@@ -51,10 +51,17 @@ final class AppAuthAuthorization: IdentityAuthorizing {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             authorizationContinuation = continuation
             OIDAuthorizationService.discoverConfiguration(forIssuer: configuration.issuer) { [weak self] service, _ in
+                // Le callback Objective-C ne transfère qu'une valeur immuable vers l'acteur.
+                let serviceArchive = service.flatMap {
+                    try? NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: true)
+                }
                 // AppAuth 3.0 livre ces callbacks sur la file principale.
                 MainActor.assumeIsolated {
                     guard let self, self.operationID == id else { return }
-                    guard let service else { self.finishAuthorization(error: IdentityFailure.unavailable); return }
+                    guard let serviceArchive,
+                          let service = try? NSKeyedUnarchiver.unarchivedObject(ofClass: OIDServiceConfiguration.self, from: serviceArchive) else {
+                        self.finishAuthorization(error: IdentityFailure.unavailable); return
+                    }
                     guard OIDCPolicy.accepts(service, configuration: configuration) else {
                         self.finishAuthorization(error: IdentityFailure.invalidProvider); return
                     }
@@ -63,13 +70,20 @@ final class AppAuthAuthorization: IdentityAuthorizing {
                     }
                     let request = OIDCPolicy.request(service: service, configuration: configuration)
                     self.flow = OIDAuthState.authState(byPresenting: request, externalUserAgent: agent) { [weak self] state, error in
+                        let stateArchive = state.flatMap {
+                            try? NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: true)
+                        }
+                        let failure = error as NSError?
+                        let cancelled = failure?.domain == OIDGeneralErrorDomain
+                            && failure?.code == OIDErrorCode.userCanceledAuthorizationFlow.rawValue
                         MainActor.assumeIsolated {
                             guard let self, self.operationID == id else { return }
-                            if let state, state.isAuthorized, OIDCPolicy.accepts(state, configuration: configuration) {
+                            if let stateArchive,
+                               let state = try? NSKeyedUnarchiver.unarchivedObject(ofClass: OIDAuthState.self, from: stateArchive),
+                               state.isAuthorized, OIDCPolicy.accepts(state, configuration: configuration) {
                                 self.authorizedState = state
                                 self.finishAuthorization(error: nil)
-                            } else if let error = error as NSError?, error.domain == OIDGeneralErrorDomain,
-                                      error.code == OIDErrorCode.userCanceledAuthorizationFlow.rawValue {
+                            } else if cancelled {
                                 self.finishAuthorization(error: CancellationError())
                             } else {
                                 self.finishAuthorization(error: IdentityFailure.unavailable)

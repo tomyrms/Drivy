@@ -4,6 +4,10 @@ on:
     branches: [master, codex/refonte-g0]
     paths:
       - '.github/workflows/ipa-essai.yml'
+      - 'apps/ios/Drivy/**'
+      - 'apps/ios/project.yml'
+      - 'apps/ios/Package.resolved'
+      - 'scripts/ios/build-ipa.sh'
   workflow_dispatch:
 permissions:
   contents: read
