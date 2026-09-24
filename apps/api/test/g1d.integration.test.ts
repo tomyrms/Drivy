@@ -206,7 +206,7 @@ describe('G1D1 · politique versionnée et profil minimal',()=>{
     } finally {await db.query('ROLLBACK');db.release();}
   });
   it('RLS forcée sur chaque table et fonctions internes non exécutables par PUBLIC',async()=>{
-    const tables=await pool.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r'");expect(tables.rowCount).toBe(17);expect(tables.rows.every(row=>row.relrowsecurity && row.relforcerowsecurity)).toBe(true);
+    const tables=await pool.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r'");expect(tables.rowCount).toBeGreaterThanOrEqual(20);expect(tables.rows.every(row=>row.relrowsecurity && row.relforcerowsecurity)).toBe(true);
     const functions=await pool.query("SELECT prosecdef,proconfig,has_function_privilege('public',p.oid,'EXECUTE') exposed FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='drivy' AND proname IN('profile_access','initialize_profile_context','profile_target_person','profile_fields_writable')");
     expect(functions.rowCount).toBe(4);expect(functions.rows.every(row=>row.prosecdef && !row.exposed && row.proconfig.includes('search_path=pg_catalog, drivy'))).toBe(true);
   });

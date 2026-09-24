@@ -16,7 +16,7 @@ try {
     throw new Error('La connexion de production doit utiliser un rôle sans superuser/BYPASSRLS.');
   }
   const invitationMail=invitationMailConfig();
-  const app = buildApp({ pool, verifyToken: createTokenVerifier(config), cursorSecret: config.CURSOR_SECRET, logger: true,...(invitationMail?{invitationMail}:{}) });
+  const app = buildApp({ pool, verifyToken: createTokenVerifier(config), cursorSecret: config.CURSOR_SECRET, reauthMaxAgeSeconds:config.REAUTH_MAX_AGE_SECONDS,logger: true,...(invitationMail?{invitationMail}:{}) });
   const shutdown = async () => { await app.close(); await pool.end(); };
   process.once('SIGINT', () => { void shutdown(); });
   process.once('SIGTERM', () => { void shutdown(); });

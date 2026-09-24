@@ -33,9 +33,10 @@ function canonical(value: unknown): string {
     .map(([key,item])=>`${JSON.stringify(key)}:${canonical(item)}`).join(',')}}`;
   return JSON.stringify(value);
 }
-export interface CommandEffect<T> { data:T; action:string; resourceType:string; resourceId:string; resourceVersion?:number; changedFields:string[] }
+export interface CommandEffect<T> { data:T; action:string; resourceType:string; resourceId:string; resourceVersion?:number; changedFields:string[];reason?:string }
 export interface CommandGuards<T> {
   additionalPersons?:(db:PoolClient)=>Promise<string[]>;
+  writeMemberships?:(db:PoolClient)=>Promise<string[]>;
   authorize?:(db:PoolClient,actor:CommandActor,school:SchoolRow)=>Promise<void>;
   replay?:(db:PoolClient,actor:CommandActor,data:T)=>Promise<T>;
 }
@@ -44,8 +45,8 @@ export async function recordCommand<T>(db:PoolClient,actor:CommandActor,schoolId
   const resourceVersion=effect.resourceVersion ?? (effect.data as {version?:number}).version ?? 1;
   await db.query(`INSERT INTO drivy.operation(actor_person_id,operation_id,school_id,command_type,payload_hash,resource_id,response_data,resource_version)
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,[actor.personId,operationId,schoolId,commandType,hash,effect.resourceId,JSON.stringify(effect.data),resourceVersion]);
-  await db.query(`INSERT INTO drivy.audit_event(id,school_id,actor_person_id,actor_membership_id,operation_id,action,resource_type,resource_id,changed_fields)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[randomUUID(),schoolId,actor.personId,actor.membershipId,operationId,effect.action,effect.resourceType,effect.resourceId,effect.changedFields]);
+  await db.query(`INSERT INTO drivy.audit_event(id,school_id,actor_person_id,actor_membership_id,operation_id,action,resource_type,resource_id,changed_fields,reason)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[randomUUID(),schoolId,actor.personId,actor.membershipId,operationId,effect.action,effect.resourceType,effect.resourceId,effect.changedFields,effect.reason ?? null]);
 }
 
 /** Un seul commit contient l'effet, sa preuve durable et son audit ; aucun appel réseau sous verrou. */
@@ -76,9 +77,12 @@ export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId:
     const result = await db.query<SchoolRow>(`SELECT ${schoolColumns} FROM drivy.school WHERE id=$1 FOR UPDATE`,[schoolId]);
     const school = result.rows[0];
     if (!school) throw notFound();
-    const member = await db.query<{id:string;roles:string[]}>("SELECT id,roles FROM drivy.membership WHERE school_id=$1 AND person_id=$2 AND status='ACTIVE' FOR SHARE",[schoolId,personId]);
-    if (!member.rows[0] || !allowedRoles.some(role=>member.rows[0]!.roles.includes(role))) throw new ApiError(403,'SETUP_ACCESS_REQUIRED','Les droits nécessaires ne sont plus disponibles.');
-    const actor = { personId,membershipId:member.rows[0].id,roles:member.rows[0].roles };
+    const writeMemberships=await guards.writeMemberships?.(db) ?? [];
+    const membershipIds=[...new Set([preliminary.rows[0].id,...writeMemberships])].sort();
+    const locked=await db.query<{id:string;roles:string[]}>(`SELECT id,roles FROM drivy.membership WHERE school_id=$1 AND id=ANY($2::uuid[]) AND status='ACTIVE' ORDER BY id FOR ${writeMemberships.length?'UPDATE':'SHARE'}`,[schoolId,membershipIds]);
+    const member=locked.rows.find(row=>row.id===preliminary.rows[0]!.id);
+    if (!member || locked.rowCount!==membershipIds.length || !allowedRoles.some(role=>member.roles.includes(role))) throw new ApiError(403,'SETUP_ACCESS_REQUIRED','Les droits nécessaires ne sont plus disponibles.');
+    const actor = { personId,membershipId:member.id,roles:member.roles };
     await db.query("SELECT set_config('app.membership_id',$1,true)",[actor.membershipId]);
     await guards.authorize?.(db,actor,school);
     const previous = await db.query<{school_id:string;command_type:string;payload_hash:string;response_data:T}>(

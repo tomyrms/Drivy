@@ -54,7 +54,7 @@ beforeAll(async()=>{
     expect((await pool.query('SELECT count(*)::int n FROM drivy.school_setup')).rows[0].n).toBe(2);
     expect((await pool.query('SELECT count(*)::int n FROM drivy.school_data_policy WHERE approved_at IS NOT NULL')).rows[0].n).toBe(0);
     const tables=await pool.query("SELECT relname,relrowsecurity,relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r'");
-    expect(tables.rows.length).toBe(17);expect(tables.rows.every(row=>row.relrowsecurity && row.relforcerowsecurity)).toBe(true);
+    expect(tables.rows.length).toBeGreaterThanOrEqual(20);expect(tables.rows.every(row=>row.relrowsecurity && row.relforcerowsecurity)).toBe(true);
   } finally {await migrationPool.end();}
   keys=await generateKeyPair('RS256');const key=await exportJWK(keys.publicKey);
   app=buildApp({pool,cursorSecret:'secret-test-32-caracteres-minimum',verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/jwks`},

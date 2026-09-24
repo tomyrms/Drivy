@@ -10,6 +10,7 @@ import { getLearner, getTraining, listLearners, listTrainings } from './queries.
 import { registerSchoolSetup } from './school-setup.js';
 import { registerInvitations } from './invitations.js';
 import { registerProfiles } from './profiles.js';
+import { registerCatalogue } from './catalogue.js';
 import type { InvitationMailConfig } from './invitation-mail.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
@@ -22,7 +23,7 @@ const learnerQuery = z.object({ ...pagination, q: z.string().max(200).optional()
 const trainingQuery = z.object({ ...pagination, learnerId: z.uuid().optional() }).strict();
 const emptyQuery = z.object({}).strict();
 
-export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig }) {
+export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig;reauthMaxAgeSeconds?:number }) {
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384 });
   const cursors = new Cursors(options.cursorSecret);
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options','nosniff'); });
@@ -114,5 +115,6 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerSchoolSetup(app,options);
   registerInvitations(app,options);
   registerProfiles(app,options);
+  registerCatalogue(app,options);
   return app;
 }
