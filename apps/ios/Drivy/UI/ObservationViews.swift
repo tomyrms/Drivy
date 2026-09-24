@@ -92,6 +92,7 @@ struct ObservationComposer: View {
     let sessionStartedAt: Date
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedTheme: ObservationTheme?
     @State private var note = ""
     @State private var showsNote = false
@@ -117,6 +118,7 @@ struct ObservationComposer: View {
             }.scrollDismissesKeyboard(.interactively)
         }
         .background(DrivyTheme.surface)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: selectedTheme)
         .presentationDetents([.height(440), .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(30)

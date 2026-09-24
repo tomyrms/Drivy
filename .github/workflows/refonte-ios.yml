@@ -75,6 +75,7 @@ jobs:
         run: bash scripts/ios/test-simulator.sh
       - name: Capturer les écrans pour la revue visuelle
         if: inputs.visual_only == true
+        timeout-minutes: 8
         shell: bash
         run: bash scripts/ios/capture-screens.sh
       - name: Construire l'IPA pour iLoader

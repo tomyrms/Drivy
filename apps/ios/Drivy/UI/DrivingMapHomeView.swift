@@ -137,7 +137,10 @@ struct DrivingMapHomeView: View {
     }
 
     private var mapPreview: some View {
-        Button { presentsMap = true } label: {
+        Button {
+            if controller.activeSession != nil && controller.isCapturing { primaryAction() }
+            else { presentsMap = true }
+        } label: {
             ZStack(alignment: .bottomTrailing) {
                 if let session = controller.activeSession, !session.points.isEmpty {
                     RouteMapView(session: session, selectedObservationID: $previewSelection, showsControls: false, showsEmptyState: false)
@@ -148,7 +151,7 @@ struct DrivingMapHomeView: View {
                         .mapControls { }
                         .allowsHitTesting(false)
                 }
-                Label("Explorer", systemImage: "arrow.up.left.and.arrow.down.right")
+                Label(controller.isCapturing ? "Ouvrir" : "Explorer", systemImage: "arrow.up.left.and.arrow.down.right")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 12).padding(.vertical, 9)
                     .background(DrivyTheme.surface, in: Capsule()).padding(12)
@@ -158,7 +161,7 @@ struct DrivingMapHomeView: View {
             .contentShape(RoundedRectangle(cornerRadius: 18))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Explorer la carte")
+        .accessibilityLabel(controller.isCapturing ? "Revenir au trajet en cours" : "Explorer la carte")
     }
 
     private var nextLessons: some View {
