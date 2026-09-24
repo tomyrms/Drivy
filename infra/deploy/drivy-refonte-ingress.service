@@ -12,12 +12,8 @@ ExecStart=/usr/sbin/nft --file /etc/drivy-refonte/ingress.nft
 UMask=0077
 NoNewPrivileges=true
 CapabilityBoundingSet=CAP_NET_ADMIN
-ProtectSystem=strict
-ProtectHome=true
-PrivateTmp=true
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
+# Le conteneur non privilégié interdit les namespaces de montage systemd.
+# Seule CAP_NET_ADMIN est accordée à ce chargeur de règles fixe.
 RestrictSUIDSGID=true
 RestrictAddressFamilies=AF_UNIX AF_NETLINK
 

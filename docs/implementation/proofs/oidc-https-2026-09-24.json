@@ -1,0 +1,26 @@
+{
+  "checkedAt": "2026-09-24T15:34:52.940Z",
+  "issuer": "https://drivy.shulker.ch/identity/realms/drivy",
+  "browser": "153.0.4234.48",
+  "result": "PASSED",
+  "checks": {
+    "discoveryStatus": 200,
+    "missingPKCERejected": true,
+    "plainPKCERejected": true,
+    "tokenExchangeStatus": 200,
+    "signaturesIssuerAudienceSubjectNonceVerified": true,
+    "meStatus": 403,
+    "meCode": "IDENTITY_NOT_LINKED",
+    "idTokenStatus": 401,
+    "refreshStatus": 200,
+    "renewedMeStatus": 403,
+    "refreshReplayStatus": 400
+  },
+  "scope": "OIDC HTTPS navigateur/PKCE, rotation et API sans lien métier ; compte luc et client iOS non utilisés.",
+  "cleanup": {
+    "providerSessionsRevoked": true,
+    "providerUserDeletedAndAbsenceVerified": true,
+    "credentialFilesRemovedFromContainerHostAndWorkstation": true,
+    "cleanedAt": "2026-09-24T15:36:31.662Z"
+  }
+}

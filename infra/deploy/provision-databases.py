@@ -66,8 +66,8 @@ def main():
         statements.append(f"CREATE ROLE {role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS PASSWORD '{scram(values[key])}';")
     statements += ['GRANT drivy_app TO drivy_refonte_owner WITH ADMIN OPTION;',
                    'GRANT drivy_app TO drivy_refonte_runtime;', 'COMMIT;',
-                   'CREATE DATABASE drivy_refonte OWNER drivy_refonte_owner;',
-                   'CREATE DATABASE drivy_identity OWNER drivy_identity_owner;',
+                   "CREATE DATABASE drivy_refonte OWNER drivy_refonte_owner ENCODING 'UTF8' TEMPLATE template0;",
+                   "CREATE DATABASE drivy_identity OWNER drivy_identity_owner ENCODING 'UTF8' TEMPLATE template0;",
                    'REVOKE ALL ON DATABASE drivy_refonte FROM PUBLIC;',
                    'REVOKE ALL ON DATABASE drivy_identity FROM PUBLIC;',
                    'GRANT CONNECT ON DATABASE drivy_refonte TO drivy_refonte_runtime;']

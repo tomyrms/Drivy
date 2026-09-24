@@ -1,6 +1,6 @@
 # Déploiement isolé de la refonte G1A
 
-Préparation du 24 septembre 2026. Ces fichiers décrivent le déploiement choisi sur l’hébergement existant. Leur écriture n’exécute aucune commande distante. Les résultats de déploiement et de connexion réelle doivent être consignés dans `STATUS.md` après exécution. Aucun jeu de démonstration n’est chargé en production.
+Déploiement initial exécuté le 24 septembre 2026, à la demande du porteur sur son hébergement existant. API G1A et identité sont accessibles en HTTPS ; les preuves détaillées sont consignées dans `STATUS.md`. Aucun jeu de démonstration n’est chargé dans les bases hébergées.
 
 ## Implantation
 
@@ -37,6 +37,8 @@ python3 /root/drivy-deploy/provision-databases.py --apply
 
 Le propriétaire de migration est sans SUPERUSER, BYPASSRLS, CREATEDB ou CREATEROLE ; il reçoit ADMIN OPTION sur le nouveau rôle NOLOGIN `drivy_app`, nécessaire au GRANT de la migration 001. Le runtime reçoit ce rôle sans ADMIN OPTION, reste NOINHERIT, n’est propriétaire d’aucune table et ne possède aucun droit de création. Keycloak possède sa propre base sous un troisième rôle de connexion.
 
+Les bases sont créées explicitement en UTF8 depuis `template0`. Le cluster historique utilise SQL_ASCII par défaut : lors du premier déploiement, les deux bases de bootstrap encore sans compte utilisateur ont été conservées sous les noms `drivy_refonte_bootstrap_ascii_20260924` et `drivy_identity_bootstrap_ascii_20260924`, puis les bases définitives initialisées en UTF8. Les anciennes bases `drivy` et `drivy_test` n'ont pas été modifiées.
+
 Insérer `pg-hba-refonte.conf` avant les règles générales existantes, sans les remplacer. Les seules connexions admises viennent de CT114 en TLS/SCRAM, vers la base prévue pour chaque rôle. Vérifier `pg_hba_file_rules` avant le rechargement de PostgreSQL. Conserver une sauvegarde du HBA précédent. Si un audit PostgreSQL supplémentaire est installé, vérifier qu’il ne journalise pas le texte des DDL de credentials ; les commandes du script désactivent la journalisation SQL pour leur seule session et n’envoient jamais les passwords en clair.
 
 Transférer le coffre directement de CT113 vers CT114 par un canal SSH authentifié, avec mode `0600`, sans l’afficher ni le placer dans une archive Git/CI. Copier uniquement le certificat public PostgreSQL vers `/root/drivy-db-ca.crt` sur CT114. Ce certificat étant auto-signé, son empreinte obtenue par le canal SSH approuvé constitue la référence de confiance.
@@ -54,6 +56,8 @@ systemd-analyze verify /etc/systemd/system/drivy-refonte-api.service /etc/system
 Le script vérifie le certificat pour son hostname, ajoute seulement le mapping DNS manquant dans `/etc/hosts` et refuse une collision avec une autre IP. Les trois connexions DB utilisent `sslmode=verify-full` et `/etc/drivy-refonte/db-ca.crt`.
 
 Keycloak utilise un heap borné à 512 Mio, un cache local et au plus huit connexions DB. systemd borne son processus à 1 Gio ; l’API dispose de 128 Mio de heap V8 et de 256 Mio au total. Ces budgets sont des paramètres initiaux, pas une qualification de charge. Surveiller RSS, mémoire du conteneur, temps de connexion et éventuels OOM pendant la première mise en service.
+
+CT114 interdit la création de namespaces de montage par systemd (`226/NAMESPACE`). Les unités adaptées à ce conteneur n'utilisent donc pas `ProtectSystem`, `PrivateTmp` ou les autres protections nécessitant ces montages. Le confinement LXC reste inchangé ; comptes de service sans privilèges, `NoNewPrivileges`, fichiers de code/configuration appartenant à root, restrictions réseau et limites mémoire restent appliqués. Le chargeur nft possède uniquement `CAP_NET_ADMIN`. Les trois unités ont passé `systemd-analyze verify` et démarrent réellement dans CT114.
 
 Le realm `drivy` ne crée aucun utilisateur. Il impose HTTPS, PKCE S256, code flow avec client public `drivy-apple`, audience `drivy-api`, callback exact `ch.drivy.qualification:/oauth/callback`, scopes `basic` et `profile`. `basic` fournit notamment `sub`. Password grant, implicit flow, comptes de service, inscription publique et offline access sont désactivés. Les refresh tokens standards sont renouvelés avec rotation ; session inactive 30 minutes, maximum 2 heures. L’application doit demander `openid profile`, sans `offline_access`.
 

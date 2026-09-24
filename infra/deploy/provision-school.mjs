@@ -12,7 +12,7 @@
  * Le journal local ne remplace pas le futur module métier AuditEvent.
  */
 import { randomBytes, randomUUID } from 'node:crypto';
-import { constants } from 'node:fs';
+import { constants, realpathSync } from 'node:fs';
 import { lstat, open, readFile, rename, unlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
@@ -295,6 +295,6 @@ async function main() {
     if (lock) { await lock.close(); await unlink(lockPath).catch(() => {}); }
   }
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(resolve(process.argv[1])) === fileURLToPath(import.meta.url)) {
   main().catch(() => { console.error('Provisionnement interrompu. État privé conservé ; reprendre avec les mêmes paramètres après vérification locale. Aucun secret affiché.'); process.exitCode = 1; });
 }

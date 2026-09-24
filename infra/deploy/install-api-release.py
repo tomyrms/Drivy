@@ -61,8 +61,10 @@ try {
   await client.connect();
   const { rows } = await client.query('SELECT rolsuper,rolbypassrls,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname=current_user');
   if (!rows[0] || Object.values(rows[0]).some(Boolean)) throw new Error('runtime_privilege');
-  const tables = await client.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='drivy'::regnamespace AND relkind='r'");
-  if (tables.rows.length !== 8 || tables.rows.some(r => !r.relrowsecurity || !r.relforcerowsecurity)) throw new Error('rls_missing');
+  const tables = await client.query("SELECT relname,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='drivy'::regnamespace AND relkind='r'");
+  const required = ['person','identity_link','school','membership','learner_profile','offering_version','training','instructor_assignment'];
+  if (required.some(name => !tables.rows.some(row => row.relname === name)) ||
+      tables.rows.some(r => !r.relrowsecurity || !r.relforcerowsecurity)) throw new Error('rls_missing');
   await client.query('BEGIN READ ONLY');
   await client.query('SET LOCAL ROLE drivy_app');
   const result = await client.query('SELECT count(*) AS total FROM drivy.person');

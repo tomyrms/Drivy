@@ -26,13 +26,8 @@ MemoryMax=1G
 TasksMax=160
 UMask=0077
 NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ReadWritePaths=/opt/drivy-refonte/runtime/keycloak/data
-ProtectHome=true
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
+# CT114 interdit les namespaces de montage systemd ; compte sans privilège,
+# code/configuration non modifiables et confinement LXC restent effectifs.
 RestrictSUIDSGID=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 LimitCORE=0
