@@ -9,7 +9,7 @@ read -r -a screens <<< "${DRIVY_VISUAL_SCREENS:-home live report without-gps rep
 read -r -a devices <<< "${DRIVY_VISUAL_DEVICES:-iPhone iPad}"
 read -r -a appearances <<< "${DRIVY_VISUAL_APPEARANCES:-light dark}"
 for screen in "${screens[@]}"; do
-  [[ "$screen" =~ ^(home|live|report|without-gps|replay|catalog|configuration|training|members|lesson-report)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
+  [[ "$screen" =~ ^(home|live|report|without-gps|replay|catalog|configuration|training|members|lesson-report|dossier|bilan)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
 done
 for kind in "${devices[@]}"; do
   [[ "$kind" == iPhone || "$kind" == iPad ]] || { echo 'Appareil de capture inconnu.' >&2; exit 1; }
