@@ -22,6 +22,14 @@ enum SchoolCommandKind: String, Codable, Sendable {
     case createLesson, moveLesson, cancelLesson, createCommercialTerms, createServiceProduct
     case createAvailabilityRule, updateAvailabilityRule, createClosure, removeAvailabilityRule, removeClosure
     case savePreparation, saveWish, completeLesson, saveReportDraft, publishReportDraft
+    case createObservation, updateObservation, removeObservation
+
+    var isObservation: Bool {
+        switch self {
+        case .createObservation, .updateObservation, .removeObservation: true
+        default: false
+        }
+    }
 
     var isPlanning: Bool {
         switch self {
@@ -51,7 +59,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         }
     }
 
-    var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog && !isPlanning && !isReport }
+    var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog && !isPlanning && !isReport && !isObservation }
 
     var isInvitation: Bool {
         switch self {
@@ -95,6 +103,9 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .completeLesson: "COMPLETE_LESSON"
         case .saveReportDraft: "SAVE_REPORT_DRAFT"
         case .publishReportDraft: "PUBLISH_REPORT_DRAFT"
+        case .createObservation: "CREATE_GEO_OBSERVATION"
+        case .updateObservation: "UPDATE_GEO_OBSERVATION"
+        case .removeObservation: "REMOVE_GEO_OBSERVATION"
         }
     }
 
@@ -122,6 +133,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .saveWish: "Wish"
         case .saveReportDraft: "ReportDraft"
         case .publishReportDraft: "ReportRevision"
+        case .createObservation, .updateObservation, .removeObservation: "GeoObservation"
         }
     }
 }
@@ -148,8 +160,12 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
     }
 
     var hasValidTarget: Bool {
-        if !kind.isProfile && !kind.isCatalog && !kind.isPlanning && !kind.isReport && (routeResourceID != nil || expectedVersion != nil) { return false }
+        if !kind.isProfile && !kind.isCatalog && !kind.isPlanning && !kind.isReport && !kind.isObservation && (routeResourceID != nil || expectedVersion != nil) { return false }
         switch kind {
+        case .createObservation:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
+        case .updateObservation, .removeObservation:
+            return (1...2_147_483_647).contains(resourceVersion) && resourceID != nil && routeResourceID != nil && expectedVersion == nil
         case .createCommercialTerms, .createServiceProduct, .createAvailabilityRule, .createClosure:
             return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && expectedVersion == nil
         case .createLesson:

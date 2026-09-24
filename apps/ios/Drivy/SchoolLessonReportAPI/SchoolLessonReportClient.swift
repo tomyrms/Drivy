@@ -44,7 +44,8 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
     }
     func drafts(schoolID: UUID, lessonID: UUID) async throws -> [SchoolReportDraft] {
         let values: [SchoolReportDraft] = try await pages(schoolID, ["lessons", lessonID.uuidString, "report-drafts"])
-        guard values.allSatisfy({ $0.lessonId == lessonID && $0.basePublicationVersion >= 0 && valid($0.observations) && $0.attachmentIds.isEmpty && ($0.geoObservationIds?.isEmpty ?? true) }) else { throw SchoolReportFailure.invalidResponse }
+        guard values.allSatisfy({ $0.lessonId == lessonID && $0.basePublicationVersion >= 0 && valid($0.observations) && $0.attachmentIds.isEmpty
+            && ($0.geoObservationIds?.count ?? 0) <= 100 && Set($0.geoObservationIds ?? []).count == ($0.geoObservationIds?.count ?? 0) }) else { throw SchoolReportFailure.invalidResponse }
         return values
     }
     func revisions(schoolID: UUID, lessonID: UUID) async throws -> [SchoolReportRevision] {
