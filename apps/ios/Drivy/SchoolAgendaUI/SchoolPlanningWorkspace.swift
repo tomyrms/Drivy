@@ -24,6 +24,9 @@ struct SchoolPlanningInstructor: Identifiable {
     private(set) var assignments: [SchoolAssignment] = []
     private(set) var availability: [SchoolAvailabilityRule] = []
     private(set) var closures: [SchoolClosure] = []
+    private(set) var isLoadingAvailability = false
+    private(set) var availabilityLoaded = false
+    private(set) var availabilityError: String?
     private(set) var pending: PendingSchoolCommand?
     private(set) var isLoading = false
     private(set) var isBusy = false
@@ -40,7 +43,14 @@ struct SchoolPlanningInstructor: Identifiable {
     @ObservationIgnored private var storageAvailable = false
     var learnerID: UUID?
     var trainingID: UUID?
-    var instructorID: UUID?
+    var instructorID: UUID? {
+        didSet {
+            if instructorID != oldValue {
+                availabilityGeneration = UUID()
+                clearAvailability()
+            }
+        }
+    }
     var productID: UUID?
     var startsAt: Date
     var meetingPoint = ""
@@ -113,12 +123,13 @@ struct SchoolPlanningInstructor: Identifiable {
     }
     private func clear() {
         school = nil; learners = []; trainings = []; offerings = []; policies = []; products = []; terms = []
-        instructors = []; assignments = []; availability = []; closures = []; pending = nil
+        instructors = []; assignments = []; clearAvailability(); pending = nil
         storageAvailable = false; needsReload = true; isBusy = false; isLoading = false
     }
     func load() async {
         guard !invalidated, !isBusy else { return }
         generation = UUID(); selectionGeneration = UUID(); availabilityGeneration = UUID(); let request = generation
+        clearAvailability()
         isLoading = true; needsReload = true; errorMessage = nil; storageAvailable = false
         defer { if request == generation { isLoading = false } }
         var storageError: String?
@@ -188,16 +199,36 @@ struct SchoolPlanningInstructor: Identifiable {
         } catch { guard request == selectionGeneration else { return }; isLoading = false; fail(error) }
     }
     func loadAvailability() async {
-        guard let instructorID, !invalidated else { return }
+        guard let instructorID, !invalidated, !accessRevoked else { clearAvailability(); return }
         let request = generation; availabilityGeneration = UUID(); let availabilityRequest = availabilityGeneration
-        availability = []; closures = []
+        clearAvailability(); isLoadingAvailability = true
+        defer {
+            if request == generation, availabilityRequest == availabilityGeneration { isLoadingAvailability = false }
+        }
         do {
             let query = [URLQueryItem(name: "instructorMembershipId", value: instructorID.uuidString)]
             let rules: [SchoolAvailabilityRule] = try await client.records(scope.schoolID, path: ["availability-rules"], query: query)
+            guard request == generation, availabilityRequest == availabilityGeneration, self.instructorID == instructorID,
+                  !invalidated, !accessRevoked, !Task.isCancelled else { return }
             let closures: [SchoolClosure] = try await client.records(scope.schoolID, path: ["closures"], query: query)
-            guard request == generation, availabilityRequest == availabilityGeneration, self.instructorID == instructorID, !Task.isCancelled else { return }
-            availability = rules; self.closures = closures
-        } catch { guard request == generation, availabilityRequest == availabilityGeneration else { return }; fail(error) }
+            guard request == generation, availabilityRequest == availabilityGeneration, self.instructorID == instructorID,
+                  !invalidated, !accessRevoked, !Task.isCancelled else { return }
+            guard rules.allSatisfy({ $0.instructorMembershipId == instructorID }),
+                  closures.allSatisfy({ $0.instructorMembershipId == instructorID }) else { throw SchoolPlanningFailure.invalidResponse }
+            availability = rules; self.closures = closures; availabilityLoaded = true
+        } catch {
+            guard request == generation, availabilityRequest == availabilityGeneration, self.instructorID == instructorID,
+                  !invalidated, !accessRevoked, !Task.isCancelled else { return }
+            if error as? SchoolPlanningFailure == .forbidden || error as? SchoolPlanningFailure == .unauthorized
+                || error as? SchoolAPIError == .forbidden || error as? SchoolAPIError == .unauthorized {
+                fail(error)
+            } else {
+                availabilityError = (error as? LocalizedError)?.errorDescription ?? "Les disponibilités n’ont pas pu être chargées."
+            }
+        }
+    }
+    private func clearAvailability() {
+        availability = []; closures = []; isLoadingAvailability = false; availabilityLoaded = false; availabilityError = nil
     }
     func saveBooking() async -> Bool {
         guard validBooking, let instructorID, let trainingID else { return false }

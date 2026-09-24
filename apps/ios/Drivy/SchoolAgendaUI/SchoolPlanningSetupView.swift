@@ -10,15 +10,15 @@ struct SchoolPlanningSetupView: View {
         NavigationStack {
             List {
                 Section {
-                    Text("Le cadre des rendez-vous").font(.title2.weight(.bold))
-                    Text("\(model.school?.name ?? "École") · \(model.timeZone)")
+                    Text(model.school?.name ?? "Votre école").font(.headline)
+                    Text("Horaires de l’école · \(model.timeZone)")
                         .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 }.listRowBackground(Color.clear)
                 SchoolPlanningFeedback(model: model)
                 if !model.isLoading && model.school != nil {
-                    if model.canConfigureCatalog { commercialSection }
                     availabilitySection
                     closureSection
+                    if model.canConfigureCatalog { commercialSection }
                 }
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
@@ -29,13 +29,16 @@ struct SchoolPlanningSetupView: View {
                 if model.instructorID == nil && !model.roles.contains("ADMIN") { model.instructorID = model.scope.membershipID }
                 await model.loadAvailability()
             }
-            .sheet(item: $editor) { request in SchoolPlanningSetupEditor(model: model, request: request) }
+            .sheet(item: $editor, onDismiss: { Task { await model.loadAvailability() } }) { request in SchoolPlanningSetupEditor(model: model, request: request) }
         }
         .interactiveDismissDisabled(model.isBusy)
         .tint(DrivyTheme.accent)
     }
     private var commercialSection: some View {
-        Section {
+        Group {
+          Section {
+            Button { editor = .init(kind: .terms) } label: { Label("Créer des conditions", systemImage: "plus") }
+                .disabled(!model.canMutate).frame(minHeight: 44)
             ForEach(model.terms.sorted { $0.version > $1.version }) { terms in
                 DisclosureGroup {
                     Text(terms.termsText).font(.subheadline).textSelection(.enabled)
@@ -50,7 +53,12 @@ struct SchoolPlanningSetupView: View {
                     }
                 }
             }
-            Button { editor = .init(kind: .terms) } label: { Label("Créer des conditions", systemImage: "doc.text.badge.plus") }.disabled(!model.canMutate)
+          } header: { Text("Conditions commerciales") }
+          footer: { Text("Une nouvelle version conserve les conditions des rendez-vous déjà pris.") }
+          Section {
+            Button { editor = .init(kind: .product) } label: { Label("Créer une prestation", systemImage: "plus") }
+                .disabled(!model.canMutate || model.terms.isEmpty).frame(minHeight: 44)
+            if model.terms.isEmpty { Text("Créez les conditions avant la première prestation.").font(.caption).foregroundStyle(DrivyTheme.muted) }
             ForEach(model.products.sorted { ($0.label, $0.version) < ($1.label, $1.version) }) { product in
                 DisclosureGroup {
                     LabeledContent("Référence", value: product.productKey)
@@ -67,19 +75,21 @@ struct SchoolPlanningSetupView: View {
                     }
                 }
             }
-            Button { editor = .init(kind: .product) } label: { Label("Créer une prestation", systemImage: "plus.circle") }
-                .disabled(!model.canMutate || model.terms.isEmpty)
-            if model.terms.isEmpty { Text("Créez les conditions avant la première prestation.").font(.caption).foregroundStyle(DrivyTheme.muted) }
-        } header: { Text("Prestations et conditions") }
-        footer: { Text("Une nouvelle version conserve les conditions des rendez-vous déjà pris.") }
+          } header: { Text("Prestations de conduite") }
+        }
     }
     private var availabilitySection: some View {
         Section {
             Picker("Moniteur", selection: $model.instructorID) {
                 Text("Choisir un moniteur").tag(nil as UUID?)
                 ForEach(model.instructors) { value in Text(value.displayName).tag(Optional(value.id)) }
-            }.onChange(of: model.instructorID) { _, _ in Task { await model.loadAvailability() } }
+            }.disabled(model.isBusy || model.isLoading)
+                .onChange(of: model.instructorID) { _, _ in Task { await model.loadAvailability() } }
             if model.instructorID != nil {
+                if model.isLoadingAvailability { ProgressView("Lecture des disponibilités…") }
+                if let error = model.availabilityError {
+                    SchoolErrorNotice(message: error, retry: { Task { await model.loadAvailability() } })
+                }
                 ForEach(model.availability) { rule in
                     VStack(alignment: .leading, spacing: 9) {
                         Text(SchoolPlanningFormat.weekdays(rule.weekdays)).font(.headline)
@@ -91,8 +101,12 @@ struct SchoolPlanningSetupView: View {
                         }.buttonStyle(.borderless).disabled(!model.canMutate)
                     }.padding(.vertical, 5)
                 }
-                if model.availability.isEmpty { Text("Aucune plage d’ouverture pour ce moniteur.").foregroundStyle(DrivyTheme.muted) }
-                Button { editor = .init(kind: .availability) } label: { Label("Ajouter une disponibilité", systemImage: "calendar.badge.plus") }.disabled(!model.canMutate)
+                if model.availabilityLoaded && model.availability.isEmpty { Text("Aucune plage d’ouverture pour ce moniteur.").foregroundStyle(DrivyTheme.muted) }
+                if !model.availabilityLoaded && !model.isLoadingAvailability && model.availabilityError == nil {
+                    Button("Charger les disponibilités") { Task { await model.loadAvailability() } }.frame(minHeight: 44)
+                }
+                Button { editor = .init(kind: .availability) } label: { Label("Ajouter une disponibilité", systemImage: "calendar.badge.plus") }
+                    .frame(minHeight: 44).disabled(!model.canMutate || !model.availabilityLoaded)
             }
         } header: { Text("Disponibilités") }
         footer: { Text("Les jours et horaires sont exprimés dans le fuseau de l’école. Les rendez-vous existants sont protégés.") }
@@ -100,6 +114,8 @@ struct SchoolPlanningSetupView: View {
     private var closureSection: some View {
         Section {
             if model.instructorID != nil {
+                if model.isLoadingAvailability { ProgressView("Lecture des fermetures…") }
+                else if model.availabilityError != nil { Text("La liste des fermetures n’a pas pu être lue.").foregroundStyle(DrivyTheme.muted) }
                 ForEach(model.closures) { closure in
                     VStack(alignment: .leading, spacing: 9) {
                         Text(SchoolPlanningFormat.interval(closure.startsAt, closure.endsAt, zone: model.timeZone)).font(.headline)
@@ -108,8 +124,9 @@ struct SchoolPlanningSetupView: View {
                             .disabled(!model.canMutate)
                     }.padding(.vertical, 5)
                 }
-                if model.closures.isEmpty { Text("Aucune fermeture enregistrée.").foregroundStyle(DrivyTheme.muted) }
-                Button { editor = .init(kind: .closure) } label: { Label("Ajouter une fermeture", systemImage: "calendar.badge.minus") }.disabled(!model.canMutate)
+                if model.availabilityLoaded && model.closures.isEmpty { Text("Aucune fermeture enregistrée.").foregroundStyle(DrivyTheme.muted) }
+                Button { editor = .init(kind: .closure) } label: { Label("Ajouter une fermeture", systemImage: "calendar.badge.minus") }
+                    .frame(minHeight: 44).disabled(!model.canMutate || !model.availabilityLoaded)
             } else { Text("Choisissez un moniteur pour consulter les fermetures.").foregroundStyle(DrivyTheme.muted) }
         } header: { Text("Fermetures et absences") }
     }
@@ -149,6 +166,7 @@ private struct SchoolPlanningSetupEditor: View {
     @State private var days = Set<Int>()
     @State private var localStart = ""
     @State private var localEnd = ""
+    @State private var awaitingCommandID: UUID?
 
     private var title: String {
         switch request.kind {
@@ -164,19 +182,25 @@ private struct SchoolPlanningSetupEditor: View {
         NavigationStack {
             Form {
                 SchoolPlanningFeedback(model: model)
-                fields
+                fields.disabled(!model.canMutate)
                 Section {
                     Toggle(confirmationText, isOn: $confirmed)
-                    Button(action: save) {
-                        Text(actionTitle).frame(maxWidth: .infinity, minHeight: 44)
-                    }.buttonStyle(DrivyPrimaryButtonStyle()).disabled(!valid || !confirmed || !model.canMutate)
+                        .disabled(!model.canMutate)
                 } footer: { Text("La modification est appliquée uniquement après confirmation par l’école.") }
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
+            .scrollDismissesKeyboard(.interactively)
+            .safeAreaInset(edge: .bottom) { saveBar }
             .environment(\.timeZone, TimeZone(identifier: model.timeZone) ?? .current)
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
             .onAppear(perform: populate)
+            .onChange(of: formValues) { _, _ in confirmed = false }
+            .onChange(of: model.isLoading) { _, loading in
+                if awaitingCommandID != nil && !loading && !model.needsReload && model.pending == nil && model.successMessage != nil {
+                    dismiss()
+                }
+            }
         }
         .interactiveDismissDisabled(model.isBusy)
         .tint(DrivyTheme.accent)
@@ -187,11 +211,17 @@ private struct SchoolPlanningSetupEditor: View {
         case .product: productFields
         case .availability: availabilityFields
         case .closure:
+            Section { instructorLabel }
+            Section("Début de la fermeture") {
+                DatePicker("Date", selection: $starts, displayedComponents: .date)
+                DatePicker("Heure", selection: $starts, displayedComponents: .hourAndMinute)
+            }
+            Section("Fin de la fermeture") {
+                DatePicker("Date", selection: $ends, in: starts..., displayedComponents: .date)
+                DatePicker("Heure", selection: $ends, displayedComponents: .hourAndMinute)
+            }
             Section {
-                instructorLabel
-                DatePicker("Début", selection: $starts)
-                DatePicker("Fin", selection: $ends, in: starts...)
-                TextField("Motif facultatif", text: $reason, axis: .vertical).lineLimit(2...5)
+                multilineField("Motif · facultatif", text: $reason)
             } footer: { Text("Les leçons concernées doivent être déplacées ou annulées avant d’ajouter une fermeture.") }
         case .removeAvailability, .removeClosure:
             Section {
@@ -200,32 +230,32 @@ private struct SchoolPlanningSetupEditor: View {
                     Text("\(rule.localStart) – \(rule.localEnd)")
                 }
                 if let closure = request.closure { Text(SchoolPlanningFormat.interval(closure.startsAt, closure.endsAt, zone: model.timeZone)).font(.headline) }
-                TextField("Motif du retrait", text: $reason, axis: .vertical).lineLimit(3...6)
+                multilineField("Motif du retrait", text: $reason)
             }
         }
     }
     private var termsFields: some View {
         Group {
             Section("Les textes") {
-                TextField("Nom des conditions", text: $label)
-                TextField("Conditions commerciales de l’école", text: $termsText, axis: .vertical).lineLimit(8...20)
+                field("Nom des conditions", text: $label)
+                multilineField("Conditions commerciales de l’école", text: $termsText, lines: 5...12)
             }
             validityFields
             Section {
                 Toggle("Approuver les textes affichés", isOn: $approved)
-                TextField("Motif de cette version", text: $reason, axis: .vertical).lineLimit(2...5)
+                multilineField("Motif de cette version", text: $reason)
             } footer: { Text("L’approbation porte sur le texte affiché. Aucune approbation n’est préremplie.") }
         }
     }
     private var productFields: some View {
         Group {
             Section("La prestation") {
-                TextField("Nom de la prestation", text: $label)
-                TextField("Référence", text: $reference).textInputAutocapitalization(.never).autocorrectionDisabled()
-                TextField("Catégorie de permis", text: $category).textInputAutocapitalization(.characters)
-                TextField("Durée en minutes", text: $duration).keyboardType(.numberPad)
-                TextField("Unité facturée", text: $unit)
-                TextField("Prix unitaire en CHF", text: $price).keyboardType(.decimalPad)
+                field("Nom de la prestation", text: $label)
+                field("Référence", text: $reference).textInputAutocapitalization(.never).autocorrectionDisabled()
+                field("Catégorie de permis", text: $category).textInputAutocapitalization(.characters)
+                field("Durée en minutes", text: $duration).keyboardType(.numberPad)
+                field("Unité facturée", text: $unit)
+                field("Prix unitaire en CHF", text: $price).keyboardType(.decimalPad)
             }
             validityFields
             Section {
@@ -252,14 +282,54 @@ private struct SchoolPlanningSetupEditor: View {
                 }
             } header: { Text("Les jours") }
             Section {
-                TextField("Début, ex. 08:00", text: $localStart).keyboardType(.numbersAndPunctuation)
-                TextField("Fin, ex. 18:00", text: $localEnd).keyboardType(.numbersAndPunctuation)
+                field("Heure de début", text: $localStart, placeholder: "HH:mm").keyboardType(.numbersAndPunctuation)
+                field("Heure de fin", text: $localEnd, placeholder: "HH:mm").keyboardType(.numbersAndPunctuation)
             } header: { Text("Heures locales · \(model.timeZone)") }
             validityFields
         }
     }
     private var instructorLabel: some View {
         LabeledContent("Moniteur", value: model.instructors.first(where: { $0.id == (request.rule?.instructorMembershipId ?? model.instructorID) })?.displayName ?? "Moniteur choisi")
+    }
+    private func field(_ title: String, text: Binding<String>, placeholder: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            TextField(placeholder ?? title, text: text).accessibilityLabel(title)
+        }.padding(.vertical, 4)
+    }
+    private func multilineField(_ title: String, text: Binding<String>, lines: ClosedRange<Int> = 2...6) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            TextField(title, text: text, axis: .vertical).lineLimit(lines).accessibilityLabel(title)
+        }.padding(.vertical, 4)
+    }
+    private var saveBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let error = model.errorMessage {
+                Text(error).font(.footnote).foregroundStyle(DrivyTheme.danger)
+            } else if let hint = validationHint {
+                Text(hint).font(.footnote).foregroundStyle(DrivyTheme.muted)
+            } else if !confirmed {
+                Text("Confirmez la relecture des informations avant d’enregistrer.").font(.footnote).foregroundStyle(DrivyTheme.muted)
+            }
+            if request.kind == .removeAvailability || request.kind == .removeClosure {
+                Button(actionTitle, role: .destructive, action: save).frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.bordered)
+                    .disabled(!valid || !confirmed || !model.canMutate)
+            } else {
+                Button(action: save) {
+                    HStack(spacing: 10) {
+                        if model.isBusy { ProgressView() }
+                        Text(model.isBusy ? "Enregistrement…" : actionTitle)
+                    }
+                }.buttonStyle(DrivyPrimaryButtonStyle()).disabled(!valid || !confirmed || !model.canMutate)
+            }
+        }.padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity).background(DrivyTheme.surface)
+    }
+    private var formValues: [String] {
+        [label, reference, category, termsText, reason, price, duration, unit, termsID?.uuidString ?? "",
+         String(validFrom.timeIntervalSince1970), String(validUntil.timeIntervalSince1970), String(starts.timeIntervalSince1970),
+         String(ends.timeIntervalSince1970), String(hasEnd), String(approved), String(enabled),
+         days.sorted().map(String.init).joined(separator: ","), localStart, localEnd, model.instructorID?.uuidString ?? ""]
     }
     private var validityFields: some View {
         Section("Validité") {
@@ -298,6 +368,37 @@ private struct SchoolPlanningSetupEditor: View {
         case .availability: return !days.isEmpty && validTime(localStart) && validTime(localEnd) && localEnd > localStart && (request.rule?.instructorMembershipId ?? model.instructorID) != nil
         case .closure: return ends > starts && reason.count <= 1000 && model.instructorID != nil
         case .removeAvailability, .removeClosure: return nonBlank(reason, max: 1000)
+        }
+    }
+    private var validationHint: String? {
+        guard !valid else { return nil }
+        if hasEnd && validUntil < validFrom { return "La date de fin doit suivre la date de début." }
+        switch request.kind {
+        case .terms:
+            if !nonBlank(label, max: 200) { return "Nommez les conditions, en 200 caractères maximum." }
+            if !nonBlank(termsText, max: 20_000) { return "Renseignez les conditions, limitées à 20 000 caractères." }
+            return "Indiquez le motif de cette version, limité à 1 000 caractères."
+        case .product:
+            if !nonBlank(label, max: 200) { return "Nommez la prestation, en 200 caractères maximum." }
+            if !nonBlank(reference, max: 100) { return "Renseignez la référence, limitée à 100 caractères." }
+            if !nonBlank(category, max: 30) { return "Renseignez la catégorie de permis." }
+            if !nonBlank(unit, max: 100) { return "Précisez l’unité facturée, limitée à 100 caractères." }
+            guard let minutes = Int(duration), (1...480).contains(minutes) else { return "La durée doit être comprise entre 1 et 480 minutes." }
+            if SchoolCatalogFormatting.cents(price) == nil { return "Vérifiez le prix en CHF." }
+            guard let terms = model.terms.first(where: { $0.id == termsID }) else { return "Choisissez les conditions commerciales à appliquer." }
+            if enabled && !terms.approved { return "Approuvez les conditions avant d’activer la prestation." }
+            return "Vérifiez les informations de la prestation."
+        case .availability:
+            if (request.rule?.instructorMembershipId ?? model.instructorID) == nil { return "Choisissez un moniteur." }
+            if days.isEmpty { return "Choisissez au moins un jour." }
+            if !validTime(localStart) || !validTime(localEnd) { return "Saisissez les deux horaires au format HH:mm." }
+            return "L’heure de fin doit être après l’heure de début."
+        case .closure:
+            if model.instructorID == nil { return "Choisissez un moniteur." }
+            if ends <= starts { return "La fermeture doit se terminer après son début." }
+            return "Le motif est limité à 1 000 caractères."
+        case .removeAvailability, .removeClosure:
+            return "Indiquez le motif du retrait, limité à 1 000 caractères."
         }
     }
     private func nonBlank(_ text: String, max: Int) -> Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && text.count <= max }
@@ -357,7 +458,9 @@ private struct SchoolPlanningSetupEditor: View {
         }
         Task {
             if await model.submit(kind, body: body, resourceID: resourceID, version: version) {
-                await model.loadAvailability(); dismiss()
+                dismiss()
+            } else if let pending = model.pending, pending.kind == kind, pending.resourceID == resourceID {
+                awaitingCommandID = pending.id
             }
         }
     }
