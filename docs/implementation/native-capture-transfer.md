@@ -10,4 +10,10 @@ Un départ renvoyé encore autorisé vérifie les deux signatures, les identité
 
 La transmission des données donne priorité à l'arrêt avant les lots et n'envoie aucun choix ou départ en attente. Une projection AP155 est relue avant/après ces transferts. Avant finalisation, sa version courante est réconciliée ; le manifeste vient du coffre. Une finalisation partielle reste un accord distinct. Les changements de droits ne réaffectent jamais les anciennes intentions à un nouveau contexte.
 
-État : code en cours d'intégration, compilation Apple et scénarios réseau à exécuter. Le raccord des interruptions de l'adaptateur, de la vue de leçon et des anciens epochs reste nécessaire. Aucun collecteur n'est activé par ce service seul.
+Le propriétaire `SchoolCaptureSessionController` est conservé à la racine de l'application. Préparation, Agenda et onglet Séance partagent le même journal. La récupération des sessions interrompues s'effectue une seule fois au lancement ; ouvrir une deuxième feuille ne scelle pas une collecte active. La source passe au propriétaire avant toute attente d'adoption ; fermer la préparation ne l'invalide plus. Un échec avant l'adoption arrête la source puis scelle l'autorisation inutilisée dans sa portée initiale.
+
+La carte montre exclusivement les mesures dont l'écriture est confirmée. Pause, reprise, refus de l'élève, révocation et arrêt ferment la source avant les attentes disque/réseau. Un arrêt terminal peut attendre un scellement de pause en cours sans être perdu. Les retours tardifs ne remplacent pas un état arrêté. Les invalidations de bail sont limitées à la portée d'origine pour qu'une ancienne réponse ne supprime pas le bail d'un autre contexte.
+
+Changer d'onglet ou fermer la vue conserve le trajet et ses commandes d'envoi. La synchronisation affichée vient du résultat AP158 durable. Un nouveau départ ne coexiste pas avec un trajet personnel en cours. Les données récupérées après relance demandent encore une entrée de reprise explicite ; elles ne réactivent jamais la source.
+
+Le snapshot `5ff4cda` est compilé sur Apple (run IPA `36061409215`). La composition complète et les nouvelles vues attendent leur compilation groupée. Les scénarios réseau, le parcours physique et le traitement visible des anciens epochs restent à qualifier. Aucun profil d'appareil n'est déclaré qualifié par ce build.

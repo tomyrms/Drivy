@@ -34,7 +34,7 @@ final class SchoolCaptureTransferCoordinator {
         stopCollection(nil)
         invalidated = true
         generation = UUID()
-        Task { await store.invalidateLeases() }
+        Task { await store.invalidateLeases(scope: scope) }
     }
 
     func pending() async throws -> [SchoolCaptureQueuedMutation] {

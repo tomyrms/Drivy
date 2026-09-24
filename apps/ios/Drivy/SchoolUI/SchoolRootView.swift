@@ -47,6 +47,7 @@ struct SchoolRootView: View {
     @State private var joinMembershipToOpen: SchoolMembership?
     @State private var pendingJoinLink: String?
     @State private var selectedHomeTab: SchoolHomeTab = .session
+    @State private var captureController = SchoolCaptureSessionController()
 
     // Les workspaces restent disponibles jusqu’à onDismiss pour la réconciliation.
     // La présentation, elle, est exclusivement pilotée par un item complet.
@@ -114,7 +115,8 @@ struct SchoolRootView: View {
                 openOnboarding: homeOnboardingAction, openCatalog: homeCatalogAction,
                 openTrainingAdministration: trainingAdministrationAction, agendaClient: homeAgendaClient,
                 openMembers: membersAction, openAddLearner: addLearnerAction,
-                trainingClient: homeTrainingClient, selectedTab: $selectedHomeTab)
+                trainingClient: homeTrainingClient, captureController: captureController,
+                selectedTab: $selectedHomeTab)
         } else {
             NavigationStack {
                 accountLanding(workspace)
@@ -130,11 +132,14 @@ struct SchoolRootView: View {
         .foregroundStyle(DrivyTheme.text)
         .background(SignInPresenter { presenter = $0 }.frame(width: 0, height: 0))
         .task(id: identity.isAuthenticated) {
+            captureController.setPersonalCaptureActive(localController.isCapturing)
             if identity.isAuthenticated { await workspace?.loadAccount() }
-            else { workspace?.reset() }
+            else { captureController.setScope(nil); workspace?.reset() }
+            updateCaptureScope()
         }
         .onChange(of: identity.isAuthenticated) { _, authenticated in
             if !authenticated {
+                captureController.setScope(nil)
                 closeJoin(); closeConfiguration(); closeInvitations(); closeProfile(); closeCatalog(); closeMembers()
                 selectedHomeTab = .session; workspace?.reset()
             } else if pendingJoinLink != nil { openJoin() }
@@ -142,11 +147,23 @@ struct SchoolRootView: View {
         .onChange(of: workspace?.membership?.membershipId) { _, _ in
             if workspace?.isLoadingAccount != true { verifyPresentedScopes() }
         }
+        .onChange(of: workspace?.membership?.accessEpoch) { _, _ in
+            if workspace?.isLoadingAccount != true { verifyPresentedScopes() }
+        }
+        .onChange(of: workspace?.person?.personId) { _, _ in
+            if workspace?.isLoadingAccount != true { updateCaptureScope() }
+        }
         .onChange(of: workspace?.isLoadingAccount) { _, loading in
             if loading == false { verifyPresentedScopes() }
         }
         .onChange(of: workspace?.isLoadingSchool) { _, loading in
             if loading == false && workspace?.isLoadingAccount != true { verifyPresentedScopes() }
+        }
+        .onChange(of: workspace?.school?.status) { _, status in
+            if status == "ARCHIVED" { captureController.setScope(nil) }
+        }
+        .onChange(of: localController.isCapturing) { _, capturing in
+            captureController.setPersonalCaptureActive(capturing)
         }
         .onOpenURL { receiveInvitation($0) }
     }
@@ -154,7 +171,9 @@ struct SchoolRootView: View {
     private var accountPresentation: some View {
         observedContent.sheet(isPresented: $showsAccount, onDismiss: accountDismissed) {
             SchoolAccountView(identity: identity, workspace: workspace, localController: localController,
-                openLocalTrials: openTrialsFromAccount, configureSchool: accountConfigurationAction,
+                openLocalTrials: openTrialsFromAccount,
+                localTrialsAvailable: captureController.captureID == nil || captureController.state == .saved,
+                configureSchool: accountConfigurationAction,
                 openInvitations: accountInvitationsAction, openProfilePolicy: accountProfilePolicyAction,
                 openOnboarding: accountOnboardingAction, openJoinSchool: accountJoinAction, signOut: signOut)
         }
@@ -226,6 +245,7 @@ struct SchoolRootView: View {
                       $0.schoolId == membership.schoolId && $0.membershipId == membership.membershipId
                   }) else { return }
             await workspace.selectSchool(current)
+            if workspace.membership?.membershipId == current.membershipId { selectedHomeTab = .school }
         }
     }
 
@@ -468,6 +488,7 @@ struct SchoolRootView: View {
     private func showAccount() { showsAccount = true }
 
     private func openTrialsFromAccount() {
+        guard captureController.captureID == nil || captureController.state == .saved else { return }
         opensTrialsAfterAccount = true
         showsAccount = false
     }
@@ -669,6 +690,7 @@ struct SchoolRootView: View {
     }
 
     private func signOut() {
+        captureController.setScope(nil)
         pendingJoinLink = nil
         closeJoin()
         closeMembers()
@@ -712,6 +734,7 @@ struct SchoolRootView: View {
     }
 
     private func verifyPresentedScopes() {
+        updateCaptureScope()
         if let model = memberWorkspace {
             if !canConfigureSchool || model.scope.personID != workspace?.person?.personId
                 || model.scope.membershipID != workspace?.membership?.membershipId
@@ -731,6 +754,19 @@ struct SchoolRootView: View {
             closeInvitations()
             return
         }
+    }
+
+    private func updateCaptureScope() {
+        guard identity.isAuthenticated, workspace?.school?.status != "ARCHIVED", let configuration,
+              let person = workspace?.person, let membership = workspace?.membership else {
+            captureController.setScope(nil)
+            return
+        }
+        // La recharge conserve la même portée. Changer d'école, de compte ou
+        // d'epoch ferme immédiatement la source de l'ancienne séance.
+        captureController.setScope(SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch,
+            apiBaseURL: configuration.apiBaseURL.absoluteString))
     }
 
     private func verifyProfileScope() {
@@ -776,6 +812,7 @@ private struct SchoolAccountView: View {
     let workspace: SchoolWorkspace?
     let localController: SessionController
     let openLocalTrials: () -> Void
+    let localTrialsAvailable: Bool
     let configureSchool: (() -> Void)?
     let openInvitations: (() -> Void)?
     let openProfilePolicy: (() -> Void)?
@@ -839,6 +876,11 @@ private struct SchoolAccountView: View {
                         Label(localController.isCapturing ? "Revenir à l’essai en cours" : "Essais locaux", systemImage: "map")
                     }
                     .accessibilityIdentifier("open-local-trials")
+                    .disabled(!localTrialsAvailable)
+                    if !localTrialsAvailable {
+                        Text("Terminez la séance de l’école avant d’ouvrir un trajet personnel.")
+                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                    }
                 } footer: {
                     Text("Les essais locaux restent sur cet appareil. Ils ne sont pas des leçons de votre école.")
                 }

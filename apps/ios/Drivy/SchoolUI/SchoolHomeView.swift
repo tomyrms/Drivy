@@ -20,6 +20,7 @@ struct SchoolHomeView: View {
     var openMembers: (() -> Void)? = nil
     var openAddLearner: (() -> Void)? = nil
     var trainingClient: SchoolTrainingClient? = nil
+    var captureController: SchoolCaptureSessionController? = nil
     @Binding var selectedTab: SchoolHomeTab
     @State private var choosesSchool = false
     @State private var dossierPlanningModel: SchoolPlanningWorkspace?
@@ -32,7 +33,7 @@ struct SchoolHomeView: View {
                 .tag(SchoolHomeTab.session)
             if let agendaClient {
                 NavigationStack {
-                    SchoolAgendaView(client: agendaClient, workspace: workspace)
+                    SchoolAgendaView(client: agendaClient, workspace: workspace, captureController: captureController)
                         .toolbar { contextToolbar }
                 }
                     .tabItem { Label("Agenda", systemImage: "calendar") }
@@ -66,17 +67,33 @@ struct SchoolHomeView: View {
             trainingCreationModel?.invalidate(); trainingCreationModel = nil
         }
         .task { await localController.load() }
+        .onChange(of: captureController?.isCollecting) { wasCollecting, isCollecting in
+            if wasCollecting != true && isCollecting == true { selectedTab = .session }
+        }
     }
 
     private var sessionTab: some View {
         NavigationStack {
-            DrivingMapHomeView(controller: localController, schoolName: workspace.school?.name,
-                openLearners: { selectedTab = .learners }, agendaClient: agendaClient,
-                workspace: workspace, openAgenda: { selectedTab = .agenda })
-                .navigationTitle("Séance")
-                .navigationBarTitleDisplayMode(.large)
-                .toolbar { contextToolbar }
+            Group {
+                if let captureController, captureController.captureID != nil {
+                    SchoolCaptureLiveView(controller: captureController, learnerName: captureLearnerName,
+                        returnToLesson: { selectedTab = .agenda })
+                } else {
+                    DrivingMapHomeView(controller: localController, schoolName: workspace.school?.name,
+                        openLearners: { selectedTab = .learners }, agendaClient: agendaClient,
+                        workspace: workspace, openAgenda: { selectedTab = .agenda })
+                        .navigationTitle("Séance")
+                        .navigationBarTitleDisplayMode(.large)
+                }
+            }
+            .toolbar { contextToolbar }
         }
+    }
+
+    private var captureLearnerName: String {
+        let learnerID = captureController?.learnerID
+        if let learner = workspace.learner, learner.id == learnerID { return learner.displayName }
+        return workspace.learners.first(where: { $0.id == learnerID })?.displayName ?? "Leçon en cours"
     }
 
     @ViewBuilder private var learnersTab: some View {

@@ -9,6 +9,7 @@ actor SQLCipherSchoolCaptureStore {
     private let protectFiles: Bool
     private let deviceID: UUID
     private var leases: [UUID: SchoolCaptureLease] = [:]
+    private var leaseScopes: [UUID: SchoolCommandScope] = [:]
     private let chunkSize = 250
 
     static func openDefault() async throws -> SQLCipherSchoolCaptureStore {
@@ -62,7 +63,13 @@ actor SQLCipherSchoolCaptureStore {
 
     func installationID() -> UUID { deviceID }
 
-    func invalidateLeases() { leases.removeAll() }
+    func invalidateLeases(scope: SchoolCommandScope? = nil) {
+        guard let scope else { leases.removeAll(); leaseScopes.removeAll(); return }
+        for id in leaseScopes.filter({ $0.value == scope }).keys {
+            leases.removeValue(forKey: id)
+            leaseScopes.removeValue(forKey: id)
+        }
+    }
 
     func stage(_ mutation: SchoolCapturePendingMutation) throws {
         try write { try insertMutation(mutation) }
@@ -192,7 +199,7 @@ actor SQLCipherSchoolCaptureStore {
         }
         guard let installed else { throw SchoolCaptureStorageFailure.unavailable }
         // Une ligne déjà présente après relance ne restaure jamais une capacité mémoire.
-        if isNew { leases[remote.id] = lease }
+        if isNew { leases[remote.id] = lease; leaseScopes[remote.id] = scope }
         return installed
     }
 
