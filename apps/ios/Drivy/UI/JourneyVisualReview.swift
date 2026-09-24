@@ -13,7 +13,9 @@ struct JourneyVisualReview: View {
 
     var body: some View {
         Group {
-            if let controller {
+            if ["catalog", "dossier", "bilan"].contains(screen) {
+                SchoolVisualReview(screen: screen)
+            } else if let controller {
                 NavigationStack {
                     switch screen {
                     case "live", "report", "without-gps":
@@ -39,6 +41,7 @@ struct JourneyVisualReview: View {
     }
 
     @MainActor private func prepare() async {
+        guard !["catalog", "dossier", "bilan"].contains(screen) else { return }
         guard controller == nil else { return }
         do {
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent("DrivyVisual-\(UUID())", isDirectory: true)

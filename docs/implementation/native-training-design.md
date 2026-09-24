@@ -13,3 +13,11 @@ La création affiche catégorie, référence, durée et prix réels dès la sél
 Relecture ciblée et `git diff --check` effectués. Les trois vues sont destinées à la prochaine compilation Apple groupée ; aucune capture ou exécution sur appareil n’est revendiquée ici.
 
 Signalement traité avec l’intégration : l’accès aux bilans et au suivi dépendait de `progress != nil`, donc une panne de AP58 masquait des parcours AP55/56. L’intégration ajoute `canOpenPedagogicalContent`, fondé sur rôle, formation chargée sous les droits courants et absence de révocation/invalidation/chargement. Les deux gardes de présentation utilisent cette propriété ; chaque destination garde ses vérifications serveur. Le parcours lui-même exige toujours son résultat AP58 pour afficher des appréciations.
+
+## Rendu natif ciblé
+
+`JourneyVisualReview` accepte les entrées `catalog`, `dossier` et `bilan`, qui instancient les vraies vues natives du catalogue, de la formation et d’une révision publiée. `SchoolVisualReview` est compilé uniquement en DEBUG sur simulateur, avec la mention visible « Rendu de contrôle · données fictives ».
+
+Les clients habituels reçoivent un transport en mémoire limité aux GET explicitement définis sur `visual.drivy.invalid`. Aucun transport réseau n’est créé et une route inconnue échoue. La file de commandes de cette fixture refuse l’écriture ; elle n’utilise ni les données scolaires locales ni le service hébergé. Les identités, conditions tarifaires et textes du bilan sont synthétiques.
+
+`DRIVY_VISUAL_LARGE_TEXT=1` permet de rendre ces mêmes vues à la taille d’accessibilité 3. Le workflow et son déclenchement restent sous la responsabilité de l’intégration. La préparation du harness ne vaut pas une preuve de rendu : les images devront être inspectées après l’exécution Apple.
