@@ -4,7 +4,7 @@ Refonte native iPhone/iPad centrée sur la leçon, les observations et le bilan 
 
 ## Réalisation en cours
 
-- `apps/ios` : code du laboratoire G0, local, avec GPS facultatif, observations et stockage SQLCipher. La compilation Apple et les essais natifs restent à exécuter ; aucun IPA validé n'est encore annoncé.
+- `apps/ios` : laboratoire G0 local, avec GPS facultatif, observations et stockage SQLCipher. Premier IPA d'essai 0.1.0 compilé et vérifié sur Apple ; 12 tests Swift réussis. Les parcours UI et les essais physiques restent à qualifier.
 - `apps/api` : six lectures G1A implémentées, identité OIDC et permissions scolaires, PostgreSQL. Typecheck, build et **33 tests ont réussi localement**, dont 20 tests d'intégration avec PostgreSQL réel.
 - `docs/implementation` : décisions, protocole de recette et preuves de la réalisation.
 
@@ -12,7 +12,9 @@ Voir [l'état exact](docs/implementation/STATUS.md). Le produit complet comprend
 
 ## Construire et installer sur iPhone/iPad
 
-Le workflow **Refonte · iOS** est configuré pour compiler et tester sur macOS. Après une exécution réussie, son artefact `Drivy-unsigned-<commit>` doit contenir l'IPA destiné à la signature avec iLoader, son empreinte SHA-256 et les informations du build. La présence du workflow ne prouve pas que la compilation a réussi. L'identité Apple reste utilisée dans iLoader sur le poste du porteur.
+Le [premier IPA d'essai 0.1.0](https://github.com/tomyrms/Drivy/actions/runs/36013615026/artifacts/10813951113) est disponible dans l'artefact `Drivy-essai-ebdb6ca202defd49de07a41425efe1274ba97b45` : extraire le ZIP, puis importer `Drivy.ipa` dans iLoader. Le paquet inclut son empreinte SHA-256 et les informations du build. L'identité Apple reste utilisée dans iLoader sur le poste du porteur. Les artefacts GitHub sont conservés 14 jours.
+
+Le workflow **IPA d'essai · iLoader** compile et vérifie le paquet indépendamment des tests sur simulateurs. Sa réussite ne qualifie donc pas tous les parcours natifs. Le workflow **Refonte · iOS** exécute séparément les tests iPhone/iPad et ne produit son artefact `Drivy-unsigned-<commit>` qu'après leur réussite.
 
 La cible minimale provisoire des essais est iOS/iPadOS 26.0. Ce n'est pas encore le minimum commercial. Les instructions détaillées sont dans [la recette G0](docs/implementation/recette-g0.md).
 

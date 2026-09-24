@@ -7,9 +7,9 @@ Mise à jour : 24 septembre 2026.
 | Conception V3.17, 556 fichiers | Intégrité vérifiée | Manifeste SHA-256 intact |
 | Reprise des données | Sans migration | Décision du porteur : base vide |
 | Dépôt | Nouveau `tomyrms/Drivy` public | Historique neuf ; ancien dépôt conservé privé dans `tomyrms/Drivy-old` |
-| Code et UI native G0 | Écrits, non compilés sur Apple | Séance locale, GPS facultatif, observations, historique, bilan local et SQLCipher ; revue statique effectuée |
-| Tests Swift / XCUITest | NOT_EXECUTED | Sources présentes ; résultats natifs à obtenir sur runner Apple |
-| Chaîne GitHub Actions → IPA | Configurée, résultat non obtenu | Aucune compilation Apple réussie ni IPA validé à cette mise à jour ; signature iLoader ensuite |
+| Code et UI native G0 | Compilés sur Apple | Debug simulateur et Release appareil ; séance locale, GPS facultatif, observations, historique, bilan local et SQLCipher |
+| Tests Swift / XCUITest | 12 tests Swift réussis ; UI en cours de qualification | Run `36009515483` : 12 réussites métier et 1 échec UI au chargement du trousseau ; correctif simulateur compilé, nouvelle exécution `36011951663` en cours à la livraison de l'IPA |
+| Chaîne GitHub Actions → IPA | Premier IPA d'essai produit et vérifié | Run `36013615026` réussi, source `ebdb6ca`, version 0.1.0/build 1 ; iOS arm64, signatures retirées, empreintes vérifiées après téléchargement ; installation iLoader à exécuter |
 | API G1A en lecture | Implémentée et vérifiée localement | Six GET OpenAPI 3.11.0 ; typecheck/build réussis ; 33 tests passent avec PostgreSQL 17.11 réel |
 | Connexion scolaire depuis un client | À réaliser | Fournisseur OIDC à configurer, liens d'identité à provisionner ; aucun parcours G0 → API connecté livré |
 | Essais iPhone/iPad physiques | NOT_EXECUTED | Installation et recette avec le porteur |
@@ -25,4 +25,10 @@ Les preuves couvrent signatures OIDC et issuer/audience, enveloppes et formats d
 
 Ce résultat porte sur six lectures : identité, école, liste/détail élève et liste/détail formation. Les données de tests sont synthétiques. Les commandes d'administration et d'invitation, la synchronisation, la capture scolaire, les bilans publiés et les fonctions commerciales restent hors de cette tranche. Voir [le guide API](../../apps/api/README.md) et [les commandes de vérification](../../README.md#serveur-en-développement).
 
-Les résultats natifs et de CI seront ajoutés lorsqu'ils seront effectivement disponibles. Les 434 scénarios métier et 68 scénarios mobiles de la conception ne changent pas de statut par simple création de tests ou de workflow. Les tests serveur réussis ne qualifient ni le GPS, ni SQLCipher sur iPhone/iPad, ni l'interface native.
+## Premier IPA et preuves Apple
+
+Le [run IPA d'essai `36013615026`](https://github.com/tomyrms/Drivy/actions/runs/36013615026) a réussi sur macOS, Xcode 26.6 (17F113), SDK iPhoneOS 26.5. Il produit **Drivy Essais 0.1.0/build 1**, minimum iOS/iPadOS 26.0, bundle `ch.drivy.qualification`, à partir du commit `ebdb6ca202defd49de07a41425efe1274ba97b45`. Le binaire principal et SQLCipher sont vérifiés arm64 appareil ; les deux bundles et binaires sont non signés. L'IPA de 1 368 606 octets a pour SHA-256 `b5f3eaad74b9891870635e9fbeb89da7bb504905b2a025a06815d399d4f1c861`. Après téléchargement sous Windows, CRC ZIP, Info.plist et empreintes de l'IPA, des binaires, du manifeste de dépendances et des métadonnées ont été vérifiés.
+
+Le workflow d'essai permet au porteur d'installer l'app pendant que les tests sur simulateurs s'exécutent séparément. Il ne vaut pas réussite de ces tests. Le [run natif `36009515483`](https://github.com/tomyrms/Drivy/actions/runs/36009515483) a exécuté 12 tests Swift avec succès et identifié un défaut d'accès au trousseau dans le simulateur non signé. Des entitlements dédiés au simulateur et une signature ad hoc ont été ajoutés ; leur présence a été vérifiée dans le produit compilé. Le [run natif `36011951663`](https://github.com/tomyrms/Drivy/actions/runs/36011951663), portant sur le même code iOS que l'IPA livré, reste en cours au moment de cette mise à jour. Aucun succès UI complet n'est encore déclaré.
+
+Les 434 scénarios métier et 68 scénarios mobiles de la conception ne changent pas de statut par simple création de tests ou de workflow. Ni la compilation ni les tests serveur ne qualifient le GPS, l'autonomie, l'installation iLoader ou les parcours physiques sur iPhone/iPad.
