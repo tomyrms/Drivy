@@ -4,6 +4,7 @@ struct SchoolBrowserView: View {
     @Bindable var workspace: SchoolWorkspace
     let openAccount: () -> Void
     var openInvitations: (() -> Void)? = nil
+    var openProfile: ((SchoolLearner) -> Void)? = nil
     @State private var choosesSchool = false
 
     var body: some View {
@@ -47,7 +48,7 @@ struct SchoolBrowserView: View {
             .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 440)
         } detail: {
             if workspace.selectedLearnerID != nil {
-                SchoolLearnerDetailView(workspace: workspace)
+                SchoolLearnerDetailView(workspace: workspace, openProfile: openProfile)
             } else {
                 SchoolOverviewView(workspace: workspace)
             }
@@ -216,6 +217,7 @@ private struct SchoolOverviewView: View {
 
 private struct SchoolLearnerDetailView: View {
     @Bindable var workspace: SchoolWorkspace
+    let openProfile: ((SchoolLearner) -> Void)?
     @State private var showsTraining = false
 
     var body: some View {
@@ -229,6 +231,13 @@ private struct SchoolLearnerDetailView: View {
                     Text(learner.displayName).font(.largeTitle.weight(.bold))
                     if learner.archivedAt != nil {
                         Label("Dossier archivé", systemImage: "archivebox").foregroundStyle(DrivyTheme.muted)
+                    }
+                    if let openProfile {
+                        Button { openProfile(learner) } label: {
+                            Label("Compléter le profil scolaire", systemImage: "person.text.rectangle")
+                        }
+                        .buttonStyle(DrivySecondaryButtonStyle())
+                        .accessibilityIdentifier("open-learner-profile")
                     }
                     if learner.contactEmail != nil || learner.contactPhone != nil {
                         DrivyPanel {

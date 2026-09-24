@@ -26,6 +26,15 @@ private actor InvitationTransport: SchoolHTTPTransport {
 
 @MainActor
 struct SchoolInvitationClientTests {
+    @Test func unconfiguredDeliveryHasSpecificMessageAndCannotReleaseAnUncertainCommand() async throws {
+        let transport = InvitationTransport(Data("{\"code\":\"INVITATION_DELIVERY_UNAVAILABLE\"}".utf8),
+            status: 503, mediaType: "application/problem+json")
+        let client = SchoolInvitationClient(baseURL: URL(string: "https://api.example.invalid")!, tokenSource: InvitationToken(), transport: transport)
+        let command = try InvitationFixture.command()
+        await #expect(throws: SchoolInvitationFailure.deliveryUnavailable) { try await client.send(command) }
+        #expect(!SchoolInvitationFailure.deliveryUnavailable.permitsCorrectionOfFreshRequest)
+        #expect(SchoolInvitationFailure.deliveryUnavailable.localizedDescription.contains("n’est pas encore configuré"))
+    }
     private let base = URL(string: "https://api.example.invalid")!
     private let school = ConfigurationFixture.schoolID
     private func envelope<T: Encodable>(_ value: T) throws -> Data {

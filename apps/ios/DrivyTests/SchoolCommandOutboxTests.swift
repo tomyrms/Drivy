@@ -5,6 +5,32 @@ import Testing
 
 @MainActor
 struct SchoolCommandOutboxTests {
+    @Test func profileRouteAndSchoolPreconditionSurviveEncryptedRecreation() throws {
+        try inDirectory { directory in
+            let original = try ProfileFixture.command()
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(original)
+            let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            #expect(try reopened.pending(for: original.scope) == original)
+            #expect(original.resourceID != original.routeResourceID && original.hasValidTarget)
+            try reopened.remove(original)
+            let id = UUID()
+            let create = PendingSchoolCommand(id: id, scope: original.scope, kind: .createProfilePolicy,
+                resourceVersion: 0, createdAt: Date(), body: try JSONEncoder().encode(SchoolEmptyProfileCommand(operationId: id)), expectedVersion: 8)
+            try reopened.save(create)
+            #expect(try store.pending(for: create.scope)?.expectedVersion == 8)
+            #expect(try store.pending(for: create.scope)?.resourceVersion == 0)
+        }
+    }
+
+    @Test func historicalArchiveWithoutProfileRoutingFieldsStillDecodes() throws {
+        let original = try command()
+        var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as? [String: Any])
+        object.removeValue(forKey: "routeResourceID"); object.removeValue(forKey: "expectedVersion")
+        let restored = try JSONDecoder().decode(PendingSchoolCommand.self, from: JSONSerialization.data(withJSONObject: object))
+        #expect(restored == original && restored.hasValidTarget)
+        #expect(restored.routeResourceID == nil && restored.expectedVersion == nil)
+    }
     private let key = Data(repeating: 0xA7, count: 32)
     private let person = UUID(uuidString: "10000000-0000-4000-8000-000000000001")!
     private let school = UUID(uuidString: "20000000-0000-4000-8000-000000000001")!

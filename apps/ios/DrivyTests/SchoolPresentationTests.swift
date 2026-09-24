@@ -4,6 +4,31 @@ import XCTest
 
 @MainActor
 final class SchoolPresentationTests: XCTestCase {
+    func testNativeAdministrativeProfileAndPolicyUseRealViewsWithSyntheticResponses() async throws {
+        let api = ProfileAPIStub()
+        api.profileValue = ProfileFixture.profile(firstName: nil, lastName: nil)
+        let profile = ProfileFixture.workspace(api: api)
+        let policy = SchoolProfileWorkspace(scope: ConfigurationFixture.scope(), roles: ["ADMIN"], api: api, outbox: ConfigurationOutboxStub())
+        await profile.load(); await policy.load()
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        var windows: [UIWindow] = []
+        defer { windows.forEach { $0.isHidden = true }; previous?.makeKeyAndVisible(); profile.invalidate(); policy.invalidate() }
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let window = contentWindow(scene: scene, style: style, content: SchoolProfileView(model: profile))
+            windows.append(window)
+            try await Task.sleep(for: .seconds(1))
+            attach(window, name: style == .light ? "g1d-01-profil-clair-fixtures" : "g1d-02-profil-sombre-fixtures")
+            window.isHidden = true
+        }
+        let policyWindow = contentWindow(scene: scene, style: .light,
+            content: SchoolProfilePolicyView(model: policy).environment(\.dynamicTypeSize, .accessibility1))
+        windows.append(policyWindow)
+        try await Task.sleep(for: .seconds(1))
+        attach(policyWindow, name: "g1d-03-politique-grand-texte-fixtures")
+        XCTAssertTrue(api.commands.isEmpty)
+        XCTAssertTrue(profile.draft.firstName.isEmpty && profile.draft.lastName.isEmpty)
+    }
     func testNativeInvitationsListFormAndUncertainCommand() async throws {
         let api = InvitationAPIStub()
         api.items = [InvitationFixture.invitation(),

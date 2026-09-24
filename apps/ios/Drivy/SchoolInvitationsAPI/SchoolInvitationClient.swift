@@ -127,6 +127,7 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
             case 400 where problem?.code == "INVALID_CURSOR": throw SchoolInvitationFailure.invalidCursor
             case 428 where problem?.code == "PRECONDITION_REQUIRED": throw SchoolInvitationFailure.rejected
             case 404 where path.first == "operations": throw SchoolInvitationFailure.operationUnknown
+            case 503 where problem?.code == "INVITATION_DELIVERY_UNAVAILABLE": throw SchoolInvitationFailure.deliveryUnavailable
             case 429, 500...599: throw SchoolInvitationFailure.unavailable
             default: throw SchoolInvitationFailure.invalidResponse
             }

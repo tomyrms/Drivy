@@ -17,6 +17,16 @@ struct SchoolCommandScope: Codable, Sendable, Equatable {
 enum SchoolCommandKind: String, Codable, Sendable {
     case updateSchool, saveSetup, activate, saveDataPolicy
     case createInvitation, resendInvitation, revokeInvitation
+    case createProfilePolicy, publishProfilePolicy, updateProfile, saveOnboarding, completeOnboarding
+
+    var isProfile: Bool {
+        switch self {
+        case .createProfilePolicy, .publishProfilePolicy, .updateProfile, .saveOnboarding, .completeOnboarding: true
+        default: false
+        }
+    }
+
+    var isConfiguration: Bool { !isInvitation && !isProfile }
 
     var isInvitation: Bool {
         switch self {
@@ -34,6 +44,11 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .createInvitation: "CREATE_INVITATION"
         case .resendInvitation: "RESEND_INVITATION"
         case .revokeInvitation: "REVOKE_INVITATION"
+        case .createProfilePolicy: "CREATE_PROFILE_FIELD_POLICY"
+        case .publishProfilePolicy: "PUBLISH_PROFILE_FIELD_POLICY"
+        case .updateProfile: "UPDATE_ADMINISTRATIVE_PROFILE"
+        case .saveOnboarding: "SAVE_ONBOARDING"
+        case .completeOnboarding: "COMPLETE_ONBOARDING"
         }
     }
 
@@ -43,6 +58,9 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .saveSetup: "SchoolSetup"
         case .saveDataPolicy: "SchoolDataPolicy"
         case .createInvitation, .resendInvitation, .revokeInvitation: "Invitation"
+        case .createProfilePolicy, .publishProfilePolicy: "ProfileFieldPolicy"
+        case .updateProfile: "AdministrativeProfile"
+        case .saveOnboarding, .completeOnboarding: "OnboardingProgress"
         }
     }
 }
@@ -56,24 +74,33 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
     let body: Data
     // Absent in v1 G1B archives; creation has no server resource identifier yet.
     let resourceID: UUID?
+    let routeResourceID: UUID?
+    let expectedVersion: Int?
+
+    var ifMatchVersion: Int { expectedVersion ?? resourceVersion }
 
     init(id: UUID, scope: SchoolCommandScope, kind: SchoolCommandKind, resourceVersion: Int,
-         createdAt: Date, body: Data, resourceID: UUID? = nil) {
+         createdAt: Date, body: Data, resourceID: UUID? = nil, routeResourceID: UUID? = nil, expectedVersion: Int? = nil) {
         self.id = id; self.scope = scope; self.kind = kind; self.resourceVersion = resourceVersion
         self.createdAt = createdAt; self.body = body; self.resourceID = resourceID
+        self.routeResourceID = routeResourceID; self.expectedVersion = expectedVersion
     }
 
     var hasValidTarget: Bool {
+        if !kind.isProfile && (routeResourceID != nil || expectedVersion != nil) { return false }
         switch kind {
-        case .createInvitation: resourceVersion == 0 && resourceID == nil
-        case .resendInvitation, .revokeInvitation: resourceVersion > 0 && resourceID != nil
-        default: resourceVersion > 0 && resourceID == nil
+        case .createProfilePolicy: return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && ifMatchVersion > 0
+        case .updateProfile: return resourceVersion > 0 && resourceID != nil && routeResourceID != nil && expectedVersion == nil
+        case .publishProfilePolicy, .saveOnboarding, .completeOnboarding: return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
+        case .createInvitation: return resourceVersion == 0 && resourceID == nil
+        case .resendInvitation, .revokeInvitation: return resourceVersion > 0 && resourceID != nil
+        default: return resourceVersion > 0 && resourceID == nil
         }
     }
 
     func matches(_ receipt: SchoolOperationReceipt) -> Bool {
         guard hasValidTarget else { return false }
-        let expectedID = kind.isInvitation ? resourceID : scope.schoolID
+        let expectedID = kind.isConfiguration ? scope.schoolID : resourceID
         return receipt.operationId == id && receipt.commandType == kind.operationType
             && receipt.resourceType == kind.resourceType && receipt.resourceVersion > resourceVersion
             && (expectedID == nil || receipt.resourceId == expectedID)

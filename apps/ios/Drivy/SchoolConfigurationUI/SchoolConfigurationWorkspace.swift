@@ -40,7 +40,7 @@ final class SchoolConfigurationWorkspace: Identifiable {
     }
 
     var mayEdit: Bool { hasLoaded && storageAccessible && !isInvalidated && !isLoading && !isBusy && pending == nil && !needsReload }
-    var canRetryPending: Bool { pending?.scope == scope && pending?.kind.isInvitation == false && !pendingRequiresReview && !isBusy && !isLoading && !isInvalidated }
+    var canRetryPending: Bool { pending?.scope == scope && pending?.kind.isConfiguration == true && !pendingRequiresReview && !isBusy && !isLoading && !isInvalidated }
     var identityIsValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && name.unicodeScalars.count <= 150
             && Self.emailIsValid(contactEmail) && contactPhone.unicodeScalars.count <= 32

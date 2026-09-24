@@ -16,6 +16,11 @@ struct SchoolRootView: View {
     @State private var showsInvitations = false
     @State private var invitations: SchoolInvitationWorkspace?
     @State private var presenter: UIViewController?
+    @State private var profileWorkspace: SchoolProfileWorkspace?
+    @State private var showsProfile = false
+    @State private var opensProfilePolicyAfterAccount = false
+    @State private var opensOnboardingAfterAccount = false
+    @State private var opensProfilePolicyAfterConfiguration = false
 
     var body: some View {
         accountPresentation
@@ -27,6 +32,9 @@ struct SchoolRootView: View {
             }
             .fullScreenCover(isPresented: $showsLocalTrials) {
                 localTrialsCover
+            }
+            .sheet(isPresented: $showsProfile, onDismiss: profileDismissed) {
+                profileSheet
             }
     }
 
@@ -54,7 +62,7 @@ struct SchoolRootView: View {
                 }
             } else {
                 SchoolBrowserView(workspace: workspace, openAccount: showAccount,
-                    openInvitations: invitationsAction)
+                    openInvitations: invitationsAction, openProfile: profileAction)
             }
         } else {
             NavigationStack {
@@ -75,7 +83,7 @@ struct SchoolRootView: View {
             else { workspace?.reset() }
         }
         .onChange(of: identity.isAuthenticated) { _, authenticated in
-            if !authenticated { closeConfiguration(); closeInvitations(); workspace?.reset() }
+            if !authenticated { closeConfiguration(); closeInvitations(); closeProfile(); workspace?.reset() }
         }
         .onChange(of: workspace?.membership?.membershipId) { _, _ in
             if workspace?.isLoadingAccount != true { verifyPresentedScopes() }
@@ -92,7 +100,8 @@ struct SchoolRootView: View {
         observedContent.sheet(isPresented: $showsAccount, onDismiss: accountDismissed) {
             SchoolAccountView(identity: identity, workspace: workspace, localController: localController,
                 openLocalTrials: openTrialsFromAccount, configureSchool: accountConfigurationAction,
-                openInvitations: accountInvitationsAction, signOut: signOut)
+                openInvitations: accountInvitationsAction, openProfilePolicy: accountProfilePolicyAction,
+                openOnboarding: accountOnboardingAction, signOut: signOut)
         }
     }
 
@@ -114,7 +123,8 @@ struct SchoolRootView: View {
     @ViewBuilder
     private var configurationSheet: some View {
         if let schoolConfiguration {
-            SchoolConfigurationView(model: schoolConfiguration, openSchool: { showsSchoolConfiguration = false })
+            SchoolConfigurationView(model: schoolConfiguration, openSchool: { showsSchoolConfiguration = false },
+                openProfilePolicy: openPolicyFromConfiguration)
                 .disabled(isCheckingSchoolAccess)
                 .overlay { accessCheckOverlay }
                 .onChange(of: schoolConfiguration.accessFailure) { _, failure in
@@ -130,6 +140,77 @@ struct SchoolRootView: View {
     private var accessCheckOverlay: some View {
         if isCheckingSchoolAccess {
             DrivyTheme.canvas.ignoresSafeArea().overlay { ProgressView("Vérification de vos accès…") }
+        }
+    }
+
+    @ViewBuilder private var profileSheet: some View {
+        if let profileWorkspace {
+            profileContent(profileWorkspace)
+                .disabled(isCheckingSchoolAccess)
+                .overlay { accessCheckOverlay }
+                .onChange(of: profileWorkspace.accessFailure) { _, failure in
+                    if failure != nil {
+                        closeProfile()
+                        Task { await workspace?.loadAccount() }
+                    }
+                }
+        }
+    }
+    @ViewBuilder private func profileContent(_ model: SchoolProfileWorkspace) -> some View {
+        if model.isPolicyManagement { SchoolProfilePolicyView(model: model) }
+        else { SchoolProfileView(model: model) }
+    }
+    private var profileAction: ((SchoolLearner) -> Void)? {
+        guard configuration != nil, workspace?.membership != nil else { return nil }
+        return { learner in openProfile(learner) }
+    }
+    private var accountProfilePolicyAction: (() -> Void)? {
+        guard canConfigureSchool else { return nil }
+        return { opensProfilePolicyAfterAccount = true; showsAccount = false }
+    }
+    private var accountOnboardingAction: (() -> Void)? {
+        guard configuration != nil, workspace?.membership != nil else { return nil }
+        return { opensOnboardingAfterAccount = true; showsAccount = false }
+    }
+    private func openPolicyFromConfiguration() {
+        opensProfilePolicyAfterConfiguration = true
+        showsSchoolConfiguration = false
+    }
+    private func makeProfileWorkspace(learner: SchoolLearner? = nil, onboardingOnly: Bool = false) -> SchoolProfileWorkspace? {
+        guard let configuration, let person = workspace?.person, let membership = workspace?.membership else { return nil }
+        if let learner, learner.schoolId != membership.schoolId { return nil }
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
+        var targetLearner = learner
+        if targetLearner == nil, onboardingOnly, membership.roles.contains("LEARNER") {
+            targetLearner = workspace?.learners.first { $0.personId == person.personId }
+        }
+        let isOwn = targetLearner?.personId == person.personId && membership.roles.contains("LEARNER")
+        let kind: SchoolOnboardingKind?
+        if isOwn { kind = .student }
+        else if onboardingOnly { kind = membership.roles.contains("LEARNER") ? .student : .staff }
+        else { kind = nil }
+        return SchoolProfileWorkspace(scope: scope, roles: membership.roles, learnerID: targetLearner?.id,
+            isOwnProfile: isOwn, onboardingKind: kind,
+            api: SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity))
+    }
+    private func openProfile(_ learner: SchoolLearner) {
+        guard let model = makeProfileWorkspace(learner: learner) else { return }
+        profileWorkspace = model; showsProfile = true
+    }
+    private func openProfilePolicy() {
+        guard canConfigureSchool, let model = makeProfileWorkspace() else { return }
+        profileWorkspace = model; showsProfile = true
+    }
+    private func openOnboarding() {
+        guard let model = makeProfileWorkspace(onboardingOnly: true) else { return }
+        profileWorkspace = model; showsProfile = true
+    }
+    private func closeProfile() { profileWorkspace?.invalidate(); showsProfile = false }
+    private func profileDismissed() {
+        profileWorkspace?.invalidate(); profileWorkspace = nil
+        if identity.isAuthenticated, workspace?.selectedLearnerID != nil {
+            Task { await workspace?.loadSelectedLearner() }
         }
     }
 
@@ -202,6 +283,12 @@ struct SchoolRootView: View {
             opensInvitationsAfterAccount = false
             openInvitations()
         }
+        if opensProfilePolicyAfterAccount {
+            opensProfilePolicyAfterAccount = false; openProfilePolicy()
+        }
+        if opensOnboardingAfterAccount {
+            opensOnboardingAfterAccount = false; openOnboarding()
+        }
     }
 
     private func invitationsDismissed() {
@@ -212,6 +299,11 @@ struct SchoolRootView: View {
     private func configurationDismissed() {
         schoolConfiguration?.invalidate()
         schoolConfiguration = nil
+        if opensProfilePolicyAfterConfiguration {
+            opensProfilePolicyAfterConfiguration = false
+            openProfilePolicy()
+            return
+        }
         if identity.isAuthenticated, workspace?.person != nil {
             Task { await workspace?.loadAccount() }
         }
@@ -336,6 +428,7 @@ struct SchoolRootView: View {
     }
 
     private func signOut() {
+        closeProfile()
         closeConfiguration()
         closeInvitations()
         workspace?.reset()
@@ -375,6 +468,7 @@ struct SchoolRootView: View {
 
     private func verifyPresentedScopes() {
         verifyConfigurationScope()
+        verifyProfileScope()
         guard let model = invitations else { return }
         guard canManageInvitations, let person = workspace?.person, let membership = workspace?.membership,
               model.scope.personID == person.personId, model.scope.schoolID == membership.schoolId,
@@ -382,6 +476,16 @@ struct SchoolRootView: View {
             closeInvitations()
             return
         }
+    }
+
+    private func verifyProfileScope() {
+        guard let model = profileWorkspace else { return }
+        guard let person = workspace?.person, let membership = workspace?.membership,
+              model.scope.personID == person.personId, model.scope.schoolID == membership.schoolId,
+              model.scope.membershipID == membership.membershipId, model.scope.accessEpoch == membership.accessEpoch else {
+            closeProfile(); return
+        }
+        if model.isPolicyManagement && !canConfigureSchool { closeProfile() }
     }
 
     private func openConfiguration() {
@@ -419,6 +523,8 @@ private struct SchoolAccountView: View {
     let openLocalTrials: () -> Void
     let configureSchool: (() -> Void)?
     let openInvitations: (() -> Void)?
+    let openProfilePolicy: (() -> Void)?
+    let openOnboarding: (() -> Void)?
     let signOut: () -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -444,6 +550,14 @@ private struct SchoolAccountView: View {
                         }
                     }
                     if identity.isAuthenticated {
+                        if let openOnboarding {
+                            Button("Mon arrivée dans l’école", action: openOnboarding)
+                                .accessibilityIdentifier("open-my-onboarding")
+                        }
+                        if let openProfilePolicy {
+                            Button("Champs du profil", action: openProfilePolicy)
+                                .accessibilityIdentifier("open-profile-policies")
+                        }
                         if let openInvitations {
                             Button(action: openInvitations) { Label("Invitations", systemImage: "envelope") }
                                 .accessibilityIdentifier("open-school-invitations")
