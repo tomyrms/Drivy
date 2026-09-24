@@ -115,7 +115,8 @@ struct SchoolDeviceAssessmentBody: Codable, Sendable {
     let preciseLocation: Bool
     let sampleAgeSeconds: Int?
     let horizontalAccuracyMeters: Double?
-    let freeBytes: Int64
+    // Sur iOS, la capacité disque reste locale (motif Apple E174.1).
+    let freeBytes: Int64?
     let networkAvailable: Bool
     func encode(to encoder: any Encoder) throws {
         var value = encoder.container(keyedBy: CodingKeys.self)

@@ -24,6 +24,10 @@ struct SchoolCaptureLease: Sendable {
         let elapsed = requestStartedAt.duration(to: instant)
         return elapsed >= .zero && elapsed < remainingAtServerResponse
     }
+
+    var collectionDeadline: ContinuousClock.Instant {
+        requestStartedAt.advanced(by: remainingAtServerResponse)
+    }
 }
 
 enum SchoolCaptureAuthorizationVerifier {

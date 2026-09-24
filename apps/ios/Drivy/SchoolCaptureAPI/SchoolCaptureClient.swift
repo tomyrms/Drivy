@@ -41,6 +41,14 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         return value
     }
 
+    func verifyScope(_ scope: SchoolCommandScope) async throws {
+        guard scope.apiBaseURL == baseURL.absoluteString else { throw SchoolCaptureFailure.forbidden }
+        let person: SchoolPerson = try await read(["v1", "me"])
+        guard person.personId == scope.personID, person.memberships.contains(where: {
+            $0.schoolId == scope.schoolID && $0.membershipId == scope.membershipID && $0.accessEpoch == scope.accessEpoch
+        }) else { throw SchoolCaptureFailure.forbidden }
+    }
+
     func recordingNotice(schoolID: UUID) async throws -> SchoolRecordingNotice {
         let value: SchoolRecordingNotice = try await read(schoolPath(schoolID, ["recording-notice"]))
         guard !value.noticeText.isEmpty, value.noticeText.utf8.count <= 200_000,
@@ -123,8 +131,9 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         }
     }
 
-    func capture(schoolID: UUID, captureID: UUID) async throws -> SchoolCaptureSession {
-        let value: SchoolCaptureSession = try await read(schoolPath(schoolID, ["captures", captureID.uuidString]))
+    func capture(schoolID: UUID, captureID: UUID, scope: SchoolCommandScope? = nil) async throws -> SchoolCaptureSession {
+        if let scope, scope.schoolID != schoolID || scope.apiBaseURL != baseURL.absoluteString { throw SchoolCaptureFailure.forbidden }
+        let value: SchoolCaptureSession = try await read(schoolPath(schoolID, ["captures", captureID.uuidString]), verifying: scope)
         guard value.id == captureID, value.schoolId == schoolID, value.hasValidTimeline else { throw SchoolCaptureFailure.invalidResponse }
         return value
     }
@@ -212,6 +221,7 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
             catch is CancellationError { throw CancellationError() }
             catch SchoolAPIError.unauthorized { throw SchoolCaptureFailure.unauthorized }
             catch SchoolAPIError.forbidden { throw SchoolCaptureFailure.forbidden }
+            catch SchoolAPIError.identityNotLinked { throw SchoolCaptureFailure.forbidden }
             catch { throw SchoolCaptureFailure.unavailable }
             guard person.personId == expected.personID, person.memberships.contains(where: {
                 $0.schoolId == expected.schoolID && $0.membershipId == expected.membershipID && $0.accessEpoch == expected.accessEpoch
