@@ -8,7 +8,8 @@ export async function withActor<T>(pool: Pool, identity: Identity, schoolId: str
   work: (db: PoolClient, actor: Actor, membership: Membership | undefined) => Promise<T>): Promise<T> {
   const db = await pool.connect();
   try {
-    await db.query('BEGIN READ ONLY');
+    // Les projections d'une réponse partagent versions et droits d'un même instant.
+    await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await db.query('SET LOCAL ROLE drivy_app');
     await db.query("SELECT set_config('app.issuer',$1,true), set_config('app.subject',$2,true), set_config('app.school_id',$3,true)", [identity.issuer, identity.subject, schoolId ?? '']);
     const link = await db.query<{ person_id: string }>('SELECT person_id FROM drivy.identity_link WHERE issuer=$1 AND subject=$2', [identity.issuer, identity.subject]);

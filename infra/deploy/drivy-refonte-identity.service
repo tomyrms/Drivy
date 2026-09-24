@@ -1,0 +1,38 @@
+[Unit]
+Description=Drivy refonte - Keycloak 26.7.4
+After=network-online.target drivy-refonte-ingress.service
+Requires=drivy-refonte-ingress.service
+Wants=network-online.target
+StartLimitIntervalSec=180
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=drivy-identity
+Group=drivy-identity
+WorkingDirectory=/opt/drivy-refonte/runtime/keycloak
+Environment=JAVA_HOME=/opt/drivy-refonte/runtime/java
+Environment="JAVA_OPTS_KC_HEAP=-Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m"
+Environment="JAVA_OPTS_APPEND=-XX:ActiveProcessorCount=2 -XX:+ExitOnOutOfMemoryError"
+EnvironmentFile=/etc/drivy-refonte/identity.env
+EnvironmentFile=-/etc/drivy-refonte/identity-bootstrap.env
+ExecStart=/opt/drivy-refonte/runtime/keycloak/bin/kc.sh start --optimized --import-realm
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=180
+TimeoutStopSec=60
+MemoryHigh=768M
+MemoryMax=1G
+TasksMax=160
+UMask=0077
+NoNewPrivileges=true
+# CT114 interdit les namespaces de montage systemd ; compte sans privilège,
+# code/configuration non modifiables et confinement LXC restent effectifs.
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LimitCORE=0
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+[Unit]
+Description=Drivy refonte - filtrage des seuls ports 3001 et 8081
+Before=drivy-refonte-api.service drivy-refonte-identity.service
+After=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/usr/sbin/nft --check --file /etc/drivy-refonte/ingress.nft
+ExecStart=/usr/sbin/nft --file /etc/drivy-refonte/ingress.nft
+# Aucun ExecStop : arrêter l'unité ne retire pas la protection des ports.
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_NET_ADMIN
+# Le conteneur non privilégié interdit les namespaces de montage systemd.
+# Seule CAP_NET_ADMIN est accordée à ce chargeur de règles fixe.
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

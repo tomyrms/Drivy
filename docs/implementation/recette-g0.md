@@ -1,15 +1,17 @@
 # Installer et essayer le premier IPA
 
-Ce build est un laboratoire privé de la refonte. Il sert à qualifier les fondations avant de connecter les données d'une école. Il n'envoie pas les trajets ou observations à un serveur.
+Ce build est un laboratoire local de la refonte. Il sert à qualifier les fondations avant de connecter les données d'une école. Il n'envoie pas les trajets ou observations à un serveur.
+
+Avant les essais de performance, lire les [budgets techniques provisoires G0](budgets-g0.md), identifier l'appareil/build et conserver les cibles retenues. Aucun résultat de cette recette ne remplace les mesures manquantes de DM07.
 
 ## Installation
 
-1. Ouvrir l'exécution réussie du workflow **Refonte · iOS** correspondant au commit communiqué.
-2. Télécharger l'artefact `Drivy-unsigned-<commit>` et extraire le ZIP.
+1. Ouvrir l'exécution réussie du workflow **IPA d'essai · iLoader** ou **Refonte · iOS** correspondant au commit communiqué.
+2. Télécharger l'artefact `Drivy-essai-<commit>` (compilation indépendante) ou `Drivy-unsigned-<commit>` (après tests natifs réussis), puis extraire le ZIP. L'artefact `Drivy-essai-build-<commit>` contient uniquement les journaux.
 3. Importer `Drivy.ipa` dans iLoader, signer avec son compte Apple puis installer sur l'iPhone ou l'iPad.
 4. Ouvrir **Drivy Essais** et commencer par une séance sans GPS.
 
-Conserver le commit, le modèle d'appareil et la version exacte d'OS pour associer un résultat au bon build. Un problème de signature/installation reste distinct d'un échec du parcours dans l'application.
+Conserver le commit, le modèle d'appareil et la version exacte d'OS pour associer un résultat au bon build. Un problème de signature/installation reste distinct d'un échec du parcours dans l'application. Le workflow d'essai construit et vérifie le paquet sans attendre les simulateurs : consulter séparément les résultats natifs, sa réussite ne les valide pas.
 
 ## Parcours sans GPS
 

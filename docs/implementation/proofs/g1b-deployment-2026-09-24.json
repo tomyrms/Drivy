@@ -1,0 +1,38 @@
+{
+  "checkedAt": "2026-09-24T16:02:15Z",
+  "status": "PASSED",
+  "commit": "c3e5e6733282a77be779f1c99661f0831c74c5d8",
+  "archiveSHA256": "e2c076e4b0879da42169eff8b7192e623456ab67bbb969d27d94f8323e65cd98",
+  "database": {
+    "engine": "PostgreSQL 16.14",
+    "encoding": "UTF8",
+    "privateBackupBeforeMigration": true,
+    "migration": "002_g1b_school_setup.sql",
+    "runtimeRoleAndTLSVerification": "PASSED",
+    "tables": 13,
+    "allTablesForceRLS": true,
+    "schools": 1,
+    "draftSchools": 1,
+    "activeAdmins": 1,
+    "initialSetups": 1,
+    "unapprovedEmptyPolicies": 1,
+    "operations": 0,
+    "audits": 0,
+    "learners": 0,
+    "trainings": 0
+  },
+  "services": { "api": "active", "identity": "active", "ingress": "active" },
+  "https": {
+    "meWithoutToken": 401,
+    "setupWithoutToken": 401,
+    "readinessWithoutToken": 401,
+    "dataPolicyWithoutToken": 401,
+    "protectedResponsesCacheControl": "no-store",
+    "discovery": 200,
+    "publicIdentityAdmin": 404
+  },
+  "limitations": [
+    "No school policy adoption or activation was performed on behalf of the user.",
+    "This deployment check does not replace native or physical device qualification."
+  ]
+}

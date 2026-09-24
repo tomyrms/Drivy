@@ -23,9 +23,7 @@ struct SessionHistoryView: View {
                 List {
                     Section {
                         ForEach(sessions) { session in
-                            NavigationLink {
-                                SessionDetailView(controller: controller, sessionID: session.id)
-                            } label: {
+                            NavigationLink(value: session.id) {
                                 SessionHistoryRow(session: session)
                             }
                             .accessibilityIdentifier("history-session-\(session.id.uuidString)")

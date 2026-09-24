@@ -7,6 +7,7 @@ import { withActor, type Actor, type Membership } from './database.js';
 import { ApiError, forbidden, notFound } from './errors.js';
 import { Cursors } from './cursor.js';
 import { getLearner, getTraining, listLearners, listTrainings } from './queries.js';
+import { registerSchoolSetup } from './school-setup.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
 const schoolParams = z.object({ schoolId: z.uuid() });
@@ -107,5 +108,6 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
     });
     versionHeader(data, reply); return envelope(data, request);
   });
+  registerSchoolSetup(app,options);
   return app;
 }

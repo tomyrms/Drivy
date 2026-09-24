@@ -17,15 +17,18 @@ permissions:
   contents: read
 concurrency:
   group: refonte-ios-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   apple:
     name: Tests natifs et IPA
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: macos-26
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      DRIVY_API_BASE_URL: ${{ vars.DRIVY_API_BASE_URL }}
+      DRIVY_OIDC_ISSUER: ${{ vars.DRIVY_OIDC_ISSUER }}
+      DRIVY_OIDC_CLIENT_ID: ${{ vars.DRIVY_OIDC_CLIENT_ID }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Installer XcodeGen vérifié
@@ -47,9 +50,31 @@ jobs:
           sw_vers > artifacts/ios/macos.txt
           swift --version > artifacts/ios/swift.txt
           xcodegen generate --spec apps/ios/project.yml
-          xcodebuild -resolvePackageDependencies -project apps/ios/Drivy.xcodeproj -scheme Drivy
+          mkdir -p apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp apps/ios/Package.resolved apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          xcodebuild -resolvePackageDependencies -onlyUsePackageVersionsFromResolvedFile -project apps/ios/Drivy.xcodeproj -scheme Drivy
           cp apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved artifacts/ios/Package.resolved
-      - name: Tests unitaires et parcours iPhone
+      - name: Compiler l'application et les tests natifs
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild build-for-testing \
+            -project apps/ios/Drivy.xcodeproj -scheme Drivy \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath artifacts/ios/DerivedData \
+            2>&1 | tee artifacts/ios/simulator-build.log
+          python3 - <<'PY'
+          import pathlib, plistlib, shutil
+          root = pathlib.Path('artifacts/ios/DerivedData/Build/Intermediates.noindex/Drivy.build')
+          matches = list(root.rglob('Drivy.app-Simulated.xcent'))
+          if len(matches) != 1:
+              raise SystemExit('Entitlements du simulateur introuvables ou ambigus.')
+          entitlements = plistlib.loads(matches[0].read_bytes())
+          if entitlements.get('application-identifier') != 'ch.drivy.qualification' or 'ch.drivy.qualification' not in entitlements.get('keychain-access-groups', []):
+              raise SystemExit('Accès au trousseau absent des entitlements du simulateur.')
+          shutil.copyfile(matches[0], 'artifacts/ios/simulator-entitlements.plist')
+          PY
+      - name: Tests natifs et parcours iPhone puis iPad
         shell: bash
         run: bash scripts/ios/test-simulator.sh
       - name: Construire l'IPA pour iLoader
@@ -70,6 +95,18 @@ jobs:
             artifacts/ios/swift.txt
           if-no-files-found: error
           retention-days: 14
+      - name: Exporter les résultats et captures des tests
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for result in artifacts/ios/*.xcresult; do
+            [[ -d "$result" ]] || continue
+            name=$(basename "$result" .xcresult)
+            mkdir -p "artifacts/ios/test-reports/$name"
+            xcrun xcresulttool get test-results summary --path "$result" > "artifacts/ios/test-reports/$name/summary.json"
+            xcrun xcresulttool export attachments --path "$result" --output-path "artifacts/ios/test-reports/$name/attachments"
+          done
       - name: Résultats natifs et captures
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -77,8 +114,15 @@ jobs:
           name: Drivy-native-results-${{ github.sha }}
           path: |
             artifacts/ios/*.xcresult
+            artifacts/ios/test-reports/
             artifacts/ios/*.png
             artifacts/ios/*-build.log
             artifacts/ios/*-test.log
+            artifacts/ios/Package.resolved
+            artifacts/ios/xcode.txt
+            artifacts/ios/sdks.txt
+            artifacts/ios/macos.txt
+            artifacts/ios/swift.txt
+            artifacts/ios/simulator-entitlements.plist
           if-no-files-found: warn
           retention-days: 14

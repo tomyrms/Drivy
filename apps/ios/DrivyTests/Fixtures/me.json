@@ -1,0 +1,32 @@
+{
+  "data": {
+    "personId": "20000000-0000-4000-8000-000000000002",
+    "displayName": "Alex Moniteur",
+    "locale": "fr-CH",
+    "version": 1,
+    "memberships": [
+      {
+        "membershipId": "30000000-0000-4000-8000-000000000002",
+        "schoolId": "10000000-0000-4000-8000-000000000001",
+        "schoolName": "Auto-école Horizon · Démonstration",
+        "roles": [
+          "INSTRUCTOR"
+        ],
+        "grants": [],
+        "accessEpoch": 1
+      },
+      {
+        "membershipId": "30000000-0000-4000-8000-000000000007",
+        "schoolId": "10000000-0000-4000-8000-000000000002",
+        "schoolName": "Auto-école Rivage · Démonstration",
+        "roles": [
+          "ADMIN"
+        ],
+        "grants": [],
+        "accessEpoch": 1
+      }
+    ]
+  },
+  "requestId": "39b3841f-51f2-493c-aa29-66530afb2dcd",
+  "serverTime": "2026-09-24T14:51:13.183Z"
+}

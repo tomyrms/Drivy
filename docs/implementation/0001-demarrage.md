@@ -8,7 +8,7 @@ Repartir d'une base vide. Développer depuis Windows ; compiler dans le dépôt 
 
 ## Premier parcours G0
 
-Le code du laboratoire local prévoit de commencer une séance d'essai avec ou sans GPS, de saisir un thème et un statut d'observation, d'arrêter, puis de relire les informations persistées. Ces parcours et leurs tests sont écrits, mais n'ont pas encore été compilés ni exécutés sur Apple. Les observations restent privées et locales. Aucun consentement scolaire, bail serveur, synchronisation ou bilan publié n'est simulé. La sélection volontaire du GPS concerne le trajet d'essai de la personne qui utilise l'appareil.
+Le laboratoire local permet de commencer une séance d'essai avec ou sans GPS, de saisir un thème et un statut d'observation, d'arrêter, puis de relire les informations persistées. L'application a été compilée sur Apple et un premier IPA a été installé et ouvert par le porteur. Les preuves détaillées et les parcours restant à qualifier sont tenus dans [l'état courant](STATUS.md). Les observations restent privées et locales. Aucun consentement scolaire, bail serveur, synchronisation ou bilan publié n'est simulé. La sélection volontaire du GPS concerne le trajet d'essai de la personne qui utilise l'appareil.
 
 L'implémentation choisit SQLCipher officiel pour les transactions et le chiffrement ; elle place la clé dans Keychain avec accès après premier déverrouillage, limité à l'appareil. Le code refuse un repli en clair. Cette lecture statique ne démontre pas encore le chiffrement effectif du binaire. Les garanties écran verrouillé, la reprise et les limites de stockage restent à mesurer sur appareils physiques.
 
@@ -26,6 +26,6 @@ Les versions détaillées sont verrouillées par le lockfile après installation
 
 **Exécuté le 24 septembre 2026 :** typecheck et build TypeScript réussis ; 33 tests serveur passent localement, dont 20 avec une vraie PostgreSQL 17.11 isolée. Les tests incluent les schémas OpenAPI originaux, rôles/affectations/révocation, RLS sous rôle applicatif, contraintes scolaires et précision des curseurs. Ces résultats ne supposent aucun fournisseur OIDC de production ni client déjà connecté.
 
-**Reste à exécuter :** compilation appareil et simulateur, tests Swift de stockage et de domaine, parcours XCUITest sans GPS. Ensuite : installation iLoader, GPS sous verrouillage, reprise après interruption, autonomie et accessibilité physique. G0 reste `NOT_QUALIFIED` tant que ces preuves requises ne sont pas obtenues. [État courant](STATUS.md).
+**Complément du 24 septembre 2026 :** compilations appareil et simulateur réussies, 12 tests Swift réussis, IPA produit et vérifié, installation et ouverture confirmées par le porteur. **Reste à qualifier :** parcours XCUITest complet, GPS sous verrouillage, reprise après interruption, autonomie et accessibilité physique. G0 reste `NOT_QUALIFIED` tant que ces preuves requises ne sont pas obtenues. [État courant](STATUS.md).
 
 Sources techniques : [GitHub runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), [XcodeGen](https://github.com/yonaskolb/XcodeGen), [SQLCipher officiel](https://github.com/sqlcipher/SQLCipher.swift), [iLoader](https://github.com/nab138/iloader).

@@ -1,0 +1,20 @@
+{
+  "data": {
+    "items": [
+      {
+        "id": "40000000-0000-4000-8000-000000000001",
+        "schoolId": "10000000-0000-4000-8000-000000000001",
+        "version": 1,
+        "personId": "20000000-0000-4000-8000-000000000003",
+        "displayName": "Alice Exemple",
+        "contactEmail": "eleve@example.invalid",
+        "contactPhone": null,
+        "archivedAt": null,
+        "profileReadiness": "MINIMAL"
+      }
+    ],
+    "nextCursor": null
+  },
+  "requestId": "5d59910e-4351-460c-9352-1dbdf3b23136",
+  "serverTime": "2026-09-24T14:51:13.247Z"
+}

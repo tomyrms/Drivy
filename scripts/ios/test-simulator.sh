@@ -10,20 +10,20 @@ print(candidates[0]["udid"])
 ')
 xcrun simctl boot "$device_id" || true
 xcrun simctl bootstatus "$device_id" -b
-xcodebuild test \
+phone_status=0
+xcodebuild test-without-building \
   -project apps/ios/Drivy.xcodeproj -scheme Drivy \
   -destination "platform=iOS Simulator,id=$device_id" \
   -parallel-testing-enabled NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/Tests.xcresult \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-  2>&1 | tee artifacts/ios/simulator-test.log
-xcrun simctl launch "$device_id" ch.drivy.qualification
+  2>&1 | tee artifacts/ios/simulator-test.log || phone_status=$?
+xcrun simctl launch "$device_id" ch.drivy.qualification || true
 sleep 2
-xcrun simctl io "$device_id" screenshot artifacts/ios/iphone-light.png
+xcrun simctl io "$device_id" screenshot artifacts/ios/iphone-light.png || true
 xcrun simctl ui "$device_id" appearance dark
 sleep 1
-xcrun simctl io "$device_id" screenshot artifacts/ios/iphone-dark.png
+xcrun simctl io "$device_id" screenshot artifacts/ios/iphone-dark.png || true
 ipad_id=$(xcrun simctl list devices available -j | python3 -c '
 import json,sys
 devices=json.load(sys.stdin)["devices"]
@@ -34,14 +34,18 @@ print(candidates[0]["udid"])
 xcrun simctl shutdown "$device_id"
 xcrun simctl boot "$ipad_id" || true
 xcrun simctl bootstatus "$ipad_id" -b
-xcodebuild test \
+ipad_status=0
+xcodebuild test-without-building \
   -project apps/ios/Drivy.xcodeproj -scheme Drivy \
   -destination "platform=iOS Simulator,id=$ipad_id" \
-  -only-testing:DrivyUITests -parallel-testing-enabled NO \
+  -only-testing:DrivyUITests -only-testing:DrivyTests/SchoolPresentationTests -parallel-testing-enabled NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/iPadTests.xcresult \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-  2>&1 | tee artifacts/ios/ipad-test.log
-xcrun simctl launch "$ipad_id" ch.drivy.qualification
+  2>&1 | tee artifacts/ios/ipad-test.log || ipad_status=$?
+xcrun simctl launch "$ipad_id" ch.drivy.qualification || true
 sleep 2
-xcrun simctl io "$ipad_id" screenshot artifacts/ios/ipad-light.png
+xcrun simctl io "$ipad_id" screenshot artifacts/ios/ipad-light.png || true
+if (( phone_status != 0 || ipad_status != 0 )); then
+  echo "Échec des essais natifs : iPhone=$phone_status iPad=$ipad_status"
+  exit 1
+fi

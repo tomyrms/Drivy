@@ -5,6 +5,7 @@ struct QualificationRootView: View {
     @State private var selectedTab = QualificationTab.session
     @State private var presentsStart = false
     @State private var presentsLive = false
+    @State private var historyPath: [UUID] = []
 
     private enum QualificationTab { case session, history }
 
@@ -24,8 +25,11 @@ struct QualificationRootView: View {
             .tabItem { Label("Séance", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
             .tag(QualificationTab.session)
 
-            NavigationStack {
+            NavigationStack(path: $historyPath) {
                 SessionHistoryView(controller: controller)
+                    .navigationDestination(for: UUID.self) { sessionID in
+                        SessionDetailView(controller: controller, sessionID: sessionID)
+                    }
             }
             .tabItem { Label("Historique", systemImage: "clock.arrow.circlepath") }
             .tag(QualificationTab.history)

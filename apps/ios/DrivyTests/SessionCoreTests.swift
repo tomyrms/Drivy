@@ -122,13 +122,17 @@ struct LocationAdmissionTests {
     @Test func gapsStartNewSegmentsWithoutInventingPositions() throws {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         var admission = LocationAdmission(startedAt: start)
-        let first = try #require(admission.admit(testSample(at: start), receivedAt: start))
-        let second = try #require(admission.admit(testSample(at: start.addingTimeInterval(1)), receivedAt: start.addingTimeInterval(1)))
+        let firstResult = admission.admit(testSample(at: start), receivedAt: start)
+        let first = try #require(firstResult)
+        let secondResult = admission.admit(testSample(at: start.addingTimeInterval(1)), receivedAt: start.addingTimeInterval(1))
+        let second = try #require(secondResult)
         #expect(first.segmentID == second.segmentID)
         admission.interrupt()
-        let third = try #require(admission.admit(testSample(at: start.addingTimeInterval(2)), receivedAt: start.addingTimeInterval(2)))
+        let thirdResult = admission.admit(testSample(at: start.addingTimeInterval(2)), receivedAt: start.addingTimeInterval(2))
+        let third = try #require(thirdResult)
         #expect(third.segmentID != second.segmentID)
-        let fourth = try #require(admission.admit(testSample(at: start.addingTimeInterval(30)), receivedAt: start.addingTimeInterval(30)))
+        let fourthResult = admission.admit(testSample(at: start.addingTimeInterval(30)), receivedAt: start.addingTimeInterval(30))
+        let fourth = try #require(fourthResult)
         #expect(fourth.segmentID != third.segmentID)
     }
 }
