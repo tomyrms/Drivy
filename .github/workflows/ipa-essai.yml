@@ -1,0 +1,87 @@
+name: IPA d'essai · iLoader
+on:
+  push:
+    branches: [master, codex/refonte-g0]
+    paths:
+      - '.github/workflows/ipa-essai.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ipa-essai-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ipa:
+    name: Compiler l'IPA d'essai
+    runs-on: macos-26
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Installer XcodeGen vérifié
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip -o "$RUNNER_TEMP/xcodegen.zip"
+          echo '4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  '"$RUNNER_TEMP/xcodegen.zip" | shasum -a 256 --check
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
+          chmod +x "$RUNNER_TEMP/xcodegen/xcodegen/bin/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Générer le projet et relever l'environnement
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ios
+          xcodebuild -version | tee artifacts/ios/xcode.txt
+          xcodebuild -showsdks > artifacts/ios/sdks.txt
+          sw_vers > artifacts/ios/macos.txt
+          swift --version > artifacts/ios/swift.txt
+          xcodegen generate --spec apps/ios/project.yml
+          mkdir -p apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp apps/ios/Package.resolved apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          xcodebuild -resolvePackageDependencies -onlyUsePackageVersionsFromResolvedFile -project apps/ios/Drivy.xcodeproj -scheme Drivy
+      - name: Construire et vérifier l'IPA pour iLoader
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ios/build-ipa.sh
+          cat > artifacts/ios/LIRE-MOI.txt <<'EOF'
+          Drivy Essais — version locale G0, iPhone/iPad avec iOS/iPadOS 26 minimum.
+          Importer Drivy.ipa dans iLoader pour le signer et l'installer.
+          Ce workflow vérifie la compilation Release et le paquet iOS non signé.
+          Les tests natifs s'exécutent séparément dans le workflow Refonte · iOS.
+          L'IPA est fourni pour essai : sa production ne signifie pas que ces tests ont réussi.
+          Qualification sur appareil physique : NOT_EXECUTED.
+          Séances locales, GPS facultatif, observations, historique et bilan local.
+          Aucun compte ou serveur scolaire connecté dans cette version.
+          EOF
+      - name: Télécharger l'IPA d'essai
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Drivy-essai-${{ github.sha }}
+          path: |
+            artifacts/ios/Drivy.ipa
+            artifacts/ios/SHA256SUMS.txt
+            artifacts/ios/build-info.json
+            artifacts/ios/Package.resolved
+            artifacts/ios/LIRE-MOI.txt
+            artifacts/ios/xcode.txt
+            artifacts/ios/sdks.txt
+            artifacts/ios/macos.txt
+            artifacts/ios/swift.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Journal de compilation
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Drivy-essai-build-${{ github.sha }}
+          path: |
+            artifacts/ios/device-build.log
+            artifacts/ios/xcode.txt
+            artifacts/ios/sdks.txt
+            artifacts/ios/macos.txt
+            artifacts/ios/swift.txt
+          if-no-files-found: warn
+          retention-days: 14
