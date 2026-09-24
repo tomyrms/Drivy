@@ -1,0 +1,26 @@
+{
+  "checkedAt": "2026-09-24T17:32:17.626Z",
+  "origin": "https://drivy.shulker.ch",
+  "browser": "153.0.4234.48",
+  "result": "PASSED",
+  "passed": 11,
+  "checks": [
+    "Accueil HTTPS et CSP",
+    "Session anonyme sans cache",
+    "Cookie sÃ©curisÃ© limitÃ© Ã  cet hÃ´te",
+    "Client web et callback exact sous PKCE S256",
+    "Connexion OIDC rÃ©elle et absence de droit scolaire inventÃ©",
+    "Rotation de session et du CSRF aprÃ¨s authentification",
+    "Aucun jeton OAuth ni stockage de donnÃ©es dans le navigateur",
+    "API PostgreSQL : identitÃ© reconnue, aucun lien mÃ©tier",
+    "Origine Ã©trangÃ¨re refusÃ©e malgrÃ© le CSRF correct",
+    "Ancien CSRF refusÃ© aprÃ¨s rotation",
+    "DÃ©connexion locale et accÃ¨s privÃ© refusÃ©"
+  ],
+  "scope": "Portail HTTPS, OIDC confidentiel, BFF et API sans lien mÃ©tier. Aucun compte utilisateur existant ni email utilisÃ©.",
+  "probeCleanup": {
+    "deleted": true,
+    "absenceVerified": true,
+    "privateLocalReceiptRemoved": true
+  }
+}

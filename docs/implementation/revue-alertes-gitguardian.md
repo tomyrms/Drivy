@@ -1,4 +1,12 @@
-# Revue des alertes GitGuardian de la PR 1
+# Revue des alertes de secrets
+
+## PR 2 — G1C
+
+24 septembre 2026, contrôle `107747726180`, commit `6ffc1036890ccc3d8232f5f8b90be4d77f6db195`. L'incident **37580704** indique « Generic Password » dans `infra/deploy/install-web-service.py`, ligne 24 : `account = pwd.getpwnam('drivy-web')`. Cette instruction appelle le module standard Python `pwd` pour rechercher le compte Unix **drivy-web** ; elle ne lit ni ne définit un mot de passe. Le secret OIDC, généré aléatoirement sur CT114, provient d'un coffre root/0600 séparé et ne figure pas dans ce source.
+
+Conclusion : **faux positif documenté**, contrôle externe toujours en échec tant que son classement n'est pas enregistré dans GitGuardian. Aucun détecteur n'est neutralisé et aucun historique n'est réécrit. Gitleaks sur `master..HEAD` et sur les changements préparés ne relève aucun secret. Le scan de l'historique complet trouve 44 occurrences supplémentaires dans le commit initial de conception `4b5f293f` : les 44 lignes sont des empreintes SHA-256 documentaires, pas des credentials. Le dossier canonique et ses empreintes restent inchangés.
+
+## PR 1 — G1A/G1B
 
 24 septembre 2026, contrôle `107728038753`, source `d2093125e2e8ee9b89e9a7ab57d372bb543e8f62`. GitGuardian signale trois occurrences du commit `0158f8efa5db338cff9b79fd4e3ab3b6a57c440f` dans l'historique de la PR. Leur code source a été relu, sans consulter ni publier les secrets hébergés.
 

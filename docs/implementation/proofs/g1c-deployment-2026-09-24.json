@@ -1,0 +1,85 @@
+{
+  "checkedAt": "2026-09-24T17:35:28.449563+00:00",
+  "release": "6ffc1036890ccc3d8232f5f8b90be4d77f6db195",
+  "snapshotSHA256": "7fb0457f7f2339feb82f56196579aeb8ce3f56530ebbca25cc2c4093e66a785e",
+  "backup": {
+    "format": "pg_dump custom",
+    "listVerified": true
+  },
+  "database": {
+    "migrations": [
+      "001_g1a.sql",
+      "002_g1b_school_setup.sql",
+      "003_g1c_invitations.sql"
+    ],
+    "forcedRLSTables": 15,
+    "runtimeRoleAndNoContextVisibilityVerified": true,
+    "schools": 1,
+    "memberships": 1,
+    "learners": 0,
+    "trainings": 0,
+    "invitations": 0,
+    "pendingMail": 0
+  },
+  "services": {
+    "api": "active",
+    "web": "active",
+    "identity": "active",
+    "ingress": "active",
+    "apiAndWebCwdMatchRelease": true
+  },
+  "proxy": {
+    "completeConfigValidated": true,
+    "reloaded": true,
+    "mainCaddyfileUnchanged": true,
+    "sensitiveAccessLogsSkipped": true
+  },
+  "lanPortsDenied": [
+    3001,
+    3002,
+    8081
+  ],
+  "publicHTTPS": {
+    "app": 200,
+    "session": 200,
+    "unauthenticatedMe": 401,
+    "identityAdmin": 404,
+    "identityMaster": 404,
+    "identityHealth": 404,
+    "identityMetrics": 404
+  },
+  "webOIDC": {
+    "confidential": true,
+    "pkce": "S256",
+    "scopes": [
+      "basic",
+      "email",
+      "profile"
+    ],
+    "callback": "https://drivy.shulker.ch/app/bff/callback",
+    "browserChecksPassed": 11,
+    "probeDeletedAndAbsenceVerified": true
+  },
+  "mail": {
+    "rolesPrepared": true,
+    "workerCredentialConfigured": false,
+    "workerStarted": false,
+    "externalDeliveryTested": false
+  },
+  "ipa": {
+    "source": "7836441a2e1a2f62071f28fdcadb8239a2780efb",
+    "run": "36033239737",
+    "version": "0.4.0",
+    "build": "9",
+    "sha256": "bad253440bd97bca2a2a5fa4051832d1a5c13e2ef38dc7523adfc751e6faf1e1",
+    "zipCRCAndManifestAndBinaryHashesVerified": true,
+    "physicalQualification": "NOT_EXECUTED"
+  },
+  "limits": [
+    "SMTP externe à raccorder",
+    "Inscription publique indisponible",
+    "Acceptation hébergée non testée",
+    "Essais Apple en cours au relevé",
+    "Aucune qualification de charge ou physique"
+  ]
+}
