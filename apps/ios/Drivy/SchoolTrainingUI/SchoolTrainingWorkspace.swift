@@ -14,6 +14,7 @@ import Observation
     private(set) var competencies: [SchoolCatalogCompetency] = []
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
+    private(set) var lessonsLoaded = false
     private(set) var errorMessage: String?
     private(set) var progressError: String?
     private(set) var accessRevoked = false
@@ -38,25 +39,35 @@ import Observation
         return competencies.filter { ids.contains($0.id) }.sorted { $0.sortOrder < $1.sortOrder }
     }
     func invalidate() { invalidated = true; generation = UUID(); progressRequest = UUID(); clear(); isLoading = false; isLoadingMore = false }
-    private func clear() { training = nil; lessons = []; nextCursor = nil; progress = nil; competencies = []; seenCursors = [] }
+    private func clear() { training = nil; lessons = []; nextCursor = nil; progress = nil; competencies = []; seenCursors = []; lessonsLoaded = false }
 
     func load() async {
         guard !invalidated else { return }
-        generation = UUID(); let request = generation
-        clear(); isLoading = true; errorMessage = nil; progressError = nil
+        generation = UUID(); progressRequest = UUID(); let request = generation
+        isLoading = true; isLoadingMore = false; errorMessage = nil; progressError = nil
         do {
             try await client.checkScope(scope, membership: membership)
             let value = try await client.reader.training(schoolID: scope.schoolID, id: trainingID)
             guard value.learnerId == learnerID else { throw SchoolAPIError.invalidResponse }
+            guard request == generation, !invalidated else { return }
+            training = value
+        } catch {
+            guard request == generation, !invalidated else { return }
+            if error as? SchoolAPIError == .notFound { clear() }
+            isLoading = false; fail(error); return
+        }
+        do {
             let page = try await client.lessons(schoolID: scope.schoolID, trainingID: trainingID, cursor: nil)
             guard page.items.allSatisfy({ $0.learnerId == learnerID }) else { throw SchoolAPIError.invalidResponse }
             guard request == generation, !invalidated else { return }
-            training = value; lessons = page.items; nextCursor = page.nextCursor; isLoading = false
-            if hasPedagogicalRole { await loadProgress() }
+            lessons = page.items; nextCursor = page.nextCursor; seenCursors = []; lessonsLoaded = true
         } catch {
             guard request == generation, !invalidated else { return }
-            isLoading = false; fail(error)
+            fail(error)
         }
+        guard request == generation, !invalidated, !accessRevoked else { return }
+        isLoading = false
+        if hasPedagogicalRole { await loadProgress() }
     }
     func loadMore() async {
         guard !invalidated, !accessRevoked, !isLoading, !isLoadingMore, let cursor = nextCursor else { return }
@@ -64,10 +75,10 @@ import Observation
         do {
             let page = try await client.lessons(schoolID: scope.schoolID, trainingID: trainingID, cursor: cursor)
             guard request == generation, !invalidated else { return }
-            guard seenCursors.insert(cursor).inserted, page.nextCursor.map({ !seenCursors.contains($0) }) ?? true,
+            guard !seenCursors.contains(cursor), page.nextCursor != cursor, page.nextCursor.map({ !seenCursors.contains($0) }) ?? true,
                   page.items.allSatisfy({ $0.learnerId == learnerID }),
                   Set(lessons.map(\.id)).isDisjoint(with: Set(page.items.map(\.id))) else { throw SchoolAPIError.invalidResponse }
-            lessons.append(contentsOf: page.items); nextCursor = page.nextCursor; isLoadingMore = false
+            seenCursors.insert(cursor); lessons.append(contentsOf: page.items); nextCursor = page.nextCursor; isLoadingMore = false
         } catch { guard request == generation else { return }; isLoadingMore = false; fail(error) }
     }
     func loadProgress() async {
@@ -94,7 +105,9 @@ import Observation
     }
     private func fail(_ error: Error) {
         errorMessage = SchoolTrainingAccess.message(error)
-        if SchoolTrainingAccess.isRevoked(error) { clear(); accessRevoked = true; generation = UUID() }
+        if SchoolTrainingAccess.isRevoked(error) {
+            clear(); accessRevoked = true; generation = UUID(); isLoading = false; isLoadingMore = false
+        }
     }
 }
 

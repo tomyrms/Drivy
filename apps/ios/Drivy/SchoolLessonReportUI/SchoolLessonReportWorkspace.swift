@@ -18,6 +18,7 @@ import Observation
     private(set) var isBusy = false
     private(set) var isOwnLearner = false
     private(set) var errorMessage: String?
+    private(set) var revisionsError: String?
     private(set) var information: String?
     private(set) var confirmation: String?
     private(set) var pendingReviewed = false
@@ -90,12 +91,12 @@ import Observation
         invalidated = true; generation = UUID(); lesson = nil; preparation = nil; wish = nil; draft = nil; revisions = []
         competencies = []; progress = nil; account = nil; pending = nil; goals = []; administrativeNote = ""; wishText = ""
         workedOn = ""; observationText = ""; nextStep = ""; observations = []; correctionReason = ""
-        isLoading = false; isBusy = false; storageAccessible = false
+        isLoading = false; isBusy = false; storageAccessible = false; revisionsError = nil
     }
     func load() async {
         guard !invalidated, !isBusy else { return }
         generation = UUID(); let request = generation
-        isLoading = true; needsReload = true; errorMessage = nil; information = nil; pendingReviewed = false
+        isLoading = true; needsReload = true; errorMessage = nil; revisionsError = nil; information = nil; pendingReviewed = false
         do { pending = try outbox.pending(for: scope); storageAccessible = true }
         catch { storageAccessible = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         do {
@@ -107,37 +108,69 @@ import Observation
             let learner = try await client.reader.learner(schoolID: scope.schoolID, id: lesson.learnerId)
             let isOwn = current.roles.contains("LEARNER") && learner.personId == scope.personID
             let author = current.roles.contains("INSTRUCTOR") && lesson.instructorMembershipId == current.membershipId
-            let wish = try await client.wish(schoolID: scope.schoolID, trainingID: lesson.trainingId)
-            let revisions = try await client.revisions(schoolID: scope.schoolID, lessonID: lessonID)
-            let progress = try await client.progress(schoolID: scope.schoolID, trainingID: lesson.trainingId)
-            let preparation = author ? try await client.preparation(schoolID: scope.schoolID, lessonID: lessonID) : nil
-            let drafts = author && lesson.status == "COMPLETED" ? try await client.drafts(schoolID: scope.schoolID, lessonID: lessonID) : []
-            guard drafts.count <= 1, drafts.allSatisfy({ $0.authorMembershipId == current.membershipId }) else { throw SchoolReportFailure.invalidResponse }
-            let account = lesson.status == "COMPLETED" && (author || isOwn) ? try await client.account(schoolID: scope.schoolID, lessonID: lessonID) : nil
-            guard request == generation, !invalidated else { return }
-            self.lesson = lesson; self.preparation = preparation; self.wish = wish; self.revisions = revisions; self.progress = progress
-            self.draft = drafts.first; self.account = account; isOwnLearner = isOwn
-            goals = preparation?.goals ?? []; administrativeNote = preparation?.administrativeCheckNote ?? ""; wishText = wish.text
-            workedOn = draft?.workedOn ?? ""; observationText = draft?.observationText ?? ""; nextStep = draft?.nextStep ?? ""
-            observations = draft?.observations ?? []; correctionReason = ""; competencies = []
-            do {
-                do {
-                    let training = try await client.reader.training(schoolID: scope.schoolID, id: lesson.trainingId)
-                    let offerings = try await collect { try await self.client.catalog.offerings(schoolID: self.scope.schoolID, cursor: $0) }
-                    if let offering = offerings.first(where: { $0.id == training.offeringId }) {
-                        let curricula = try await collect { try await self.client.catalog.curricula(schoolID: self.scope.schoolID, cursor: $0) }
-                        guard request == generation, !invalidated else { return }
-                        competencies = curricula.first(where: { $0.id == offering.curriculumVersionId })?.competencies.sorted { $0.sortOrder < $1.sortOrder } ?? []
+            let wishRead = try await readSupplement(request: request, unavailable: "Le souhait de l’élève n’a pas pu être chargé.") {
+                try await self.client.wish(schoolID: self.scope.schoolID, trainingID: lesson.trainingId)
+            }
+            let revisionsRead = try await readSupplement(request: request, unavailable: "Les bilans partagés n’ont pas pu être chargés. Actualisez pour les retrouver.") {
+                try await self.client.revisions(schoolID: self.scope.schoolID, lessonID: self.lessonID)
+            }
+            let progressRead = try await readSupplement(request: request, unavailable: "La progression n’a pas pu être chargée.") {
+                try await self.client.progress(schoolID: self.scope.schoolID, trainingID: lesson.trainingId)
+            }
+            var preparationRead: (value: SchoolLessonPreparation?, message: String?) = (nil, nil)
+            var draftsRead: (value: [SchoolReportDraft]?, message: String?) = (nil, nil)
+            var accountRead: (value: SchoolLessonAccount?, message: String?) = (nil, nil)
+            if author {
+                preparationRead = try await readSupplement(request: request, unavailable: "La préparation n’a pas pu être chargée. Actualisez avant de la modifier.") {
+                    try await self.client.preparation(schoolID: self.scope.schoolID, lessonID: self.lessonID)
+                }
+                if lesson.status == "COMPLETED" {
+                    draftsRead = try await readSupplement(request: request, unavailable: "Le brouillon privé n’a pas pu être chargé. Actualisez avant de le modifier.") {
+                        let values = try await self.client.drafts(schoolID: self.scope.schoolID, lessonID: self.lessonID)
+                        guard values.count <= 1, values.allSatisfy({ $0.authorMembershipId == current.membershipId }) else { throw SchoolReportFailure.invalidResponse }
+                        return values
                     }
-                } catch {
-                    if error as? SchoolCatalogFailure == .unauthorized || error as? SchoolCatalogFailure == .forbidden { throw SchoolReportFailure.forbidden }
-                    guard request == generation, !invalidated else { return }
-                    information = "Le référentiel est momentanément indisponible. Le bilan textuel peut être enregistré sans ajouter de compétence."
                 }
             }
+            if lesson.status == "COMPLETED" && (author || isOwn) {
+                accountRead = try await readSupplement(request: request, unavailable: "Le compte de la leçon n’a pas pu être chargé.") {
+                    try await self.client.account(schoolID: self.scope.schoolID, lessonID: self.lessonID)
+                }
+            }
+            let curriculumRead = try await readSupplement(request: request, unavailable: "Le référentiel est momentanément indisponible. Le bilan textuel peut être enregistré sans ajouter de compétence.") {
+                let training = try await self.client.reader.training(schoolID: self.scope.schoolID, id: lesson.trainingId)
+                let offerings = try await self.collect { try await self.client.catalog.offerings(schoolID: self.scope.schoolID, cursor: $0) }
+                guard let offering = offerings.first(where: { $0.id == training.offeringId }) else { throw SchoolReportFailure.notFound }
+                let curricula = try await self.collect { try await self.client.catalog.curricula(schoolID: self.scope.schoolID, cursor: $0) }
+                guard let curriculum = curricula.first(where: { $0.id == offering.curriculumVersionId }) else { throw SchoolReportFailure.notFound }
+                return curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }
+            }
             guard request == generation, !invalidated else { return }
+            self.lesson = lesson; preparation = preparationRead.value; wish = wishRead.value
+            revisions = revisionsRead.value ?? []; revisionsError = revisionsRead.message; progress = progressRead.value
+            draft = draftsRead.value?.first; account = accountRead.value; isOwnLearner = isOwn
+            goals = preparation?.goals ?? []; administrativeNote = preparation?.administrativeCheckNote ?? ""; wishText = wish?.text ?? ""
+            workedOn = draft?.workedOn ?? ""; observationText = draft?.observationText ?? ""; nextStep = draft?.nextStep ?? ""
+            observations = draft?.observations ?? []; correctionReason = ""; competencies = curriculumRead.value ?? []
+            let notes = [wishRead.message, progressRead.message, preparationRead.message, draftsRead.message, accountRead.message, curriculumRead.message].compactMap { $0 }
+            information = notes.isEmpty ? nil : notes.joined(separator: "\n\n")
             isLoading = false; needsReload = false
         } catch { guard request == generation, !invalidated else { return }; isLoading = false; fail(error) }
+    }
+    // A failed secondary read must not hide independently authorized content. Only
+    // authentication/access changes invalidate the whole projection; missing resources
+    // and transient failures leave that section unavailable, never editable as empty data.
+    private func readSupplement<Value>(request: UUID, unavailable: String, fetch: () async throws -> Value) async throws -> (value: Value?, message: String?) {
+        guard request == generation, !invalidated else { throw CancellationError() }
+        do {
+            let value = try await fetch()
+            guard request == generation, !invalidated else { throw CancellationError() }
+            return (value, nil)
+        } catch {
+            guard request == generation, !invalidated else { throw CancellationError() }
+            if error is CancellationError || isAccessRevoked(error) { throw error }
+            return (nil, unavailable)
+        }
     }
     func savePreparation() async {
         guard let preparation, canMutate, isAuthor, preparationValid else { return }
@@ -221,14 +254,17 @@ import Observation
         return values
     }
     private func fail(_ error: any Error) {
-        var denied = error as? SchoolReportFailure == .forbidden || error as? SchoolReportFailure == .unauthorized || error as? SchoolReportFailure == .notFound
-            || error as? SchoolAPIError == .forbidden || error as? SchoolAPIError == .unauthorized
-        if let failure = error as? SchoolAgendaFailure {
-            switch failure { case .authentication, .forbidden: denied = true; default: break }
-        }
+        let denied = isAccessRevoked(error) || error as? SchoolReportFailure == .notFound || error as? SchoolAPIError == .notFound
         if denied { invalidate() }
         errorMessage = (error as? SchoolReportFailure)?.localizedDescription
             ?? (error as? SchoolConfigurationFailure)?.localizedDescription
             ?? (error as? SchoolAPIError)?.localizedDescription ?? SchoolReportFailure.unavailable.localizedDescription
+    }
+    private func isAccessRevoked(_ error: any Error) -> Bool {
+        if SchoolTrainingAccess.isRevoked(error) || error as? SchoolAPIError == .identityNotLinked { return true }
+        if let failure = error as? SchoolAgendaFailure {
+            switch failure { case .authentication, .forbidden: return true; default: break }
+        }
+        return false
     }
 }
