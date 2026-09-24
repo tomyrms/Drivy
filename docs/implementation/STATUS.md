@@ -12,6 +12,8 @@ Dix captures iPhone clair/sombre des vues natives de `072e724` ont été inspect
 
 **API001–008 déployée** depuis `b6481b8cede084271c474acdc103f3a128d5aaad` : sauvegarde vérifiée, trois services actifs. Le serveur expose les autorisations de capture, lots chiffrés, arrêt, finalisation et relecture privée. Le [transport natif](native-capture-transport.md) prépare lectures, signatures, lots et mutations ; le stockage durable scolaire est en cours d’intégration et la collecte scolaire n’est pas encore ouverte. Les clés dédiées sont actives sur CT114 ; aucun profil physique n’est déclaré qualifié. Le web hébergé reste G1C.
 
+Les [finitions du profil et de la politique de champs](native-profile-design.md) sont intégrées localement dans `dbc5037`, hors du snapshot du correctif urgent : libellés persistants, action principale fixe, validation des champs, relecture de la version réellement publiée et conservation des erreurs de commande. Leur compilation Apple reste à effectuer.
+
 Le journal web durable reste compilable mais non qualifié/non déployé ; le web hébergé conserve G1C. Aucun mode produit « Drivy Démo » séparé : les données d’exemple empruntent les vrais accès. La capture scolaire partagée, les documents, les packs/cours et l’envoi SMTP externe restent des chantiers nécessaires à l’application complète ; un trajet privé local n’est pas encore lié à une leçon scolaire.
 
 Les paragraphes et tableaux suivants conservent les jalons antérieurs et leurs preuves ; ils ne remplacent pas l’état courant ci-dessus.
