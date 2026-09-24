@@ -41,4 +41,4 @@ Les preuves G1C comprennent les réponses Invitation/MemberContext/AP72 validée
 
 Mailpit reçoit réellement le message SMTP ; le test vérifie le lien fragment et la purge du payload après SENT. Les tests vérifient aussi claim concurrent de deux workers, erreur SMTP sans faux succès, annulation après révocation/expiration, corruption du ciphertext et impossibilité pour le worker de muter les adhésions. Les tokens et coordonnées synthétiques ne sont pas journalisés dans les résultats.
 
-Ce résultat ne constitue pas une preuve de livraison externe, d'inscription navigateur complète, de parcours iOS ou de déploiement. Les fichiers G1C sont gelés pour la recette intégrée locale ; aucune mutation distante ni aucun envoi externe n'a été exécuté pour cette tranche.
+Ces tests sont complétés par la [recette locale de 18 contrôles](recette-entree-web.md), puis le [déploiement API/web et sa recette HTTPS](preparation-deploiement-web.md). Ils ne constituent pas une preuve de livraison externe, de formulaire public d'inscription ou de parcours iOS physique. Aucun email externe n'a été envoyé ; le transport hébergé reste à raccorder.

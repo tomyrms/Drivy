@@ -2,7 +2,7 @@
 
 Mise à jour : 24 septembre 2026. La refonte est en cours ; G0, G1A et G1B ne constituent pas le produit complet.
 
-**Travail en cours sur `codex/refonte-entree` :** invitations API/iOS, outbox d’email chiffrée et acceptation web React/BFF. L’API passe **89 tests** sur PostgreSQL 16.14 et 17.11 (57 précédents + 32 F02), avec SMTP Mailpit réel. Le web passe **19 tests**, **10 contrôles** de connexion réelle et la [recette complète de 18 contrôles](recette-entree-web.md) SMTP → vérification d’adresse → identité nouvelle → acceptation explicite → un dossier minimal, sans formation. Typecheck/build réussis ; cinq captures d’accueil/compte clair/sombre et mobile relues. Le [run serveur/web `36032834055`](https://github.com/tomyrms/Drivy/actions/runs/36032834055) est réussi. Deux premiers builds Apple ont échoué dans l’inférence des callbacks SwiftUI ; les corrections sont poussées dans `7836441`, avec **27 nouveaux tests Swift et un test de présentation restant à exécuter**. Le code G1C n’est pas encore déployé ; l’IPA livré et la release hébergée décrits ci-dessous restent G1B. Seule l’adaptation du scope OIDC `email` est appliquée. [PR2 en brouillon](https://github.com/tomyrms/Drivy/pull/2), [préparation du déploiement](preparation-deploiement-web.md), [couverture complète](couverture-produit.md), [tranche F02](g1c-invitations.md), [web/BFF](../../apps/web/README.md).
+**G1C testé et déployé, G1D1 en développement :** invitations API/iOS, outbox d’email chiffrée et acceptation web React/BFF sont implémentées. L’API passe **89 tests** sur PostgreSQL 16.14 et 17.11 (57 précédents + 32 F02), avec SMTP Mailpit réel. Le web passe **19 tests**, **10 contrôles** de connexion locale et la [recette complète de 18 contrôles](recette-entree-web.md) SMTP → vérification d’adresse → identité nouvelle → acceptation explicite → un dossier minimal, sans formation. Le [run serveur/web `36033466605`](https://github.com/tomyrms/Drivy/actions/runs/36033466605) réussit. **API et web sont déployés depuis `6ffc103`**, avec **11 contrôles HTTPS publics réussis** et nettoyage de la sonde. Le transport email externe reste à raccorder. **IPA 0.4.0/build 9 compilé et vérifié** ; les tests natifs `36033239715` réussissent : **97/97 iPhone et 4/4 iPad**, zéro échec/ignoré, après correction de deux erreurs de compilation SwiftUI. [PR2 en brouillon](https://github.com/tomyrms/Drivy/pull/2), [déploiement et preuves](preparation-deploiement-web.md), [couverture complète](couverture-produit.md), [tranche F02](g1c-invitations.md), [web/BFF](../../apps/web/README.md). Les profils administratifs G1D1 sont travaillés dans un worktree séparé.
 
 | Élément | État | Preuve / suite |
 |---|---|---|
@@ -11,18 +11,19 @@ Mise à jour : 24 septembre 2026. La refonte est en cours ; G0, G1A et G1B ne co
 | Laboratoire G0 | Compilé et testé sur simulateurs | Séance locale, GPS facultatif, observations, historique, bilan local et SQLCipher |
 | Accès scolaire G1A | Client et API implémentés | AppAuth/PKCE, écoles et rôles, élèves et formations en lecture |
 | Configuration G1B | Client compilé, serveur déployé | Coordonnées, textes adoptés explicitement, préparation et activation ADMIN ; commandes chiffrées avant émission |
-| Serveur | 57 tests réussis | PostgreSQL 16.14 et 17.11 réels ; typecheck/build et CI réussis |
-| Tests Apple G0/G1A/G1B | iPhone 69/69, iPad 3/3 | Run `36024174590` entièrement réussi ; zéro échec ou test ignoré |
-| IPA connecté | 0.3.0/build 5 disponible | Run `36024174745`, source `c3e5e67`, CRC/hashes/configuration compilée revérifiés |
-| Hébergement HTTPS | API, identité et filtrage actifs | CT114, PostgreSQL UTF8 CT113, chemins Caddy CT109 |
+| Serveur G1A/G1B/G1C | 89 tests réussis | PostgreSQL 16.14 et 17.11 réels ; typecheck/build et CI réussis |
+| Entrée par invitation G1C | API/web déployés ; SMTP externe manquant | 19 tests web, 18 contrôles locaux complets, 11 contrôles HTTPS de connexion |
+| Tests Apple G0/G1A/G1B/G1C | iPhone 97/97, iPad 4/4 | Run `36033239715` entièrement réussi ; zéro échec ou test ignoré |
+| IPA connecté | 0.4.0/build 9 disponible ; tests natifs réussis | Run `36033239737`, source `7836441`, CRC/hashes/configuration compilée vérifiés |
+| Hébergement HTTPS | API, web/BFF, identité et filtrage actifs | Release `6ffc103`, CT114, PostgreSQL UTF8 CT113, Caddy CT109 |
 | Première école | DRAFT, ADMIN actif | Compte `luc`, « Luc auto école » ; aucune adoption ou activation faite automatiquement |
 | Essais physiques | Installation du premier IPA confirmée ; recette restante | Connexion 0.3.0, VoiceOver, interruptions réseau, GPS et budgets à qualifier |
-| G1 complet / G2 connecté | À réaliser | Invitations, acceptation des dossiers, formations administrées, planning, leçons et bilans partagés |
+| G1 complet / G2 connecté | À poursuivre | SMTP externe, profils/onboarding, formations administrées, planning, leçons et bilans partagés |
 | G3/G4 et pilote G5 | À réaliser | Cours/packs, web de gestion, exploitation et procédures |
 
 ## Preuves serveur
 
-Sous Node 24, `npm run typecheck`, `npm test` et `npm run build` réussissent. Les **57 tests** comprennent 13 tests JWT/configuration/curseurs, 21 tests d'intégration G1A et 23 tests d'intégration G1B ; aucun n'est ignoré. La suite passe sur PostgreSQL 17.11 et 16.14, version hébergée. Le [run `36024174827`](https://github.com/tomyrms/Drivy/actions/runs/36024174827) confirme tests, build et intégrité documentaire.
+Sous Node 24, `npm run typecheck`, `npm test` et `npm run build` réussissent. Les **89 tests** comprennent 13 tests JWT/configuration/curseurs, 21 tests d’intégration G1A, 23 tests d’intégration G1B et 32 tests F02 ; aucun n’est ignoré. La suite passe sur PostgreSQL 17.11 et 16.14, version hébergée. Le [run `36033466605`](https://github.com/tomyrms/Drivy/actions/runs/36033466605) confirme tests serveur/web, builds et intégrité documentaire.
 
 G1A couvre les six lectures du contrat, les dates et curseurs, affectations moniteur, accès à soi, multi-rôles, révocation avec JWT valide et séparation scolaire sous `drivy_app`. Six réponses PostgreSQL réelles servent de fixtures aux tests Swift.
 
@@ -30,11 +31,11 @@ G1B couvre coordonnées, progression, readiness, adoption versionnée des textes
 
 ## Hébergement et identité
 
-La release API **`c3e5e6733282a77be779f1c99661f0831c74c5d8`** tourne sous Node 24.21.0 dans `/opt/drivy-refonte` sur CT114. Une sauvegarde privée de la seule base `drivy_refonte` a précédé la migration 002. Le processus redémarré utilise le dossier `apps/api` de cette release ; identité et filtrage sont restés actifs. L'ancienne API sur 3000 et les anciennes bases sont conservées.
+La release API/web **`6ffc1036890ccc3d8232f5f8b90be4d77f6db195`** tourne sous Node 24.21.0 dans `/opt/drivy-refonte` sur CT114. Une sauvegarde privée vérifiée de la seule base `drivy_refonte` a précédé la migration 003. Les processus API et web utilisent les dossiers de cette release ; identité et filtrage sont actifs. Le Caddyfile complet a été validé avant le rechargement du snippet refonte. L’ancienne API sur 3000 et les anciennes bases sont conservées.
 
-Les bases `drivy_refonte` et `drivy_identity` sont neuves, UTF8, avec rôles distincts non superutilisateurs. La vraie connexion runtime vérifie les privilèges, le certificat TLS/hostname PostgreSQL, `SET LOCAL ROLE drivy_app` et l'absence de personne visible sans contexte. Les treize tables métier ont ENABLE/FORCE RLS. Les adaptations LXC et les bases de bootstrap SQL_ASCII conservées sont expliquées dans [le déploiement](deploiement-refonte.md).
+Les bases `drivy_refonte` et `drivy_identity` sont neuves, UTF8, avec rôles distincts non superutilisateurs. La vraie connexion runtime vérifie les privilèges, le certificat TLS/hostname PostgreSQL, `SET LOCAL ROLE drivy_app` et l'absence de personne visible sans contexte. Les quinze tables métier ont ENABLE/FORCE RLS. Les adaptations LXC et les bases de bootstrap SQL_ASCII conservées sont expliquées dans [le déploiement](deploiement-refonte.md).
 
-L'API répond sous `https://drivy.shulker.ch/refonte`, Keycloak 26.7.4 sous `https://drivy.shulker.ch/identity/realms/drivy`. Discovery et JWKS répondent 200 ; les lectures protégées sans jeton répondent 401/no-store. Les chemins admin, master, health et metrics publics répondent 404 ; les ports 3001/8081 refusent les connexions LAN hors proxy. Les accès sensibles sont exclus des journaux Caddy.
+L'API répond sous `https://drivy.shulker.ch/refonte`, Keycloak 26.7.4 sous `https://drivy.shulker.ch/identity/realms/drivy`. Discovery et JWKS répondent 200 ; les lectures protégées sans jeton répondent 401/no-store. Les chemins admin, master, health et metrics publics répondent 404 ; les ports 3001/3002/8081 refusent les connexions LAN hors proxy. Les accès sensibles sont exclus des journaux Caddy.
 
 Le [contrôle OIDC HTTPS](controle-oidc-deploye.md) a réussi avec une sonde indépendante : PKCE S256 obligatoire, code/jetons/signatures/nonce vérifiés, identité sans lien métier refusée (403), ID token refusé comme accès API (401), renouvellement puis rejeu refusé (400). Sonde, sessions et credentials ont été supprimés, puis l'absence du compte vérifiée. La [preuve datée](proofs/oidc-https-2026-09-24.json) ne contient aucun secret. Le banc OIDC local compte également 29 contrôles réussis et le provisionnement 8 tests réussis.
 
@@ -42,9 +43,11 @@ Le compte initial `luc` et « Luc auto école » proviennent du provisionnement 
 
 La [preuve du déploiement G1B](proofs/g1b-deployment-2026-09-24.json) confirme une école DRAFT, un ADMIN actif, un setup initial et une politique vide non approuvée. Aucune commande, aucun élève ni formation n'a été créé par ce contrôle. Adoption et activation restent des gestes explicites de l'administrateur.
 
-Le client OIDC public `drivy-apple` a reçu le scope `email` le 24 septembre pour préparer F02 : scopes `basic/email/profile`, callback exact et PKCE S256 relus et inchangés. Une requête d’autorisation HTTPS avec `openid profile email` retourne le formulaire 200 sans soumettre d’identifiants. Cette adaptation seule est déjà appliquée ; elle n’est pas une nouvelle preuve de connexion Apple, ni un déploiement G1C.
+Le client OIDC public `drivy-apple` a reçu le scope `email` le 24 septembre pour préparer F02 : scopes `basic/email/profile`, callback exact et PKCE S256 relus et inchangés. Une requête d’autorisation HTTPS avec `openid profile email` retourne le formulaire 200 sans soumettre d’identifiants. Le portail web a ensuite été déployé avec son propre client confidentiel. Sa recette HTTPS compte 11 contrôles réussis, sans utiliser `luc` ; la sonde a été supprimée et son absence relue. Ce contrôle ne qualifie pas la connexion Apple physique ou le SMTP externe.
 
 ## IPA et preuves Apple
+
+Le [run IPA G1C `36033239737`](https://github.com/tomyrms/Drivy/actions/runs/36033239737) produit **0.4.0/build 9**, source `7836441a2e1a2f62071f28fdcadb8239a2780efb`, SHA-256 `bad253440bd97bca2a2a5fa4051832d1a5c13e2ef38dc7523adfc751e6faf1e1`. CRC ZIP, manifeste, hashes des deux binaires et configuration HTTPS ont été vérifiés après téléchargement ; aucun bundle signé. Le [run natif `36033239715`](https://github.com/tomyrms/Drivy/actions/runs/36033239715) réussit : **97/97 tests sur iPhone 17 Pro et 4/4 sur iPad Pro 13 pouces (M5), simulateurs iOS 26.4.1**, zéro échec/ignoré. Les 27 nouveaux tests Swift et le nouveau test de présentation G1C passent. Les huit captures F02 iPhone/iPad (clair, sombre, grand texte, demande incertaine) sont relues sans défaut visuel bloquant ; [preuve native](proofs/g1c-native-2026-09-24.json). Le champ descriptif `scope` de son manifest mentionne encore G1B ; la source et les versions ci-dessus identifient le contenu G1C. Les précédentes preuves G1B sont conservées ci-dessous pour la traçabilité. Les essais physiques restent distincts.
 
 Le [run IPA `36024174745`](https://github.com/tomyrms/Drivy/actions/runs/36024174745) produit **Drivy 0.3.0/build 5**, minimum iOS/iPadOS 26.0, bundle `ch.drivy.qualification`, source `c3e5e6733282a77be779f1c99661f0831c74c5d8`. Xcode 26.6 (17F113), SDK iPhoneOS 26.5. Les deux binaires sont arm64 appareil et les quatre bundles non signés. SHA-256 : `8d7ecee21aaa72e29e3f6c9b3fb1ca7e9ba8bc4f6ee1601c4314790cb8e0405f`. Après téléchargement, CRC ZIP, hashes du manifeste et des binaires, ainsi que les trois paramètres HTTPS dans Info.plist ont été vérifiés ; `schoolConnectionConfigured=true`.
 
