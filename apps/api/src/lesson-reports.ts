@@ -8,6 +8,7 @@ import {schoolCommand,checkIdempotency,checkVersion,requireVersion,type CommandG
 import {ApiError,notFound} from './errors.js';
 import {Cursors} from './cursor.js';
 import {getLesson,lessonProjection,type LessonRow} from './lessons.js';
+import {attachLiveObservations,draftObservationIDs} from './capture-observations.js';
 
 const id=z.uuid(),empty=z.object({}).strict(),date=z.iso.datetime({offset:true});
 const text=(max:number)=>z.string().refine(value=>[...value].length<=max,`Le texte dépasse ${max} caractères.`);
@@ -30,7 +31,7 @@ interface DraftRow {id:string;school_id:string;lesson_id:string;author_membershi
 interface RevisionRow extends Omit<DraftRow,'base_publication_version'> {sequence:number;published_at:Date;correction_reason:string|null;_createdAt:string}
 const preparationProjection=(r:PreparationRow)=>({id:r.id,schoolId:r.school_id,version:r.version,lessonId:r.lesson_id,goals:r.goals,administrativeCheckNote:r.administrative_check_note,plannedWaypoints:r.planned_waypoints});
 const wishProjection=(r:WishRow)=>({id:r.id,schoolId:r.school_id,version:r.version,trainingId:r.training_id,lessonId:r.lesson_id,text:r.text});
-const draftProjection=(r:DraftRow)=>({id:r.id,schoolId:r.school_id,version:r.version,lessonId:r.lesson_id,authorMembershipId:r.author_membership_id,basePublicationVersion:r.base_publication_version,workedOn:r.worked_on,observationText:r.observation_text,nextStep:r.next_step,observations:r.observations,attachmentIds:[],geoObservationIds:[]});
+const draftProjection=async(db:PoolClient,r:DraftRow)=>({id:r.id,schoolId:r.school_id,version:r.version,lessonId:r.lesson_id,authorMembershipId:r.author_membership_id,basePublicationVersion:r.base_publication_version,workedOn:r.worked_on,observationText:r.observation_text,nextStep:r.next_step,observations:r.observations,attachmentIds:[],geoObservationIds:await draftObservationIDs(db,r.school_id,r.id)});
 const revisionProjection=(r:RevisionRow)=>({id:r.id,schoolId:r.school_id,version:r.version,lessonId:r.lesson_id,sequence:r.sequence,authorMembershipId:r.author_membership_id,publishedAt:r.published_at.toISOString(),workedOn:r.worked_on,observationText:r.observation_text,nextStep:r.next_step,observations:r.observations,attachmentIds:[],correctionReason:r.correction_reason,capturePublication:null,textObservations:[]});
 async function preparation(db:PoolClient,schoolId:string,lessonId:string,lock=false){const row=(await db.query<PreparationRow>(`SELECT * FROM drivy.lesson_preparation WHERE school_id=$1 AND lesson_id=$2 ${lock?'FOR UPDATE':''}`,[schoolId,lessonId])).rows[0];if(!row)throw notFound();return row;}
 async function wish(db:PoolClient,schoolId:string,trainingId:string,lock=false){const row=(await db.query<WishRow>(`SELECT * FROM drivy.training_wish WHERE school_id=$1 AND training_id=$2 ${lock?'FOR UPDATE':''}`,[schoolId,trainingId])).rows[0];if(!row)throw notFound();return row;}
@@ -110,13 +111,14 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
    if(old.commercial_selection.mode!=='UNIT_PRICE')throw new ApiError(409,'ENTITLEMENT_NOT_READY','Le constat couvert par un pack exige le registre de consommation des droits.');
    const lesson=(await db.query<LessonRow>(`UPDATE drivy.lesson SET status='COMPLETED',version=version+1,actual_start=$3,actual_end=$4,completion_anomaly_reason=$5 WHERE school_id=$1 AND id=$2 RETURNING *`,[school.id,lessonId,body.actualStart,body.actualEnd,body.anomalyReason])).rows[0]!;
    const created=(await db.query<DraftRow>(`INSERT INTO drivy.report_draft(school_id,lesson_id,author_membership_id,worked_on,observation_text,next_step) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[school.id,lessonId,actor.membershipId,body.workedOn??'',body.observationText??'',body.nextStep??''])).rows[0]!;
+   await attachLiveObservations(db,lesson,created.id,actor.membershipId);
    const accountId=randomUUID();await db.query('INSERT INTO drivy.lesson_account(id,school_id,lesson_id,planned_price_cents) VALUES($1,$2,$3,$4)',[accountId,school.id,lessonId,old.price_cents_snapshot]);
    await db.query(`INSERT INTO drivy.charge_entry(school_id,account_id,kind,amount_signed_cents,reason,operation_id) VALUES($1,$2,'INITIAL',$3,$4,$5)`,[school.id,accountId,old.price_cents_snapshot,'Prix unitaire convenu à la réservation ; leçon réalisée.',body.operationId]);
    await db.query('UPDATE drivy.reservation SET active=false WHERE school_id=$1 AND lesson_id=$2 AND active',[school.id,lessonId]);await event(db,lesson,body.operationId,'LessonCompleted');
-   return {data:{lesson:lessonProjection(lesson),draft:draftProjection(created),account:await account(db,school.id,lessonId)},action:'LessonCompleted',resourceType:'Lesson',resourceId:lessonId,resourceVersion:lesson.version,changedFields:['status','actualStart','actualEnd','draft','account'],reason:body.anomalyReason};
+   return {data:{lesson:lessonProjection(lesson),draft:await draftProjection(db,created),account:await account(db,school.id,lessonId)},action:'LessonCompleted',resourceType:'Lesson',resourceId:lessonId,resourceVersion:lesson.version,changedFields:['status','actualStart','actualEnd','draft','account'],reason:body.anomalyReason};
   });reply.header('ETag',`"${value.lesson.version}"`);return envelope(value,r);
  });
- app.get(`${base}/report-drafts/:draftId`,async(r,reply)=>{empty.parse(r.query);const value=await read(r,async db=>draftProjection(await draft(db,schoolID(r),targetID(r,'draftId'))));reply.header('ETag',`"${value.version}"`);return envelope(value,r);});
+ app.get(`${base}/report-drafts/:draftId`,async(r,reply)=>{empty.parse(r.query);const value=await read(r,async db=>draftProjection(db,await draft(db,schoolID(r),targetID(r,'draftId'))));reply.header('ETag',`"${value.version}"`);return envelope(value,r);});
  // Extension de reprise : retrouver son brouillon après perte de la réponse de constat.
  app.get(`${base}/lessons/:lessonId/report-drafts`,async r=>{
   const query=z.object({limit:z.coerce.number().int().min(1).max(100).default(50),cursor:z.string().max(6000).optional()}).strict().parse(r.query),schoolId=schoolID(r),lessonId=targetID(r,'lessonId');
@@ -126,7 +128,7 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
    const scope=JSON.stringify(['drafts',schoolId,actor.personId,member!.accessEpoch,lessonId,query.limit]),position=cursors.decode(query.cursor,scope);
    const rows=(await db.query<DraftRow&{_createdAt:string}>(`SELECT *,to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "_createdAt" FROM drivy.report_draft
     WHERE school_id=$1 AND lesson_id=$2 AND ($3::timestamptz IS NULL OR (created_at,id)>($3::timestamptz,$4::uuid)) ORDER BY created_at,id LIMIT $5`,[schoolId,lessonId,position?.createdAt??null,position?.id??null,query.limit+1])).rows;
-   const items=rows.slice(0,query.limit),last=items.at(-1);return {items:items.map(draftProjection),nextCursor:rows.length>query.limit&&last?cursors.encode(scope,{createdAt:last._createdAt,id:last.id}):null};
+   const items=rows.slice(0,query.limit),last=items.at(-1);return {items:await Promise.all(items.map(row=>draftProjection(db,row))),nextCursor:rows.length>query.limit&&last?cursors.encode(scope,{createdAt:last._createdAt,id:last.id}):null};
   });return envelope(data,r);
  });
  app.put(`${base}/report-drafts/:draftId`,{bodyLimit:350_000},async(r,reply)=>{
@@ -137,7 +139,7 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
    if(body.attachmentIds.length)throw new ApiError(409,'ATTACHMENT_NOT_READY','Le contrôle des pièces doit être disponible avant de les rattacher. Le texte peut être conservé sans pièce.');
    await validateCompetencies(db,school.id,lesson.training_id,body.observations.map(o=>o.competencyId));
    const row=(await db.query<DraftRow>('UPDATE drivy.report_draft SET version=version+1,worked_on=$3,observation_text=$4,next_step=$5,observations=$6 WHERE school_id=$1 AND id=$2 RETURNING *',[school.id,draftId,body.workedOn,body.observationText,body.nextStep,JSON.stringify(body.observations)])).rows[0]!;
-   return {data:draftProjection(row),action:'ReportDraftSaved',resourceType:'ReportDraft',resourceId:draftId,changedFields:['workedOn','observationText','nextStep','observations']};
+   return {data:await draftProjection(db,row),action:'ReportDraftSaved',resourceType:'ReportDraft',resourceId:draftId,changedFields:['workedOn','observationText','nextStep','observations']};
   });reply.header('ETag',`"${value.version}"`);return envelope(value,r);
  });
  app.post(`${base}/report-drafts/:draftId/publish`,{bodyLimit:100_000},async(r,reply)=>{

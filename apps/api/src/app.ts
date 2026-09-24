@@ -1,3 +1,4 @@
+import {registerCaptureObservations} from './capture-observations.js';
 import { randomUUID } from 'node:crypto';
 import Fastify, { LogController, type FastifyReply, type FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
@@ -125,5 +126,6 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerLessons(app,options);
   registerLessonReports(app,options);
   registerCaptures(app,options);
+  registerCaptureObservations(app,options);
   return app;
 }
