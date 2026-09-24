@@ -23,3 +23,11 @@ Les mutations et la fermeture pendant leur envoi sont désactivées. `load()` co
 ## Vérification
 
 Relecture des gardes et `git diff --check` effectués. Compilation Apple groupée confiée à l’intégration ; aucun nouveau résultat de simulateur, VoiceOver ou appareil physique n’est revendiqué pour ce lot.
+
+## Édition du catalogue
+
+Le formulaire conserve ses validations et ses choix d’approbation initialement désactivés. La commande de relecture est accessible en bas. Une feuille présente les valeurs exactes, leurs références et l’effet choisi avant la confirmation manuelle : brouillon, approbation ou activation. Revenir à l’édition réinitialise cette confirmation.
+
+Les coordonnées d’offre et références de compétence ont des libellés persistants ; les compétences sont numérotées dans leur ordre, les sources facultatives se déplient. Une nouvelle révision porte un titre distinct d’une première création. L’exigence de contenus approuvés est expliquée près du choix d’activation.
+
+Une erreur de sauvegarde et la vérification/relance de la demande conservée restent dans la relecture. Les commandes utilisent toujours le workspace existant et sa réponse durable. Ce prolongement est relu et soumis à la même compilation Apple groupée, sans nouvelle campagne de tests.

@@ -3,6 +3,7 @@ import SwiftUI
 struct SchoolCatalogEditor: View {
     @Bindable var model: SchoolCatalogWorkspace
     let kind: SchoolCatalogEditorKind
+    private let isRevision: Bool
     @Environment(\.dismiss) private var dismiss
     @State private var offering = SchoolOfferingDraft()
     @State private var curriculum = SchoolCurriculumDraft()
@@ -14,10 +15,13 @@ struct SchoolCatalogEditor: View {
     @State private var includesEnd = false
     @State private var endDate = Date().addingTimeInterval(86_400)
     @State private var reviewed = false
+    @State private var showsReview = false
+    @State private var hasSubmitted = false
 
     init(model: SchoolCatalogWorkspace, kind: SchoolCatalogEditorKind, sourceOffering: SchoolOffering? = nil,
         sourceCurriculum: SchoolCurriculum? = nil, sourcePolicy: SchoolCatalogPolicy? = nil) {
         self.model = model; self.kind = kind
+        isRevision = sourceOffering != nil || sourceCurriculum != nil || sourcePolicy != nil
         var offerDraft = SchoolOfferingDraft()
         if let sourceOffering {
             offerDraft.key = sourceOffering.offeringKey; offerDraft.category = sourceOffering.categoryCode
@@ -55,31 +59,28 @@ struct SchoolCatalogEditor: View {
                     Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
                 }
                 if model.pending != nil {
-                    Section {
-                        Text("Votre demande reste conservée. Vérifiez son résultat avant de la remplacer.").font(.subheadline)
-                        Button("Vérifier la demande") {
-                            Task {
-                                await model.verifyPending()
-                                if model.pending == nil && model.accessFailure == nil { dismiss() }
-                            }
-                        }.disabled(!model.canVerify)
-                    }
+                    Section { pendingNotice }
                 }
                 editorFields
-                Section {
-                    Toggle("J’ai relu les informations et je confirme cette demande.", isOn: $reviewed)
-                        .tint(DrivyTheme.accent)
-                    Button { Task { await save() } } label: {
-                        HStack {
-                            if model.isBusy { ProgressView() }
-                            Text(model.isBusy ? "Enregistrement…" : actionTitle)
-                        }.frame(maxWidth: .infinity, minHeight: 48)
+            }
+            .scrollContentBackground(.hidden)
+            .background(DrivyTheme.canvas)
+            .safeAreaInset(edge: .bottom) {
+                VStack(alignment: .leading, spacing: 10) {
+                    if !isValid, model.canMutate {
+                        Text("Complétez les informations avant de relire.")
+                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                    }
+                    Button("Relire avant d’enregistrer") {
+                        reviewed = false
+                        hasSubmitted = false
+                        showsReview = true
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle())
-                    .disabled(!isValid || !reviewed || !model.canMutate)
-                } footer: {
-                    Text("Une réponse interrompue conserve la même demande. Les informations ne sont confirmées qu’après l’enregistrement par l’école.")
+                    .disabled(!isValid || !model.canMutate)
                 }
+                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity)
+                .background(DrivyTheme.surface)
             }
             .disabled(model.isBusy)
             .navigationTitle(title)
@@ -88,6 +89,7 @@ struct SchoolCatalogEditor: View {
             .environment(\.timeZone, TimeZone(identifier: model.school?.timeZone ?? "Europe/Zurich") ?? .current)
             .interactiveDismissDisabled(model.isBusy)
             .onChange(of: offering.category) { _, _ in offering.curriculumID = nil; offering.policyID = nil; reviewed = false }
+            .sheet(isPresented: $showsReview, onDismiss: { reviewed = false }) { reviewSheet }
         }
         .tint(DrivyTheme.accent)
     }
@@ -144,8 +146,10 @@ struct SchoolCatalogEditor: View {
     private var offeringFields: some View {
         Group {
             Section("Identifier l’offre") {
-                TextField("Référence de l’offre", text: $offering.key).textInputAutocapitalization(.never).autocorrectionDisabled()
-                TextField("Catégorie", text: $offering.category).textInputAutocapitalization(.characters).autocorrectionDisabled()
+                labeledField("Référence de l’offre", text: $offering.key)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                labeledField("Catégorie", text: $offering.category)
+                    .textInputAutocapitalization(.characters).autocorrectionDisabled()
             }
             Section("Contenus de cette catégorie") {
                 Picker("Référentiel", selection: $offering.curriculumID) {
@@ -166,9 +170,14 @@ struct SchoolCatalogEditor: View {
                 }
             }
             Section {
-                TextField("Durée en minutes", text: $offering.duration).keyboardType(.numberPad)
-                TextField("Prix en CHF", text: $offering.price).keyboardType(.decimalPad)
+                labeledField("Durée en minutes", text: $offering.duration).keyboardType(.numberPad)
+                labeledField("Prix en CHF", text: $offering.price).keyboardType(.decimalPad)
                 Toggle("Activer cette offre", isOn: $offering.enabled)
+                if offering.enabled && !offeringReferencesApproved {
+                    Text("L’activation exige un référentiel et une procédure approuvés. Choisissez leurs versions, ou gardez l’offre désactivée.")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } header: {
                 Text("Conditions proposées")
             } footer: {
@@ -183,14 +192,14 @@ struct SchoolCatalogEditor: View {
                 TextField("Catégorie", text: $curriculum.category).textInputAutocapitalization(.characters).autocorrectionDisabled()
             }
             ForEach($curriculum.competencies) { $competency in
-                Section("Compétence") {
-                    TextField("Référence", text: $competency.key).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    TextField("Intitulé", text: $competency.label)
+                Section {
+                    labeledField("Intitulé", text: $competency.label)
+                    labeledField("Référence", text: $competency.key).textInputAutocapitalization(.never).autocorrectionDisabled()
                     TextField("Description", text: $competency.explanation, axis: .vertical).lineLimit(3...8)
                     if curriculum.competencies.count > 1 {
                         Button("Retirer cette compétence", role: .destructive) { curriculum.competencies.removeAll { $0.id == competency.id } }
                     }
-                }
+                } header: { Text("Compétence \((curriculum.competencies.firstIndex(where: { $0.id == competency.id }) ?? 0) + 1)") }
             }
             Section {
                 Button { curriculum.competencies.append(SchoolCompetencyDraft()) } label: { Label("Ajouter une compétence", systemImage: "plus") }
@@ -216,9 +225,11 @@ struct SchoolCatalogEditor: View {
             Section("Conditions d’annulation") {
                 TextField("Conditions applicables", text: $policy.cancellation, axis: .vertical).lineLimit(5...12)
             }
-            Section("Sources facultatives") {
-                TextField("Une adresse web par ligne", text: $policy.sources, axis: .vertical)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled().lineLimit(2...6)
+            Section {
+                DisclosureGroup("Sources · facultatif") {
+                    TextField("Une adresse web par ligne", text: $policy.sources, axis: .vertical)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled().lineLimit(2...6)
+                }
             }
             Section {
                 Toggle("Approuver ces textes", isOn: $policy.approved)
@@ -235,6 +246,10 @@ struct SchoolCatalogEditor: View {
     private var matchingPolicies: [SchoolCatalogPolicy] {
         model.policies.filter { $0.categoryCode == offering.category.trimmingCharacters(in: .whitespacesAndNewlines) }
     }
+    private var offeringReferencesApproved: Bool {
+        matchingCurricula.first(where: { $0.id == offering.curriculumID })?.approved == true
+            && matchingPolicies.first(where: { $0.id == offering.policyID })?.approved == true
+    }
     private var isValid: Bool {
         switch kind {
         case .offering:
@@ -249,7 +264,9 @@ struct SchoolCatalogEditor: View {
         }
     }
     private var title: String {
-        switch kind { case .offering: "Nouvelle offre"; case .curriculum: "Nouveau référentiel"; case .policy: "Nouvelle procédure"
+        switch kind { case .offering: isRevision ? "Nouvelle version d’offre" : "Nouvelle offre"
+        case .curriculum: isRevision ? "Réviser le référentiel" : "Nouveau référentiel"
+        case .policy: isRevision ? "Réviser la procédure" : "Nouvelle procédure"
         case .training: "Nouvelle formation"; case .assignment: "Affecter un moniteur" }
     }
     private var introduction: String {
@@ -269,6 +286,159 @@ struct SchoolCatalogEditor: View {
         case .training: "Créer la formation"
         case .assignment: "Confirmer l’affectation"
         }
+    }
+
+    private func labeledField(_ label: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            TextField(label, text: text).accessibilityLabel(label)
+        }.padding(.vertical, 4)
+    }
+
+    private var pendingNotice: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Résultat à vérifier").font(.headline)
+            Text("Votre demande est conservée. Vérifiez son résultat avant de la remplacer.").font(.subheadline)
+            Button("Vérifier la demande") {
+                Task {
+                    await model.verifyPending()
+                    if model.pending == nil && model.accessFailure == nil && model.successMessage != nil { dismiss() }
+                }
+            }.frame(minHeight: 44).disabled(!model.canVerify)
+            if model.canRetry {
+                Button("Renvoyer la même demande") {
+                    Task {
+                        await model.retryPending()
+                        if model.pending == nil && model.accessFailure == nil && model.successMessage != nil { dismiss() }
+                    }
+                }.frame(minHeight: 44)
+            }
+        }
+    }
+
+    private var reviewSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Text(model.learner?.displayName ?? model.school?.name ?? "Votre école")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    reviewContent
+                    Divider()
+                    if hasSubmitted, let error = model.errorMessage {
+                        SchoolErrorNotice(message: error, retry: model.pending == nil ? { Task { await model.load() } } : nil)
+                    }
+                    if model.pending != nil {
+                        pendingNotice
+                    } else {
+                        Toggle(reviewAcknowledgement, isOn: $reviewed)
+                            .disabled(model.isBusy)
+                    }
+                }
+                .padding(24).frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity)
+            }
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    hasSubmitted = true
+                    Task { await save() }
+                } label: {
+                    HStack(spacing: 10) {
+                        if model.isBusy { ProgressView() }
+                        Text(model.isBusy ? "Enregistrement…" : model.pending != nil ? "Résultat à vérifier" : actionTitle)
+                    }
+                }
+                .buttonStyle(DrivyPrimaryButtonStyle())
+                .disabled(!isValid || !reviewed || !model.canMutate)
+                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity)
+                .background(DrivyTheme.surface)
+            }
+            .background(DrivyTheme.canvas)
+            .navigationTitle("Relire et confirmer")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Retour") { showsReview = false }.disabled(model.isBusy)
+                }
+            }
+            .interactiveDismissDisabled(model.isBusy)
+        }
+    }
+
+    @ViewBuilder private var reviewContent: some View {
+        switch kind {
+        case .offering:
+            Text("Catégorie \(offering.category)").font(.title2.weight(.bold))
+            reviewValue("Référence", offering.key)
+            reviewValue("Durée", "\(offering.duration) min")
+            if let cents = SchoolCatalogFormatting.cents(offering.price) {
+                reviewValue("Prix", SchoolCatalogFormatting.price(cents))
+            }
+            if let reference = matchingCurricula.first(where: { $0.id == offering.curriculumID }) {
+                reviewValue("Référentiel", "Révision \(reference.revision) · \(reference.approved ? "Approuvée" : "Brouillon")")
+            }
+            if let reference = matchingPolicies.first(where: { $0.id == offering.policyID }) {
+                reviewValue("Procédure", "Version \(reference.version) · \(reference.approved ? "Approuvée" : "Brouillon")")
+            }
+            Text(offering.enabled ? "Cette offre sera ouverte aux nouvelles formations." : "Cette offre restera désactivée.")
+                .font(.headline)
+        case .curriculum:
+            Text("Catégorie \(curriculum.category)").font(.title2.weight(.bold))
+            ForEach(curriculum.competencies) { competency in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(competency.label).font(.headline)
+                    Text(competency.explanation)
+                    Text(competency.key).font(.caption).foregroundStyle(DrivyTheme.muted)
+                }
+            }
+            reviewValue("Motif de la version", curriculum.reason)
+            Text(curriculum.approved ? "Le référentiel sera approuvé pour cette catégorie." : "Le référentiel restera un brouillon.")
+                .font(.headline)
+        case .policy:
+            Text("Catégorie \(policy.category)").font(.title2.weight(.bold))
+            reviewValue("Déroulement de la formation", policy.procedure)
+            reviewValue("Conditions d’annulation", policy.cancellation)
+            if !policy.urls.isEmpty { reviewValue("Sources", policy.urls.joined(separator: "\n")) }
+            reviewValue("Motif de la version", policy.reason)
+            Text(policy.approved ? "Ces textes seront approuvés pour cette catégorie." : "Ces textes resteront un brouillon.")
+                .font(.headline)
+        case .training:
+            if let selected = model.availableOfferings.first(where: { $0.id == offeringID }) {
+                Text("Catégorie \(selected.categoryCode)").font(.title2.weight(.bold))
+                reviewValue("Offre", "\(selected.offeringKey) · version \(selected.version)")
+                reviewValue("Conditions proposées", "\(selected.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(selected.defaultPriceCents))")
+            }
+            reviewValue("Date de début", includesStart ? reviewDate(startDate, includesTime: false) : "Non précisée")
+        case .assignment:
+            Text(model.instructors.first(where: { $0.id == memberID })?.displayName ?? "Moniteur")
+                .font(.title2.weight(.bold))
+            reviewValue("Début de l’affectation", reviewDate(startDate))
+            reviewValue("Fin", includesEnd ? reviewDate(endDate) : "Aucune date prévue")
+        }
+    }
+
+    private func reviewValue(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.headline)
+            Text(value).textSelection(.enabled)
+        }
+    }
+
+    private var reviewAcknowledgement: String {
+        switch kind {
+        case .offering: offering.enabled ? "Je confirme ces conditions et l’activation de cette offre." : "Je confirme ces conditions, sans activer l’offre."
+        case .curriculum: curriculum.approved ? "J’ai relu les compétences et je confirme leur approbation." : "Je confirme l’enregistrement de ce brouillon."
+        case .policy: policy.approved ? "J’ai relu ces textes et je confirme leur approbation." : "Je confirme l’enregistrement de ce brouillon."
+        case .training: "Je confirme l’ouverture de cette formation avec cette offre."
+        case .assignment: "Je confirme ce moniteur et cette période d’affectation."
+        }
+    }
+
+    private func reviewDate(_ date: Date, includesTime: Bool = true) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_CH")
+        formatter.timeZone = TimeZone(identifier: model.school?.timeZone ?? "Europe/Zurich")
+        formatter.dateStyle = .long
+        formatter.timeStyle = includesTime ? .short : .none
+        return formatter.string(from: date)
     }
     private func save() async {
         guard reviewed, isValid else { return }
