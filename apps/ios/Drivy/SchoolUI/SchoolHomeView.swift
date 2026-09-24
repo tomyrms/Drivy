@@ -15,6 +15,9 @@ struct SchoolHomeView: View {
     var openCatalog: (() -> Void)? = nil
     var openTrainingAdministration: ((SchoolLearner) -> Void)? = nil
     var agendaClient: SchoolAgendaClient? = nil
+    var openMembers: (() -> Void)? = nil
+    var openAddLearner: (() -> Void)? = nil
+    var requestedLearnerID: UUID? = nil
     @State private var selectedTab: HomeTab = .session
     @State private var choosesSchool = false
     @State private var dossierPlanningModel: SchoolPlanningWorkspace?
@@ -51,6 +54,9 @@ struct SchoolHomeView: View {
             dossierPlanningModel?.invalidate(); dossierPlanningModel = nil
         }
         .task { await localController.load() }
+        .task(id: requestedLearnerID) {
+            if let requestedLearnerID, workspace.selectedLearnerID == requestedLearnerID { selectedTab = .learners }
+        }
     }
 
     private var sessionTab: some View {
@@ -69,7 +75,7 @@ struct SchoolHomeView: View {
             SchoolBrowserView(workspace: workspace, openAccount: openAccount,
                 openInvitations: openInvitations, openProfile: openProfile,
                 openSchool: { selectedTab = .school }, openTrainingAdministration: openTrainingAdministration,
-                openPlanning: planningAction)
+                openPlanning: planningAction, openAddLearner: openAddLearner)
         } else {
             NavigationStack {
                 schoolSelection
@@ -174,6 +180,10 @@ struct SchoolHomeView: View {
                 if let openInvitations {
                     Divider().padding(.leading, 64)
                     actionRow("Invitations", detail: "Inviter et suivre les accès", symbol: "envelope", action: openInvitations)
+                }
+                if let openMembers {
+                    Divider().padding(.leading, 64)
+                    actionRow("Équipe et accès", detail: "Membres, rôles et autorisations", symbol: "person.2.badge.key", action: openMembers)
                 }
                 if let configureSchool {
                     Divider().padding(.leading, 64)

@@ -23,9 +23,15 @@ struct SchoolRootView: View {
     @State private var opensProfilePolicyAfterConfiguration = false
     @State private var catalogWorkspace: SchoolCatalogWorkspace?
     @State private var showsCatalog = false
+    @State private var memberWorkspace: SchoolMemberWorkspace?
+    @State private var showsMembers = false
+    @State private var memberEntryMode: SchoolMemberEntryMode = .team
+    @State private var opensInvitationsAfterMembers = false
+    @State private var memberLearnerToOpen: SchoolLearner?
+    @State private var requestedLearnerID: UUID?
 
     var body: some View {
-        catalogPresentation
+        memberPresentation
             .sheet(isPresented: $showsInvitations, onDismiss: invitationsDismissed) {
                 invitationsSheet
             }
@@ -61,7 +67,8 @@ struct SchoolRootView: View {
                 configureSchool: homeConfigurationAction, openInvitations: invitationsAction,
                 openProfile: profileAction, openProfilePolicy: homeProfilePolicyAction,
                 openOnboarding: homeOnboardingAction, openCatalog: homeCatalogAction,
-                openTrainingAdministration: trainingAdministrationAction, agendaClient: homeAgendaClient)
+                openTrainingAdministration: trainingAdministrationAction, agendaClient: homeAgendaClient,
+                openMembers: membersAction, openAddLearner: addLearnerAction, requestedLearnerID: requestedLearnerID)
         } else {
             NavigationStack {
                 accountLanding(workspace)
@@ -81,7 +88,7 @@ struct SchoolRootView: View {
             else { workspace?.reset() }
         }
         .onChange(of: identity.isAuthenticated) { _, authenticated in
-            if !authenticated { closeConfiguration(); closeInvitations(); closeProfile(); closeCatalog(); workspace?.reset() }
+            if !authenticated { closeConfiguration(); closeInvitations(); closeProfile(); closeCatalog(); closeMembers(); requestedLearnerID = nil; workspace?.reset() }
         }
         .onChange(of: workspace?.membership?.membershipId) { _, _ in
             if workspace?.isLoadingAccount != true { verifyPresentedScopes() }
@@ -119,6 +126,61 @@ struct SchoolRootView: View {
     private var homeAgendaClient: SchoolAgendaClient? {
         guard let configuration else { return nil }
         return SchoolAgendaClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
+    }
+
+    private var memberPresentation: some View {
+        catalogPresentation.sheet(isPresented: $showsMembers, onDismiss: membersDismissed) {
+            if let memberWorkspace {
+                SchoolMemberView(model: memberWorkspace, identity: identity, mode: memberEntryMode,
+                    openInvitations: {
+                        opensInvitationsAfterMembers = true
+                        showsMembers = false
+                    }, openLearner: { learner in
+                        memberLearnerToOpen = learner
+                        showsMembers = false
+                    })
+                    .disabled(isCheckingSchoolAccess)
+                    .overlay { accessCheckOverlay }
+                    .onChange(of: memberWorkspace.accessRevoked) { _, revoked in if revoked { closeMembers() } }
+                    .onChange(of: memberWorkspace.ownAccessChanged) { _, changed in if changed { showsMembers = false } }
+            }
+        }
+    }
+    private var membersAction: (() -> Void)? {
+        guard canConfigureSchool, workspace?.school?.status == "ACTIVE" else { return nil }
+        return { openMembers(mode: .team) }
+    }
+    private var addLearnerAction: (() -> Void)? {
+        guard canConfigureSchool, workspace?.school?.status == "ACTIVE" else { return nil }
+        return { openMembers(mode: .addLearner) }
+    }
+    private func openMembers(mode: SchoolMemberEntryMode) {
+        guard canConfigureSchool, workspace?.school?.status == "ACTIVE", let configuration,
+              let person = workspace?.person, let membership = workspace?.membership else { return }
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
+        memberWorkspace = SchoolMemberWorkspace(scope: scope, client: SchoolMemberClient(baseURL: configuration.apiBaseURL, tokenSource: identity))
+        memberEntryMode = mode; showsMembers = true
+    }
+    private func closeMembers() { memberWorkspace?.invalidate(); showsMembers = false }
+    private func membersDismissed() {
+        let learner = memberLearnerToOpen
+        let invite = opensInvitationsAfterMembers
+        let personID = memberWorkspace?.scope.personID
+        let schoolID = memberWorkspace?.scope.schoolID
+        memberLearnerToOpen = nil; opensInvitationsAfterMembers = false
+        memberWorkspace?.invalidate(); memberWorkspace = nil
+        guard identity.isAuthenticated else { return }
+        Task {
+            await workspace?.loadAccount()
+            guard workspace?.person?.personId == personID, workspace?.membership?.schoolId == schoolID else { return }
+            if let learner, learner.schoolId == schoolID {
+                workspace?.selectLearner(learner.id)
+                requestedLearnerID = learner.id
+                await workspace?.loadSelectedLearner()
+            }
+            if invite { openInvitations() }
+        }
     }
 
     private var homeCatalogAction: (() -> Void)? {
@@ -485,6 +547,7 @@ struct SchoolRootView: View {
     }
 
     private func signOut() {
+        closeMembers()
         closeCatalog()
         closeProfile()
         closeConfiguration()
@@ -525,6 +588,11 @@ struct SchoolRootView: View {
     }
 
     private func verifyPresentedScopes() {
+        if let model = memberWorkspace {
+            if !canConfigureSchool || model.scope.personID != workspace?.person?.personId
+                || model.scope.membershipID != workspace?.membership?.membershipId
+                || model.scope.accessEpoch != workspace?.membership?.accessEpoch { closeMembers() }
+        }
         if let model = catalogWorkspace {
             if !canConfigureSchool || model.scope.personID != workspace?.person?.personId
                 || model.scope.membershipID != workspace?.membership?.membershipId

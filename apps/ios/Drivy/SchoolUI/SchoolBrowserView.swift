@@ -8,6 +8,7 @@ struct SchoolBrowserView: View {
     var openSchool: (() -> Void)? = nil
     var openTrainingAdministration: ((SchoolLearner) -> Void)? = nil
     var openPlanning: ((SchoolLearner) -> Void)? = nil
+    var openAddLearner: (() -> Void)? = nil
     @State private var choosesSchool = false
 
     var body: some View {
@@ -30,6 +31,12 @@ struct SchoolBrowserView: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button(action: openInvitations) { Label("Invitations", systemImage: "envelope") }
                             .accessibilityIdentifier("open-school-invitations")
+                    }
+                }
+                if let openAddLearner {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(action: openAddLearner) { Label("Ajouter un élève", systemImage: "person.badge.plus") }
+                            .accessibilityIdentifier("add-school-learner")
                     }
                 }
             }
