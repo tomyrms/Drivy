@@ -57,6 +57,7 @@ try{
  const chunk={operationId:randomUUID(),...content,contentHash:trackContentHash(content),signedUploadAuthorization:authorization.signedUploadAuthorization};
  assert.equal((await call('PUT',`/captures/${capture.id}/segments/${segment}/chunks/0`,chunk)).statusCode,200);
  const accepted=await call('POST',route,anchored);assert.equal(accepted.statusCode,201,JSON.stringify(accepted.json()));
+ const replayPage=await call('GET',`/captures/${capture.id}/replay`);assert.equal(replayPage.statusCode,200);assert.deepEqual(replayPage.json().data.observations.map((o:any)=>o.id),[accepted.json().data.id]);
  const completed=await call('POST',`/lessons/${lesson}/complete`,{operationId:randomUUID(),actualStart:new Date(Date.now()-60000).toISOString(),actualEnd:new Date().toISOString(),workedOn:'Travail synthétique',observationText:'Constat synthétique',nextStep:'Suite synthétique',anomalyReason:'Recette locale'},1);
  assert.equal(completed.statusCode,200,JSON.stringify(completed.json()));const draft=completed.json().data.draft;
  assert.deepEqual(new Set(draft.geoObservationIds),new Set([marker.id,accepted.json().data.id]));
@@ -65,6 +66,7 @@ try{
  // La destruction du lot supprime aussi l'ancre et invalide la version relue du brouillon.
  await pool.query('UPDATE drivy.capture_chunk SET encrypted_points=NULL WHERE capture_id=$1',[capture.id]);
  page=await call('GET',route);const unanchored=page.json().data.items.find((o:any)=>o.id===accepted.json().data.id);assert.equal(unanchored.captureId,null);assert.equal(unanchored.version,3);
+ assert.deepEqual((await call('GET',`/captures/${capture.id}/replay`)).json().data.observations,[]);
  const recovered=await call('POST',route,anchored);assert.equal(recovered.json().data.captureId,null);
  const late=await call('POST',route,{...body,operationId:randomUUID()});assert.equal(late.statusCode,201);assert.equal(late.json().data.draftId,draft.id);
  const remove={operationId:randomUUID(),reason:'Retrait explicite de recette'};const removed=await call('POST',`/geo-observations/${late.json().data.id}/remove`,remove,1);assert.equal(removed.statusCode,200);assert.equal(removed.json().data.accepted,true);

@@ -9,6 +9,7 @@ import { checkIdempotency,checkVersion,requireVersion,schoolCommand,type Command
 import { getLesson } from './lessons.js';
 import { assessmentCommand,assessmentProjection,choiceCommand,choiceProjection,chunkCommand,captureProjection,finalizeCommand,startCommand,stopCommand,uuid,type AssessmentInput,type AssessmentRow,type CaptureRow,type ChoiceRow,type ChunkInput,type ChunkRow,type Manifest,type TrackPoint } from './capture-contracts.js';
 import { CaptureAuthority,canonicalCaptureJSON,chunkAAD,decryptPoints,encryptPoints,trackContentHash,type CaptureConfig,type QualificationProfile } from './capture-crypto.js';
+import {geoObservationProjection,type GeoObservationRow} from './capture-contracts.js';
 
 const empty=z.object({}).strict();
 const error=(code:string,message:string,status=409)=>new ApiError(status,code,message);
@@ -215,7 +216,12 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
     else{if(segments.length===100){page=page.slice(0,i);break;}segments.push({segmentId:item.segmentId,segmentIndex:item.segmentIndex,points:[item.point],hasGapBefore:previous?(!same||!continuous):item.segmentIndex>0||item.point.sequence>0,qualityLabel:quality,continuesFromPreviousPage:i===0&&!!continuous,continuesOnNextPage:false});}
    }
    const last=page.at(-1),next=ordered[begin+page.length];if(last&&next&&last.segmentId===next.segmentId&&last.point.sequence+1===next.point.sequence)segments.at(-1)!.continuesOnNextPage=true;
-   return {captureId,quality:row.sync_state==='SYNCED'?'SYNCED':'PARTIAL',publicationState:'PRIVATE',segments,observations:[],nextCursor:last&&next?cursors.encode(scope,{id:last.segmentId,createdAt:new Date(last.point.sequence).toISOString()}):null,generatedAt:new Date().toISOString(),reportRevisionId:null,geometrySnapshotId:null};
+   // Seules les observations dont la mesure figure réellement dans cette page sont restituées.
+   // La RLS conserve les droits privés ; une observation sans GPS reste accessible par AP161.
+   const pageAnchors=new Set(page.map(item=>`${item.segmentId}:${item.point.sequence}`));
+   const annotations=(await db.query<GeoObservationRow>('SELECT * FROM drivy.geo_observation WHERE school_id=$1 AND capture_id=$2 AND removed_at IS NULL ORDER BY created_at,id',[row.school_id,row.id])).rows;
+   const observations=annotations.filter(item=>pageAnchors.has(`${item.segment_id}:${item.point_sequence}`)).map(geoObservationProjection);
+   return {captureId,quality:row.sync_state==='SYNCED'?'SYNCED':'PARTIAL',publicationState:'PRIVATE',segments,observations,nextCursor:last&&next?cursors.encode(scope,{id:last.segmentId,createdAt:new Date(last.point.sequence).toISOString()}):null,generatedAt:new Date().toISOString(),reportRevisionId:null,geometrySnapshotId:null};
   });return envelope(result,r);
  });
 }

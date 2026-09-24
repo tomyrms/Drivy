@@ -52,6 +52,8 @@ Retirer vide le texte et les références GPS de la ligne, tout en gardant une t
 
 AP54 conserve sa garde explicite : aucune sélection textuelle ou géographique n'est publiée par cette tranche. Un bilan textuel peut être publié avec `captureSelection:null` et `textObservationSelection:[]`. Les événements privés restent privés ; ni le compteur ni MARKER ne deviennent une évaluation élève.
 
+AP160 restitue aussi les observations privées autorisées dont l'ancre correspond à une mesure effectivement incluse dans sa page de replay. Les événements sans ancre restent dans AP161 ; aucune position ne leur est attribuée. Une page sans mesure n'ajoute aucune observation ancrée, et la purge du lot retire ces observations du replay sans supprimer le texte privé conservé dans AP161.
+
 ## Vérification exécutée
 
 `npm run typecheck --workspace @drivy/api` et `npm run build --workspace @drivy/api` réussis. Une seule recette ciblée : `npm exec --workspace @drivy/api -- vitest run test/capture-observations.integration.test.ts`, PostgreSQL 17 du conteneur local port 55435, base dédiée `drivy_observation_test`. Migrations 001–009 appliquées sous owner non-superuser, sans BYPASSRLS ni CREATEROLE ; 40 tables sur 40 en FORCE RLS. La recette utilise seulement des données synthétiques et une qualification de capture synthétique locale, jamais un profil d'appareil approuvé pour l'hébergement.
