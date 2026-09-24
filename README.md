@@ -4,15 +4,15 @@ Refonte native iPhone/iPad centrée sur la leçon, les observations et le bilan 
 
 ## Réalisation en cours
 
-- `apps/ios` : connexion scolaire AppAuth/PKCE, écoles, élèves et formations en lecture ; laboratoire local avec GPS facultatif, observations et stockage SQLCipher. G1A validé sur simulateurs iPhone/iPad. G1B ajoute les coordonnées, textes de données et activation explicite de l'école ; sa validation Apple est en cours.
-- `apps/api` : lectures G1A et configuration/activation G1B, identité OIDC et permissions scolaires, PostgreSQL. Typecheck, build et **57 tests réussis**, avec PostgreSQL 17.11 et 16.14 réels. G1A est déployé en HTTPS ; le déploiement G1B est en préparation.
+- `apps/ios` : connexion scolaire AppAuth/PKCE, écoles, élèves et formations en lecture ; laboratoire local avec GPS facultatif, observations et stockage SQLCipher. G1B ajoute les coordonnées, textes de données et activation explicite de l’école. Les parcours natifs passent sur iPhone (69 tests) et iPad (3 tests).
+- `apps/api` : lectures G1A et configuration/activation G1B déployées en HTTPS, identité OIDC et permissions scolaires, PostgreSQL. Typecheck, build et **57 tests réussis**, avec PostgreSQL 17.11 et 16.14 réels.
 - `docs/implementation` : décisions, protocole de recette et preuves de la réalisation.
 
 Voir [l'état exact](docs/implementation/STATUS.md). Le produit complet comprend aussi planning, bilans partagés, cours collectifs, packs et web de gestion ; ces fonctions restent à réaliser. Le laboratoire G0 ne contient aucune donnée scolaire ni publication serveur.
 
 ## Construire et installer sur iPhone/iPad
 
-Le [build connecté 0.2.0/build 4](https://github.com/tomyrms/Drivy/actions/runs/36020145594) contient l'artefact `Drivy-essai-30999d682f40fde1eb4e16ea35e038c491525297` : extraire le ZIP, puis importer `Drivy.ipa` dans iLoader. Le paquet inclut son empreinte SHA-256 et les informations du build. Les identifiants de connexion Drivy sont fournis dans un fichier privé distinct ; aucune clé d'identité n'est incluse dans l'IPA. L'identité Apple reste utilisée dans iLoader sur le poste du porteur. Les artefacts GitHub sont conservés 14 jours.
+Le [build connecté 0.3.0/build 5](https://github.com/tomyrms/Drivy/actions/runs/36024174745) contient l'artefact `Drivy-essai-c3e5e6733282a77be779f1c99661f0831c74c5d8` : extraire le ZIP, puis importer `Drivy.ipa` dans iLoader. Il ajoute la configuration et l'activation ADMIN. Le paquet inclut son empreinte SHA-256 et les informations du build. Les identifiants de connexion Drivy sont fournis dans un fichier privé distinct ; aucune clé d'identité n'est incluse dans l'IPA. L'identité Apple reste utilisée dans iLoader sur le poste du porteur. Les artefacts GitHub sont conservés 14 jours.
 
 Le workflow **IPA d'essai · iLoader** compile et vérifie le paquet indépendamment des tests sur simulateurs. Sa réussite ne qualifie donc pas tous les parcours natifs. Le workflow **Refonte · iOS** exécute séparément les tests iPhone/iPad et ne produit son artefact `Drivy-unsigned-<commit>` qu'après leur réussite.
 

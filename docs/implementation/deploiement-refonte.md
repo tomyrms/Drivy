@@ -71,7 +71,7 @@ Créer un snapshot du commit vérifié incluant `package.json`, `package-lock.js
 python3 /root/drivy-deploy/install-api-release.py --apply /opt/drivy-refonte/releases/<SHA-complet>
 ```
 
-La migration utilise uniquement `MIGRATION_DATABASE_URL`, jamais le rôle runtime. Elle conserve son verrou transactionnel et ses hashes SHA-256. Le contrôle suivant utilise au contraire la vraie connexion runtime : absence de privilèges dangereux, huit tables métier avec RLS forcée, `SET LOCAL ROLE drivy_app` effectif et zéro personne visible sans contexte d’identité. Aucun seed n’est exécuté. Les secrets de migration ne figurent pas dans l’environnement du service API.
+La migration utilise uniquement `MIGRATION_DATABASE_URL`, jamais le rôle runtime. Elle conserve son verrou transactionnel et ses hashes SHA-256. Le contrôle suivant utilise au contraire la vraie connexion runtime : absence de privilèges dangereux, présence des huit tables initiales et RLS forcée sur toutes les tables métier (treize après G1B), `SET LOCAL ROLE drivy_app` effectif et zéro personne visible sans contexte d’identité. Aucun seed n’est exécuté. Les secrets de migration ne figurent pas dans l’environnement du service API.
 
 ## 4. Filtrage, Caddy et démarrage
 
