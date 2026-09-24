@@ -26,6 +26,9 @@ import Observation
         self.scope = scope; self.membership = membership; self.learnerID = learnerID; self.trainingID = trainingID; self.client = client
     }
     var hasPedagogicalRole: Bool { membership.roles.contains("INSTRUCTOR") || membership.roles.contains("LEARNER") }
+    // L’ouverture déclenche sa propre lecture autorisée. AP58 n’est pas une permission
+    // pour AP55/56 : une indisponibilité de la progression ne doit pas masquer les bilans.
+    var canOpenPedagogicalContent: Bool { hasPedagogicalRole && training != nil && !invalidated && !accessRevoked && !isLoading }
     var publishedLessons: [SchoolLesson] { lessons.filter { $0.currentPublishedRevisionId != nil }.sorted { $0.plannedStart > $1.plannedStart } }
     var upcomingLessons: [SchoolLesson] { lessons.filter { $0.status == "PLANNED" }.sorted { $0.plannedStart < $1.plannedStart } }
     var pastLessons: [SchoolLesson] { lessons.filter { $0.status != "PLANNED" }.sorted { $0.plannedStart > $1.plannedStart } }
