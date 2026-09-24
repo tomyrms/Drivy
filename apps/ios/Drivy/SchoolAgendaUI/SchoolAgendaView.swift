@@ -8,6 +8,7 @@ struct SchoolAgendaView: View {
     @State private var isLoading = false
     @State private var error: String?
     @State private var requestID = UUID()
+    @State private var loadedScope: String?
     @State private var selectedLesson: SchoolLesson?
 
     private var calendar: Calendar {
@@ -20,7 +21,8 @@ struct SchoolAgendaView: View {
     private var weekStart: Date { calendar.dateInterval(of: .weekOfYear, for: selectedDate)?.start ?? calendar.startOfDay(for: selectedDate) }
     private var weekDays: [Date] { (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: weekStart) } }
     private var dailyLessons: [SchoolLesson] {
-        lessons.filter { lesson in lesson.startsAt.map { calendar.isDate($0, inSameDayAs: selectedDate) } ?? false }
+        guard loadedScope == scopeKey else { return [] }
+        return lessons.filter { lesson in lesson.startsAt.map { calendar.isDate($0, inSameDayAs: selectedDate) } ?? false }
             .sorted { $0.plannedStart < $1.plannedStart }
     }
     private var scopeKey: String { "\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(weekStart.timeIntervalSince1970)" }
@@ -145,22 +147,22 @@ struct SchoolAgendaView: View {
     private func hasLessons(on day: Date) -> Bool { lessons.contains { $0.startsAt.map { calendar.isDate($0, inSameDayAs: day) } ?? false } }
     private func moveWeek(_ offset: Int) { if let date = calendar.date(byAdding: .weekOfYear, value: offset, to: selectedDate) { selectedDate = date } }
     @MainActor private func loadWeek() async {
-        let id = UUID(); requestID = id; lessons = []; error = nil
+        let id = UUID(); requestID = id; lessons = []; error = nil; loadedScope = nil
         guard let schoolID = workspace.membership?.schoolId, let end = calendar.date(byAdding: .day, value: 7, to: weekStart) else { isLoading = false; return }
-        let start = weekStart
+        let start = weekStart, scope = scopeKey
         isLoading = true
         defer { if requestID == id { isLoading = false } }
         do {
             var all: [SchoolLesson] = [], cursor: String?, seen = Set<String>()
             repeat {
                 let page = try await client.lessons(schoolID: schoolID, from: start, to: end, cursor: cursor)
-                guard !Task.isCancelled, requestID == id, workspace.membership?.schoolId == schoolID else { return }
+                guard !Task.isCancelled, requestID == id, scopeKey == scope else { return }
                 all.append(contentsOf: page.items); cursor = page.nextCursor
                 if let cursor, !seen.insert(cursor).inserted { throw SchoolAgendaFailure.invalidResponse }
                 if all.count > 10_000 { throw SchoolAgendaFailure.invalidResponse }
             } while cursor != nil
             guard Set(all.map(\.id)).count == all.count else { throw SchoolAgendaFailure.invalidResponse }
-            lessons = all
+            lessons = all; loadedScope = scope
         } catch {
             guard !Task.isCancelled, requestID == id else { return }
             self.error = (error as? LocalizedError)?.errorDescription ?? "L’agenda n’a pas pu être chargé."

@@ -17,7 +17,7 @@ struct SessionHistoryView: View {
                 ContentUnavailableView {
                     Label("Vos séances, ici", systemImage: "clock.arrow.circlepath")
                 } description: {
-                    Text("Après un essai, retrouvez son trajet, ses observations et son bilan local.")
+                    Text("Retrouvez vos trajets, les moments importants et vos bilans après chaque séance.")
                 }
             } else {
                 List {
@@ -79,6 +79,9 @@ struct SessionDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedObservationID: UUID?
     @State private var replayOffset = 0.0
+    @State private var isPlaying = false
+    @State private var playbackSpeed = 1.0
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showsSummaryEditor = false
     @State private var confirmsDelete = false
     @State private var deleting = false
@@ -147,6 +150,9 @@ struct SessionDetailView: View {
             Text("Le trajet, les observations et le bilan de cet essai seront supprimés de cet appareil. Cette action est définitive.")
         }
         .task { await controller.selectSession(sessionID) }
+        .task(id: isPlaying) { await playReplay() }
+        .onDisappear { isPlaying = false }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { isPlaying = false } }
         .sheet(isPresented: $showsSummaryEditor) {
             if let session {
                 SummaryEditorView(controller: controller, sessionID: session.id, initialText: session.summary)
@@ -190,17 +196,39 @@ struct SessionDetailView: View {
                 .frame(height: sizeClass == .regular ? 400 : 300)
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Relecture")
+                    Text("Replay")
                         .font(.headline)
                     Spacer()
                     Text(date.sessionElapsed(since: session.startedAt))
                         .monospacedDigit()
                         .font(.subheadline.weight(.medium))
                 }
-                Slider(value: $replayOffset, in: 0...duration)
+                Slider(value: $replayOffset, in: 0...duration, onEditingChanged: { editing in if editing { isPlaying = false } })
                     .accessibilityLabel("Instant du trajet")
                     .accessibilityValue(date.sessionElapsed(since: session.startedAt))
                     .accessibilityIdentifier("replay-timeline")
+                HStack(spacing: 12) {
+                    Button { jumpObservation(in: session, forward: false) } label: {
+                        Image(systemName: "backward.end.fill").frame(width: 48, height: 48)
+                    }.accessibilityLabel("Observation précédente").disabled(session.observations.isEmpty)
+                    Spacer(minLength: 0)
+                    Button {
+                        if replayOffset >= duration { replayOffset = 0 }
+                        isPlaying.toggle()
+                    } label: {
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                            .font(.title3).frame(width: 56, height: 56)
+                            .foregroundStyle(DrivyTheme.onAccent)
+                            .background(DrivyTheme.accent, in: Circle())
+                    }.accessibilityLabel(isPlaying ? "Mettre le replay en pause" : "Lire le replay")
+                    Spacer(minLength: 0)
+                    Button { jumpObservation(in: session, forward: true) } label: {
+                        Image(systemName: "forward.end.fill").frame(width: 48, height: 48)
+                    }.accessibilityLabel("Observation suivante").disabled(session.observations.isEmpty)
+                    Button { playbackSpeed = playbackSpeed == 1 ? 2 : playbackSpeed == 2 ? 4 : 1 } label: {
+                        Text("×\(Int(playbackSpeed))").font(.subheadline.weight(.semibold)).frame(width: 44, height: 48)
+                    }.accessibilityLabel("Vitesse du replay : \(Int(playbackSpeed)) fois")
+                }.buttonStyle(.plain).foregroundStyle(DrivyTheme.accent)
                 Group {
                     if let position {
                         Text("Dernière position : \(position.timestamp.sessionElapsed(since: session.startedAt)).")
@@ -217,8 +245,36 @@ struct SessionDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .onChange(of: selectedObservationID) { _, id in
             if let observation = session.observations.first(where: { $0.id == id }) {
+                isPlaying = false
                 replayOffset = max(0, observation.observedAt.timeIntervalSince(session.startedAt))
             }
+        }
+    }
+
+    @MainActor private func playReplay() async {
+        guard isPlaying, let session else { return }
+        let duration = max(1, (session.endedAt ?? session.points.last?.timestamp ?? session.startedAt).timeIntervalSince(session.startedAt))
+        var previous = ContinuousClock.now
+        while isPlaying && !Task.isCancelled {
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            guard isPlaying, !Task.isCancelled else { return }
+            let now = ContinuousClock.now
+            let elapsed = previous.duration(to: now).components
+            previous = now
+            replayOffset = min(duration, replayOffset + (Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18) * playbackSpeed)
+            if replayOffset >= duration { isPlaying = false }
+        }
+    }
+
+    private func jumpObservation(in session: DrivingSession, forward: Bool) {
+        isPlaying = false
+        let ordered = session.observations.sorted { $0.observedAt < $1.observedAt }
+        let target = forward
+            ? ordered.first { $0.observedAt.timeIntervalSince(session.startedAt) > replayOffset + 0.1 }
+            : ordered.last { $0.observedAt.timeIntervalSince(session.startedAt) < replayOffset - 0.1 }
+        if let target {
+            selectedObservationID = target.id
+            replayOffset = max(0, target.observedAt.timeIntervalSince(session.startedAt))
         }
     }
 
@@ -233,6 +289,7 @@ struct SessionDetailView: View {
                 } else {
                     ForEach(session.observations.sorted { $0.observedAt < $1.observedAt }) { observation in
                         Button {
+                            isPlaying = false
                             selectedObservationID = observation.id
                             replayOffset = max(0, observation.observedAt.timeIntervalSince(session.startedAt))
                         } label: {
@@ -260,7 +317,7 @@ struct SessionDetailView: View {
     private func summary(_ session: DrivingSession) -> some View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: 16) {
-                Label("Bilan local", systemImage: "note.text")
+                Label("Bilan de la séance", systemImage: "note.text")
                     .font(.title3.weight(.semibold))
                 if session.summary.isEmpty {
                     Text("Ce que vous retenez de la séance et ce que vous souhaitez retravailler.")
