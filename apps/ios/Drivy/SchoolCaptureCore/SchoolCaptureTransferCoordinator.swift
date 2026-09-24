@@ -151,7 +151,10 @@ final class SchoolCaptureTransferCoordinator {
         let command = try await store.markAttempted(id: operationID, scope: scope)
         try check(request)
         let startedAt = ContinuousClock.now
-        let result = try await client.send(command)
+        // Après admission durable, la fermeture de la vue n'annule pas la lecture
+        // de l'accusé. La requête garde ses délais URLSession et sa portée originale.
+        let delivery = Task { try await client.send(command) }
+        let result = try await delivery.value
         let receivedAt = ContinuousClock.now
         if case .authorization(let authorization) = result, authorization.capture.captureState == .authorized {
             try check(request)

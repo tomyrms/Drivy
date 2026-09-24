@@ -13,6 +13,7 @@ final class SchoolCaptureLocalCoordinator {
     private var beginTask: Task<SchoolCaptureSegmentHandle, Error>?
     private var writeTail: Task<Void, Error>?
     private var stopping = false
+    private var transitionWaiters: [CheckedContinuation<Void, Never>] = []
     private var queuedMeasurementCount = 0
     private(set) var lastFailure: String?
 
@@ -22,6 +23,10 @@ final class SchoolCaptureLocalCoordinator {
         self.scope = scope
         self.stopLocalCollector = stopLocalCollector
     }
+
+    /// Barrière synchrone pour une révocation ou un changement de contexte.
+    /// Les tâches déjà admises restent disponibles pour stop/recover et le scellement.
+    func halt() { closeAdmission() }
 
     func begin(captureID: UUID, startedAt: String,
                reason: SchoolCaptureChunkBody.StartReason) async throws -> SchoolCaptureSegmentHandle {
@@ -83,7 +88,7 @@ final class SchoolCaptureLocalCoordinator {
                reason: SchoolCaptureManifest.EndReason) async throws {
         guard activeHandle == handle, !stopping else { throw SchoolCaptureStorageFailure.closed }
         stopping = true
-        defer { stopping = false }
+        defer { finishTransition() }
         let pendingStart = beginTask
         let pendingWrites = writeTail
         closeAdmission()
@@ -97,9 +102,12 @@ final class SchoolCaptureLocalCoordinator {
     @discardableResult
     func stop(captureID: UUID, stoppedAt: String,
               reason: SchoolCaptureLocalStopReason) async throws -> SchoolCapturePendingMutation {
-        guard !stopping else { closeAdmission(); throw SchoolCaptureStorageFailure.closed }
+        // Une révocation pendant une pause doit attendre son scellement puis écrire
+        // AP157. Elle ne doit pas abandonner l'arrêt parce que pause utilise le coffre.
+        closeAdmission()
+        while stopping { await withCheckedContinuation { transitionWaiters.append($0) } }
         stopping = true
-        defer { stopping = false }
+        defer { finishTransition() }
         let pendingStart = beginTask
         let pendingWrites = writeTail
         // Toujours avant le premier await, y compris lors d'une panne réseau ou disque.
@@ -114,9 +122,10 @@ final class SchoolCaptureLocalCoordinator {
     }
 
     func recover(deviceID: UUID) async throws {
-        guard !stopping else { closeAdmission(); throw SchoolCaptureStorageFailure.closed }
+        closeAdmission()
+        while stopping { await withCheckedContinuation { transitionWaiters.append($0) } }
         stopping = true
-        defer { stopping = false }
+        defer { finishTransition() }
         let pendingStart = beginTask
         let pendingWrites = writeTail
         closeAdmission()
@@ -132,5 +141,12 @@ final class SchoolCaptureLocalCoordinator {
         activeHandle = nil
         lifecycle = UUID()
         stopLocalCollector()
+    }
+
+    private func finishTransition() {
+        stopping = false
+        let waiting = transitionWaiters
+        transitionWaiters.removeAll()
+        for continuation in waiting { continuation.resume() }
     }
 }
