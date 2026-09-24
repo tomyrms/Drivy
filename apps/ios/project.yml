@@ -23,9 +23,15 @@ settings:
     'CODE_SIGN_STYLE[sdk=iphonesimulator*]': Manual
     GCC_PREPROCESSOR_DEFINITIONS: '$(inherited) SQLITE_HAS_CODEC=1'
     OTHER_SWIFT_FLAGS: '$(inherited) -Xcc -DSQLITE_HAS_CODEC'
-    MARKETING_VERSION: 0.1.0
+    MARKETING_VERSION: 0.2.0
     CURRENT_PROJECT_VERSION: 1
+    DRIVY_API_BASE_URL: ''
+    DRIVY_OIDC_ISSUER: ''
+    DRIVY_OIDC_CLIENT_ID: ''
 packages:
+  AppAuth:
+    url: https://github.com/openid/AppAuth-iOS.git
+    exactVersion: 3.0.0
   SQLCipher:
     url: https://github.com/sqlcipher/SQLCipher.swift.git
     exactVersion: 4.19.0
@@ -38,6 +44,7 @@ targets:
         excludes:
           - '**/*.md'
     dependencies:
+      - package: AppAuth
       - package: SQLCipher
     settings:
       base:
@@ -58,6 +65,7 @@ targets:
     sources: [DrivyTests]
     dependencies:
       - target: Drivy
+      - package: AppAuth
       - package: SQLCipher
     settings:
       base:

@@ -10,6 +10,15 @@
     <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
     <key>LSRequiresIPhoneOS</key><true/>
+    <key>DrivyAPIBaseURL</key><string>$(DRIVY_API_BASE_URL)</string>
+    <key>DrivyOIDCIssuer</key><string>$(DRIVY_OIDC_ISSUER)</string>
+    <key>DrivyOIDCClientID</key><string>$(DRIVY_OIDC_CLIENT_ID)</string>
+    <key>CFBundleURLTypes</key>
+    <array><dict>
+        <key>CFBundleURLName</key><string>ch.drivy.qualification.oauth</string>
+        <key>CFBundleTypeRole</key><string>Editor</string>
+        <key>CFBundleURLSchemes</key><array><string>ch.drivy.qualification</string></array>
+    </dict></array>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Drivy enregistre votre trajet d'essai uniquement lorsque vous choisissez de commencer une séance avec GPS.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

@@ -5,6 +5,7 @@ final class QualificationFlowTests: XCTestCase {
     func testOfflineSessionPersistsAcrossRelaunch() throws {
         let app = XCUIApplication()
         app.launch()
+        openLocalTrials(app)
         let newSession = app.buttons["new-session"]
         XCTAssertTrue(newSession.waitForExistence(timeout: 15))
         attach(app, name: "01-accueil")
@@ -35,7 +36,8 @@ final class QualificationFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["new-session"].waitForExistence(timeout: 10))
         app.terminate()
         app.launch()
-        let history = app.tabBars.buttons["Historique"]
+        openLocalTrials(app)
+        let history = app.buttons["Historique"].firstMatch
         XCTAssertTrue(history.waitForExistence(timeout: 15))
         history.tap()
         let session = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-session-")).firstMatch
@@ -54,13 +56,20 @@ final class QualificationFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["saved-summary"].waitForExistence(timeout: 10))
         app.terminate()
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["Historique"].waitForExistence(timeout: 15))
-        app.tabBars.buttons["Historique"].tap()
+        openLocalTrials(app)
+        XCTAssertTrue(history.waitForExistence(timeout: 15))
+        history.tap()
         XCTAssertTrue(session.waitForExistence(timeout: 10))
         session.tap()
         XCTAssertTrue(app.staticTexts["saved-summary"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["saved-summary"].label, "Revoir les priorités à droite.")
         attach(app, name: "04-bilan-local-apres-relance")
+    }
+
+    private func openLocalTrials(_ app: XCUIApplication) {
+        let trials = app.buttons["open-local-trials"]
+        XCTAssertTrue(trials.waitForExistence(timeout: 15))
+        trials.tap()
     }
 
     private func attach(_ app: XCUIApplication, name: String) {

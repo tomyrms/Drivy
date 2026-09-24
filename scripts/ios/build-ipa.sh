@@ -19,11 +19,29 @@ cleanup() {
 trap cleanup EXIT
 # Une tentative échouée ne doit pas laisser un ancien IPA présenté comme courant.
 rm -f -- "$artifact_dir/Drivy.ipa" "$artifact_dir/SHA256SUMS.txt" "$artifact_dir/build-info.json"
+python3 - <<'PY'
+import os, urllib.parse
+names = ('DRIVY_API_BASE_URL', 'DRIVY_OIDC_ISSUER', 'DRIVY_OIDC_CLIENT_ID')
+values = [os.environ.get(name, '') for name in names]
+if any(values):
+    if not all(values):
+        raise SystemExit('Configuration scolaire incomplète : les trois variables de build sont nécessaires.')
+    for name, value in zip(names[:2], values[:2]):
+        url = urllib.parse.urlsplit(value)
+        if (url.scheme != 'https' or not url.hostname or url.username or url.password
+                or url.query or url.fragment or any(c.isspace() or ord(c) < 32 for c in value)):
+            raise SystemExit(name + ' doit être une URL HTTPS sans identifiants, requête ni fragment.')
+    if len(values[2]) > 200 or any(c.isspace() or ord(c) < 32 for c in values[2]) or '$(' in values[2]:
+        raise SystemExit('Identifiant de client OIDC invalide.')
+PY
 xcodebuild build \
   -project apps/ios/Drivy.xcodeproj -scheme Drivy -configuration Release \
   -sdk iphoneos -destination 'generic/platform=iOS' \
   -derivedDataPath "$staging_dir/DeviceBuild" \
   CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER:-1}" \
+  DRIVY_API_BASE_URL="${DRIVY_API_BASE_URL:-}" \
+  DRIVY_OIDC_ISSUER="${DRIVY_OIDC_ISSUER:-}" \
+  DRIVY_OIDC_CLIENT_ID="${DRIVY_OIDC_CLIENT_ID:-}" \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' \
   2>&1 | tee "$artifact_dir/device-build.log"
 mkdir -p "$staging_dir/Payload"
@@ -151,7 +169,8 @@ info = {
     "ipaSHA256": ipa_hash, "binaries": binary_info,
     "packageResolvedSHA256": hashlib.sha256((stage / "Package.resolved").read_bytes()).hexdigest(),
     "distribution": "Signature locale avec iLoader",
-    "scope": "G0 : séances d'essai locales ; aucun serveur scolaire connecté",
+    "scope": "G0 : séances locales ; G1A : accès scolaire en lecture si configuré",
+    "schoolConnectionConfigured": all(plist.get(name, '') for name in ('DrivyAPIBaseURL', 'DrivyOIDCIssuer', 'DrivyOIDCClientID')),
     "physicalQualification": "NOT_EXECUTED"
 }
 (stage / "build-info.json").write_text(json.dumps(info, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

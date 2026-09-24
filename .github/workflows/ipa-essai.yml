@@ -17,6 +17,9 @@ jobs:
     timeout-minutes: 20
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      DRIVY_API_BASE_URL: ${{ vars.DRIVY_API_BASE_URL }}
+      DRIVY_OIDC_ISSUER: ${{ vars.DRIVY_OIDC_ISSUER }}
+      DRIVY_OIDC_CLIENT_ID: ${{ vars.DRIVY_OIDC_CLIENT_ID }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Installer XcodeGen vérifié
@@ -47,14 +50,15 @@ jobs:
           set -euo pipefail
           bash scripts/ios/build-ipa.sh
           cat > artifacts/ios/LIRE-MOI.txt <<'EOF'
-          Drivy Essais — version locale G0, iPhone/iPad avec iOS/iPadOS 26 minimum.
+          Drivy Essais — iPhone/iPad avec iOS/iPadOS 26 minimum.
           Importer Drivy.ipa dans iLoader pour le signer et l'installer.
           Ce workflow vérifie la compilation Release et le paquet iOS non signé.
           Les tests natifs s'exécutent séparément dans le workflow Refonte · iOS.
           L'IPA est fourni pour essai : sa production ne signifie pas que ces tests ont réussi.
           Qualification sur appareil physique : NOT_EXECUTED.
-          Séances locales, GPS facultatif, observations, historique et bilan local.
-          Aucun compte ou serveur scolaire connecté dans cette version.
+          Laboratoire local : séances, GPS facultatif, observations, historique et bilan.
+          Accès scolaire : connexion, écoles, élèves et formations si les services sont configurés.
+          Voir schoolConnectionConfigured dans build-info.json ; sans configuration, les accès scolaires sont indisponibles.
           EOF
       - name: Télécharger l'IPA d'essai
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

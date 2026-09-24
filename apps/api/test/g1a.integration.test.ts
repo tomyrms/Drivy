@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
@@ -52,6 +52,30 @@ function conforms(name: string, data: unknown) {
 }
 const school = `/v1/schools/${id.schoolA}`;
 describe('G1A · contrats exacts OpenAPI 3.11', () => {
+  it('partage les réponses PostgreSQL réelles avec les tests du client Swift', async () => {
+    const fixtures = new URL('../../ios/DrivyTests/Fixtures/', import.meta.url);
+    const cases = [
+      ['me', '/v1/me', 'MeEnvelope'], ['school', school, 'SchoolEnvelope'],
+      ['learners', `${school}/learners`, 'LearnerPageEnvelope'],
+      ['learner', `${school}/learners/${id.aliceLearner}`, 'LearnerEnvelope'],
+      ['trainings', `${school}/trainings?learnerId=${id.aliceLearner}`, 'TrainingPageEnvelope'],
+      ['training', `${school}/trainings/${id.aliceTraining}`, 'TrainingEnvelope']
+    ] as const;
+    for (const [name, path, schema] of cases) {
+      const response = await get(path);
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      conforms(schema, body);
+      const file = new URL(`${name}.json`, fixtures);
+      if (process.env.DRIVY_EXPORT_SWIFT_FIXTURES === 'true') {
+        await mkdir(fixtures, { recursive:true });
+        await writeFile(file, `${JSON.stringify(body, null, 2)}\n`);
+      }
+      const fixture = JSON.parse(await readFile(file, 'utf8')) as { data:unknown };
+      conforms(schema, fixture);
+      expect(fixture.data).toEqual(body.data);
+    }
+  });
   it('identifie issuer/subject et liste uniquement les appartenances de la personne', async () => {
     const response = await get('/v1/me');
     expect(response.statusCode).toBe(200); conforms('MeEnvelope',response.json());

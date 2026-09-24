@@ -1,0 +1,22 @@
+{
+  "data": {
+    "id": "10000000-0000-4000-8000-000000000001",
+    "schoolId": "10000000-0000-4000-8000-000000000001",
+    "version": 1,
+    "name": "Auto-école Horizon · Démonstration",
+    "timeZone": "Europe/Zurich",
+    "status": "ACTIVE",
+    "contactEmail": "contact@example.invalid",
+    "contactPhone": null,
+    "logoAssetId": null,
+    "modules": {
+      "gpsEnabled": false,
+      "packsEnabled": false,
+      "collectiveCoursesEnabled": false,
+      "courseOffersVisibleByDefault": false
+    },
+    "configurationVersion": 1
+  },
+  "requestId": "246a943e-2fa1-4091-b54b-bfff09330729",
+  "serverTime": "2026-09-24T14:51:13.217Z"
+}
