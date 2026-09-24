@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:g1c-invitation-preview:1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["data", "requestId", "serverTime"],
+  "properties": {
+    "requestId": {"type":"string","format":"uuid"},
+    "serverTime": {"type":"string","format":"date-time"},
+    "data": {
+      "type":"object","additionalProperties":false,
+      "required":["invitationId","schoolId","schoolName","roles","maskedEmail","expiresAt","notice"],
+      "properties": {
+        "invitationId":{"type":"string","format":"uuid"},
+        "schoolId":{"type":"string","format":"uuid"},
+        "schoolName":{"type":"string","minLength":1},
+        "roles":{"type":"array","items":{"enum":["ADMIN","INSTRUCTOR","LEARNER"]},"minItems":1,"maxItems":3,"uniqueItems":true},
+        "maskedEmail":{"type":"string","minLength":1},
+        "expiresAt":{"type":"string","format":"date-time"},
+        "notice": {
+          "type":"object","additionalProperties":false,
+          "required":["version","noticeText","retentionText","contactEmail"],
+          "properties": {
+            "version":{"type":"integer","minimum":1},
+            "noticeText":{"type":"string","minLength":1},
+            "retentionText":{"type":"string","minLength":1},
+            "contactEmail":{"type":"string","format":"email"}
+          }
+        }
+      }
+    }
+  }
+}

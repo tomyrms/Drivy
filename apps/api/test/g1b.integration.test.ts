@@ -33,6 +33,9 @@ beforeAll(async()=>{
   await pool.query(`DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='drivy_app') THEN
     CREATE ROLE drivy_app NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT; END IF; END $$`);
   await pool.query('GRANT drivy_app TO drivy_test_migrator WITH ADMIN OPTION');
+  await pool.query(`DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='drivy_invitation_mailer') THEN
+    CREATE ROLE drivy_invitation_mailer NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT; END IF; END $$`);
+  await pool.query('GRANT drivy_invitation_mailer TO drivy_test_migrator WITH ADMIN OPTION');
   const migrationPool=new Pool({connectionString:url,options:'-c role=drivy_test_migrator'});
   try {
     const privileges=await migrationPool.query('SELECT current_user,rolsuper,rolbypassrls,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname=current_user');
@@ -51,7 +54,7 @@ beforeAll(async()=>{
     expect((await pool.query('SELECT count(*)::int n FROM drivy.school_setup')).rows[0].n).toBe(2);
     expect((await pool.query('SELECT count(*)::int n FROM drivy.school_data_policy WHERE approved_at IS NOT NULL')).rows[0].n).toBe(0);
     const tables=await pool.query("SELECT relname,relrowsecurity,relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r'");
-    expect(tables.rows.length).toBe(13);expect(tables.rows.every(row=>row.relrowsecurity && row.relforcerowsecurity)).toBe(true);
+    expect(tables.rows.length).toBe(15);expect(tables.rows.every(row=>row.relrowsecurity && row.relforcerowsecurity)).toBe(true);
   } finally {await migrationPool.end();}
   keys=await generateKeyPair('RS256');const key=await exportJWK(keys.publicKey);
   app=buildApp({pool,cursorSecret:'secret-test-32-caracteres-minimum',verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/jwks`},

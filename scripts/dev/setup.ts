@@ -33,7 +33,7 @@ async function main() {
     redirectUris:z.array(z.string()),attributes:z.record(z.string(),z.string()),defaultClientScopes:z.array(z.string()) }).passthrough()).parse(await clientsResponse.json());
   if (clients.length!==1 || clients[0]?.attributes['pkce.code.challenge.method']!=='S256' ||
       JSON.stringify(clients[0].redirectUris)!==JSON.stringify(['ch.drivy.qualification:/oauth/callback']) ||
-      JSON.stringify([...clients[0].defaultClientScopes].sort())!==JSON.stringify(['basic','profile'])) throw new Error('Client Apple local non conforme ; aucune correction silencieuse des droits.');
+      JSON.stringify([...clients[0].defaultClientScopes].sort())!==JSON.stringify(['basic','email','profile'])) throw new Error('Client Apple local non conforme ; exécuter setup-web pour étendre le client précédent au scope email.');
   const fixturePeople = [
     ['demo-admin',fixtureIds.admin,'Camille','Administration'],['demo-instructor',fixtureIds.instructor,'Alex','Moniteur'],
     ['demo-alice',fixtureIds.alice,'Alice','Exemple'],['demo-bob',fixtureIds.bob,'Noé','Exemple'],

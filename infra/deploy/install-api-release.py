@@ -52,6 +52,12 @@ def main():
             raise RuntimeError('Connexion de migration/runtime hors base ou rôle refonte.')
     execute([npm, 'ci', '--ignore-scripts', '--include=dev'], release, environment, 'Installation verrouillée')
     execute([npm, 'run', 'build', '--workspace', '@drivy/api'], release, environment, 'Compilation API')
+    web = release / 'apps/web'
+    if web.exists():
+        if not (web / 'package-lock.json').is_file():
+            raise RuntimeError('Snapshot web incomplet.')
+        execute([npm, 'ci', '--ignore-scripts', '--include=dev'], web, environment, 'Installation web verrouillée')
+        execute([npm, 'run', 'build'], web, environment, 'Compilation web et BFF')
     execute([npm, 'run', 'migrate', '--workspace', '@drivy/api'], release, environment | migration, 'Migration API')
     # Vérifier le rôle réel et l'efficacité de RLS sans contexte, avec la vraie connexion runtime.
     validation = """
@@ -74,6 +80,8 @@ try {
 """
     execute([node, '--input-type=module', '-e', validation], release, environment | runtime, 'Contrôle runtime/RLS')
     execute([npm, 'prune', '--omit=dev', '--ignore-scripts'], release, environment, 'Réduction des dépendances runtime')
+    if web.exists():
+        execute([npm, 'prune', '--omit=dev', '--ignore-scripts'], web, environment, 'Réduction des dépendances web')
     # Le compte runtime n'est jamais propriétaire du code ni du lien actif.
     for directory, dirs, names in os.walk(release):
         os.chmod(directory, 0o755)

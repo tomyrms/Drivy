@@ -3,6 +3,7 @@ import SwiftUI
 struct SchoolBrowserView: View {
     @Bindable var workspace: SchoolWorkspace
     let openAccount: () -> Void
+    var openInvitations: (() -> Void)? = nil
     @State private var choosesSchool = false
 
     var body: some View {
@@ -35,6 +36,12 @@ struct SchoolBrowserView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: openAccount) { Label("Compte", systemImage: "person.crop.circle") }
                         .accessibilityIdentifier("school-account")
+                }
+                if let openInvitations {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(action: openInvitations) { Label("Invitations", systemImage: "envelope") }
+                            .accessibilityIdentifier("open-school-invitations")
+                    }
                 }
             }
             .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 440)
@@ -403,7 +410,7 @@ enum SchoolPresentation {
         parser.timeZone = TimeZone(secondsFromGMT: 0)
         parser.dateFormat = "yyyy-MM-dd"
         guard let date = parser.date(from: value) else { return "Date indisponible" }
-        parser.locale = .autoupdatingCurrent
+        parser.locale = Locale(identifier: "fr_CH")
         parser.setLocalizedDateFormatFromTemplate("d MMMM yyyy")
         return parser.string(from: date)
     }

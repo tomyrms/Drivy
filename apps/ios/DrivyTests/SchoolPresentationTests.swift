@@ -4,6 +4,44 @@ import XCTest
 
 @MainActor
 final class SchoolPresentationTests: XCTestCase {
+    func testNativeInvitationsListFormAndUncertainCommand() async throws {
+        let api = InvitationAPIStub()
+        api.items = [InvitationFixture.invitation(),
+            InvitationFixture.invitation(id: UUID(), email: "m***@example.invalid", roles: [.instructor], status: .expired),
+            InvitationFixture.invitation(id: UUID(), email: "r***@example.invalid", status: .accepted)]
+        let outbox = ConfigurationOutboxStub()
+        let model = InvitationFixture.workspace(api: api, outbox: outbox)
+        await model.load()
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        var windows: [UIWindow] = []
+        defer { windows.forEach { $0.isHidden = true }; previous?.makeKeyAndVisible(); model.invalidate() }
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let window = contentWindow(scene: scene, style: style, content: SchoolInvitationsView(model: model))
+            windows.append(window)
+            try await Task.sleep(for: .seconds(1))
+            attach(window, name: style == .light ? "f02-01-invitations-clair-fixtures" : "f02-02-invitations-sombre-fixtures")
+            window.isHidden = true
+        }
+        model.email = "personne@example.invalid"
+        let form = contentWindow(scene: scene, style: .light, content: InvitationCreationView(model: model)
+            .environment(\.dynamicTypeSize, .accessibility1))
+        windows.append(form)
+        try await Task.sleep(for: .seconds(1))
+        attach(form, name: "f02-03-formulaire-grand-texte-fixtures")
+        form.isHidden = true
+        XCTAssertTrue(api.commands.isEmpty)
+        outbox.value = try InvitationFixture.command()
+        await model.load()
+        let pending = contentWindow(scene: scene, style: .light, content: SchoolInvitationsView(model: model))
+        windows.append(pending)
+        try await Task.sleep(for: .seconds(1))
+        attach(pending, name: "f02-04-demande-incertaine-fixtures")
+        XCTAssertFalse(model.mayEdit)
+        XCTAssertEqual(model.invitations.count, 3)
+        XCTAssertTrue(api.commands.isEmpty)
+    }
+
     func testNativeSchoolConfigurationKeepsDraftTextsUnapproved() async throws {
         let api = ConfigurationAPIStub()
         let model = SchoolConfigurationWorkspace(scope: ConfigurationFixture.scope(), api: api, outbox: ConfigurationOutboxStub())
@@ -71,6 +109,17 @@ final class SchoolPresentationTests: XCTestCase {
         window.overrideUserInterfaceStyle = style
         let host = UIHostingController(rootView: SchoolBrowserView(workspace: workspace, openAccount: {})
             .tint(DrivyTheme.accent).foregroundStyle(DrivyTheme.text))
+        host.overrideUserInterfaceStyle = style
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+        return window
+    }
+
+    private func contentWindow<Content: View>(scene: UIWindowScene, style: UIUserInterfaceStyle, content: Content) -> UIWindow {
+        let window = UIWindow(windowScene: scene)
+        window.overrideUserInterfaceStyle = style
+        let host = UIHostingController(rootView: content.environment(\.locale, Locale(identifier: "fr_CH")))
         host.overrideUserInterfaceStyle = style
         window.rootViewController = host
         window.makeKeyAndVisible()

@@ -1,0 +1,33 @@
+[Unit]
+Description=Drivy refonte - web et session BFF
+After=network-online.target drivy-refonte-ingress.service
+Requires=drivy-refonte-ingress.service
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=drivy-web
+Group=drivy-web
+WorkingDirectory=/opt/drivy-refonte/current/apps/web
+EnvironmentFile=/etc/drivy-refonte/web.env
+Environment=NODE_OPTIONS=--max-old-space-size=128
+ExecStart=/opt/drivy-refonte/runtime/node/bin/node dist/server/main.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+MemoryHigh=192M
+MemoryMax=256M
+TasksMax=64
+UMask=0077
+NoNewPrivileges=true
+# Les namespaces de montage systemd ne sont pas disponibles dans CT114.
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LimitCORE=0
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

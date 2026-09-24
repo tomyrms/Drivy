@@ -6,7 +6,7 @@ table inet drivy_refonte {
     chain input {
         type filter hook input priority -10; policy accept;
         iifname "lo" accept
-        ip saddr 192.168.1.147 tcp dport { 3001, 8081 } accept
-        tcp dport { 3001, 8081 } drop
+        ip saddr 192.168.1.147 tcp dport { 3001, 3002, 8081 } accept
+        tcp dport { 3001, 3002, 8081 } drop
     }
 }

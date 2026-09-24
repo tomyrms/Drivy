@@ -12,36 +12,61 @@ struct SchoolRootView: View {
     @State private var opensConfigurationAfterAccount = false
     @State private var showsSchoolConfiguration = false
     @State private var schoolConfiguration: SchoolConfigurationWorkspace?
+    @State private var opensInvitationsAfterAccount = false
+    @State private var showsInvitations = false
+    @State private var invitations: SchoolInvitationWorkspace?
     @State private var presenter: UIViewController?
 
     var body: some View {
-        Group {
-            if identity.isAuthenticated, let workspace {
-                if workspace.person != nil, workspace.membership != nil {
-                    if let school = workspace.school, school.status != "ACTIVE" {
-                        NavigationStack {
-                            SchoolPreparationLanding(school: school, mayConfigure: canConfigureSchool, configure: openConfiguration)
-                                .navigationTitle("Mon école")
-                                .toolbar { accountToolbar }
-                        }
-                    } else {
-                        SchoolBrowserView(workspace: workspace, openAccount: { showsAccount = true })
-                    }
-                } else {
-                    NavigationStack {
-                        accountLanding(workspace)
-                            .navigationTitle("Mon école")
-                            .toolbar { accountToolbar }
-                    }
-                }
-            } else {
-                NavigationStack {
-                    signInLanding
-                        .navigationTitle("Drivy")
-                        .toolbar { accountToolbar }
-                }
+        accountPresentation
+            .sheet(isPresented: $showsInvitations, onDismiss: invitationsDismissed) {
+                invitationsSheet
+            }
+            .sheet(isPresented: $showsSchoolConfiguration, onDismiss: configurationDismissed) {
+                configurationSheet
+            }
+            .fullScreenCover(isPresented: $showsLocalTrials) {
+                localTrialsCover
+            }
+    }
+
+    @ViewBuilder
+    private var rootContent: some View {
+        if identity.isAuthenticated, let workspace {
+            authenticatedContent(workspace)
+        } else {
+            NavigationStack {
+                signInLanding
+                    .navigationTitle("Drivy")
+                    .toolbar { accountToolbar }
             }
         }
+    }
+
+    @ViewBuilder
+    private func authenticatedContent(_ workspace: SchoolWorkspace) -> some View {
+        if workspace.person != nil, workspace.membership != nil {
+            if let school = workspace.school, school.status != "ACTIVE" {
+                NavigationStack {
+                    SchoolPreparationLanding(school: school, mayConfigure: canConfigureSchool, configure: openConfiguration)
+                        .navigationTitle("Mon école")
+                        .toolbar { accountToolbar }
+                }
+            } else {
+                SchoolBrowserView(workspace: workspace, openAccount: showAccount,
+                    openInvitations: invitationsAction)
+            }
+        } else {
+            NavigationStack {
+                accountLanding(workspace)
+                    .navigationTitle("Mon école")
+                    .toolbar { accountToolbar }
+            }
+        }
+    }
+
+    private var observedContent: some View {
+        rootContent
         .tint(DrivyTheme.accent)
         .foregroundStyle(DrivyTheme.text)
         .background(SignInPresenter { presenter = $0 }.frame(width: 0, height: 0))
@@ -50,78 +75,145 @@ struct SchoolRootView: View {
             else { workspace?.reset() }
         }
         .onChange(of: identity.isAuthenticated) { _, authenticated in
-            if !authenticated { closeConfiguration(); workspace?.reset() }
+            if !authenticated { closeConfiguration(); closeInvitations(); workspace?.reset() }
         }
         .onChange(of: workspace?.membership?.membershipId) { _, _ in
-            if workspace?.isLoadingAccount != true { verifyConfigurationScope() }
+            if workspace?.isLoadingAccount != true { verifyPresentedScopes() }
         }
         .onChange(of: workspace?.isLoadingAccount) { _, loading in
-            if loading == false { verifyConfigurationScope() }
+            if loading == false { verifyPresentedScopes() }
         }
         .onChange(of: workspace?.isLoadingSchool) { _, loading in
-            if loading == false && workspace?.isLoadingAccount != true { verifyConfigurationScope() }
+            if loading == false && workspace?.isLoadingAccount != true { verifyPresentedScopes() }
         }
-        .sheet(isPresented: $showsAccount, onDismiss: {
-            if opensTrialsAfterAccount {
-                opensTrialsAfterAccount = false
-                showsLocalTrials = true
-            }
-            if opensConfigurationAfterAccount {
-                opensConfigurationAfterAccount = false
-                openConfiguration()
-            }
-        }) {
+    }
+
+    private var accountPresentation: some View {
+        observedContent.sheet(isPresented: $showsAccount, onDismiss: accountDismissed) {
             SchoolAccountView(identity: identity, workspace: workspace, localController: localController,
-                openLocalTrials: {
-                    opensTrialsAfterAccount = true
-                    showsAccount = false
-                }, configureSchool: canConfigureSchool ? {
-                    opensConfigurationAfterAccount = true
-                    showsAccount = false
-                } : nil, signOut: signOut)
+                openLocalTrials: openTrialsFromAccount, configureSchool: accountConfigurationAction,
+                openInvitations: accountInvitationsAction, signOut: signOut)
         }
-        .sheet(isPresented: $showsSchoolConfiguration, onDismiss: {
-            schoolConfiguration?.invalidate()
-            schoolConfiguration = nil
-            if identity.isAuthenticated, workspace?.person != nil {
-                Task { await workspace?.loadAccount() }
-            }
-        }) {
-            if let schoolConfiguration {
-                SchoolConfigurationView(model: schoolConfiguration, openSchool: { showsSchoolConfiguration = false })
-                    .disabled(isCheckingSchoolAccess)
-                    .overlay {
-                        if isCheckingSchoolAccess {
-                            DrivyTheme.canvas.ignoresSafeArea().overlay { ProgressView("Vérification de vos accès…") }
-                        }
+    }
+
+    @ViewBuilder
+    private var invitationsSheet: some View {
+        if let invitations {
+            SchoolInvitationsView(model: invitations)
+                .disabled(isCheckingSchoolAccess)
+                .overlay { accessCheckOverlay }
+                .onChange(of: invitations.accessFailure) { _, failure in
+                    if let failure {
+                        closeInvitations()
+                        workspace?.rejectCurrentAccess(requiresAuthentication: failure == .unauthorized)
                     }
-                    .onChange(of: schoolConfiguration.accessFailure) { _, failure in
-                        if let failure {
-                            closeConfiguration()
-                            workspace?.rejectCurrentAccess(requiresAuthentication: failure == .unauthorized)
-                        }
-                    }
-            }
-        }
-        .fullScreenCover(isPresented: $showsLocalTrials) {
-            VStack(spacing: 0) {
-                HStack {
-                    Button { showsLocalTrials = false } label: {
-                        Label("Retour à Drivy", systemImage: "chevron.left")
-                            .frame(minHeight: 44)
-                    }
-                    Spacer()
-                    Text("Essais locaux")
-                        .font(.footnote)
-                        .foregroundStyle(DrivyTheme.muted)
                 }
-                .padding(.horizontal, 16)
-                .background(DrivyTheme.surface)
-                QualificationRootView(controller: localController)
-                    .task { await localController.load() }
+        }
+    }
+
+    @ViewBuilder
+    private var configurationSheet: some View {
+        if let schoolConfiguration {
+            SchoolConfigurationView(model: schoolConfiguration, openSchool: { showsSchoolConfiguration = false })
+                .disabled(isCheckingSchoolAccess)
+                .overlay { accessCheckOverlay }
+                .onChange(of: schoolConfiguration.accessFailure) { _, failure in
+                    if let failure {
+                        closeConfiguration()
+                        workspace?.rejectCurrentAccess(requiresAuthentication: failure == .unauthorized)
+                    }
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var accessCheckOverlay: some View {
+        if isCheckingSchoolAccess {
+            DrivyTheme.canvas.ignoresSafeArea().overlay { ProgressView("Vérification de vos accès…") }
+        }
+    }
+
+    private var localTrialsCover: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button { showsLocalTrials = false } label: {
+                    Label("Retour à Drivy", systemImage: "chevron.left")
+                        .frame(minHeight: 44)
+                }
+                Spacer()
+                Text("Essais locaux")
+                    .font(.footnote)
+                    .foregroundStyle(DrivyTheme.muted)
             }
-            .tint(DrivyTheme.accent)
+            .padding(.horizontal, 16)
             .background(DrivyTheme.surface)
+            QualificationRootView(controller: localController)
+                .task { await localController.load() }
+        }
+        .tint(DrivyTheme.accent)
+        .background(DrivyTheme.surface)
+    }
+
+    private var invitationsAction: (() -> Void)? {
+        guard canManageInvitations else { return nil }
+        let action: () -> Void = { openInvitations() }
+        return action
+    }
+
+    private var accountConfigurationAction: (() -> Void)? {
+        guard canConfigureSchool else { return nil }
+        let action: () -> Void = { openConfigurationFromAccount() }
+        return action
+    }
+
+    private var accountInvitationsAction: (() -> Void)? {
+        guard canManageInvitations else { return nil }
+        let action: () -> Void = { openInvitationsFromAccount() }
+        return action
+    }
+
+    private func showAccount() { showsAccount = true }
+
+    private func openTrialsFromAccount() {
+        opensTrialsAfterAccount = true
+        showsAccount = false
+    }
+
+    private func openConfigurationFromAccount() {
+        opensConfigurationAfterAccount = true
+        showsAccount = false
+    }
+
+    private func openInvitationsFromAccount() {
+        opensInvitationsAfterAccount = true
+        showsAccount = false
+    }
+
+    private func accountDismissed() {
+        if opensTrialsAfterAccount {
+            opensTrialsAfterAccount = false
+            showsLocalTrials = true
+        }
+        if opensConfigurationAfterAccount {
+            opensConfigurationAfterAccount = false
+            openConfiguration()
+        }
+        if opensInvitationsAfterAccount {
+            opensInvitationsAfterAccount = false
+            openInvitations()
+        }
+    }
+
+    private func invitationsDismissed() {
+        invitations?.invalidate()
+        invitations = nil
+    }
+
+    private func configurationDismissed() {
+        schoolConfiguration?.invalidate()
+        schoolConfiguration = nil
+        if identity.isAuthenticated, workspace?.person != nil {
+            Task { await workspace?.loadAccount() }
         }
     }
 
@@ -245,6 +337,7 @@ struct SchoolRootView: View {
 
     private func signOut() {
         closeConfiguration()
+        closeInvitations()
         workspace?.reset()
         showsAccount = false
         Task { await identity.signOut() }
@@ -257,6 +350,38 @@ struct SchoolRootView: View {
 
     private var isCheckingSchoolAccess: Bool {
         workspace?.isLoadingAccount == true || workspace?.isLoadingSchool == true
+    }
+
+    private var canManageInvitations: Bool {
+        configuration != nil && workspace?.school?.status == "ACTIVE"
+            && (workspace?.membership?.roles.contains("ADMIN") == true || workspace?.membership?.roles.contains("INSTRUCTOR") == true)
+    }
+
+    private func openInvitations() {
+        guard canManageInvitations, let configuration, let person = workspace?.person,
+              let membership = workspace?.membership else { return }
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch,
+            apiBaseURL: configuration.apiBaseURL.absoluteString)
+        invitations = SchoolInvitationWorkspace(scope: scope, roles: membership.roles,
+            api: SchoolInvitationClient(baseURL: configuration.apiBaseURL, tokenSource: identity))
+        showsInvitations = true
+    }
+
+    private func closeInvitations() {
+        invitations?.invalidate()
+        showsInvitations = false
+    }
+
+    private func verifyPresentedScopes() {
+        verifyConfigurationScope()
+        guard let model = invitations else { return }
+        guard canManageInvitations, let person = workspace?.person, let membership = workspace?.membership,
+              model.scope.personID == person.personId, model.scope.schoolID == membership.schoolId,
+              model.scope.membershipID == membership.membershipId, model.scope.accessEpoch == membership.accessEpoch else {
+            closeInvitations()
+            return
+        }
     }
 
     private func openConfiguration() {
@@ -293,6 +418,7 @@ private struct SchoolAccountView: View {
     let localController: SessionController
     let openLocalTrials: () -> Void
     let configureSchool: (() -> Void)?
+    let openInvitations: (() -> Void)?
     let signOut: () -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -318,6 +444,10 @@ private struct SchoolAccountView: View {
                         }
                     }
                     if identity.isAuthenticated {
+                        if let openInvitations {
+                            Button(action: openInvitations) { Label("Invitations", systemImage: "envelope") }
+                                .accessibilityIdentifier("open-school-invitations")
+                        }
                         if let configureSchool {
                             Button("Préparer mon école", action: configureSchool)
                                 .accessibilityIdentifier("open-school-configuration")

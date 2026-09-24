@@ -1,0 +1,36 @@
+{
+  "run": "36033239715",
+  "source": "7836441a2e1a2f62071f28fdcadb8239a2780efb",
+  "result": "PASSED",
+  "devices": [
+    {
+      "model": "iPhone 17 Pro",
+      "osVersion": "26.4.1",
+      "platform": "iOS Simulator",
+      "passed": 97,
+      "failed": 0,
+      "skipped": 0,
+      "reportSHA256": "02ee17bbe125447f286e8aa060a1796c7edf73e20e696e7ee3cafb714e4e658d"
+    },
+    {
+      "model": "iPad Pro 13-inch (M5)",
+      "osVersion": "26.4.1",
+      "platform": "iOS Simulator",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "reportSHA256": "f45d9637e638cbbe1c4b4beb85438003acb19d0999647847583126dfcf97f23c"
+    }
+  ],
+  "physicalQualification": "NOT_EXECUTED",
+  "captures": {
+    "iPhoneF02": {
+      "reviewed": true,
+      "scope": "Liste clair/sombre, formulaire grand texte, demande incertaine lisibles ; fixtures synthétiques."
+    },
+    "iPadF02": {
+      "reviewed": true,
+      "scope": "Liste clair/sombre, formulaire grand texte, demande incertaine lisibles ; double colonne cohérente. Revue de captures, sans VoiceOver ou contraste mesuré."
+    }
+  }
+}

@@ -13,16 +13,20 @@
     "test": "vitest run",
     "test:unit": "vitest run test/auth.test.ts test/cursor.test.ts",
     "migrate": "tsx scripts/migrate.ts",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "mail:worker": "node dist/invitation-mail-worker.js",
+    "mail:worker:dev": "tsx src/invitation-mail-worker.ts"
   },
   "dependencies": {
     "fastify": "5.12.5",
     "jose": "^6.1.0",
+    "nodemailer": "10.0.10",
     "pg": "^8.16.3",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/nodemailer": "8.0.2",
     "@types/pg": "^8.15.5",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",

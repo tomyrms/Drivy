@@ -1,13 +1,17 @@
 # À importer DANS drivy.shulker.ch, avant le handle de l'ancienne API.
 # Conserver le handle /knowledge/* et le handle final déjà présents.
-@drivyRefonteSensitive path /refonte /refonte/* /identity*
+@drivyRefonteSensitive path /refonte /refonte/* /identity* /app /app/*
 log_skip @drivyRefonteSensitive
 
 @drivyIdentityPublic path /identity/realms/drivy /identity/realms/drivy/* /identity/resources/*
+@drivyWeb path /app /app/*
 # Le handle avec matcher est trié avant le handle final sans matcher de l'ancien service.
 handle @drivyRefonteSensitive {
     # L'ordre interne est conservé : l'autorisation précède le refus du reste d'identity.
     route {
+        handle @drivyWeb {
+            reverse_proxy 192.168.1.153:3002
+        }
         handle /refonte {
             redir /refonte/ 308
         }

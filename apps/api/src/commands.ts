@@ -3,7 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 import type { Identity } from './auth.js';
 import { ApiError, forbidden, notFound } from './errors.js';
 
-export interface CommandActor { personId: string; membershipId: string }
+export interface CommandActor { personId: string; membershipId: string; roles:string[] }
 export interface SchoolRow {
   id: string; version: number; name: string; timeZone: string; status: 'DRAFT'|'ACTIVE'|'ARCHIVED';
   contactEmail: string; contactPhone: string|null; configurationVersion: number;
@@ -33,13 +33,21 @@ function canonical(value: unknown): string {
     .map(([key,item])=>`${JSON.stringify(key)}:${canonical(item)}`).join(',')}}`;
   return JSON.stringify(value);
 }
-export interface CommandEffect<T> { data:T; action:string; resourceType:string; resourceId:string; changedFields:string[] }
+export interface CommandEffect<T> { data:T; action:string; resourceType:string; resourceId:string; resourceVersion?:number; changedFields:string[] }
+export const commandHash = (body:unknown,expectedVersion:number|null) => createHash('sha256').update(canonical({body,expectedVersion})).digest('hex');
+export async function recordCommand<T>(db:PoolClient,actor:CommandActor,schoolId:string,commandType:string,operationId:string,hash:string,effect:CommandEffect<T>) {
+  const resourceVersion=effect.resourceVersion ?? (effect.data as {version?:number}).version ?? 1;
+  await db.query(`INSERT INTO drivy.operation(actor_person_id,operation_id,school_id,command_type,payload_hash,resource_id,response_data,resource_version)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,[actor.personId,operationId,schoolId,commandType,hash,effect.resourceId,JSON.stringify(effect.data),resourceVersion]);
+  await db.query(`INSERT INTO drivy.audit_event(id,school_id,actor_person_id,actor_membership_id,operation_id,action,resource_type,resource_id,changed_fields)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[randomUUID(),schoolId,actor.personId,actor.membershipId,operationId,effect.action,effect.resourceType,effect.resourceId,effect.changedFields]);
+}
 
 /** Un seul commit contient l'effet, sa preuve durable et son audit ; aucun appel réseau sous verrou. */
 export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId: string,
-  commandType: string, body: { operationId:string }, expectedVersion: number,
-  work: (db:PoolClient, actor:CommandActor, school:SchoolRow)=>Promise<CommandEffect<T>>): Promise<T> {
-  const hash = createHash('sha256').update(canonical({ body, expectedVersion })).digest('hex');
+  commandType: string, body: { operationId:string }, expectedVersion: number|null,
+  work: (db:PoolClient, actor:CommandActor, school:SchoolRow)=>Promise<CommandEffect<T>>, allowedRoles:string[]=['ADMIN']): Promise<T> {
+  const hash = commandHash(body,expectedVersion);
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
@@ -58,12 +66,12 @@ export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId:
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`${personId}:${body.operationId.toLowerCase()}`]);
     const preliminary = await db.query<{id:string;roles:string[]}>("SELECT id,roles FROM drivy.membership WHERE school_id=$1 AND person_id=$2 AND status='ACTIVE'",[schoolId,personId]);
     if (!preliminary.rows[0]) throw notFound();
-    if (!preliminary.rows[0].roles.includes('ADMIN')) throw new ApiError(403,'SETUP_ACCESS_REQUIRED','La configuration est réservée aux administrateurs.');
+    if (!allowedRoles.some(role=>preliminary.rows[0]!.roles.includes(role))) throw new ApiError(403,'SETUP_ACCESS_REQUIRED','Les droits nécessaires ne sont pas disponibles.');
     const result = await db.query<SchoolRow>(`SELECT ${schoolColumns} FROM drivy.school WHERE id=$1 FOR UPDATE`,[schoolId]);
     const school = result.rows[0];
     if (!school) throw notFound();
     const member = await db.query<{id:string;roles:string[]}>("SELECT id,roles FROM drivy.membership WHERE school_id=$1 AND person_id=$2 AND status='ACTIVE' FOR SHARE",[schoolId,personId]);
-    if (!member.rows[0]?.roles.includes('ADMIN')) throw new ApiError(403,'SETUP_ACCESS_REQUIRED','Les droits de configuration ne sont plus disponibles.');
+    if (!member.rows[0] || !allowedRoles.some(role=>member.rows[0]!.roles.includes(role))) throw new ApiError(403,'SETUP_ACCESS_REQUIRED','Les droits nécessaires ne sont plus disponibles.');
     const previous = await db.query<{school_id:string;command_type:string;payload_hash:string;response_data:T}>(
       'SELECT school_id,command_type,payload_hash,response_data FROM drivy.operation WHERE actor_person_id=$1 AND operation_id=$2',[personId,body.operationId]);
     const known = previous.rows[0];
@@ -75,12 +83,9 @@ export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId:
       return known.response_data;
     }
     if (school.status === 'ARCHIVED') throw new ApiError(409,'SCHOOL_ARCHIVED','Cette école archivée ne peut plus être configurée.');
-    const actor = { personId,membershipId:member.rows[0].id };
+    const actor = { personId,membershipId:member.rows[0].id,roles:member.rows[0].roles };
     const effect = await work(db,actor,school);
-    await db.query(`INSERT INTO drivy.operation(actor_person_id,operation_id,school_id,command_type,payload_hash,resource_id,response_data)
-      VALUES ($1,$2,$3,$4,$5,$6,$7)`,[personId,body.operationId,schoolId,commandType,hash,effect.resourceId,JSON.stringify(effect.data)]);
-    await db.query(`INSERT INTO drivy.audit_event(id,school_id,actor_person_id,actor_membership_id,operation_id,action,resource_type,resource_id,changed_fields)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[randomUUID(),schoolId,personId,actor.membershipId,body.operationId,effect.action,effect.resourceType,effect.resourceId,effect.changedFields]);
+    await recordCommand(db,actor,schoolId,commandType,body.operationId,hash,effect);
     await db.query('COMMIT');
     return effect.data;
   } catch (error) {

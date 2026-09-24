@@ -8,6 +8,8 @@ import { ApiError, forbidden, notFound } from './errors.js';
 import { Cursors } from './cursor.js';
 import { getLearner, getTraining, listLearners, listTrainings } from './queries.js';
 import { registerSchoolSetup } from './school-setup.js';
+import { registerInvitations } from './invitations.js';
+import type { InvitationMailConfig } from './invitation-mail.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
 const schoolParams = z.object({ schoolId: z.uuid() });
@@ -19,7 +21,7 @@ const learnerQuery = z.object({ ...pagination, q: z.string().max(200).optional()
 const trainingQuery = z.object({ ...pagination, learnerId: z.uuid().optional() }).strict();
 const emptyQuery = z.object({}).strict();
 
-export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean }) {
+export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig }) {
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384 });
   const cursors = new Cursors(options.cursorSecret);
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options','nosniff'); });
@@ -109,5 +111,6 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
     versionHeader(data, reply); return envelope(data, request);
   });
   registerSchoolSetup(app,options);
+  registerInvitations(app,options);
   return app;
 }
