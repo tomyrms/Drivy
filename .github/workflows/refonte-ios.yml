@@ -8,6 +8,18 @@ on:
         description: Capturer les écrans iPhone et iPad sans lancer la campagne de tests
         type: boolean
         default: false
+      visual_screens:
+        description: Écrans à capturer, séparés par des espaces
+        type: string
+        default: 'home live report without-gps replay'
+      visual_devices:
+        description: Appareils à capturer, séparés par des espaces
+        type: string
+        default: 'iPhone iPad'
+      visual_appearances:
+        description: Apparences à capturer, séparées par des espaces
+        type: string
+        default: 'light dark'
 permissions:
   contents: read
 concurrency:
@@ -49,11 +61,15 @@ jobs:
           cp apps/ios/Package.resolved apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
           xcodebuild -resolvePackageDependencies -onlyUsePackageVersionsFromResolvedFile -project apps/ios/Drivy.xcodeproj -scheme Drivy
           cp apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved artifacts/ios/Package.resolved
-      - name: Compiler l'application et les tests natifs
+      - name: Compiler l'application et les cibles nécessaires
         shell: bash
+        env:
+          VISUAL_ONLY: ${{ inputs.visual_only }}
         run: |
           set -euo pipefail
-          xcodebuild build-for-testing \
+          action=build-for-testing
+          if [[ "$VISUAL_ONLY" == true ]]; then action=build; fi
+          xcodebuild "$action" \
             -project apps/ios/Drivy.xcodeproj -scheme Drivy \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath artifacts/ios/DerivedData \
@@ -77,6 +93,10 @@ jobs:
         if: inputs.visual_only == true
         timeout-minutes: 8
         shell: bash
+        env:
+          DRIVY_VISUAL_SCREENS: ${{ inputs.visual_screens }}
+          DRIVY_VISUAL_DEVICES: ${{ inputs.visual_devices }}
+          DRIVY_VISUAL_APPEARANCES: ${{ inputs.visual_appearances }}
         run: bash scripts/ios/capture-screens.sh
       - name: Construire l'IPA pour iLoader
         if: inputs.visual_only != true
