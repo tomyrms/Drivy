@@ -140,7 +140,8 @@ struct SchoolInvitationClientTests {
             (409, "INVITATION_USED", .invitationUsed), (409, "INVITATION_REVOKED", .invitationRevoked),
             (409, "POLICY_REVIEW_REQUIRED", .policyRequired), (409, "SCHOOL_ARCHIVED", .schoolInactive),
             (412, "VERSION_CONFLICT", .conflict), (400, "INVALID_REQUEST", .rejected),
-            (503, "INVITATION_DELIVERY_UNAVAILABLE", .unavailable), (409, "IDEMPOTENCY_MISMATCH", .pendingCommand),
+            (503, "INVITATION_DELIVERY_UNAVAILABLE", .deliveryUnavailable), (503, "SERVICE_UNAVAILABLE", .unavailable),
+            (409, "IDEMPOTENCY_MISMATCH", .pendingCommand),
             (403, "INVITATION_ROLE_FORBIDDEN", .forbidden)
         ]
         for (status, code, expected) in cases {
