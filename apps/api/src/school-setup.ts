@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { authorizePlanningOperation } from './lessons.js';
 import { authorizeReportOperation } from './lesson-reports.js';
+import { authorizeCaptureOperation } from './captures.js';
 import type { TokenVerifier } from './auth.js';
 import { withActor } from './database.js';
 import { ApiError, notFound } from './errors.js';
@@ -115,6 +116,7 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
       if (!result.rows[0]) throw notFound();
       const planningCommand=await authorizePlanningOperation(db,schoolId,result.rows[0].commandType,result.rows[0].resourceId);
       const reportCommand=await authorizeReportOperation(db,schoolId,result.rows[0].commandType,result.rows[0].resourceId);
+      const captureCommand=await authorizeCaptureOperation(db,schoolId,result.rows[0].commandType,result.rows[0].resourceId);
       const invitationCommand=['CREATE_INVITATION','RESEND_INVITATION','REVOKE_INVITATION'].includes(result.rows[0].commandType);
       const profileCommand=['UPDATE_ADMINISTRATIVE_PROFILE','UPDATE_LEARNER'].includes(result.rows[0].commandType);
       const onboardingCommand=['SAVE_ONBOARDING','COMPLETE_ONBOARDING'].includes(result.rows[0].commandType);
@@ -126,7 +128,7 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
         const progress=(await db.query<{kind:string}>('SELECT kind FROM drivy.onboarding_progress WHERE school_id=$1 AND id=$2',[schoolId,result.rows[0].resourceId])).rows[0];
         if(!progress || !(progress.kind==='STUDENT'?member.roles.includes('LEARNER'):member.roles.some(role=>['ADMIN','INSTRUCTOR'].includes(role)))) throw notFound();
       }
-      if (!member.roles.includes('ADMIN') && !(invitationCommand && member.roles.includes('INSTRUCTOR')) && result.rows[0].commandType!=='ACCEPT_INVITATION' && !profileCommand && !onboardingCommand && !(trainingCommand && member.roles.includes('INSTRUCTOR')) && !ownMemberChange && !planningCommand && !reportCommand)
+      if (!member.roles.includes('ADMIN') && !(invitationCommand && member.roles.includes('INSTRUCTOR')) && result.rows[0].commandType!=='ACCEPT_INVITATION' && !profileCommand && !onboardingCommand && !(trainingCommand && member.roles.includes('INSTRUCTOR')) && !ownMemberChange && !planningCommand && !reportCommand && !captureCommand)
         throw new ApiError(403,'SETUP_ACCESS_REQUIRED','Les droits nécessaires à cette opération ne sont plus disponibles.');
       return {...result.rows[0],committedAt:result.rows[0].committedAt.toISOString()};
     });

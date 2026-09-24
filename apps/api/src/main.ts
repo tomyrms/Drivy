@@ -3,6 +3,7 @@ import { buildApp } from './app.js';
 import { createTokenVerifier } from './auth.js';
 import { readConfig } from './config.js';
 import { invitationMailConfig } from './invitation-mail.js';
+import { readCaptureConfig } from './capture-crypto.js';
 
 const config = readConfig();
 const pool = new Pool({ connectionString: config.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000, statement_timeout: 5000 });
@@ -16,7 +17,8 @@ try {
     throw new Error('La connexion de production doit utiliser un rôle sans superuser/BYPASSRLS.');
   }
   const invitationMail=invitationMailConfig();
-  const app = buildApp({ pool, verifyToken: createTokenVerifier(config), cursorSecret: config.CURSOR_SECRET, reauthMaxAgeSeconds:config.REAUTH_MAX_AGE_SECONDS,logger: true,...(invitationMail?{invitationMail}:{}) });
+  const capture=readCaptureConfig();
+  const app = buildApp({ pool, verifyToken: createTokenVerifier(config), cursorSecret: config.CURSOR_SECRET, reauthMaxAgeSeconds:config.REAUTH_MAX_AGE_SECONDS,logger: true,...(invitationMail?{invitationMail}:{}),...(capture?{capture}:{}) });
   const shutdown = async () => { await app.close(); await pool.end(); };
   process.once('SIGINT', () => { void shutdown(); });
   process.once('SIGTERM', () => { void shutdown(); });
