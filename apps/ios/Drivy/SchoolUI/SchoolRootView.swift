@@ -68,7 +68,8 @@ struct SchoolRootView: View {
                 openProfile: profileAction, openProfilePolicy: homeProfilePolicyAction,
                 openOnboarding: homeOnboardingAction, openCatalog: homeCatalogAction,
                 openTrainingAdministration: trainingAdministrationAction, agendaClient: homeAgendaClient,
-                openMembers: membersAction, openAddLearner: addLearnerAction, requestedLearnerID: requestedLearnerID)
+                openMembers: membersAction, openAddLearner: addLearnerAction, requestedLearnerID: requestedLearnerID,
+                trainingClient: homeTrainingClient)
         } else {
             NavigationStack {
                 accountLanding(workspace)
@@ -126,6 +127,11 @@ struct SchoolRootView: View {
     private var homeAgendaClient: SchoolAgendaClient? {
         guard let configuration else { return nil }
         return SchoolAgendaClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
+    }
+
+    private var homeTrainingClient: SchoolTrainingClient? {
+        guard let configuration else { return nil }
+        return SchoolTrainingClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
     }
 
     private var memberPresentation: some View {

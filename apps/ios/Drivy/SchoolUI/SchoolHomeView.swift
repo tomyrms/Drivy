@@ -18,9 +18,11 @@ struct SchoolHomeView: View {
     var openMembers: (() -> Void)? = nil
     var openAddLearner: (() -> Void)? = nil
     var requestedLearnerID: UUID? = nil
+    var trainingClient: SchoolTrainingClient? = nil
     @State private var selectedTab: HomeTab = .session
     @State private var choosesSchool = false
     @State private var dossierPlanningModel: SchoolPlanningWorkspace?
+    @State private var trainingCreationModel: SchoolTrainingCreationWorkspace?
 
     private enum HomeTab: Hashable { case session, agenda, learners, school }
 
@@ -47,11 +49,22 @@ struct SchoolHomeView: View {
         .tint(DrivyTheme.accent)
         .sheet(isPresented: $choosesSchool) { schoolChooser }
         .sheet(item: $dossierPlanningModel) { model in SchoolPlanningView(model: model) }
+        .sheet(item: $trainingCreationModel, onDismiss: trainingCreationDismissed) { model in
+            SchoolTrainingCreationView(model: model)
+                .onChange(of: model.accessRevoked) { _, revoked in
+                    if revoked {
+                        model.invalidate(); trainingCreationModel = nil
+                        Task { await workspace.loadAccount() }
+                    }
+                }
+        }
         .onChange(of: workspace.membership?.membershipId) { _, _ in
             dossierPlanningModel?.invalidate(); dossierPlanningModel = nil
+            trainingCreationModel?.invalidate(); trainingCreationModel = nil
         }
         .onChange(of: workspace.membership?.accessEpoch) { _, _ in
             dossierPlanningModel?.invalidate(); dossierPlanningModel = nil
+            trainingCreationModel?.invalidate(); trainingCreationModel = nil
         }
         .task { await localController.load() }
         .task(id: requestedLearnerID) {
@@ -75,7 +88,8 @@ struct SchoolHomeView: View {
             SchoolBrowserView(workspace: workspace, openAccount: openAccount,
                 openInvitations: openInvitations, openProfile: openProfile,
                 openSchool: { selectedTab = .school }, openTrainingAdministration: openTrainingAdministration,
-                openPlanning: planningAction, openAddLearner: openAddLearner)
+                openPlanning: planningAction, openAddLearner: openAddLearner,
+                trainingClient: trainingClient, openCreateTraining: createTrainingAction)
         } else {
             NavigationStack {
                 schoolSelection
@@ -104,6 +118,20 @@ struct SchoolHomeView: View {
             model.learnerID = learner.id
             dossierPlanningModel = model
         }
+    }
+
+    private var createTrainingAction: ((SchoolLearner) -> Void)? {
+        guard let trainingClient, let person = workspace.person, let membership = workspace.membership,
+              workspace.school?.status == "ACTIVE", membership.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) else { return nil }
+        return { learner in
+            let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+                membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: trainingClient.baseURL.absoluteString)
+            trainingCreationModel = SchoolTrainingCreationWorkspace(scope: scope, membership: membership, learner: learner, client: trainingClient)
+        }
+    }
+    private func trainingCreationDismissed() {
+        trainingCreationModel?.invalidate(); trainingCreationModel = nil
+        Task { await workspace.loadTrainings() }
     }
 
     private var schoolDetails: some View {

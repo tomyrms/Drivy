@@ -9,6 +9,8 @@ struct SchoolBrowserView: View {
     var openTrainingAdministration: ((SchoolLearner) -> Void)? = nil
     var openPlanning: ((SchoolLearner) -> Void)? = nil
     var openAddLearner: (() -> Void)? = nil
+    var trainingClient: SchoolTrainingClient? = nil
+    var openCreateTraining: ((SchoolLearner) -> Void)? = nil
     @State private var choosesSchool = false
 
     var body: some View {
@@ -43,7 +45,8 @@ struct SchoolBrowserView: View {
             .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 440)
         } detail: {
             if workspace.selectedLearnerID != nil {
-                SchoolLearnerDetailView(workspace: workspace, openProfile: openProfile, openTrainingAdministration: openTrainingAdministration, openPlanning: openPlanning)
+                SchoolLearnerDetailView(workspace: workspace, openProfile: openProfile, openTrainingAdministration: openTrainingAdministration,
+                    openPlanning: openPlanning, trainingClient: trainingClient, openCreateTraining: openCreateTraining)
             } else {
                 SchoolOverviewView(workspace: workspace)
             }
@@ -263,6 +266,8 @@ private struct SchoolLearnerDetailView: View {
     let openProfile: ((SchoolLearner) -> Void)?
     let openTrainingAdministration: ((SchoolLearner) -> Void)?
     let openPlanning: ((SchoolLearner) -> Void)?
+    let trainingClient: SchoolTrainingClient?
+    let openCreateTraining: ((SchoolLearner) -> Void)?
     @State private var showsTraining = false
 
     var body: some View {
@@ -320,7 +325,9 @@ private struct SchoolLearnerDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: workspace.selectedLearnerID) { await workspace.loadSelectedLearner() }
         .sheet(isPresented: $showsTraining, onDismiss: { workspace.selectTraining(nil) }) {
-            SchoolTrainingDetailView(workspace: workspace)
+            if let trainingClient, let learner = workspace.learner, let trainingID = workspace.selectedTrainingID {
+                SchoolTrainingView(client: trainingClient, workspace: workspace, learner: learner, trainingID: trainingID)
+            } else { SchoolTrainingDetailView(workspace: workspace) }
         }
     }
 
@@ -355,13 +362,17 @@ private struct SchoolLearnerDetailView: View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Formations").font(.title3.weight(.semibold))
+                if let learner = workspace.learner, let openCreateTraining, learner.archivedAt == nil {
+                    Button { openCreateTraining(learner) } label: { Label("Ouvrir une formation", systemImage: "plus.circle") }
+                        .frame(minHeight: 48).accessibilityIdentifier("create-learner-training")
+                }
                 if let learner = workspace.learner, let openPlanning, learner.archivedAt == nil {
                     Button { openPlanning(learner) } label: { Label("Planifier une leçon", systemImage: "calendar.badge.plus") }
                         .frame(minHeight: 48).accessibilityIdentifier("learner-plan-lesson")
                 }
                 if let learner = workspace.learner, let openTrainingAdministration, learner.archivedAt == nil {
                     Button { openTrainingAdministration(learner) } label: {
-                        Label("Gérer les formations", systemImage: "person.badge.plus")
+                        Label("Affecter un moniteur", systemImage: "person.badge.plus")
                     }
                     .frame(minHeight: 48)
                     .accessibilityIdentifier("manage-learner-trainings")
