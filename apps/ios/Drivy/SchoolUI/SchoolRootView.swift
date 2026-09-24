@@ -527,7 +527,12 @@ struct SchoolRootView: View {
               membership.accessEpoch == scope.accessEpoch else { return }
         if schoolChanged {
             Task {
-                await workspace?.selectSchool(membership)
+                await workspace?.loadAccount()
+                guard identity.isAuthenticated,
+                      workspace?.person?.personId == scope.personID,
+                      workspace?.membership?.schoolId == scope.schoolID,
+                      workspace?.membership?.membershipId == scope.membershipID,
+                      workspace?.membership?.accessEpoch == scope.accessEpoch else { return }
                 if opensPolicy { openProfilePolicy() }
             }
         } else if opensPolicy {
