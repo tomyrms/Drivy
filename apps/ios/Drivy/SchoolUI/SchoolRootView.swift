@@ -155,15 +155,21 @@ struct SchoolRootView: View {
     }
 
     private var invitationsAction: (() -> Void)? {
-        canManageInvitations ? openInvitations : nil
+        guard canManageInvitations else { return nil }
+        let action: () -> Void = { openInvitations() }
+        return action
     }
 
     private var accountConfigurationAction: (() -> Void)? {
-        canConfigureSchool ? openConfigurationFromAccount : nil
+        guard canConfigureSchool else { return nil }
+        let action: () -> Void = { openConfigurationFromAccount() }
+        return action
     }
 
     private var accountInvitationsAction: (() -> Void)? {
-        canManageInvitations ? openInvitationsFromAccount : nil
+        guard canManageInvitations else { return nil }
+        let action: () -> Void = { openInvitationsFromAccount() }
+        return action
     }
 
     private func showAccount() { showsAccount = true }
