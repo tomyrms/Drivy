@@ -27,9 +27,10 @@ enum SchoolCaptureChunkEncoding {
         guard (0..<200).contains(segmentIndex), let start = SchoolLesson.date(startedAt),
               !points.isEmpty, points.count <= 1000, points.allSatisfy(\.isValid),
               Set(points.map(\.sequence)).count == points.count,
-              points.allSatisfy({ $0.sequence <= 2_147_483_646 && $0.elapsedMs <= 10_800_000 && SchoolLesson.date($0.capturedAt)! >= start }),
-              zip(points, points.dropFirst()).allSatisfy({ $0.sequence < $1.sequence && $0.elapsedMs <= $1.elapsedMs
-                  && SchoolLesson.date($0.capturedAt)! <= SchoolLesson.date($1.capturedAt)! }),
+              points.allSatisfy({ $0.sequence <= 2_147_483_646 && $0.elapsedMs <= 10_800_000 && SchoolLesson.date($0.capturedAt)! >= start
+                  && abs(SchoolLesson.date($0.capturedAt)!.timeIntervalSince(start) * 1000 - Double($0.elapsedMs)) <= 1 }),
+              zip(points, points.dropFirst()).allSatisfy({ $0.sequence < $1.sequence && $0.elapsedMs < $1.elapsedMs
+                  && SchoolLesson.date($0.capturedAt)! < SchoolLesson.date($1.capturedAt)! }),
               !signedUploadAuthorization.isEmpty, signedUploadAuthorization.utf8.count <= 12_000 else { throw SchoolCaptureFailure.invalidResponse }
         let content = Content(segmentIndex: segmentIndex, segmentStartedAt: startedAt, segmentStartReason: reason, points: points)
         let data = try JSONEncoder().encode(content)
