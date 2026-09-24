@@ -1,0 +1,12 @@
+# Table indépendante : ne change aucun port de l'ancien service.
+# Le lot est atomique et rejouable : seul le contenu de NOTRE table est remplacé.
+add table inet drivy_refonte
+flush table inet drivy_refonte
+table inet drivy_refonte {
+    chain input {
+        type filter hook input priority -10; policy accept;
+        iifname "lo" accept
+        ip saddr 192.168.1.147 tcp dport { 3001, 8081 } accept
+        tcp dport { 3001, 8081 } drop
+    }
+}

@@ -1,0 +1,34 @@
+# À importer DANS drivy.shulker.ch, avant le handle de l'ancienne API.
+# Conserver le handle /knowledge/* et le handle final déjà présents.
+@drivyRefonteSensitive path /refonte /refonte/* /identity*
+log_skip @drivyRefonteSensitive
+
+@drivyIdentityPublic path /identity/realms/drivy /identity/realms/drivy/* /identity/resources/*
+# Le handle avec matcher est trié avant le handle final sans matcher de l'ancien service.
+handle @drivyRefonteSensitive {
+    # L'ordre interne est conservé : l'autorisation précède le refus du reste d'identity.
+    route {
+        handle /refonte {
+            redir /refonte/ 308
+        }
+        handle_path /refonte/* {
+            reverse_proxy 192.168.1.153:3001
+        }
+        handle @drivyIdentityPublic {
+            reverse_proxy 192.168.1.153:8081 {
+                header_up -Forwarded
+                header_up X-Forwarded-For {remote_host}
+                header_up X-Forwarded-Proto https
+                header_up X-Forwarded-Host drivy.shulker.ch
+                header_up X-Forwarded-Port 443
+                header_up -X-Forwarded-Prefix
+                header_up -X-Original-Forwarded-For
+                header_up -X-Real-IP
+                header_up -X-Forwarded-Access-Token
+            }
+        }
+        handle {
+            respond "Not found" 404
+        }
+    }
+}
