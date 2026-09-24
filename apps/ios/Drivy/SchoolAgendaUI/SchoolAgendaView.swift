@@ -3,6 +3,7 @@ import SwiftUI
 struct SchoolAgendaView: View {
     let client: SchoolAgendaClient
     @Bindable var workspace: SchoolWorkspace
+    var captureController: SchoolCaptureSessionController? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var selectedDate = Date()
     @State private var lessons: [SchoolLesson] = []
@@ -87,7 +88,8 @@ struct SchoolAgendaView: View {
         .task(id: scopeKey) { selectedLesson = nil; await loadWeek() }
         .refreshable { await loadWeek() }
         .sheet(item: $selectedLesson) { lesson in
-            SchoolLessonDetailView(client: client, workspace: workspace, schoolID: lesson.schoolId, lessonID: lesson.id, learnerName: learnerName(lesson))
+            SchoolLessonDetailView(client: client, workspace: workspace, schoolID: lesson.schoolId,
+                lessonID: lesson.id, learnerName: learnerName(lesson), captureController: captureController)
         }
         .sheet(item: $planningModel, onDismiss: { Task { await loadWeek() } }) { model in SchoolPlanningView(model: model) }
         .sheet(item: $setupModel, onDismiss: { Task { await loadWeek() } }) { model in SchoolPlanningSetupView(model: model) }
@@ -252,6 +254,7 @@ private struct SchoolLessonDetailView: View {
     let schoolID: UUID
     let lessonID: UUID
     let learnerName: String
+    var captureController: SchoolCaptureSessionController? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var lesson: SchoolLesson?
     @State private var error: String?
@@ -349,8 +352,21 @@ private struct SchoolLessonDetailView: View {
     private func openCapturePreparation() {
         guard mayPrepareCapture, let person = workspace.person, let membership = workspace.membership,
               membership.schoolId == schoolID else { return }
-        capturePreparation = SchoolCapturePreparationWorkspace(scope: client.scope(person: person, membership: membership),
-            lessonID: lessonID, client: client.captureClient, reader: client.reader, agenda: client)
+        let scope = client.scope(person: person, membership: membership)
+        if let captureController {
+            let handler: SchoolCaptureStartHandler = { transfer, source, session, lease, authorization, receivedAt in
+                try await captureController.adoptAndStart(transfer: transfer, source: source, session: session,
+                    lease: lease, authorization: authorization, receivedAt: receivedAt)
+            }
+            capturePreparation = SchoolCapturePreparationWorkspace(scope: scope, lessonID: lessonID,
+                client: client.captureClient, reader: client.reader, agenda: client,
+                journalProvider: { try await captureController.journal() }, onCaptureAuthorized: handler,
+                onRefusalConfirmed: { learnerID, lessonID in captureController.learnerRefused(learnerID: learnerID, lessonID: lessonID) },
+                canUseDiagnostic: { captureController.canPrepareCapture })
+        } else {
+            capturePreparation = SchoolCapturePreparationWorkspace(scope: scope, lessonID: lessonID,
+                client: client.captureClient, reader: client.reader, agenda: client)
+        }
     }
     private func interval(_ lesson: SchoolLesson) -> String {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = TimeZone(identifier: lesson.timeZone); formatter.dateFormat = "HH:mm"

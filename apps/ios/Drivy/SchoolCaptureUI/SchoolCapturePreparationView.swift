@@ -8,6 +8,7 @@ struct SchoolCapturePreparationView: View {
     @State private var choiceRoute: ChoiceRoute?
     @State private var resendRoute: SchoolCaptureQueuedMutation?
     @State private var confirmsResend = false
+    @State private var startReview: SchoolCaptureStartReview?
 
     private struct ChoiceRoute: Identifiable {
         let id = UUID()
@@ -35,6 +36,8 @@ struct SchoolCapturePreparationView: View {
                         }
                     }
                     if !model.pendingAssessments.isEmpty { pendingPanel }
+                    if !model.pendingStarts.isEmpty { pendingStartsPanel }
+                    if model.contextIsCurrent && model.isInstructor && model.collectionIsIntegrated { startPanel }
                     if model.hasOldScope {
                         Label("Une demande conservée dépend de vos anciens accès. Elle ne sera pas renvoyée avec ces nouveaux droits.", systemImage: "lock")
                             .font(.subheadline).foregroundStyle(DrivyTheme.warning)
@@ -58,16 +61,19 @@ struct SchoolCapturePreparationView: View {
             }
             .task { await model.load() }
             .onDisappear { model.suspend() }
+            .onChange(of: model.diagnosticIsAvailable) { _, available in if !available { model.closeDiagnostic() } }
             .onChange(of: currentScope) { _, scope in
                 guard scope != model.scope else { return }
-                model.invalidate(); choiceRoute = nil; resendRoute = nil; dismiss()
+                model.invalidate(); choiceRoute = nil; resendRoute = nil; startReview = nil; dismiss()
             }
             .sheet(item: $choiceRoute, onDismiss: { Task { await model.load() } }) { route in
                 SchoolRecordingChoiceEntryView(client: model.client, reader: model.reader, agenda: model.agenda,
                     schoolWorkspace: schoolWorkspace, lessonID: route.lessonID,
-                    onRefusalConfirmed: { _, _ in model.closeDiagnostic() }, store: route.store)
+                    onRefusalConfirmed: { learnerID, lessonID in model.learnerRefused(learnerID, lessonID: lessonID) }, store: route.store)
             }
             .sheet(item: $resendRoute) { queued in resendSheet(queued) }
+            .sheet(item: $startReview) { review in SchoolCaptureStartReviewView(model: model, review: review) }
+            .onChange(of: model.captureStarted) { _, started in if started { dismiss() } }
         }.tint(DrivyTheme.accent)
     }
 
@@ -121,6 +127,10 @@ struct SchoolCapturePreparationView: View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: 18) {
                 Label("L’appareil du moniteur", systemImage: "iphone").font(.title3.weight(.semibold))
+                if !model.diagnosticIsAvailable {
+                    Text("Arrêtez et sauvegardez le trajet en cours avant de vérifier un autre départ.")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                }
                 if let snapshot = model.snapshot {
                     Label(permissionLabel(snapshot.permission), systemImage: snapshot.permission.permitsLocation ? "location" : "location.slash")
                     if let age = snapshot.sampleAgeSeconds, let accuracy = snapshot.horizontalAccuracyMeters {
@@ -138,8 +148,10 @@ struct SchoolCapturePreparationView: View {
                     Label("Envoyer le diagnostic", systemImage: "checkmark.shield")
                 }.buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.maySendAssessment)
                     .accessibilityIdentifier("preparation-send-diagnostic")
-                Text("Aucun trajet n’est enregistré depuis cet écran. Le démarrage du GPS scolaire n’est pas encore disponible.")
-                    .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                if !model.collectionIsIntegrated {
+                    Text("Aucun trajet n’est enregistré depuis cet écran. Le démarrage du GPS scolaire n’est pas encore disponible.")
+                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                }
             }
         }
     }
@@ -200,6 +212,43 @@ struct SchoolCapturePreparationView: View {
         }
     }
 
+    private var startPanel: some View {
+        DrivyPanel {
+            VStack(alignment: .leading, spacing: 16) {
+                Label("Le départ du trajet", systemImage: "location.fill").font(.title3.weight(.semibold))
+                Text("Après confirmation, seules les positions de cette leçon seront enregistrées. Vous pourrez arrêter le GPS à tout moment.")
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                if let message = model.startMessage { Text(message).font(.subheadline) }
+                Button { Task { startReview = await model.reviewStart() } } label: { Label("Relire et démarrer", systemImage: "arrow.right.circle") }
+                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.mayReviewStart)
+                    .accessibilityIdentifier("preparation-review-start")
+                if model.choice?.status != .allowed { Text("Le choix GPS de l’élève doit être confirmé avant le départ.").font(.footnote).foregroundStyle(DrivyTheme.muted) }
+            }
+        }
+    }
+
+    private var pendingStartsPanel: some View {
+        DrivyPanel {
+            VStack(alignment: .leading, spacing: 14) {
+                Label("Départ à vérifier", systemImage: "clock.arrow.circlepath").font(.title3.weight(.semibold))
+                ForEach(model.pendingStarts) { queued in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(queued.mutation.targetID == model.lessonID ? "Une demande de départ est conservée pour cette leçon." : "Une demande de départ concerne une autre leçon de cette école.")
+                            .font(.subheadline)
+                        if model.mayVerifyPendingStart(queued) {
+                            Button("Vérifier auprès de l’école") { Task { await model.verifyStart(queued) } }.frame(minHeight: 44)
+                        }
+                        if model.mayReviewPendingStart(queued) {
+                            Button("Relire ce départ") { Task { startReview = await model.reviewStart(resuming: queued) } }.frame(minHeight: 44)
+                        }
+                        Text("Aucune collecte ne reprend automatiquement.").font(.footnote).foregroundStyle(DrivyTheme.muted)
+                        DisclosureGroup("Référence") { Text(queued.id.uuidString).font(.caption.monospaced()).textSelection(.enabled) }
+                    }
+                }
+            }
+        }
+    }
+
     private func resendSheet(_ queued: SchoolCaptureQueuedMutation) -> some View {
         NavigationStack {
             Form {
@@ -242,5 +291,68 @@ struct SchoolCapturePreparationView: View {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH")
         formatter.timeZone = TimeZone(identifier: model.lesson?.timeZone ?? "Europe/Zurich"); formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+}
+
+private struct SchoolCaptureStartReviewView: View {
+    @Bindable var model: SchoolCapturePreparationWorkspace
+    let review: SchoolCaptureStartReview
+    @State private var acknowledged = false
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Text("Démarrer le GPS").font(.largeTitle.weight(.bold))
+                    Text(review.learnerName).font(.title2.weight(.semibold))
+                    Text(lessonDate).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    DrivyPanel {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Label("Accord GPS de l’élève confirmé", systemImage: "person.crop.circle.badge.checkmark")
+                            Label("Diagnostic de l’appareil qualifié", systemImage: "checkmark.shield")
+                            Text(review.lesson.meetingPoint).foregroundStyle(DrivyTheme.muted)
+                            Text("Le trajet reste privé. Cette action ne publie ni carte ni bilan.").font(.subheadline)
+                        }
+                    }
+                    DisclosureGroup("Relire l’information GPS de l’école") {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(review.notice.noticeText)
+                            Text("Conservation des données").font(.headline)
+                            Text(review.notice.retentionText)
+                            Text(review.notice.contactEmail).font(.subheadline)
+                        }.padding(.top, 12).textSelection(.enabled)
+                    }
+                    if review.pendingMutation != nil {
+                        Text("Cette confirmation reprend exactement la demande de départ conservée. La leçon, l’accord et le diagnostic seront vérifiés à nouveau.")
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    }
+                    Toggle("Je confirme le départ GPS maintenant pour cette leçon", isOn: $acknowledged)
+                        .disabled(model.isBusy).accessibilityIdentifier("capture-confirm-start")
+                    if let error = model.errorMessage { Text(error).foregroundStyle(DrivyTheme.warning).font(.subheadline) }
+                    if let message = model.startMessage { Text(message).font(.subheadline) }
+                    if model.isBusy { ProgressView("Vérification et ouverture du trajet…") }
+                    Button {
+                        Task { if await model.confirmStart(review, acknowledged: acknowledged) { dismiss() } }
+                    } label: { Label("Démarrer le GPS", systemImage: "location.fill") }
+                        .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!acknowledged || !model.mayConfirmStart)
+                        .accessibilityIdentifier("capture-start")
+                }.padding(24).frame(maxWidth: 700, alignment: .leading).frame(maxWidth: .infinity)
+            }.background(DrivyTheme.canvas)
+                .navigationTitle("Avant le départ").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { dismiss() }.disabled(model.isBusy) } }
+                .interactiveDismissDisabled(model.isBusy)
+        }.tint(DrivyTheme.accent)
+    }
+
+    private var lessonDate: String {
+        guard let start = review.lesson.startsAt, let end = review.lesson.endsAt else { return "" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_CH")
+        formatter.timeZone = TimeZone(identifier: review.lesson.timeZone)
+        formatter.dateStyle = .long; formatter.timeStyle = .short
+        let beginning = formatter.string(from: start)
+        formatter.dateStyle = .none
+        return beginning + " – " + formatter.string(from: end)
     }
 }
