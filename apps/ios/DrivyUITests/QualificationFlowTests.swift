@@ -5,7 +5,7 @@ final class QualificationFlowTests: XCTestCase {
     func testOfflineSessionPersistsAcrossRelaunch() throws {
         let app = XCUIApplication()
         app.launch()
-        openLocalTrials(app)
+        try openLocalTrials(app)
         let newSession = app.buttons["new-session"]
         XCTAssertTrue(newSession.waitForExistence(timeout: 15))
         attach(app, name: "01-accueil")
@@ -36,18 +36,13 @@ final class QualificationFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["new-session"].waitForExistence(timeout: 10))
         app.terminate()
         app.launch()
-        openLocalTrials(app)
-        let history = app.buttons["Historique"].firstMatch
-        XCTAssertTrue(history.waitForExistence(timeout: 15))
-        history.tap()
-        let session = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-session-")).firstMatch
-        XCTAssertTrue(session.waitForExistence(timeout: 10))
-        session.tap()
+        try openLocalTrials(app)
+        try openLatestSession(app)
         XCTAssertTrue(app.staticTexts["Séance sans GPS"].firstMatch.waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)
             .matching(NSPredicate(format: "label CONTAINS %@", "Priorité à droite")).firstMatch.exists)
         attach(app, name: "03-historique-apres-relance")
-        app.buttons["edit-summary"].tap()
+        try tapWhenHittable(app.buttons["edit-summary"])
         let summary = app.textViews["summary-text"]
         XCTAssertTrue(summary.waitForExistence(timeout: 5))
         summary.tap()
@@ -56,20 +51,40 @@ final class QualificationFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["saved-summary"].waitForExistence(timeout: 10))
         app.terminate()
         app.launch()
-        openLocalTrials(app)
-        XCTAssertTrue(history.waitForExistence(timeout: 15))
-        history.tap()
-        XCTAssertTrue(session.waitForExistence(timeout: 10))
-        session.tap()
+        try openLocalTrials(app)
+        try openLatestSession(app)
         XCTAssertTrue(app.staticTexts["saved-summary"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["saved-summary"].label, "Revoir les priorités à droite.")
         attach(app, name: "04-bilan-local-apres-relance")
     }
 
-    private func openLocalTrials(_ app: XCUIApplication) {
+    private func openLocalTrials(_ app: XCUIApplication) throws {
         let trials = app.buttons["open-local-trials"]
-        XCTAssertTrue(trials.waitForExistence(timeout: 15))
-        trials.tap()
+        try tapWhenHittable(trials)
+        _ = try waitUntilHittable(app.buttons["new-session"])
+    }
+
+    private func openLatestSession(_ app: XCUIApplication) throws {
+        try tapWhenHittable(app.buttons["Historique"].firstMatch)
+        XCTAssertTrue(app.navigationBars["Historique"].waitForExistence(timeout: 10))
+        let session = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-session-")).firstMatch
+        _ = try waitUntilHittable(session)
+        attach(app, name: "historique-avant-ouverture")
+        session.tap()
+        let detail = app.navigationBars["Relire la séance"]
+        _ = try XCTUnwrap(detail.waitForExistence(timeout: 15) ? detail : nil,
+                         "Le tap sur la séance doit ouvrir sa relecture.\n\(app.debugDescription)")
+    }
+
+    private func tapWhenHittable(_ element: XCUIElement) throws {
+        try waitUntilHittable(element).tap()
+    }
+
+    private func waitUntilHittable(_ element: XCUIElement) throws -> XCUIElement {
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND hittable == true"), object: element)
+        let result = XCTWaiter.wait(for: [ready], timeout: 15)
+        return try XCTUnwrap(result == .completed ? element : nil,
+                             "Élément inaccessible après la navigation : \(element.debugDescription)")
     }
 
     private func attach(_ app: XCUIApplication, name: String) {

@@ -22,26 +22,39 @@ final class SchoolPresentationTests: XCTestCase {
 
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previous = scene.windows.first(where: \.isKeyWindow)
-        let window = UIWindow(windowScene: scene)
-        let host = UIHostingController(rootView: SchoolBrowserView(workspace: workspace, openAccount: {})
-            .tint(DrivyTheme.accent).foregroundStyle(DrivyTheme.text))
-        window.rootViewController = host
-        window.overrideUserInterfaceStyle = .light
-        window.makeKeyAndVisible()
+        let window = presentationWindow(scene: scene, workspace: workspace, style: .light)
         defer { window.isHidden = true; previous?.makeKeyAndVisible() }
 
-        try await Task.sleep(for: .milliseconds(350))
+        try await Task.sleep(for: .seconds(1))
         attach(window, name: "g1a-01-eleves-clair-fixtures")
-        window.overrideUserInterfaceStyle = .dark
-        try await Task.sleep(for: .milliseconds(250))
-        attach(window, name: "g1a-02-eleves-sombre-fixtures")
-        window.overrideUserInterfaceStyle = .light
         workspace.selectLearner(workspace.learners.first?.id)
         await workspace.loadSelectedLearner()
-        try await Task.sleep(for: .milliseconds(350))
+        try await Task.sleep(for: .seconds(1))
         XCTAssertEqual(workspace.learner?.displayName, "Alice Exemple")
         XCTAssertEqual(workspace.trainings.count, 1)
         attach(window, name: "g1a-03-dossier-formation-fixtures")
+
+        // A fresh hierarchy starts in dark mode. Changing a live window's
+        // appearance can capture the system search material mid-transition.
+        window.isHidden = true
+        workspace.selectLearner(nil)
+        let darkWindow = presentationWindow(scene: scene, workspace: workspace, style: .dark)
+        defer { darkWindow.isHidden = true }
+        try await Task.sleep(for: .seconds(1))
+        attach(darkWindow, name: "g1a-02-eleves-sombre-fixtures")
+    }
+
+    private func presentationWindow(scene: UIWindowScene, workspace: SchoolWorkspace,
+                                    style: UIUserInterfaceStyle) -> UIWindow {
+        let window = UIWindow(windowScene: scene)
+        window.overrideUserInterfaceStyle = style
+        let host = UIHostingController(rootView: SchoolBrowserView(workspace: workspace, openAccount: {})
+            .tint(DrivyTheme.accent).foregroundStyle(DrivyTheme.text))
+        host.overrideUserInterfaceStyle = style
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+        return window
     }
 
     private func attach(_ window: UIWindow, name: String) {

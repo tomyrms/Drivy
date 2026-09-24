@@ -21,7 +21,7 @@ enum OIDCPolicy {
     static func request(service: OIDServiceConfiguration, configuration: AppConfiguration) -> OIDAuthorizationRequest {
         // AppAuth génère un state, un nonce et un vérificateur PKCE aléatoires, puis S256.
         OIDAuthorizationRequest(configuration: service, clientId: configuration.clientID, clientSecret: nil,
-                                scopes: [OIDScopeOpenID, OIDScopeProfile, "offline_access"],
+                                scopes: [OIDScopeOpenID, OIDScopeProfile],
                                 redirectURL: configuration.redirectURL, responseType: OIDResponseTypeCode,
                                 additionalParameters: nil)
     }
