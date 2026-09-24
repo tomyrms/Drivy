@@ -40,7 +40,7 @@ final class SchoolConfigurationWorkspace: Identifiable {
     }
 
     var mayEdit: Bool { hasLoaded && storageAccessible && !isInvalidated && !isLoading && !isBusy && pending == nil && !needsReload }
-    var canRetryPending: Bool { pending?.scope == scope && !pendingRequiresReview && !isBusy && !isLoading && !isInvalidated }
+    var canRetryPending: Bool { pending?.scope == scope && pending?.kind.isInvitation == false && !pendingRequiresReview && !isBusy && !isLoading && !isInvalidated }
     var identityIsValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && name.unicodeScalars.count <= 150
             && Self.emailIsValid(contactEmail) && contactPhone.unicodeScalars.count <= 32
@@ -149,7 +149,7 @@ final class SchoolConfigurationWorkspace: Identifiable {
         isBusy = true
         do {
             let receipt = try await api.operation(schoolID: scope.schoolID, id: command.id)
-            guard Self.matches(receipt, command: command) else { throw SchoolConfigurationFailure.invalidResponse }
+            guard command.matches(receipt) else { throw SchoolConfigurationFailure.invalidResponse }
             try outbox.remove(command)
             guard request == generation else { return }
             pending = nil
@@ -264,15 +264,4 @@ final class SchoolConfigurationWorkspace: Identifiable {
             && value.unicodeScalars.count <= 254 && !value.contains(where: \.isWhitespace)
     }
 
-    private static func matches(_ receipt: SchoolOperationReceipt, command: PendingSchoolCommand) -> Bool {
-        let expected: (String, String) = switch command.kind {
-        case .updateSchool: ("UPDATE_SCHOOL", "School")
-        case .saveSetup: ("SAVE_SCHOOL_SETUP", "SchoolSetup")
-        case .saveDataPolicy: ("ADOPT_SCHOOL_DATA_POLICY", "SchoolDataPolicy")
-        case .activate: ("ACTIVATE_SCHOOL", "School")
-        }
-        return receipt.operationId == command.id && receipt.resourceId == command.scope.schoolID
-            && receipt.commandType == expected.0 && receipt.resourceType == expected.1
-            && receipt.resourceVersion > command.resourceVersion
-    }
 }

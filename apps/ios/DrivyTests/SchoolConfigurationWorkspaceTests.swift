@@ -4,6 +4,21 @@ import Testing
 
 @MainActor
 struct SchoolConfigurationWorkspaceTests {
+    @Test func aPendingInvitationAllowsReadingConfigurationButCannotUseItsWriter() async throws {
+        let command = try InvitationFixture.command()
+        let api = ConfigurationAPIStub()
+        let outbox = ConfigurationOutboxStub(value: command)
+        let model = SchoolConfigurationWorkspace(scope: ConfigurationFixture.scope(), api: api, outbox: outbox)
+        await model.load()
+        #expect(model.school != nil && model.policy != nil)
+        #expect(!model.mayEdit && !model.canRetryPending)
+        await model.retryPending()
+        #expect(api.commands.isEmpty)
+        api.operationValue = InvitationFixture.receipt(command)
+        await model.verifyPending()
+        #expect(outbox.value == nil && model.mayEdit)
+    }
+
     @Test func loadingNeverApprovesTextsOrActivatesTheSchool() async {
         let api = ConfigurationAPIStub()
         let model = SchoolConfigurationWorkspace(scope: ConfigurationFixture.scope(), api: api, outbox: ConfigurationOutboxStub())
@@ -205,8 +220,12 @@ final class ConfigurationOutboxStub: SchoolCommandOutbox {
     var saves: [PendingSchoolCommand] = []
     var removals: [PendingSchoolCommand] = []
     var failSave = false
+    var failRead = false
     init(value: PendingSchoolCommand? = nil) { self.value = value }
-    func pending(for scope: SchoolCommandScope) throws -> PendingSchoolCommand? { value }
+    func pending(for scope: SchoolCommandScope) throws -> PendingSchoolCommand? {
+        if failRead { throw SchoolConfigurationFailure.storage }
+        return value
+    }
     func save(_ command: PendingSchoolCommand) throws {
         if failSave { throw SchoolConfigurationFailure.storage }
         if let value, value != command { throw SchoolConfigurationFailure.pendingCommand }
@@ -260,6 +279,7 @@ final class ConfigurationAPIStub: SchoolConfigurationAPI {
                 approvedAt: ConfigurationFixture.timestamp, approvedByMembershipId: command.scope.membershipID)
             return .dataPolicy(policyValue)
         case .saveSetup: return .setup(ConfigurationFixture.setup(version: command.resourceVersion + 1))
+        case .createInvitation, .resendInvitation, .revokeInvitation: throw SchoolConfigurationFailure.invalidResponse
         }
     }
 }

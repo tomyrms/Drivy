@@ -65,7 +65,7 @@ struct SchoolConfigurationView: View {
             TextField("Téléphone, facultatif", text: $model.contactPhone)
                 .textContentType(.telephoneNumber).keyboardType(.phonePad)
             if let zone = model.school?.timeZone, let timeZone = TimeZone(identifier: zone) {
-                LabeledContent("Fuseau horaire", value: timeZone.localizedName(for: .standard, locale: .autoupdatingCurrent) ?? zone)
+                LabeledContent("Fuseau horaire", value: timeZone.localizedName(for: .standard, locale: Locale(identifier: "fr_CH")) ?? zone)
                     .foregroundStyle(DrivyTheme.muted)
             }
             Button("Enregistrer les coordonnées") { confirmation = .identity }
@@ -155,6 +155,9 @@ struct SchoolConfigurationView: View {
         Section {
             Label("Confirmation en attente", systemImage: "clock.arrow.circlepath")
                 .font(.headline)
+            if pending.kind.isInvitation {
+                Text("Une invitation attend sa confirmation. Vous pouvez vérifier son résultat ici ou retrouver sa demande dans Invitations.")
+            }
             if pending.scope != model.scope {
                 Text("Vos accès ont changé. Cette demande doit être vérifiée par l’école avant toute nouvelle modification.")
             } else if model.pendingRequiresReview {
@@ -165,7 +168,7 @@ struct SchoolConfigurationView: View {
             Button("Vérifier le résultat") { Task { await model.verifyPending() } }
                 .frame(minHeight: 44).disabled(model.isBusy || model.isLoading)
                 .accessibilityIdentifier("school-config-verify-command")
-            if pending.scope == model.scope && !model.pendingRequiresReview {
+            if !pending.kind.isInvitation && pending.scope == model.scope && !model.pendingRequiresReview {
                 Button("Renvoyer la même demande") { Task { await model.retryPending() } }
                     .frame(minHeight: 44).disabled(!model.canRetryPending)
                     .accessibilityIdentifier("school-config-retry-command")

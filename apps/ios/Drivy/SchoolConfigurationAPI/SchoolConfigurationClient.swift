@@ -48,13 +48,14 @@ final class SchoolConfigurationClient: SchoolConfigurationAPI {
 
     func operation(schoolID: UUID, id: UUID) async throws -> SchoolOperationReceipt {
         let result: SchoolOperationReceipt = try await request(schoolID: schoolID, suffix: "operations", recordID: id)
-        guard result.operationId == id, result.resourceId == schoolID, result.resourceVersion > 0,
+        guard result.operationId == id, result.resourceVersion > 0,
+              result.resourceType == "Invitation" || result.resourceId == schoolID,
               Self.timestamp(result.committedAt) else { throw SchoolConfigurationFailure.invalidResponse }
         return result
     }
 
     func send(_ command: PendingSchoolCommand) async throws -> SchoolCommandResult {
-        guard command.scope.apiBaseURL == baseURL.absoluteString, command.resourceVersion > 0,
+        guard !command.kind.isInvitation, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,
               let object = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any],
               let operation = object["operationId"] as? String, UUID(uuidString: operation) == command.id else {
             throw SchoolConfigurationFailure.invalidResponse
@@ -82,6 +83,8 @@ final class SchoolConfigurationClient: SchoolConfigurationAPI {
                 throw SchoolConfigurationFailure.invalidResponse
             }
             return .dataPolicy(result)
+        case .createInvitation, .resendInvitation, .revokeInvitation:
+            throw SchoolConfigurationFailure.invalidResponse
         }
     }
 

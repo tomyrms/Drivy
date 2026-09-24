@@ -12,6 +12,9 @@ struct SchoolRootView: View {
     @State private var opensConfigurationAfterAccount = false
     @State private var showsSchoolConfiguration = false
     @State private var schoolConfiguration: SchoolConfigurationWorkspace?
+    @State private var opensInvitationsAfterAccount = false
+    @State private var showsInvitations = false
+    @State private var invitations: SchoolInvitationWorkspace?
     @State private var presenter: UIViewController?
 
     var body: some View {
@@ -25,7 +28,8 @@ struct SchoolRootView: View {
                                 .toolbar { accountToolbar }
                         }
                     } else {
-                        SchoolBrowserView(workspace: workspace, openAccount: { showsAccount = true })
+                        SchoolBrowserView(workspace: workspace, openAccount: { showsAccount = true },
+                            openInvitations: canManageInvitations ? openInvitations : nil)
                     }
                 } else {
                     NavigationStack {
@@ -50,16 +54,16 @@ struct SchoolRootView: View {
             else { workspace?.reset() }
         }
         .onChange(of: identity.isAuthenticated) { _, authenticated in
-            if !authenticated { closeConfiguration(); workspace?.reset() }
+            if !authenticated { closeConfiguration(); closeInvitations(); workspace?.reset() }
         }
         .onChange(of: workspace?.membership?.membershipId) { _, _ in
-            if workspace?.isLoadingAccount != true { verifyConfigurationScope() }
+            if workspace?.isLoadingAccount != true { verifyPresentedScopes() }
         }
         .onChange(of: workspace?.isLoadingAccount) { _, loading in
-            if loading == false { verifyConfigurationScope() }
+            if loading == false { verifyPresentedScopes() }
         }
         .onChange(of: workspace?.isLoadingSchool) { _, loading in
-            if loading == false && workspace?.isLoadingAccount != true { verifyConfigurationScope() }
+            if loading == false && workspace?.isLoadingAccount != true { verifyPresentedScopes() }
         }
         .sheet(isPresented: $showsAccount, onDismiss: {
             if opensTrialsAfterAccount {
@@ -70,6 +74,10 @@ struct SchoolRootView: View {
                 opensConfigurationAfterAccount = false
                 openConfiguration()
             }
+            if opensInvitationsAfterAccount {
+                opensInvitationsAfterAccount = false
+                openInvitations()
+            }
         }) {
             SchoolAccountView(identity: identity, workspace: workspace, localController: localController,
                 openLocalTrials: {
@@ -78,7 +86,30 @@ struct SchoolRootView: View {
                 }, configureSchool: canConfigureSchool ? {
                     opensConfigurationAfterAccount = true
                     showsAccount = false
+                } : nil, openInvitations: canManageInvitations ? {
+                    opensInvitationsAfterAccount = true
+                    showsAccount = false
                 } : nil, signOut: signOut)
+        }
+        .sheet(isPresented: $showsInvitations, onDismiss: {
+            invitations?.invalidate()
+            invitations = nil
+        }) {
+            if let invitations {
+                SchoolInvitationsView(model: invitations)
+                    .disabled(isCheckingSchoolAccess)
+                    .overlay {
+                        if isCheckingSchoolAccess {
+                            DrivyTheme.canvas.ignoresSafeArea().overlay { ProgressView("Vérification de vos accès…") }
+                        }
+                    }
+                    .onChange(of: invitations.accessFailure) { _, failure in
+                        if let failure {
+                            closeInvitations()
+                            workspace?.rejectCurrentAccess(requiresAuthentication: failure == .unauthorized)
+                        }
+                    }
+            }
         }
         .sheet(isPresented: $showsSchoolConfiguration, onDismiss: {
             schoolConfiguration?.invalidate()
@@ -245,6 +276,7 @@ struct SchoolRootView: View {
 
     private func signOut() {
         closeConfiguration()
+        closeInvitations()
         workspace?.reset()
         showsAccount = false
         Task { await identity.signOut() }
@@ -257,6 +289,38 @@ struct SchoolRootView: View {
 
     private var isCheckingSchoolAccess: Bool {
         workspace?.isLoadingAccount == true || workspace?.isLoadingSchool == true
+    }
+
+    private var canManageInvitations: Bool {
+        configuration != nil && workspace?.school?.status == "ACTIVE"
+            && (workspace?.membership?.roles.contains("ADMIN") == true || workspace?.membership?.roles.contains("INSTRUCTOR") == true)
+    }
+
+    private func openInvitations() {
+        guard canManageInvitations, let configuration, let person = workspace?.person,
+              let membership = workspace?.membership else { return }
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch,
+            apiBaseURL: configuration.apiBaseURL.absoluteString)
+        invitations = SchoolInvitationWorkspace(scope: scope, roles: membership.roles,
+            api: SchoolInvitationClient(baseURL: configuration.apiBaseURL, tokenSource: identity))
+        showsInvitations = true
+    }
+
+    private func closeInvitations() {
+        invitations?.invalidate()
+        showsInvitations = false
+    }
+
+    private func verifyPresentedScopes() {
+        verifyConfigurationScope()
+        guard let model = invitations else { return }
+        guard canManageInvitations, let person = workspace?.person, let membership = workspace?.membership,
+              model.scope.personID == person.personId, model.scope.schoolID == membership.schoolId,
+              model.scope.membershipID == membership.membershipId, model.scope.accessEpoch == membership.accessEpoch else {
+            closeInvitations()
+            return
+        }
     }
 
     private func openConfiguration() {
@@ -293,6 +357,7 @@ private struct SchoolAccountView: View {
     let localController: SessionController
     let openLocalTrials: () -> Void
     let configureSchool: (() -> Void)?
+    let openInvitations: (() -> Void)?
     let signOut: () -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -318,6 +383,10 @@ private struct SchoolAccountView: View {
                         }
                     }
                     if identity.isAuthenticated {
+                        if let openInvitations {
+                            Button(action: openInvitations) { Label("Invitations", systemImage: "envelope") }
+                                .accessibilityIdentifier("open-school-invitations")
+                        }
                         if let configureSchool {
                             Button("Préparer mon école", action: configureSchool)
                                 .accessibilityIdentifier("open-school-configuration")

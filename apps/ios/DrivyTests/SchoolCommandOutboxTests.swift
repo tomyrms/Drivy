@@ -149,4 +149,44 @@ struct SchoolCommandOutboxTests {
             #expect(try String(contentsOf: directory, encoding: .utf8) == "unrelated test file")
         }
     }
+
+    @Test func invitationTargetAndZeroVersionCreationSurviveEncryptedReopening() throws {
+        try inDirectory { directory in
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            let id = UUID()
+            let create = PendingSchoolCommand(id: id, scope: scope(), kind: .createInvitation, resourceVersion: 0,
+                createdAt: Date(), body: try JSONEncoder().encode(SchoolInviteCommand(operationId: id,
+                    email: "private@example.invalid", roles: [.learner])))
+            try store.save(create)
+            let bytes = try Data(contentsOf: directory.appendingPathComponent("pending-v1.bin"))
+            #expect(bytes.range(of: Data("private@example.invalid".utf8)) == nil)
+            let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            #expect(try reopened.pending(for: scope()) == create)
+            try reopened.remove(create)
+            let target = UUID()
+            let resend = PendingSchoolCommand(id: id, scope: scope(), kind: .resendInvitation, resourceVersion: 3,
+                createdAt: Date(), body: try JSONEncoder().encode(SchoolResendInvitationCommand(operationId: id)), resourceID: target)
+            try reopened.save(resend)
+            #expect(try store.pending(for: scope())?.resourceID == target)
+            let invalid = PendingSchoolCommand(id: UUID(), scope: scope(), kind: .resendInvitation, resourceVersion: 0,
+                createdAt: Date(), body: resend.body, resourceID: target)
+            #expect(throws: SchoolConfigurationFailure.storage) { try store.save(invalid) }
+        }
+    }
+
+    @Test func legacyConfigurationArchiveWithoutResourceIDStillOpensUnchanged() throws {
+        try inDirectory { directory in
+            let expected = try command()
+            var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(expected)) as? [String: Any])
+            object.removeValue(forKey: "resourceID")
+            let clear = try JSONSerialization.data(withJSONObject: ["version": 1, "commands": [object]])
+            let encrypted = try AES.GCM.seal(clear, using: SymmetricKey(data: key),
+                authenticating: Data("drivy-school-commands-v1".utf8)).combined!
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try encrypted.write(to: directory.appendingPathComponent("pending-v1.bin"))
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            #expect(try store.pending(for: scope()) == expected)
+            try store.save(expected)
+        }
+    }
 }

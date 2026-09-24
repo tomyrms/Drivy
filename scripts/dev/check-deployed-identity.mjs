@@ -37,7 +37,7 @@ async function main() {
     stage = 'Obligation de PKCE S256 imposée par le fournisseur HTTPS';
     const withoutChallenge = new URL(discovery.authorization_endpoint);
     withoutChallenge.search = new URLSearchParams({ client_id: clientId, response_type: 'code', redirect_uri: callbackURI,
-      scope: 'openid profile', state, nonce }).toString();
+      scope: 'openid profile email', state, nonce }).toString();
     const rejectedAuthorization = async url => {
       const response = await request(url);
       const location = response.headers.get('location');
@@ -70,7 +70,7 @@ async function main() {
     });
     const page = await context.newPage();
     const auth = new URL(discovery.authorization_endpoint);
-    auth.search = new URLSearchParams({ client_id: clientId, response_type: 'code', redirect_uri: callbackURI, scope: 'openid profile',
+    auth.search = new URLSearchParams({ client_id: clientId, response_type: 'code', redirect_uri: callbackURI, scope: 'openid profile email',
       state, nonce, code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', prompt: 'login' }).toString();
     await page.goto(auth.href, { waitUntil: 'domcontentloaded' });
     await page.locator('input[name="username"]').fill(account.username);

@@ -16,6 +16,35 @@ struct SchoolCommandScope: Codable, Sendable, Equatable {
 
 enum SchoolCommandKind: String, Codable, Sendable {
     case updateSchool, saveSetup, activate, saveDataPolicy
+    case createInvitation, resendInvitation, revokeInvitation
+
+    var isInvitation: Bool {
+        switch self {
+        case .createInvitation, .resendInvitation, .revokeInvitation: true
+        default: false
+        }
+    }
+
+    var operationType: String {
+        switch self {
+        case .updateSchool: "UPDATE_SCHOOL"
+        case .saveSetup: "SAVE_SCHOOL_SETUP"
+        case .activate: "ACTIVATE_SCHOOL"
+        case .saveDataPolicy: "ADOPT_SCHOOL_DATA_POLICY"
+        case .createInvitation: "CREATE_INVITATION"
+        case .resendInvitation: "RESEND_INVITATION"
+        case .revokeInvitation: "REVOKE_INVITATION"
+        }
+    }
+
+    var resourceType: String {
+        switch self {
+        case .updateSchool, .activate: "School"
+        case .saveSetup: "SchoolSetup"
+        case .saveDataPolicy: "SchoolDataPolicy"
+        case .createInvitation, .resendInvitation, .revokeInvitation: "Invitation"
+        }
+    }
 }
 
 struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
@@ -25,6 +54,30 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
     let resourceVersion: Int
     let createdAt: Date
     let body: Data
+    // Absent in v1 G1B archives; creation has no server resource identifier yet.
+    let resourceID: UUID?
+
+    init(id: UUID, scope: SchoolCommandScope, kind: SchoolCommandKind, resourceVersion: Int,
+         createdAt: Date, body: Data, resourceID: UUID? = nil) {
+        self.id = id; self.scope = scope; self.kind = kind; self.resourceVersion = resourceVersion
+        self.createdAt = createdAt; self.body = body; self.resourceID = resourceID
+    }
+
+    var hasValidTarget: Bool {
+        switch kind {
+        case .createInvitation: resourceVersion == 0 && resourceID == nil
+        case .resendInvitation, .revokeInvitation: resourceVersion > 0 && resourceID != nil
+        default: resourceVersion > 0 && resourceID == nil
+        }
+    }
+
+    func matches(_ receipt: SchoolOperationReceipt) -> Bool {
+        guard hasValidTarget else { return false }
+        let expectedID = kind.isInvitation ? resourceID : scope.schoolID
+        return receipt.operationId == id && receipt.commandType == kind.operationType
+            && receipt.resourceType == kind.resourceType && receipt.resourceVersion > resourceVersion
+            && (expectedID == nil || receipt.resourceId == expectedID)
+    }
 }
 
 @MainActor
@@ -129,7 +182,7 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
 
     private func validate(_ command: PendingSchoolCommand) throws {
         let scope = command.scope
-        guard command.resourceVersion > 0, scope.accessEpoch > 0,
+        guard command.hasValidTarget, scope.accessEpoch > 0,
               command.createdAt.timeIntervalSince1970.isFinite,
               !command.body.isEmpty, command.body.count <= 200_000,
               scope.apiBaseURL.rangeOfCharacter(from: .whitespacesAndNewlines) == nil,

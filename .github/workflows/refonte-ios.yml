@@ -1,7 +1,7 @@
 name: Refonte · iOS
 on:
   push:
-    branches: [master, codex/refonte-g0]
+    branches: [master, 'codex/**']
     paths:
       - 'apps/ios/**'
       - 'scripts/ios/**'
