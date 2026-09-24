@@ -205,9 +205,14 @@ private struct SchoolLessonDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var lesson: SchoolLesson?
     @State private var error: String?
-    @State private var planningModel: SchoolPlanningWorkspace?
-    @State private var cancelsLesson = false
+    @State private var planningRoute: PlanningRoute?
     @State private var showsReport = false
+
+    private struct PlanningRoute: Identifiable {
+        let id = UUID()
+        let model: SchoolPlanningWorkspace
+        let cancelling: Bool
+    }
 
     private var identityScope: String { "\(workspace.person?.id.uuidString ?? ""):\(workspace.membership?.id.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)" }
     private var mayManage: Bool { workspace.membership?.schoolId == schoolID && workspace.membership?.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) == true }
@@ -243,8 +248,8 @@ private struct SchoolLessonDetailView: View {
             .navigationTitle("La leçon").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
             .task { await load() }
-            .sheet(item: $planningModel, onDismiss: { Task { await load() } }) { model in
-                SchoolPlanningView(model: model, cancelling: cancelsLesson)
+            .sheet(item: $planningRoute, onDismiss: { Task { await load() } }) { route in
+                SchoolPlanningView(model: route.model, cancelling: route.cancelling)
             }
             .sheet(isPresented: $showsReport, onDismiss: { Task { await load() } }) {
                 NavigationStack {
@@ -252,7 +257,7 @@ private struct SchoolLessonDetailView: View {
                 }.tint(DrivyTheme.accent)
             }
             .onChange(of: identityScope) { _, _ in
-                planningModel?.invalidate(); planningModel = nil; showsReport = false; lesson = nil; dismiss()
+                planningRoute?.model.invalidate(); planningRoute = nil; showsReport = false; lesson = nil; dismiss()
             }
         }.tint(DrivyTheme.accent)
     }
@@ -274,8 +279,8 @@ private struct SchoolLessonDetailView: View {
     }
     private func openPlanning(_ lesson: SchoolLesson, cancelling: Bool) {
         guard let person = workspace.person, let membership = workspace.membership, mayManage else { return }
-        cancelsLesson = cancelling
-        planningModel = SchoolPlanningWorkspace(scope: client.scope(person: person, membership: membership), client: client.planningClient, lesson: lesson)
+        let model = SchoolPlanningWorkspace(scope: client.scope(person: person, membership: membership), client: client.planningClient, lesson: lesson)
+        planningRoute = PlanningRoute(model: model, cancelling: cancelling)
     }
     private func interval(_ lesson: SchoolLesson) -> String {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = TimeZone(identifier: lesson.timeZone); formatter.dateFormat = "HH:mm"

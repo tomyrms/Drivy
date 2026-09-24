@@ -7,9 +7,15 @@ struct JourneyVisualReview: View {
     let screen: String
     @State private var controller: SessionController?
     @State private var replayID: UUID?
-    @State private var reportContext: ObservationContext?
-    @State private var showsReport = false
+    @State private var report: ReportRoute?
     @State private var failure: String?
+
+    private struct ReportRoute: Identifiable {
+        let controller: SessionController
+        let context: ObservationContext
+        let sessionStartedAt: Date
+        var id: UUID { context.id }
+    }
 
     var body: some View {
         Group {
@@ -26,17 +32,15 @@ struct JourneyVisualReview: View {
                         DrivingMapHomeView(controller: controller, schoolName: "École · exemple visuel", openLearners: {})
                     }
                 }
-                .sheet(isPresented: $showsReport) {
-                    if let context = reportContext, let session = controller.activeSession {
-                        ObservationComposer(controller: controller, context: context, sessionStartedAt: session.startedAt)
-                    }
-                }
             } else if let failure {
                 ContentUnavailableView("Capture indisponible", systemImage: "exclamationmark.triangle", description: Text(failure))
             } else { ProgressView("Préparation visuelle…") }
         }
         .environment(\.locale, Locale(identifier: "fr_CH"))
         .tint(DrivyTheme.accent)
+        .sheet(item: $report) { route in
+            ObservationComposer(controller: route.controller, context: route.context, sessionStartedAt: route.sessionStartedAt)
+        }
         .task { await prepare() }
     }
 
@@ -84,12 +88,13 @@ struct JourneyVisualReview: View {
                         await model.addObservation(theme: theme, status: index == 0 ? .toWorkOn : index == 1 ? .attention : .positive, note: "", context: context)
                     }
                 }
-                if screen == "report" { reportContext = model.beginObservation() }
             }
             controller = model
             if screen == "report" {
                 try await Task.sleep(for: .milliseconds(400))
-                showsReport = true
+                if let session = model.activeSession, let context = model.beginObservation() {
+                    report = ReportRoute(controller: model, context: context, sessionStartedAt: session.startedAt)
+                }
             }
         } catch { failure = error.localizedDescription }
     }

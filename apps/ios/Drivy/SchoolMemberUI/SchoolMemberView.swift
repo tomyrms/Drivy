@@ -10,7 +10,12 @@ struct SchoolMemberView: View {
     let openInvitations: () -> Void
     let openLearner: (SchoolLearner) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var showsEditor = false
+    @State private var editor: MemberEditorRoute?
+
+    private struct MemberEditorRoute: Identifiable {
+        let id: UUID
+        let model: SchoolMemberWorkspace
+    }
 
     private var listedMembers: [SchoolMember] { mode == .addLearner ? model.availableForLearnerRole : model.filteredMembers }
     var body: some View {
@@ -48,7 +53,8 @@ struct SchoolMemberView: View {
                     ForEach(listedMembers) { member in
                         Button {
                             model.select(member, addLearner: mode == .addLearner)
-                            showsEditor = true
+                            guard model.selectedMember?.id == member.id else { return }
+                            editor = MemberEditorRoute(id: member.id, model: model)
                         } label: { memberRow(member) }
                         .buttonStyle(.plain).disabled(model.isBusy || identity.isWorking)
                         .accessibilityIdentifier("school-member-\(member.id.uuidString)")
@@ -65,8 +71,8 @@ struct SchoolMemberView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy || identity.isWorking) } }
             .task { await model.load() }
-            .sheet(isPresented: $showsEditor, onDismiss: { model.clearSelection() }) {
-                SchoolMemberEditor(model: model, identity: identity)
+            .sheet(item: $editor, onDismiss: { model.clearSelection() }) { route in
+                SchoolMemberEditor(model: route.model, identity: identity, memberID: route.id)
             }
             .onChange(of: model.locatedLearner?.id) { _, _ in
                 if let learner = model.locatedLearner { openLearner(learner) }
@@ -95,6 +101,7 @@ struct SchoolMemberView: View {
 private struct SchoolMemberEditor: View {
     @Bindable var model: SchoolMemberWorkspace
     @Bindable var identity: IdentitySession
+    let memberID: UUID
     @Environment(\.dismiss) private var dismiss
     @State private var presenter: UIViewController?
     @State private var authError: String?
@@ -105,7 +112,7 @@ private struct SchoolMemberEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let member = model.selectedMember {
+                if let member = model.selectedMember, member.id == memberID {
                     Section {
                         Text(member.displayName).font(.title2.weight(.bold))
                         Text(SchoolPresentation.roles(member.roles)).foregroundStyle(DrivyTheme.muted)
@@ -121,6 +128,11 @@ private struct SchoolMemberEditor: View {
                                 Label("Ouvrir le dossier élève", systemImage: "person.text.rectangle")
                             }.disabled(model.isBusy || identity.isWorking)
                         } footer: { Text("Les formations et les affectations de moniteurs se gèrent depuis ce dossier.") }
+                    }
+                } else {
+                    Section {
+                        Text("Cette personne n’est plus accessible. Fermez cet écran et actualisez les membres.")
+                            .foregroundStyle(DrivyTheme.muted)
                     }
                 }
                 if let error = model.errorMessage { Section { Text(error).foregroundStyle(DrivyTheme.danger) } }
@@ -140,7 +152,7 @@ private struct SchoolMemberEditor: View {
                             Label("Confirmer avec mon compte", systemImage: "person.crop.circle.badge.checkmark")
                                 .frame(maxWidth: .infinity, minHeight: 44)
                         }.buttonStyle(DrivyPrimaryButtonStyle())
-                            .disabled(!model.canSave || identity.isWorking || presenter == nil)
+                            .disabled(!model.canSave || model.selectedMember?.id != memberID || identity.isWorking || presenter == nil)
                             .accessibilityIdentifier("member-confirm-access")
                         if identity.isWorking { ProgressView("Confirmation de votre identité…") }
                         else if model.isBusy { ProgressView("Enregistrement des accès…") }
@@ -205,7 +217,7 @@ private struct SchoolMemberEditor: View {
         })
     }
     private func authenticateAndSave() {
-        guard let presenter, model.canSave else { return }
+        guard let presenter, model.canSave, model.selectedMember?.id == memberID else { return }
         authError = nil
         Task {
             let authenticated = await identity.reauthenticate(presenting: presenter, expectedPersonID: model.scope.personID)
