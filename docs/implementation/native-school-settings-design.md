@@ -33,3 +33,5 @@ Le formulaire conserve ses validations et ses choix d’approbation initialement
 Les coordonnées d’offre et références de compétence ont des libellés persistants ; les compétences sont numérotées dans leur ordre, les sources facultatives se déplient. Une nouvelle révision porte un titre distinct d’une première création. L’exigence de contenus approuvés est expliquée près du choix d’activation.
 
 Une erreur de sauvegarde et la vérification/relance de la demande conservée restent dans la relecture. Les commandes utilisent toujours le workspace existant et sa réponse durable. Ce prolongement est relu et soumis à la même compilation Apple groupée, sans nouvelle campagne de tests.
+
+Le bouton de relecture indisponible précise ensuite le premier champ ou contenu à corriger : référence, catégorie, durée, prix, contenu lié, compétence, motif ou période. Ces indications accompagnent les prédicats existants sans les remplacer.

@@ -68,7 +68,7 @@ struct SchoolCatalogEditor: View {
             .safeAreaInset(edge: .bottom) {
                 VStack(alignment: .leading, spacing: 10) {
                     if !isValid, model.canMutate {
-                        Text("Complétez les informations avant de relire.")
+                        Text(validationHint)
                             .font(.footnote).foregroundStyle(DrivyTheme.muted)
                     }
                     Button("Relire avant d’enregistrer") {
@@ -261,6 +261,49 @@ struct SchoolCatalogEditor: View {
         case .policy: return policy.isValid
         case .training: return model.availableOfferings.contains { $0.id == offeringID }
         case .assignment: return model.instructors.contains { $0.id == memberID } && (!includesEnd || endDate > startDate)
+        }
+    }
+    private var validationHint: String {
+        switch kind {
+        case .offering:
+            if offering.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Donnez une référence à l’offre." }
+            if offering.key.count > 80 { return "La référence est limitée à 80 caractères." }
+            if offering.category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Indiquez la catégorie de l’offre." }
+            if offering.category.count > 30 { return "La catégorie est limitée à 30 caractères." }
+            if Int(offering.duration).map({ (1...480).contains($0) }) != true { return "Indiquez une durée entre 1 et 480 minutes." }
+            if SchoolCatalogFormatting.cents(offering.price) == nil { return "Indiquez un prix valide en CHF." }
+            if !matchingCurricula.contains(where: { $0.id == offering.curriculumID }) { return "Choisissez un référentiel de cette catégorie." }
+            if !matchingPolicies.contains(where: { $0.id == offering.policyID }) { return "Choisissez une procédure de cette catégorie." }
+            return "L’activation exige un référentiel et une procédure approuvés."
+        case .curriculum:
+            if curriculum.category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Indiquez la catégorie du référentiel." }
+            if curriculum.category.count > 30 { return "La catégorie est limitée à 30 caractères." }
+            if let index = curriculum.competencies.firstIndex(where: { !$0.isValid }) {
+                let competency = curriculum.competencies[index]
+                if competency.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Nommez la compétence \(index + 1)." }
+                if competency.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Donnez une référence à la compétence \(index + 1)." }
+                if competency.explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Décrivez la compétence \(index + 1)." }
+                return "Compétence \(index + 1) : référence 80 caractères, intitulé 200, description 4 000 maximum."
+            }
+            if Set(curriculum.competencies.map { $0.key.trimmingCharacters(in: .whitespacesAndNewlines) }).count != curriculum.competencies.count {
+                return "Chaque compétence doit avoir une référence différente."
+            }
+            return curriculum.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "Indiquez le motif de cette version." : "Le motif est limité à 1 000 caractères."
+        case .policy:
+            if policy.category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Indiquez la catégorie de la procédure." }
+            if policy.category.count > 30 { return "La catégorie est limitée à 30 caractères." }
+            if policy.procedure.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Décrivez le déroulement de la formation." }
+            if policy.procedure.count > 4000 { return "Le déroulement est limité à 4 000 caractères." }
+            if policy.cancellation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Renseignez les conditions d’annulation." }
+            if policy.cancellation.count > 4000 { return "Les conditions d’annulation sont limitées à 4 000 caractères." }
+            if policy.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Indiquez le motif de cette version." }
+            if policy.reason.count > 1000 { return "Le motif est limité à 1 000 caractères." }
+            return "Vérifiez les sources : une adresse web complète par ligne, 30 au maximum."
+        case .training:
+            return "Choisissez une offre de l’école."
+        case .assignment:
+            return !model.instructors.contains(where: { $0.id == memberID }) ? "Choisissez le moniteur de cette formation." : "La fin de l’affectation doit suivre son début."
         }
     }
     private var title: String {
