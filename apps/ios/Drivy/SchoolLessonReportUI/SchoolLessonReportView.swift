@@ -22,11 +22,13 @@ struct SchoolLessonReportView: View {
         value.scope.personID == schoolWorkspace.person?.personId && value.scope.membershipID == schoolWorkspace.membership?.membershipId
             && value.scope.schoolID == schoolWorkspace.membership?.schoolId && value.scope.accessEpoch == schoolWorkspace.membership?.accessEpoch
             && value.membership.roles == schoolWorkspace.membership?.roles && value.membership.grants == schoolWorkspace.membership?.grants
+            && value.scope.apiBaseURL == client.baseURL.absoluteString
     }
     var body: some View {
         Group {
             if let model, matches(model) {
-                SchoolLessonReportContent(model: model, learnerName: learnerName)
+                SchoolLessonReportContent(model: model, learnerName: learnerName, schoolWorkspace: schoolWorkspace,
+                    observationClient: client.agenda.observationClient)
             } else {
                 ContentUnavailableView("Sélectionnez votre école", systemImage: "building.2", description: Text("Le bilan est lié à votre compte et à cette école."))
             }
@@ -36,33 +38,45 @@ struct SchoolLessonReportView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Fermer") {
-                    if hasUnsavedChanges { confirmsDiscard = true } else { dismiss() }
+                    if hasUnsavedChanges { confirmsDiscard = true } else { model?.invalidate(); dismiss() }
                 }.disabled(model?.isBusy == true)
             }
         }
         .interactiveDismissDisabled(hasUnsavedChanges || model?.isBusy == true)
         .confirmationDialog("Fermer sans enregistrer cette saisie ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
-            Button("Fermer sans enregistrer", role: .destructive) { dismiss() }
+            Button("Fermer sans enregistrer", role: .destructive) { model?.invalidate(); dismiss() }
             Button("Continuer la saisie", role: .cancel) { }
         }
         .task(id: scopeKey) {
+            // A full-height child sheet can make this view appear again. Keep
+            // its current editing model until the real account/school changes.
+            if let model, matches(model) { return }
             model?.invalidate(); model = nil
             guard let person = schoolWorkspace.person, let membership = schoolWorkspace.membership else { return }
             let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId, membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: client.baseURL.absoluteString)
             let value = SchoolLessonReportWorkspace(scope: scope, membership: membership, lessonID: lessonID, client: client)
             model = value; await value.load()
         }
-        .onDisappear { model?.invalidate() }
     }
 }
 
 private struct SchoolLessonReportContent: View {
     @Bindable var model: SchoolLessonReportWorkspace
     let learnerName: String
+    @Bindable var schoolWorkspace: SchoolWorkspace
+    let observationClient: SchoolObservationClient
     @State private var showComplete = false
     @State private var showPreview = false
     @State private var showReloadConfirmation = false
+    @State private var observationRoute: ObservationRoute?
+    @State private var observationsWereOpened = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private struct ObservationRoute: Identifiable {
+        let id = UUID()
+        let client: SchoolObservationClient
+        let lessonID: UUID
+    }
 
     var body: some View {
         Form {
@@ -80,6 +94,20 @@ private struct SchoolLessonReportContent: View {
                 if let message = model.information { Text(message).font(.footnote).foregroundStyle(.secondary) }
             }.listRowBackground(Color.clear)
             if model.pending != nil { pendingSection }
+            if model.isAuthor, !(model.draft?.geoObservationIds?.isEmpty ?? true) {
+                Section {
+                    Button("Relire les observations privées", systemImage: "list.bullet") {
+                        observationRoute = ObservationRoute(client: observationClient, lessonID: model.lessonID)
+                    }.disabled(model.isBusy || model.isLoading)
+                    if observationsWereOpened {
+                        Button("Actualiser les références du brouillon", systemImage: "arrow.clockwise") {
+                            showReloadConfirmation = true
+                        }.disabled(model.isBusy || model.isLoading)
+                    }
+                } footer: {
+                    Text("Ces observations restent privées. Elles ne sont pas partagées avec le bilan.")
+                }
+            }
             if model.isAuthor, model.draft != nil { draftSection }
             if let wish = model.wish {
                 Section("Souhait pour la prochaine leçon") {
@@ -138,11 +166,19 @@ private struct SchoolLessonReportContent: View {
             }
         }
         .confirmationDialog("Recharger les données de l’école ?", isPresented: $showReloadConfirmation, titleVisibility: .visible) {
-            Button("Recharger et remplacer la saisie non enregistrée") { Task { await model.load() } }
+            Button("Recharger et remplacer la saisie non enregistrée") {
+                Task {
+                    await model.load()
+                    if model.draft != nil && model.errorMessage == nil { observationsWereOpened = false }
+                }
+            }
             Button("Garder ma saisie", role: .cancel) {}
         }
         .sheet(isPresented: $showComplete) { SchoolLessonCompletionSheet(model: model) }
         .sheet(isPresented: $showPreview) { SchoolReportPreviewSheet(model: model, learnerName: learnerName) }
+        .sheet(item: $observationRoute, onDismiss: { observationsWereOpened = true }) { route in
+            SchoolObservationEntryView(client: route.client, schoolWorkspace: schoolWorkspace, lessonID: route.lessonID)
+        }
     }
     private var pendingSection: some View {
         Section("Confirmation en attente") {

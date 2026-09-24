@@ -13,3 +13,11 @@ La reprise conserve les workspaces et leurs validations :
 Le pied d’écran empile les actions aux tailles de texte d’accessibilité. Les dates de leçon suivent le fuseau scolaire et le format français. Cette reprise ne change pas les contrats, les droits, les prix ou les effets financiers.
 
 Contrôle effectué : lecture des vues et des maquettes, contrôle du diff. Aucun nouveau rendu simulateur ni campagne fonctionnelle lancé pour ce lot. La compilation Apple du commit d’intégration reste nécessaire avant sa livraison ; aucune qualification physique n’en découle.
+
+## Observations privées depuis le brouillon
+
+Le bilan auteur propose désormais de relire les observations lorsque `geoObservationIds` n’est pas vide. La feuille porte son client et sa leçon dans une route atomique ; `SchoolObservationEntryView` relit les accès avant le contenu. Le footer précise que ces observations restent privées et ne sont pas partagées avec le bilan.
+
+L’ouverture d’une feuille ne détruit plus le modèle du formulaire. Le retour conserve les textes saisis : la tâche d’entrée ne reconstruit le modèle que lorsque le compte, l’école, les rôles, les droits ou le serveur changent. La fermeture explicite invalide toujours le modèle. Après consultation, une action de rechargement des références reste soumise à la confirmation existante avant de remplacer les textes non enregistrés. Aucune actualisation silencieuse n’écrase la rédaction.
+
+Diff vérifié ; compilation et retour effectif de la feuille native à confirmer dans le prochain binaire groupé.
