@@ -40,4 +40,4 @@ Une recette métier locale a exercé les routes actuelles avec PostgreSQL 17, mi
 
 La base dédiée `drivy_training_receipt_test` et le rôle migrateur temporaire ont été supprimés après la recette. Le script et le journal locaux sont dans `artifacts/check-training-receipt.mts` et `artifacts/check-training-receipt.log` ; ils ne sont pas livrés dans l’application. Aucune campagne de tests supplémentaire n’a été lancée.
 
-Le lot natif initial est le commit `b40c877`. La compilation Apple est distincte de cette vérification serveur et doit être confirmée par son exécution CI ; Windows ne la qualifie pas.
+Le lot natif initial est le commit `b40c877`, compilé avec succès dans l’IPA 0.7.0/build21, source`394d4cd`, run`36054482531`. Les finitions visuelles suivantes et l’indépendance de la navigation des bilans vis-à-vis d’AP58 attendent leur compilation d’intégration ; aucune qualification physique n’est déduite de ces builds.
