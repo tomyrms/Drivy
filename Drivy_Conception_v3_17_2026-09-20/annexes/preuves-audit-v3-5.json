@@ -1,0 +1,333 @@
+{
+  "version": "3.5",
+  "base": "3.4",
+  "proofs": [
+    {
+      "id": "V35-01",
+      "sourceFile": "04-technique/api.md",
+      "sha256": "1a957871c8d6824ab37ae924d79bfed489d2794cf32019288b4e26870518cecc",
+      "matches": [
+        {
+          "line": 288,
+          "text": "Les commandes de présence utilisent If-Match de l’AttendanceRecord ; valeur de création explicite `\"0\"` avant premier enregistrement, version forte ensuite. Le serveur distingue création d’une présence et correction auditée. Les codes d’erreur métiers sont spécifiés dans les domaines et la table de transactions, sans fuite d’occupations privées."
+        }
+      ],
+      "meaning": "Repérage textuel source avant modification ; compléter avec contrats/registre dans le diff."
+    },
+    {
+      "id": "V35-02",
+      "sourceFile": "02-experience/design-system.md",
+      "sha256": "3e14b1b09f5f2353c249c4466172f0ed3434983fb6a4968f755cbb37fa009191",
+      "matches": [
+        {
+          "line": 135,
+          "text": "Les marques d’école personnalisent logo, accent et coordonnées. Elles ne changent ni la sémantique d’une alerte, ni la visibilité du refus GPS, ni les noms de statut. Vérifier à nouveau tous les contrastes après adaptation d’accent ; ne pas hériter automatiquement du contraste mesuré pour la couleur de référence."
+        }
+      ],
+      "meaning": "Repérage textuel source avant modification ; compléter avec contrats/registre dans le diff."
+    },
+    {
+      "id": "V35-03",
+      "sourceFile": "03-fonctionnel/extensions.md",
+      "sha256": "f82f60c3e4f5c635bb213f0df2db0194f670bd016df16ebbad6d7b5b8bf2fad4",
+      "matches": [
+        {
+          "line": 18,
+          "text": "Préparer des objectifs et des points manuels est possible dans le cœur. Une bibliothèque de modèles, partage inter-moniteurs et transformation d’un trajet personnel en itinéraire constituent une extension : revue de confidentialité, gestion de versions, nettoyage des habitudes/adresses et droits de partage. Retirer un nom ne suffit pas à garantir l’anonymat. Aucune conservation supplémentaire des traces n’est autorisée par anticipation de cette extension."
+        }
+      ],
+      "meaning": "Repérage textuel source avant modification ; compléter avec contrats/registre dans le diff."
+    },
+    {
+      "id": "V35-04",
+      "sourceFile": "03-fonctionnel/calendrier-notifications.md",
+      "sha256": "a81d0d38ea27969594071b7e9879e2b5cfcfa66829974e241bd88d429e30d077",
+      "matches": [
+        {
+          "line": 18,
+          "text": "Par défaut, les membres élèves actifs de l’école voient les cours publiés de l’audience scolaire, y compris les personnes déjà formées, avec filtre « Afficher les cours disponibles ». Au pilote, l’école peut borner une audience par catégorie de formation active validée ; cet aperçu précise la règle. Le site et la langue restent des informations/filtres de consultation, pas des critères de ciblage tant qu’aucune préférence élève n’est définie. Aucune segmentation par trajet ou localisation n’est utilisée."
+        },
+        {
+          "line": 84,
+          "text": "Le filtre d’audience scolaire peut porter sur les catégories des Training actives et validées. ALL_ACTIVE_LEARNERS n’applique aucun filtre ; FILTERED exige au moins une catégorie. Les dimensions site et langue n’ont pas de source d’affiliation élève définie dans le modèle actuel : elles ne servent donc pas à exclure un élève ni à cibler un push au pilote. Les champs API `CourseAudience.siteIds` et `languages` restent des tableaux vides réservés, refusés s’ils sont remplis. Le site et la langue du cours restent affichables et filtrables dans la consultation des offres. Leur activation comme ciblage exigera une préférence scolaire explicite et documentée, jamais une déduction depuis le GPS, l’adresse ou la langue de l’interface."
+        }
+      ],
+      "meaning": "Repérage textuel source avant modification ; compléter avec contrats/registre dans le diff."
+    },
+    {
+      "id": "V35-05",
+      "sourceFile": "03-fonctionnel/regles-etats.md",
+      "sha256": "ed21f83e34c1ee5109b022d92477cbcc84506f5adcea130bc66c71ef2119675a",
+      "matches": [],
+      "meaning": "Repérage textuel source avant modification ; compléter avec contrats/registre dans le diff."
+    },
+    {
+      "id": "V35-06",
+      "sourceFile": "03-fonctionnel/regles-etats.md",
+      "sha256": "ed21f83e34c1ee5109b022d92477cbcc84506f5adcea130bc66c71ef2119675a",
+      "matches": [
+        {
+          "line": 38,
+          "text": "Une école active garde au moins un administrateur actif. Retirer le dernier est refusé ; transfert et désactivation utilisent un verrou d’école. Un administrateur ne reçoit pas automatiquement les droits pédagogiques d’un moniteur."
+        },
+        {
+          "line": 71,
+          "text": "Un créneau appartient aux ouvertures des ressources nécessaires et ne recoupe pas de fermeture. Les leçons et occurrences de cours ne passent pas minuit local au pilote. Modifier des ouvertures ou une fermeture ne supprime aucun engagement : refuser et retourner les impacts autorisés à traiter. Les sessions de cours possèdent un horaire explicite qui peut être distinct des heures de conduite, sans contourner une indisponibilité du moniteur ou de la salle. **Application :** moteur de planning ; F04 F05 F18."
+        },
+        {
+          "line": 99,
+          "text": "Le déplacement d’une leçon remplace horaire, occupation et version dans une transaction ; si refus, ancien créneau conservé et aucun avis envoyé. Pour les leçons individuelles, l’accord est recueilli hors app au pilote. Les changements d’une série collective suivent R62 : impacts complets, nouvelle version acceptée par les participants, places maintenues pendant reconfirmation. **Application :** moteur de planning et outbox ; F05 F11 F18."
+        },
+        {
+          "line": 123,
+          "text": "Échelle proposée : DISCOVERING, GUIDED, INDEPENDENT ; NOT_OBSERVED n’est pas une note et ne compte pas comme zéro. Chaque observation réfère une compétence et une version de référentiel, un contexte et une date de leçon. Une révision contient au plus une observation par compétence ; les doublons sont refusés et non moyennés. Aucun score global, moyenne inter-permis, inférence de réussite à l’examen ou validation automatique."
+        },
+        {
+          "line": 211,
+          "text": "Rendez-vous et événements : instants UTC + identifiant IANA de l’école. Dates civiles de naissance/validité : DATE, jamais minuit UTC imposé. Europe/Zurich par défaut proposé. Une heure locale inexistante est refusée ; une heure ambiguë demande un choix d’offset. Un voyage du téléphone ne déplace pas le rendez-vous scolaire."
+        }
+      ],
+      "meaning": "Repérage textuel source avant modification ; compléter avec contrats/registre dans le diff."
+    },
+    {
+      "id": "V35-07",
+      "sourceFile": "03-fonctionnel/calendrier-notifications.md",
+      "sha256": "a81d0d38ea27969594071b7e9879e2b5cfcfa66829974e241bd88d429e30d077",
+      "matches": [
+        {
+          "line": 59,
+          "text": "## Résilience et préférences"
+        }
+      ],
+      "meaning": "Repérage textuel source avant modification ; compléter avec contrats/registre dans le diff."
+    },
+    {
+      "id": "V35-08",
+      "sourceFile": "05-realisation/roadmap-backlog.md",
+      "sha256": "56aa320199c94df976b05df3880b7a44b87553aad4a761f594e4a16b3cd0f192",
+      "matches": [
+        {
+          "line": 68,
+          "text": "Chat, encaissement en ligne, comptabilité fiscale, réservation autonome de leçons individuelles, liste d’attente, rattrapage autonome, scores de conduite, BI avancée et relais GPS live. Ces limites ne repoussent ni web, ni tablettes, ni onboarding, ni auto-inscription collective. Voir [extensions](../03-fonctionnel/extensions.md)."
+        }
+      ],
+      "meaning": "Repérage textuel source avant modification ; compléter avec contrats/registre dans le diff."
+    },
+    {
+      "id": "V35-09",
+      "sourceFile": "03-fonctionnel/gps-replay.md",
+      "sha256": "9ef793a6b9a276682907596fb8bd2026377e9c302a4dbee1c5d6d503a4910dbe",
+      "matches": [
+        {
+          "line": 103,
+          "text": "**Recette appareil :** T192–T199 ; qualification technique avant choix définitif du client, matériel réel, paysage/portrait/fenêtrage, permissions, verrouillage, interruption système, batterie et réseau. Aucun test appareil n’est revendiqué ici."
+        }
+      ],
+      "meaning": "Repérage textuel source avant modification ; compléter avec contrats/registre dans le diff."
+    },
+    {
+      "id": "V35-10",
+      "sourceFile": "06-gouvernance/changements-v3-4.md",
+      "sha256": "d7645dc46e0c1dec557e6f211f34eed053add6daa32ca69d81cf0d12b6cf3a35",
+      "matches": [
+        {
+          "line": 54,
+          "text": "| DM06 | **Blocage avant publication publique** | Contrat et parcours de suppression globale du compte, pas simple archivage scolaire. |"
+        }
+      ],
+      "meaning": "Repérage textuel source avant modification ; compléter avec contrats/registre dans le diff."
+    },
+    {
+      "id": "V35-11",
+      "sourceFile": "06-gouvernance/tracabilite.md",
+      "sha256": "05932a36c3f5b62d0e92275eec0fe133eb3d90d2a5528f59c17702caa780b6cd",
+      "matches": [
+        {
+          "line": 25,
+          "text": "| F14 | [J10](../02-experience/parcours.md#j10), [J24](../02-experience/parcours.md#j24), [J25](../02-experience/parcours.md#j25) | [E13](../02-experience/ecrans.md#e13), [E18](../02-experience/ecrans.md#e18), [E35](../02-experience/ecrans.md#e35), [E36](../02-experience/ecrans.md#e36), [E37](../02-experience/ecrans.md#e37), [E46](../02-experience/ecrans.md#e46) | [Spécification](../03-fonctionnel/hors-ligne-vie-privee.md#f14) | G2 |"
+        },
+        {
+          "line": 53,
+          "text": "| F14 | [R01](../03-fonctionnel/regles-etats.md#r01), [R29](../03-fonctionnel/regles-etats.md#r29), [R30](../03-fonctionnel/regles-etats.md#r30), [R32](../03-fonctionnel/regles-etats.md#r32), [R34](../03-fonctionnel/regles-etats.md#r34), [R87](../03-fonctionnel/regles-etats.md#r87), [R88](../03-fonctionnel/regles-etats.md#r88), [R89](../03-fonctionnel/regles-etats.md#r89), [R90](../03-fonctionnel/regles-etats.md#r90), [R91](../03-fonctionnel/regles-etats.md#r91), [R96](../03-fonctionnel/regles-etats.md#r96), [R12](../03-fonctionnel/regles-etats.md#r12), [R19](../03-fonctionnel/regles-etats.md#r19), [R48](../03-fonctionnel/regles-etats.md#r48) | PrivacyRequest, RetentionPolicyVersion, DeletionTombstone, Export | AP17, AP57, AP64, AP76, AP77, AP78, AP79, AP80, AP81, AP82, AP83, AP91, AP182, AP184, AP185 |"
+        },
+        {
+          "line": 120,
+          "text": "| [T053](../05-realisation/tests-recette.md#t053) | F14 | [R01](../03-fonctionnel/regles-etats.md#r01), [R29](../03-fonctionnel/regles-etats.md#r29), [R30](../03-fonctionnel/regles-etats.md#r30), [R32](../03-fonctionnel/regles-etats.md#r32), [R34](../03-fonctionnel/regles-etats.md#r34) | NOT_EXECUTED |"
+        },
+        {
+          "line": 121,
+          "text": "| [T054](../05-realisation/tests-recette.md#t054) | F14 | [R01](../03-fonctionnel/regles-etats.md#r01), [R29](../03-fonctionnel/regles-etats.md#r29), [R30](../03-fonctionnel/regles-etats.md#r30), [R32](../03-fonctionnel/regles-etats.md#r32), [R34](../03-fonctionnel/regles-etats.md#r34) | NOT_EXECUTED |"
+        },
+        {
+          "line": 122,
+          "text": "| [T055](../05-realisation/tests-recette.md#t055) | F14 | [R01](../03-fonctionnel/regles-etats.md#r01), [R29](../03-fonctionnel/regles-etats.md#r29), [R30](../03-fonctionnel/regles-etats.md#r30), [R32](../03-fonctionnel/regles-etats.md#r32), [R34](../03-fonctionnel/regles-etats.md#r34) | NOT_EXECUTED |"
+        }
+      ],
+      "meaning": "Repérage textuel source avant modification ; compléter avec contrats/registre dans le diff."
+    },
+    {
+      "id": "V35-05-schema",
+      "sourceFile": "04-technique/openapi.yaml",
+      "schema": "PermitCommand",
+      "before": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "documentId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "physicalSeen": {
+            "type": "boolean"
+          },
+          "categoryCode": {
+            "type": "string"
+          },
+          "validUntil": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APPROVED",
+              "REJECTED"
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "operationId",
+          "physicalSeen",
+          "categoryCode",
+          "decision"
+        ]
+      }
+    },
+    {
+      "id": "V35-11-phases",
+      "sourceFile": "annexes/traceabilite.json",
+      "before": [
+        {
+          "feature": "F01",
+          "phase": "G1→G2"
+        },
+        {
+          "feature": "F02",
+          "phase": "G1→G2"
+        },
+        {
+          "feature": "F03",
+          "phase": "G1→G2"
+        },
+        {
+          "feature": "F04",
+          "phase": "G1→G2"
+        },
+        {
+          "feature": "F05",
+          "phase": "G1→G2"
+        },
+        {
+          "feature": "F06",
+          "phase": "G1→G2"
+        },
+        {
+          "feature": "F07",
+          "phase": "G1→G2"
+        },
+        {
+          "feature": "F08",
+          "phase": "G1→G2"
+        },
+        {
+          "feature": "F09",
+          "phase": "G2"
+        },
+        {
+          "feature": "F10",
+          "phase": "G1→G2"
+        },
+        {
+          "feature": "F11",
+          "phase": "G1→G2"
+        },
+        {
+          "feature": "F12",
+          "phase": "G2"
+        },
+        {
+          "feature": "F13",
+          "phase": "G1→G2"
+        },
+        {
+          "feature": "F14",
+          "phase": "G2"
+        },
+        {
+          "feature": "F15",
+          "phase": "G0→G3"
+        },
+        {
+          "feature": "F16",
+          "phase": "G0→G3"
+        },
+        {
+          "feature": "F17",
+          "phase": "G1→G3"
+        },
+        {
+          "feature": "F18",
+          "phase": "G0→G3"
+        },
+        {
+          "feature": "F19",
+          "phase": "G1→G3"
+        },
+        {
+          "feature": "F20",
+          "phase": "G1"
+        },
+        {
+          "feature": "F21",
+          "phase": "G1→G3"
+        },
+        {
+          "feature": "F22",
+          "phase": "G1→G4"
+        },
+        {
+          "feature": "F23",
+          "phase": "G4"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "version": "3.12",
+  "scope": "DOCUMENTARY_READER_ONLY",
+  "loadingMethod": "Playwright set_content; links checked structurally; local file URLs blocked by environment",
+  "checks": [
+    {
+      "name": "79_markdown_documents",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "unique_reader_ids",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "reader_links_resolve",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "all_documents_navigated",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "search_returns_relevant_subset",
+      "passed": true,
+      "detail": 15
+    },
+    {
+      "name": "design_group_present",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "reader_body_no_horizontal_overflow",
+      "passed": true,
+      "detail": [
+        {
+          "width": 1440,
+          "bodyFits": true,
+          "titleTop": 182.6875,
+          "headerBottom": 78
+        },
+        {
+          "width": 834,
+          "bodyFits": true,
+          "titleTop": 159.6875,
+          "headerBottom": 78
+        },
+        {
+          "width": 390,
+          "bodyFits": true,
+          "titleTop": 143,
+          "headerBottom": 72
+        }
+      ]
+    },
+    {
+      "name": "titles_not_hidden_by_header",
+      "passed": true,
+      "detail": [
+        {
+          "width": 1440,
+          "bodyFits": true,
+          "titleTop": 182.6875,
+          "headerBottom": 78
+        },
+        {
+          "width": 834,
+          "bodyFits": true,
+          "titleTop": 159.6875,
+          "headerBottom": 78
+        },
+        {
+          "width": 390,
+          "bodyFits": true,
+          "titleTop": 143,
+          "headerBottom": 72
+        }
+      ]
+    },
+    {
+      "name": "no_reader_js_errors",
+      "passed": true,
+      "detail": []
+    }
+  ],
+  "passed": true,
+  "errors": [],
+  "nativeTestsExecuted": false,
+  "limits": [
+    "No native UI, screen reader or user tests.",
+    "Viewport dimensions do not demonstrate physical-device qualification."
+  ]
+}

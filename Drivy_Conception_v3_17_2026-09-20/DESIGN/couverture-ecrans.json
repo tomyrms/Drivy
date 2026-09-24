@@ -1,0 +1,1108 @@
+{
+  "version": "3.17",
+  "screenCount": 49,
+  "illustratedScreens": 23,
+  "coverage": [
+    {
+      "screen": "E01",
+      "title": "Connexion",
+      "family": "Formulaire / accueil",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e01",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS09",
+        "DS10"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E02",
+      "title": "Choix d’école et acceptation",
+      "family": "Formulaire / accueil",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e02",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS11",
+        "DS25"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E03",
+      "title": "Agenda du personnel",
+      "family": "Agenda / engagement / séance",
+      "visuals": [
+        "APP02",
+        "VIS11"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e03",
+      "historicalVisuals": [
+        "VIS11"
+      ],
+      "currentVisuals": [
+        "APP02"
+      ],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS04",
+        "DS14",
+        "DS22"
+      ],
+      "currentRoutes": [
+        "agenda"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E04",
+      "title": "Leçon de référence",
+      "family": "Agenda / engagement / séance",
+      "visuals": [
+        "APP05",
+        "VIS01",
+        "VIS03",
+        "VIS15"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e04",
+      "historicalVisuals": [
+        "VIS01",
+        "VIS03",
+        "VIS15"
+      ],
+      "currentVisuals": [
+        "APP05"
+      ],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS04",
+        "DS06",
+        "DS17",
+        "DS25"
+      ],
+      "currentRoutes": [
+        "lesson"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E05",
+      "title": "Planifier ou déplacer",
+      "family": "Agenda / engagement / séance",
+      "visuals": [
+        "APP06"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e05",
+      "historicalVisuals": [],
+      "currentVisuals": [
+        "APP06"
+      ],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS06",
+        "DS11",
+        "DS15"
+      ],
+      "currentRoutes": [
+        "planning"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E06",
+      "title": "Rechercher une personne à accompagner",
+      "family": "Agenda / engagement / séance",
+      "visuals": [
+        "APP03"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e06",
+      "historicalVisuals": [],
+      "currentVisuals": [
+        "APP03"
+      ],
+      "components": [
+        "DS01",
+        "DS03",
+        "DS09",
+        "DS15",
+        "DS25"
+      ],
+      "currentRoutes": [
+        "students"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E07",
+      "title": "Dossier et formation",
+      "family": "Dossier / liste / détail",
+      "visuals": [
+        "APP04",
+        "VIS12"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e07",
+      "historicalVisuals": [
+        "VIS12"
+      ],
+      "currentVisuals": [
+        "APP04"
+      ],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS06",
+        "DS12",
+        "DS25"
+      ],
+      "currentRoutes": [
+        "student"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E08",
+      "title": "Rédiger et prévisualiser un bilan",
+      "family": "Dossier / liste / détail",
+      "visuals": [
+        "APP07",
+        "APP08",
+        "VIS07"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e08",
+      "historicalVisuals": [
+        "VIS07"
+      ],
+      "currentVisuals": [
+        "APP07",
+        "APP08"
+      ],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS07",
+        "DS08",
+        "DS11",
+        "DS15",
+        "DS16"
+      ],
+      "currentRoutes": [
+        "report",
+        "preview"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E09",
+      "title": "Lire un bilan partagé",
+      "family": "Dossier / liste / détail",
+      "visuals": [
+        "APP09",
+        "VIS04"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e09",
+      "historicalVisuals": [
+        "VIS04"
+      ],
+      "currentVisuals": [
+        "APP09"
+      ],
+      "components": [
+        "DS01",
+        "DS07",
+        "DS12",
+        "DS16",
+        "DS18"
+      ],
+      "currentRoutes": [
+        "shared"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E10",
+      "title": "Documents utiles",
+      "family": "Dossier / liste / détail",
+      "visuals": [
+        "APP10"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e10",
+      "historicalVisuals": [],
+      "currentVisuals": [
+        "APP10"
+      ],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS12",
+        "DS15",
+        "DS25"
+      ],
+      "currentRoutes": [
+        "documents"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E11",
+      "title": "Journal d’un compte de prestation",
+      "family": "État / journal / opération sensible",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e11",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS03",
+        "DS11",
+        "DS13",
+        "DS15"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E12",
+      "title": "Disponibilités",
+      "family": "Agenda / engagement / séance",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e12",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS14"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E13",
+      "title": "École et responsabilités",
+      "family": "État / journal / opération sensible",
+      "visuals": [
+        "APP13"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e13",
+      "historicalVisuals": [],
+      "currentVisuals": [
+        "APP13"
+      ],
+      "components": [
+        "DS01",
+        "DS05",
+        "DS22",
+        "DS25"
+      ],
+      "currentRoutes": [
+        "school"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E14",
+      "title": "Mes leçons, élève",
+      "family": "Dossier / liste / détail",
+      "visuals": [
+        "APP14",
+        "VIS15"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e14",
+      "historicalVisuals": [
+        "VIS15"
+      ],
+      "currentVisuals": [
+        "APP14"
+      ],
+      "components": [
+        "DS01",
+        "DS04",
+        "DS06",
+        "DS22",
+        "DS25"
+      ],
+      "currentRoutes": [
+        "learner"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E15",
+      "title": "Mon parcours",
+      "family": "Dossier / liste / détail",
+      "visuals": [
+        "APP16"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e15",
+      "historicalVisuals": [],
+      "currentVisuals": [
+        "APP16"
+      ],
+      "components": [
+        "DS01",
+        "DS06",
+        "DS07",
+        "DS16",
+        "DS25"
+      ],
+      "currentRoutes": [
+        "progress"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E16",
+      "title": "Invitations et équipe",
+      "family": "Dossier / liste / détail",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e16",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS03",
+        "DS05",
+        "DS11",
+        "DS25"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E17",
+      "title": "Brouillons et opérations en attente",
+      "family": "État / journal / opération sensible",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e17",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS08",
+        "DS11",
+        "DS25"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E18",
+      "title": "Demandes concernant mes données",
+      "family": "État / journal / opération sensible",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e18",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS11",
+        "DS15"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E19",
+      "title": "Compte et préférences",
+      "family": "État / journal / opération sensible",
+      "visuals": [
+        "APP11"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e19",
+      "historicalVisuals": [],
+      "currentVisuals": [
+        "APP11"
+      ],
+      "components": [
+        "DS01",
+        "DS03",
+        "DS15",
+        "DS22",
+        "DS25"
+      ],
+      "currentRoutes": [
+        "account"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E20",
+      "title": "Contrôle d’une pièce de permis",
+      "family": "État / journal / opération sensible",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e20",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS03",
+        "DS11",
+        "DS12"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E21",
+      "title": "Conflit à résoudre",
+      "family": "État / journal / opération sensible",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e21",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS08",
+        "DS10",
+        "DS11"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E22",
+      "title": "Séance, accueil du personnel",
+      "family": "Agenda / engagement / séance",
+      "visuals": [
+        "APP01",
+        "VIS01"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e22",
+      "historicalVisuals": [
+        "VIS01"
+      ],
+      "currentVisuals": [
+        "APP01"
+      ],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS04",
+        "DS08",
+        "DS22",
+        "DS25"
+      ],
+      "currentRoutes": [
+        "home"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E23",
+      "title": "Carte de séance et capture",
+      "family": "Carte / collecte / replay",
+      "visuals": [
+        "APP17",
+        "APP18",
+        "APP19",
+        "VIS02",
+        "VIS10"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e23",
+      "historicalVisuals": [
+        "VIS02",
+        "VIS10"
+      ],
+      "currentVisuals": [
+        "APP17",
+        "APP18",
+        "APP19"
+      ],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS07",
+        "DS08",
+        "DS15",
+        "DS17",
+        "DS18"
+      ],
+      "currentRoutes": [
+        "capture",
+        "categories",
+        "status"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E24",
+      "title": "Replay et observations",
+      "family": "Carte / collecte / replay",
+      "visuals": [
+        "APP20",
+        "VIS04"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e24",
+      "historicalVisuals": [
+        "VIS04"
+      ],
+      "currentVisuals": [
+        "APP20"
+      ],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS07",
+        "DS15",
+        "DS18"
+      ],
+      "currentRoutes": [
+        "replay"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E25",
+      "title": "Agenda élève, engagements et offres",
+      "family": "Agenda / engagement / séance",
+      "visuals": [
+        "APP15",
+        "VIS05"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e25",
+      "historicalVisuals": [
+        "VIS05"
+      ],
+      "currentVisuals": [
+        "APP15"
+      ],
+      "components": [
+        "DS01",
+        "DS04",
+        "DS06",
+        "DS14",
+        "DS19",
+        "DS22"
+      ],
+      "currentRoutes": [
+        "learner-agenda"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E26",
+      "title": "Fiche d’une série et inscription",
+      "family": "Agenda / engagement / séance",
+      "visuals": [
+        "VIS06"
+      ],
+      "status": "HISTORICAL_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e26",
+      "historicalVisuals": [
+        "VIS06"
+      ],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS11",
+        "DS19",
+        "DS20"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E27",
+      "title": "Composer et publier un cours",
+      "family": "Agenda / engagement / séance",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e27",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS11",
+        "DS20"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E28",
+      "title": "Inscrits et présences",
+      "family": "Agenda / engagement / séance",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e28",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS05",
+        "DS11",
+        "DS20",
+        "DS25"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E29",
+      "title": "Catalogue et formules d’école",
+      "family": "Dossier / liste / détail",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e29",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS03",
+        "DS06",
+        "DS21",
+        "DS25"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E30",
+      "title": "Mes achats et droits",
+      "family": "Dossier / liste / détail",
+      "visuals": [
+        "VIS09"
+      ],
+      "status": "HISTORICAL_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e30",
+      "historicalVisuals": [
+        "VIS09"
+      ],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS13",
+        "DS21"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E31",
+      "title": "Reconfirmer une série modifiée",
+      "family": "Agenda / engagement / séance",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e31",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS11",
+        "DS20"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E32",
+      "title": "Centre de notifications",
+      "family": "État / journal / opération sensible",
+      "visuals": [
+        "APP12"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e32",
+      "historicalVisuals": [],
+      "currentVisuals": [
+        "APP12"
+      ],
+      "components": [
+        "DS01",
+        "DS05",
+        "DS22",
+        "DS25"
+      ],
+      "currentRoutes": [
+        "notifications"
+      ],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E33",
+      "title": "Vue d’ensemble web",
+      "family": "Dossier / liste / détail",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e33",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS22",
+        "DS24",
+        "DS25"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E34",
+      "title": "Liste détaillée des élèves",
+      "family": "Dossier / liste / détail",
+      "visuals": [
+        "VIS12"
+      ],
+      "status": "HISTORICAL_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e34",
+      "historicalVisuals": [
+        "VIS12"
+      ],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS03",
+        "DS06",
+        "DS11",
+        "DS25"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E35",
+      "title": "Dossier élève sur bureau",
+      "family": "Dossier / liste / détail",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e35",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS06",
+        "DS12",
+        "DS13",
+        "DS16",
+        "DS25"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E36",
+      "title": "Prévisualisation et résultat d’archivage",
+      "family": "État / journal / opération sensible",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e36",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS10",
+        "DS11"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E37",
+      "title": "Restauration du dossier",
+      "family": "État / journal / opération sensible",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e37",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS08",
+        "DS11"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E38",
+      "title": "Configuration guidée de l’école",
+      "family": "Formulaire / accueil",
+      "visuals": [
+        "VIS14"
+      ],
+      "status": "HISTORICAL_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e38",
+      "historicalVisuals": [
+        "VIS14"
+      ],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS06",
+        "DS23"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E39",
+      "title": "Préparation et activation de l’école",
+      "family": "Formulaire / accueil",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e39",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS05",
+        "DS11",
+        "DS23"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E40",
+      "title": "Identité et coordonnées élève",
+      "family": "Formulaire / accueil",
+      "visuals": [
+        "VIS08"
+      ],
+      "status": "HISTORICAL_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e40",
+      "historicalVisuals": [
+        "VIS08"
+      ],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS23"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E41",
+      "title": "Formations souhaitées et acquis déclarés",
+      "family": "Formulaire / accueil",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e41",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS03",
+        "DS06",
+        "DS23"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E42",
+      "title": "Comprendre le GPS et les notifications",
+      "family": "Formulaire / accueil",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e42",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS05",
+        "DS23"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E43",
+      "title": "Prochaines étapes personnelles",
+      "family": "Formulaire / accueil",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e43",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS05",
+        "DS23",
+        "DS25"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E44",
+      "title": "Préparation de l’appareil GPS",
+      "family": "Carte / collecte / replay",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e44",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS05",
+        "DS17",
+        "DS23"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E45",
+      "title": "Activité et indicateurs détaillés",
+      "family": "Dossier / liste / détail",
+      "visuals": [
+        "VIS13"
+      ],
+      "status": "HISTORICAL_VARIANT_ILLUSTRATED",
+      "source": "02-experience/ecrans.md#e45",
+      "historicalVisuals": [
+        "VIS13"
+      ],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS03",
+        "DS24"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E46",
+      "title": "Export de gestion",
+      "family": "État / journal / opération sensible",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e46",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS11",
+        "DS24"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E47",
+      "title": "Accueil personnel du moniteur",
+      "family": "Formulaire / accueil",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e47",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS23"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E48",
+      "title": "Politique de profil et paramètres détaillés",
+      "family": "Formulaire / accueil",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e48",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS03",
+        "DS06",
+        "DS25"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    },
+    {
+      "screen": "E49",
+      "title": "Supprimer mon compte Drivy et suivre la demande",
+      "family": "État / journal / opération sensible",
+      "visuals": [],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "source": "02-experience/ecrans.md#e49",
+      "historicalVisuals": [],
+      "currentVisuals": [],
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS08",
+        "DS10",
+        "DS11",
+        "DS15"
+      ],
+      "currentRoutes": [],
+      "nativeStatus": "NOT_EXECUTED"
+    }
+  ],
+  "currentScreens": 17,
+  "currentCompositions": 20,
+  "diagnosticCompositions": 1,
+  "coverageMeaning": "At least one represented variant, not all states, roles or product workflows."
+}

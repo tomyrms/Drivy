@@ -1,0 +1,409 @@
+{
+  "version": "3.6",
+  "scope": "DOCUMENTARY_CHECKS_ONLY",
+  "productTestsExecuted": false,
+  "checks": [
+    {
+      "check": "Current_contract_version",
+      "passed": true,
+      "detail": "3.6.0"
+    },
+    {
+      "check": "Public_text_selection_explicit",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Published_text_has_no_geographic_identifier",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Final_report_carries_text_snapshot",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Direct_delivery_is_not_a_lesson",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Delivery_command_owns_no_actor_or_learner",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Course_close_contract_matches_decision",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Explicit_pack_pricing_PackOfferCommand",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Explicit_pack_pricing_PackOfferVersion",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Purchase_snapshots_preserved",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "No_customer_price_in_purchase_command",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Preview_pagination_global_owner_scope",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Preview_first_page_bounded",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Preview_total_not_artificially_capped",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Deletion_receipt_does_not_restore_session",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Trace_contract_version_matches",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Trace_current_document_version",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Feature_ids_preserved",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "New_test_ids_contiguous",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "No_product_test_promoted_to_executed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Catalogue_covers_all_features",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "No_active_claim_global_contract_absent",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Single_global_deletion_mobile_section",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC143",
+      "passed": true,
+      "detail": "Publier texte sans capture"
+    },
+    {
+      "check": "Schema_case_SC144",
+      "passed": true,
+      "detail": "Sélection textuelle omise"
+    },
+    {
+      "check": "Schema_case_SC145",
+      "passed": true,
+      "detail": "Référence textuelle exactement répétée"
+    },
+    {
+      "check": "Schema_case_SC146",
+      "passed": true,
+      "detail": "Version textuelle zéro"
+    },
+    {
+      "check": "Schema_case_SC147",
+      "passed": true,
+      "detail": "Snapshot textuel autonome"
+    },
+    {
+      "check": "Schema_case_SC148",
+      "passed": true,
+      "detail": "Ancrage GPS interdit au snapshot textuel"
+    },
+    {
+      "check": "Schema_case_SC149",
+      "passed": true,
+      "detail": "Texte seulement espaces"
+    },
+    {
+      "check": "Schema_case_SC150",
+      "passed": true,
+      "detail": "Segment vide explicite"
+    },
+    {
+      "check": "Schema_case_SC151",
+      "passed": true,
+      "detail": "Fausse dernière séquence zéro"
+    },
+    {
+      "check": "Schema_case_SC152",
+      "passed": true,
+      "detail": "Segment vide annonçant un chunk"
+    },
+    {
+      "check": "Schema_case_SC153",
+      "passed": true,
+      "detail": "Segment mesuré sans chunk"
+    },
+    {
+      "check": "Schema_case_SC154",
+      "passed": true,
+      "detail": "Segment non vide cohérent en forme"
+    },
+    {
+      "check": "Schema_case_SC155",
+      "passed": true,
+      "detail": "Séquence absente malgré un point"
+    },
+    {
+      "check": "Schema_case_SC156",
+      "passed": true,
+      "detail": "Remise documentée"
+    },
+    {
+      "check": "Schema_case_SC157",
+      "passed": true,
+      "detail": "Remise quantité zéro"
+    },
+    {
+      "check": "Schema_case_SC158",
+      "passed": true,
+      "detail": "Remise sans confirmation réelle"
+    },
+    {
+      "check": "Schema_case_SC159",
+      "passed": true,
+      "detail": "Mouvement de remise sans réservation fictive"
+    },
+    {
+      "check": "Schema_case_SC160",
+      "passed": true,
+      "detail": "Évidence de remise sur HOLD"
+    },
+    {
+      "check": "Schema_case_SC161",
+      "passed": true,
+      "detail": "Remise directe liée à réservation inventée"
+    },
+    {
+      "check": "Schema_case_SC162",
+      "passed": true,
+      "detail": "Contourner un constat de conduite par remise"
+    },
+    {
+      "check": "Schema_case_SC163",
+      "passed": true,
+      "detail": "Clôture sans droit à libérer"
+    },
+    {
+      "check": "Schema_case_SC164",
+      "passed": true,
+      "detail": "Clôture omettant la revue des droits"
+    },
+    {
+      "check": "Schema_case_SC165",
+      "passed": true,
+      "detail": "Libération sélectionnée explicitement"
+    },
+    {
+      "check": "Schema_case_SC166",
+      "passed": true,
+      "detail": "Libération identique répétée"
+    },
+    {
+      "check": "Schema_case_SC167",
+      "passed": true,
+      "detail": "Pas de présence via décision de clôture"
+    },
+    {
+      "check": "Schema_case_SC168",
+      "passed": true,
+      "detail": "Cycle de libération zéro"
+    },
+    {
+      "check": "Schema_case_SC169",
+      "passed": true,
+      "detail": "Version lot zéro"
+    },
+    {
+      "check": "Schema_case_SC170",
+      "passed": true,
+      "detail": "Ligne de prix de base"
+    },
+    {
+      "check": "Schema_case_SC171",
+      "passed": true,
+      "detail": "Libellé de prix vide"
+    },
+    {
+      "check": "Schema_case_SC172",
+      "passed": true,
+      "detail": "Supplément d’option explicite"
+    },
+    {
+      "check": "Schema_case_SC173",
+      "passed": true,
+      "detail": "Supplément négatif non prévu"
+    },
+    {
+      "check": "Schema_case_SC174",
+      "passed": true,
+      "detail": "Prix dérogatoire motivé"
+    },
+    {
+      "check": "Schema_case_SC175",
+      "passed": true,
+      "detail": "Dérogation sans motif"
+    },
+    {
+      "check": "Schema_case_SC176",
+      "passed": true,
+      "detail": "Aperçu sans école"
+    },
+    {
+      "check": "Schema_case_SC177",
+      "passed": true,
+      "detail": "Aperçu sans total ni pagination"
+    },
+    {
+      "check": "Schema_case_SC178",
+      "passed": true,
+      "detail": "Total nul contredit par une appartenance"
+    },
+    {
+      "check": "Schema_case_SC179",
+      "passed": true,
+      "detail": "Première page autorisée, total supérieur"
+    },
+    {
+      "check": "Schema_case_SC180",
+      "passed": true,
+      "detail": "Curseur vide"
+    },
+    {
+      "check": "Schema_case_SC181",
+      "passed": true,
+      "detail": "Dernière page du manifeste"
+    },
+    {
+      "check": "Schema_case_SC182",
+      "passed": true,
+      "detail": "Page dépassant cent éléments"
+    },
+    {
+      "check": "Pricing_reference_model_PM01",
+      "passed": true,
+      "detail": "Base avec remise et frais offerts"
+    },
+    {
+      "check": "Pricing_reference_model_PM02",
+      "passed": true,
+      "detail": "Deux composants, un seul supplément"
+    },
+    {
+      "check": "Pricing_reference_model_PM03",
+      "passed": true,
+      "detail": "Prix convenu, catalogue conservé"
+    },
+    {
+      "check": "Pricing_reference_model_PM04",
+      "passed": true,
+      "detail": "Option inconnue"
+    },
+    {
+      "check": "Pricing_reference_model_PM05",
+      "passed": true,
+      "detail": "Option choisie deux fois"
+    },
+    {
+      "check": "Pricing_reference_model_PM06",
+      "passed": true,
+      "detail": "Clé de prix répétée avec autre montant"
+    },
+    {
+      "check": "Pricing_reference_model_PM07",
+      "passed": true,
+      "detail": "Prix d’option manquant"
+    },
+    {
+      "check": "Pricing_reference_model_PM08",
+      "passed": true,
+      "detail": "Prix de base non égal aux lignes"
+    },
+    {
+      "check": "Pricing_reference_model_PM09",
+      "passed": true,
+      "detail": "Dérogation sans droit"
+    },
+    {
+      "check": "Pricing_reference_model_PM10",
+      "passed": true,
+      "detail": "Dérogation sans justification"
+    },
+    {
+      "check": "Pricing_reference_model_PM11",
+      "passed": true,
+      "detail": "Supplément zéro explicite"
+    },
+    {
+      "check": "Pricing_reference_model_PM12",
+      "passed": true,
+      "detail": "Dépassement de la borne monétaire"
+    },
+    {
+      "check": "Pricing_reference_model_PM13",
+      "passed": true,
+      "detail": "Booleen n’est pas un montant"
+    },
+    {
+      "check": "Pricing_reference_model_PM14",
+      "passed": true,
+      "detail": "Une ligne tarifaire ne crée pas de droit"
+    }
+  ],
+  "schemaComparisonSummary": {
+    "version": "3.6",
+    "baseVersion": "3.5",
+    "scope": "SAME_FICTITIOUS_PAYLOADS_JSON_SCHEMA_ONLY",
+    "productTestsExecuted": false,
+    "caseCount": 40,
+    "previouslyAcceptedNowRejected": 6
+  },
+  "referenceModelCases": 14,
+  "passed": true,
+  "errorCount": 0,
+  "errors": [],
+  "limitations": [
+    "No Swift build, PostgreSQL transaction, permission, provider or actual deletion was executed.",
+    "JSON shape and reference calculation do not demonstrate all semantic correctness.",
+    "Retentions, school commercial policy, last-admin procedure and device qualification remain decisions or future tests."
+  ]
+}

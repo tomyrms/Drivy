@@ -1,0 +1,397 @@
+{
+  "baseline": "Drivy_Dossier_Conception_v3_2026-09-19.zip",
+  "meaning": "Extraits de repérage du dossier V3 reçu ; les interprétations et corrections sont explicites. Pas preuve de défaut exécuté dans une application.",
+  "findings": [
+    {
+      "id": "AUD-01",
+      "title": "Activation initiale de l’école",
+      "classification": "Bloquant de conception",
+      "baselineFile": "03-fonctionnel/onboarding.md",
+      "baselineSha256": "bed8baa2a62a881a5f275dc42c05a27fc2814f3d258e9372da99ea1a812ca284",
+      "locatingTerm": "CAN_USE_WORKSPACE",
+      "baselineSnippets": [
+        {
+          "startLine": 40,
+          "endLine": 43,
+          "text": "\n`CAN_USE_WORKSPACE` exige école ACTIVE, responsable et contact, notice et politique de données validées. `CAN_PLAN_LESSON` ajoute une offre/durée/prix/référentiel cohérents et une affectation. `CAN_CAPTURE` ajoute les conditions GPS et un appareil qualifié ; il reste faux lorsque le module est désactivé. `CAN_PUBLISH_COURSE` ajoute série, profil, formateur, salle et règles de capacité. Aucune coche d’interface ne remplace ces contrôles.\n\nLa validation de configuration retourne des éléments `{code, fieldPath, severity, capability, message}`. Les avertissements facultatifs ne bloquent pas. Les erreurs sont rapprochées des champs, avec navigation vers l’étape concernée. Les politiques juridiques non qualifiées ne sont pas approuvées par une simple valeur par défaut générée par Drivy."
+        }
+      ],
+      "observation": "La définition de CAN_USE_WORKSPACE exigeait une école ACTIVE, tandis que l’activation utilisait cette capacité comme préalable. La création d’une école DRAFT pouvait donc être spécifiée sans chemin d’activation cohérent.",
+      "correction": "SchoolReadiness expose activationReady et activationBlockers calculés avant la transition ; l’accès courant au workspace reste conditionné à ACTIVE. La préparation globale n’est pas une autorisation de transaction pour un élève ou appareil donné.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-02",
+      "title": "Archivage et délégation",
+      "classification": "Importante",
+      "baselineFile": "03-fonctionnel/roles-permissions.md",
+      "baselineSha256": "17924ec7328f5f4b2b2c9e8e68f60003931f120f9c3883fbb9ee10928ded0260",
+      "locatingTerm": "Archiver",
+      "baselineSnippets": [
+        {
+          "startLine": 40,
+          "endLine": 43,
+          "text": "| Voir journal d’audit scolaire | A, sans texte sensible | Ses actions pertinentes | Ses changements visibles | Export d’audit limité par finalité. |\n| Archiver formation/dossier | A | Demander via contact interne | N | Traiter leçons futures et conservation. |\n| Demander accès ou suppression de données | A pour l’école | SOI | SOI | Décision instruite, pas effacement immédiat. |\n"
+        },
+        {
+          "startLine": 95,
+          "endLine": 98,
+          "text": "| Lire profil administratif détaillé | Besoin administratif, école | Élèves affectés et champs nécessaires | Ses propres champs |\n| Archiver/restaurer F22 | Oui | MANAGE_LEARNER_ARCHIVES et affectation | Non ; demande de droits séparée |\n| Activité non financière de toute l’école | Oui | VIEW_SCHOOL_METRICS | Non |\n| Activité personnelle affectée | Si INSTRUCTOR, ou grant d’école | Oui, scope SELF | Non |"
+        }
+      ],
+      "observation": "La matrice générale et E07 réservaient l’archivage à ADMIN, alors que F22, les règles et les contrats prévoient MANAGE_LEARNER_ARCHIVES. Terminer une formation et archiver le dossier étaient également regroupés.",
+      "correction": "Les deux opérations sont séparées ; un moniteur délégué peut archiver uniquement dans son périmètre affecté, avec prévisualisation et vérification au commit. L’accès au web ne donne aucun droit supplémentaire.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-03",
+      "title": "Validation d’une formation et projection de l’équipe",
+      "classification": "Importante",
+      "baselineFile": "03-fonctionnel/roles-permissions.md",
+      "baselineSha256": "17924ec7328f5f4b2b2c9e8e68f60003931f120f9c3883fbb9ee10928ded0260",
+      "locatingTerm": "formation",
+      "baselineSnippets": [
+        {
+          "startLine": 7,
+          "endLine": 10,
+          "text": "\nRéférence : [R01 à R04](regles-etats.md#r01), [R34](regles-etats.md#r34), [R36](regles-etats.md#r36), [R37](regles-etats.md#r37). Le modèle ne reprend pas un unique rôle par personne. L’appartenance est scolaire ; les rôles sont cumulables ; l’affectation pédagogique donne accès à une formation déterminée.\n\n**ADMIN** gère l’école, les rendez-vous et les données administratives. **INSTRUCTOR** accompagne les formations qui lui sont affectées. **LEARNER** consulte et contribue à son propre parcours. Un administrateur également moniteur cumule les deux rôles, mais reste soumis à l’affectation pédagogique. Il n’existe pas de rôle parent ni secrétaire autonome au pilote ; les délégations de cours et catalogue ci-dessous sont incluses, sans partage de compte ni création d’un rôle parent."
+        },
+        {
+          "startLine": 9,
+          "endLine": 12,
+          "text": "\n**ADMIN** gère l’école, les rendez-vous et les données administratives. **INSTRUCTOR** accompagne les formations qui lui sont affectées. **LEARNER** consulte et contribue à son propre parcours. Un administrateur également moniteur cumule les deux rôles, mais reste soumis à l’affectation pédagogique. Il n’existe pas de rôle parent ni secrétaire autonome au pilote ; les délégations de cours et catalogue ci-dessous sont incluses, sans partage de compte ni création d’un rôle parent.\n\nLe support de la plateforme n’est pas administrateur permanent de toutes les écoles. Un accès exceptionnel nécessite demande motivée, durée limitée, approbation scolaire et trace. L’accès aux documents de permis et bilans n’est pas nécessaire pour diagnostiquer une simple erreur réseau."
+        }
+      ],
+      "observation": "Les formulations de rôle laissaient confondre création de formation pour un élève connu et approbation d’une TrainingRequest. La liste administrative Member, comprenant rôles et délégations, n’était pas distinguée assez fermement d’un contact d’école.",
+      "correction": "Approbation de TrainingRequest par ADMIN ; vérification des affectations conservée pour les opérations du moniteur. AP07 expose la liste administrative uniquement à ADMIN. Les autres utilisateurs voient le contact de l’école et les intervenants via leurs engagements autorisés, pas le roster administratif.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-04",
+      "title": "Archivage et remboursement non terminé",
+      "classification": "Importante",
+      "baselineFile": "03-fonctionnel/gestion-web-archivage.md",
+      "baselineSha256": "cc96c2a0a2faf6431efab1635afe223db7cc7b3cefb0c5ef0607b8a80c60aa5f",
+      "locatingTerm": "bloc",
+      "baselineSnippets": [
+        {
+          "startLine": 56,
+          "endLine": 59,
+          "text": "1. Ouvrir « Archiver le dossier » depuis la fiche autorisée. Le serveur crée un ArchivePreview lié à l’acteur, à l’école, à l’élève et à sa version ; validité proposée de 15 minutes.\n2. Afficher les blocages et avertissements avec liens d’action : formation encore active/en pause, leçon future/en cours, inscription future ou À reconfirmer, présence/bilan obligatoire restant à clôturer, droit réservé, capture connue non finalisée, compte non soldé.\n3. Résoudre explicitement les blocages dans leurs fonctions respectives. L’archivage ne déclenche ni remboursement, ni annulation groupée, ni clôture de formation à la place du responsable.\n4. Les droits non consommés et non réservés sont conservés avec avertissement et confirmation de compréhension. Les éventuelles dates contractuelles continuent de s’appliquer ; aucun crédit n’est perdu ni prolongé par l’archivage."
+        },
+        {
+          "startLine": 57,
+          "endLine": 60,
+          "text": "2. Afficher les blocages et avertissements avec liens d’action : formation encore active/en pause, leçon future/en cours, inscription future ou À reconfirmer, présence/bilan obligatoire restant à clôturer, droit réservé, capture connue non finalisée, compte non soldé.\n3. Résoudre explicitement les blocages dans leurs fonctions respectives. L’archivage ne déclenche ni remboursement, ni annulation groupée, ni clôture de formation à la place du responsable.\n4. Les droits non consommés et non réservés sont conservés avec avertissement et confirmation de compréhension. Les éventuelles dates contractuelles continuent de s’appliquer ; aucun crédit n’est perdu ni prolongé par l’archivage.\n5. Refaire la prévisualisation après une résolution ou un changement ; confirmer une raison administrative courte et la version courante. Le serveur recontrôle les règles sous verrou avant commit."
+        }
+      ],
+      "observation": "La vérification des obligations mettait en avant dette, engagements et droits réservés, mais ne rendait pas explicite le blocage d’une inscription annulée dont le remboursement restait à traiter alors que le solde courant était nul.",
+      "correction": "Le suivi financier REFUND_REQUIRED bloque l’archivage avec ARCHIVE_FINANCIAL_FOLLOW_UP_REQUIRED dans ARCHIVE_BLOCKED. Une capture arrêtée avec transfert incomplet est un avertissement, pas une collecte encore active.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-05",
+      "title": "Profil partiel et versions concurrentes",
+      "classification": "Importante",
+      "baselineFile": "04-technique/api.md",
+      "baselineSha256": "19452aac46a70eaa070cb0021bc9c783d999aa8c7356d2fba44df3ba1c7db8b1",
+      "locatingTerm": "profil",
+      "baselineSnippets": [
+        {
+          "startLine": 236,
+          "endLine": 239,
+          "text": "| AP122 | `POST /v1/schools/{schoolId}/requirements/{requirementId}/review` | F18 | `ReviewRequirementCommand` → contrat typé OpenAPI |\n| AP123 | `GET /v1/schools/{schoolId}/regulatory-profiles` | F13 | `Sans corps` → contrat typé OpenAPI |\n| AP124 | `POST /v1/schools/{schoolId}/regulatory-profiles` | F13 | `RegulatoryProfileCommand` → contrat typé OpenAPI |\n| AP125 | `POST /v1/schools/{schoolId}/regulatory-profiles/{profileId}/approve` | F13 | `ApproveProfileCommand` → contrat typé OpenAPI |"
+        },
+        {
+          "startLine": 237,
+          "endLine": 240,
+          "text": "| AP123 | `GET /v1/schools/{schoolId}/regulatory-profiles` | F13 | `Sans corps` → contrat typé OpenAPI |\n| AP124 | `POST /v1/schools/{schoolId}/regulatory-profiles` | F13 | `RegulatoryProfileCommand` → contrat typé OpenAPI |\n| AP125 | `POST /v1/schools/{schoolId}/regulatory-profiles/{profileId}/approve` | F13 | `ApproveProfileCommand` → contrat typé OpenAPI |\n| AP126 | `GET /v1/schools/{schoolId}/course-templates` | F18 | `Sans corps` → contrat typé OpenAPI |"
+        }
+      ],
+      "observation": "AdministrativeProfileCommand exigeait les noms même pour une modification de contact. Deux voies de modification Learner/profil n’expliquaient pas suffisamment leur versionnement commun, ni l’omission des champs privés dans les projections.",
+      "correction": "PATCH partiel avec au moins un champ modifié ; autorisation par champ côté service. AP16 et AP176 portent le même agrégat et invalident ensemble leurs versions de projection. Les champs non autorisés sont omis ; null signifie absence de valeur pour un champ autorisé.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-06",
+      "title": "Photo facultative jusque dans le contrat",
+      "classification": "Importante",
+      "baselineFile": "03-fonctionnel/onboarding.md",
+      "baselineSha256": "bed8baa2a62a881a5f275dc42c05a27fc2814f3d258e9372da99ea1a812ca284",
+      "locatingTerm": "photo",
+      "baselineSnippets": [
+        {
+          "startLine": 9,
+          "endLine": 12,
+          "text": "\n**Exigence du porteur :** prévoir l’accueil, l’identité et les coordonnées utiles, une photo facultative et la configuration des permis/services. **Proposition :** collecte progressive, champs justifiés et blocages limités à l’action qui nécessite l’information. Le minimum ne signifie pas renoncer aux pièces utiles ; il signifie les demander au bon moment.\n\nLes règles canoniques sont [R73–R81](regles-etats.md#r73), [R97–R100](regles-etats.md#r97). F01/F02 conservent l’identité et l’invitation ; F13 les paramètres ; F03 la validation de formation. F20/F21 les orchestrent sans dupliquer leurs règles."
+        },
+        {
+          "startLine": 77,
+          "endLine": 80,
+          "text": "\nLa photo se propose dans le profil, sans étape bloquante. « Plus tard » n’affiche pas un profil en échec. L’élève peut consulter son agenda même si l’adresse n’est pas nécessaire à ce stade. L’accès à l’aide, aux annulations existantes et à ses droits sur les données n’est pas conditionné à la complétude administrative.\n\n### Catalogue des champs et finalités proposées"
+        }
+      ],
+      "observation": "L’onboarding promettait une photo facultative, mais la règle générique de politique permettait de déclarer ce champ obligatoire à l’entrée. Les noms de champs et étapes de politique différaient aussi entre prose et schéma.",
+      "correction": "ProfileFieldRule contraint la photo à OPTIONAL/OPTIONAL/PERSONALISATION. Les noms exigés pour l’identité et les champs conditionnels sont séparés. Les clés et étapes de politique sont alignées sur le contrat. La photo n’est pas un préalable de capacité.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-07",
+      "title": "Publication GPS réellement immuable",
+      "classification": "Bloquant de conception",
+      "baselineFile": "03-fonctionnel/gps-replay.md",
+      "baselineSha256": "81a17cae2220d74dbbfdfdd7e9e652579fd30476615fdbb67f7d796cd6aa7ac3",
+      "locatingTerm": "publi",
+      "baselineSnippets": [
+        {
+          "startLine": 38,
+          "endLine": 41,
+          "text": "| Transport | LOCAL_ONLY, UPLOADING, SYNCED, PARTIAL, REJECTED | Données disponibles et preuves de transfert. |\n| Publication | PRIVATE, PUBLISHED, WITHDRAWN, DELETED | Qui peut consulter, non la qualité de la mesure. |\n| Leçon | PLANNED, COMPLETED, CANCELLED, NO_SHOW | Résultat métier maintenu séparé. |\n"
+        },
+        {
+          "startLine": 41,
+          "endLine": 44,
+          "text": "\nSans capture, il n’existe pas de session GPS « vide » obligatoire. L’écran indique « Trajet non enregistré ». Une capture interrompue peut être STOPPED/PARTIAL et être utilisée pédagogiquement, mais reste clairement partielle. SYNCED ne signifie jamais PUBLISHED.\n\n## Interruptions et comportements honnêtes"
+        }
+      ],
+      "observation": "Le bilan publié référençait une sélection de capture et d’observations alors que celles-ci restaient des objets privés modifiables ; ni la version des observations sélectionnées ni le manifeste des points publiés n’étaient matérialisés assez précisément.",
+      "correction": "CaptureSelection exige les versions contrôlées au commit ; CapturePublication et PublishedGeoObservation matérialisent le snapshot publié, avec geometrySnapshotId et sans draftId. Une arrivée tardive de points ne modifie pas un ancien bilan. Purge et révocation restent prioritaires sur l’accès aux snapshots.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-08",
+      "title": "Autorisation de collecte et transfert différé",
+      "classification": "Bloquant de conception",
+      "baselineFile": "04-technique/synchronisation.md",
+      "baselineSha256": "aadb7a160a545af6e1827820285183a779bb3b5e7b7ee04c274a49d91083dab0",
+      "locatingTerm": "capture",
+      "baselineSnippets": [
+        {
+          "startLine": 88,
+          "endLine": 91,
+          "text": "\nLes sauvegardes système ne doivent pas réintroduire une clé et des données scolaires en clair. La politique de backup des fichiers natifs et du stockage de clés fait partie du spike de sécurité. Les captures d’écran déjà prises et les données déjà lues ne peuvent pas être récupérées à distance. Ces limites doivent figurer dans la notice aux écoles.\n\n## Recette de synchronisation obligatoire"
+        },
+        {
+          "startLine": 94,
+          "endLine": 97,
+          "text": "\n## Capture GPS et offres collectives\n\nLes points GPS ne passent pas par le changefeed ordinaire des dossiers. Une outbox spécialisée native stocke chunks chiffrés et manifestes ; acquittement par identité/hash, reprise hors ordre et contrôle du cutoff. La capture peut continuer dans la borne autorisée sans réseau ; son démarrage initial exige serveur au pilote. À la clôture, le collecteur local s’arrête avant toute tentative réseau. Un résultat de leçon en attente n’autorise pas à continuer la collecte."
+        }
+      ],
+      "observation": "La preuve temporaire utilisée pour collecter se retrouvait dans la commande d’envoi alors que l’envoi différé pouvait dépasser la borne de collecte. L’origine de la durée maximale et la distinction entre états serveur et collecteur local restaient ambiguës.",
+      "correction": "Deux preuves de portée différente : signedCaptureAuthorization et signedUploadAuthorization. L’expiration de collecte part de authorizedAt, pas d’un lancement local tardif. Le serveur connaît AUTHORIZED/STOPPED/REVOKED/EXPIRED ; RECORDING/PAUSED sont locaux. Session et droits courants sont toujours contrôlés à l’envoi.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-09",
+      "title": "Pagination du replay sans perte de segment",
+      "classification": "Importante",
+      "baselineFile": "04-technique/api.md",
+      "baselineSha256": "19452aac46a70eaa070cb0021bc9c783d999aa8c7356d2fba44df3ba1c7db8b1",
+      "locatingTerm": "replay",
+      "baselineSnippets": [
+        {
+          "startLine": 273,
+          "endLine": 276,
+          "text": "| AP159 | `POST /v1/schools/{schoolId}/captures/{captureId}/withdraw` | F16 | `ReasonCommand` → contrat typé OpenAPI |\n| AP160 | `GET /v1/schools/{schoolId}/captures/{captureId}/replay` | F16 | `Sans corps` → contrat typé OpenAPI |\n| AP161 | `GET /v1/schools/{schoolId}/lessons/{lessonId}/geo-observations` | F16 | `Sans corps` → contrat typé OpenAPI |\n| AP162 | `POST /v1/schools/{schoolId}/lessons/{lessonId}/geo-observations` | F16 | `GeoObservationCommand` → contrat typé OpenAPI |"
+        }
+      ],
+      "observation": "Les limites de page et de points par segment ne définissaient pas comment lire un long segment dépassant la borne du schéma. Un développeur aurait pu couper un trajet ou fabriquer des ruptures pour paginer.",
+      "correction": "Le budget est de 1 000 points au total par page ; chaque fragment conserve son segment logique et indique ses continuations. Le curseur est lié au scope, aux droits et à la révision/snapshot. La limite de transport ne crée aucune pause GPS.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-10",
+      "title": "Inscription et réinscription sans effet financier caché",
+      "classification": "Importante",
+      "baselineFile": "03-fonctionnel/cours-collectifs.md",
+      "baselineSha256": "28b5faacbae1170e720cbef75f7e0e4c6c56713ca0dbd258164fae514bbdcc4b",
+      "locatingTerm": "réinscription",
+      "baselineSnippets": [],
+      "observation": "Le contrat pouvait accepter RECORDED_REQUEST sans justificatif de demande, et ne rejetait pas les identifiants d’occurrences dupliqués. La réutilisation d’une relation annulée ne distinguait pas assez clairement un nouveau cycle et l’ancien compte financier.",
+      "correction": "Une note accompagne la saisie de demande par le personnel, sans remplacer ses droits ; SELF reste distinct. Occurrences uniques, ensemble validé côté service. Réinscription explicite avec enrollmentCycle, obligations antérieures résolues et aucun INITIAL ou encaissement dupliqué.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-11",
+      "title": "Audience de cours et données réellement disponibles",
+      "classification": "Arbitrage conservateur explicite",
+      "baselineFile": "03-fonctionnel/calendrier-notifications.md",
+      "baselineSha256": "07c5beebd20fb25f861faad7af305fdc038294102c75190e9b2eb5ab4ae6bd0c",
+      "locatingTerm": "langue",
+      "baselineSnippets": [
+        {
+          "startLine": 17,
+          "endLine": 20,
+          "text": "\nPar défaut, les membres élèves actifs de l’école voient les cours publiés de l’audience scolaire, y compris les personnes déjà formées, avec filtre « Afficher les cours disponibles ». L’école peut borner une audience par site, langue ou catégorie proposée ; cette audience doit être visible dans l’aperçu de publication. Aucune segmentation par trajet ou localisation n’est utilisée.\n\nLe fait d’avoir déjà accompli une sensibilisation influe surtout sur l’annonce et l’admissibilité, pas sur l’existence d’un événement public à l’intérieur de l’école. L’élève peut masquer les offres ; il ne masque pas ainsi ses engagements et ne se désinscrit pas."
+        }
+      ],
+      "observation": "Des filtres d’audience par site/langue étaient proposés sans modèle de rattachement de l’élève à un site ni préférence de langue de cours permettant de les calculer. L’adresse ou le GPS ne constituent pas une telle préférence.",
+      "correction": "Au pilote, audience globale ou catégories de Training actives et validées. Les tableaux siteIds/languages d’audience restent réservés mais vides ; site et langue restent des caractéristiques consultables de l’offre. Un ciblage futur exige une préférence/règle explicitement modélisée et acceptée, pas une inférence cachée.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-12",
+      "title": "Droits financiers distincts des statistiques d’école",
+      "classification": "Importante",
+      "baselineFile": "03-fonctionnel/statistiques.md",
+      "baselineSha256": "520d7446ed06d1698b487ed2aec3121b75a008958e000a2959dd12f808339d61",
+      "locatingTerm": "VIEW_FINANCIAL_METRICS",
+      "baselineSnippets": [
+        {
+          "startLine": 93,
+          "endLine": 96,
+          "text": "\nINSTRUCTOR peut lire ses M01/M02/M03/M04/M09. La vue école exige ADMIN ou VIEW_SCHOOL_METRICS. M06/M07 exigent ADMIN ou VIEW_FINANCIAL_METRICS. M08 exige l’accès administratif aux dossiers concernés. Les contrôles du détail restent indépendants des compteurs ; l’autorisation d’un agrégat n’accorde pas celle de chaque document.\n\nLes permissions sont évaluées au serveur avant les requêtes. Aucune requête ne charge une école entière pour filtrer ensuite dans le navigateur. Le web ne reçoit pas de coordonnées brutes, photos, dates de naissance ni noms d’élèves dans les séries agrégées."
+        }
+      ],
+      "observation": "Les règles de portée ne rendaient pas uniforme le cas d’une personne possédant VIEW_FINANCIAL_METRICS sans VIEW_SCHOOL_METRICS. Des libellés laissaient également imaginer des séries temporelles pour tous les indicateurs.",
+      "correction": "Les deux délégations sont indépendantes. Au scope SCHOOL, les mesures interdites sont omises, non nulles ou remplacées par zéro. Les séries couvrent M01/M02/M03/M04/M06 ; M05/M07/M08 sont des instantanés, M09 reste un compteur de suivi avec période de référence.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-13",
+      "title": "Unités et termes canoniques",
+      "classification": "Importante",
+      "baselineFile": "04-technique/fichiers-temps-communications.md",
+      "baselineSha256": "c642118c209291989c7b5e99e7b9703be05c616a57f77dd38d524071ed677225",
+      "locatingTerm": "CHF",
+      "baselineSnippets": [
+        {
+          "startLine": 51,
+          "endLine": 54,
+          "text": "\nMontants entiers CHF ; afficher `90.00 CHF` ou format local cohérent, mais transporter `9000`. Calculer total des charges, net encaissé et solde depuis les écritures. Arrondi de TVA, facture légale, avoir global et rapprochement bancaire sont hors pilote ; ne pas les simuler par des champs de commentaire. Un reçu de saisie interne doit être libellé « Enregistrement interne » et non « Facture ».\n\nLangue de lancement proposée : français suisse ; architecture de chaînes localisables. Aucune traduction allemande ou portugaise n’est déclarée prête. Séparer clé de traduction et code d’erreur ; pluriels et formats passent par le moteur de localisation. Conserver noms propres et texte utilisateur tels que saisis, sans traduction automatique de bilan. Les codes de catégorie sont des identifiants métier, pas des chaînes à traduire librement."
+        },
+        {
+          "startLine": 92,
+          "endLine": 95,
+          "text": "\n**Exports de gestion :** UTF‑8, séparateur et conventions affichés dans manifest, colonnes déterministes et versionnées ; neutralisation de formules testée [S57](../06-gouvernance/sources.md#s57). Les montants sont calculés en centimes, conversion affichée en CHF, pas flottants monétaires internes. Génération privée,10k lignes/24h proposées, purge objets et dérivés. L’export de droits personnels demeure séparé.\n\n**Dates du profil :** birthDate est une date civile, jamais minuit UTC converti selon le téléphone. Périodes statistiques : dates civiles inclusif/exclusif dans le fuseau de l’école, mapping UTC côté serveur pour les événements. Les contre-écritures conservent recordedAt et une date économique source pour ne pas confondre correction et remboursement."
+        }
+      ],
+      "observation": "Deux textes parlaient de montants entiers CHF alors que le contrat manipule des centimes. Plusieurs alias d’export, de préparation ou d’accomplissement ne correspondaient pas aux enums. Les unités des indicateurs étaient permissives.",
+      "correction": "Centimes CHF partout ; STUDENT_LIST/METRICS distincts de PRIVACY ; SETUP_INCOMPLETE, PROFILE_ACTION_REQUIRED, EXPORT_TOO_LARGE et definitionsVersion alignés. UNKNOWN/EVIDENCE_PENDING/COMPLETED concernent le bon agrégat. Les types, unités et bornes M01–M09 sont contraints par schéma.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-14",
+      "title": "Modèle relationnel et occupation historique",
+      "classification": "Importante",
+      "baselineFile": "04-technique/modele-donnees.md",
+      "baselineSha256": "a093d69b4c03a284f031cbd3bb56084b671458c64fa84fada1d5ecf2f8754aff",
+      "locatingTerm": "School",
+      "baselineSnippets": [
+        {
+          "startLine": 7,
+          "endLine": 10,
+          "text": "\nIdentifiants publics : UUID aléatoires ; ils ne portent ni nom, ni email, ni catégorie. Toute entité scolaire possède `school_id`, `created_at`, `updated_at` lorsque mutable et `version` lorsqu’une mutation utilisateur existe. Les instants sont `timestamptz`, les dates civiles `date`, la devise `CHF`, les montants `bigint` en centimes avec borne de transport JSON documentée. Une version est incrémentée atomiquement, jamais calculée par l’horloge du client.\n\nLes clés étrangères scolaires utilisent `(school_id, id)` vers une clé unique de la table parente. Un simple `training_id` globalement unique ne suffit pas à exprimer l’invariant d’école dans le schéma. Les contraintes métier principales sont [R01–R100](../03-fonctionnel/regles-etats.md). Les migrations n’utilisent pas des suppressions en cascade générales pour clore un élève."
+        },
+        {
+          "startLine": 9,
+          "endLine": 12,
+          "text": "\nLes clés étrangères scolaires utilisent `(school_id, id)` vers une clé unique de la table parente. Un simple `training_id` globalement unique ne suffit pas à exprimer l’invariant d’école dans le schéma. Les contraintes métier principales sont [R01–R100](../03-fonctionnel/regles-etats.md). Les migrations n’utilisent pas des suppressions en cascade générales pour clore un élève.\n\n## Identité, appartenance et formation"
+        }
+      ],
+      "observation": "Le modèle School ne présentait pas DRAFT partout et des noms d’entités d’onboarding différaient des DTO. La formulation « réservation active » pouvait être comprise comme future seulement, contrairement au maintien d’un historique de leçons réalisées.",
+      "correction": "School, SchoolSetup, OnboardingProgress, AdministrativeProfile et ProfileFieldPolicyVersion sont alignés. Les occupations effectives historiques sont conservées ; la date passée ne désactive pas automatiquement une contrainte. L’API School expose modules et configurationVersion.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-15",
+      "title": "Diagnostic appareil indépendant des notifications",
+      "classification": "Importante",
+      "baselineFile": "04-technique/transactions-v3.md",
+      "baselineSha256": "17cac2ab774ffaef75f6f0aec3abdee09b0311dcca18013f02eb079bba674cc9",
+      "locatingTerm": "appareil",
+      "baselineSnippets": [
+        {
+          "startLine": 1,
+          "endLine": 3,
+          "text": "# Transactions V3 : accueil, archivage, appareils et mesures\n\n> Drivy · Référence de conception 3.0 · 19 septembre 2026"
+        },
+        {
+          "startLine": 17,
+          "endLine": 20,
+          "text": "\n**Readiness matériel :** SchoolReadiness renseigne CAN_CAPTURE pour le contexte de l’acteur. Sans appareil fourni/préparé, ce point reste non prêt avec DEVICE_REQUIRED et ne bloque pas CAN_USE_WORKSPACE. Il ne prétend pas que tous les téléphones de l’école ont été testés. Les limites juridiques et de profil s’appliquent indépendamment.\n\n## TX3-02 · Entrée d’une personne et reprise multi-appareils"
+        }
+      ],
+      "observation": "Le diagnostic et la création de l’installation n’étaient pas reliés explicitement ; l’inscription aux notifications pouvait être prise, à tort, comme seule voie d’enregistrement de l’appareil.",
+      "correction": "assessCaptureDevice crée ou retrouve l’installation authentifiée dans la transaction de diagnostic, sans jeton push requis. Le diagnostic est une donnée versionnée, pas une preuve de qualification physique universelle.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-16",
+      "title": "Catalogue API et exemples effectivement vérifiés",
+      "classification": "Importante",
+      "baselineFile": "04-technique/api.md",
+      "baselineSha256": "19452aac46a70eaa070cb0021bc9c783d999aa8c7356d2fba44df3ba1c7db8b1",
+      "locatingTerm": "AP17",
+      "baselineSnippets": [
+        {
+          "startLine": 39,
+          "endLine": 42,
+          "text": "| AP16 | `PATCH /v1/schools/{schoolId}/learners/{learnerId}` | F02 | `UpdateLearnerCommand` → `Learner` | Oui |\n| AP17 | `POST /v1/schools/{schoolId}/learners/{learnerId}/archive` | F14 | `ReasonCommand` → `Learner` | Oui |\n| AP18 | `GET /v1/schools/{schoolId}/offerings` | F03 F13 | `sans corps` → `OfferingPage` | Non |\n| AP19 | `POST /v1/schools/{schoolId}/offerings` | F03 F13 | `OfferingCommand` → `Offering` | Non |"
+        },
+        {
+          "startLine": 297,
+          "endLine": 300,
+          "text": "\nLe contrat [OpenAPI](openapi.yaml) définit les corps, paramètres, erreurs et réponses. Les endpoints anciens AP01–AP164 restent identifiés ; AP17 est renforcé par une preview, AP14 ajoute filtres, StartCapture exige deviceAssessmentId et le pipeline F09 accepte PROFILE_PHOTO. Les suffixes de noms de schéma V2 sont conservés comme identifiants historiques ; ils ne désignent pas une deuxième version active.\n\n| ID | Méthode et route | Fonction | Opération |"
+        }
+      ],
+      "observation": "Le tableau AP17 décrivait encore une commande générique ReasonCommand au lieu d’ArchiveCommitCommand ; d’autres lignes additionnelles n’avaient pas leurs types précis. Le vérificateur ignorait les exemples au niveau media type. Celui d’AP154 omettait deviceAssessmentId, pourtant obligatoire.",
+      "correction": "Les 191 lignes sont réalignées sur OpenAPI. Les exemples de schémas, d’annexe et des requêtes/réponses media type sont tous pris en compte : 27 occurrences positives, dont 6 auparavant hors contrôle. L’exemple d’AP154 est complété.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-17",
+      "title": "Dépendances de la roadmap",
+      "classification": "Importante",
+      "baselineFile": "05-realisation/roadmap-backlog.md",
+      "baselineSha256": "ca97b0bac0cd01690ea64cf94227c13a1fcc1980f8673c79268bb26a9562ff08",
+      "locatingTerm": "T163",
+      "baselineSnippets": [
+        {
+          "startLine": 25,
+          "endLine": 28,
+          "text": "\n**Sortie :** T001–T012 pertinents, T163–T191 et sécurité tenant/session passent en environnement intégré ; jeu fictif indépendant et école multi-moniteurs. Pas de setup terminé qui laisse le premier utilisateur sans action réalisable.\n\n## G2 · Leçon complète et tablette native"
+        }
+      ],
+      "observation": "Le bloc de tests demandé au premier gate couvrait aussi des inscriptions concurrentes à des cours, alors que la tranche collective n’était pas encore réalisée. Des périmètres de recette risquaient d’être annoncés avant leurs sources de données.",
+      "correction": "G1 ne dépend plus implicitement de T188/T189 ; ces cas suivent le collectif. Les 28 nouveaux scénarios sont rattachés à la première tranche implémentant leur capacité, jamais tous à l’activation initiale. Les indicateurs attendent leurs sources métier.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-18",
+      "title": "Expérience et vocabulaire de preuve",
+      "classification": "Cohérence",
+      "baselineFile": "02-experience/ecrans.md",
+      "baselineSha256": "8e7951436ec06024f056a746db820fc406b1f4221365c7a058e10dca213a3c9e",
+      "locatingTerm": "Archiver via ADMIN",
+      "baselineSnippets": [
+        {
+          "startLine": 138,
+          "endLine": 141,
+          "text": "\n**Actions et sorties :** Équipe : créer formation, affecter, planifier, gérer pièces. Élève : changer formation, consulter, saisir souhait. Archiver via ADMIN avec aperçu.\n\n| État | Comportement attendu |"
+        }
+      ],
+      "observation": "Un écran réservait encore l’archivage à ADMIN, une tablette secondaire pouvait prétendre qu’une autre enregistrait en direct, et une fixture photo évoquait un deuxième élève dans l’image au lieu d’un deuxième compte. Le titre annonçait trois actions pour quatre opérations de cycle de vie.",
+      "correction": "Écrans et compositions alignés sur les autorisations et la connaissance serveur ; fixtures fictives sans promesse de reconnaissance de visage. Archivage, fin de formation, révocation et effacement restent quatre actions distinctes.",
+      "productTestStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "AUD-19",
+      "title": "Portée du contrôle et traçabilité",
+      "classification": "Qualité documentaire",
+      "baselineFile": "annexes/verifier-documentation.py",
+      "baselineSha256": "1e32b1474cc12e39b763e0b2ea9f15afd30361d0e459c0d7255da27f44713873",
+      "locatingTerm": "schemaAndAnnexExamplesChecked",
+      "baselineSnippets": [
+        {
+          "startLine": 90,
+          "endLine": 93,
+          "text": "    for i,v in enumerate(ex['examples']):check_example(api['components']['schemas'][v['schema']],v['value'],f'annex:{i}:{v[\"schema\"]}')\n    checks['api']={'operations':len(operations),'schemas':len(api['components']['schemas']),'internalRefsResolved':len(refs),'schemaAndAnnexExamplesChecked':example_count,'openapiVersion':api['openapi'],'fullOpenApiMetaSchemaValidation':False,'note':'YAML, refs, paramètres de routes, schémas JSON2020-12 et exemples seulement ; pas validation OpenAPI complète ou serveur.'}\n    trace=json.loads((ROOT/'annexes/traceabilite.json').read_text())\n    definitions={}"
+        }
+      ],
+      "observation": "Les liens et exemples existants passaient sans détecter plusieurs contradictions sémantiques. Les rapports et le lecteur étaient ceux de la V3 ; les conserver aurait présenté des vérifications anciennes comme résultats du dossier corrigé.",
+      "correction": "Vérificateur étendu avec 47 cas JSON Schema positifs/négatifs, contrôle catalogue API/registre/prose et relations fonctions-tests réciproques. 28 tests métier supplémentaires restent NOT_EXECUTED. Rapports, index, lecteur, empreintes et archive sont régénérés ; le contrôle documentaire n’est jamais une recette produit.",
+      "productTestStatus": "NOT_EXECUTED"
+    }
+  ]
+}

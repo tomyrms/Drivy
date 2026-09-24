@@ -1,0 +1,39 @@
+{
+  "status": "FICTIONAL_DOCUMENTATION_ONLY",
+  "currency": "CHF",
+  "lessonMinutes": [
+    45,
+    50,
+    90
+  ],
+  "lessonLearnerKeys": [
+    "A",
+    "A",
+    "B"
+  ],
+  "courseCapacities": [
+    8,
+    12
+  ],
+  "occupiedSeats": [
+    6,
+    3
+  ],
+  "receiptsCents": [
+    146000,
+    11000
+  ],
+  "refundsCents": [
+    10000
+  ],
+  "reversedReceiptCents": 11000,
+  "expected": {
+    "lessonCount": 3,
+    "durationSeconds": 11100,
+    "distinctLearners": 2,
+    "courseFillRatio": 0.45,
+    "netRecordedCents": 147000,
+    "netAfterReversalCents": 136000
+  },
+  "notExecuted": "Aucun appel API de produit ; les valeurs attendues seront vérifiées arithmétiquement par le contrôle documentaire."
+}

@@ -1,0 +1,307 @@
+{
+  "version": "3.5",
+  "scope": "SAME_FICTITIOUS_PAYLOADS_JSON_SCHEMA_ONLY",
+  "productTestsExecuted": false,
+  "baseVersion": "3.4",
+  "caseCount": 33,
+  "previouslyAcceptedNowRejected": 6,
+  "results": [
+    {
+      "id": "SC110",
+      "schema": "PermitCommand",
+      "beforeValid": true,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": true
+    },
+    {
+      "id": "SC111",
+      "schema": "PermitCommand",
+      "beforeValid": true,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC112",
+      "schema": "PermitCommand",
+      "beforeValid": true,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC113",
+      "schema": "PermitCommand",
+      "beforeValid": true,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": true
+    },
+    {
+      "id": "SC114",
+      "schema": "PermitCommand",
+      "beforeValid": true,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": true
+    },
+    {
+      "id": "SC115",
+      "schema": "PermitCommand",
+      "beforeValid": true,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC116",
+      "schema": "PlannedWaypoint",
+      "beforeValid": null,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC117",
+      "schema": "PlannedWaypoint",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC118",
+      "schema": "PlannedWaypoint",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC119",
+      "schema": "PreparationCommand",
+      "beforeValid": false,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC120",
+      "schema": "PreparationCommand",
+      "beforeValid": true,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC121",
+      "schema": "PreparationCommand",
+      "beforeValid": false,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC122",
+      "schema": "PreparationCommand",
+      "beforeValid": false,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC123",
+      "schema": "AccountDeletionSubmitCommand",
+      "beforeValid": null,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC124",
+      "schema": "AccountDeletionSubmitCommand",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC125",
+      "schema": "AccountDeletionSubmitCommand",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC126",
+      "schema": "AccountDeletionSubmitCommand",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC127",
+      "schema": "AccountDeletionRequest",
+      "beforeValid": null,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC128",
+      "schema": "AccountDeletionRequest",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC129",
+      "schema": "AccountDeletionRequest",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC130",
+      "schema": "AccountDeletionRequest",
+      "beforeValid": null,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC131",
+      "schema": "AccountDeletionRequest",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC132",
+      "schema": "AccountDeletionRequest",
+      "beforeValid": null,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC133",
+      "schema": "AccountDeletionReceipt",
+      "beforeValid": null,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC134",
+      "schema": "AccountDeletionReceipt",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC135",
+      "schema": "AccountDeletionReceipt",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC136",
+      "schema": "CourseSession",
+      "beforeValid": false,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC137",
+      "schema": "CourseSession",
+      "beforeValid": true,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": true
+    },
+    {
+      "id": "SC138",
+      "schema": "CourseSession",
+      "beforeValid": false,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC139",
+      "schema": "PermitCheck",
+      "beforeValid": true,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC140",
+      "schema": "PermitCheck",
+      "beforeValid": true,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": true
+    },
+    {
+      "id": "SC141",
+      "schema": "PermitCheck",
+      "beforeValid": true,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": true
+    },
+    {
+      "id": "SC142",
+      "schema": "AccountDeletionReceipt",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    }
+  ]
+}

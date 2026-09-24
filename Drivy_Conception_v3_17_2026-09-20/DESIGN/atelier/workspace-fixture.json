@@ -1,0 +1,254 @@
+{
+  "version": "3.17",
+  "kind": "FICTITIOUS_WORKSPACE_NO_SERVER",
+  "date": "2026-09-21",
+  "school": "École du Parc",
+  "instructor": "Nicolas Meyer",
+  "students": [
+    {
+      "id": "emma",
+      "name": "Emma Laurent",
+      "initials": "EL",
+      "trainings": [
+        "B",
+        "A"
+      ],
+      "next": "Lundi 21 · 09:00",
+      "permit": "Vérifié",
+      "permitTone": "success"
+    },
+    {
+      "id": "lucas",
+      "name": "Lucas Martin",
+      "initials": "LM",
+      "trainings": [
+        "B"
+      ],
+      "next": "Lundi 21 · 10:15",
+      "permit": "À vérifier",
+      "permitTone": "warning"
+    },
+    {
+      "id": "ines",
+      "name": "Inès Morel",
+      "initials": "IM",
+      "trainings": [
+        "B"
+      ],
+      "next": "Lundi 21 · 13:00",
+      "permit": "Vérifié",
+      "permitTone": "success"
+    },
+    {
+      "id": "theo",
+      "name": "Théo Ribeiro",
+      "initials": "TR",
+      "trainings": [
+        "A"
+      ],
+      "next": "Mardi 22 · 09:00",
+      "permit": "Vérifié",
+      "permitTone": "success"
+    },
+    {
+      "id": "lea",
+      "name": "Léa Dubois",
+      "initials": "LD",
+      "trainings": [
+        "B"
+      ],
+      "next": "Mardi 22 · 10:15",
+      "permit": "À vérifier",
+      "permitTone": "warning"
+    },
+    {
+      "id": "noah",
+      "name": "Noah Ferreira",
+      "initials": "NF",
+      "trainings": [
+        "B"
+      ],
+      "next": "À planifier",
+      "permit": "Vérifié",
+      "permitTone": "success"
+    }
+  ],
+  "lessons": [
+    {
+      "id": "active",
+      "student": "emma",
+      "training": "B",
+      "day": 21,
+      "time": "09:00",
+      "end": "09:50",
+      "duration": 50,
+      "place": "Gare · Neuchâtel",
+      "state": "IN_PROGRESS",
+      "price": 9000
+    },
+    {
+      "id": "l2",
+      "student": "lucas",
+      "training": "B",
+      "day": 21,
+      "time": "10:15",
+      "end": "11:05",
+      "duration": 50,
+      "place": "Place du Marché",
+      "state": "PLANNED",
+      "price": 9000
+    },
+    {
+      "id": "l3",
+      "student": "ines",
+      "training": "B",
+      "day": 21,
+      "time": "13:00",
+      "end": "13:50",
+      "duration": 50,
+      "place": "Gare · Neuchâtel",
+      "state": "PLANNED",
+      "price": 9000
+    },
+    {
+      "id": "l4",
+      "student": "theo",
+      "training": "A",
+      "day": 22,
+      "time": "09:00",
+      "end": "09:50",
+      "duration": 50,
+      "place": "École du Parc",
+      "state": "PLANNED",
+      "price": 9000
+    },
+    {
+      "id": "l5",
+      "student": "lea",
+      "training": "B",
+      "day": 22,
+      "time": "10:15",
+      "end": "11:05",
+      "duration": 50,
+      "place": "Gare · Neuchâtel",
+      "state": "PLANNED",
+      "price": 9000
+    }
+  ],
+  "completedLesson": {
+    "id": "past18",
+    "student": "emma",
+    "training": "B",
+    "day": 18,
+    "time": "09:00",
+    "end": "09:50",
+    "duration": 50,
+    "place": "Gare · Neuchâtel",
+    "state": "COMPLETED",
+    "price": 9000
+  },
+  "draft": {
+    "workedOn": "Priorités à droite et stationnement en créneau.",
+    "observationText": "Les contrôles sont plus réguliers. Anticipe encore le regard à droite avant chaque intersection.",
+    "nextStep": "Reprendre deux intersections sans indication, puis un créneau en autonomie.",
+    "selected": []
+  },
+  "reportObservations": [
+    {
+      "id": "report18-1",
+      "second": 420,
+      "theme": "00000000-0000-4000-8000-000000000108",
+      "status": "ATTENTION",
+      "kind": "QUALIFIED",
+      "anchor": null,
+      "note": "Regarder à droite avant de s’engager.",
+      "visibility": "PRIVATE"
+    },
+    {
+      "id": "report18-2",
+      "second": 1410,
+      "theme": "00000000-0000-4000-8000-000000000111",
+      "status": "POSITIVE",
+      "kind": "QUALIFIED",
+      "anchor": null,
+      "note": "Placement autonome au second essai.",
+      "visibility": "PRIVATE"
+    }
+  ],
+  "published": {
+    "id": "published11",
+    "student": "emma",
+    "training": "B",
+    "date": "11 septembre 2026",
+    "author": "Nicolas Meyer",
+    "workedOn": "Approche des intersections et contrôles visuels.",
+    "observationText": "Tu identifies mieux les zones où ralentir. Continue à vérifier la droite avant de t’engager.",
+    "nextStep": "Mettre en pratique les priorités à droite sur un trajet moins familier.",
+    "observations": [],
+    "trajectory": null
+  },
+  "documents": [
+    {
+      "id": "doc1",
+      "student": "emma",
+      "training": "B",
+      "name": "Permis d’élève",
+      "type": "PDF",
+      "status": "READY",
+      "humanStatus": "Vérifié le 11 septembre",
+      "private": false
+    },
+    {
+      "id": "doc2",
+      "student": "emma",
+      "training": "B",
+      "name": "Repères de stationnement",
+      "type": "PDF",
+      "status": "READY",
+      "humanStatus": null,
+      "private": false
+    },
+    {
+      "id": "doc3",
+      "student": "emma",
+      "training": "B",
+      "name": "Nouvelle pièce de permis",
+      "type": "JPEG",
+      "status": "ANALYZING",
+      "humanStatus": null,
+      "private": false
+    }
+  ],
+  "skills": [
+    {
+      "title": "Priorités",
+      "value": "Avec accompagnement",
+      "date": "11 septembre"
+    },
+    {
+      "title": "Stationnement",
+      "value": "Découverte",
+      "date": "11 septembre"
+    },
+    {
+      "title": "Autoroute",
+      "value": "Non observé",
+      "date": null
+    }
+  ],
+  "limits": "Élèves, disponibilités, prix et documents fictifs. Aucune inscription, publication, capture, analyse de fichier ni autorisation serveur réelle. Préférences et brouillons en mémoire volatile.",
+  "offerOptions": [
+    {
+      "duration": 45,
+      "price": 8500
+    },
+    {
+      "duration": 50,
+      "price": 9000
+    },
+    {
+      "duration": 60,
+      "price": 10500
+    }
+  ]
+}

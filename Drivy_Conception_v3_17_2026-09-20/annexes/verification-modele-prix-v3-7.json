@@ -1,0 +1,513 @@
+{
+  "version": "3.7",
+  "scope": "DOCUMENTARY_REFERENCE_MODEL_ONLY",
+  "rule": "R108",
+  "productCodeExercised": false,
+  "cases": [
+    {
+      "id": "PM01",
+      "title": "Base avec remise et frais offerts",
+      "input": {
+        "base": [
+          100000,
+          -10000,
+          0
+        ],
+        "declared": 90000,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 15000
+          }
+        ],
+        "selected": []
+      },
+      "expected": {
+        "catalogTotalCents": 90000,
+        "totalCents": 90000
+      },
+      "actual": {
+        "catalogTotalCents": 90000,
+        "totalCents": 90000
+      },
+      "passed": true
+    },
+    {
+      "id": "PM02",
+      "title": "Deux composants, un seul supplément",
+      "input": {
+        "base": [
+          100000,
+          -10000,
+          0
+        ],
+        "declared": 90000,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 15000
+          }
+        ],
+        "selected": [
+          "firstAid"
+        ]
+      },
+      "expected": {
+        "catalogTotalCents": 105000,
+        "totalCents": 105000
+      },
+      "actual": {
+        "catalogTotalCents": 105000,
+        "totalCents": 105000
+      },
+      "passed": true
+    },
+    {
+      "id": "PM03",
+      "title": "Prix convenu, catalogue conservé",
+      "input": {
+        "base": [
+          100000,
+          -10000,
+          0
+        ],
+        "declared": 90000,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 15000
+          }
+        ],
+        "selected": [
+          "firstAid"
+        ],
+        "override": {
+          "agreedTotalCents": 100000,
+          "reason": "Accord fictif explicite"
+        },
+        "admin": true
+      },
+      "expected": {
+        "catalogTotalCents": 105000,
+        "totalCents": 100000
+      },
+      "actual": {
+        "catalogTotalCents": 105000,
+        "totalCents": 100000
+      },
+      "passed": true
+    },
+    {
+      "id": "PM04",
+      "title": "Option inconnue",
+      "input": {
+        "base": [
+          100000,
+          -10000,
+          0
+        ],
+        "declared": 90000,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 15000
+          }
+        ],
+        "selected": [
+          "unknown"
+        ]
+      },
+      "expected": "UNKNOWN_OPTION",
+      "actual": "UNKNOWN_OPTION",
+      "passed": true
+    },
+    {
+      "id": "PM05",
+      "title": "Option choisie deux fois",
+      "input": {
+        "base": [
+          100000,
+          -10000,
+          0
+        ],
+        "declared": 90000,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 15000
+          }
+        ],
+        "selected": [
+          "firstAid",
+          "firstAid"
+        ]
+      },
+      "expected": "DUPLICATE_SELECTION",
+      "actual": "DUPLICATE_SELECTION",
+      "passed": true
+    },
+    {
+      "id": "PM06",
+      "title": "Clé de prix répétée avec autre montant",
+      "input": {
+        "base": [
+          100000,
+          -10000,
+          0
+        ],
+        "declared": 90000,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 15000
+          },
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 16000
+          }
+        ],
+        "selected": []
+      },
+      "expected": "DUPLICATE_OPTION_PRICE",
+      "actual": "DUPLICATE_OPTION_PRICE",
+      "passed": true
+    },
+    {
+      "id": "PM07",
+      "title": "Prix d’option manquant",
+      "input": {
+        "base": [
+          100000,
+          -10000,
+          0
+        ],
+        "declared": 90000,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [],
+        "selected": []
+      },
+      "expected": "OPTION_PRICE_SET_MISMATCH",
+      "actual": "OPTION_PRICE_SET_MISMATCH",
+      "passed": true
+    },
+    {
+      "id": "PM08",
+      "title": "Prix de base non égal aux lignes",
+      "input": {
+        "base": [
+          100000,
+          -10000,
+          0
+        ],
+        "declared": 89000,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 15000
+          }
+        ],
+        "selected": []
+      },
+      "expected": "BASE_SUM_MISMATCH",
+      "actual": "BASE_SUM_MISMATCH",
+      "passed": true
+    },
+    {
+      "id": "PM09",
+      "title": "Dérogation sans droit",
+      "input": {
+        "base": [
+          100000,
+          -10000,
+          0
+        ],
+        "declared": 90000,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 15000
+          }
+        ],
+        "selected": [],
+        "override": {
+          "agreedTotalCents": 80000,
+          "reason": "Accord"
+        }
+      },
+      "expected": "OVERRIDE_FORBIDDEN",
+      "actual": "OVERRIDE_FORBIDDEN",
+      "passed": true
+    },
+    {
+      "id": "PM10",
+      "title": "Dérogation sans justification",
+      "input": {
+        "base": [
+          100000,
+          -10000,
+          0
+        ],
+        "declared": 90000,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 15000
+          }
+        ],
+        "selected": [],
+        "override": {
+          "agreedTotalCents": 80000,
+          "reason": "  "
+        },
+        "admin": true
+      },
+      "expected": "REASON_REQUIRED",
+      "actual": "REASON_REQUIRED",
+      "passed": true
+    },
+    {
+      "id": "PM11",
+      "title": "Supplément zéro explicite",
+      "input": {
+        "base": [
+          100000,
+          -10000,
+          0
+        ],
+        "declared": 90000,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 0
+          }
+        ],
+        "selected": [
+          "firstAid"
+        ]
+      },
+      "expected": {
+        "catalogTotalCents": 90000,
+        "totalCents": 90000
+      },
+      "actual": {
+        "catalogTotalCents": 90000,
+        "totalCents": 90000
+      },
+      "passed": true
+    },
+    {
+      "id": "PM12",
+      "title": "Dépassement de la borne monétaire",
+      "input": {
+        "base": [
+          9007199254740991
+        ],
+        "declared": 9007199254740991,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 15000
+          }
+        ],
+        "selected": [
+          "firstAid"
+        ]
+      },
+      "expected": "AMOUNT_INVALID",
+      "actual": "AMOUNT_INVALID",
+      "passed": true
+    },
+    {
+      "id": "PM13",
+      "title": "Booleen n’est pas un montant",
+      "input": {
+        "base": [
+          true
+        ],
+        "declared": 1,
+        "components": [
+          {
+            "optionKey": null
+          },
+          {
+            "optionKey": "firstAid"
+          },
+          {
+            "optionKey": "firstAid"
+          }
+        ],
+        "prices": [
+          {
+            "optionKey": "firstAid",
+            "additionalCents": 15000
+          }
+        ],
+        "selected": []
+      },
+      "expected": "AMOUNT_INVALID",
+      "actual": "AMOUNT_INVALID",
+      "passed": true
+    },
+    {
+      "id": "PM14",
+      "title": "Une ligne tarifaire ne crée pas de droit",
+      "input": {
+        "base": [
+          100000,
+          -10000,
+          0
+        ],
+        "declared": 90000,
+        "components": [
+          {
+            "optionKey": null
+          }
+        ],
+        "prices": [],
+        "selected": []
+      },
+      "expected": {
+        "catalogTotalCents": 90000,
+        "totalCents": 90000
+      },
+      "actual": {
+        "catalogTotalCents": 90000,
+        "totalCents": 90000
+      },
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "limitation": "Modèle isolé du dossier : aucune transaction, aucun droit réel, aucun prix d’école ni code serveur ne sont exécutés."
+}

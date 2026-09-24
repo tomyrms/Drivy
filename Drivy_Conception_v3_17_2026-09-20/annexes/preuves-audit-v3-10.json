@@ -1,0 +1,539 @@
+{
+  "version": "3.10",
+  "sourceVersion": "3.9",
+  "meaning": "Lignes de la source avant correction ; formes de schémas complètes conservées dans schemas-base-v3-9.json. Aucune vulnérabilité applicative reproduite.",
+  "files": [
+    {
+      "file": "04-technique/fichiers-temps-communications.md",
+      "sha256": "b887449132f5c13791239b13abedf8c84878bdba52f7af0793a65cc75972933e",
+      "matches": [
+        {
+          "line": 10,
+          "text": "La création d’intention valide droits, portée, finalité, taille déclarée, MIME autorisé et hash. Le serveur choisit la clé objet aléatoire et le bucket privé ; le nom original n’est jamais un chemin. Le ticket est limité à cette clé, durée et taille. La finalisation vérifie taille réelle, signature de format et checksum, puis passe en quarantaine. Le worker analyse et réencode les images pour retirer métadonnées non nécessaires ; PDFs inspectés et rendus sans contenu actif dans l’aperçu sécurisé. Un scanner indisponible laisse QUARANTINED : ne jamais échouer ouvert vers READY. Ces mesures suivent la défense en profondeur recommandée pour les dépôts [S32](../06-gouvernance/sources.md#s32)."
+        },
+        {
+          "line": 12,
+          "text": "Le checksum déclaré porte sur l’original envoyé. Si le serveur produit un dérivé, conserver un hash séparé de ce dérivé et l’association de provenance ; ne pas comparer ensuite les octets transformés au checksum original. Les signatures du contenu et de l’intention sont des contrôles d’intégrité, pas une preuve que le fichier est légitime ou juridiquement nécessaire."
+        },
+        {
+          "line": 18,
+          "text": "    QUARANTINED --> READY: contrôles validés"
+        }
+      ]
+    },
+    {
+      "file": "04-technique/modele-donnees.md",
+      "sha256": "3eeabea1dbdfa9f5b21cb0456fa8e25068139d6bbfab69876d069397f7d6577a",
+      "matches": [
+        {
+          "line": 59,
+          "text": "| Document | id, school_id, owner_profile_id, training_id nullable, lesson_id nullable, purpose, audience, state, object_key, checksum, mime, bytes | Portée cohérente ; READY seul consultable ; aucune URL publique persistée. |"
+        },
+        {
+          "line": 60,
+          "text": "| SchoolAsset | id, school_id, purpose LOGO, state, object_key, checksum, mime, bytes | Pas de propriétaire élève. ADMIN dépose, membres autorisés lisent le logo READY courant ; nom scolaire en repli. |"
+        },
+        {
+          "line": 61,
+          "text": "| UploadIntent | id, school_id, document_id, object_key, expires_at, expected_size, state | Clé précise et permission courte ; aucune lecture générale du bucket. |"
+        }
+      ]
+    },
+    {
+      "file": "04-technique/api.md",
+      "sha256": "72f3a0571e5f9700720ad3a84b16784e8220215d5532de799700ad30323d40f1",
+      "matches": [
+        {
+          "line": 113,
+          "text": "| AP90 | `GET /v1/schools/{schoolId}/documents/{documentId}/content` | F09 | `sans corps` → `Ack` | Non |"
+        },
+        {
+          "line": 114,
+          "text": "| AP91 | `GET /v1/schools/{schoolId}/exports/{exportId}/content` | F14 | `sans corps` → `Ack` | Non |"
+        },
+        {
+          "line": 115,
+          "text": "| AP92 | `GET /v1/schools/{schoolId}/school-assets/{assetId}/content` | F13 | `sans corps` → `Ack` | Non |"
+        }
+      ]
+    },
+    {
+      "file": "03-fonctionnel/gestion-web-archivage.md",
+      "sha256": "fd6e624586fe1a27409d42393c3575ea3bfb7df4aa60e01815e1b96749e0204c",
+      "matches": [
+        {
+          "line": 96,
+          "text": "Plafond proposé de 10 000 lignes ; au-delà, demander un filtre plus précis, jamais livrer un fichier tronqué sans avertissement. Les cellules textuelles CSV sont neutralisées contre l’interprétation comme formule, y compris après séparateur/retour ligne [S57](../06-gouvernance/sources.md#s57). Une copie déjà téléchargée ne peut pas être rappelée ; l’interface le signale."
+        }
+      ]
+    },
+    {
+      "file": "04-technique/architecture-client-swift.md",
+      "sha256": "69a271c5af37df9d63c4bedb4c06a777438fb42bad49e9691df725b7bdad2fdc",
+      "matches": [
+        {
+          "line": 24,
+          "text": " ├─ DrivyAPIClient : URLSession, DTO et gestion HTTP explicite"
+        },
+        {
+          "line": 69,
+          "text": "**REC :** un magasin SQLite/SQLCipher natif dédié, intégration et édition choisies après qualification [S104](../06-gouvernance/sources.md#s104). Des modèles `Codable` ne remplacent pas une transaction locale. Une simple mention de SQLite, SwiftData ou Core Data ne prouve pas le chiffrement exigé par le dossier ; ne pas ajouter une synchronisation CloudKit concurrente au serveur métier."
+        },
+        {
+          "line": 91,
+          "text": "**REC :** `URLSession` derrière `DrivyAPIClient`. Un client généré par Swift OpenAPI Generator est candidat : le projet officiel génère des types et appels depuis le contrat, avec un transport choisi séparément [S103](../06-gouvernance/sources.md#s103). Cela ne démontre pas que toutes les constructions des 370 schémas de Drivy sont couvertes par la version retenue."
+        },
+        {
+          "line": 107,
+          "text": "**Transport GPS de référence :** envoi des chunks JSON existants par URLSession lorsque le processus dispose d’exécution, avec reprise au premier plan. La file reste chiffrée au repos et la réception est confirmée par l’API, pas par l’indicateur d’octets envoyés. Ne pas introduire un fichier temporaire en clair pour obtenir un upload système en arrière-plan. Cette optimisation éventuelle demanderait un profil distinct prouvant protection, authentification expirée, redirection, annulation et compatibilité du contrat ; elle n’est pas une capacité acquise du pilote."
+        },
+        {
+          "line": 148,
+          "text": "Les critères restant ouverts sont : appareils/minimum d’OS, implémentation précise des permissions, fournisseur d’identité et de cartes web/Android, politique locale de clés, bibliothèque SQLCipher/édition, budget Android et clôture globale de compte. La décision **Swift natif** n’est plus une question ouverte ; ces choix de réalisation le restent."
+        }
+      ]
+    },
+    {
+      "file": "annexes/traceabilite.json",
+      "sha256": "6930a05cfcd2c59494e77f2f1b089cc7a275d8a30d573fd2e3e72b8361ff05a6",
+      "matches": [
+        {
+          "line": 2,
+          "text": "  \"status\": \"Référence documentaire V3.6 ; application non implémentée par ce dossier\","
+        }
+      ]
+    },
+    {
+      "file": "README.md",
+      "sha256": "ec779a16b8aae922b27d1cc0ad8e749bfec10552ad44d4c44479deffa0324470",
+      "matches": [
+        {
+          "line": 149,
+          "text": "| [Vérification de référence](annexes/verifier-reference-v3-8.py) | Contrôles hérités de contrat avec version documentaire actuelle. |"
+        },
+        {
+          "line": 150,
+          "text": "| [Contrôles design](annexes/verifier-design-v3-8.py) | Tokens, couverture et cohérence de génération. |"
+        },
+        {
+          "line": 152,
+          "text": "| [Provenance](annexes/provenance-v3-8.json) | Archive source et contrat identifiés par empreintes. |"
+        }
+      ]
+    },
+    {
+      "file": "06-gouvernance/glossaire-decisions-questions.md",
+      "sha256": "508903bb59e11cf99d0537fcdbf99e803c17b3293db4ea6ed8085f313663d596",
+      "matches": [
+        {
+          "line": 410,
+          "text": "La pile Apple ne fait plus partie des questions ouvertes : D11 est confirmée. Les décisions DM01–DM08 sont suivies dans le [registre courant V3.6](audit-corrections-v3-6.md#decisions) ; le registre V3.3 est historique. Les minimums d’OS, appareils, bibliothèques et paramètres de capture restent à qualifier. Android ne constitue pas un prérequis de build Apple. DM06 possède désormais un contrat global détaillé ; son implémentation, ses responsabilités, délais, rétentions et le cas du dernier ADMIN restent un blocage avant publication publique."
+        },
+        {
+          "line": 414,
+          "text": "Le [registre courant V3.6](audit-corrections-v3-6.md#decisions) remplace les formulations de « registre courant » des historiques. **Swift natif demeure accepté.** Les détails R106–R108 et les valeurs initiales de préférences sont des propositions pour lever des lacunes, à valider avec les responsables du produit et des écoles. Leur présence dans un schéma n’atteste ni accord commercial ni implémentation."
+        }
+      ]
+    }
+  ],
+  "schemasBefore": {
+    "Document": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "schoolId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ownerLearnerId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "trainingId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lessonId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "purpose": {
+          "type": "string",
+          "enum": [
+            "PERMIT",
+            "LESSON_SUPPORT",
+            "ADMINISTRATIVE",
+            "PROFILE_PHOTO"
+          ]
+        },
+        "audience": {
+          "type": "string",
+          "enum": [
+            "LEARNER_SHARED",
+            "STAFF_RESTRICTED"
+          ]
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING_UPLOAD",
+            "QUARANTINED",
+            "READY",
+            "REJECTED",
+            "DELETED"
+          ]
+        },
+        "detectedMime": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rejectionCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "schoolId",
+        "version",
+        "ownerLearnerId",
+        "trainingId",
+        "lessonId",
+        "purpose",
+        "audience",
+        "displayName",
+        "status",
+        "detectedMime",
+        "bytes",
+        "rejectionCode"
+      ]
+    },
+    "UploadTicket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "document": {
+          "$ref": "#/components/schemas/Document"
+        },
+        "uploadId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "uploadUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "requiredHeaders": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "document",
+        "uploadId",
+        "uploadUrl",
+        "expiresAt",
+        "requiredHeaders"
+      ]
+    },
+    "DownloadTicket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "documentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "documentId",
+        "url",
+        "expiresAt"
+      ]
+    },
+    "Export": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "schoolId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "privacyRequestId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PREPARING",
+            "READY",
+            "FAILED",
+            "EXPIRED"
+          ]
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "manifest": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "PRIVACY",
+            "STUDENT_LIST",
+            "METRICS"
+          ]
+        },
+        "createdByMembershipId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "columnsVersion": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 100
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rowCount": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "schoolId",
+        "version",
+        "privacyRequestId",
+        "status",
+        "expiresAt",
+        "manifest",
+        "kind"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "STUDENT_LIST",
+                  "METRICS"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "privacyRequestId": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "createdByMembershipId",
+              "columnsVersion"
+            ]
+          },
+          "else": {
+            "properties": {
+              "privacyRequestId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ],
+      "description": "Finalité explicite obligatoire. Aucun kind implicite ni assimilation automatique à PRIVACY. Contrôles R96 par génération et téléchargement."
+    },
+    "SchoolAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "schoolId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "purpose": {
+          "const": "LOGO"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING_UPLOAD",
+            "QUARANTINED",
+            "READY",
+            "REJECTED",
+            "DELETED"
+          ]
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detectedMime": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "schoolId",
+        "version",
+        "purpose",
+        "status",
+        "displayName",
+        "bytes",
+        "detectedMime"
+      ]
+    },
+    "AssetUploadTicket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "$ref": "#/components/schemas/SchoolAsset"
+        },
+        "uploadId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "uploadUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "requiredHeaders": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "asset",
+        "uploadId",
+        "uploadUrl",
+        "expiresAt",
+        "requiredHeaders"
+      ]
+    }
+  }
+}

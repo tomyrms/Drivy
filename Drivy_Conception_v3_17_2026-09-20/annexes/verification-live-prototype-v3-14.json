@@ -1,0 +1,764 @@
+{
+  "version": "3.14",
+  "scope": "DOCUMENTARY_HTML_MEMORY_AND_DTO_ONLY",
+  "executedAtUTC": "2026-09-20T10:13:46.504226+00:00",
+  "environment": {
+    "python": "3.13.5",
+    "system": "Linux",
+    "playwright": "1.57.0",
+    "chromium": "/usr/bin/chromium"
+  },
+  "checks": [
+    {
+      "name": "opening_does_not_create_event",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "six_named_stable_categories",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "open_context_points_to_already_recorded_fixture",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "cancel_leaves_no_event_or_command",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_default_status_no_event_after_theme",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "resize_keeps_pending_timestamp_and_selection",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "explicit_commit_creates_one_private_qualified_event",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "commit_keeps_open_time_not_validation_time",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "anchored_signal_matches_unchanged_api_shape",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "canvas_coords_not_transmitted_as_gps",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "duplicate_commit_without_pending_is_ignored",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "live_map_contains_private_pin",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "negative_schema_half_anchor",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "negative_schema_invalid_time",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "negative_schema_missing_status",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "negative_schema_unqualified_as_qualified",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "private_replay_opens_same_moment",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "private_replay_exposes_named_event",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "replay_does_not_steal_manual_camera",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "recenter_keeps_replay_time",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "student_navigation_forces_published_context",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "student_replay_has_no_private_timeline_or_controls",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "marker_private_and_not_qualified",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "marker_dto_valid",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "detail_form_requires_theme_and_status",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "qualifying_marker_preserves_identity_time_anchor",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "qualified_marker_dto_valid",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_automatic_selection_or_grade",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "preview_escapes_entered_text",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "selection_does_not_assign_grade",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "stop_accessible_while_signal_open",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "stopping_keeps_pending_signal_explicit",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "without_gps_same_signal_path_no_anchor",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "without_gps_dto_valid",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "critical_targets_visible_at_all_eight_sizes",
+      "passed": true,
+      "detail": [
+        {
+          "phoneWidth": 320,
+          "phoneHeight": 568,
+          "targets": [
+            {
+              "action": "openSignal",
+              "width": 204,
+              "height": 60,
+              "inside": true
+            },
+            {
+              "action": "markLive",
+              "width": 60,
+              "height": 60,
+              "inside": true
+            },
+            {
+              "action": "stop",
+              "width": 99.359375,
+              "height": 44,
+              "inside": true
+            }
+          ],
+          "passed": true,
+          "largeText": false,
+          "requestedWidth": 320,
+          "requestedHeight": 568
+        },
+        {
+          "phoneWidth": 320,
+          "phoneHeight": 568,
+          "targets": [
+            {
+              "action": "openSignal",
+              "width": 212.0625,
+              "height": 67.390625,
+              "inside": true
+            },
+            {
+              "action": "markLive",
+              "width": 60,
+              "height": 67.390625,
+              "inside": true
+            },
+            {
+              "action": "stop",
+              "width": 142.71875,
+              "height": 51.796875,
+              "inside": true
+            }
+          ],
+          "passed": true,
+          "largeText": true,
+          "requestedWidth": 320,
+          "requestedHeight": 568
+        },
+        {
+          "phoneWidth": 375,
+          "phoneHeight": 667,
+          "targets": [
+            {
+              "action": "openSignal",
+              "width": 259,
+              "height": 60,
+              "inside": true
+            },
+            {
+              "action": "markLive",
+              "width": 60,
+              "height": 60,
+              "inside": true
+            },
+            {
+              "action": "stop",
+              "width": 99.359375,
+              "height": 44,
+              "inside": true
+            }
+          ],
+          "passed": true,
+          "largeText": false,
+          "requestedWidth": 375,
+          "requestedHeight": 667
+        },
+        {
+          "phoneWidth": 375,
+          "phoneHeight": 667,
+          "targets": [
+            {
+              "action": "openSignal",
+              "width": 267,
+              "height": 67.390625,
+              "inside": true
+            },
+            {
+              "action": "markLive",
+              "width": 60,
+              "height": 67.390625,
+              "inside": true
+            },
+            {
+              "action": "stop",
+              "width": 142.71875,
+              "height": 51.796875,
+              "inside": true
+            }
+          ],
+          "passed": true,
+          "largeText": true,
+          "requestedWidth": 375,
+          "requestedHeight": 667
+        },
+        {
+          "phoneWidth": 390,
+          "phoneHeight": 844,
+          "targets": [
+            {
+              "action": "openSignal",
+              "width": 274,
+              "height": 60,
+              "inside": true
+            },
+            {
+              "action": "markLive",
+              "width": 60,
+              "height": 60,
+              "inside": true
+            },
+            {
+              "action": "stop",
+              "width": 99.359375,
+              "height": 44,
+              "inside": true
+            }
+          ],
+          "passed": true,
+          "largeText": false,
+          "requestedWidth": 390,
+          "requestedHeight": 844
+        },
+        {
+          "phoneWidth": 390,
+          "phoneHeight": 844,
+          "targets": [
+            {
+              "action": "openSignal",
+              "width": 282,
+              "height": 67.390625,
+              "inside": true
+            },
+            {
+              "action": "markLive",
+              "width": 60,
+              "height": 67.390625,
+              "inside": true
+            },
+            {
+              "action": "stop",
+              "width": 142.71875,
+              "height": 51.796875,
+              "inside": true
+            }
+          ],
+          "passed": true,
+          "largeText": true,
+          "requestedWidth": 390,
+          "requestedHeight": 844
+        },
+        {
+          "phoneWidth": 440,
+          "phoneHeight": 956,
+          "targets": [
+            {
+              "action": "openSignal",
+              "width": 324,
+              "height": 60,
+              "inside": true
+            },
+            {
+              "action": "markLive",
+              "width": 60,
+              "height": 60,
+              "inside": true
+            },
+            {
+              "action": "stop",
+              "width": 99.359375,
+              "height": 44,
+              "inside": true
+            }
+          ],
+          "passed": true,
+          "largeText": false,
+          "requestedWidth": 440,
+          "requestedHeight": 956
+        },
+        {
+          "phoneWidth": 440,
+          "phoneHeight": 956,
+          "targets": [
+            {
+              "action": "openSignal",
+              "width": 332,
+              "height": 67.390625,
+              "inside": true
+            },
+            {
+              "action": "markLive",
+              "width": 60,
+              "height": 67.390625,
+              "inside": true
+            },
+            {
+              "action": "stop",
+              "width": 142.71875,
+              "height": 51.796875,
+              "inside": true
+            }
+          ],
+          "passed": true,
+          "largeText": true,
+          "requestedWidth": 440,
+          "requestedHeight": 956
+        }
+      ]
+    },
+    {
+      "name": "negative_geometry_detects_hidden_trigger",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "ipad_resize_retains_pending_and_events",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "reduced_motion_removes_panel_animation",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "contrast_option_keeps_all_category_actions",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "negative_open_side_effect_is_detected",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "negative_validation_timestamp_is_detected",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "fresh_document_clears_memory",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_network_requests",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "no_javascript_errors",
+      "passed": true,
+      "detail": []
+    }
+  ],
+  "dtoCases": [
+    {
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000110001",
+        "draftId": null,
+        "captureId": "00000000-0000-4000-8000-000000000150",
+        "segmentId": "00000000-0000-4000-8000-000000000151",
+        "pointSequence": 7,
+        "competencyId": "00000000-0000-4000-8000-000000000108",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T07:24:50.000Z",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION"
+      },
+      "passed": true,
+      "errors": []
+    },
+    {
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000110002",
+        "draftId": null,
+        "captureId": "00000000-0000-4000-8000-000000000150",
+        "segmentId": "00000000-0000-4000-8000-000000000151",
+        "pointSequence": 8,
+        "competencyId": null,
+        "text": "Moment à qualifier",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T07:30:00.000Z",
+        "eventKind": "MARKER",
+        "eventStatus": null
+      },
+      "passed": true,
+      "errors": []
+    },
+    {
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000110002",
+        "draftId": null,
+        "captureId": "00000000-0000-4000-8000-000000000150",
+        "segmentId": "00000000-0000-4000-8000-000000000151",
+        "pointSequence": 8,
+        "competencyId": "00000000-0000-4000-8000-000000000111",
+        "text": "Stationnement <script>aucun_script()</script>",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T07:30:00.000Z",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "TO_REWORK"
+      },
+      "passed": true,
+      "errors": []
+    },
+    {
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000110003",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "00000000-0000-4000-8000-000000000112",
+        "text": "Signalisation",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T07:30:00.000Z",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "POSITIVE"
+      },
+      "passed": true,
+      "errors": []
+    }
+  ],
+  "layouts": [
+    {
+      "phoneWidth": 320,
+      "phoneHeight": 568,
+      "targets": [
+        {
+          "action": "openSignal",
+          "width": 204,
+          "height": 60,
+          "inside": true
+        },
+        {
+          "action": "markLive",
+          "width": 60,
+          "height": 60,
+          "inside": true
+        },
+        {
+          "action": "stop",
+          "width": 99.359375,
+          "height": 44,
+          "inside": true
+        }
+      ],
+      "passed": true,
+      "largeText": false,
+      "requestedWidth": 320,
+      "requestedHeight": 568
+    },
+    {
+      "phoneWidth": 320,
+      "phoneHeight": 568,
+      "targets": [
+        {
+          "action": "openSignal",
+          "width": 212.0625,
+          "height": 67.390625,
+          "inside": true
+        },
+        {
+          "action": "markLive",
+          "width": 60,
+          "height": 67.390625,
+          "inside": true
+        },
+        {
+          "action": "stop",
+          "width": 142.71875,
+          "height": 51.796875,
+          "inside": true
+        }
+      ],
+      "passed": true,
+      "largeText": true,
+      "requestedWidth": 320,
+      "requestedHeight": 568
+    },
+    {
+      "phoneWidth": 375,
+      "phoneHeight": 667,
+      "targets": [
+        {
+          "action": "openSignal",
+          "width": 259,
+          "height": 60,
+          "inside": true
+        },
+        {
+          "action": "markLive",
+          "width": 60,
+          "height": 60,
+          "inside": true
+        },
+        {
+          "action": "stop",
+          "width": 99.359375,
+          "height": 44,
+          "inside": true
+        }
+      ],
+      "passed": true,
+      "largeText": false,
+      "requestedWidth": 375,
+      "requestedHeight": 667
+    },
+    {
+      "phoneWidth": 375,
+      "phoneHeight": 667,
+      "targets": [
+        {
+          "action": "openSignal",
+          "width": 267,
+          "height": 67.390625,
+          "inside": true
+        },
+        {
+          "action": "markLive",
+          "width": 60,
+          "height": 67.390625,
+          "inside": true
+        },
+        {
+          "action": "stop",
+          "width": 142.71875,
+          "height": 51.796875,
+          "inside": true
+        }
+      ],
+      "passed": true,
+      "largeText": true,
+      "requestedWidth": 375,
+      "requestedHeight": 667
+    },
+    {
+      "phoneWidth": 390,
+      "phoneHeight": 844,
+      "targets": [
+        {
+          "action": "openSignal",
+          "width": 274,
+          "height": 60,
+          "inside": true
+        },
+        {
+          "action": "markLive",
+          "width": 60,
+          "height": 60,
+          "inside": true
+        },
+        {
+          "action": "stop",
+          "width": 99.359375,
+          "height": 44,
+          "inside": true
+        }
+      ],
+      "passed": true,
+      "largeText": false,
+      "requestedWidth": 390,
+      "requestedHeight": 844
+    },
+    {
+      "phoneWidth": 390,
+      "phoneHeight": 844,
+      "targets": [
+        {
+          "action": "openSignal",
+          "width": 282,
+          "height": 67.390625,
+          "inside": true
+        },
+        {
+          "action": "markLive",
+          "width": 60,
+          "height": 67.390625,
+          "inside": true
+        },
+        {
+          "action": "stop",
+          "width": 142.71875,
+          "height": 51.796875,
+          "inside": true
+        }
+      ],
+      "passed": true,
+      "largeText": true,
+      "requestedWidth": 390,
+      "requestedHeight": 844
+    },
+    {
+      "phoneWidth": 440,
+      "phoneHeight": 956,
+      "targets": [
+        {
+          "action": "openSignal",
+          "width": 324,
+          "height": 60,
+          "inside": true
+        },
+        {
+          "action": "markLive",
+          "width": 60,
+          "height": 60,
+          "inside": true
+        },
+        {
+          "action": "stop",
+          "width": 99.359375,
+          "height": 44,
+          "inside": true
+        }
+      ],
+      "passed": true,
+      "largeText": false,
+      "requestedWidth": 440,
+      "requestedHeight": 956
+    },
+    {
+      "phoneWidth": 440,
+      "phoneHeight": 956,
+      "targets": [
+        {
+          "action": "openSignal",
+          "width": 332,
+          "height": 67.390625,
+          "inside": true
+        },
+        {
+          "action": "markLive",
+          "width": 60,
+          "height": 67.390625,
+          "inside": true
+        },
+        {
+          "action": "stop",
+          "width": 142.71875,
+          "height": 51.796875,
+          "inside": true
+        }
+      ],
+      "passed": true,
+      "largeText": true,
+      "requestedWidth": 440,
+      "requestedHeight": 956
+    }
+  ],
+  "passed": true,
+  "errorCount": 0,
+  "errors": [],
+  "nativeTestsExecuted": false,
+  "limits": [
+    "No persistent storage, real GPS, backend, transaction or publication executed.",
+    "Canvas anchors are fictitious references; shape validation does not enforce authorization or freshness.",
+    "CSS measurements do not establish native Dynamic Type, VoiceOver, safety in motion or actual smallest supported device.",
+    "T423–T434 and all other product scenarios remain NOT_EXECUTED."
+  ]
+}

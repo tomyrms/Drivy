@@ -1,0 +1,126 @@
+{
+  "version": "3.16",
+  "scope": "STRUCTURAL_DOCUMENTARY_CHECKS_ONLY",
+  "passed": true,
+  "errorCount": 0,
+  "checks": [
+    {
+      "check": "Unchanged 04-technique/openapi.yaml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Unchanged annexes/tokens-proposition.json",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Unchanged annexes/traceabilite.json",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Generated atelier equals its current sources",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "No remote scripts, fonts or styles required",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Four review views only",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Prototype limitation outside application canvas",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "No API calls or persistence are implemented",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Reduced motion is implemented",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Eight static vector exports",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "01_capture_dark.svg is XML, with editable text and no bitmap/font payload",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "01_capture_light.svg is XML, with editable text and no bitmap/font payload",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "02_categories_dark.svg is XML, with editable text and no bitmap/font payload",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "02_categories_light.svg is XML, with editable text and no bitmap/font payload",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "03_status_dark.svg is XML, with editable text and no bitmap/font payload",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "03_status_light.svg is XML, with editable text and no bitmap/font payload",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "04_replay_dark.svg is XML, with editable text and no bitmap/font payload",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "04_replay_light.svg is XML, with editable text and no bitmap/font payload",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Brand spelling in current prototype",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "README current count",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Current guide prioritises atelier",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Complementary gallery links to current atelier",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Direction approval does not invent Figma delivery",
+      "passed": true,
+      "details": null
+    }
+  ],
+  "markdownDocuments": 86,
+  "figmaImportExecuted": false,
+  "nativeTestsExecuted": false
+}

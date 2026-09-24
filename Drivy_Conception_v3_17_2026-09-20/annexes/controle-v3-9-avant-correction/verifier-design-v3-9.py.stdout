@@ -1,0 +1,120 @@
+{
+  "version": "3.9",
+  "scope": "DESIGN_DOCUMENTATION_ONLY",
+  "nativeTestsExecuted": false,
+  "checks": [
+    {
+      "name": "selected_option_A_status",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "base_palette_matches_selected_direction",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "36_contrast_pairs_recomputed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "canonical_palette_in_document_and_prototype",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "prototype_exactly_generated_from_canonical_sources",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "15_unique_scenes",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "49_screen_coverage_no_duplicates",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "coverage_matches_actual_scene_declarations",
+      "passed": true,
+      "detail": {
+        "listed": 19,
+        "scenes": 19
+      }
+    },
+    {
+      "name": "16_illustrated_33_not_drawn",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "scene_components_have_specifications",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_font_binaries",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_external_runtime_resources",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_runtime_geolocation_or_network_calls",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "api_unchanged",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "six_visual_exports_exist",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "old_palette_absent_from_active_system",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "direction_not_open_in_decision_register",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "interaction_bindings_match_screen_and_visual_catalog",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "UX21_to_UX32_documented_not_executed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "entrypoints_use_current_review",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "scenes": 15,
+  "illustratedScreenReferences": 16,
+  "notDrawnScreenReferences": 33,
+  "passed": true,
+  "errors": [],
+  "limits": [
+    "Opaque sRGB contrast only; no global WCAG certification.",
+    "Screenshots are browser compositions, not SwiftUI, MapKit or device tests.",
+    "Business rules and native behaviour are not exercised by these checks."
+  ]
+}

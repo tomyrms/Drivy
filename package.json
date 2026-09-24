@@ -1,0 +1,15 @@
+{
+  "name": "drivy",
+  "version": "0.1.0",
+  "private": true,
+  "engines": { "node": ">=24 <25" },
+  "workspaces": ["apps/api"],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test --workspaces",
+    "test:unit": "npm run test:unit --workspaces",
+    "check:docs": "python -B Drivy_Conception_v3_17_2026-09-20/annexes/verifier-integrite.py",
+    "dev:api": "npm run dev --workspace @drivy/api"
+  }
+}

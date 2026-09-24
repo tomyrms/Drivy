@@ -1,0 +1,41 @@
+{
+  "version": "3.11",
+  "status": "PROPOSED_NOT_USER_VALIDATED",
+  "nativeStatus": "NOT_EXECUTED",
+  "bindings": [
+    {
+      "id": "UX33",
+      "action": "markLive",
+      "screens": [
+        "E04",
+        "E23"
+      ],
+      "expected": "private marker, no default score, no GPS point invented"
+    },
+    {
+      "id": "UX34",
+      "action": "editLive/saveLive",
+      "screens": [
+        "E04",
+        "E23"
+      ],
+      "expected": "theme/status required, retained in demo memory only"
+    },
+    {
+      "id": "UX35",
+      "action": "liveBilan",
+      "screens": [
+        "E08"
+      ],
+      "expected": "explicit selection, no automatic grade or publication"
+    },
+    {
+      "id": "UX36",
+      "action": "liveStop",
+      "screens": [
+        "E23"
+      ],
+      "expected": "stop available while form open, no mandatory save"
+    }
+  ]
+}

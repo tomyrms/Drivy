@@ -1,0 +1,68 @@
+name: Drivy
+options:
+  minimumXcodeGenVersion: 2.46.0
+  bundleIdPrefix: ch.drivy
+  deploymentTarget:
+    iOS: '26.0'
+  developmentLanguage: fr
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  Release: release
+settings:
+  base:
+    SWIFT_VERSION: '6.0'
+    SWIFT_STRICT_CONCURRENCY: complete
+    TARGETED_DEVICE_FAMILY: '1,2'
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_REQUIRED: NO
+    DEVELOPMENT_TEAM: ''
+    GCC_PREPROCESSOR_DEFINITIONS: '$(inherited) SQLITE_HAS_CODEC=1'
+    OTHER_SWIFT_FLAGS: '$(inherited) -Xcc -DSQLITE_HAS_CODEC'
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: 1
+packages:
+  SQLCipher:
+    url: https://github.com/sqlcipher/SQLCipher.swift.git
+    exactVersion: 4.19.0
+targets:
+  Drivy:
+    type: application
+    platform: iOS
+    sources:
+      - path: Drivy
+        excludes:
+          - '**/*.md'
+    dependencies:
+      - package: SQLCipher
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ch.drivy.qualification
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+        INFOPLIST_FILE: Drivy/Info.plist
+    scheme:
+      testTargets:
+        - DrivyTests
+        - DrivyUITests
+      gatherCoverageData: true
+  DrivyTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [DrivyTests]
+    dependencies:
+      - target: Drivy
+      - package: SQLCipher
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+  DrivyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [DrivyUITests]
+    dependencies:
+      - target: Drivy
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES

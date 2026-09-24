@@ -1,0 +1,371 @@
+{
+  "version": "3.10.0",
+  "schemas": {
+    "GeoObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "schoolId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lessonId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "trainingId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "draftId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "captureId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "segmentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pointSequence": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "competencyId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "id",
+        "schoolId",
+        "version",
+        "lessonId",
+        "trainingId",
+        "draftId",
+        "captureId",
+        "segmentId",
+        "pointSequence",
+        "competencyId",
+        "text"
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "captureId": {
+              "type": "null"
+            },
+            "segmentId": {
+              "type": "null"
+            },
+            "pointSequence": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "captureId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "segmentId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "pointSequence": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "GeoObservationCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "draftId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "captureId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "segmentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pointSequence": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "competencyId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "operationId",
+        "draftId",
+        "captureId",
+        "segmentId",
+        "pointSequence",
+        "competencyId",
+        "text"
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "captureId": {
+              "type": "null"
+            },
+            "segmentId": {
+              "type": "null"
+            },
+            "pointSequence": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "captureId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "segmentId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "pointSequence": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "PublishedGeoObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "captureId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "segmentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pointSequence": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "competencyId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "sourceVersion": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "id",
+        "captureId",
+        "segmentId",
+        "pointSequence",
+        "competencyId",
+        "text",
+        "sourceVersion"
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "captureId": {
+              "type": "null"
+            },
+            "segmentId": {
+              "type": "null"
+            },
+            "pointSequence": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "captureId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "segmentId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "pointSequence": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "PublishedTextObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "competencyId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "pattern": "\\S"
+        },
+        "sourceVersion": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "id",
+        "competencyId",
+        "text",
+        "sourceVersion"
+      ]
+    }
+  }
+}

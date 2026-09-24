@@ -1,0 +1,42 @@
+[
+  {
+    "script": "verifier-documentation.py",
+    "exit": 0,
+    "seconds": 6.18,
+    "passed": true,
+    "errorCount": 0,
+    "errors": []
+  },
+  {
+    "script": "verifier-reference-v3-10.py",
+    "exit": 0,
+    "seconds": 3.3,
+    "passed": true,
+    "errorCount": 0,
+    "errors": []
+  },
+  {
+    "script": "verifier-fichiers-v3-10.py",
+    "exit": 0,
+    "seconds": 3.28,
+    "passed": true,
+    "errorCount": null,
+    "errors": []
+  },
+  {
+    "script": "verifier-mobile-swift-v3-10.py",
+    "exit": 0,
+    "seconds": 0.76,
+    "passed": true,
+    "errorCount": null,
+    "errors": []
+  },
+  {
+    "script": "verifier-design-v3-10.py",
+    "exit": 0,
+    "seconds": 0.67,
+    "passed": true,
+    "errorCount": null,
+    "errors": []
+  }
+]

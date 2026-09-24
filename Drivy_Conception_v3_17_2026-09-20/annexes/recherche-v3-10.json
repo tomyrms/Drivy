@@ -1,0 +1,58 @@
+{
+  "version": "3.10",
+  "consultedAt": "2026-09-19",
+  "sources": [
+    {
+      "id": "S128",
+      "title": "AWS : réutilisation et portée des URL présignées",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html",
+      "scope": "Les URL présignées sont réutilisables jusqu’à expiration et un PUT peut remplacer la même clé. Les signatures portent sur méthode et paramètres ; l’expiration ne prouve pas suppression de l’objet. Conséquence Drivy proposée : staging distinct et contenu scellé, bearer de stockage jamais confondu avec identité métier."
+    },
+    {
+      "id": "S129",
+      "title": "AWS : écritures conditionnelles",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html",
+      "scope": "If-None-Match: * empêche l’écrasement de la clé courante ; les politiques peuvent imposer cette condition. Une clé absente ou un delete marker ne constituent pas une immuabilité éternelle : la génération canonique doit rester distincte du staging. 412 ou 409 nécessitent réconciliation ; aucun essai S3 n’a été effectué."
+    },
+    {
+      "id": "S130",
+      "title": "OWASP : défense en profondeur du dépôt de fichiers",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html",
+      "scope": "Types autorisés, contrôle du contenu, stockage privé et limites de traitement. Taille compressée et taille/coût décompressés distincts ; antivirus ne remplace pas isolation et validation. Les budgets précis Drivy sont une configuration à qualifier, pas des nombres prescrits par cette source."
+    },
+    {
+      "id": "S131",
+      "title": "IETF RFC 9111 : caches HTTP",
+      "url": "https://www.rfc-editor.org/rfc/rfc9111.html",
+      "scope": "Directives no-store et private pour caches HTTP. La politique de cache ne garantit pas l’effacement des copies applicatives/sauvegardes externes ni la confidentialité des snapshots système. Compléments locaux Drivy spécifiés séparément."
+    },
+    {
+      "id": "S132",
+      "title": "Apple QA1838 : snapshot du sélecteur d’applications, source archivée",
+      "url": "https://developer.apple.com/library/archive/qa/qa1838/_index.html",
+      "scope": "SOURCE ARCHIVÉE. Apple explique le snapshot effectué lors du passage en arrière-plan et la nécessité de retirer les informations sensibles de la hiérarchie avant capture, sans animation. Le callback Objective-C de cet ancien document n’est pas une preuve de bonne intégration SwiftUI, multi-scènes, iOS/iPadOS 26 ou 27. Adapter et qualifier le cycle de vie sur builds réels."
+    },
+    {
+      "id": "S133",
+      "title": "OpenAPI 3.1 : contenu des réponses et schémas",
+      "url": "https://spec.openapis.org/oas/v3.1.0",
+      "scope": "Le contrat décrit les media types des réponses et leurs schémas. Application : distinguer CSV et ZIP dans AP91, pas un Ack fictif dans le catalogue. La lecture de la spécification et jsonschema ne constituent pas une validation intégrale du méta-schéma OpenAPI."
+    },
+    {
+      "id": "S134",
+      "title": "Apple : outillage Xcode, reconsultation ciblée",
+      "url": "https://developer.apple.com/xcode/system-requirements",
+      "scope": "Tableau consulté le 19 septembre 2026 : Xcode 27, SDK iOS 27 et macOS Tahoe 26.6 ou ultérieur sont séparés des lignes bêta. Cette consultation n’a compilé aucune dépendance Drivy et ne qualifie pas les plateformes. Les décisions de minimum utilisateur et les cellules de build restent ouvertes."
+    }
+  ],
+  "notRevalidated": [
+    "Tarifs des dix auto-écoles",
+    "Profils réglementaires scolaires",
+    "Toutes les bibliothèques natives",
+    "Conditions des prestataires non choisis"
+  ],
+  "accessLimits": [
+    "Pages DocC URLSession/URLCache à rendu JavaScript sans texte complet récupéré dans cette passe : configuration candidate à compiler, pas signature API attestée ici.",
+    "Installation du validateur OpenAPI complet échouée faute de résolution DNS ; contrôles JSON Schema/ref et media types réalisés séparément."
+  ]
+}

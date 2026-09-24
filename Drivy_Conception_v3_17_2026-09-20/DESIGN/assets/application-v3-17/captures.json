@@ -1,0 +1,247 @@
+{
+  "generatedAtUTC": "2026-09-20T17:39:35.704887+00:00",
+  "version": "3.17",
+  "method": "Chromium page.set_content / locator screenshot",
+  "screens": [
+    {
+      "file": "01_seance_light.png",
+      "route": "home",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "02_agenda_light.png",
+      "route": "agenda",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "03_eleves_light.png",
+      "route": "students",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "04_dossier_light.png",
+      "route": "student",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "05_lecon_light.png",
+      "route": "lesson",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "06_planifier_light.png",
+      "route": "planning",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "07_rediger_light.png",
+      "route": "report",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "08_apercu_light.png",
+      "route": "preview",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "09_bilan_partage_light.png",
+      "route": "shared",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "10_documents_light.png",
+      "route": "documents",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "11_compte_light.png",
+      "route": "account",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "12_notifications_light.png",
+      "route": "notifications",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "13_ecole_light.png",
+      "route": "school",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "14_mes_lecons_light.png",
+      "route": "learner",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "15_agenda_eleve_light.png",
+      "route": "learner-agenda",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "16_parcours_light.png",
+      "route": "progress",
+      "theme": "light",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "01_seance_dark.png",
+      "route": "home",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "02_agenda_dark.png",
+      "route": "agenda",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "03_eleves_dark.png",
+      "route": "students",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "04_dossier_dark.png",
+      "route": "student",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "05_lecon_dark.png",
+      "route": "lesson",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "06_planifier_dark.png",
+      "route": "planning",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "07_rediger_dark.png",
+      "route": "report",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "08_apercu_dark.png",
+      "route": "preview",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "09_bilan_partage_dark.png",
+      "route": "shared",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "10_documents_dark.png",
+      "route": "documents",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "11_compte_dark.png",
+      "route": "account",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "12_notifications_dark.png",
+      "route": "notifications",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "13_ecole_dark.png",
+      "route": "school",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "14_mes_lecons_dark.png",
+      "route": "learner",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "15_agenda_eleve_dark.png",
+      "route": "learner-agenda",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "16_parcours_dark.png",
+      "route": "progress",
+      "theme": "dark",
+      "size": "390x844",
+      "scope": "HTML_FICTITIOUS_DATA"
+    },
+    {
+      "file": "17_ipad_dossier.png",
+      "route": "student",
+      "theme": "light",
+      "size": "tablet",
+      "scale": "normal"
+    },
+    {
+      "file": "18_grand_texte.png",
+      "route": "agenda",
+      "theme": "light",
+      "size": "small",
+      "scale": "large"
+    }
+  ],
+  "errors": [],
+  "native": "NOT_EXECUTED"
+}

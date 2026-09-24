@@ -1,0 +1,1932 @@
+{
+  "version": "3.10",
+  "businessTestsUnchanged": 284,
+  "requirements": [
+    {
+      "id": "MX01",
+      "title": "Support documenté par OS et binaire",
+      "reference": "04-technique/integration-ios-ipados.md",
+      "firstGate": "G0",
+      "sources": [
+        "S63",
+        "S64",
+        "S88",
+        "S116",
+        "S117"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX02",
+      "title": "Matériaux et composants adaptés sans fausse intégration native",
+      "reference": "02-experience/patterns-mobile-parcours.md",
+      "firstGate": "G0",
+      "sources": [
+        "S65",
+        "S97"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX03",
+      "title": "Fenêtres, clavier et accessibilité indépendants du modèle d’appareil",
+      "reference": "02-experience/plateformes-tablette-web.md",
+      "firstGate": "G2",
+      "sources": [
+        "S68",
+        "S97",
+        "S84"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX04",
+      "title": "Capture facultative et trois niveaux d’autorisation distincts",
+      "reference": "03-fonctionnel/gps-replay.md",
+      "firstGate": "G2",
+      "sources": [
+        "S73",
+        "S99"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX05",
+      "title": "Collecteur durable, arrêt local et limites temporelles",
+      "reference": "04-technique/integration-mobile-transverse.md",
+      "firstGate": "G2",
+      "sources": [
+        "S73",
+        "S99",
+        "S100",
+        "S113"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX06",
+      "title": "Authentification système et liens relus sous droits courants",
+      "reference": "04-technique/integration-mobile-transverse.md",
+      "firstGate": "G1",
+      "sources": [
+        "S77",
+        "S78",
+        "S79"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX07",
+      "title": "Stockage, secrets, sauvegarde et purge traités ensemble",
+      "reference": "04-technique/integration-mobile-transverse.md",
+      "firstGate": "G2",
+      "sources": [
+        "S100",
+        "S104",
+        "S90"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX08",
+      "title": "Notifications facultatives sans effet métier caché",
+      "reference": "03-fonctionnel/calendrier-notifications.md",
+      "firstGate": "G3",
+      "sources": [
+        "S105",
+        "S83",
+        "S111",
+        "S112"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX09",
+      "title": "Import de fichiers explicite et permissions minimales",
+      "reference": "04-technique/integration-mobile-transverse.md",
+      "firstGate": "G1",
+      "sources": [
+        "S93",
+        "S94"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX10",
+      "title": "Même sémantique de confirmation sur tous les clients",
+      "reference": "04-technique/synchronisation.md",
+      "firstGate": "G3",
+      "sources": [
+        "S67"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX11",
+      "title": "Profil Android de localisation et FGS déclaré et éprouvé",
+      "reference": "04-technique/preparation-android.md",
+      "firstGate": "ANDROID_LAUNCH",
+      "sources": [
+        "S81",
+        "S82",
+        "S83"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX12",
+      "title": "Adaptation Android et compatibilité du binaire natif",
+      "reference": "04-technique/preparation-android.md",
+      "firstGate": "ANDROID_LAUNCH",
+      "sources": [
+        "S84",
+        "S85",
+        "S86",
+        "S87"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX13",
+      "title": "Binaire natif et migrations sans interruption volontaire de capture",
+      "reference": "04-technique/integration-mobile-transverse.md",
+      "firstGate": "G5",
+      "sources": [
+        "S97"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX14",
+      "title": "Déclarations et suppression globale avant publication store",
+      "reference": "04-technique/integration-mobile-transverse.md#cloture-compte",
+      "firstGate": "BEFORE_PUBLIC_STORE",
+      "sources": [
+        "S91",
+        "S92",
+        "S93",
+        "S95"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX15",
+      "title": "Contenu et interactions revus sans production générique non vérifiée",
+      "reference": "02-experience/qualite-ui-ux-anti-slop.md",
+      "firstGate": "G2",
+      "sources": [
+        "S69",
+        "S67",
+        "S114"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    },
+    {
+      "id": "MX16",
+      "title": "Mesures sur appareils et observations UX, preuves séparées",
+      "reference": "05-realisation/qualification-mobile-ui-ux.md",
+      "firstGate": "G5",
+      "sources": [
+        "S68",
+        "S90"
+      ],
+      "status": "DESIGN_REQUIREMENT"
+    }
+  ],
+  "cases": [
+    {
+      "id": "MOB001",
+      "title": "Matrice iOS 26/27 reproductible",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX01"
+      ],
+      "features": [
+        "F15",
+        "F21"
+      ],
+      "screens": [
+        "E44"
+      ],
+      "precondition": "Projet Swift, versions Xcode/macOS/SwiftPM, modèles et commit identifiés.",
+      "procedure": "Construire le binaire Apple signé ; installer sur chaque cellule iOS/iPadOS 26/27 prévue ; vérifier les versions réellement embarquées.",
+      "expected": "Preuve par cellule, aucune ligne marquée supportée sans exécution ; dépendance incompatible bloque cette cellule.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB002",
+      "title": "Liquid Glass et repli accessible",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX02"
+      ],
+      "features": [
+        "F15",
+        "F16"
+      ],
+      "screens": [
+        "E23",
+        "E24"
+      ],
+      "precondition": "Même scène de carte avec texte et commandes, binaire qualifiable.",
+      "procedure": "Comparer 26/27, thème clair/sombre, réduction de transparence et des animations, API de verre disponible puis indisponible.",
+      "expected": "Même sens et mêmes actions ; surfaces lisibles ; pas de fonction désactivée du seul fait du repli opaque.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB003",
+      "title": "VoiceOver et grand texte",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX03"
+      ],
+      "features": [
+        "F16",
+        "F18",
+        "F20"
+      ],
+      "screens": [
+        "E24",
+        "E26",
+        "E40"
+      ],
+      "precondition": "Données fictives avec noms longs, plusieurs dates et observations.",
+      "procedure": "Activer VoiceOver et une grande taille de texte ; parcourir fiche cours, formulaire et replay sans exploiter la carte tactile.",
+      "expected": "Labels/états et ordre compréhensibles ; alternative aux gestes complexes ; erreurs annoncées sans répétition permanente.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB004",
+      "title": "Fenêtre iPad et clavier pendant collecte",
+      "platforms": [
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX03",
+        "MX05"
+      ],
+      "features": [
+        "F15",
+        "F21"
+      ],
+      "screens": [
+        "E23",
+        "E44"
+      ],
+      "precondition": "Une capture autorisée active, clavier matériel connecté.",
+      "procedure": "Tourner, réduire/agrandir la fenêtre, ouvrir/fermer un panneau, utiliser Tab/Échap et revenir à la leçon.",
+      "expected": "Un seul collecteur ; arrêt accessible ; focus logique ; aucun reset du trajet, de la sélection ni du brouillon.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB005",
+      "title": "Refus de GPS sans exclusion du produit",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX04"
+      ],
+      "features": [
+        "F15",
+        "F20"
+      ],
+      "screens": [
+        "E22",
+        "E42"
+      ],
+      "precondition": "Leçon valide avec élève n’acceptant pas l’enregistrement.",
+      "procedure": "Refuser le choix métier puis refuser la permission OS dans un autre scénario ; réaliser la séance et son bilan sans GPS.",
+      "expected": "Pas de point collecté ni prompt en boucle ; cours, agenda, bilan et packs restent utilisables selon droits.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB006",
+      "title": "Profil iOS réel de permission de fond",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX04",
+        "MX05"
+      ],
+      "features": [
+        "F15",
+        "F21"
+      ],
+      "screens": [
+        "E23",
+        "E44"
+      ],
+      "precondition": "Profil Core Location natif déclaré, Info.plist, sessions et messages inspectés.",
+      "procedure": "Tester chacun des droits effectivement requis, notamment autorisation provisoire et précision réduite ; verrouiller puis rouvrir.",
+      "expected": "Profil whenInUse et session de fond qualifiés séparément de la permission métier ; aucun Always demandé par défaut ni capacité annoncée sans essai ; refus explicite si une condition manque.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB007",
+      "title": "Terminaison système et fermeture forcée",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX05"
+      ],
+      "features": [
+        "F15"
+      ],
+      "screens": [
+        "E23",
+        "E17"
+      ],
+      "precondition": "Capture active avec points persistés et état de transport connu.",
+      "procedure": "Simuler terminaison système autorisée par le protocole de test, puis fermeture forcée utilisateur séparément ; relancer l’app.",
+      "expected": "Cas distingués ; état réconcilié ; pas de trou inventé ni auto-relance promise contre le choix utilisateur.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB008",
+      "title": "Clé et fichier accessibles sous verrouillage",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX05",
+        "MX07"
+      ],
+      "features": [
+        "F12",
+        "F15"
+      ],
+      "screens": [
+        "E23",
+        "E17"
+      ],
+      "precondition": "Build chiffré avec classes de protection documentées et file test.",
+      "procedure": "Verrouiller pendant écriture de points puis vérifier base, WAL/journal, erreur de clé et redémarrage.",
+      "expected": "Pas de point déclaré conservé avant écriture ; aucune copie de secours en clair ; erreur expliquée et données restantes identifiées.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB009",
+      "title": "Horloge changée et budget expiré",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX05"
+      ],
+      "features": [
+        "F15"
+      ],
+      "screens": [
+        "E23"
+      ],
+      "precondition": "Autorisation bornée et référence de temps connue.",
+      "procedure": "Changer heure/fuseau local, suspendre puis rouvrir après expiration ; essayer d’envoyer des points hors bornes.",
+      "expected": "Pas de prolongation via horloge ni reboot ; collecteur arrêté ou reprise refusée selon état réel ; serveur rejette hors bornes.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB010",
+      "title": "Deux appareils pour la même leçon",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX04",
+        "MX05"
+      ],
+      "features": [
+        "F15",
+        "F21"
+      ],
+      "screens": [
+        "E23",
+        "E44"
+      ],
+      "precondition": "Même compte autorisé ouvert sur téléphone et tablette.",
+      "procedure": "Démarrer sur A puis tenter sur B ; revenir sur A après ouverture de la carte B.",
+      "expected": "Pas de deuxième capture active ; B ne présente pas un état live non observé ; aucune reprise implicite du droit.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB011",
+      "title": "Pas de réseau et carte indisponible",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX05"
+      ],
+      "features": [
+        "F15",
+        "F16"
+      ],
+      "screens": [
+        "E23",
+        "E24"
+      ],
+      "precondition": "Départ préautorisé ; données test avec source GNSS réelle.",
+      "procedure": "Couper réseau ; provoquer une erreur de carte ; continuer puis reconnecter. Tester séparément départ entièrement hors ligne.",
+      "expected": "Capture autorisée indépendante du rendu ; absence de fond de carte expliquée ; pas de nouvelle autorisation hors ligne ; transfert sans doublon.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB012",
+      "title": "Arrêt local avec callbacks tardifs",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX05"
+      ],
+      "features": [
+        "F15"
+      ],
+      "screens": [
+        "E23"
+      ],
+      "precondition": "Collecte active sans réseau, mécanisme de callbacks contrôlable.",
+      "procedure": "Presser Arrêter, puis injecter/observer callbacks retardés ; reconnecter avec jeton d’envoi expiré puis réauthentifié.",
+      "expected": "Source coupée sans réseau ; aucune extension de capture ; manifeste et reprise conformes aux droits actuels.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB013",
+      "title": "Replay partiel, publication et retrait",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID",
+        "WEB"
+      ],
+      "requirements": [
+        "MX05",
+        "MX10"
+      ],
+      "features": [
+        "F16",
+        "F08",
+        "F14"
+      ],
+      "screens": [
+        "E24",
+        "E09"
+      ],
+      "precondition": "Bilan fictif publié puis arrivée tardive de points et retrait autorisé.",
+      "procedure": "Lire depuis chaque client, parcourir plusieurs pages puis appliquer un retrait ; rouvrir et vérifier caches/miniatures.",
+      "expected": "Snapshot ancien inchangé ; trous visibles ; après retrait appris, aucune géométrie/observation/cursor de données retirées exposée.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB014",
+      "title": "Lien de cours à froid et repli web",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID",
+        "WEB"
+      ],
+      "requirements": [
+        "MX06"
+      ],
+      "features": [
+        "F01",
+        "F18",
+        "F19"
+      ],
+      "screens": [
+        "E26",
+        "E02"
+      ],
+      "precondition": "Domaines de test associés au binaire et compte élève valide.",
+      "procedure": "Ouvrir lien app absente, app fermée, app ouverte ; terminer auth si nécessaire.",
+      "expected": "Même fiche accessible après droits ; app absente renvoie au web ; aucune ouverture ou installation n’inscrit automatiquement.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB015",
+      "title": "OIDC et lien dans la mauvaise école",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID",
+        "WEB"
+      ],
+      "requirements": [
+        "MX06"
+      ],
+      "features": [
+        "F01",
+        "F02"
+      ],
+      "screens": [
+        "E01",
+        "E02"
+      ],
+      "precondition": "Deux comptes et deux écoles sans accès croisé, redirect de test.",
+      "procedure": "Ouvrir lien sous mauvais compte ; essayer state/nonce/redirect altéré et lien expiré.",
+      "expected": "Refus sans fuite ; switch explicite puis nouvelle vérification ; pas de WebView collectant mot de passe ni de redirect libre.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB016",
+      "title": "Réinstallation et secrets résiduels",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX07"
+      ],
+      "features": [
+        "F01",
+        "F12"
+      ],
+      "screens": [
+        "E01",
+        "E17"
+      ],
+      "precondition": "Cache/credentials de test et état serveur révoqué.",
+      "procedure": "Désinstaller puis réinstaller ; changer biométrie dans scénario séparé ; essayer de réutiliser la session précédente.",
+      "expected": "Revalidation serveur ; pas de compte actif par simple secret résiduel ; perte de clé expliquée sans export de données interdites.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB017",
+      "title": "Sauvegarde restaurée sans clé",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX07"
+      ],
+      "features": [
+        "F12",
+        "F14"
+      ],
+      "screens": [
+        "E17",
+        "E18"
+      ],
+      "precondition": "Sauvegarde de test conforme au périmètre choisi.",
+      "procedure": "Inspecter exclusions cloud/device-transfer ; restaurer une sauvegarde ou base sans clé.",
+      "expected": "Secrets et traces non exportés par inadvertance ; aucune restauration en clair ; caches reconstitués seulement sous droits actuels.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB018",
+      "title": "Refus des notifications ordinaires",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX08"
+      ],
+      "features": [
+        "F19",
+        "F20"
+      ],
+      "screens": [
+        "E32",
+        "E42"
+      ],
+      "precondition": "Élève sans droit push mais membre actif.",
+      "procedure": "Refuser permission puis consulter calendrier/cours et s’inscrire explicitement.",
+      "expected": "Centre in-app et inscription restent accessibles ; aucun consentement GPS inféré de ce refus.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB019",
+      "title": "Push dupliqué, ancien ou objet inaccessible",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX08",
+        "MX06"
+      ],
+      "features": [
+        "F19",
+        "F18"
+      ],
+      "screens": [
+        "E32",
+        "E26"
+      ],
+      "precondition": "Notification fictive pour un cours ensuite modifié ou inaccessible.",
+      "procedure": "Recevoir deux fois, ouvrir tard, puis sous permissions révoquées.",
+      "expected": "Pas de double inscription ; lecture courante ; contenu verrouillage minimal ; refus ne révèle pas l’objet.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB020",
+      "title": "Photo facultative et accès fichier expiré",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID",
+        "WEB"
+      ],
+      "requirements": [
+        "MX09"
+      ],
+      "features": [
+        "F09",
+        "F20"
+      ],
+      "screens": [
+        "E10",
+        "E40"
+      ],
+      "precondition": "Profil sans photo et document de test issu du sélecteur système.",
+      "procedure": "Passer la photo ; annuler import ; révoquer accès URI ; essayer fichier invalide puis fichier valide.",
+      "expected": "Onboarding possible sans photo ; erreur conservant le contexte ; quarantaine/READY exacts, aucune permission globale inutile.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB021",
+      "title": "Dernière place depuis deux clients",
+      "platforms": [
+        "IOS",
+        "ANDROID",
+        "WEB"
+      ],
+      "requirements": [
+        "MX10"
+      ],
+      "features": [
+        "F18",
+        "F17"
+      ],
+      "screens": [
+        "E26"
+      ],
+      "precondition": "Une place disponible et deux élèves autorisés sur clients distincts.",
+      "procedure": "Lancer les demandes simultanément, puis vérifier calendrier et droits des deux élèves.",
+      "expected": "Une seule place confirmée ; perdant informé sans débit/droit consommé ; aucune coche anticipée.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB022",
+      "title": "202 et perte de réponse après commit",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID",
+        "WEB"
+      ],
+      "requirements": [
+        "MX10"
+      ],
+      "features": [
+        "F18",
+        "F12"
+      ],
+      "screens": [
+        "E26",
+        "E17"
+      ],
+      "precondition": "Mutation identifiable avec réponse retardée et backend de test.",
+      "procedure": "Déclencher PENDING ou timeout après commit ; fermer écran ; reprendre la même opération.",
+      "expected": "Intention conservée, aucune nouvelle commande doublonnante ; résultat définitif explique refus ou confirme une seule inscription.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB023",
+      "title": "Durée et pack révisés entre appareils",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID",
+        "WEB"
+      ],
+      "requirements": [
+        "MX10"
+      ],
+      "features": [
+        "F04",
+        "F17"
+      ],
+      "screens": [
+        "E05",
+        "E30"
+      ],
+      "precondition": "Leçon planifiée, pack et versions connues.",
+      "procedure": "Modifier 45 vers 90 minutes avec condition commerciale puis provoquer un conflit sur un autre client.",
+      "expected": "Mêmes conditions affichées ; refus préserve ancien créneau/droits/compte ; aucun calcul fondé sur durée GPS.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB024",
+      "title": "Disque plein et brouillon repris",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX07",
+        "MX10"
+      ],
+      "features": [
+        "F12"
+      ],
+      "screens": [
+        "E17",
+        "E08"
+      ],
+      "precondition": "Brouillon autorisé et espace local contrôlable.",
+      "procedure": "Provoquer écriture refusée ; tenter quitter ; libérer espace puis relancer sous même compte.",
+      "expected": "Pas de faux enregistrement ; avertissement exploitable ; seules données persistées sont reprises.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB025",
+      "title": "FGS Android lancé explicitement",
+      "platforms": [
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX11"
+      ],
+      "features": [
+        "F15",
+        "F21"
+      ],
+      "screens": [
+        "E23",
+        "E44"
+      ],
+      "precondition": "Release Android avec type/permissions manifestés et profil de collecte retenu.",
+      "procedure": "Lancer depuis préparation visible, passer au fond ; tester un lancement illégitime depuis push séparément.",
+      "expected": "Service et indication conformes ; lancement caché refusé ; pas d’autorisation de fond assimilée au consentement métier.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB026",
+      "title": "Android approximatif ou permission refusée",
+      "platforms": [
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX11",
+        "MX04"
+      ],
+      "features": [
+        "F15",
+        "F20"
+      ],
+      "screens": [
+        "E23",
+        "E42"
+      ],
+      "precondition": "App Android autorisée seulement approximativement, puis refus complet.",
+      "procedure": "Préparer une leçon, examiner qualité possible et continuer sans trace quand insuffisante.",
+      "expected": "Aucune observation prétendument précise à partir d’une position vague ; pas de blocage du reste du produit.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB027",
+      "title": "Notification Android refusée pendant FGS",
+      "platforms": [
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX11",
+        "MX08"
+      ],
+      "features": [
+        "F15",
+        "F19"
+      ],
+      "screens": [
+        "E23",
+        "E32"
+      ],
+      "precondition": "Version Android soumise à POST_NOTIFICATIONS ; FGS légalement démarrable.",
+      "procedure": "Refuser notifications ordinaires puis démarrer le service avec son indication obligatoire et consulter état système.",
+      "expected": "Comportement Android réel documenté ; pas de dépendance artificielle aux annonces push ; arrêt toujours accessible dans l’app.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB028",
+      "title": "Arrêt Android et constructeurs distincts",
+      "platforms": [
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX11",
+        "MX05"
+      ],
+      "features": [
+        "F15"
+      ],
+      "screens": [
+        "E23",
+        "E17"
+      ],
+      "precondition": "Deux appareils de constructeurs différents avec build release.",
+      "procedure": "Tester verrouillage/économie d’énergie, terminaison, arrêt utilisateur du service et redémarrage.",
+      "expected": "Pas de garantie universelle inventée ; incident et segments conservés correctement ; aucune relance de surveillance cachée.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB029",
+      "title": "Insets, clavier et retour prédictif",
+      "platforms": [
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX12",
+        "MX03"
+      ],
+      "features": [
+        "F15",
+        "F20"
+      ],
+      "screens": [
+        "E23",
+        "E40"
+      ],
+      "precondition": "Android avec navigation gestuelle et clavier logiciel.",
+      "procedure": "Ouvrir formulaire et carte, afficher clavier, faire retour prédictif et changer fenêtre.",
+      "expected": "Aucune commande cachée sous barre/clavier ; retour attendu ; collecte ne s’arrête pas à cause de navigation.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB030",
+      "title": "Tablette Android et TalkBack",
+      "platforms": [
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX12",
+        "MX03"
+      ],
+      "features": [
+        "F16",
+        "F18",
+        "F22"
+      ],
+      "screens": [
+        "E24",
+        "E26",
+        "E34"
+      ],
+      "precondition": "Tablette ou appareil adaptable avec TalkBack et grand texte.",
+      "procedure": "Réduire fenêtre, utiliser liste/détail, parcourir cours et observations sans gestes de carte.",
+      "expected": "Sens identique au téléphone, focus cohérent, texte complet, alternative accessible aux seules coordonnées visuelles.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB031",
+      "title": "Compatibilité pages natives 16 Ko",
+      "platforms": [
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX12",
+        "MX01"
+      ],
+      "features": [
+        "F15",
+        "F12"
+      ],
+      "screens": [
+        "E23",
+        "E17"
+      ],
+      "precondition": "AAB/APK release, dépendances natives identifiées.",
+      "procedure": "Contrôler les bibliothèques natives et exécuter sur environnement/appareil à pages 16 Ko selon procédure officielle.",
+      "expected": "Chargement, chiffrement et carte fonctionnent ; rapport lié au binaire Android, pas simple succès d’un test de contrat.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB032",
+      "title": "Signature, environnements et liens distribués",
+      "platforms": [
+        "ANDROID",
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX01",
+        "MX06"
+      ],
+      "features": [
+        "F01"
+      ],
+      "screens": [
+        "E01",
+        "E02"
+      ],
+      "precondition": "Builds dev et release séparés, certificats/domaines identifiés.",
+      "procedure": "Installer depuis canal de distribution de test ; vérifier API ciblée, association et login, puis tenter données de production depuis dev.",
+      "expected": "Bon environnement ; clés bornées ; association de distribution effective ; aucune confusion dev/prod.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB033",
+      "title": "Changement de binaire et interruption pendant capture",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX13",
+        "MX05"
+      ],
+      "features": [
+        "F15",
+        "F12"
+      ],
+      "screens": [
+        "E23",
+        "E17"
+      ],
+      "precondition": "Capture active, deux binaires de test signés et journal durable inspectable.",
+      "procedure": "Vérifier qu’aucune relance n’est imposée par l’app ; tester séparément une terminaison/remplacement de processus puis lancer le nouveau binaire.",
+      "expected": "Pas d’interruption volontaire pour mise à jour ; après remplacement système, données persistées retrouvées, trou explicite, aucun droit de capture prolongé ni garantie de continuité inventée.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB034",
+      "title": "Migration locale et downgrade contrôlé",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX13",
+        "MX07"
+      ],
+      "features": [
+        "F12",
+        "F15"
+      ],
+      "screens": [
+        "E17",
+        "E23"
+      ],
+      "precondition": "Base chiffrée contenant brouillons/points test, version précédente disponible.",
+      "procedure": "Mettre à jour le binaire, interrompre la migration, reprendre puis essayer le scénario de downgrade supporté ou son refus.",
+      "expected": "Migration atomique, données protégées ; schéma trop récent refusé sans perte ; aucun retour de binaire présumé inverser les données.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB035",
+      "title": "Audit du binaire et déclarations de données",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX14",
+        "MX01"
+      ],
+      "features": [
+        "F14",
+        "F15"
+      ],
+      "screens": [
+        "E19",
+        "E42"
+      ],
+      "precondition": "Binaire release, SDKs, flux réseau de test et fiches store préparés.",
+      "procedure": "Comparer permissions générées, manifests, notices et tiers effectivement utilisés ; inspecter logs en refus et en capture.",
+      "expected": "Aucune collecte non déclarée, secret/coordonnée en logs ou permission sans finalité ; écart bloque publication.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB036",
+      "title": "Suppression globale multi-écoles",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID",
+        "WEB"
+      ],
+      "requirements": [
+        "MX14"
+      ],
+      "features": [
+        "F01",
+        "F14"
+      ],
+      "screens": [
+        "E18",
+        "E19"
+      ],
+      "precondition": "Contrat global de clôture à compléter ; personne avec deux écoles puis sans appartenance.",
+      "procedure": "Demander suppression depuis Compte et web ; tester responsabilités restantes, tokens, accès et confirmation.",
+      "expected": "Demande durable hors scope scolaire ; pas simple désactivation ; pas suppression d’autrui ; délais/conservation expliqués et traitement testé.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB037",
+      "title": "Revue anti-slop des six patterns",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID",
+        "WEB"
+      ],
+      "requirements": [
+        "MX15"
+      ],
+      "features": [
+        "F15",
+        "F16",
+        "F18",
+        "F20"
+      ],
+      "screens": [
+        "E22",
+        "E24",
+        "E26",
+        "E40"
+      ],
+      "precondition": "Prototypes puis implémentations avec mêmes jeux fictifs et états réels.",
+      "procedure": "Passer AS01–AS10, tester chaque action visible, demander source des chiffres et sens des confirmations.",
+      "expected": "Aucun faux succès, bouton décoratif ou jugement pédagogique inventé ; écarts documentés sans note moyenne compensant un blocage.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB038",
+      "title": "Statistiques et textes longs sans remplissage",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID",
+        "WEB"
+      ],
+      "requirements": [
+        "MX15",
+        "MX03"
+      ],
+      "features": [
+        "F23"
+      ],
+      "screens": [
+        "E33",
+        "E45"
+      ],
+      "precondition": "Compte à permissions limitées, données absentes puis valeurs fictives connues.",
+      "procedure": "Comparer périodes/unités, droits absents, long nom de formation et traductions français/allemand/italien de test.",
+      "expected": "Pas de zéros pour données interdites ni de chiffres de démonstration en production ; terminologie et reflow cohérents.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB039",
+      "title": "Performance, batterie et confidentialité en mesure",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID"
+      ],
+      "requirements": [
+        "MX16",
+        "MX05"
+      ],
+      "features": [
+        "F15",
+        "F16"
+      ],
+      "screens": [
+        "E23",
+        "E24"
+      ],
+      "precondition": "Protocole contrôlé 90 minutes proposé, mêmes appareils/températures/configurations notés.",
+      "procedure": "Mesurer mémoire, stockage, énergie et latence UI avec carte visible puis fond, réseau intermittent et long replay.",
+      "expected": "Mesures par modèle/build, aucune promesse sans résultat ; seuils approuvés ; rapport sans traces réelles exposées.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB040",
+      "title": "Observation UX sur parcours complets",
+      "platforms": [
+        "IOS",
+        "IPADOS",
+        "ANDROID",
+        "WEB"
+      ],
+      "requirements": [
+        "MX16",
+        "MX15"
+      ],
+      "features": [
+        "F15",
+        "F18",
+        "F20",
+        "F22"
+      ],
+      "screens": [
+        "E22",
+        "E26",
+        "E40",
+        "E36"
+      ],
+      "precondition": "Participants consentants de rôles pertinents, données fictives, scénario sans conduite active.",
+      "procedure": "Faire préparer/arrêter une capture, comprendre un bilan, s’inscrire à un cours, reprendre onboarding et expliquer un archivage.",
+      "expected": "Erreurs/hésitations et compréhension consignées ; petit échantillon non présenté comme preuve statistique ; problèmes critiques corrigés puis retestés.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB041",
+      "title": "Démarrages concurrents et réentrance Swift",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX05"
+      ],
+      "features": [
+        "F15"
+      ],
+      "screens": [
+        "E22",
+        "E23"
+      ],
+      "precondition": "Coordinateur avec source et réseau de test ; génération de session observable.",
+      "procedure": "Déclencher deux démarrages ; suspendre le premier à un await puis demander arrêt avant son retour.",
+      "expected": "Une seule source admise ; réponse tardive rejetée après changement de génération ; aucune transition doublée.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB042",
+      "title": "Durée de vie du collecteur hors des vues SwiftUI",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX03",
+        "MX05"
+      ],
+      "features": [
+        "F15",
+        "F21"
+      ],
+      "screens": [
+        "E23",
+        "E44"
+      ],
+      "precondition": "Capture active possédée par la racine ; deux compositions de fenêtre.",
+      "procedure": "Détruire et reconstruire la vue carte, changer NavigationStack, faire apparaître une seconde scène autorisée.",
+      "expected": "Un propriétaire local de collecte ; aucune tâche de vue ne coupe le service ; pas de nouvelle capture implicite.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB043",
+      "title": "Stop et écritures locales déjà admises",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX05",
+        "MX07"
+      ],
+      "features": [
+        "F15",
+        "F12"
+      ],
+      "screens": [
+        "E23",
+        "E17"
+      ],
+      "precondition": "Magasin chiffré avec latence d’écriture et callbacks contrôlés.",
+      "procedure": "Bloquer une écriture admise, arrêter localement, émettre un callback tardif puis libérer la transaction.",
+      "expected": "Source coupée immédiatement ; barrières et manifeste cohérents ; mesure tardive rejetée ; aucun succès avant commit.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB044",
+      "title": "Confirmer SQLCipher natif dans le binaire",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX07",
+        "MX01"
+      ],
+      "features": [
+        "F12",
+        "F15"
+      ],
+      "screens": [
+        "E17",
+        "E23"
+      ],
+      "precondition": "Binaire Apple signé et base fictive contenant marqueurs connus.",
+      "procedure": "Vérifier liaison de la bibliothèque, lecture sans clé/clé erronée, fichiers DB/WAL/temp et écriture écran verrouillé.",
+      "expected": "Chiffrement effectif démontré ; pas de repli SQLite en clair ; politique Keychain/fichiers cohérente ou test déclaré en échec.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB045",
+      "title": "Couverture du client HTTP Swift sur OpenAPI",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX01",
+        "MX10"
+      ],
+      "features": [
+        "F17",
+        "F18",
+        "F15"
+      ],
+      "screens": [
+        "E23",
+        "E26",
+        "E28"
+      ],
+      "precondition": "Client Swift généré ou adaptateurs écrits avec version fixée.",
+      "procedure": "Compiler les opérations critiques ; décoder les fixtures et comparer null, omission, unions, conditions et erreurs aux schémas canoniques.",
+      "expected": "Aucune validation serveur affaiblie pour générer ; écarts documentés et adaptateurs testés ; aucune couverture intégrale déduite de la seule génération.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB046",
+      "title": "PATCH partiel, centimes et préconditions en Swift",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX10"
+      ],
+      "features": [
+        "F20",
+        "F17"
+      ],
+      "screens": [
+        "E40",
+        "E30"
+      ],
+      "precondition": "Profil, achat et versions de test ; encodeur/décodeur du client Apple.",
+      "procedure": "Encoder champ omis puis explicitement null, montant centimes et If-Match ; exercer une précondition périmée.",
+      "expected": "Omission et effacement distingués ; montant entier exact ; conflit présenté sans écrasement ni prix recalculé en Double.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB047",
+      "title": "Périmètre scolaire après réponse réseau retardée",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX06",
+        "MX07"
+      ],
+      "features": [
+        "F01",
+        "F03",
+        "F12"
+      ],
+      "screens": [
+        "E01",
+        "E07",
+        "E17"
+      ],
+      "precondition": "Deux écoles et comptes sans accès croisé, réponse et refresh bloqués.",
+      "procedure": "Lancer lecture/upload sous A, changer vers B puis libérer les réponses et la tentative de refresh.",
+      "expected": "Résultat ancien rejeté ; données non affichées ni transmises sous B ; les commandes conservent leur périmètre original.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB048",
+      "title": "URLSession sans faux acquittement de capture",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX05",
+        "MX10"
+      ],
+      "features": [
+        "F15",
+        "F12"
+      ],
+      "screens": [
+        "E23",
+        "E17"
+      ],
+      "precondition": "Chunks durables, autorisations de collecte/envoi distinctes, serveur de recette.",
+      "procedure": "Faire échouer la réponse après réception, suspendre l’app puis revenir au premier plan ; expirer le jeton avant un autre essai.",
+      "expected": "Reprise idempotente selon droits actuels ; octets envoyés non assimilés à ack ; aucun spool GPS en clair ni prolongement de collecte.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB049",
+      "title": "Snapshot MapKit retiré et pagination de segments",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX03",
+        "MX10"
+      ],
+      "features": [
+        "F16",
+        "F14"
+      ],
+      "screens": [
+        "E24",
+        "E19"
+      ],
+      "precondition": "Long trajet fictif à plusieurs pages, snapshot publié puis retrait.",
+      "procedure": "Charger par fragments, déplacer la caméra, changer de vue et appliquer la notification de retrait avec nouvelle lecture autorisée.",
+      "expected": "Même segment à travers pages ; aucune nouvelle collecte par la carte ; géométries et caches retirés quand le retrait est appris.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB050",
+      "title": "APNs natif et environnement de distribution",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX08",
+        "MX01"
+      ],
+      "features": [
+        "F19",
+        "F01"
+      ],
+      "screens": [
+        "E32",
+        "E18"
+      ],
+      "precondition": "Deux environnements Apple avec installations et tokens de test distincts.",
+      "procedure": "Renouveler le token, réinstaller, refuser les notifications et ouvrir un avis ancien depuis TestFlight.",
+      "expected": "Installation mise à jour sans fuite de token ; pas de mélange sandbox/production ; centre in-app disponible et objet relu sous droits.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB051",
+      "title": "Navigation SwiftUI et contrat de commande durable",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX03",
+        "MX10"
+      ],
+      "features": [
+        "F18",
+        "F20"
+      ],
+      "screens": [
+        "E26",
+        "E40"
+      ],
+      "precondition": "Formulaire et inscription avec opération en attente ; iPhone puis fenêtre iPad étroite.",
+      "procedure": "Valider, revenir en arrière pendant 202, élargir la fenêtre puis revenir à la destination par lien.",
+      "expected": "État et intention retrouvés ; une annulation de tâche de vue n’annule pas le commit serveur ; pas de double inscription ni formulaire réinitialisé.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB052",
+      "title": "Distribution native et schéma local plus récent",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX13",
+        "MX01",
+        "MX07"
+      ],
+      "features": [
+        "F12",
+        "F15"
+      ],
+      "screens": [
+        "E17",
+        "E23"
+      ],
+      "precondition": "Deux binaires Apple et base versionnée ; configurations de test distinctes.",
+      "procedure": "Inspecter provenance/Package.resolved et secrets ; tenter ancienne version sur schéma nouveau et configuration distante changeant le code.",
+      "expected": "Binaire traçable ; downgrade incompatible refusé sans purge ; aucune exécution de bundle métier distant ni secret de signature embarqué.",
+      "status": "NOT_EXECUTED",
+      "evidence": null
+    },
+    {
+      "id": "MOB053",
+      "title": "Ancienne position au démarrage",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX04",
+        "MX05"
+      ],
+      "features": [
+        "F15",
+        "F16"
+      ],
+      "screens": [
+        "E23"
+      ],
+      "precondition": "Source de test délivrant une position avant la nouvelle autorisation puis un point actuel.",
+      "procedure": "Démarrer une nouvelle leçon sur iPhone puis iPad.",
+      "expected": "Le cache antérieur n’entre pas dans la trace ; état En attente de position puis sauvegarde réelle.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.7"
+    },
+    {
+      "id": "MOB054",
+      "title": "Réception en lot et horloge",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX05",
+        "MX07"
+      ],
+      "features": [
+        "F12",
+        "F15"
+      ],
+      "screens": [
+        "E23"
+      ],
+      "precondition": "Build qualifié avec horloge/source contrôlées et persistance chiffrée.",
+      "procedure": "Livrer des positions dans l’intervalle avec délai puis provoquer un saut d’horloge.",
+      "expected": "Lots valides conservés, rupture explicite si mapping perdu ; bail non prolongé, manifeste stable.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.7"
+    },
+    {
+      "id": "MOB055",
+      "title": "iPad non qualifié pour capture",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX01",
+        "MX03",
+        "MX04"
+      ],
+      "features": [
+        "F15",
+        "F18",
+        "F08"
+      ],
+      "screens": [
+        "E23",
+        "E27"
+      ],
+      "precondition": "Binaire sans exigence globale gps, appareil de test non qualifié pour collecte.",
+      "procedure": "Installer, ouvrir agenda/cours/bilan puis tenter GPS.",
+      "expected": "Usages non GPS accessibles ; diagnostic limite seulement la capture, aucune fausse position.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.7"
+    },
+    {
+      "id": "MOB056",
+      "title": "Absence de mesure et accessibilité",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX05",
+        "MX15",
+        "MX16"
+      ],
+      "features": [
+        "F15",
+        "F16"
+      ],
+      "screens": [
+        "E23"
+      ],
+      "precondition": "Source sans mesure exploitable ; VoiceOver et grande taille de texte actifs.",
+      "procedure": "Démarrer/arrêter puis consulter le replay.",
+      "expected": "État sans point annoncé sans carte fictive ; arrêt accessible, aucune réussite de trajet prétendue.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.7"
+    },
+    {
+      "id": "MOB057",
+      "title": "Connexion de deux comptes sur une installation",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX06",
+        "MX08",
+        "MX07"
+      ],
+      "features": [
+        "F01",
+        "F11"
+      ],
+      "screens": [
+        "E01",
+        "E02"
+      ],
+      "precondition": "Comptes de recette A/B et tokens fournisseur de test, réseau contrôlé.",
+      "procedure": "Basculer de A vers B, actualiser AP148 et déclencher l’ancienne route.",
+      "expected": "Pas de nouveau message de A après revalidation serveur ; ouverture exige droits de B, aucune donnée personnelle dans payload.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.7"
+    },
+    {
+      "id": "MOB058",
+      "title": "Entitlement et environnement APNs",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX01",
+        "MX08",
+        "MX13"
+      ],
+      "features": [
+        "F11"
+      ],
+      "screens": [
+        "E19"
+      ],
+      "precondition": "Deux binaires signés recette/distribution et configurations fournisseur distinctes.",
+      "procedure": "Inspecter entitlement réel, récupérer token puis soumettre une mauvaise combinaison.",
+      "expected": "Environnement concordant enregistré ; mismatch refusé, pas de fallback caché vers production.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.7"
+    },
+    {
+      "id": "MOB059",
+      "title": "Token renouvelé et révocation obsolète",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX06",
+        "MX08"
+      ],
+      "features": [
+        "F01",
+        "F11"
+      ],
+      "screens": [
+        "E19"
+      ],
+      "precondition": "Installation réinscrite avec token courant et ancienne commande de révocation.",
+      "procedure": "Recevoir nouveau token, rejouer l’ancienne révocation et reconnecter.",
+      "expected": "Token relu au système ; nouvelle liaison non supprimée par commande obsolète, logs sans token.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.7"
+    },
+    {
+      "id": "MOB060",
+      "title": "Push déjà en transit et retour web",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX08",
+        "MX10",
+        "MX15"
+      ],
+      "features": [
+        "F01",
+        "F11",
+        "F19"
+      ],
+      "screens": [
+        "E01",
+        "E27"
+      ],
+      "precondition": "Message accepté avant logout hors réseau ; compte courant différent.",
+      "procedure": "Livrer le message, le toucher, puis ouvrir le portail web sans push.",
+      "expected": "Message générique, dossier refusé/relu sous bons droits ; calendrier web indépendant du token natif.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.7"
+    },
+    {
+      "id": "MOB061",
+      "title": "Sessions API et staging séparées",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX06",
+        "MX07"
+      ],
+      "features": [
+        "F01",
+        "F09"
+      ],
+      "screens": [
+        "E01",
+        "E10"
+      ],
+      "precondition": "Compte connecté et ticket fictif qualifié.",
+      "procedure": "Observer les requêtes API et PUT sur un environnement contrôlé.",
+      "expected": "Le bearer Drivy et les cookies API ne sont jamais envoyés au stockage ; méthode/headers exacts.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.10"
+    },
+    {
+      "id": "MOB062",
+      "title": "Origine et redirect hostiles",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX06",
+        "MX07"
+      ],
+      "features": [
+        "F09",
+        "F14"
+      ],
+      "screens": [
+        "E10",
+        "E18"
+      ],
+      "precondition": "Ticket malformé ou réponse de redirection de contenu.",
+      "procedure": "Tester userinfo, sous-domaine trompeur, HTTP et redirect vers une autre origine.",
+      "expected": "Refus avant émission de secrets ; aucune acceptation par simple suffixe de domaine.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.10"
+    },
+    {
+      "id": "MOB063",
+      "title": "Caches de médias et export",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX07",
+        "MX15"
+      ],
+      "features": [
+        "F09",
+        "F12",
+        "F14"
+      ],
+      "screens": [
+        "E10",
+        "E18"
+      ],
+      "precondition": "Pièce et export consultés, sans sauvegarde volontaire externe.",
+      "procedure": "Inspecter URLCache, caches d’aperçu et fichiers temporaires avant/après logout.",
+      "expected": "Aucun cache disque clair sensible ; les copies temporaires et projections suivent les règles de purge.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.10"
+    },
+    {
+      "id": "MOB064",
+      "title": "Snapshot de scène sensible",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX03",
+        "MX07"
+      ],
+      "features": [
+        "F01",
+        "F12"
+      ],
+      "screens": [
+        "E04",
+        "E23"
+      ],
+      "precondition": "Fiche ou carte avec contenu privé affichée.",
+      "procedure": "Passer au sélecteur d’apps, verrouiller, revenir ; répéter sur plusieurs scènes.",
+      "expected": "Couverture opaque neutre au snapshot et retour sans ancienne identité ; hook qualifié sur chaque OS.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.10"
+    },
+    {
+      "id": "MOB065",
+      "title": "Couverture sans perte GPS",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX03",
+        "MX05",
+        "MX07"
+      ],
+      "features": [
+        "F12",
+        "F15"
+      ],
+      "screens": [
+        "E23"
+      ],
+      "precondition": "Capture valide avec points déjà conservés.",
+      "procedure": "Présenter la couverture de confidentialité en arrière-plan puis reprendre.",
+      "expected": "Le collecteur conserve sa session ; aucune interruption créée uniquement par la couverture.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.10"
+    },
+    {
+      "id": "MOB066",
+      "title": "Dépôt expiré réconcilié",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX07",
+        "MX09"
+      ],
+      "features": [
+        "F09",
+        "F12"
+      ],
+      "screens": [
+        "E10"
+      ],
+      "precondition": "PUT reçu sans réponse puis URL expirée.",
+      "procedure": "Rouvrir la fiche et reprendre avec droits valides.",
+      "expected": "Finaliser le même objet si encore disponible ; pas de nouveau dépôt aveugle ni texte perdu.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.10"
+    },
+    {
+      "id": "MOB067",
+      "title": "Retour de scène après changement de compte",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX03",
+        "MX06",
+        "MX07"
+      ],
+      "features": [
+        "F01",
+        "F12"
+      ],
+      "screens": [
+        "E01",
+        "E04"
+      ],
+      "precondition": "Une ancienne scène a une réponse de téléchargement en attente.",
+      "procedure": "Changer de compte puis réactiver l’ancienne scène.",
+      "expected": "Résultat obsolète non présenté et aucune capture d’ancienne identité au retour.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.10"
+    },
+    {
+      "id": "MOB068",
+      "title": "Copie explicite hors de Drivy",
+      "platforms": [
+        "IOS",
+        "IPADOS"
+      ],
+      "requirements": [
+        "MX07",
+        "MX15"
+      ],
+      "features": [
+        "F14",
+        "F22"
+      ],
+      "screens": [
+        "E18",
+        "E46"
+      ],
+      "precondition": "Export READY reçu sous type/longueur/hash corrects.",
+      "procedure": "Choisir une sauvegarde/partage système puis se déconnecter.",
+      "expected": "La copie externe volontaire est expliquée comme non révocable ; les temporaires internes sont traités séparément.",
+      "status": "NOT_EXECUTED",
+      "evidence": null,
+      "introducedIn": "3.10"
+    }
+  ],
+  "meaning": "Catalogue documentaire : client Apple Swift natif confirmé, Android futur distinct. Aucun test T/MOB exécuté.",
+  "businessTestsCurrent": 406
+}

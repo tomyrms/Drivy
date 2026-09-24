@@ -1,0 +1,265 @@
+{
+  "version": "3.5",
+  "status": "DOCUMENTARY_CHECKS_ONLY",
+  "productTestsExecuted": false,
+  "checks": [
+    {
+      "check": "No_stale_ETag0_creation_instruction",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Presence_creation_precondition_canonical",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "No_free_school_accent_promise",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Native_stack_accepted",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Prepared_waypoints_are_contractual",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Prepared_waypoints_bounded",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Course_language_contract",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Calendar_language_filter_present",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "No_inferred_language_audience",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Global_receipt_not_normal_session",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Global_request_no_client_personId",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Receipt_data_minimal",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Stable_original_feature_ids",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "All_features_listed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Core_GPS_not_extension",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Phases_match_catalogue",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Global_paths_available_without_school",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC110",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC111",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC112",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC113",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC114",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC115",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC116",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC117",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC118",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC119",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC120",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC121",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC122",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC123",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC124",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC125",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC126",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC127",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC128",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC129",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC130",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC131",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC132",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC133",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC134",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC135",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC136",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC137",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC138",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC139",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC140",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC141",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC142",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "errorCount": 0,
+  "errors": [],
+  "passed": true,
+  "limitations": [
+    "Same-shape schema checks do not run server authorization, SQL, encryption or actual deletion.",
+    "Contract source and user requirements remain separate from proposed implementation choices.",
+    "Scope catalogue is not a list of features implemented or released."
+  ]
+}

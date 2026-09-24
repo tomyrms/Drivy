@@ -1,0 +1,147 @@
+{
+  "scope": "SOURCE_REWRITE_ONLY",
+  "changes": [
+    {
+      "file": "annexes/verifier-mobile-swift-v3-9.py",
+      "calls": 2
+    },
+    {
+      "file": "annexes/verifier-reference-v3-8.py",
+      "calls": 2
+    },
+    {
+      "file": "annexes/verifier-mobile-v3-7.py",
+      "calls": 9
+    },
+    {
+      "file": "annexes/verifier-swift-v3-7.py",
+      "calls": 10
+    },
+    {
+      "file": "annexes/verifier-mobile-v3-5.py",
+      "calls": 9
+    },
+    {
+      "file": "annexes/comparer-prototypes-v3-8-v3-9.py",
+      "calls": 2
+    },
+    {
+      "file": "annexes/verifier-documentation.py",
+      "calls": 8
+    },
+    {
+      "file": "annexes/verifier-contrats-transversaux.py",
+      "calls": 1
+    },
+    {
+      "file": "annexes/verifier-prototype-v3-9.py",
+      "calls": 4
+    },
+    {
+      "file": "annexes/verifier-v3-7.py",
+      "calls": 9
+    },
+    {
+      "file": "annexes/verifier-design-v3-10.py",
+      "calls": 16
+    },
+    {
+      "file": "annexes/verifier-mobile-v3-3.py",
+      "calls": 9
+    },
+    {
+      "file": "annexes/verifier-reference-v3-9.py",
+      "calls": 2
+    },
+    {
+      "file": "annexes/verifier-mobile-swift-v3-10.py",
+      "calls": 2
+    },
+    {
+      "file": "annexes/verifier-prototype-v3-8.py",
+      "calls": 3
+    },
+    {
+      "file": "annexes/verifier-swift-v3-4.py",
+      "calls": 10
+    },
+    {
+      "file": "annexes/verifier-v3-6.py",
+      "calls": 9
+    },
+    {
+      "file": "annexes/verifier-fichiers-v3-10.py",
+      "calls": 5
+    },
+    {
+      "file": "annexes/generer-lecteur.py",
+      "calls": 1
+    },
+    {
+      "file": "annexes/verifier-lecteur-v3-8.py",
+      "calls": 2
+    },
+    {
+      "file": "annexes/verifier-mobile-v3-4.py",
+      "calls": 9
+    },
+    {
+      "file": "annexes/verifier-design-v3-8.py",
+      "calls": 11
+    },
+    {
+      "file": "annexes/verifier-lecteur.py",
+      "calls": 2
+    },
+    {
+      "file": "annexes/verifier-swift-v3-6.py",
+      "calls": 10
+    },
+    {
+      "file": "annexes/verifier-mobile-v3-6.py",
+      "calls": 9
+    },
+    {
+      "file": "annexes/verifier-lecteur-v3-10.py",
+      "calls": 2
+    },
+    {
+      "file": "annexes/verifier-design-v3-9.py",
+      "calls": 16
+    },
+    {
+      "file": "annexes/verifier-swift-v3-5.py",
+      "calls": 10
+    },
+    {
+      "file": "annexes/verifier-mobile-swift-v3-8.py",
+      "calls": 2
+    },
+    {
+      "file": "annexes/verifier-prototype-v3-10.py",
+      "calls": 4
+    },
+    {
+      "file": "annexes/generer-maquettes.py",
+      "calls": 4
+    },
+    {
+      "file": "annexes/verifier-lecteur-v3-9.py",
+      "calls": 2
+    },
+    {
+      "file": "annexes/verifier-modeles-v3-7.py",
+      "calls": 1
+    },
+    {
+      "file": "annexes/verifier-v3-5.py",
+      "calls": 10
+    },
+    {
+      "file": "annexes/verifier-reference-v3-10.py",
+      "calls": 2
+    }
+  ],
+  "totalCalls": 209,
+  "windowsExecuted": false
+}

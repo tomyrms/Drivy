@@ -1,0 +1,247 @@
+{
+  "archive": "Drivy-master.zip",
+  "sha256": "017fe85938e393a503f03b10681967ff001c4cca0b32fe60c33a0153e775d5e3",
+  "scope": "static_targeted_not_runtime",
+  "evidence": [
+    {
+      "id": "EV01",
+      "path": "README.md",
+      "startLine": 1,
+      "endLine": 78,
+      "purpose": "Positionnement ancien, stack annoncée et statut documentaire périmé",
+      "fileSha256": "a4b77284875609b5b3e61f853f552ce332e18670908bd2b316ade6ffd1b8a01c"
+    },
+    {
+      "id": "EV02",
+      "path": "api/prisma/schema.prisma",
+      "startLine": 1,
+      "endLine": 218,
+      "purpose": "Énumérations, écoles, personnes, appartenances, invitations, conversations",
+      "fileSha256": "a736650afa299c710669edba96d92a45026402fdffd235d7e316f8fb7192f95b"
+    },
+    {
+      "id": "EV03",
+      "path": "api/prisma/schema.prisma",
+      "startLine": 219,
+      "endLine": 368,
+      "purpose": "Référentiels, dossiers, offres, formations, leçons",
+      "fileSha256": "a736650afa299c710669edba96d92a45026402fdffd235d7e316f8fb7192f95b"
+    },
+    {
+      "id": "EV04",
+      "path": "api/prisma/schema.prisma",
+      "startLine": 369,
+      "endLine": 473,
+      "purpose": "Traces, évaluations, fautes, documents et médias",
+      "fileSha256": "a736650afa299c710669edba96d92a45026402fdffd235d7e316f8fb7192f95b"
+    },
+    {
+      "id": "EV05",
+      "path": "api/prisma/schema.prisma",
+      "startLine": 474,
+      "endLine": 707,
+      "purpose": "Itinéraires, plusieurs modèles de compétences, disponibilités, prérequis, badges",
+      "fileSha256": "a736650afa299c710669edba96d92a45026402fdffd235d7e316f8fb7192f95b"
+    },
+    {
+      "id": "EV06",
+      "path": "api/src/index.routes.ts",
+      "startLine": 1,
+      "endLine": 49,
+      "purpose": "Routes de domaines effectivement enregistrées",
+      "fileSha256": "a2161b42576cd19031ff3cd513cfe5685c272567d6c469532536ff32277dd2a0"
+    },
+    {
+      "id": "EV07",
+      "path": "api/src/services/lesson.service.ts",
+      "startLine": 1,
+      "endLine": 319,
+      "purpose": "Création, modification, cycle de leçon, objectifs et indicateur payé",
+      "fileSha256": "dab11245e0b51656b4507584e5bcd610d013d58530f9e5d1091a274394e22e2b"
+    },
+    {
+      "id": "EV08",
+      "path": "api/src/repositories/lesson.repository.ts",
+      "startLine": 1,
+      "endLine": 301,
+      "purpose": "Recherche de conflits et transactions sérialisables",
+      "fileSha256": "56225260a7e2180f5f80b6d380eef506e6092b899807df6ca620cf11e3fb2e58"
+    },
+    {
+      "id": "EV09",
+      "path": "api/src/lib/scheduling.ts",
+      "startLine": 1,
+      "endLine": 244,
+      "purpose": "Fuseau fixe Europe/Zurich, intervalles, pauses, créneaux",
+      "fileSha256": "e453600642e0253d0b3d611633a2a1d3ac693bef2ca4ecf895653a0f1a6f8282"
+    },
+    {
+      "id": "EV10",
+      "path": "api/src/services/lesson-sync.service.ts",
+      "startLine": 1,
+      "endLine": 136,
+      "purpose": "Validation et identifiant de synchronisation",
+      "fileSha256": "f5e46db7944156049bbb7420cb448a200d78202d182da3cf54a5040f08ddcda5"
+    },
+    {
+      "id": "EV11",
+      "path": "api/src/repositories/lesson-sync.repository.ts",
+      "startLine": 1,
+      "endLine": 200,
+      "purpose": "Remplacement transactionnel de bilan et protection partielle des évaluations récentes",
+      "fileSha256": "e0917b77c80b4b0ce2f8f4618953ebfca5c84ca8262adeaf002a9f2d3b35a6d5"
+    },
+    {
+      "id": "EV12",
+      "path": "api/src/services/competency-assessment.service.ts",
+      "startLine": 1,
+      "endLine": 165,
+      "purpose": "Niveaux et normalisation du score",
+      "fileSha256": "0b7173a4c50d964e74a8c0b3ab824d2be19924d8c7940e63df2225ad58c231b5"
+    },
+    {
+      "id": "EV13",
+      "path": "api/src/services/push.service.ts",
+      "startLine": 1,
+      "endLine": 27,
+      "purpose": "Enregistrement et retrait de token, pas expédition dans ce service",
+      "fileSha256": "ef09d7ad889f7961e0ea1463613606a1710cf706e179f3a579425948673dce6c"
+    },
+    {
+      "id": "EV14",
+      "path": "ios/Drivy/Core/Sync/PendingSyncStore.swift",
+      "startLine": 1,
+      "endLine": 331,
+      "purpose": "Brouillons, file durable, actions, conflits ; écritures JSON",
+      "fileSha256": "a4e0b5ed96e0818f50a0f60cb3328760866754e8992c5fd17d10119ad90adc28"
+    },
+    {
+      "id": "EV15",
+      "path": "ios/Drivy/Features/Shell/MainTabView.swift",
+      "startLine": 400,
+      "endLine": 450,
+      "purpose": "Navigation actuelle différente selon rôle",
+      "fileSha256": "2a9f0dcf7926bc7883be5e8f8ff65191b8010e11741ac16b5573416380f63c99"
+    },
+    {
+      "id": "EV16",
+      "path": "docs/security-privacy.md",
+      "startLine": 1,
+      "endLine": 104,
+      "purpose": "Affirmations de sécurité et questions de conformité à réexaminer",
+      "fileSha256": "45b5cb896e67ee3970bd3ca1a906eb4fa043f2e6c9e8559213feb7873b8b7b9b"
+    },
+    {
+      "id": "EV17",
+      "path": "docs/README.md",
+      "startLine": 1,
+      "endLine": 29,
+      "purpose": "Hiérarchie documentaire annoncée et documents historiques",
+      "fileSha256": "7ddfd383157ff5f121eb9ea1885168bae144f282f635d3e2388fdf784041bef2"
+    },
+    {
+      "id": "EV18",
+      "path": "api/package.json",
+      "startLine": 1,
+      "endLine": 44,
+      "purpose": "Dépendances et scripts déclarés, non exécutés",
+      "fileSha256": "3435597a57f2cf08e3f5708f89fdd0090c21e4933e82ce47a52579ba6df04e3d"
+    },
+    {
+      "id": "EV19",
+      "path": "api/src/services/document.service.ts",
+      "startLine": 1,
+      "endLine": 392,
+      "purpose": "Accès aux documents et cycle média",
+      "fileSha256": "5af5a0a2b0d5e20942feaa594bb0153989a1410d083ef142ca2e8ce6fa593f2d"
+    },
+    {
+      "id": "EV20",
+      "path": "api/src/services/availability.service.ts",
+      "startLine": 1,
+      "endLine": 210,
+      "purpose": "Disponibilités, pauses et génération de créneaux",
+      "fileSha256": "9d93de70b5f74a7a7ad8e95dd5a7b5a9c400aed83b8161221f60bf3ea04c8999"
+    },
+    {
+      "id": "EV21",
+      "path": "api/src/services/student.service.ts",
+      "startLine": 1,
+      "endLine": 400,
+      "purpose": "Gestion des dossiers et permis",
+      "fileSha256": "131f038ecf7bdc6c4183592b5dbba1306be0db7a2e908b61c83cc4df3657ea81"
+    },
+    {
+      "id": "EV22",
+      "path": "api/src/services/chat.service.ts",
+      "startLine": 1,
+      "endLine": 98,
+      "purpose": "Conversation école-élève et messages",
+      "fileSha256": "ee49594195c6fb5aef4e949151307e4f8a28daae2d27a8e2f045bf197903a75b"
+    },
+    {
+      "id": "EV23",
+      "path": "api/src/services/analytics.service.ts",
+      "startLine": 1,
+      "endLine": 252,
+      "purpose": "Agrégations analytiques",
+      "fileSha256": "beba806f1846bb46dbde43f75f0e8bea2250c0991f7609c9b095069032de3dae"
+    },
+    {
+      "id": "EV24",
+      "path": "api/src/services/badge.service.ts",
+      "startLine": 1,
+      "endLine": 39,
+      "purpose": "Attribution et consultation des badges",
+      "fileSha256": "97a86b0c7f8740d055a82717a13f088fbc16a314b50954d233764544aa23bc57"
+    },
+    {
+      "id": "EV25",
+      "path": "ios/Drivy/Features/Instructor/LessonLiveViewModel.swift",
+      "startLine": 1,
+      "endLine": 304,
+      "purpose": "Orchestration de la leçon en direct, GPS et évaluations",
+      "fileSha256": "5c87e9aa033c74b9a214bbc89f7de4d2521ae99d8e6bba6a471b1208b27289ab"
+    },
+    {
+      "id": "EV26",
+      "path": "ios/Drivy/Features/Lessons/LessonDetailView.swift",
+      "startLine": 1,
+      "endLine": 750,
+      "purpose": "Consultation des leçons et représentation de trajet",
+      "fileSha256": "c0cf9d069c7c71bb3f9a0b44c98c6be44bba3d7854da54f83b9d174b82f48482"
+    },
+    {
+      "id": "EV27",
+      "path": "ios/Drivy/Features/Shared/Attachments/LessonAttachmentsViewModel.swift",
+      "startLine": 1,
+      "endLine": 370,
+      "purpose": "Capture et dépôt des pièces jointes",
+      "fileSha256": "7260700523a4cf3e797ec698f2721850845c0fc88a1fa3213cb094d56bbbf87b"
+    },
+    {
+      "id": "EV28",
+      "path": "ios/Drivy/Features/Settings/SchoolBrandingView.swift",
+      "startLine": 1,
+      "endLine": 370,
+      "purpose": "Paramétrage de marque dans l’ancienne interface",
+      "fileSha256": "b6355667c50618118eef0c0c8a6a66ef6aed69e4e6d1071dcbbe5b567cb888f6"
+    },
+    {
+      "id": "EV29",
+      "path": "api/src/services/requirement.service.ts",
+      "startLine": 1,
+      "endLine": 257,
+      "purpose": "Catalogue et statut des exigences de formation",
+      "fileSha256": "f59577484031ff13f0437bd20e753cde132e83b8e20431df0c718bb612bca88d"
+    },
+    {
+      "id": "EV30",
+      "path": "api/src/lib/authz.ts",
+      "startLine": 1,
+      "endLine": 17,
+      "purpose": "Autorisation par appartenance et rôle",
+      "fileSha256": "41c76cd04542de34ffc1cc279594d1d1b30dbfdf55ce7e7f1f1ed2e4cfaca2db"
+    }
+  ]
+}

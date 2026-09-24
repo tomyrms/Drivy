@@ -1,0 +1,10 @@
+{
+  "sourceVersion": "3.14",
+  "destinationVersion": "3.15",
+  "sourceArchive": "Drivy_Conception_v3_14_2026-09-20.zip",
+  "sourceArchiveSHA256": "4ba983f03e7afe2a364049335155ad9834f12af1c627c57d744ca71ba97e7524",
+  "checked": 438,
+  "passed": true,
+  "failures": [],
+  "meaning": "Byte integrity only, not correctness of design"
+}

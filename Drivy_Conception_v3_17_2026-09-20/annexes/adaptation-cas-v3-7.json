@@ -1,0 +1,11 @@
+{
+  "version": "3.7",
+  "adaptedCases": [
+    "SC076",
+    "SC077"
+  ],
+  "expectedResultsUnchanged": true,
+  "source": "annexes/cas-contrats-v3-2-adaptes-v3-6.json",
+  "target": "annexes/cas-contrats-v3-2-adaptes-v3-7.json",
+  "revisedBusinessTest": "T323 : nouvelle politique de conservation factuelle, ancien résultat conservé en V3.6"
+}

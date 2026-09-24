@@ -1,0 +1,44 @@
+[
+  {
+    "script": "verifier-design-v3-9.py",
+    "returncode": 0,
+    "seconds": 0.83,
+    "stdout": "verifier-design-v3-9.py.stdout",
+    "stderr": "verifier-design-v3-9.py.stderr"
+  },
+  {
+    "script": "verifier-reference-v3-9.py",
+    "returncode": 0,
+    "seconds": 3.41,
+    "stdout": "verifier-reference-v3-9.py.stdout",
+    "stderr": "verifier-reference-v3-9.py.stderr"
+  },
+  {
+    "script": "verifier-mobile-swift-v3-9.py",
+    "returncode": 0,
+    "seconds": 0.78,
+    "stdout": "verifier-mobile-swift-v3-9.py.stdout",
+    "stderr": "verifier-mobile-swift-v3-9.py.stderr"
+  },
+  {
+    "script": "verifier-documentation.py",
+    "returncode": 0,
+    "seconds": 6.35,
+    "stdout": "verifier-documentation.py.stdout",
+    "stderr": "verifier-documentation.py.stderr"
+  },
+  {
+    "script": "verifier-prototype-v3-9.py",
+    "returncode": 0,
+    "seconds": 9.32,
+    "stdout": "verifier-prototype-v3-9.py.stdout",
+    "stderr": "verifier-prototype-v3-9.py.stderr"
+  },
+  {
+    "script": "verifier-lecteur-v3-9.py",
+    "returncode": 0,
+    "seconds": 5.11,
+    "stdout": "verifier-lecteur-v3-9.py.stdout",
+    "stderr": "verifier-lecteur-v3-9.py.stderr"
+  }
+]

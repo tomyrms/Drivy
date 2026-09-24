@@ -1,0 +1,9 @@
+{
+  "scope": "FILE_INTEGRITY_ONLY",
+  "passed": true,
+  "listedFiles": 380,
+  "missing": [],
+  "unlisted": [],
+  "changed": [],
+  "manifestRegenerated": false
+}

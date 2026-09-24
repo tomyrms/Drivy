@@ -1,0 +1,573 @@
+{
+  "status": "SAME_FIXTURE_SCHEMA_COMPARISON",
+  "productCodeExercised": false,
+  "cases": [
+    {
+      "id": "SC048",
+      "title": "Page vide bornée",
+      "expectedValid": true,
+      "baselineValid": true,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC049",
+      "title": "101 salles dépassent la page ordinaire",
+      "expectedValid": false,
+      "baselineValid": true,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC050",
+      "title": "100 salles constituent une page complète",
+      "expectedValid": true,
+      "baselineValid": true,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC051",
+      "title": "Liste de lots enveloppée",
+      "expectedValid": true,
+      "baselineValid": null,
+      "currentValid": true,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC052",
+      "title": "Liste de lots non enveloppée refusée",
+      "expectedValid": false,
+      "baselineValid": null,
+      "currentValid": false,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC053",
+      "title": "Opération en cours sans faux résultat",
+      "expectedValid": true,
+      "baselineValid": null,
+      "currentValid": true,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC054",
+      "title": "PENDING ne porte pas une ressource confirmée",
+      "expectedValid": false,
+      "baselineValid": null,
+      "currentValid": false,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC055",
+      "title": "PENDING ne peut annoncer COMMITTED",
+      "expectedValid": false,
+      "baselineValid": null,
+      "currentValid": false,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC056",
+      "title": "Pas de boucle immédiate de reprise",
+      "expectedValid": false,
+      "baselineValid": null,
+      "currentValid": false,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC057",
+      "title": "Création conditionnelle",
+      "expectedValid": true,
+      "baselineValid": null,
+      "currentValid": true,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC058",
+      "title": "Correction versionnée",
+      "expectedValid": true,
+      "baselineValid": null,
+      "currentValid": true,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC059",
+      "title": "Aucune précondition",
+      "expectedValid": false,
+      "baselineValid": null,
+      "currentValid": false,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC060",
+      "title": "Deux préconditions concurrentes",
+      "expectedValid": false,
+      "baselineValid": null,
+      "currentValid": false,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC061",
+      "title": "Version fictive zéro",
+      "expectedValid": false,
+      "baselineValid": null,
+      "currentValid": false,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC062",
+      "title": "ETag faible non autorisé",
+      "expectedValid": false,
+      "baselineValid": null,
+      "currentValid": false,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC063",
+      "title": "Justificatif dupliqué dans présence",
+      "expectedValid": false,
+      "baselineValid": true,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC064",
+      "title": "Présence porte son cycle",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC065",
+      "title": "Présence sans cycle refusée",
+      "expectedValid": false,
+      "baselineValid": true,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC066",
+      "title": "Dates et échéances présentes (forme)",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC067",
+      "title": "Échéance inscription manquante",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC068",
+      "title": "Échéance informelle refusée",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC069",
+      "title": "Série expose son exigence figée",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC070",
+      "title": "Série sans snapshot exigence",
+      "expectedValid": false,
+      "baselineValid": true,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC071",
+      "title": "Correction de titre isolée",
+      "expectedValid": true,
+      "baselineValid": null,
+      "currentValid": true,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC072",
+      "title": "Titre ne modifie pas le prix clandestinement",
+      "expectedValid": false,
+      "baselineValid": null,
+      "currentValid": false,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC073",
+      "title": "Révision commerciale explicite",
+      "expectedValid": true,
+      "baselineValid": null,
+      "currentValid": true,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC074",
+      "title": "Révision commerciale ne déplace pas les dates",
+      "expectedValid": false,
+      "baselineValid": null,
+      "currentValid": false,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC075",
+      "title": "Tarif sans conditions refusé",
+      "expectedValid": false,
+      "baselineValid": null,
+      "currentValid": false,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC076",
+      "title": "Conditions acceptées du cycle matérialisées",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC077",
+      "title": "Inscription sans conditions figées refusée",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC078",
+      "title": "Déplacement simple, forme",
+      "expectedValid": true,
+      "baselineValid": true,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC079",
+      "title": "Révision commerciale complète, forme",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC080",
+      "title": "Révision commerciale vide refusée",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC081",
+      "title": "Révision historique explicite",
+      "expectedValid": true,
+      "baselineValid": null,
+      "currentValid": true,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC082",
+      "title": "Prix négatif dans révision refusé",
+      "expectedValid": false,
+      "baselineValid": null,
+      "currentValid": false,
+      "baselineSchemaExisted": false,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC083",
+      "title": "Droits actifs distingués du registre",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC084",
+      "title": "Prépayé suspendu garde reliquat sans usage neuf",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC085",
+      "title": "Suspension ne peut conserver des droits utilisables",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC086",
+      "title": "Achat désactivé garde historique",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC087",
+      "title": "Achat désactivé ne permet pas une réservation",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC088",
+      "title": "Projection ne confond pas disponible et utilisable",
+      "expectedValid": false,
+      "baselineValid": true,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC089",
+      "title": "Invalider COURSE_SESSION",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC090",
+      "title": "Invalider COURSE_ENROLLMENT",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC091",
+      "title": "Invalider ENTITLEMENT",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC092",
+      "title": "Invalider CAPTURE",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC093",
+      "title": "Invalider RECORDING_CHOICE",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC094",
+      "title": "Invalider ADMINISTRATIVE_PROFILE",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC095",
+      "title": "Pas de domaine brut de points dans le flux",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC096",
+      "title": "Publication disponible figée",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC097",
+      "title": "Publication effacée sans ancre",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC098",
+      "title": "Publication effacée ne garde pas de géométrie",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC099",
+      "title": "Publication retirée sans annotations GPS cachées",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC100",
+      "title": "Replay supprimé réduit à métadonnées autorisées",
+      "expectedValid": true,
+      "baselineValid": false,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC101",
+      "title": "Replay supprimé refuse géométrie",
+      "expectedValid": false,
+      "baselineValid": true,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC102",
+      "title": "Replay supprimé refuse segment",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC103",
+      "title": "Replay supprimé refuse curseur de fuite",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC104",
+      "title": "Replay publié exige un snapshot réel",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC105",
+      "title": "Option choisie une fois",
+      "expectedValid": true,
+      "baselineValid": true,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC106",
+      "title": "Option dupliquée refusée",
+      "expectedValid": false,
+      "baselineValid": true,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC107",
+      "title": "Indices uniques de manifeste",
+      "expectedValid": true,
+      "baselineValid": true,
+      "currentValid": true,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC108",
+      "title": "Même chunk attendu deux fois refusé",
+      "expectedValid": false,
+      "baselineValid": true,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    },
+    {
+      "id": "SC109",
+      "title": "Occurrences dupliquées à la reconfirmation",
+      "expectedValid": false,
+      "baselineValid": false,
+      "currentValid": false,
+      "baselineSchemaExisted": true,
+      "currentMatchesExpectation": true
+    }
+  ],
+  "summary": {
+    "newCases": 62,
+    "positive": 29,
+    "negative": 33,
+    "allCurrentPass": true,
+    "previouslyAcceptedNowRejected": 8,
+    "newSchemaCases": 19
+  },
+  "limitations": "Une forme acceptée par le schéma ne prouve pas son acceptation par un service implémenté. Les nouveaux DTO sont distingués des mêmes données comparables ; la présence de champs introduits en V3.2 peut rendre la fixture incompatible avec V3.1."
+}

@@ -1,0 +1,16 @@
+{
+  "version": "3.12",
+  "scope": "SOURCE_ARCHIVE_AND_MANIFEST_ONLY",
+  "input": "Drivy_Conception_v3_11_2026-09-19.zip",
+  "sha256": "7836cb98c7aec64dcb8b4e5986a8a959e595eddaa105d6561c7a948295a4c859",
+  "manifestListedFiles": 351,
+  "manifestPassed": true,
+  "missing": [],
+  "unlisted": [],
+  "changed": [],
+  "sourceDirectoryModified": false,
+  "limitations": [
+    "This verifies the supplied V3.11 archive hash and its own SHA256SUMS manifest only.",
+    "It does not prove the semantic correctness of the V3.11 documentation or the application."
+  ]
+}

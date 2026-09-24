@@ -1,0 +1,133 @@
+{
+  "version": "3.12",
+  "scope": "DOCUMENTARY_COHERENCE_ONLY",
+  "checks": [
+    {
+      "name": "markdown_count_matches_release",
+      "passed": true,
+      "detail": 79
+    },
+    {
+      "name": "active_release_branding",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "contract_brand_and_independent_version",
+      "passed": true,
+      "detail": {
+        "title": "Drivy · Contrat de conception",
+        "version": "3.11.0",
+        "description": "Contrat documentaire de la refonte assumée de Drivy : clients Apple en Swift natif, web et Android futur distinct. GPS facultatif, observations privées pendant la leçon et replay, catalogue configurable et cours collectifs. Réutilise les identifiants de routes et schémas existants ; extension proposée de GeoObservation avant constat. Aucun serveur ni build natif vérifié. Les règles de la référence active complètent les contraintes de forme ; /v1 ne garantit pas la compatibilité avec l’ancienne application."
+      }
+    },
+    {
+      "name": "D01_D33_exactly_once_in_order",
+      "passed": true,
+      "detail": [
+        "01",
+        "02",
+        "03",
+        "04",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "30",
+        "31",
+        "32",
+        "33"
+      ]
+    },
+    {
+      "name": "all_decisions_have_explicit_status",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "Q01_Q14_exactly_once_in_order",
+      "passed": true,
+      "detail": [
+        "01",
+        "02",
+        "03",
+        "04",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14"
+      ]
+    },
+    {
+      "name": "open_questions_have_gate_dashboard",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "DM07_fail_closed_quality_rule",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "generic_acceptance_action_removed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "design_risk_priority_present",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "research_evidence_template_present",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "current_audit_linked_from_entrypoints",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "historical_brand_exception_explained",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "passed": true,
+  "errorCount": 0,
+  "errors": [],
+  "productTestsExecuted": false,
+  "nativeBuildExecuted": false,
+  "limits": [
+    "Checks establish internal documentary invariants only.",
+    "They do not validate product usability, safety, performance, legal compliance or implementation."
+  ]
+}

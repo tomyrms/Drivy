@@ -1,0 +1,577 @@
+{
+  "version": "3.2",
+  "basis": "Drivy_Dossier_Conception_v3_1_2026-09-19.zip",
+  "status": "STATIC_SOURCE_EVIDENCE",
+  "findings": [
+    {
+      "id": "D01",
+      "title": "Pagination et enveloppes des listes",
+      "type": "Contradiction de contrat",
+      "problem": "R33 et les conventions annoncent 50 éléments par défaut et 100 au maximum. Plusieurs routes ajoutées autorisent 200, les pages V2 vont jusqu’à 500 et 15 réponses de listes ne sont pas enveloppées comme les autres.",
+      "resolution": "Limiter les requêtes ordinaires à 1–100 (50 par défaut), leurs tableaux à 100, et envelopper les 15 réponses. Les budgets spécialisés du replay/snapshot restent distincts de la capacité d’un cours.",
+      "references": [
+        "04-technique/api.md",
+        "03-fonctionnel/regles-etats.md",
+        "04-technique/openapi.yaml"
+      ],
+      "futureTests": [
+        "T261",
+        "T262"
+      ],
+      "sourceEvidence": [
+        {
+          "file": "04-technique/api.md",
+          "sha256": "f20ff1c653394cfbe926ca263b7e37745377bd0c89d5b8c0a7ca38bfe7f35b65",
+          "matchedText": "Réponses `{data",
+          "startLine": 10,
+          "endLine": 19,
+          "excerpt": "## Conventions communes\n\nPréfixe `/v1`. Contexte scolaire dans le chemin, vérifié contre l’identité authentifiée. Corps JSON stricts, champs inconnus refusés. Réponses `{data, requestId, serverTime}`. Pagination opaque stable, 50 par défaut, 100 maximum, ordre documenté par ressource : leçons par `(plannedStart,id)`, bilans par `(date de leçon,id,sequence)`, autres listes par `(createdAt,id)` lorsque disponible. Le curseur fixe les filtres et la portée ; le modifier ou changer d’école le rend invalide.\n\nLes commandes portent `operationId` et `Idempotency-Key` identiques. Les mutations d’une ressource existante exigent `If-Match` avec version forte selon la colonne Version requise, sauf les exceptions explicitement définies en R11 (chunks immuables, écritures append-only prévues et arrêt de sécurité monotone) ; les créations sans ressource antérieure ne possèdent pas cette précondition, mais gardent l’idempotence et les contrôles transactionnels. Les ressources un-à-un Preparation et Wish sont créées vides avec la leçon/formation, ce qui évite une ambiguïté de premier PUT sans version. Leurs objets vides n’impliquent aucune observation. L’API renvoie une version actuelle autorisée ou permet de la recharger ; elle ne révèle jamais un objet d’une autre école.\n\nLe schéma OpenAPI encode la structure ; il ne peut pas exprimer à lui seul les transactions, la portée des droits, la correspondance catégorie/pièce, la décision de publication ni les contraintes temporelles. Ces validations sont dans les services et la base. Les codes d’erreur sont stables ; le texte est localisable. Un 403 de révocation n’autorise pas à conserver un affichage de cache.\n\nLes instants incluent un offset ou Z ; le fuseau de l’école demeure un champ séparé. Une date de validité est `YYYY-MM-DD`, pas un instant UTC. Montants entiers en centimes dans les bornes exactement représentables en JSON. L’API ne reçoit ni montant flottant « 90.00 », ni numéro de carte.\n"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "maximum: 200",
+          "startLine": 12074,
+          "endLine": 12083,
+          "excerpt": "          type: integer\n          minimum: 1\n          maximum: 200\n      responses:\n        '200':\n          description: Résultat serveur ; pas une implémentation exécutée.\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/SchoolSitePageV2'"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "maximum: 200",
+          "startLine": 12284,
+          "endLine": 12293,
+          "excerpt": "          type: integer\n          minimum: 1\n          maximum: 200\n      responses:\n        '200':\n          description: Résultat serveur ; pas une implémentation exécutée.\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/RoomPageV2'"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "maxItems: 500",
+          "startLine": 30244,
+          "endLine": 30253,
+          "excerpt": "            $ref: '#/components/schemas/SchoolSite'\n          minItems: 0\n          maxItems: 500\n        nextCursor:\n          anyOf:\n          - type: string\n            minLength: 1\n            maxLength: 2000\n          - type: 'null'\n        generatedAt:"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "maxItems: 500",
+          "startLine": 30284,
+          "endLine": 30293,
+          "excerpt": "            $ref: '#/components/schemas/Room'\n          minItems: 0\n          maxItems: 500\n        nextCursor:\n          anyOf:\n          - type: string\n            minLength: 1\n            maxLength: 2000\n          - type: 'null'\n        generatedAt:"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "listLearnerPurchases",
+          "startLine": 13380,
+          "endLine": 13389,
+          "excerpt": "  /v1/schools/{schoolId}/learners/{learnerId}/purchases:\n    get:\n      operationId: listLearnerPurchases\n      summary: AP108 · listLearnerPurchases\n      tags:\n      - F17\n      description: Règles R01–R100, autorisation courante et transactions documentées ; aucun état métier confirmé\n        par simple écriture locale.\n      parameters:\n      - name: schoolId"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "listLearnerPurchases",
+          "startLine": 13381,
+          "endLine": 13390,
+          "excerpt": "    get:\n      operationId: listLearnerPurchases\n      summary: AP108 · listLearnerPurchases\n      tags:\n      - F17\n      description: Règles R01–R100, autorisation courante et transactions documentées ; aucun état métier confirmé\n        par simple écriture locale.\n      parameters:\n      - name: schoolId\n        in: path"
+        }
+      ]
+    },
+    {
+      "id": "D02",
+      "title": "Résultat encore en cours, sans fausse confirmation",
+      "type": "Contrat incomplet",
+      "problem": "La fonction de cours mentionne OPERATION_PENDING/202. Le contrat de recherche d’opération et beaucoup de mutations scolaires ne définissent que le résultat commité, sans DTO de résultat encore en cours.",
+      "resolution": "Ajouter PendingOperationEnvelope aux réponses concernées et à AP72. Le client conserve l’intention et sa clé ; 202 ne confirme aucune place ni prestation. Distinguer un Job accepté de la commande encore en cours. Préciser le crash, la preuve durable et le rejeu à clé inchangée.",
+      "references": [
+        "03-fonctionnel/cours-collectifs.md",
+        "04-technique/synchronisation.md",
+        "04-technique/openapi.yaml"
+      ],
+      "futureTests": [
+        "T263",
+        "T264",
+        "T284"
+      ],
+      "sourceEvidence": [
+        {
+          "file": "03-fonctionnel/cours-collectifs.md",
+          "sha256": "1382f32cd5c735a6608ad98a59ed207f4d5868a02be77790a19de6974cfe363b",
+          "matchedText": "OPERATION_PENDING",
+          "startLine": 97,
+          "endLine": 106,
+          "excerpt": "Le contrat [OpenAPI](../04-technique/openapi.yaml) expose création/édition/publication de sessions, lecture des offres, création/annulation/reconfirmation d’inscriptions, présence et exigences. Les transactions détaillées sont dans [transactions GPS, packs et cours](../04-technique/transactions-v2.md).\n\nErreurs à distinguer : COURSE_FULL (409), ALREADY_ENROLLED (409 ou résultat idempotent de la même commande), SCHEDULE_CONFLICT (409), INELIGIBLE (422), REQUIREMENT_UNVERIFIED (422), PROFILE_NOT_APPROVED (422), OFFER_CHANGED (412), INSUFFICIENT_ENTITLEMENT (409), CANCELLATION_REQUIRES_STAFF (409), OUTSIDE_SCHOOL (404), OPERATION_PENDING (202 si résultat encore indéterminé). Aucune erreur ne divulgue les noms d’autres élèves.\n\n## Critères d’acceptation essentiels\n\nDeux élèves visent une dernière place : un succès et un refus sans débit. Une publication ne crée aucune inscription. Une série de plusieurs dates n’immobilise qu’une place mais occupe tous ses horaires. Un élève ayant déjà satisfait l’exigence ne reçoit pas l’annonce ciblée. Refus de push : calendrier et inscription utilisables. Une présence manquante interdit la validation finale. Un achat de pack ne préinscrit pas à une session. Une inscription manuelle et autonome concurrentes restent uniques.\n\nTous ces cas sont détaillés dans la [recette](../05-realisation/tests-recette.md) ; ils sont spécifiés, pas exécutés.\n"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "getOperationResult",
+          "startLine": 9226,
+          "endLine": 9235,
+          "excerpt": "  /v1/schools/{schoolId}/operations/{operationId}:\n    get:\n      operationId: getOperationResult\n      summary: AP72 · getOperationResult\n      tags:\n      - F12\n      description: Permissions selon la matrice scolaire ; invariants et transactions selon R01-R100.\n      parameters:\n      - name: schoolId\n        in: path"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "getOperationResult",
+          "startLine": 9227,
+          "endLine": 9236,
+          "excerpt": "    get:\n      operationId: getOperationResult\n      summary: AP72 · getOperationResult\n      tags:\n      - F12\n      description: Permissions selon la matrice scolaire ; invariants et transactions selon R01-R100.\n      parameters:\n      - name: schoolId\n        in: path\n        required: true"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "OperationResult:",
+          "startLine": 24783,
+          "endLine": 24792,
+          "excerpt": "      - operationId\n      - reason\n    OperationResult:\n      type: object\n      additionalProperties: false\n      properties:\n        operationId:\n          type: string\n          format: uuid\n        commandType:"
+        }
+      ]
+    },
+    {
+      "id": "D03",
+      "title": "Présence conditionnelle et cycle de réinscription",
+      "type": "Contradiction et lacune de cycle",
+      "problem": "AP146 accepte une « version 0 » pour la première présence via If-Match alors que la convention parle d’ETag d’une ressource existante. Le relevé ne porte pas enrollmentCycle malgré les cycles de réinscription introduits en V3.1.",
+      "resolution": "Identifier le cycle dans l’URI et le relevé ; création If-None-Match: *, correction If-Match. Une seule précondition, version initiale 1. Rejeter une commande d’un cycle antérieur et empêcher une présence définitive avant la fin du bloc. Ce dernier choix est une proposition conservatrice de pilote, explicitement soumise à validation.",
+      "references": [
+        "04-technique/api.md",
+        "03-fonctionnel/cours-collectifs.md",
+        "03-fonctionnel/regles-etats.md",
+        "04-technique/openapi.yaml"
+      ],
+      "futureTests": [
+        "T265",
+        "T266",
+        "T267"
+      ],
+      "sourceEvidence": [
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "version 0",
+          "startLine": 17722,
+          "endLine": 17731,
+          "excerpt": "      tags:\n      - F18\n      description: TAKE_ATTENDANCE sur occurrence ; version 0 explicitement acceptée pour première création, version\n        actuelle pour correction. Première présence consomme au plus une fois le HOLD ; validation finale séparée.\n      parameters:\n      - name: schoolId\n        in: path\n        required: true\n        schema:\n          type: string"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "AttendanceRecord:",
+          "startLine": 29154,
+          "endLine": 29163,
+          "excerpt": "      - reason\n      - acceptedTermsVersionId\n    AttendanceRecord:\n      type: object\n      additionalProperties: false\n      properties:\n        id:\n          type: string\n          format: uuid\n        schoolId:"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "AttendanceCommand:",
+          "startLine": 29210,
+          "endLine": 29219,
+          "excerpt": "      - evidenceDocumentIds\n      - correctionReason\n    AttendanceCommand:\n      type: object\n      additionalProperties: false\n      properties:\n        operationId:\n          type: string\n          format: uuid\n        status:"
+        }
+      ]
+    },
+    {
+      "id": "D04",
+      "title": "Déplacement de cours et échéances",
+      "type": "Paramètres manquants et effet de bord commercial",
+      "problem": "RescheduleCourseCommand contient les occurrences et le motif, mais pas les échéances stockées sur la série. Avancer ou reporter les dates ne définit pas comment revalider inscription et désinscription.",
+      "resolution": "Soumettre et contrôler les deux échéances avec les dates. Conserver la date d’annulation acceptée par chaque cycle ; ne pas la raccourcir implicitement. Le déplacement et ses avis restent atomiques ; une comparaison temporelle relève du service, pas du seul JSON Schema.",
+      "references": [
+        "03-fonctionnel/cours-collectifs.md",
+        "03-fonctionnel/regles-etats.md",
+        "04-technique/openapi.yaml"
+      ],
+      "futureTests": [
+        "T268",
+        "T271"
+      ],
+      "sourceEvidence": [
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "RescheduleCourseCommand:",
+          "startLine": 28917,
+          "endLine": 28926,
+          "excerpt": "      - enrollmentDeadline\n      - selfCancellationDeadline\n    RescheduleCourseCommand:\n      type: object\n      additionalProperties: false\n      properties:\n        operationId:\n          type: string\n          format: uuid\n        occurrences:"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "selfCancellationDeadline:",
+          "startLine": 28834,
+          "endLine": 28843,
+          "excerpt": "          type: string\n          format: date-time\n        selfCancellationDeadline:\n          type: string\n          format: date-time\n        generatedAt:\n          type: string\n          format: date-time\n      required:\n      - id"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "selfCancellationDeadline:",
+          "startLine": 28901,
+          "endLine": 28910,
+          "excerpt": "          type: string\n          format: date-time\n        selfCancellationDeadline:\n          type: string\n          format: date-time\n      required:\n      - operationId\n      - templateId\n      - title\n      - productVersionId"
+        }
+      ]
+    },
+    {
+      "id": "D05",
+      "title": "Modèle de cours, offre publiée et conditions acceptées",
+      "type": "Lacune de versionnement et action promise non contractée",
+      "problem": "CourseTemplate est mutable et porte requirementType, mais CourseSession ne fige pas cette valeur. Le document prévoit des corrections éditoriales et changements de prix ; le PUT existant est DRAFT seulement et les commandes publiées n’incluent pas cette édition ciblée.",
+      "resolution": "Figer requirementTypeSnapshot sur la série et acceptedCommercialSnapshot par cycle. AP192 concrétise les deux actions déjà promises : titre seul ou nouvelles conditions pour futurs inscrits. Une reconfirmation de dates ne transforme pas le tarif accepté en prix courant.",
+      "references": [
+        "03-fonctionnel/cours-collectifs.md",
+        "03-fonctionnel/calendrier-notifications.md",
+        "04-technique/openapi.yaml"
+      ],
+      "futureTests": [
+        "T269",
+        "T270",
+        "T271"
+      ],
+      "sourceEvidence": [
+        {
+          "file": "03-fonctionnel/cours-collectifs.md",
+          "sha256": "1382f32cd5c735a6608ad98a59ed207f4d5868a02be77790a19de6974cfe363b",
+          "matchedText": "Correction d’une faute",
+          "startLine": 66,
+          "endLine": 75,
+          "excerpt": "| Situation | Comportement proposé |\n|---|---|\n| Correction d’une faute dans le descriptif | Nouvelle version éditoriale ; pas une nouvelle campagne générale. |\n| Changement de prix | Nouvelle version pour achats ultérieurs ; les inscrits conservent les conditions acceptées. |\n| Changement de date ou lieu | Contrôle de tous les conflits, puis RECONFIRMATION_REQUIRED ; comparaison ancien/nouveau, place maintenue. |\n| Nouvelle date incompatible avec un inscrit | Refus de la mutation globale ; le personnel résout le cas avec l’élève avant nouvelle tentative. |\n| Élève ne répond pas au changement | Place conservée, état visible au personnel ; pas de facture ni désinscription supplémentaire automatique. |\n| Annulation élève dans les conditions | Libérer la place et le droit encore réservé ; ajuster le compte sans inventer un remboursement. |\n| Annulation hors délai ou cours commencé | Contact du personnel ; décisions et compensations tracées. |\n| École annule toute la série | Tous les inscrits avertis ; occupations futures libérées, droits et montants traités explicitement. |"
+        },
+        {
+          "file": "03-fonctionnel/cours-collectifs.md",
+          "sha256": "1382f32cd5c735a6608ad98a59ed207f4d5868a02be77790a19de6974cfe363b",
+          "matchedText": "Changement de prix",
+          "startLine": 67,
+          "endLine": 76,
+          "excerpt": "|---|---|\n| Correction d’une faute dans le descriptif | Nouvelle version éditoriale ; pas une nouvelle campagne générale. |\n| Changement de prix | Nouvelle version pour achats ultérieurs ; les inscrits conservent les conditions acceptées. |\n| Changement de date ou lieu | Contrôle de tous les conflits, puis RECONFIRMATION_REQUIRED ; comparaison ancien/nouveau, place maintenue. |\n| Nouvelle date incompatible avec un inscrit | Refus de la mutation globale ; le personnel résout le cas avec l’élève avant nouvelle tentative. |\n| Élève ne répond pas au changement | Place conservée, état visible au personnel ; pas de facture ni désinscription supplémentaire automatique. |\n| Annulation élève dans les conditions | Libérer la place et le droit encore réservé ; ajuster le compte sans inventer un remboursement. |\n| Annulation hors délai ou cours commencé | Contact du personnel ; décisions et compensations tracées. |\n| École annule toute la série | Tous les inscrits avertis ; occupations futures libérées, droits et montants traités explicitement. |\n| Absence à un bloc | Marquer ABSENT, garder le parcours PARTIAL si nécessaire ; ne pas valider le cours. |"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "DRAFT seulement",
+          "startLine": 16066,
+          "endLine": 16075,
+          "excerpt": "      tags:\n      - F18\n      description: DRAFT seulement. Une série publiée se modifie via commandes explicites, jamais PUT silencieux\n        des dates.\n      parameters:\n      - name: schoolId\n        in: path\n        required: true\n        schema:\n          type: string"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "CourseTemplate:",
+          "startLine": 28567,
+          "endLine": 28576,
+          "excerpt": "      - reviewEvidenceDocumentIds\n      - transitionCasesProcedure\n    CourseTemplate:\n      type: object\n      additionalProperties: false\n      properties:\n        id:\n          type: string\n          format: uuid\n        schoolId:"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "CourseSession:",
+          "startLine": 28772,
+          "endLine": 28781,
+          "excerpt": "      - roomId\n      - instructorMembershipId\n    CourseSession:\n      type: object\n      additionalProperties: false\n      properties:\n        id:\n          type: string\n          format: uuid\n        schoolId:"
+        }
+      ]
+    },
+    {
+      "id": "D06",
+      "title": "Durée de leçon et financement synchronisés",
+      "type": "Transition insuffisamment spécifiée",
+      "problem": "MoveLessonCommand peut modifier début et fin, mais ne propose ni sélection commerciale révisée ni prix/quantité de droits. Une séance passant de 45 à 90 minutes pouvait être décrite sans traitement explicite de son HOLD et de son compte.",
+      "resolution": "Ajouter commercialChange pour la révision explicite avant capture/constat sur PLANNED. Conserver LessonCommercialRevision et appliquer horaire, occupations, droits et compte au même commit. Sans révision requise ou avec un solde invalide, préserver entièrement l’ancienne leçon. Aucune règle tarifaire universelle basée sur le GPS.",
+      "references": [
+        "03-fonctionnel/planning-lecons.md",
+        "03-fonctionnel/catalogue-packs.md",
+        "04-technique/openapi.yaml"
+      ],
+      "futureTests": [
+        "T272",
+        "T273",
+        "T274"
+      ],
+      "sourceEvidence": [
+        {
+          "file": "03-fonctionnel/planning-lecons.md",
+          "sha256": "ca864c823a531db2661be93fc770a281426c3a0d6cfdae52dac2be2850f89e45",
+          "matchedText": "HOLD",
+          "startLine": 185,
+          "endLine": 191,
+          "excerpt": "## Intégration du GPS, des droits et des cours\n\nUne leçon possède un mode commercial UNIT_PRICE ou ENTITLEMENT, un ServiceProductVersion et une quantité acceptée. La réservation d’un droit compatible est atomique avec les occupations ; si le créneau échoue, aucun droit n’est immobilisé. CompleteLesson consomme le HOLD et crée une charge nulle lorsque la prestation est déjà financée par un pack. Les prix, durées et quantités ne sont jamais déduits de la capture.\n\nLa préparation mène à [F15](gps-replay.md) avec choix explicite. Le début de capture ne change pas automatiquement le résultat Lesson ; une capture est une ressource autonome. L’arrêt local précède toujours la clôture, même si le réseau ne répond pas. Une capture manquante ou partielle ne bloque ni résultat ni bilan. Les horaires effectifs restent ceux de la séance, pas les bornes des points GPS.\n\nLes collisions couvrent les engagements de cours collectifs et les leçons au sein de la même école. Une offre non inscrite ne bloque pas un élève ; un moniteur qui anime une occurrence n’est pas disponible pour une leçon au même moment. Le parcours autonome [F18](cours-collectifs.md) ne donne pas aux élèves le pouvoir de modifier leurs leçons individuelles au pilote."
+        },
+        {
+          "file": "03-fonctionnel/catalogue-packs.md",
+          "sha256": "811a0c26789575b7c59fc3823c6b8349b13e63fdcd7c0ad8cdc5e5295b6b9940",
+          "matchedText": "Une double leçon",
+          "startLine": 47,
+          "endLine": 56,
+          "excerpt": "## Quantités et compatibilité\n\nUne unité de 45 minutes ne devient pas une unité de 60 minutes au changement de grille. Une double leçon utilise deux unités seulement si le service acheté le prévoit. Aucun arrondi de durée GPS ne calcule le nombre de droits à consommer. Le prix d’un pack composite n’est pas divisé arbitrairement par ses composants pour inventer leurs valeurs de remboursement.\n\nLa correspondance entre ancien produit et nouveau produit se fait par décision administrative validée et auditée, pas par égalité de nom. Un droit voiture B ne finance pas automatiquement un cours moto. Un cours déjà accompli ailleurs peut satisfaire l’exigence sans consommer un droit acheté ; un éventuel remboursement/remplacement du composant dépend des conditions acceptées.\n\n## Annulations, remboursement et corrections\n\nAnnuler avant utilisation libère une réservation de droit selon les conditions. Une pénalité éventuelle est un mouvement distinct, motivé et contractuellement justifié. Une annulation scolaire après début de cours requiert arbitrage sur les droits déjà consommés et les prestations restantes. Rien n’est assimilé automatiquement à un remboursement en espèces.\n"
+        },
+        {
+          "file": "03-fonctionnel/catalogue-packs.md",
+          "sha256": "811a0c26789575b7c59fc3823c6b8349b13e63fdcd7c0ad8cdc5e5295b6b9940",
+          "matchedText": "HOLD",
+          "startLine": 30,
+          "endLine": 39,
+          "excerpt": "Pour vendre, le personnel sélectionne l’élève et l’offre versionnée, fait confirmer les conditions puis crée l’achat. Les droits sont accordés selon la politique : soit après paiement intégral pour un pack prépayé strict, soit utilisables immédiatement si l’école autorise la facturation ultérieure. Cette dernière possibilité doit être explicite dans l’achat et ne peut être changée silencieusement après utilisation.\n\nÀ la réservation d’une leçon ou d’un cours compatible, le système montre les droits utilisables et le solde après réservation. Un HOLD diminue le disponible. À réalisation d’une leçon, il devient CONSUME. Un cours collectif utilise la politique R54. Le paiement est enregistré sur le compte de l’achat ou de la prestation unitaire, pas sur chaque utilisation couverte par pack.\n\n## Exemple inspiré de Luc’s\n\nLe site de Luc’s publie un pack Start comprenant 10 leçons de 45 minutes, sensibilisation et accompagnement à l’examen, avec inscription offerte [S33](../06-gouvernance/sources.md#s33). Le modèle suivant est une **traduction proposée**, pas le catalogue importé d’un logiciel interne :\n\n| Composant | Droit créé | Quand il est utilisé |\n|---|---|---|"
+        },
+        {
+          "file": "03-fonctionnel/catalogue-packs.md",
+          "sha256": "811a0c26789575b7c59fc3823c6b8349b13e63fdcd7c0ad8cdc5e5295b6b9940",
+          "matchedText": "HOLD",
+          "startLine": 59,
+          "endLine": 68,
+          "excerpt": "## Concurrence et erreurs\n\nDeux réservations tentant d’utiliser le dernier droit sont sérialisées avec le compte de droits du même élève. Le serveur valide le produit, la quantité, les occupations et le solde dans la même transaction. Échec de capacité de cours : rollback du HOLD. Rejeu d’une réponse perdue : même achat ou réservation, pas un second GRANT.\n\nErreurs : PRODUCT_INACTIVE, OFFER_CHANGED, ENTITLEMENT_INCOMPATIBLE, INSUFFICIENT_ENTITLEMENT, PREPAYMENT_REQUIRED, ACCOUNT_BALANCE_CONFLICT, PURCHASE_HAS_COMMITMENTS. Elles donnent une action compréhensible sans révéler les comptes d’autres élèves. Les commandes financières ne sont pas placées dans une file d’attente hors ligne.\n\n## Données et validations\n\nMontants entiers en centimes CHF ; quantités entières positives au pilote ; durée d’unité explicitée. Un pack ne contient pas de pack récursif. Composants maximum proposé : 32, options maximum 16 ; la somme des lignes affichées et ajustements doit correspondre au total accepté. Un rabais informatif déjà inclus n’est pas appliqué une seconde fois. La référence externe de paiement est facultative ; ne jamais enregistrer de carte bancaire.\n"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "MoveLessonCommand:",
+          "startLine": 25639,
+          "endLine": 25648,
+          "excerpt": "          entitlementLotId: 00000000-0000-4000-8000-000000000004\n          acceptedTermsVersionId: 00000000-0000-4000-8000-000000000005\n    MoveLessonCommand:\n      type: object\n      additionalProperties: false\n      properties:\n        operationId:\n          type: string\n          format: uuid\n        plannedStart:"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "HOLD",
+          "startLine": 17723,
+          "endLine": 17732,
+          "excerpt": "      - F18\n      description: TAKE_ATTENDANCE sur occurrence ; version 0 explicitement acceptée pour première création, version\n        actuelle pour correction. Première présence consomme au plus une fois le HOLD ; validation finale séparée.\n      parameters:\n      - name: schoolId\n        in: path\n        required: true\n        schema:\n          type: string\n          format: uuid"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "HOLD",
+          "startLine": 28101,
+          "endLine": 28110,
+          "excerpt": "          enum:\n          - GRANT\n          - HOLD\n          - RELEASE\n          - CONSUME\n          - RESTORE\n          - EXPIRE\n        quantity:\n          type: integer\n          minimum: 1"
+        }
+      ]
+    },
+    {
+      "id": "D07",
+      "title": "Droits de pack après correction d’un prépaiement",
+      "type": "Transition retour non définie",
+      "problem": "La documentation décrit l’activation après paiement intégral et les contre-écritures, mais ne rend pas explicite le retour à un financement insuffisant. Les états de lot n’exposent pas cette suspension ni l’utilisabilité distincte du reliquat.",
+      "resolution": "Séparer availableQuantity et usableQuantity ; ajouter SUSPENDED_PAYMENT et DISABLED. Recontrôler finance et droits atomiquement lors d’une correction sur achat. Proposition du pilote : pas d’annulation automatique des engagements acquis ; honorer/traiter explicitement les HOLD existants et bloquer leur augmentation nette tant que nécessaire.",
+      "references": [
+        "03-fonctionnel/catalogue-packs.md",
+        "04-technique/transactions-v2.md",
+        "04-technique/openapi.yaml"
+      ],
+      "futureTests": [
+        "T275",
+        "T276",
+        "T277"
+      ],
+      "sourceEvidence": [
+        {
+          "file": "03-fonctionnel/catalogue-packs.md",
+          "sha256": "811a0c26789575b7c59fc3823c6b8349b13e63fdcd7c0ad8cdc5e5295b6b9940",
+          "matchedText": "après paiement intégral",
+          "startLine": 28,
+          "endLine": 37,
+          "excerpt": "Le personnel habilité CONFIGURE_CATALOG crée une nouvelle version de produit/pack. Avant activation il vérifie le libellé, la durée, la quantité, les sites et les conditions ; une modification de tarif ne réécrit pas les ventes existantes.\n\nPour vendre, le personnel sélectionne l’élève et l’offre versionnée, fait confirmer les conditions puis crée l’achat. Les droits sont accordés selon la politique : soit après paiement intégral pour un pack prépayé strict, soit utilisables immédiatement si l’école autorise la facturation ultérieure. Cette dernière possibilité doit être explicite dans l’achat et ne peut être changée silencieusement après utilisation.\n\nÀ la réservation d’une leçon ou d’un cours compatible, le système montre les droits utilisables et le solde après réservation. Un HOLD diminue le disponible. À réalisation d’une leçon, il devient CONSUME. Un cours collectif utilise la politique R54. Le paiement est enregistré sur le compte de l’achat ou de la prestation unitaire, pas sur chaque utilisation couverte par pack.\n\n## Exemple inspiré de Luc’s\n\nLe site de Luc’s publie un pack Start comprenant 10 leçons de 45 minutes, sensibilisation et accompagnement à l’examen, avec inscription offerte [S33](../06-gouvernance/sources.md#s33). Le modèle suivant est une **traduction proposée**, pas le catalogue importé d’un logiciel interne :\n"
+        },
+        {
+          "file": "04-technique/transactions-v2.md",
+          "sha256": "88b35a5d10bb59f9f9daddcf0703fc0182bc0b3ff068cc0561aa5ac48c515d17",
+          "matchedText": "Les opérations purement financières",
+          "startLine": 10,
+          "endLine": 19,
+          "excerpt": "## Discipline globale de verrouillage\n\nPour le pilote, toute mutation pouvant modifier des occupations ou immobiliser des droits prend d’abord un verrou transactionnel de coordination par école. Puis, dans un ordre déterministe : agrégats de planning par ID, ressources/personnes par ID, comptes de droits par ID, comptes financiers par ID. Les opérations purement financières qui n’affectent aucune occupation verrouillent leur compte sans acquérir ultérieurement un verrou plus large. Une opération de remboursement qui modifie aussi une réservation suit obligatoirement le chemin large dès son début.\n\nCe choix simple sérialise les rares mutations de planning d’une école et évite les inversions de verrous entre inscription, déplacement, capacité et annulation. Il ne sérialise pas les lectures ni les uploads GPS. Mesurer latence et débit avant remplacer par un verrouillage plus fin ; ne pas optimiser au prix d’une surréservation. PostgreSQL fournit les mécanismes, mais les essais de Drivy restent à réaliser [S46](../06-gouvernance/sources.md#s46).\n\nLes contraintes d’unicité/exclusion en base restent une seconde barrière. Les conflits de sérialisation ou deadlocks éventuels sont réessayés de façon bornée avec la même operationId, jamais comme une nouvelle commande. Un échec final ne conserve aucun effet métier partiel.\n\n## Transaction d’inscription\n"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "EntitlementLot:",
+          "startLine": 28022,
+          "endLine": 28031,
+          "excerpt": "        acceptanceSource: IN_PERSON\n        reason: Vente d’exemple, données fictives.\n    EntitlementLot:\n      type: object\n      additionalProperties: false\n      properties:\n        id:\n          type: string\n          format: uuid\n        schoolId:"
+        }
+      ]
+    },
+    {
+      "id": "D08",
+      "title": "Flux de synchronisation des domaines ajoutés",
+      "type": "Écart entre périmètre fonctionnel et contrat incrémental",
+      "problem": "SyncChange énumère les domaines initiaux, mais ne peut pas nommer cours, inscriptions, achats, droits, exigences et captures. Les nouvelles règles parlent pourtant d’invalidation de ces données.",
+      "resolution": "Compléter les types et l’action INVALIDATE. Définir la matrice entre snapshot initial et caches enrichis, leur relecture autorisée et leur nettoyage à changement d’epoch/snapshot. Les points GPS gardent leur circuit spécialisé, sans promesse nouvelle de tout fonctionner hors ligne.",
+      "references": [
+        "04-technique/synchronisation.md",
+        "03-fonctionnel/hors-ligne-vie-privee.md",
+        "04-technique/openapi.yaml"
+      ],
+      "futureTests": [
+        "T278",
+        "T279"
+      ],
+      "sourceEvidence": [
+        {
+          "file": "04-technique/synchronisation.md",
+          "sha256": "363e1da7292b3529507e99d4d9539b63fbf117fdfddbb8f457db324d806bc910",
+          "matchedText": "Flux de changements",
+          "startLine": 26,
+          "endLine": 35,
+          "excerpt": "Les collections d’une page peuvent être partielles et vides. Les relations peuvent arriver dans une page suivante ; les clés étrangères locales ne sont rendues contraignantes qu’au basculement, après contrôle de complétude. Tous les éléments appartiennent au même snapshot. Un changement de droits pendant sa construction ou sa lecture invalide les pages restantes et impose une nouvelle initialisation.\n\n## Flux de changements sans perte à la frontière de commit\n\nUn simple identifiant auto-incrémenté alloué au début d’une transaction n’est pas un ordre garanti de commit. Le contrat utilise `SchoolSyncClock` : chaque transaction scolaire qui modifie une ressource synchronisable verrouille la ligne d’horloge en fin de traitement, incrémente le compteur, écrit ses `ProjectionEvent` avec ordinaux, puis conserve le verrou jusqu’au commit. La transaction suivante n’obtient pas une séquence visible avant la précédente. Un rollback ne publie aucun événement.\n\nLe curseur est opaque, authentifié et lié à `(école, personne, accessEpoch, filtres, watermark, position)`. Il contient la séquence et l’ordinal pour ne pas perdre le second événement d’une même transaction. Le watermark fixe la borne haute d’une lecture paginée ; les changements suivants seront récupérés après cette borne. Une réponse vide peut avancer le curseur jusqu’au watermark, y compris lorsque des événements ne sont pas autorisés pour cette personne. Le nombre ou le type des objets filtrés n’est pas dévoilé.\n\nUn événement UPSERT indique un identifiant et une version, pas un accès universel à son contenu. Le client recharge la ressource ou la projection correspondante par l’API autorisée. Une lecture peut déjà retourner une version plus récente : la conserver, puis ignorer les versions plus anciennes reçues ensuite. Pour un ensemble dérivé, comme la progression, remplacer l’ensemble autorisé reçu et non additionner des pourcentages. DELETE retire la projection locale, mais ne prouve pas une purge physique des archives serveur. Les renommages, modifications de référentiel applicables et changements de journal financier doivent aussi générer un événement.\n"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "SyncChange:",
+          "startLine": 24810,
+          "endLine": 24819,
+          "excerpt": "      - committedAt\n      - resourceVersion\n    SyncChange:\n      type: object\n      additionalProperties: false\n      properties:\n        sequence:\n          type: integer\n          minimum: 0\n        ordinal:"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "SnapshotPage:",
+          "startLine": 24909,
+          "endLine": 24918,
+          "excerpt": "      - expiresAt\n      - nextPageToken\n    SnapshotPage:\n      type: object\n      additionalProperties: false\n      properties:\n        snapshotId:\n          type: string\n          format: uuid\n        accessEpoch:"
+        }
+      ]
+    },
+    {
+      "id": "D09",
+      "title": "Effacement GPS représentable sans coordonnées",
+      "type": "Contradiction de projection et de confidentialité",
+      "problem": "ReplayPage accepte WITHDRAWN/DELETED mais impose un geometrySnapshotId pour tout état non privé et ne contraint pas les segments à être vides. CapturePublication ne décrit que le snapshot disponible. Cela contredit l’effacement géographique documenté.",
+      "resolution": "Distinguer le snapshot conservé à titre de preuve de sa projection d’accès courante. Un objet retiré/effacé expose une géométrie nulle, sans observations, segments ni curseur de données. Les bilans autonomes autorisés restent séparés ; retirer un partage n’ouvre pas la vue privée. Purge des dérivés et limites hors ligne conservées.",
+      "references": [
+        "03-fonctionnel/gps-replay.md",
+        "03-fonctionnel/regles-etats.md",
+        "04-technique/openapi.yaml"
+      ],
+      "futureTests": [
+        "T280",
+        "T281"
+      ],
+      "sourceEvidence": [
+        {
+          "file": "03-fonctionnel/regles-etats.md",
+          "sha256": "7697e30f7eb719347b1ad0e13770d78ac37902a4aa7191e513a607f90559e31c",
+          "matchedText": "Effacer une capture",
+          "startLine": 302,
+          "endLine": 311,
+          "excerpt": "## R48 · Effacement géographique\n\nEffacer une capture enlève les points, géométries simplifiées, miniatures, caches, exports et coordonnées des marqueurs concernés. Le texte non géographique n’est conservé que si une finalité distincte le justifie ; une mention « lieu retiré » remplace l’ancre. Les sauvegardes suivent une purge par échéance et une réapplication des tombstones à restauration. Aucun log n’héberge une copie de la trace.\n\n<a id=\"r49\"></a>\n## R49 · Temps non équivalents\n\nplannedDuration, actualLessonDuration, capturedDuration et commercialQuantity sont distincts. Le temps GPS ne déclenche ni facturation, ni consommation proportionnelle, ni validation de présence de cours, ni score de compétence. Une double leçon consomme selon le produit versionné acheté, pas selon les kilomètres.\n\n<a id=\"r50\"></a>"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "ReplayPage:",
+          "startLine": 29897,
+          "endLine": 29906,
+          "excerpt": "      - continuesFromPreviousPage\n      - continuesOnNextPage\n    ReplayPage:\n      type: object\n      additionalProperties: false\n      properties:\n        captureId:\n          type: string\n          format: uuid\n        quality:"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "CapturePublication:",
+          "startLine": 33155,
+          "endLine": 33164,
+          "excerpt": "            type: integer\n            minimum: 0\n    CapturePublication:\n      type: object\n      additionalProperties: false\n      properties:\n        id:\n          type: string\n          format: uuid\n        reportRevisionId:"
+        }
+      ]
+    },
+    {
+      "id": "D10",
+      "title": "Sélections uniques plutôt que tableaux dupliqués",
+      "type": "Validation de forme manquante",
+      "problem": "Les options d’achat et les indices de chunks attendus acceptent des doublons dans les schémas. Les justificatifs de présence avaient le même problème de liste répétée.",
+      "resolution": "Imposer uniqueItems sur ces ensembles. Les références, sommes et compatibilités restent vérifiées au service ; cette restriction ne prouve ni le calcul commercial ni la complétude d’un trajet.",
+      "references": [
+        "04-technique/openapi.yaml",
+        "03-fonctionnel/catalogue-packs.md",
+        "03-fonctionnel/gps-replay.md"
+      ],
+      "futureTests": [
+        "T282"
+      ],
+      "sourceEvidence": [
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "selectedOptionKeys:",
+          "startLine": 13600,
+          "endLine": 13609,
+          "excerpt": "              offerVersionId: 00000000-0000-4000-8000-000000000019\n              acceptedOfferVersion: 1\n              selectedOptionKeys: []\n              acceptedTermsVersionId: 00000000-0000-4000-8000-000000000005\n              rightsActivationMode: AFTER_FULL_PAYMENT\n              acceptanceSource: IN_PERSON\n              reason: Vente d’exemple, données fictives.\n  /v1/schools/{schoolId}/purchases/{purchaseId}:\n    get:\n      operationId: getPurchase"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "selectedOptionKeys:",
+          "startLine": 27977,
+          "endLine": 27986,
+          "excerpt": "          type: integer\n          minimum: 1\n        selectedOptionKeys:\n          type: array\n          items:\n            type: string\n            minLength: 1\n            maxLength: 100\n          minItems: 0\n          maxItems: 16"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "expectedChunkIndices:",
+          "startLine": 29602,
+          "endLine": 29611,
+          "excerpt": "          type: integer\n          minimum: 0\n        expectedChunkIndices:\n          type: array\n          items:\n            type: integer\n            minimum: 0\n          minItems: 0\n          maxItems: 1000\n        expectedPointCount:"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "evidenceDocumentIds:",
+          "startLine": 17848,
+          "endLine": 17857,
+          "excerpt": "              operationId: 00000000-0000-4000-8000-000000000016\n              status: PRESENT\n              evidenceDocumentIds:\n              - 00000000-0000-4000-8000-000000000017\n              reason: Présence constatée par le formateur ; exemple fictif.\n  /v1/schools/{schoolId}/calendar:\n    get:\n      operationId: getCalendar\n      summary: AP147 · getCalendar\n      tags:"
+        },
+        {
+          "file": "04-technique/openapi.yaml",
+          "sha256": "5ce369eea63fb41c4f997ae094fd3851273f93a3fe418e1ee16c86a659c00535",
+          "matchedText": "evidenceDocumentIds:",
+          "startLine": 28242,
+          "endLine": 28251,
+          "excerpt": "          minItems: 0\n          maxItems: 20\n        evidenceDocumentIds:\n          type: array\n          items:\n            type: string\n            format: uuid\n          minItems: 0\n          maxItems: 20\n        profileVersionId:"
+        }
+      ]
+    },
+    {
+      "id": "D11",
+      "title": "Autorisation courante à la frontière du commit",
+      "type": "Précision d’architecture à tester",
+      "problem": "Les permissions courantes sont exigées et l’ordre des verrous métier est décrit, mais la coordination d’une révocation avec une commande ayant déjà lu ses droits puis attendu un verrou n’est pas matérialisée.",
+      "resolution": "Inclure l’appartenance et ses délégations dans l’ordre de verrouillage et relire la portée en transaction ; la révocation prend le verrou incompatible. Spécifier les deux ordres de commit et la reprise bornée. Cela décrit une stratégie, pas une vulnérabilité reproduite ni un test de concurrence exécuté.",
+      "references": [
+        "03-fonctionnel/roles-permissions.md",
+        "03-fonctionnel/regles-etats.md",
+        "04-technique/transactions-v2.md"
+      ],
+      "futureTests": [
+        "T283"
+      ],
+      "sourceEvidence": [
+        {
+          "file": "03-fonctionnel/regles-etats.md",
+          "sha256": "7697e30f7eb719347b1ad0e13770d78ac37902a4aa7191e513a607f90559e31c",
+          "matchedText": "Autorisation courante",
+          "startLine": 18,
+          "endLine": 27,
+          "excerpt": "\n<a id=\"r02\"></a>\n## R02 · Autorisation courante\n\nL’identité provient du fournisseur ; les droits métier sont relus dans Drivy au traitement de chaque commande. Le rôle inclus dans un ancien token n’autorise pas une opération. Les décisions combinent rôle, école, affectation à une formation, état de l’objet et finalité. Refus par défaut.\n\n**Application :** Service d’autorisation ; tests de matrice. **Fonctions :** F01 F03 F13. Les tests correspondants sont indexés dans la [traçabilité](../06-gouvernance/tracabilite.md).\n\n<a id=\"r03\"></a>\n## R03 · Personne et relations"
+        },
+        {
+          "file": "04-technique/transactions-v2.md",
+          "sha256": "88b35a5d10bb59f9f9daddcf0703fc0182bc0b3ff068cc0561aa5ac48c515d17",
+          "matchedText": "Discipline globale de verrouillage",
+          "startLine": 8,
+          "endLine": 17,
+          "excerpt": "Ce document décrit l’application technique des [règles R41–R72](../03-fonctionnel/regles-etats.md#r41). Il ne constitue ni du SQL déployé ni la preuve que les transactions fonctionnent déjà. Le contrat [OpenAPI](openapi.yaml) et les [tests](../05-realisation/tests-recette.md) doivent rester alignés.\n\n## Discipline globale de verrouillage\n\nPour le pilote, toute mutation pouvant modifier des occupations ou immobiliser des droits prend d’abord un verrou transactionnel de coordination par école. Puis, dans un ordre déterministe : agrégats de planning par ID, ressources/personnes par ID, comptes de droits par ID, comptes financiers par ID. Les opérations purement financières qui n’affectent aucune occupation verrouillent leur compte sans acquérir ultérieurement un verrou plus large. Une opération de remboursement qui modifie aussi une réservation suit obligatoirement le chemin large dès son début.\n\nCe choix simple sérialise les rares mutations de planning d’une école et évite les inversions de verrous entre inscription, déplacement, capacité et annulation. Il ne sérialise pas les lectures ni les uploads GPS. Mesurer latence et débit avant remplacer par un verrouillage plus fin ; ne pas optimiser au prix d’une surréservation. PostgreSQL fournit les mécanismes, mais les essais de Drivy restent à réaliser [S46](../06-gouvernance/sources.md#s46).\n\nLes contraintes d’unicité/exclusion en base restent une seconde barrière. Les conflits de sérialisation ou deadlocks éventuels sont réessayés de façon bornée avec la même operationId, jamais comme une nouvelle commande. Un échec final ne conserve aucun effet métier partiel.\n"
+        },
+        {
+          "file": "04-technique/transactions-v2.md",
+          "sha256": "88b35a5d10bb59f9f9daddcf0703fc0182bc0b3ff068cc0561aa5ac48c515d17",
+          "matchedText": "Authentifier et vérifier",
+          "startLine": 19,
+          "endLine": 28,
+          "excerpt": "\n```text\nAuthentifier et vérifier école\nLire/rejouer l’opération déjà commitée si même clé et même charge\nBEGIN\n  prendre SchoolSchedulingLock\n  verrouiller série et contrôler publication/profil/délais\n  contrôler acceptedOfferRevision (pas le compteur de places)\n  résoudre l’unicité élève/série\n  verrouiller occupations de toutes les dates de la série"
+        }
+      ]
+    }
+  ]
+}

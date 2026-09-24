@@ -1,0 +1,138 @@
+{
+  "version": "3.14",
+  "scope": "DOCUMENTARY_RELEASE_ONLY",
+  "executedAtUTC": "2026-09-20T10:13:52.220504+00:00",
+  "requestedBrowserChecks": true,
+  "running": false,
+  "passed": true,
+  "allChecksExecuted": true,
+  "reports": [
+    {
+      "script": "verifier-environnement.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 1.585,
+      "scope": "DOCUMENTARY_ENVIRONMENT_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    },
+    {
+      "script": "verifier-documentation.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 6.184,
+      "scope": "DOCUMENTARY_CHECKS_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    },
+    {
+      "script": "verifier-coherence-v3-14.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 2.541,
+      "scope": "DOCUMENTARY_COHERENCE_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    },
+    {
+      "script": "verifier-reference-v3-14.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 3.176,
+      "scope": "DOCUMENTARY_CHECKS_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    },
+    {
+      "script": "verifier-fichiers-v3-14.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 3.331,
+      "scope": "SCHEMAS_AND_ISOLATED_DOCUMENTARY_MODELS",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    },
+    {
+      "script": "verifier-mobile-swift-v3-14.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 0.783,
+      "scope": "MOBILE_SWIFT_DOCUMENTATION_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    },
+    {
+      "script": "verifier-design-v3-14.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 0.669,
+      "scope": "DESIGN_DOCUMENTATION_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    },
+    {
+      "script": "verifier-prototype-v3-14.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 8.353,
+      "scope": "DOCUMENTARY_HTML_PROTOTYPE_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": "2.5s 15_scenes_plus_overview: True\nlayout 1 320 light\nlayout 1 320 dark\nlayout 1 390 light\nlayout 1 390 dark\nlayout 1 834 light\nlayout 1 834 dark\nlayout 1 1440 light\nlayout 1 1440 dark\nlayout 2 320 light\nlayout 2 320 dark\nlayout 2 390 light\nlayout 2 390 dark\nlayout 2 834 light\nlayout 2 834 dark\nlayout 2 1440 light\nlayout 2 1440 dark\n3.8s normal_layouts_no_document_overflow: True\n3.8s normal_buttons_no_horizontal_clipping: True\n3.8s 200_percent_layouts_no_document_overflow: True\n3.8s 200_percent_buttons_no_horizontal_clipping: True\n3.9s student_lesson_is_read_only: True\n3.9s student_view_only_published_context: True\n3.9s route_change_focus_not_lost: True\n4.0s destination_focus_visible_after_long_page: True\n4.1s unillustrated_staff_link_does_not_open_student_screen: True\n4.1s modal_closes_with_escape: True\n4.2s open_capture_hides_new_start: True\n4.3s capture_retains_state_after_close_return: True\n4.3s no_gps_transition_does_not_silently_drop_capture: True\n4.3s pause_focus_moves_to_resume: True\n4.4s resume_focus_moves_to_pause: True\n4.4s waiting_has_no_measured_geometry: True\n4.4s empty_pause_resume_stays_empty: True\n4.5s empty_stop_stays_empty: True\n4.5s stop_does_not_complete_lesson: True\n4.6s bilan_has_no_default_grade: True\n4.6s no_gps_composition_has_no_disabled_map: True\n4.7s three_required_bilan_fields: True\n4.7s draft_without_grade_contract: True\n4.7s empty_constat_blocks_preview: True\n4.8s preview_uses_edited_text_and_escapes_markup: True\n4.8s dialog_label_and_initial_focus: True\n4.8s dialog_tab_keeps_focus_inside: True\n4.8s dialog_focus_returns_to_opener: True\n4.8s draft_fields_retained_across_views: True\n4.9s observed_grade_requires_context: True\n4.9s draft_with_grade_and_context_contract: True\n5.0s grade_context_in_exact_preview: True\n5.0s removing_grade_encodes_absence_not_zero: True\n5.0s cleared_grade_contract: True\n5.1s draft_preview_rejects_overlong_text: True\n5.1s overlong_draft_rejected_by_contract: True\n5.1s unicode_draft_4000_codepoints_contract: True\n5.1s unicode_draft_not_cut_at_2000_scalars: True\n5.2s reload_does_not_claim_persistent_draft: True\n5.3s all_course_dates_before_submission: True\n5.3s pending_is_not_confirmation: True\n5.4s unknown_keeps_same_pending_intent: True\n5.4s pending_to_full_has_no_registration: True\n5.4s refused_course_does_not_reserve_right: True\n5.7s confirmed_course_moves_to_commitments: True\n5.8s unsimulated_day_stays_labelled_21: True\n5.8s only_confirmed_right_is_reserved: True\n5.9s reconfirmed_time_visible: True\n6.0s second_observation_position_matches_timestamp: True\n6.0s second_observation_text_matches_time: True\n6.0s gap_has_no_moving_position: True\n6.0s gap_has_two_nonconnected_measured_paths: True\n6.0s gap_boundaries_remain_real_samples: True\n6.0s no_future_observation_shown: True\n6.0s next_from_start_goes_first_annotation: True\n6.0s withdrawn_replay_contains_no_geometry: True\n6.2s archive_preview_explains_not_account_deletion: True\n6.2s archive_retains_query_filter: True\n6.2s hidden_archived_selection_removed: True\n6.3s archive_focus_returns_to_search: True\n6.3s filter_can_be_cleared: True\n6.3s archive_is_visible_on_explicit_reselection: True\n6.4s future_commitments_still_block_archive: True\n6.4s empty_filter_has_no_stale_dossier: True\n6.5s onboarding_memory_retained: True\n6.5s form_text_genuinely_doubles: True\n6.6s grade_labels_genuinely_double: True\n6.7s school_choices_remain_demo_memory: True\n6.8s malformed_hash_falls_back_safely: True\n6.8s no_javascript_exceptions: True\n6.8s no_external_prototype_requests: True\n"
+    },
+    {
+      "script": "verifier-live-prototype-v3-14.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 8.049,
+      "scope": "DOCUMENTARY_HTML_MEMORY_AND_DTO_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": "opening_does_not_create_event: True\nsix_named_stable_categories: True\nopen_context_points_to_already_recorded_fixture: True\ncancel_leaves_no_event_or_command: True\nno_default_status_no_event_after_theme: True\nresize_keeps_pending_timestamp_and_selection: True\nexplicit_commit_creates_one_private_qualified_event: True\ncommit_keeps_open_time_not_validation_time: True\nanchored_signal_matches_unchanged_api_shape: True\ncanvas_coords_not_transmitted_as_gps: True\nduplicate_commit_without_pending_is_ignored: True\nlive_map_contains_private_pin: True\nnegative_schema_half_anchor: True\nnegative_schema_invalid_time: True\nnegative_schema_missing_status: True\nnegative_schema_unqualified_as_qualified: True\nprivate_replay_opens_same_moment: True\nprivate_replay_exposes_named_event: True\nreplay_does_not_steal_manual_camera: True\nrecenter_keeps_replay_time: True\nstudent_navigation_forces_published_context: True\nstudent_replay_has_no_private_timeline_or_controls: True\nmarker_private_and_not_qualified: True\nmarker_dto_valid: True\ndetail_form_requires_theme_and_status: True\nqualifying_marker_preserves_identity_time_anchor: True\nqualified_marker_dto_valid: True\nno_automatic_selection_or_grade: True\npreview_escapes_entered_text: True\nselection_does_not_assign_grade: True\nstop_accessible_while_signal_open: True\nstopping_keeps_pending_signal_explicit: True\nwithout_gps_same_signal_path_no_anchor: True\nwithout_gps_dto_valid: True\ncritical_targets_visible_at_all_eight_sizes: True\nnegative_geometry_detects_hidden_trigger: True\nipad_resize_retains_pending_and_events: True\nreduced_motion_removes_panel_animation: True\ncontrast_option_keeps_all_category_actions: True\nnegative_open_side_effect_is_detected: True\nnegative_validation_timestamp_is_detected: True\nfresh_document_clears_memory: True\nno_network_requests: True\nno_javascript_errors: True\n"
+    },
+    {
+      "script": "verifier-lecteur-v3-14.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 5.349,
+      "scope": "DOCUMENTARY_READER_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    }
+  ],
+  "productTestsExecuted": false,
+  "nativeBuildExecuted": false,
+  "limits": [
+    "A passing documentary suite does not establish product correctness, safety or legal compliance.",
+    "NOT_RUN is not passed. Timeout, missing browser and unavailable checks fail explicitly.",
+    "Reports and manifests must be regenerated after content changes."
+  ]
+}

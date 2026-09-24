@@ -1,0 +1,392 @@
+{
+  "version": "3.7",
+  "scope": "ISOLATED_DOCUMENTARY_MODELS",
+  "productCodeExercised": false,
+  "checks": [
+    {
+      "id": "RM01",
+      "title": "Présence exacte sans consommation forcée",
+      "input": {
+        "present": true,
+        "released": true,
+        "active_consumption": false,
+        "pending": false
+      },
+      "expected": {
+        "present": true,
+        "settlement": "REVIEW_REQUIRED",
+        "consumedDelta": 0,
+        "moneyDelta": 0
+      },
+      "actual": {
+        "present": true,
+        "settlement": "REVIEW_REQUIRED",
+        "consumedDelta": 0,
+        "moneyDelta": 0
+      },
+      "passed": true
+    },
+    {
+      "id": "RM02",
+      "title": "Rétraction ferme le suivi sans crédit fictif",
+      "input": {
+        "present": false,
+        "released": true,
+        "active_consumption": false,
+        "pending": true
+      },
+      "expected": {
+        "present": false,
+        "settlement": "NOT_REQUIRED",
+        "consumedDelta": 0,
+        "moneyDelta": 0
+      },
+      "actual": {
+        "present": false,
+        "settlement": "NOT_REQUIRED",
+        "consumedDelta": 0,
+        "moneyDelta": 0
+      },
+      "passed": true
+    },
+    {
+      "id": "RM03",
+      "title": "Une consommation effective n’est pas redébitée par le fait",
+      "input": {
+        "present": true,
+        "released": true,
+        "active_consumption": true,
+        "pending": false
+      },
+      "expected": {
+        "present": true,
+        "settlement": "NONE",
+        "consumedDelta": 0,
+        "moneyDelta": 0
+      },
+      "actual": {
+        "present": true,
+        "settlement": "NONE",
+        "consumedDelta": 0,
+        "moneyDelta": 0
+      },
+      "passed": true
+    },
+    {
+      "id": "RM04",
+      "title": "Consommation exacte sans argent",
+      "input": {
+        "present": true,
+        "pending": true,
+        "available": 1,
+        "quantity": 1,
+        "mode": "CONSUME_FROM_ORIGINAL_LOT",
+        "admin": true
+      },
+      "expected": {
+        "settlement": "SETTLED",
+        "available": 0,
+        "consumedDelta": 1,
+        "moneyDelta": 0
+      },
+      "actual": {
+        "settlement": "SETTLED",
+        "available": 0,
+        "consumedDelta": 1,
+        "moneyDelta": 0
+      },
+      "passed": true
+    },
+    {
+      "id": "RM05",
+      "title": "Reliquat insuffisant",
+      "input": {
+        "present": true,
+        "pending": true,
+        "available": 0,
+        "quantity": 1,
+        "mode": "CONSUME_FROM_ORIGINAL_LOT",
+        "admin": true
+      },
+      "expected": "INSUFFICIENT_ENTITLEMENT",
+      "actual": "INSUFFICIENT_ENTITLEMENT",
+      "passed": true
+    },
+    {
+      "id": "RM06",
+      "title": "Renonciation sans nouveau droit",
+      "input": {
+        "present": true,
+        "pending": true,
+        "available": 0,
+        "quantity": 1,
+        "mode": "WAIVE_CONSUMPTION",
+        "admin": true
+      },
+      "expected": {
+        "settlement": "SETTLED",
+        "available": 0,
+        "consumedDelta": 0,
+        "moneyDelta": 0
+      },
+      "actual": {
+        "settlement": "SETTLED",
+        "available": 0,
+        "consumedDelta": 0,
+        "moneyDelta": 0
+      },
+      "passed": true
+    },
+    {
+      "id": "RM07",
+      "title": "Habilitation requise",
+      "input": {
+        "present": true,
+        "pending": true,
+        "available": 1,
+        "quantity": 1,
+        "mode": "CONSUME_FROM_ORIGINAL_LOT",
+        "admin": false
+      },
+      "expected": "FORBIDDEN",
+      "actual": "FORBIDDEN",
+      "passed": true
+    },
+    {
+      "id": "RM08",
+      "title": "Fait rétracté",
+      "input": {
+        "present": false,
+        "pending": true,
+        "available": 1,
+        "quantity": 1,
+        "mode": "CONSUME_FROM_ORIGINAL_LOT",
+        "admin": true
+      },
+      "expected": "RIGHT_SETTLEMENT_CHANGED",
+      "actual": "RIGHT_SETTLEMENT_CHANGED",
+      "passed": true
+    },
+    {
+      "id": "RM09",
+      "title": "Suivi déjà clos",
+      "input": {
+        "present": true,
+        "pending": false,
+        "available": 1,
+        "quantity": 1,
+        "mode": "CONSUME_FROM_ORIGINAL_LOT",
+        "admin": true
+      },
+      "expected": "RIGHT_SETTLEMENT_CHANGED",
+      "actual": "RIGHT_SETTLEMENT_CHANGED",
+      "passed": true
+    },
+    {
+      "id": "RM10",
+      "title": "Booléen interdit comme quantité",
+      "input": {
+        "present": true,
+        "pending": true,
+        "available": 1,
+        "quantity": true,
+        "mode": "CONSUME_FROM_ORIGINAL_LOT",
+        "admin": true
+      },
+      "expected": "INVALID_QUANTITY",
+      "actual": "INVALID_QUANTITY",
+      "passed": true
+    },
+    {
+      "id": "GM01",
+      "title": "Mesure dans intervalle",
+      "input": {
+        "measured": 110,
+        "start": 100,
+        "stop": 200,
+        "callback": 120,
+        "sealed": false,
+        "accuracy": 4
+      },
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "id": "GM02",
+      "title": "Cache avant nouvelle leçon",
+      "input": {
+        "measured": 99,
+        "start": 100,
+        "stop": 200,
+        "callback": 120,
+        "sealed": false,
+        "accuracy": 4
+      },
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "id": "GM03",
+      "title": "Point postérieur à arrêt",
+      "input": {
+        "measured": 201,
+        "start": 100,
+        "stop": 200,
+        "callback": 202,
+        "sealed": false,
+        "accuracy": 4
+      },
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "id": "GM04",
+      "title": "Borne d’arrêt exclue",
+      "input": {
+        "measured": 200,
+        "start": 100,
+        "stop": 200,
+        "callback": 202,
+        "sealed": false,
+        "accuracy": 4
+      },
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "id": "GM05",
+      "title": "Batch tardif non scellé",
+      "input": {
+        "measured": 110,
+        "start": 100,
+        "stop": 200,
+        "callback": 1000,
+        "sealed": false,
+        "accuracy": 4
+      },
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "id": "GM06",
+      "title": "Callback après scellement",
+      "input": {
+        "measured": 110,
+        "start": 100,
+        "stop": 200,
+        "callback": 120,
+        "sealed": true,
+        "accuracy": 4
+      },
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "id": "GM07",
+      "title": "Précision négative",
+      "input": {
+        "measured": 110,
+        "start": 100,
+        "stop": 200,
+        "callback": 120,
+        "sealed": false,
+        "accuracy": -1
+      },
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "id": "GM08",
+      "title": "Précision non finie",
+      "input": {
+        "measured": 110,
+        "start": 100,
+        "stop": 200,
+        "callback": 120,
+        "sealed": false,
+        "accuracy": "NAN"
+      },
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "id": "GM09",
+      "title": "Origine géographique possible",
+      "input": {
+        "measured": 110,
+        "start": 100,
+        "stop": 200,
+        "callback": 120,
+        "sealed": false,
+        "accuracy": 4,
+        "latitude": 0,
+        "longitude": 0
+      },
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "id": "GM10",
+      "title": "Latitude impossible",
+      "input": {
+        "measured": 110,
+        "start": 100,
+        "stop": 200,
+        "callback": 120,
+        "sealed": false,
+        "accuracy": 4,
+        "latitude": 91
+      },
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "id": "GM11",
+      "title": "Instant de réception impossible",
+      "input": {
+        "measured": 110,
+        "start": 100,
+        "stop": 200,
+        "callback": 109,
+        "sealed": false,
+        "accuracy": 4
+      },
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "id": "GM12",
+      "title": "Précision zéro conservée si réellement fournie",
+      "input": {
+        "measured": 110,
+        "start": 100,
+        "stop": 200,
+        "callback": 120,
+        "sealed": false,
+        "accuracy": 0
+      },
+      "expected": true,
+      "actual": true,
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "caseCount": 22,
+  "limitations": [
+    "No application, sensor, PostgreSQL or APNs was executed.",
+    "No OIDC, grant implementation, operation deduplication or concurrent transaction is validated by these pure functions.",
+    "GPS times are normalised synthetic values, not proof of mapping between CLLocation timestamps and a monotone clock.",
+    "R109 is a proposed policy, not a commercial or legal rule validated with a school."
+  ]
+}

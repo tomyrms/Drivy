@@ -1,0 +1,1008 @@
+{
+  "version": "3.7",
+  "status": "DOCUMENTARY_SCHEMA_CASES",
+  "productCodeExercised": false,
+  "cases": [
+    {
+      "id": "SC183",
+      "title": "Source interne avec cycle explicite",
+      "schema": "ReviewRequirementCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "status": "COMPLETED",
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "evidenceDocumentIds": [],
+        "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+        "sourceEnrollmentCycle": 1,
+        "reason": "Contrôle fictif des blocs.",
+        "sourceEnrollmentVersion": 1,
+        "attendanceVersionChecks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "version": 2
+          }
+        ],
+        "documentVersionChecks": []
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC184",
+      "title": "Source interne sans cycle",
+      "schema": "ReviewRequirementCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "status": "COMPLETED",
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "evidenceDocumentIds": [],
+        "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+        "sourceEnrollmentCycle": null,
+        "reason": "Contrôle fictif des blocs.",
+        "sourceEnrollmentVersion": 1,
+        "attendanceVersionChecks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "version": 2
+          }
+        ],
+        "documentVersionChecks": []
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC185",
+      "title": "Cycle zéro",
+      "schema": "ReviewRequirementCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "status": "COMPLETED",
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "evidenceDocumentIds": [],
+        "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+        "sourceEnrollmentCycle": 0,
+        "reason": "Contrôle fictif des blocs.",
+        "sourceEnrollmentVersion": 1,
+        "attendanceVersionChecks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "version": 2
+          }
+        ],
+        "documentVersionChecks": []
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC186",
+      "title": "Complété sans source ni preuve externe",
+      "schema": "ReviewRequirementCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "status": "COMPLETED",
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "evidenceDocumentIds": [],
+        "sourceEnrollmentId": null,
+        "sourceEnrollmentCycle": null,
+        "reason": "Contrôle fictif des blocs.",
+        "sourceEnrollmentVersion": null,
+        "attendanceVersionChecks": [],
+        "documentVersionChecks": []
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC187",
+      "title": "Justificatif externe sélectionné",
+      "schema": "ReviewRequirementCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "status": "COMPLETED",
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "evidenceDocumentIds": [
+          "00000000-0000-4000-8000-000000000004"
+        ],
+        "sourceEnrollmentId": null,
+        "sourceEnrollmentCycle": null,
+        "reason": "Contrôle fictif des blocs.",
+        "sourceEnrollmentVersion": null,
+        "attendanceVersionChecks": [],
+        "documentVersionChecks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "version": 1
+          }
+        ]
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC188",
+      "title": "Exemption laissée au contrôle du profil",
+      "schema": "ReviewRequirementCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "status": "EXEMPT",
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "evidenceDocumentIds": [],
+        "sourceEnrollmentId": null,
+        "sourceEnrollmentCycle": null,
+        "reason": "Contrôle fictif des blocs.",
+        "sourceEnrollmentVersion": null,
+        "attendanceVersionChecks": [],
+        "documentVersionChecks": []
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "FORM_ONLY_PROFILE_RULE_NOT_TESTED"
+    },
+    {
+      "id": "SC189",
+      "title": "Exemption abusivement présentée comme cours interne",
+      "schema": "ReviewRequirementCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "status": "EXEMPT",
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "evidenceDocumentIds": [],
+        "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+        "sourceEnrollmentCycle": 1,
+        "reason": "Contrôle fictif des blocs.",
+        "sourceEnrollmentVersion": 1,
+        "attendanceVersionChecks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "version": 2
+          }
+        ],
+        "documentVersionChecks": []
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC190",
+      "title": "Liste de justificatifs répétée",
+      "schema": "ReviewRequirementCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "status": "COMPLETED",
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "evidenceDocumentIds": [
+          "00000000-0000-4000-8000-000000000004",
+          "00000000-0000-4000-8000-000000000004"
+        ],
+        "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+        "sourceEnrollmentCycle": 1,
+        "reason": "Contrôle fictif des blocs.",
+        "sourceEnrollmentVersion": 1,
+        "attendanceVersionChecks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "version": 2
+          }
+        ],
+        "documentVersionChecks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "version": 1
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "version": 1
+          }
+        ]
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC191",
+      "title": "Motif composé d’espaces",
+      "schema": "ReviewRequirementCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "status": "COMPLETED",
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "evidenceDocumentIds": [],
+        "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+        "sourceEnrollmentCycle": 1,
+        "reason": "   ",
+        "sourceEnrollmentVersion": 1,
+        "attendanceVersionChecks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "version": 2
+          }
+        ],
+        "documentVersionChecks": []
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC192",
+      "title": "Ancien payload COMPLETED sans preuve ni cycle explicite",
+      "schema": "ReviewRequirementCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "status": "COMPLETED",
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "evidenceDocumentIds": [],
+        "sourceEnrollmentId": null,
+        "reason": "Contrôle fictif des blocs."
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SAME_LEGACY_PAYLOAD_NEW_REQUIRED_FIELD_AND_EVIDENCE_CONSTRAINT"
+    },
+    {
+      "id": "SC193",
+      "title": "Snapshot interne avec relevé versionné",
+      "schema": "RequirementDecisionBasis",
+      "value": {
+        "sourceKind": "INTERNAL_COURSE",
+        "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+        "sourceEnrollmentCycle": 1,
+        "attendanceVersions": [
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "version": 2
+          }
+        ],
+        "documentVersions": []
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC194",
+      "title": "Snapshot interne sans relevé",
+      "schema": "RequirementDecisionBasis",
+      "value": {
+        "sourceKind": "INTERNAL_COURSE",
+        "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+        "sourceEnrollmentCycle": 1,
+        "attendanceVersions": [],
+        "documentVersions": []
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC195",
+      "title": "Snapshot externe sans document",
+      "schema": "RequirementDecisionBasis",
+      "value": {
+        "sourceKind": "EXTERNAL_DOCUMENTS",
+        "sourceEnrollmentId": null,
+        "sourceEnrollmentCycle": null,
+        "attendanceVersions": [],
+        "documentVersions": []
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC196",
+      "title": "Snapshot externe recevable en forme",
+      "schema": "RequirementDecisionBasis",
+      "value": {
+        "sourceKind": "EXTERNAL_DOCUMENTS",
+        "sourceEnrollmentId": null,
+        "sourceEnrollmentCycle": null,
+        "attendanceVersions": [],
+        "documentVersions": [
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "version": 1
+          }
+        ]
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC197",
+      "title": "Snapshot d’exemption sans présence fictive",
+      "schema": "RequirementDecisionBasis",
+      "value": {
+        "sourceKind": "EXEMPTION",
+        "sourceEnrollmentId": null,
+        "sourceEnrollmentCycle": null,
+        "attendanceVersions": [],
+        "documentVersions": []
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC198",
+      "title": "État final documenté",
+      "schema": "RequirementRecord",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000009",
+        "schoolId": "00000000-0000-4000-8000-000000000010",
+        "version": 3,
+        "learnerId": "00000000-0000-4000-8000-000000000011",
+        "requirementType": "SENSITISATION",
+        "status": "COMPLETED",
+        "trainingIds": [
+          "00000000-0000-4000-8000-000000000012"
+        ],
+        "evidenceDocumentIds": [],
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "reviewedBy": "00000000-0000-4000-8000-000000000013",
+        "reviewedAt": "2026-09-19T12:00:00Z",
+        "reason": "Validation fictive.",
+        "basis": {
+          "sourceKind": "INTERNAL_COURSE",
+          "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+          "sourceEnrollmentCycle": 1,
+          "attendanceVersions": [
+            {
+              "id": "00000000-0000-4000-8000-000000000005",
+              "version": 2
+            }
+          ],
+          "documentVersions": []
+        }
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC199",
+      "title": "État final sans contrôleur",
+      "schema": "RequirementRecord",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000009",
+        "schoolId": "00000000-0000-4000-8000-000000000010",
+        "version": 3,
+        "learnerId": "00000000-0000-4000-8000-000000000011",
+        "requirementType": "SENSITISATION",
+        "status": "COMPLETED",
+        "trainingIds": [
+          "00000000-0000-4000-8000-000000000012"
+        ],
+        "evidenceDocumentIds": [],
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "reviewedBy": null,
+        "reviewedAt": "2026-09-19T12:00:00Z",
+        "reason": "Validation fictive.",
+        "basis": {
+          "sourceKind": "INTERNAL_COURSE",
+          "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+          "sourceEnrollmentCycle": 1,
+          "attendanceVersions": [
+            {
+              "id": "00000000-0000-4000-8000-000000000005",
+              "version": 2
+            }
+          ],
+          "documentVersions": []
+        }
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC200",
+      "title": "État final sans date",
+      "schema": "RequirementRecord",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000009",
+        "schoolId": "00000000-0000-4000-8000-000000000010",
+        "version": 3,
+        "learnerId": "00000000-0000-4000-8000-000000000011",
+        "requirementType": "SENSITISATION",
+        "status": "COMPLETED",
+        "trainingIds": [
+          "00000000-0000-4000-8000-000000000012"
+        ],
+        "evidenceDocumentIds": [],
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "reviewedBy": "00000000-0000-4000-8000-000000000013",
+        "reviewedAt": null,
+        "reason": "Validation fictive.",
+        "basis": {
+          "sourceKind": "INTERNAL_COURSE",
+          "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+          "sourceEnrollmentCycle": 1,
+          "attendanceVersions": [
+            {
+              "id": "00000000-0000-4000-8000-000000000005",
+              "version": 2
+            }
+          ],
+          "documentVersions": []
+        }
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC201",
+      "title": "État final sans profil",
+      "schema": "RequirementRecord",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000009",
+        "schoolId": "00000000-0000-4000-8000-000000000010",
+        "version": 3,
+        "learnerId": "00000000-0000-4000-8000-000000000011",
+        "requirementType": "SENSITISATION",
+        "status": "COMPLETED",
+        "trainingIds": [
+          "00000000-0000-4000-8000-000000000012"
+        ],
+        "evidenceDocumentIds": [],
+        "profileVersionId": null,
+        "reviewedBy": "00000000-0000-4000-8000-000000000013",
+        "reviewedAt": "2026-09-19T12:00:00Z",
+        "reason": "Validation fictive.",
+        "basis": {
+          "sourceKind": "INTERNAL_COURSE",
+          "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+          "sourceEnrollmentCycle": 1,
+          "attendanceVersions": [
+            {
+              "id": "00000000-0000-4000-8000-000000000005",
+              "version": 2
+            }
+          ],
+          "documentVersions": []
+        }
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC202",
+      "title": "État final sans snapshot",
+      "schema": "RequirementRecord",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000009",
+        "schoolId": "00000000-0000-4000-8000-000000000010",
+        "version": 3,
+        "learnerId": "00000000-0000-4000-8000-000000000011",
+        "requirementType": "SENSITISATION",
+        "status": "COMPLETED",
+        "trainingIds": [
+          "00000000-0000-4000-8000-000000000012"
+        ],
+        "evidenceDocumentIds": [],
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "reviewedBy": "00000000-0000-4000-8000-000000000013",
+        "reviewedAt": "2026-09-19T12:00:00Z",
+        "reason": "Validation fictive.",
+        "basis": null
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC203",
+      "title": "Réexamen sans preuve courante prétendue valide",
+      "schema": "RequirementRecord",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000009",
+        "schoolId": "00000000-0000-4000-8000-000000000010",
+        "version": 3,
+        "learnerId": "00000000-0000-4000-8000-000000000011",
+        "requirementType": "SENSITISATION",
+        "status": "EVIDENCE_PENDING",
+        "trainingIds": [
+          "00000000-0000-4000-8000-000000000012"
+        ],
+        "evidenceDocumentIds": [],
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "reviewedBy": null,
+        "reviewedAt": null,
+        "reason": "Validation fictive.",
+        "basis": null
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC204",
+      "title": "Réexamen qui expose encore une preuve active",
+      "schema": "RequirementRecord",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000009",
+        "schoolId": "00000000-0000-4000-8000-000000000010",
+        "version": 3,
+        "learnerId": "00000000-0000-4000-8000-000000000011",
+        "requirementType": "SENSITISATION",
+        "status": "EVIDENCE_PENDING",
+        "trainingIds": [
+          "00000000-0000-4000-8000-000000000012"
+        ],
+        "evidenceDocumentIds": [],
+        "profileVersionId": "00000000-0000-4000-8000-000000000002",
+        "reviewedBy": "00000000-0000-4000-8000-000000000013",
+        "reviewedAt": "2026-09-19T12:00:00Z",
+        "reason": "Validation fictive.",
+        "basis": {
+          "sourceKind": "INTERNAL_COURSE",
+          "sourceEnrollmentId": "00000000-0000-4000-8000-000000000003",
+          "sourceEnrollmentCycle": 1,
+          "attendanceVersions": [
+            {
+              "id": "00000000-0000-4000-8000-000000000005",
+              "version": 2
+            }
+          ],
+          "documentVersions": []
+        }
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC205",
+      "title": "Suivi ouvert sans décision fictive",
+      "schema": "CourseRightSettlement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000020",
+        "version": 1,
+        "enrollmentCycle": 1,
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "status": "REVIEW_REQUIRED",
+        "resolution": null,
+        "consumptionMovementId": null,
+        "reason": null,
+        "resolvedBy": null,
+        "resolvedAt": null
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC206",
+      "title": "Suivi ouvert déjà consommé",
+      "schema": "CourseRightSettlement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000020",
+        "version": 1,
+        "enrollmentCycle": 1,
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "status": "REVIEW_REQUIRED",
+        "resolution": null,
+        "consumptionMovementId": "00000000-0000-4000-8000-000000000022",
+        "reason": null,
+        "resolvedBy": null,
+        "resolvedAt": null
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC207",
+      "title": "Résolution par consommation tracée",
+      "schema": "CourseRightSettlement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000020",
+        "version": 1,
+        "enrollmentCycle": 1,
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "status": "SETTLED",
+        "resolution": "CONSUME_FROM_ORIGINAL_LOT",
+        "consumptionMovementId": "00000000-0000-4000-8000-000000000022",
+        "reason": "Accord fictif.",
+        "resolvedBy": "00000000-0000-4000-8000-000000000013",
+        "resolvedAt": "2026-09-19T12:00:00Z"
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC208",
+      "title": "Consommation sans mouvement",
+      "schema": "CourseRightSettlement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000020",
+        "version": 1,
+        "enrollmentCycle": 1,
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "status": "SETTLED",
+        "resolution": "CONSUME_FROM_ORIGINAL_LOT",
+        "consumptionMovementId": null,
+        "reason": "Accord fictif.",
+        "resolvedBy": "00000000-0000-4000-8000-000000000013",
+        "resolvedAt": "2026-09-19T12:00:00Z"
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC209",
+      "title": "Renonciation qui crée un mouvement",
+      "schema": "CourseRightSettlement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000020",
+        "version": 1,
+        "enrollmentCycle": 1,
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "status": "SETTLED",
+        "resolution": "WAIVE_CONSUMPTION",
+        "consumptionMovementId": "00000000-0000-4000-8000-000000000022",
+        "reason": "Accord fictif.",
+        "resolvedBy": "00000000-0000-4000-8000-000000000013",
+        "resolvedAt": "2026-09-19T12:00:00Z"
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC210",
+      "title": "Renonciation sans mouvement",
+      "schema": "CourseRightSettlement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000020",
+        "version": 1,
+        "enrollmentCycle": 1,
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "status": "SETTLED",
+        "resolution": "WAIVE_CONSUMPTION",
+        "consumptionMovementId": null,
+        "reason": "Accord fictif.",
+        "resolvedBy": "00000000-0000-4000-8000-000000000013",
+        "resolvedAt": "2026-09-19T12:00:00Z"
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC211",
+      "title": "Résolution sans responsable",
+      "schema": "CourseRightSettlement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000020",
+        "version": 1,
+        "enrollmentCycle": 1,
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "status": "SETTLED",
+        "resolution": "CONSUME_FROM_ORIGINAL_LOT",
+        "consumptionMovementId": "00000000-0000-4000-8000-000000000022",
+        "reason": "Accord fictif.",
+        "resolvedBy": null,
+        "resolvedAt": "2026-09-19T12:00:00Z"
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC212",
+      "title": "Fait rétracté donc suivi inutile",
+      "schema": "CourseRightSettlement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000020",
+        "version": 1,
+        "enrollmentCycle": 1,
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "status": "NOT_REQUIRED",
+        "resolution": null,
+        "consumptionMovementId": null,
+        "reason": "Plus de présence applicable.",
+        "resolvedBy": null,
+        "resolvedAt": "2026-09-19T12:00:00Z"
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC213",
+      "title": "Suivi inutile avec auteur de décision inventé",
+      "schema": "CourseRightSettlement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000020",
+        "version": 1,
+        "enrollmentCycle": 1,
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "status": "NOT_REQUIRED",
+        "resolution": null,
+        "consumptionMovementId": null,
+        "reason": "Plus de présence applicable.",
+        "resolvedBy": "00000000-0000-4000-8000-000000000013",
+        "resolvedAt": "2026-09-19T12:00:00Z"
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC214",
+      "title": "Commande de renonciation explicite",
+      "schema": "ResolveCourseRightCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000023",
+        "settlementId": "00000000-0000-4000-8000-000000000020",
+        "settlementVersion": 1,
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "resolution": "WAIVE_CONSUMPTION",
+        "reason": "Décision du responsable, exemple fictif."
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC215",
+      "title": "Quantité imposée par le client",
+      "schema": "ResolveCourseRightCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000023",
+        "settlementId": "00000000-0000-4000-8000-000000000020",
+        "settlementVersion": 1,
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "resolution": "WAIVE_CONSUMPTION",
+        "reason": "Décision du responsable, exemple fictif.",
+        "quantity": 100
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC216",
+      "title": "Lot arbitraire fourni par le client",
+      "schema": "ResolveCourseRightCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000023",
+        "settlementId": "00000000-0000-4000-8000-000000000020",
+        "settlementVersion": 1,
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "resolution": "WAIVE_CONSUMPTION",
+        "reason": "Décision du responsable, exemple fictif.",
+        "lotId": "00000000-0000-4000-8000-000000000024"
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC217",
+      "title": "Version de suivi absente",
+      "schema": "ResolveCourseRightCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000023",
+        "settlementId": "00000000-0000-4000-8000-000000000020",
+        "sourceCreditMovementId": "00000000-0000-4000-8000-000000000021",
+        "resolution": "WAIVE_CONSUMPTION",
+        "reason": "Décision du responsable, exemple fictif."
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC218",
+      "title": "Token Apple développement",
+      "schema": "RegisterPushCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000030",
+        "deviceId": "00000000-0000-4000-8000-000000000031",
+        "platform": "IOS",
+        "providerToken": "fictional-token-not-valid-with-any-provider",
+        "deliveryEnvironment": "APNS_SANDBOX"
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC219",
+      "title": "Token Apple production",
+      "schema": "RegisterPushCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000030",
+        "deviceId": "00000000-0000-4000-8000-000000000031",
+        "platform": "IOS",
+        "providerToken": "fictional-token-not-valid-with-any-provider",
+        "deliveryEnvironment": "APNS_PRODUCTION"
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC220",
+      "title": "Environnement Android sur Apple",
+      "schema": "RegisterPushCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000030",
+        "deviceId": "00000000-0000-4000-8000-000000000031",
+        "platform": "IOS",
+        "providerToken": "fictional-token-not-valid-with-any-provider",
+        "deliveryEnvironment": "FCM_PRODUCTION"
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC221",
+      "title": "Futur Android configuré, forme uniquement",
+      "schema": "RegisterPushCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000030",
+        "deviceId": "00000000-0000-4000-8000-000000000031",
+        "platform": "ANDROID",
+        "providerToken": "fictional-token-not-valid-with-any-provider",
+        "deliveryEnvironment": "FCM_PRODUCTION"
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "FORM_ONLY_FUTURE_ADAPTER_NOT_IMPLEMENTED"
+    },
+    {
+      "id": "SC222",
+      "title": "Android sur environnement Apple",
+      "schema": "RegisterPushCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000030",
+        "deviceId": "00000000-0000-4000-8000-000000000031",
+        "platform": "ANDROID",
+        "providerToken": "fictional-token-not-valid-with-any-provider",
+        "deliveryEnvironment": "APNS_SANDBOX"
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC223",
+      "title": "Faux Web Push natif",
+      "schema": "RegisterPushCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000030",
+        "deviceId": "00000000-0000-4000-8000-000000000031",
+        "platform": "WEB",
+        "providerToken": "fictional-token-not-valid-with-any-provider",
+        "deliveryEnvironment": "APNS_SANDBOX"
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC224",
+      "title": "Ancien WEB sans environnement",
+      "schema": "RegisterPushCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000030",
+        "deviceId": "00000000-0000-4000-8000-000000000031",
+        "platform": "WEB",
+        "providerToken": "fictional-token-not-valid-with-any-provider"
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SAME_LEGACY_PAYLOAD_REMOVAL_OF_UNIMPLEMENTED_TRANSPORT"
+    },
+    {
+      "id": "SC225",
+      "title": "Topic choisi librement par client",
+      "schema": "RegisterPushCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000030",
+        "deviceId": "00000000-0000-4000-8000-000000000031",
+        "platform": "IOS",
+        "providerToken": "fictional-token-not-valid-with-any-provider",
+        "deliveryEnvironment": "APNS_SANDBOX",
+        "apnsTopic": "other.app"
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC226",
+      "title": "Projection sans token secret",
+      "schema": "DevicePushRegistration",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000032",
+        "schoolId": "00000000-0000-4000-8000-000000000010",
+        "version": 1,
+        "deviceId": "00000000-0000-4000-8000-000000000031",
+        "platform": "IOS",
+        "state": "ACTIVE",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "deliveryEnvironment": "APNS_PRODUCTION",
+        "bindingVersion": 2
+      },
+      "expectedValid": true,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC227",
+      "title": "Token exposé en lecture",
+      "schema": "DevicePushRegistration",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000032",
+        "schoolId": "00000000-0000-4000-8000-000000000010",
+        "version": 1,
+        "deviceId": "00000000-0000-4000-8000-000000000031",
+        "platform": "IOS",
+        "state": "ACTIVE",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "deliveryEnvironment": "APNS_PRODUCTION",
+        "bindingVersion": 2,
+        "providerToken": "fictional-token-not-valid-with-any-provider"
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC228",
+      "title": "Liaison version zéro",
+      "schema": "DevicePushRegistration",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000032",
+        "schoolId": "00000000-0000-4000-8000-000000000010",
+        "version": 1,
+        "deviceId": "00000000-0000-4000-8000-000000000031",
+        "platform": "IOS",
+        "state": "ACTIVE",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "deliveryEnvironment": "APNS_PRODUCTION",
+        "bindingVersion": 0
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    },
+    {
+      "id": "SC229",
+      "title": "Projection sans environnement",
+      "schema": "DevicePushRegistration",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000032",
+        "schoolId": "00000000-0000-4000-8000-000000000010",
+        "version": 1,
+        "deviceId": "00000000-0000-4000-8000-000000000031",
+        "platform": "IOS",
+        "state": "ACTIVE",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "bindingVersion": 2
+      },
+      "expectedValid": false,
+      "finding": "V3.7",
+      "comparisonMeaning": "SCHEMA_SHAPE"
+    }
+  ]
+}

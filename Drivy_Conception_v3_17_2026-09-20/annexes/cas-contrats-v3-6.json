@@ -1,0 +1,1515 @@
+{
+  "version": "3.6",
+  "status": "DOCUMENTARY_SCHEMA_CASES",
+  "productCodeExercised": false,
+  "cases": [
+    {
+      "id": "SC143",
+      "title": "Publier texte sans capture",
+      "schema": "PublishCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "expectedPublicationVersion": 0,
+        "captureSelection": null,
+        "textObservationSelection": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000000037",
+            "version": 1
+          }
+        ]
+      },
+      "expectedValid": true,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC144",
+      "title": "Sélection textuelle omise",
+      "schema": "PublishCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "expectedPublicationVersion": 0,
+        "captureSelection": null
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC145",
+      "title": "Référence textuelle exactement répétée",
+      "schema": "PublishCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "expectedPublicationVersion": 0,
+        "captureSelection": null,
+        "textObservationSelection": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000000037",
+            "version": 1
+          },
+          {
+            "observationId": "00000000-0000-4000-8000-000000000037",
+            "version": 1
+          }
+        ]
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC146",
+      "title": "Version textuelle zéro",
+      "schema": "PublishCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "expectedPublicationVersion": 0,
+        "captureSelection": null,
+        "textObservationSelection": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000000037",
+            "version": 0
+          }
+        ]
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC147",
+      "title": "Snapshot textuel autonome",
+      "schema": "PublishedTextObservation",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000037",
+        "competencyId": null,
+        "text": "Observation fictive relue.",
+        "sourceVersion": 1
+      },
+      "expectedValid": true,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC148",
+      "title": "Ancrage GPS interdit au snapshot textuel",
+      "schema": "PublishedTextObservation",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000037",
+        "competencyId": null,
+        "text": "Observation fictive relue.",
+        "sourceVersion": 1,
+        "captureId": "00000000-0000-4000-8000-000000000036"
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC149",
+      "title": "Texte seulement espaces",
+      "schema": "PublishedTextObservation",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000037",
+        "competencyId": null,
+        "text": "  ",
+        "sourceVersion": 1
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC150",
+      "title": "Segment vide explicite",
+      "schema": "SegmentManifest",
+      "value": {
+        "segmentId": "00000000-0000-4000-8000-000000000036",
+        "segmentIndex": 0,
+        "expectedChunkIndices": [],
+        "expectedPointCount": 0,
+        "lastSequence": null,
+        "endReason": "STOP"
+      },
+      "expectedValid": true,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC151",
+      "title": "Fausse dernière séquence zéro",
+      "schema": "SegmentManifest",
+      "value": {
+        "segmentId": "00000000-0000-4000-8000-000000000036",
+        "segmentIndex": 0,
+        "expectedChunkIndices": [],
+        "expectedPointCount": 0,
+        "lastSequence": 0,
+        "endReason": "STOP"
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC152",
+      "title": "Segment vide annonçant un chunk",
+      "schema": "SegmentManifest",
+      "value": {
+        "segmentId": "00000000-0000-4000-8000-000000000036",
+        "segmentIndex": 0,
+        "expectedChunkIndices": [
+          0
+        ],
+        "expectedPointCount": 0,
+        "lastSequence": 0,
+        "endReason": "STOP"
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC153",
+      "title": "Segment mesuré sans chunk",
+      "schema": "SegmentManifest",
+      "value": {
+        "segmentId": "00000000-0000-4000-8000-000000000036",
+        "segmentIndex": 0,
+        "expectedChunkIndices": [],
+        "expectedPointCount": 1,
+        "lastSequence": 0,
+        "endReason": "STOP"
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC154",
+      "title": "Segment non vide cohérent en forme",
+      "schema": "SegmentManifest",
+      "value": {
+        "segmentId": "00000000-0000-4000-8000-000000000036",
+        "segmentIndex": 0,
+        "expectedChunkIndices": [
+          0
+        ],
+        "expectedPointCount": 1,
+        "lastSequence": 0,
+        "endReason": "STOP"
+      },
+      "expectedValid": true,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC155",
+      "title": "Séquence absente malgré un point",
+      "schema": "SegmentManifest",
+      "value": {
+        "segmentId": "00000000-0000-4000-8000-000000000036",
+        "segmentIndex": 0,
+        "expectedChunkIndices": [
+          0
+        ],
+        "expectedPointCount": 1,
+        "lastSequence": null,
+        "endReason": "STOP"
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC156",
+      "title": "Remise documentée",
+      "schema": "RecordServiceDeliveryCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "quantity": 1,
+        "performedOn": "2026-09-19",
+        "confirmationNote": "Accès remis, exemple fictif."
+      },
+      "expectedValid": true,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC157",
+      "title": "Remise quantité zéro",
+      "schema": "RecordServiceDeliveryCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "quantity": 0,
+        "performedOn": "2026-09-19",
+        "confirmationNote": "Accès remis, exemple fictif."
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC158",
+      "title": "Remise sans confirmation réelle",
+      "schema": "RecordServiceDeliveryCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "quantity": 1,
+        "performedOn": "2026-09-19",
+        "confirmationNote": " "
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC159",
+      "title": "Mouvement de remise sans réservation fictive",
+      "schema": "EntitlementMovement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000037",
+        "schoolId": "00000000-0000-4000-8000-000000000036",
+        "version": 1,
+        "lotId": "00000000-0000-4000-8000-000000000036",
+        "type": "CONSUME",
+        "quantity": 1,
+        "sourceMovementId": null,
+        "reservationId": null,
+        "occurredAt": "2026-09-19T10:00:00Z",
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "delivery": {
+          "productType": "EXTERNAL_SERVICE",
+          "performedOn": "2026-09-19",
+          "recordedBy": "00000000-0000-4000-8000-000000000036",
+          "confirmationNote": "Remise fictive."
+        }
+      },
+      "expectedValid": true,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC160",
+      "title": "Évidence de remise sur HOLD",
+      "schema": "EntitlementMovement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000037",
+        "schoolId": "00000000-0000-4000-8000-000000000036",
+        "version": 1,
+        "lotId": "00000000-0000-4000-8000-000000000036",
+        "type": "HOLD",
+        "quantity": 1,
+        "sourceMovementId": null,
+        "reservationId": null,
+        "occurredAt": "2026-09-19T10:00:00Z",
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "delivery": {
+          "productType": "EXTERNAL_SERVICE",
+          "performedOn": "2026-09-19",
+          "recordedBy": "00000000-0000-4000-8000-000000000036",
+          "confirmationNote": "Remise fictive."
+        }
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC161",
+      "title": "Remise directe liée à réservation inventée",
+      "schema": "EntitlementMovement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000037",
+        "schoolId": "00000000-0000-4000-8000-000000000036",
+        "version": 1,
+        "lotId": "00000000-0000-4000-8000-000000000036",
+        "type": "CONSUME",
+        "quantity": 1,
+        "sourceMovementId": null,
+        "reservationId": "00000000-0000-4000-8000-000000000036",
+        "occurredAt": "2026-09-19T10:00:00Z",
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "delivery": {
+          "productType": "EXTERNAL_SERVICE",
+          "performedOn": "2026-09-19",
+          "recordedBy": "00000000-0000-4000-8000-000000000036",
+          "confirmationNote": "Remise fictive."
+        }
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC162",
+      "title": "Contourner un constat de conduite par remise",
+      "schema": "EntitlementMovement",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000037",
+        "schoolId": "00000000-0000-4000-8000-000000000036",
+        "version": 1,
+        "lotId": "00000000-0000-4000-8000-000000000036",
+        "type": "CONSUME",
+        "quantity": 1,
+        "sourceMovementId": null,
+        "reservationId": null,
+        "occurredAt": "2026-09-19T10:00:00Z",
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "delivery": {
+          "productType": "INDIVIDUAL_LESSON",
+          "performedOn": "2026-09-19",
+          "recordedBy": "00000000-0000-4000-8000-000000000036",
+          "confirmationNote": "Remise fictive."
+        }
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC163",
+      "title": "Clôture sans droit à libérer",
+      "schema": "CloseCourseCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "reason": "Revue de clôture fictive.",
+        "unusedRightsDecisions": []
+      },
+      "expectedValid": true,
+      "finding": "V3.6",
+      "beforeSchema": "ReasonCommand"
+    },
+    {
+      "id": "SC164",
+      "title": "Clôture omettant la revue des droits",
+      "schema": "CloseCourseCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "reason": "Revue de clôture fictive."
+      },
+      "expectedValid": false,
+      "finding": "V3.6",
+      "beforeSchema": "ReasonCommand"
+    },
+    {
+      "id": "SC165",
+      "title": "Libération sélectionnée explicitement",
+      "schema": "CloseCourseCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "reason": "Revue de clôture fictive.",
+        "unusedRightsDecisions": [
+          {
+            "enrollmentId": "00000000-0000-4000-8000-000000000036",
+            "enrollmentCycle": 1,
+            "expectedEnrollmentVersion": 2,
+            "expectedLotVersion": 2,
+            "holdMovementId": "00000000-0000-4000-8000-000000000037",
+            "action": "RELEASE",
+            "reason": "Aucune présence, crédit libéré."
+          }
+        ]
+      },
+      "expectedValid": true,
+      "finding": "V3.6",
+      "beforeSchema": "ReasonCommand"
+    },
+    {
+      "id": "SC166",
+      "title": "Libération identique répétée",
+      "schema": "CloseCourseCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000036",
+        "reason": "Revue de clôture fictive.",
+        "unusedRightsDecisions": [
+          {
+            "enrollmentId": "00000000-0000-4000-8000-000000000036",
+            "enrollmentCycle": 1,
+            "expectedEnrollmentVersion": 2,
+            "expectedLotVersion": 2,
+            "holdMovementId": "00000000-0000-4000-8000-000000000037",
+            "action": "RELEASE",
+            "reason": "Aucune présence, crédit libéré."
+          },
+          {
+            "enrollmentId": "00000000-0000-4000-8000-000000000036",
+            "enrollmentCycle": 1,
+            "expectedEnrollmentVersion": 2,
+            "expectedLotVersion": 2,
+            "holdMovementId": "00000000-0000-4000-8000-000000000037",
+            "action": "RELEASE",
+            "reason": "Aucune présence, crédit libéré."
+          }
+        ]
+      },
+      "expectedValid": false,
+      "finding": "V3.6",
+      "beforeSchema": "ReasonCommand"
+    },
+    {
+      "id": "SC167",
+      "title": "Pas de présence via décision de clôture",
+      "schema": "UnusedCourseRightDecision",
+      "value": {
+        "enrollmentId": "00000000-0000-4000-8000-000000000036",
+        "enrollmentCycle": 1,
+        "expectedEnrollmentVersion": 2,
+        "expectedLotVersion": 2,
+        "holdMovementId": "00000000-0000-4000-8000-000000000037",
+        "action": "CONSUME",
+        "reason": "Aucune présence, crédit libéré."
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC168",
+      "title": "Cycle de libération zéro",
+      "schema": "UnusedCourseRightDecision",
+      "value": {
+        "enrollmentId": "00000000-0000-4000-8000-000000000036",
+        "enrollmentCycle": 0,
+        "expectedEnrollmentVersion": 2,
+        "expectedLotVersion": 2,
+        "holdMovementId": "00000000-0000-4000-8000-000000000037",
+        "action": "RELEASE",
+        "reason": "Aucune présence, crédit libéré."
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC169",
+      "title": "Version lot zéro",
+      "schema": "UnusedCourseRightDecision",
+      "value": {
+        "enrollmentId": "00000000-0000-4000-8000-000000000036",
+        "enrollmentCycle": 1,
+        "expectedEnrollmentVersion": 2,
+        "expectedLotVersion": 0,
+        "holdMovementId": "00000000-0000-4000-8000-000000000037",
+        "action": "RELEASE",
+        "reason": "Aucune présence, crédit libéré."
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC170",
+      "title": "Ligne de prix de base",
+      "schema": "PackBasePriceLine",
+      "value": {
+        "label": "Forfait fictif",
+        "amountSignedCents": 100000
+      },
+      "expectedValid": true,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC171",
+      "title": "Libellé de prix vide",
+      "schema": "PackBasePriceLine",
+      "value": {
+        "label": " ",
+        "amountSignedCents": 100000
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC172",
+      "title": "Supplément d’option explicite",
+      "schema": "PackOptionPrice",
+      "value": {
+        "optionKey": "secours",
+        "additionalCents": 12000
+      },
+      "expectedValid": true,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC173",
+      "title": "Supplément négatif non prévu",
+      "schema": "PackOptionPrice",
+      "value": {
+        "optionKey": "secours",
+        "additionalCents": -1
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC174",
+      "title": "Prix dérogatoire motivé",
+      "schema": "PurchasePriceOverride",
+      "value": {
+        "agreedTotalCents": 108000,
+        "reason": "Total fictif convenu et accepté."
+      },
+      "expectedValid": true,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC175",
+      "title": "Dérogation sans motif",
+      "schema": "PurchasePriceOverride",
+      "value": {
+        "agreedTotalCents": 108000,
+        "reason": " "
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC176",
+      "title": "Aperçu sans école",
+      "schema": "AccountDeletionPreview",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000036",
+        "version": 1,
+        "createdAt": "2026-09-19T10:00:00Z",
+        "expiresAt": "2026-09-19T10:15:00Z",
+        "memberships": [],
+        "processingInformation": "Délai fictif annoncé.",
+        "retentionInformation": "Rétentions à définir avant pilote.",
+        "policyVersion": "fixture",
+        "totalMemberships": 0,
+        "nextMembershipCursor": null
+      },
+      "expectedValid": true,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC177",
+      "title": "Aperçu sans total ni pagination",
+      "schema": "AccountDeletionPreview",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000036",
+        "version": 1,
+        "createdAt": "2026-09-19T10:00:00Z",
+        "expiresAt": "2026-09-19T10:15:00Z",
+        "memberships": [],
+        "processingInformation": "Délai fictif annoncé.",
+        "retentionInformation": "Rétentions à définir avant pilote.",
+        "policyVersion": "fixture"
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC178",
+      "title": "Total nul contredit par une appartenance",
+      "schema": "AccountDeletionPreview",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000036",
+        "version": 1,
+        "createdAt": "2026-09-19T10:00:00Z",
+        "expiresAt": "2026-09-19T10:15:00Z",
+        "memberships": [
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          }
+        ],
+        "processingInformation": "Délai fictif annoncé.",
+        "retentionInformation": "Rétentions à définir avant pilote.",
+        "policyVersion": "fixture",
+        "totalMemberships": 0,
+        "nextMembershipCursor": null
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC179",
+      "title": "Première page autorisée, total supérieur",
+      "schema": "AccountDeletionPreview",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000036",
+        "version": 1,
+        "createdAt": "2026-09-19T10:00:00Z",
+        "expiresAt": "2026-09-19T10:15:00Z",
+        "memberships": [
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          }
+        ],
+        "processingInformation": "Délai fictif annoncé.",
+        "retentionInformation": "Rétentions à définir avant pilote.",
+        "policyVersion": "fixture",
+        "totalMemberships": 101,
+        "nextMembershipCursor": "fixture-only"
+      },
+      "expectedValid": true,
+      "finding": "V3.6",
+      "limitation": "La taille/exhaustivité exacte du manifeste et la suite du curseur restent contrôlées au service."
+    },
+    {
+      "id": "SC180",
+      "title": "Curseur vide",
+      "schema": "AccountDeletionPreview",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000036",
+        "version": 1,
+        "createdAt": "2026-09-19T10:00:00Z",
+        "expiresAt": "2026-09-19T10:15:00Z",
+        "memberships": [
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          }
+        ],
+        "processingInformation": "Délai fictif annoncé.",
+        "retentionInformation": "Rétentions à définir avant pilote.",
+        "policyVersion": "fixture",
+        "totalMemberships": 101,
+        "nextMembershipCursor": ""
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC181",
+      "title": "Dernière page du manifeste",
+      "schema": "AccountDeletionMembershipPage",
+      "value": {
+        "previewId": "00000000-0000-4000-8000-000000000036",
+        "previewVersion": 1,
+        "totalMemberships": 101,
+        "items": [
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          }
+        ],
+        "nextCursor": null,
+        "expiresAt": "2026-09-19T10:15:00Z"
+      },
+      "expectedValid": true,
+      "finding": "V3.6"
+    },
+    {
+      "id": "SC182",
+      "title": "Page dépassant cent éléments",
+      "schema": "AccountDeletionMembershipPage",
+      "value": {
+        "previewId": "00000000-0000-4000-8000-000000000036",
+        "previewVersion": 1,
+        "totalMemberships": 101,
+        "items": [
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          },
+          {
+            "schoolId": "00000000-0000-4000-8000-000000000036",
+            "schoolName": "École fictive",
+            "isSoleAdministrator": false,
+            "hasFutureCommitments": false,
+            "hasFinancialFollowUp": false,
+            "summary": "Exemple sans données réelles."
+          }
+        ],
+        "nextCursor": null,
+        "expiresAt": "2026-09-19T10:15:00Z"
+      },
+      "expectedValid": false,
+      "finding": "V3.6"
+    }
+  ]
+}

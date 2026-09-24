@@ -1,0 +1,84 @@
+{
+  "version": "3.9",
+  "kind": "FICTITIOUS_CANVAS_NOT_GEOGRAPHIC",
+  "durationSeconds": 2700,
+  "points": [
+    {
+      "t": 0,
+      "x": 285,
+      "y": 570
+    },
+    {
+      "t": 180,
+      "x": 320,
+      "y": 485
+    },
+    {
+      "t": 360,
+      "x": 450,
+      "y": 485
+    },
+    {
+      "t": 480,
+      "x": 450,
+      "y": 448
+    },
+    {
+      "t": 620,
+      "x": 450,
+      "y": 400
+    },
+    {
+      "t": 674,
+      "x": 450,
+      "y": 345
+    },
+    {
+      "t": 1150,
+      "x": 575,
+      "y": 345
+    },
+    {
+      "t": 1490,
+      "x": 575,
+      "y": 230
+    },
+    {
+      "t": 1800,
+      "x": 470,
+      "y": 230
+    },
+    {
+      "t": 2200,
+      "x": 470,
+      "y": 145
+    },
+    {
+      "t": 2700,
+      "x": 605,
+      "y": 145
+    }
+  ],
+  "partialGap": {
+    "after": 480,
+    "before": 620
+  },
+  "observations": [
+    {
+      "number": 1,
+      "t": 674,
+      "x": 450,
+      "y": 345,
+      "title": "Anticipation",
+      "text": "Observer plus tôt à l’approche du giratoire."
+    },
+    {
+      "number": 2,
+      "t": 1490,
+      "x": 575,
+      "y": 230,
+      "title": "Insertion",
+      "text": "Préparer l’insertion sans précipiter la décision."
+    }
+  ]
+}

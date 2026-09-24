@@ -1,0 +1,165 @@
+{
+  "version": "3.9",
+  "sourceVersion": "3.8",
+  "scope": "SAME_USER_INTENTS_IN_DOCUMENTARY_PROTOTYPES_ONLY",
+  "cases": [
+    {
+      "name": "student_has_no_staff_commands",
+      "before": {
+        "passed": false,
+        "destination": "seance"
+      },
+      "after": {
+        "passed": true,
+        "destination": "mes-lecons"
+      }
+    },
+    {
+      "name": "capture_survives_return",
+      "before": {
+        "passed": false,
+        "state": "waiting",
+        "hasPoints": false
+      },
+      "after": {
+        "passed": true,
+        "state": "recording",
+        "hasPoints": true
+      }
+    },
+    {
+      "name": "constat_field_exists",
+      "before": {
+        "passed": false,
+        "labels": [
+          "Ce qui a été travaillé",
+          "À travailler ensuite"
+        ]
+      },
+      "after": {
+        "passed": true,
+        "labels": [
+          "Ce qui a été travaillé",
+          "Constat de la séance",
+          "Contexte de cette observation",
+          "À travailler ensuite"
+        ]
+      }
+    },
+    {
+      "name": "preview_uses_current_text",
+      "before": {
+        "passed": false
+      },
+      "after": {
+        "passed": true
+      }
+    },
+    {
+      "name": "draft_survives_view_change",
+      "before": {
+        "passed": false
+      },
+      "after": {
+        "passed": true
+      }
+    },
+    {
+      "name": "observation_matches_position",
+      "before": {
+        "passed": false,
+        "position": [
+          575,
+          320.39923095703125
+        ],
+        "expected": [
+          575,
+          230
+        ]
+      },
+      "after": {
+        "passed": true,
+        "position": [
+          575,
+          230
+        ],
+        "expected": [
+          575,
+          230
+        ]
+      }
+    },
+    {
+      "name": "no_position_inside_gap",
+      "before": {
+        "passed": false
+      },
+      "after": {
+        "passed": true
+      }
+    },
+    {
+      "name": "no_continuous_path_across_gap",
+      "before": {
+        "passed": false,
+        "paths": 1
+      },
+      "after": {
+        "passed": true,
+        "paths": 2
+      }
+    },
+    {
+      "name": "archive_keeps_filter",
+      "before": {
+        "passed": false,
+        "query": "",
+        "filter": "all"
+      },
+      "after": {
+        "passed": true,
+        "query": "Noé",
+        "filter": "active"
+      }
+    },
+    {
+      "name": "archive_has_useful_focus",
+      "before": {
+        "passed": false,
+        "focus": "BODY"
+      },
+      "after": {
+        "passed": true,
+        "focus": "studentSearch"
+      }
+    },
+    {
+      "name": "empty_filter_has_no_stale_actions",
+      "before": {
+        "passed": false,
+        "detail": "EL\nActif\nEmma Laurent\nFormation B · École Horizon\nDossier\nEngagements\nProchaine leçon\n\n21 sept. · 09:00\n\nEngagements à venir\n\n3 engagements\n\nLes notes"
+      },
+      "after": {
+        "passed": true,
+        "detail": "Aucun dossier sélectionné\n\nChoisir un élève parmi les résultats. Les actions du dossier précédent ne restent pas affichées."
+      }
+    },
+    {
+      "name": "tested_text_reaches_200_percent",
+      "before": {
+        "passed": false,
+        "factor": 1.5,
+        "classification": "coverage extension; 150% was explicit in V3.8"
+      },
+      "after": {
+        "passed": true,
+        "factor": 2.0,
+        "classification": "coverage extension; 150% was explicit in V3.8"
+      }
+    }
+  ],
+  "improved": 12,
+  "regressions": [],
+  "passed": true,
+  "notABackendOrNativeTest": true
+}

@@ -1,0 +1,37 @@
+{
+  "version": "3.9",
+  "reports": {
+    "verification-documentaire.json": {
+      "version": "3.9",
+      "passed": true
+    },
+    "verification-reference-v3-9.json": {
+      "version": "3.9",
+      "passed": true
+    },
+    "verification-mobile-swift-v3-9.json": {
+      "version": "3.9",
+      "passed": true
+    },
+    "verification-design-v3-9.json": {
+      "version": "3.9",
+      "passed": true
+    },
+    "verification-prototype-v3-9.json": {
+      "version": "3.9",
+      "passed": true
+    },
+    "verification-lecteur-v3-9.json": {
+      "version": "3.9",
+      "passed": true
+    },
+    "comparaison-prototype-v3-8-v3-9.json": {
+      "version": "3.9",
+      "passed": true
+    }
+  },
+  "apiVersion": "3.7.0",
+  "applicationTestsExecuted": false,
+  "originalsUnchanged": true,
+  "scope": "Aggregate of executed current reports, no new assertion about product readiness."
+}

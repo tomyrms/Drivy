@@ -1,0 +1,444 @@
+{
+  "version": "3.7",
+  "scope": "DOCUMENTARY_CHECKS_ONLY",
+  "productTestsExecuted": false,
+  "checks": [
+    {
+      "check": "Current_contract_version",
+      "passed": true,
+      "detail": "3.7.0"
+    },
+    {
+      "check": "Public_text_selection_explicit",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Published_text_has_no_geographic_identifier",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Final_report_carries_text_snapshot",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Direct_delivery_is_not_a_lesson",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Delivery_command_owns_no_actor_or_learner",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Course_close_contract_matches_decision",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Explicit_pack_pricing_PackOfferCommand",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Explicit_pack_pricing_PackOfferVersion",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Purchase_snapshots_preserved",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "No_customer_price_in_purchase_command",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Preview_pagination_global_owner_scope",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Preview_first_page_bounded",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Preview_total_not_artificially_capped",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Deletion_receipt_does_not_restore_session",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Trace_contract_version_matches",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Trace_current_document_version",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Feature_ids_preserved",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "New_test_ids_contiguous",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "No_product_test_promoted_to_executed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Catalogue_covers_all_features",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "No_active_claim_global_contract_absent",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Single_global_deletion_mobile_section",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "check": "Schema_case_SC183",
+      "passed": true,
+      "detail": "Source interne avec cycle explicite"
+    },
+    {
+      "check": "Schema_case_SC184",
+      "passed": true,
+      "detail": "Source interne sans cycle"
+    },
+    {
+      "check": "Schema_case_SC185",
+      "passed": true,
+      "detail": "Cycle zéro"
+    },
+    {
+      "check": "Schema_case_SC186",
+      "passed": true,
+      "detail": "Complété sans source ni preuve externe"
+    },
+    {
+      "check": "Schema_case_SC187",
+      "passed": true,
+      "detail": "Justificatif externe sélectionné"
+    },
+    {
+      "check": "Schema_case_SC188",
+      "passed": true,
+      "detail": "Exemption laissée au contrôle du profil"
+    },
+    {
+      "check": "Schema_case_SC189",
+      "passed": true,
+      "detail": "Exemption abusivement présentée comme cours interne"
+    },
+    {
+      "check": "Schema_case_SC190",
+      "passed": true,
+      "detail": "Liste de justificatifs répétée"
+    },
+    {
+      "check": "Schema_case_SC191",
+      "passed": true,
+      "detail": "Motif composé d’espaces"
+    },
+    {
+      "check": "Schema_case_SC192",
+      "passed": true,
+      "detail": "Ancien payload COMPLETED sans preuve ni cycle explicite"
+    },
+    {
+      "check": "Schema_case_SC193",
+      "passed": true,
+      "detail": "Snapshot interne avec relevé versionné"
+    },
+    {
+      "check": "Schema_case_SC194",
+      "passed": true,
+      "detail": "Snapshot interne sans relevé"
+    },
+    {
+      "check": "Schema_case_SC195",
+      "passed": true,
+      "detail": "Snapshot externe sans document"
+    },
+    {
+      "check": "Schema_case_SC196",
+      "passed": true,
+      "detail": "Snapshot externe recevable en forme"
+    },
+    {
+      "check": "Schema_case_SC197",
+      "passed": true,
+      "detail": "Snapshot d’exemption sans présence fictive"
+    },
+    {
+      "check": "Schema_case_SC198",
+      "passed": true,
+      "detail": "État final documenté"
+    },
+    {
+      "check": "Schema_case_SC199",
+      "passed": true,
+      "detail": "État final sans contrôleur"
+    },
+    {
+      "check": "Schema_case_SC200",
+      "passed": true,
+      "detail": "État final sans date"
+    },
+    {
+      "check": "Schema_case_SC201",
+      "passed": true,
+      "detail": "État final sans profil"
+    },
+    {
+      "check": "Schema_case_SC202",
+      "passed": true,
+      "detail": "État final sans snapshot"
+    },
+    {
+      "check": "Schema_case_SC203",
+      "passed": true,
+      "detail": "Réexamen sans preuve courante prétendue valide"
+    },
+    {
+      "check": "Schema_case_SC204",
+      "passed": true,
+      "detail": "Réexamen qui expose encore une preuve active"
+    },
+    {
+      "check": "Schema_case_SC205",
+      "passed": true,
+      "detail": "Suivi ouvert sans décision fictive"
+    },
+    {
+      "check": "Schema_case_SC206",
+      "passed": true,
+      "detail": "Suivi ouvert déjà consommé"
+    },
+    {
+      "check": "Schema_case_SC207",
+      "passed": true,
+      "detail": "Résolution par consommation tracée"
+    },
+    {
+      "check": "Schema_case_SC208",
+      "passed": true,
+      "detail": "Consommation sans mouvement"
+    },
+    {
+      "check": "Schema_case_SC209",
+      "passed": true,
+      "detail": "Renonciation qui crée un mouvement"
+    },
+    {
+      "check": "Schema_case_SC210",
+      "passed": true,
+      "detail": "Renonciation sans mouvement"
+    },
+    {
+      "check": "Schema_case_SC211",
+      "passed": true,
+      "detail": "Résolution sans responsable"
+    },
+    {
+      "check": "Schema_case_SC212",
+      "passed": true,
+      "detail": "Fait rétracté donc suivi inutile"
+    },
+    {
+      "check": "Schema_case_SC213",
+      "passed": true,
+      "detail": "Suivi inutile avec auteur de décision inventé"
+    },
+    {
+      "check": "Schema_case_SC214",
+      "passed": true,
+      "detail": "Commande de renonciation explicite"
+    },
+    {
+      "check": "Schema_case_SC215",
+      "passed": true,
+      "detail": "Quantité imposée par le client"
+    },
+    {
+      "check": "Schema_case_SC216",
+      "passed": true,
+      "detail": "Lot arbitraire fourni par le client"
+    },
+    {
+      "check": "Schema_case_SC217",
+      "passed": true,
+      "detail": "Version de suivi absente"
+    },
+    {
+      "check": "Schema_case_SC218",
+      "passed": true,
+      "detail": "Token Apple développement"
+    },
+    {
+      "check": "Schema_case_SC219",
+      "passed": true,
+      "detail": "Token Apple production"
+    },
+    {
+      "check": "Schema_case_SC220",
+      "passed": true,
+      "detail": "Environnement Android sur Apple"
+    },
+    {
+      "check": "Schema_case_SC221",
+      "passed": true,
+      "detail": "Futur Android configuré, forme uniquement"
+    },
+    {
+      "check": "Schema_case_SC222",
+      "passed": true,
+      "detail": "Android sur environnement Apple"
+    },
+    {
+      "check": "Schema_case_SC223",
+      "passed": true,
+      "detail": "Faux Web Push natif"
+    },
+    {
+      "check": "Schema_case_SC224",
+      "passed": true,
+      "detail": "Ancien WEB sans environnement"
+    },
+    {
+      "check": "Schema_case_SC225",
+      "passed": true,
+      "detail": "Topic choisi librement par client"
+    },
+    {
+      "check": "Schema_case_SC226",
+      "passed": true,
+      "detail": "Projection sans token secret"
+    },
+    {
+      "check": "Schema_case_SC227",
+      "passed": true,
+      "detail": "Token exposé en lecture"
+    },
+    {
+      "check": "Schema_case_SC228",
+      "passed": true,
+      "detail": "Liaison version zéro"
+    },
+    {
+      "check": "Schema_case_SC229",
+      "passed": true,
+      "detail": "Projection sans environnement"
+    },
+    {
+      "check": "Pricing_reference_model_PM01",
+      "passed": true,
+      "detail": "Base avec remise et frais offerts"
+    },
+    {
+      "check": "Pricing_reference_model_PM02",
+      "passed": true,
+      "detail": "Deux composants, un seul supplément"
+    },
+    {
+      "check": "Pricing_reference_model_PM03",
+      "passed": true,
+      "detail": "Prix convenu, catalogue conservé"
+    },
+    {
+      "check": "Pricing_reference_model_PM04",
+      "passed": true,
+      "detail": "Option inconnue"
+    },
+    {
+      "check": "Pricing_reference_model_PM05",
+      "passed": true,
+      "detail": "Option choisie deux fois"
+    },
+    {
+      "check": "Pricing_reference_model_PM06",
+      "passed": true,
+      "detail": "Clé de prix répétée avec autre montant"
+    },
+    {
+      "check": "Pricing_reference_model_PM07",
+      "passed": true,
+      "detail": "Prix d’option manquant"
+    },
+    {
+      "check": "Pricing_reference_model_PM08",
+      "passed": true,
+      "detail": "Prix de base non égal aux lignes"
+    },
+    {
+      "check": "Pricing_reference_model_PM09",
+      "passed": true,
+      "detail": "Dérogation sans droit"
+    },
+    {
+      "check": "Pricing_reference_model_PM10",
+      "passed": true,
+      "detail": "Dérogation sans justification"
+    },
+    {
+      "check": "Pricing_reference_model_PM11",
+      "passed": true,
+      "detail": "Supplément zéro explicite"
+    },
+    {
+      "check": "Pricing_reference_model_PM12",
+      "passed": true,
+      "detail": "Dépassement de la borne monétaire"
+    },
+    {
+      "check": "Pricing_reference_model_PM13",
+      "passed": true,
+      "detail": "Booleen n’est pas un montant"
+    },
+    {
+      "check": "Pricing_reference_model_PM14",
+      "passed": true,
+      "detail": "Une ligne tarifaire ne crée pas de droit"
+    }
+  ],
+  "schemaComparisonSummary": {
+    "version": "3.7",
+    "baseVersion": "3.6",
+    "scope": "SAME_FICTITIOUS_PAYLOADS_JSON_SCHEMA_ONLY",
+    "productTestsExecuted": false,
+    "caseCount": 47,
+    "previouslyAcceptedNowRejected": 2
+  },
+  "referenceModelCases": 14,
+  "passed": true,
+  "errorCount": 0,
+  "errors": [],
+  "limitations": [
+    "No Swift build, PostgreSQL transaction, permission, provider or actual deletion was executed.",
+    "JSON shape and reference calculation do not demonstrate all semantic correctness.",
+    "Retentions, school commercial policy, last-admin procedure and device qualification remain decisions or future tests."
+  ]
+}

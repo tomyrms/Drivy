@@ -1,0 +1,169 @@
+{
+  "version": "3.14",
+  "canonicalAPI": "../04-technique/openapi.yaml",
+  "scope": "DOCUMENTARY_UI_BINDINGS_NOT_NEW_BUSINESS_RULES",
+  "entries": [
+    {
+      "id": "I01",
+      "functions": [
+        "F05",
+        "F08",
+        "F16"
+      ],
+      "screens": [
+        "E14",
+        "E04",
+        "E09",
+        "E24"
+      ],
+      "visuals": [
+        "VIS15",
+        "VIS04"
+      ],
+      "role": "STUDENT",
+      "invariant": "Rôle conservé ; consultation publiée, sans commandes personnel.",
+      "appStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "I02",
+      "functions": [
+        "F15"
+      ],
+      "screens": [
+        "E22",
+        "E23"
+      ],
+      "visuals": [
+        "VIS01",
+        "VIS02",
+        "VIS10"
+      ],
+      "role": "STAFF",
+      "invariant": "Retour vers capture existante ; arrêt explicite, pas réinitialisation de navigation.",
+      "appStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "I03",
+      "functions": [
+        "F08"
+      ],
+      "screens": [
+        "E08"
+      ],
+      "visuals": [
+        "VIS07"
+      ],
+      "role": "STAFF",
+      "invariant": "Trois textes et contexte ; non observé représenté par absence ; aperçu des valeurs courantes.",
+      "appStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "I04",
+      "functions": [
+        "F16"
+      ],
+      "screens": [
+        "E24"
+      ],
+      "visuals": [
+        "VIS04"
+      ],
+      "role": "STUDENT",
+      "invariant": "Temps et observations alignés ; aucune interpolation entre segments.",
+      "appStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "I05",
+      "functions": [
+        "F18",
+        "F19"
+      ],
+      "screens": [
+        "E25",
+        "E26"
+      ],
+      "visuals": [
+        "VIS05",
+        "VIS06"
+      ],
+      "role": "STUDENT",
+      "invariant": "Même intention en attente ; confirmation et refus explicites séparés.",
+      "appStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "I06",
+      "functions": [
+        "F22"
+      ],
+      "screens": [
+        "E34",
+        "E36"
+      ],
+      "visuals": [
+        "VIS12"
+      ],
+      "role": "STAFF",
+      "invariant": "Recherche/filtre conservés ; aucune action de sélection cachée ; focus utile.",
+      "appStatus": "NOT_EXECUTED"
+    },
+    {
+      "id": "I07",
+      "functions": [
+        "F21",
+        "F20"
+      ],
+      "screens": [
+        "E40",
+        "E38"
+      ],
+      "visuals": [
+        "VIS08",
+        "VIS14"
+      ],
+      "role": "ROLE_SCOPED",
+      "invariant": "Saisies transitoires conservées dans la visite, pas persistance serveur ni transition de compte simulées.",
+      "appStatus": "NOT_EXECUTED"
+    }
+  ],
+  "draftBinding": {
+    "schema": "SaveDraftCommand",
+    "fields": {
+      "workedOn": "Ce qui a été travaillé",
+      "observationText": "Constat de la séance",
+      "nextStep": "À travailler ensuite"
+    },
+    "observationSchema": "ObservationInput",
+    "noObservation": "omit array entry; do not invent NOT_OBSERVED enum",
+    "previewIsPublication": false
+  },
+  "reviewControlsAreNotAppFeatures": true,
+  "persistentStorageInGallery": false,
+  "signalement": {
+    "screens": [
+      "E23",
+      "E24",
+      "E04"
+    ],
+    "openCreatesEvent": false,
+    "contextFrozenOnOpen": true,
+    "explicitStatusCommit": true,
+    "defaultStatus": null,
+    "cancelCreatesCommand": false,
+    "demoPersistence": "MEMORY_ONLY",
+    "nativeTests": "NOT_EXECUTED",
+    "testIds": [
+      "T423",
+      "T424",
+      "T425",
+      "T426",
+      "T427",
+      "T428",
+      "T429",
+      "T430",
+      "T431",
+      "T432",
+      "T433",
+      "T434"
+    ]
+  }
+}

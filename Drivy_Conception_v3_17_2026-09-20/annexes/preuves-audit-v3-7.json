@@ -1,0 +1,105 @@
+{
+  "scope": "BASELINE_3_6_SOURCE_LINES_NOT_CURRENT_LINES",
+  "evidence": [
+    {
+      "finding": "V37-01",
+      "file": "03-fonctionnel/regles-etats.md",
+      "sourceVersion": "3.6",
+      "sha256": "570f2b474155d13ae9496e998f9227336c6abf177e7ce85f9616cbfd3575f365",
+      "startLine": 421,
+      "endLine": 425,
+      "excerpt": "Après clôture, une correction ABSENT→PRESENT concernant un droit déjà libéré par R106 est une rectification coordonnée, pas une écriture de présence isolée : le service refuse `COURSE_RIGHT_ALREADY_RELEASED` tant qu’une compensation de droits explicitement autorisée n’est pas préparée. Le pilote conserve la correction comme demande à traiter par personnel ; il ne reprend pas silencieusement un crédit déjà réutilisé. Les modalités de ce cas commercial exceptionnel sont à valider avant usage ; l’accomplissement n’est pas attesté automatiquement.\n\n<a id=\"r64\"></a>\n## R64 · Calendrier unifié\n",
+      "matchedText": "COURSE_RIGHT_ALREADY_RELEASED"
+    },
+    {
+      "finding": "V37-01",
+      "file": "03-fonctionnel/regles-etats.md",
+      "sourceVersion": "3.6",
+      "sha256": "570f2b474155d13ae9496e998f9227336c6abf177e7ce85f9616cbfd3575f365",
+      "startLine": 803,
+      "endLine": 807,
+      "excerpt": "## R106 · Libérer les droits collectifs inutilisés sans fabriquer une présence\n\nAP138 reçoit CloseCourseCommand avec une décision RELEASE pour chaque HOLD encore ouvert d’un cycle sans aucune présence PRESENT. La liste, les cycles, les versions d’inscription/lot et les mouvements source sont revérifiés sous verrou ; absences et dispenses doivent déjà être renseignées, toutes les occurrences terminées. Une omission, un doublon d’identifiant même avec version différente ou une présence concurrente refuse toute la clôture avec COURSE_SETTLEMENT_CHANGED. Liste vide seulement si aucun HOLD à résoudre. ADMIN ou MANAGE_COURSES peut clôturer ; une libération exige en plus SELL_SERVICES (ou ADMIN). Ce découplage empêche TAKE_ATTENDANCE seul d’accorder des crédits.\n\nChaque RELEASE est relié au HOLD, plafonné au reliquat et idempotent ; la série passe CLOSED dans le même commit. Le cycle et ses absences sont conservés. Aucun remboursement, frais, réussite de formation, réactivation de lot expiré ou suspension de paiement levée implicitement. Un éventuel suivi financier demeure visible et bloque l’archivage selon R88.",
+      "matchedText": "## R106"
+    },
+    {
+      "finding": "V37-02",
+      "file": "04-technique/openapi.yaml",
+      "sourceVersion": "3.6",
+      "sha256": "d8c1ae255e37af90b1c4654822a4d4513b3e94b3f1420adf98bd12eedb82aa48",
+      "startLine": 31609,
+      "endLine": 31683,
+      "excerpt": "    ReviewRequirementCommand:\n      type: object\n      additionalProperties: false\n      properties:\n        operationId:\n          type: string\n          format: uuid\n        status:\n          type: string\n          enum:\n          - TO_DO\n          - PARTIAL\n          - COMPLETED\n          - EXEMPT\n          - UNKNOWN\n        profileVersionId:\n          type: string\n          format: uuid\n        evidenceDocumentIds:\n          type: array\n          items:\n            type: string\n            format: uuid\n          minItems: 0\n          maxItems: 20\n        sourceEnrollmentId:\n          anyOf:\n          - type: string\n            format: uuid\n          - type: 'null'\n        reason:\n          type: string\n          minLength: 1\n          maxLength: 1000\n      required:\n      - operationId\n      - status\n      - profileVersionId\n      - evidenceDocumentIds\n      - sourceEnrollmentId\n      - reason\n    ProfileRules:\n      type: object\n      additionalProperties: false\n      properties:\n        maxParticipants:\n          type: integer\n          minimum: 1\n          maximum: 200\n        requiredBlockCodes:\n          type: array\n          items:\n            type: string\n            minLength: 1\n            maxLength: 50\n          minItems: 1\n          maxItems: 64\n        blockDurationMinutes:\n          type: integer\n          minimum: 1\n          maximum: 480\n        minimumDistinctDays:\n          type: integer\n          minimum: 1\n          maximum: 64\n        maximumBlocksPerDay:\n          type: integer\n          minimum: 1\n          maximum: 64\n        firstBlockCode:\n          anyOf:\n          - type: string\n            minLength: 1\n            maxLength: 50\n          - type: 'null'",
+      "matchedText": "    ReviewRequirementCommand:"
+    },
+    {
+      "finding": "V37-02",
+      "file": "04-technique/openapi.yaml",
+      "sourceVersion": "3.6",
+      "sha256": "d8c1ae255e37af90b1c4654822a4d4513b3e94b3f1420adf98bd12eedb82aa48",
+      "startLine": 31488,
+      "endLine": 31562,
+      "excerpt": "    RequirementRecord:\n      type: object\n      additionalProperties: false\n      properties:\n        id:\n          type: string\n          format: uuid\n        schoolId:\n          type: string\n          format: uuid\n        version:\n          type: integer\n          minimum: 1\n        learnerId:\n          type: string\n          format: uuid\n        requirementType:\n          type: string\n          minLength: 1\n          maxLength: 100\n        status:\n          type: string\n          enum:\n          - UNKNOWN\n          - TO_DO\n          - PARTIAL\n          - EVIDENCE_PENDING\n          - COMPLETED\n          - EXEMPT\n        trainingIds:\n          type: array\n          items:\n            type: string\n            format: uuid\n          minItems: 0\n          maxItems: 20\n        evidenceDocumentIds:\n          type: array\n          items:\n            type: string\n            format: uuid\n          minItems: 0\n          maxItems: 20\n        profileVersionId:\n          anyOf:\n          - type: string\n            format: uuid\n          - type: 'null'\n        reviewedBy:\n          anyOf:\n          - type: string\n            format: uuid\n          - type: 'null'\n        reviewedAt:\n          anyOf:\n          - type: string\n            format: date-time\n          - type: 'null'\n        reason:\n          anyOf:\n          - type: string\n            minLength: 1\n            maxLength: 1000\n          - type: 'null'\n      required:\n      - id\n      - schoolId\n      - version\n      - learnerId\n      - requirementType\n      - status\n      - trainingIds\n      - evidenceDocumentIds\n      - profileVersionId\n      - reviewedBy",
+      "matchedText": "    RequirementRecord:"
+    },
+    {
+      "finding": "V37-03",
+      "file": "03-fonctionnel/regles-etats.md",
+      "sourceVersion": "3.6",
+      "sha256": "570f2b474155d13ae9496e998f9227336c6abf177e7ce85f9616cbfd3575f365",
+      "startLine": 289,
+      "endLine": 293,
+      "excerpt": "## R43 · Mesures et segments\n\nChaque point brut porte segmentId, sequence, capturedAt, latitude, longitude et accuracyMeters ; longitude/latitude valides, précision non négative. Séquence strictement croissante dans un segment. Pause, perte de permission, relance ou coupure identifiée créent une rupture. Ne pas présenter une interpolation ou un recalage routier comme une mesure ; aucune ligne pleine à travers une lacune.\n\n**Aucune mesure reçue.** Un segment vide conserve son identité et motif avec `expectedPointCount=0`, `expectedChunkIndices=[]`, `lastSequence=null`. Si aucun segment n’a été ouvert, `segments=[]` est valable à l’arrêt. Un segment non vide exige des indices de chunks et une dernière séquence réelle. Vérifier les sommes/identités au service ; ne pas déduire une position fictive de l’indice zéro. Le statut de transfert d’un manifeste vide ne prouve pas une trace utilisable.",
+      "matchedText": "## R43"
+    },
+    {
+      "finding": "V37-03",
+      "file": "04-technique/openapi.yaml",
+      "sourceVersion": "3.6",
+      "sha256": "d8c1ae255e37af90b1c4654822a4d4513b3e94b3f1420adf98bd12eedb82aa48",
+      "startLine": 32828,
+      "endLine": 32902,
+      "excerpt": "    TrackPoint:\n      type: object\n      additionalProperties: false\n      properties:\n        sequence:\n          type: integer\n          minimum: 0\n        elapsedMs:\n          type: integer\n          minimum: 0\n        capturedAt:\n          type: string\n          format: date-time\n        latitude:\n          type: number\n          minimum: -90\n          maximum: 90\n        longitude:\n          type: number\n          minimum: -180\n          maximum: 180\n        accuracyMeters:\n          type: number\n          minimum: 0\n      required:\n      - sequence\n      - elapsedMs\n      - capturedAt\n      - latitude\n      - longitude\n      - accuracyMeters\n    TrackChunkCommand:\n      type: object\n      additionalProperties: false\n      properties:\n        operationId:\n          type: string\n          format: uuid\n        segmentIndex:\n          type: integer\n          minimum: 0\n        segmentStartedAt:\n          type: string\n          format: date-time\n        segmentStartReason:\n          type: string\n          enum:\n          - START\n          - RESUME\n          - RESTART\n          - PERMISSION_RESTORED\n          - SIGNAL_RECOVERED\n        contentHash:\n          type: string\n          pattern: ^[a-f0-9]{64}$\n        points:\n          type: array\n          items:\n            $ref: '#/components/schemas/TrackPoint'\n          minItems: 1\n          maxItems: 1000\n        signedUploadAuthorization:\n          type: string\n          minLength: 1\n          maxLength: 12000\n      required:\n      - operationId\n      - segmentIndex\n      - segmentStartedAt\n      - segmentStartReason\n      - contentHash\n      - points\n      - signedUploadAuthorization\n    TrackChunkReceipt:\n      type: object",
+      "matchedText": "    TrackPoint:"
+    },
+    {
+      "finding": "V37-04",
+      "file": "04-technique/openapi.yaml",
+      "sourceVersion": "3.6",
+      "sha256": "d8c1ae255e37af90b1c4654822a4d4513b3e94b3f1420adf98bd12eedb82aa48",
+      "startLine": 33570,
+      "endLine": 33644,
+      "excerpt": "    RegisterPushCommand:\n      type: object\n      additionalProperties: false\n      properties:\n        operationId:\n          type: string\n          format: uuid\n        deviceId:\n          type: string\n          format: uuid\n        platform:\n          type: string\n          enum:\n          - IOS\n          - ANDROID\n          - WEB\n        providerToken:\n          type: string\n          minLength: 1\n          maxLength: 4096\n      required:\n      - operationId\n      - deviceId\n      - platform\n      - providerToken\n    NotificationPreferences:\n      type: object\n      additionalProperties: false\n      properties:\n        version:\n          type: integer\n          minimum: 1\n        courseOffersInApp:\n          type: boolean\n        courseOffersPush:\n          type: boolean\n        courseOffersEmail:\n          type: boolean\n        transactionalPush:\n          type: boolean\n        transactionalEmail:\n          type: boolean\n      required:\n      - version\n      - courseOffersInApp\n      - courseOffersPush\n      - courseOffersEmail\n      - transactionalPush\n      - transactionalEmail\n    NotificationPreferencesCommand:\n      type: object\n      additionalProperties: false\n      properties:\n        operationId:\n          type: string\n          format: uuid\n        courseOffersInApp:\n          type: boolean\n        courseOffersPush:\n          type: boolean\n        courseOffersEmail:\n          type: boolean\n        transactionalPush:\n          type: boolean\n        transactionalEmail:\n          type: boolean\n      required:\n      - operationId\n      - courseOffersInApp\n      - courseOffersPush\n      - courseOffersEmail\n      - transactionalPush\n      - transactionalEmail\n    SchoolSitePageV2:\n      type: object",
+      "matchedText": "    RegisterPushCommand:"
+    },
+    {
+      "finding": "V37-04",
+      "file": "04-technique/openapi.yaml",
+      "sourceVersion": "3.6",
+      "sha256": "d8c1ae255e37af90b1c4654822a4d4513b3e94b3f1420adf98bd12eedb82aa48",
+      "startLine": 33531,
+      "endLine": 33605,
+      "excerpt": "    DevicePushRegistration:\n      type: object\n      additionalProperties: false\n      properties:\n        id:\n          type: string\n          format: uuid\n        schoolId:\n          type: string\n          format: uuid\n        version:\n          type: integer\n          minimum: 1\n        deviceId:\n          type: string\n          format: uuid\n        platform:\n          type: string\n          enum:\n          - IOS\n          - ANDROID\n          - WEB\n        state:\n          type: string\n          enum:\n          - ACTIVE\n          - INVALID\n          - REVOKED\n        updatedAt:\n          type: string\n          format: date-time\n      required:\n      - id\n      - schoolId\n      - version\n      - deviceId\n      - platform\n      - state\n      - updatedAt\n    RegisterPushCommand:\n      type: object\n      additionalProperties: false\n      properties:\n        operationId:\n          type: string\n          format: uuid\n        deviceId:\n          type: string\n          format: uuid\n        platform:\n          type: string\n          enum:\n          - IOS\n          - ANDROID\n          - WEB\n        providerToken:\n          type: string\n          minLength: 1\n          maxLength: 4096\n      required:\n      - operationId\n      - deviceId\n      - platform\n      - providerToken\n    NotificationPreferences:\n      type: object\n      additionalProperties: false\n      properties:\n        version:\n          type: integer\n          minimum: 1\n        courseOffersInApp:\n          type: boolean\n        courseOffersPush:\n          type: boolean",
+      "matchedText": "    DevicePushRegistration:"
+    },
+    {
+      "finding": "V37-05",
+      "file": "annexes/verifier-mobile-v3-6.py",
+      "sourceVersion": "3.6",
+      "sha256": "7d03e1348c4de7b593592b4d7cc295e2f641303890ae94066bd366ec074c179a",
+      "startLine": 73,
+      "endLine": 77,
+      "excerpt": "    checks.update({'mobileRequirements':len(req_ids),'mobileCasesNotExecuted':len(case_ids),'sourceEntriesTracked':len(src_ids),'newSourceEntriesV34':9,'unqualifiedBuildRows':len(build['builds']),'qualityCriteria':10,'appliedPatterns':6,'apiMatchesCurrentProvenance':api_hash==prov['openapiSHA256'],'apiSHA256':api_hash,'businessScenariosCurrent':310,'businessScenariosInherited':284,'caseProseAndRegistryChecked':True,'touchTokensConsistent':True,'globalDeletionOperationalGateDisclosed':True})\n    return {'version':'3.6','status':'DOCUMENTARY_CHECKS_ONLY','productTestsExecuted':False,'checkedAt':'2026-09-19','checks':checks,'errorCount':len(errors),'errors':errors,'passed':not errors,'limitations':['Contrôles de structure/relations, pas exécution des scénarios MOB ou T.','Présence d’une clause ne démontre pas que son implémentation est correcte.','Aucun verdict automatisé sur esthétique, AI slop, conformité juridique ou compatibilité physique.','URLs sources vérifiées syntaxiquement ici ; consultations web séparées dans le registre.']}\nif __name__=='__main__':\n    ap=argparse.ArgumentParser();ap.add_argument('--write-report',action='store_true');args=ap.parse_args()\n    report=check()",
+      "matchedText": "'businessScenariosCurrent':310"
+    },
+    {
+      "finding": "V37-05",
+      "file": "README.md",
+      "sourceVersion": "3.6",
+      "sha256": "e3c27a43b7e721975a37b97cdd33ac922ed8ccccf05c85c09997d49ed9f0545d",
+      "startLine": 185,
+      "endLine": 191,
+      "excerpt": "## Reproduire les contrôles V3.5\n\nDepuis le dossier extrait, exécuter `python annexes/verifier-documentation.py --write-report`, `python annexes/verifier-v3-6.py --write-report`, `python annexes/verifier-mobile-v3-5.py --write-report` puis `python annexes/verifier-swift-v3-6.py --write-report`. PyYAML, jsonschema, markdown-it-py et beautifulsoup4 sont les dépendances documentaires ; Playwright/Chromium sert seulement au lecteur. Les scripts anciens sont conservés comme historique et ne doivent pas qualifier le contrat actuel. [Provenance actuelle](annexes/provenance-v3-6.json).\n\n## Utiliser la bonne référence\n\nLes spécifications actives et le contrat **3.6.0** font autorité ensemble. Les journaux V2 à V3.5, les anciens schémas et les résultats de contrôles précédents sont des **historiques**, pas des règles concurrentes. Le lecteur signale ces journaux à l’ouverture. Les scripts numérotés d’une ancienne version ne sont pas à utiliser pour qualifier le contrat courant. Les vérifications actuelles et leurs commandes sont dans la [revue de cohérence](06-gouvernance/revue-coherence.md).",
+      "matchedText": "## Reproduire les contrôles V3.5"
+    }
+  ]
+}

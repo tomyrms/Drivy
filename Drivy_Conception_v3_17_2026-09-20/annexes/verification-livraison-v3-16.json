@@ -1,0 +1,80 @@
+{
+  "version": "3.16",
+  "scope": "DOCUMENTARY_AND_FOCUSED_VISUAL_RELEASE",
+  "previousSpecializedSuite": "NOT_RERUN_ON_V3_16",
+  "coverageNote": "The current suite rechecks generic contracts/links and the four-view atelier/reader. Version-specific V3.14 file/mobile/gallery suites remain historical and are not represented as passing V3.16.",
+  "executedAtUTC": "2026-09-20T14:52:21.955064+00:00",
+  "requestedBrowserChecks": true,
+  "running": false,
+  "passed": true,
+  "allChecksExecuted": true,
+  "reports": [
+    {
+      "script": "verifier-environnement.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 3.389,
+      "scope": "DOCUMENTARY_ENVIRONMENT_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    },
+    {
+      "script": "verifier-documentation.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 13.325,
+      "scope": "DOCUMENTARY_CHECKS_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    },
+    {
+      "script": "verifier-visuel-v3-16.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 1.793,
+      "scope": "STRUCTURAL_DOCUMENTARY_CHECKS_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    },
+    {
+      "script": "verifier-atelier-v3-16.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 35.232,
+      "scope": "HTML_DOCUMENTARY_PROTOTYPE_NOT_NATIVE_APP",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    },
+    {
+      "script": "verifier-lecteur-v3-16.py",
+      "status": "PASSED",
+      "exitCode": 0,
+      "passed": true,
+      "timedOut": false,
+      "elapsedSeconds": 12.707,
+      "scope": "READER_AND_COMPLEMENTARY_GALLERY_SMOKE_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "stderr": ""
+    }
+  ],
+  "productTestsExecuted": false,
+  "nativeBuildExecuted": false,
+  "limits": [
+    "A passing documentary suite does not establish product correctness, safety or legal compliance.",
+    "NOT_RUN is not passed. Timeout, missing browser and unavailable checks fail explicitly.",
+    "Reports and manifests must be regenerated after content changes."
+  ]
+}

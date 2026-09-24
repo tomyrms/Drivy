@@ -1,0 +1,13 @@
+{
+  "version": "3.14",
+  "sourceVersion": "3.13",
+  "sourceSHA256": "657cc325b02481820f2eb4f6f783d8b52f2ef878b64526e5079b4aaa79bd294b",
+  "listedFiles": 408,
+  "mismatches": [],
+  "extraFiles": [
+    "annexes/__pycache__/verifier-environnement.cpython-313.pyc",
+    "annexes/__pycache__/verifier-contrats-transversaux.cpython-313.pyc"
+  ],
+  "passed": true,
+  "extrasDisposition": "Only source Python caches excluded from working copy and ZIP"
+}

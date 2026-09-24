@@ -1,0 +1,73 @@
+{
+  "version": "3.9",
+  "consultedAt": "2026-09-19",
+  "entries": [
+    {
+      "id": "S118",
+      "title": "Apple, Get to know the new design system",
+      "url": "https://developer.apple.com/videos/play/wwdc2025/356/",
+      "scope": "Transcription WWDC25 : hiérarchie par composition, couche de commandes et continuité entre tailles. Pas preuve d’ergonomie de Drivy."
+    },
+    {
+      "id": "S119",
+      "title": "Apple HIG, Materials",
+      "url": "https://developer.apple.com/tutorials/data/design/human-interface-guidelines/materials.json",
+      "scope": "Représentation JSON officielle consultée après page HTML nécessitant JavaScript. Matériaux système et séparation du contenu ; le prototype ne reproduit pas leur moteur."
+    },
+    {
+      "id": "S120",
+      "title": "Apple HIG, Typography",
+      "url": "https://developer.apple.com/tutorials/data/design/human-interface-guidelines/typography.json",
+      "scope": "Représentation JSON officielle. Texte lisible, hiérarchie, styles système et adaptation des tailles. Les mesures Drivy restent à tester."
+    },
+    {
+      "id": "S121",
+      "title": "W3C, Contrast Minimum",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html",
+      "scope": "Texte courant 4,5:1 et grand texte 3:1 avec conditions et exceptions ; comparaison sans arrondir. Tests opaques seulement."
+    },
+    {
+      "id": "S122",
+      "title": "W3C, Non-text Contrast",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html",
+      "scope": "Contraste 3:1 des informations graphiques nécessaires, selon conditions. Pas obligation de contraster chaque séparateur décoratif."
+    },
+    {
+      "id": "S123",
+      "title": "W3C, Use of Color",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html",
+      "scope": "Une couleur ne suffit pas à transmettre un état. Drivy ajoute libellés, marqueurs et différences de forme."
+    },
+    {
+      "id": "S124",
+      "title": "W3C, Focus Not Obscured Minimum",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html",
+      "scope": "Focus non totalement masqué par les contenus créés par l’auteur. Drivy vise un contrôle et son contexte visibles."
+    },
+    {
+      "id": "S125",
+      "title": "W3C, Reflow",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/reflow.html",
+      "scope": "Reflow à largeur 320 CSS px dans les conditions du critère ; exceptions pour contenus bidimensionnels. Le planning a une alternative liste."
+    },
+    {
+      "id": "S126",
+      "title": "W3C Resize Text",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html",
+      "scope": "Contrôles textuels jusqu’à 200 %, avec conditions ; pas certification de Drivy."
+    },
+    {
+      "id": "S127",
+      "title": "W3C APG Dialog Modal",
+      "url": "https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/",
+      "scope": "Focus initial, tabulation et retour contextuel, pattern web seulement."
+    }
+  ],
+  "reconsultedThisPass": [
+    "S125"
+  ],
+  "newThisPass": [
+    "S126",
+    "S127"
+  ]
+}

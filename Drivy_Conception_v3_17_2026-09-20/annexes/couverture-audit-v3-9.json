@@ -1,0 +1,523 @@
+{
+  "version": "3.9",
+  "files": [
+    {
+      "file": "00-synthese.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "01-fonctionnalites-prevues.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "01-recherche/audit-existant.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "01-recherche/auto-ecoles-suisses.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "01-recherche/benchmark.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "01-recherche/inventaire-decisions.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "01-recherche/ui-ux-mobile-etat-art.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "01-recherche/vision-perimetre.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "01-recherche/web-tablette-onboarding.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "02-experience/architecture-information.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "02-experience/design-system.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "02-experience/directions-artistiques.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "02-experience/ecrans.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "02-experience/parcours.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "02-experience/patterns-mobile-parcours.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "02-experience/plateformes-tablette-web.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "02-experience/qualite-ui-ux-anti-slop.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "02-experience/wireframes.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "03-fonctionnel/bilans-documents.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "03-fonctionnel/calendrier-notifications.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "03-fonctionnel/catalogue-packs.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "03-fonctionnel/compte-suppression-globale.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "03-fonctionnel/cours-collectifs.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "03-fonctionnel/extensions.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "03-fonctionnel/gestion-web-archivage.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "03-fonctionnel/gps-replay.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "03-fonctionnel/hors-ligne-vie-privee.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "03-fonctionnel/identites-formations.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "03-fonctionnel/onboarding.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "03-fonctionnel/paiements-communications.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "03-fonctionnel/planning-lecons.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "03-fonctionnel/regles-etats.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "03-fonctionnel/roles-permissions.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "03-fonctionnel/statistiques.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "04-technique/api.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "04-technique/architecture-client-swift.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "04-technique/architecture-decisions.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "04-technique/fichiers-temps-communications.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "04-technique/integration-ios-ipados.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "04-technique/integration-mobile-transverse.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "04-technique/modele-donnees.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "04-technique/preparation-android.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "04-technique/securite-vie-privee.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "04-technique/synchronisation.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "04-technique/transactions-v2.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "04-technique/transactions-v3.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "05-realisation/deploiement-exploitation.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "05-realisation/migration.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "05-realisation/qualification-mobile-ui-ux.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "05-realisation/roadmap-backlog.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "05-realisation/tests-recette.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-1.md",
+      "historical": true,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-2.md",
+      "historical": true,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-5.md",
+      "historical": true,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-6.md",
+      "historical": true,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-7.md",
+      "historical": true,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-9.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "06-gouvernance/changements-v2.md",
+      "historical": true,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/changements-v3-3.md",
+      "historical": true,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/changements-v3-4.md",
+      "historical": true,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/changements-v3-8.md",
+      "historical": true,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/changements-v3.md",
+      "historical": true,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/glossaire-decisions-questions.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/revue-coherence.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "06-gouvernance/sources.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "06-gouvernance/tracabilite.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": false,
+      "scope": "Structural and inherited controls; metadata change is not a complete semantic reread."
+    },
+    {
+      "file": "DESIGN/01-direction-artistique.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "DESIGN/02-composants.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "DESIGN/03-cartographie.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "DESIGN/04-ecrans-reference.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "DESIGN/05-contenu-etats.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "DESIGN/06-livraison-validation.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "DESIGN/README.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    },
+    {
+      "file": "README.md",
+      "historical": false,
+      "structuralCheck": true,
+      "semanticFocusThisPass": true,
+      "scope": "Targeted cross-reading of cited domain junctions; not every external claim reverified."
+    }
+  ]
+}

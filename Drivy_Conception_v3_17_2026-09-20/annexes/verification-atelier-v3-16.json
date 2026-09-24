@@ -1,0 +1,1887 @@
+{
+  "version": "3.16",
+  "executedAtUTC": "2026-09-20T14:52:08.736749+00:00",
+  "passed": true,
+  "errorCount": 0,
+  "status": "PASSED",
+  "scope": "HTML_DOCUMENTARY_PROTOTYPE_NOT_NATIVE_APP",
+  "environment": {
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "python": "3.13.5",
+    "browser": "144.0.7559.96",
+    "navigation": "page.set_content; separate file:// smoke blocked by browser policy, not qualified"
+  },
+  "checks": [
+    {
+      "check": "Three clearly identified fixture observations",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Opening does not add an event",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "No default category or status",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Theme selection does not save",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Theme plus explicit status adds one event",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Frozen moment and position preserved",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Private no publication fields",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Undo removes only last addition",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Cancellation does not save",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Escape cancels and focus restored",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Marker has no default qualification",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "No GPS is not a disabled map",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Observation without GPS has no anchor",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Offline still saves private observation",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Offline banner does not claim synced",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Save error does not produce success",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Save error visibly reported",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Pause changes state without ending lesson",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Pause cannot invent a fresh position",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Stop confirmation is explicit",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Stop GPS keeps lesson and observations",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Observation allowed after GPS stops",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Lesson end does not publish or erase observations",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Replay x1 runs on elapsed time",
+      "passed": true,
+      "details": 0.6499000000007982
+    },
+    {
+      "check": "Manual map pan does not pause playback",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "No forced recenter during manual exploration",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Recenter does not reset replay time",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Next observation aligns the time",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Edit text retained safely",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Qualification updates existing observation, not duplicate",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Replay focus restored after editing",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Dialog focus trapped",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Background inert in dialog",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Status actions have no navigation chevron",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "One concise instruction preserves commit semantics",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Status options explicitly name their private save action",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Category to status keeps dialog, map and header nodes",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Back keeps timestamp and anchor",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Back returns focus to previously selected category",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Back keeps the same dialog node",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Rapid transitions can be interrupted with no write",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Reduced-motion keeps action without animated morph",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Reduced-motion still saves explicit choice",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "OS reduced-motion also disables panel motion",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Selected point uses its pedagogical theme",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Selected point still carries a non-color status symbol",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Theme and written status retained in replay panel",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Unselected points remain concise",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Selecting another point preserves free camera",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Point and replay time update together",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Undo qualification restores event instead of deleting it",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Dense map is a separate fictional layer",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Dense review is outside the simulated application",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Dense fixture adds four separate events",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Every dense event has a list entry",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Next traverses same-time observations individually",
+      "passed": true,
+      "details": [
+        "dense-01",
+        "dense-02",
+        "dense-03",
+        "dense-04",
+        "demo-03"
+      ]
+    },
+    {
+      "check": "Previous reaches same-time distinct observation",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "List independently opens a collocated observation",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Removing review fiction keeps original data",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Simple marker failure remains visibly explicit",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Marker failure in panel keeps pending context",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Replay does not show a distant stale observation",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "128 layouts: visible primary/close, 44px targets, no horizontal text clipping",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "Reload resets volatile demo state",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "No script error in executed suite",
+      "passed": true,
+      "details": []
+    }
+  ],
+  "layouts": [
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "large",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "large",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "large",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "large",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "large",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "large",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "large",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "phone",
+      "scale": "large",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "normal",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "normal",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "normal",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "normal",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "large",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "large",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "large",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "large",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "large",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "large",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "large",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "small",
+      "scale": "large",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "calm",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "large",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "large",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "large",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "large",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "large",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "large",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "large",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "phone",
+      "scale": "large",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "normal",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "normal",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "normal",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "normal",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "large",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "large",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "large",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "large",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "large",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "large",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "large",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "small",
+      "scale": "large",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "mapDetail": "dense",
+      "size": "tablet",
+      "scale": "large",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    }
+  ],
+  "nativeTests": "NOT_EXECUTED",
+  "roadSafety": "NOT_QUALIFIED"
+}

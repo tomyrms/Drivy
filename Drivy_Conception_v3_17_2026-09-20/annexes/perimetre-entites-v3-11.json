@@ -1,0 +1,1590 @@
+{
+  "version": "3.11",
+  "meaning": "Logical labels, not SQL table count",
+  "inputTableRows": 113,
+  "logicalEntries": 101,
+  "physicalModelValidated": false,
+  "entries": [
+    {
+      "name": "Person",
+      "fields": [
+        "id, display_name, preferred_locale",
+        "accessState ACTIVE/CLOSING/DELETED et version d’accès ; porte globale verrouillée avant les écoles, indépendamment du statut des appartenances"
+      ],
+      "invariants": [
+        "Identité humaine globale ; données scolaires hors de cette table.",
+        "[R104](../03-fonctionnel/regles-etats.md#r104) et [ordre](transactions-v2.md#autorisation-et-commit)"
+      ],
+      "lifecycle": [
+        "Créée à première identité valide ; effacement global seulement après analyse des appartenances restantes."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Identité humaine globale ; données scolaires hors de cette table. [R104](../03-fonctionnel/regles-etats.md#r104) et [ordre](transactions-v2.md#autorisation-et-commit)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "IdentityLink",
+      "fields": [
+        "issuer, subject, person_id"
+      ],
+      "invariants": [
+        "Unique `(issuer, subject)` ; email vérifié est un attribut, pas une clé métier universelle de dossier."
+      ],
+      "lifecycle": [
+        "Géré par authentification ; changement d’email ne change pas les formations."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Unique `(issuer, subject)` ; email vérifié est un attribut, pas une clé métier universelle de dossier.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "School",
+      "fields": [
+        "id, name, state, time_zone, current_settings_version"
+      ],
+      "invariants": [
+        "DRAFT/ACTIVE/ARCHIVED ; fuseau IANA."
+      ],
+      "lifecycle": [
+        "Création contrôlée ; archivage instruit."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "DRAFT/ACTIVE/ARCHIVED ; fuseau IANA.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "SchoolMembership",
+      "fields": [
+        "id, school_id, person_id, status, access_epoch"
+      ],
+      "invariants": [
+        "Unique `(school_id, person_id)` ; ACTIVE/REVOKED."
+      ],
+      "lifecycle": [
+        "Rôles multiples via table dédiée ; révocation ne supprime pas les auteurs historiques."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Unique `(school_id, person_id)` ; ACTIVE/REVOKED.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "MembershipRole",
+      "fields": [
+        "membership_id, school_id, role"
+      ],
+      "invariants": [
+        "Unique rôle par appartenance ; ADMIN/INSTRUCTOR/LEARNER."
+      ],
+      "lifecycle": [
+        "Changements audités et protégés contre retrait du dernier ADMIN."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Unique rôle par appartenance ; ADMIN/INSTRUCTOR/LEARNER.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "MembershipGrant",
+      "fields": [
+        "membership_id, school_id, grant"
+      ],
+      "invariants": [
+        "`permit_review`, `cash_record`, CONFIGURE_CATALOG, SELL_SERVICES, MANAGE_COURSES, TAKE_ATTENDANCE, VALIDATE_REQUIREMENT, REVIEW_REGULATORY_PROFILE, MANAGE_LEARNER_ARCHIVES, VIEW_SCHOOL_METRICS, VIEW_FINANCIAL_METRICS, EXPORT_MANAGEMENT ; portées détaillées dans les permissions."
+      ],
+      "lifecycle": [
+        "Révocable, déclenche mise à jour d’epoch."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "`permit_review`, `cash_record`, CONFIGURE_CATALOG, SELL_SERVICES, MANAGE_COURSES, TAKE_ATTENDANCE, VALIDATE_REQUIREMENT, REVIEW_REGULATORY_PROFILE, MANAGE_LEARNER_ARCHIVES, VIEW_SCHOOL_METRICS, VIEW_FINANCIAL_METRICS, EXPORT_MANAGEMENT ; portées détaillées dans les permissions.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "LearnerProfile",
+      "fields": [
+        "id, school_id, person_id, membership_id, contact_fields, archived_at"
+      ],
+      "invariants": [
+        "Unique profil scolaire par personne ; rattachement LEARNER actif pour parcours courant."
+      ],
+      "lifecycle": [
+        "Archivage après traitement du futur ; identité conservée séparément."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Unique profil scolaire par personne ; rattachement LEARNER actif pour parcours courant.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "Invitation",
+      "fields": [
+        "id, school_id, email, token_hash, roles, expires_at, state, accepted_by"
+      ],
+      "invariants": [
+        "Jeton haché unique ; états PENDING/ACCEPTED/REVOKED/EXPIRED."
+      ],
+      "lifecycle": [
+        "Consommation atomique ; pas de réutilisation d’un ancien code."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Jeton haché unique ; états PENDING/ACCEPTED/REVOKED/EXPIRED.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "SchoolPolicyVersion",
+      "fields": [
+        "id, school_id, category_code, procedure_text, cancellation_policy_text, source_urls, approved_by, approved_at"
+      ],
+      "invariants": [
+        "Procédure relue et approuvée avant activation de l’offre ; pas de moteur automatisé de droit cantonal."
+      ],
+      "lifecycle": [
+        "Versions immuables, `OfferingVersion.policy_version` pointe ici."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Procédure relue et approuvée avant activation de l’offre ; pas de moteur automatisé de droit cantonal.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "SchoolSettingsVersion",
+      "fields": [
+        "id, school_id, revision, effective_at, settings"
+      ],
+      "invariants": [
+        "Version immuable des paramètres applicables."
+      ],
+      "lifecycle": [
+        "Nouvelle version pour changement ; ancienne conservée si référencée."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Version immuable des paramètres applicables.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "OfferingVersion",
+      "fields": [
+        "id, school_id, offering_key, category_code, curriculum_version_id, enabled, policy_version"
+      ],
+      "invariants": [
+        "Clé logique stable `offering_key`, numéro de version distinct ; référentiel et politique documentaire valides avant activation."
+      ],
+      "lifecycle": [
+        "Désactivation pour le futur seulement."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Clé logique stable `offering_key`, numéro de version distinct ; référentiel et politique documentaire valides avant activation.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "Training",
+      "fields": [
+        "id, school_id, learner_profile_id, offering_key, offering_version_id, status, started_on, closed_on"
+      ],
+      "invariants": [
+        "Index unique partiel `(school_id, learner_profile_id, offering_key)` pour ACTIVE/PAUSED ; une nouvelle version de l’offre ne contourne pas cette contrainte. Plusieurs catégories admises."
+      ],
+      "lifecycle": [
+        "ACTIVE ↔ PAUSED ; clôture COMPLETED/CANCELLED ; nouveau cycle par nouvel id."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Index unique partiel `(school_id, learner_profile_id, offering_key)` pour ACTIVE/PAUSED ; une nouvelle version de l’offre ne contourne pas cette contrainte. Plusieurs catégories admises.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "InstructorAssignment",
+      "fields": [
+        "id, school_id, training_id, instructor_membership_id, valid_from, valid_to"
+      ],
+      "invariants": [
+        "Formation et membre de même école ; rôle INSTRUCTOR actif."
+      ],
+      "lifecycle": [
+        "Retrait avec analyse des leçons et brouillons."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Formation et membre de même école ; rôle INSTRUCTOR actif.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "PermitCheck",
+      "fields": [
+        "id, school_id, training_id, document_id nullable, physical_seen, category, valid_until, decision, reviewer, reviewed_at"
+      ],
+      "invariants": [
+        "Pièce READY ou attestation physique explicite ; décision humaine."
+      ],
+      "lifecycle": [
+        "Append-only ; nouvelle pièce entraîne nouveau contrôle en attente."
+      ],
+      "initialSection": "Identité, appartenance et formation",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Pièce READY ou attestation physique explicite ; décision humaine.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "AvailabilityRule",
+      "fields": [
+        "id, school_id, instructor_membership_id, weekdays, local_start, local_end, valid_from, valid_to, version"
+      ],
+      "invariants": [
+        "Intervalles locaux valides, dates d’application cohérentes, calendrier de l’école."
+      ],
+      "lifecycle": [
+        "Modification prévisualisée, sans invalidation silencieuse de leçons."
+      ],
+      "initialSection": "Planning et leçon",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Intervalles locaux valides, dates d’application cohérentes, calendrier de l’école.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "Closure",
+      "fields": [
+        "id, school_id, instructor_membership_id, start_at, end_at, private_reason, version"
+      ],
+      "invariants": [
+        "Début < fin ; motif privé non exposé à l’élève."
+      ],
+      "lifecycle": [
+        "Ajout/refus sous les mêmes verrous que la réservation."
+      ],
+      "initialSection": "Planning et leçon",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Début < fin ; motif privé non exposé à l’élève.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "Lesson",
+      "fields": [
+        "id, school_id, training_id, instructor_membership_id, planned_start, planned_end, time_zone, meeting_point, price_snapshot_cents, buffer_snapshot_minutes, status, version"
+      ],
+      "invariants": [
+        "Formation et moniteur compatibles ; personne élève dérivée de formation."
+      ],
+      "lifecycle": [
+        "Transitions R39 ; aucune suppression courante."
+      ],
+      "initialSection": "Planning et leçon",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Formation et moniteur compatibles ; personne élève dérivée de formation.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "Reservation",
+      "fields": [
+        "id, school_id, lesson_id?, occurrence_id?, enrollment_id?, resource_kind, resource_id, occupied_range, active"
+      ],
+      "invariants": [
+        "Origine explicite ; moniteur/salle pour occurrence, élève pour inscription ; contraintes d’exclusion communes."
+      ],
+      "lifecycle": [
+        "active signifie occupation effective, y compris historique réalisé ; une annulation autorisée libère les créneaux concernés, pas le simple passage du temps."
+      ],
+      "initialSection": "Planning et leçon",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Origine explicite ; moniteur/salle pour occurrence, élève pour inscription ; contraintes d’exclusion communes.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "LessonOutcome",
+      "fields": [
+        "lesson_id, school_id, actual_start, actual_end, anomaly_flags, reason, revision"
+      ],
+      "invariants": [
+        "Historique des constats/corrections ; heures réelles différentes des heures prévues."
+      ],
+      "lifecycle": [
+        "Nouvelle révision lors de correction, pas effacement du fait antérieur."
+      ],
+      "initialSection": "Planning et leçon",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Historique des constats/corrections ; heures réelles différentes des heures prévues.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "LessonPreparation",
+      "fields": [
+        "lesson_id, school_id, goals, administrative_check_note, version"
+      ],
+      "invariants": [
+        "0 à 3 objectifs ; IDs de compétences versionnées facultatifs."
+      ],
+      "lifecycle": [
+        "Modifiable avant résultat clos ; jamais convertie automatiquement en observation."
+      ],
+      "initialSection": "Planning et leçon",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "0 à 3 objectifs ; IDs de compétences versionnées facultatifs.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "LearnerWish",
+      "fields": [
+        "id, school_id, training_id, lesson_id nullable, text, author, version"
+      ],
+      "invariants": [
+        "Auteur élève concerné ; formation explicite."
+      ],
+      "lifecycle": [
+        "Peut rester pertinent après annulation, sans être imposé au prochain programme."
+      ],
+      "initialSection": "Planning et leçon",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Auteur élève concerné ; formation explicite.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CurriculumVersion",
+      "fields": [
+        "id, school_id, category_code, revision, approved_by, approved_at"
+      ],
+      "invariants": [
+        "Version immuable ; aucun catalogue présenté comme standard légal sans validation."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Version immuable ; aucun catalogue présenté comme standard légal sans validation.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CompetencyDefinition",
+      "fields": [
+        "id, school_id, curriculum_version_id, stable_key, label, description, sort_order"
+      ],
+      "invariants": [
+        "Identifiant stable pour une version ; correspondance inter-versions explicite, jamais par simple texte égal."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Identifiant stable pour une version ; correspondance inter-versions explicite, jamais par simple texte égal.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "OutcomeApproval",
+      "fields": [
+        "id, school_id, lesson_id, lesson_version, account_version, publication_version, proposal_hash, approver, expires_at, consumed_at"
+      ],
+      "invariants": [
+        "Approbateur affecté, validité courte, contenu et versions immuables ; consommation atomique avec correction."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Approbateur affecté, validité courte, contenu et versions immuables ; consommation atomique avec correction.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "ReportDraft",
+      "fields": [
+        "id, school_id, lesson_id, author_membership_id, base_publication_version, worked_on, observation_text, next_step, observations, attachments, version"
+      ],
+      "invariants": [
+        "Un brouillon courant par auteur/leçon ; privé ; transitions contrôlées."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Un brouillon courant par auteur/leçon ; privé ; transitions contrôlées.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "ReportRevision",
+      "fields": [
+        "id, school_id, lesson_id, sequence, author, published_at, correction_reason, payload",
+        "textObservations, snapshots autonomes de texte/version sans références au brouillon ou à la géométrie"
+      ],
+      "invariants": [
+        "Immuable après publication ; numéro unique par leçon.",
+        "[R46](../03-fonctionnel/regles-etats.md#r46)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Immuable après publication ; numéro unique par leçon. [R46](../03-fonctionnel/regles-etats.md#r46)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "ReportPublication",
+      "fields": [
+        "lesson_id, school_id, current_revision_id nullable, version"
+      ],
+      "invariants": [
+        "Pointeur atomique, retrait motivé possible ; ne détruit pas révisions."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Pointeur atomique, retrait motivé possible ; ne détruit pas révisions.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CompetencyObservation",
+      "fields": [
+        "id, school_id, training_id, lesson_id, report_revision_id, competency_definition_id, level, context, observed_at"
+      ],
+      "invariants": [
+        "Révision et formation cohérentes ; seule la révision publiée courante participe à la projection."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Révision et formation cohérentes ; seule la révision publiée courante participe à la projection.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "TrainingProgressProjection",
+      "fields": [
+        "school_id, training_id, competency_definition_id, source_revision_id, source_lesson_id, observed_at, level, context"
+      ],
+      "invariants": [
+        "Dérivée, supprimable/recalculable ; pas source primaire de vérité."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G2",
+      "kind": "projection ou contrat",
+      "justification": "Dérivée, supprimable/recalculable ; pas source primaire de vérité.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "Document",
+      "fields": [
+        "id, school_id, owner_profile_id, training_id nullable, lesson_id nullable, purpose, audience, state, version, sealed_generation_id, canonical_artifact_id, deleted_at"
+      ],
+      "invariants": [
+        "Portée cohérente ; READY ne vise que la génération contrôlée ; tombstone empêche une promotion tardive. Mime/taille projetés depuis le contenu canonique."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Portée cohérente ; READY ne vise que la génération contrôlée ; tombstone empêche une promotion tardive. Mime/taille projetés depuis le contenu canonique.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "SchoolAsset",
+      "fields": [
+        "id, school_id, purpose LOGO, state, version, sealed_generation_id, canonical_artifact_id, deleted_at"
+      ],
+      "invariants": [
+        "Pas de propriétaire élève. Logo READY courant seulement ; image JPEG/PNG admissible, nom scolaire en repli."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Pas de propriétaire élève. Logo READY courant seulement ; image JPEG/PNG admissible, nom scolaire en repli.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "UploadIntent",
+      "fields": [
+        "id, school_id, document_id nullable, asset_id nullable, staging_key, ticket_expires_at, cleanup_after, expected_size, expected_mime, expected_sha256, state, sealed_generation_id"
+      ],
+      "invariants": [
+        "Exactement un propriétaire Document ou SchoolAsset de même école ; clé jamais réaffectée. État interne OPEN/SEALED/ABANDONED ; aucune réouverture implicite. Expiration d’URL distincte du nettoyage."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Exactement un propriétaire Document ou SchoolAsset de même école ; clé jamais réaffectée. État interne OPEN/SEALED/ABANDONED ; aucune réouverture implicite. Expiration d’URL distincte du nettoyage.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "FileGeneration",
+      "fields": [
+        "id, school_id, owner_kind, owner_id, upload_intent_id, source_storage_version, source_key, source_sha256, source_bytes, sealed_at"
+      ],
+      "invariants": [
+        "Identifie les octets originaux figés, non écrasables via URL client ; une génération scellée par intention. La stratégie stockage/version/copie est qualifiée avant lancement."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Identifie les octets originaux figés, non écrasables via URL client ; une génération scellée par intention. La stratégie stockage/version/copie est qualifiée avant lancement.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "FileArtifact",
+      "fields": [
+        "id, generation_id, role, object_key, storage_version, sha256, bytes, detected_mime, transform_version, scan_evidence, deleted_at"
+      ],
+      "invariants": [
+        "Original/aperçu/canonique distingués. Chaque sortie est immuable. La promotion CAS de l’objet propriétaire et de sa génération interdit les résultats de scan obsolètes."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Original/aperçu/canonique distingués. Chaque sortie est immuable. La promotion CAS de l’objet propriétaire et de sa génération interdit les résultats de scan obsolètes.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "ReportAttachment",
+      "fields": [
+        "school_id, report_revision_id, document_id"
+      ],
+      "invariants": [
+        "READY et même élève/formation ; relation explicite au moment de publication."
+      ],
+      "lifecycle": [],
+      "initialSection": "Pédagogie et documents",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "READY et même élève/formation ; relation explicite au moment de publication.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "Account (vue contextuelle LessonAccount)",
+      "fields": [
+        "id, school_id, lesson_id?, purchase_id?, enrollment_id?, version"
+      ],
+      "invariants": [
+        "Un propriétaire exactement, FK scolaires et unicité par propriétaire. Les routes de leçon sont une vue du même compte ; soldes dérivés du journal commun."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Un propriétaire exactement, FK scolaires et unicité par propriétaire. Les routes de leçon sont une vue du même compte ; soldes dérivés du journal commun.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "ChargeEntry",
+      "fields": [
+        "school_id, account_id, type INITIAL/ADJUSTMENT/REVERSAL, amount_signed_cents, reason, operation_id, author"
+      ],
+      "invariants": [
+        "Total de charge jamais négatif ; écriture initiale unique par événement de réalisation/vente/inscription, corrections explicites."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Total de charge jamais négatif ; écriture initiale unique par événement de réalisation/vente/inscription, corrections explicites.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "PaymentEntry",
+      "fields": [
+        "school_id, account_id, type RECEIPT/REFUND/REVERSAL, amount_cents, method, occurred_on, recorded_at, reversal_of nullable, operation_id"
+      ],
+      "invariants": [
+        "Montant positif, remboursements bornés et référence non inversée deux fois."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Montant positif, remboursements bornés et référence non inversée deux fois.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "Operation",
+      "fields": [
+        "school_id nullable pour commandes globales, actor_person_id, operation_id, command_type, payload_hash, resource_id, result_summary, committed_at",
+        "Réservation d’intention, hash et preuve durable"
+      ],
+      "invariants": [
+        "Unique `(actor_person_id, operation_id)` ; contexte scolaire ou global et type de commande vérifiés avant lecture du résultat. Preuve de non-double-effet, sans contenu sensible inutile.",
+        "Le marqueur en cours ne prouve pas le commit ; récupération de crash contrôlée avant reprise."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Unique `(actor_person_id, operation_id)` ; contexte scolaire ou global et type de commande vérifiés avant lecture du résultat. Preuve de non-double-effet, sans contenu sensible inutile. Le marqueur en cours ne prouve pas le commit ; récupération de crash contrôlée avant reprise.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "AuditEvent",
+      "fields": [
+        "school_id, actor, resource_type/id, action, reason, operation_id, server_time"
+      ],
+      "invariants": [
+        "Append-only pour rôles applicatifs ; accès dédié ; limites de rétention."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Append-only pour rôles applicatifs ; accès dédié ; limites de rétention.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "OutboxEvent",
+      "fields": [
+        "school_id, id, event_type, resource_id, revision, state, lease_until, attempts"
+      ],
+      "invariants": [
+        "Créé dans transaction métier ; charge utile minimale ; réessais idempotents."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Créé dans transaction métier ; charge utile minimale ; réessais idempotents.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "InAppNotification",
+      "fields": [
+        "school_id, recipient_person_id, event_id, resource_id, viewed_at nullable"
+      ],
+      "invariants": [
+        "Unicité événement/destinataire ; lecture recalculée selon droits."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Unicité événement/destinataire ; lecture recalculée selon droits.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "DeliveryAttempt",
+      "fields": [
+        "event_id, recipient_ref, channel, provider_id, state, attempted_at, reason_code"
+      ],
+      "invariants": [
+        "Livraison séparée de l’état métier ; ne pas journaliser le texte du bilan."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Livraison séparée de l’état métier ; ne pas journaliser le texte du bilan.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "SchoolSyncClock",
+      "fields": [
+        "school_id, committed_sequence"
+      ],
+      "invariants": [
+        "Compteur verrouillé transactionnel, garantit ordre de publication des mutations scolaires."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Compteur verrouillé transactionnel, garantit ordre de publication des mutations scolaires.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "ProjectionEvent",
+      "fields": [
+        "school_id, sequence, ordinal, resource_type/id, operation UPSERT/DELETE",
+        "Types de domaines enrichis alignés sur SyncChange"
+      ],
+      "invariants": [
+        "Flux minimal ; données filtrées par droits au moment de lecture.",
+        "Invalidation scoped/epoch ; ni points bruts ni permission transportée."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G1",
+      "kind": "projection ou contrat",
+      "justification": "Flux minimal ; données filtrées par droits au moment de lecture. Invalidation scoped/epoch ; ni points bruts ni permission transportée.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "BootstrapSnapshot",
+      "fields": [
+        "id, school_id, person_id, access_epoch, watermark, expires_at, private_pages_ref"
+      ],
+      "invariants": [
+        "Vue cohérente paginée, temporaire et privée."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G1",
+      "kind": "projection ou contrat",
+      "justification": "Vue cohérente paginée, temporaire et privée.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "PrivacyRequest",
+      "fields": [
+        "school_id, requester, type, state, verified_at, decision, hold_reason, export_ref"
+      ],
+      "invariants": [
+        "Instruction et portée explicites, pas effacement aveugle."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Instruction et portée explicites, pas effacement aveugle.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "RetentionPolicyVersion",
+      "fields": [
+        "school_id, category, duration, justification, approved_by, effective_at"
+      ],
+      "invariants": [
+        "Approuvée avant pilote ; l’app n’invente pas le droit applicable."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Approuvée avant pilote ; l’app n’invente pas le droit applicable.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "DeletionTombstone",
+      "fields": [
+        "school_id, resource_type/id, approved_at, purge_state, retention_hold"
+      ],
+      "invariants": [
+        "Réappliqué après restauration et propagation aux projections."
+      ],
+      "lifecycle": [],
+      "initialSection": "Règlements et fonctions transversales",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Réappliqué après restauration et propagation aux projections.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "RecordingChoice",
+      "fields": [
+        "school_id, learner_id, lesson_id?, status, notice_version_id, recorded_by, recorded_at, source"
+      ],
+      "invariants": [
+        "ALLOWED / REFUSED / UNKNOWN ; un accord ne dépasse pas la finalité/version ; source SELF ou RECORDED_VERBAL."
+      ],
+      "lifecycle": [],
+      "initialSection": "Entités GPS et publication",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "ALLOWED / REFUSED / UNKNOWN ; un accord ne dépasse pas la finalité/version ; source SELF ou RECORDED_VERBAL.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CaptureSession",
+      "fields": [
+        "id, school_id, lesson_id, learner_id, instructor_id, device_id, choice_id, authorized_at, expires_at, stopped_at?, cutoff_at?, capture_state, sync_state, version"
+      ],
+      "invariants": [
+        "Une active par leçon et moniteur ; autorisation explicite ; pas de création en mode sans GPS."
+      ],
+      "lifecycle": [],
+      "initialSection": "Entités GPS et publication",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Une active par leçon et moniteur ; autorisation explicite ; pas de création en mode sans GPS.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "TrackSegment",
+      "fields": [
+        "school_id, capture_id, id, segment_index, start_reason, end_reason?, started_at, ended_at?"
+      ],
+      "invariants": [
+        "Index unique par capture ; rupture explicite, pas interpolation entre segments."
+      ],
+      "lifecycle": [],
+      "initialSection": "Entités GPS et publication",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Index unique par capture ; rupture explicite, pas interpolation entre segments.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "TrackChunk",
+      "fields": [
+        "school_id, capture_id, segment_id, chunk_index, sequence_start, sequence_end, hash, storage_key, acknowledged_at"
+      ],
+      "invariants": [
+        "Unicité capture/segment/chunk ; hash stable, stockage privé ; pas de coordonnées dans outbox générale."
+      ],
+      "lifecycle": [],
+      "initialSection": "Entités GPS et publication",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Unicité capture/segment/chunk ; hash stable, stockage privé ; pas de coordonnées dans outbox générale.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CaptureManifest",
+      "fields": [
+        "capture_id, expected_chunks, expected_points, last_sequence_by_segment, received_at, version"
+      ],
+      "invariants": [
+        "Réconciliation explicite ; incomplet reste PARTIAL."
+      ],
+      "lifecycle": [],
+      "initialSection": "Entités GPS et publication",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Réconciliation explicite ; incomplet reste PARTIAL.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "GeoObservation",
+      "fields": [
+        "id, school_id, lesson_id, training_id, author_membership_id, draft_id?, origin, observed_at?, event_kind, event_status?, capture_id?, segment_id?, point_sequence?, text, competency_id?, version"
+      ],
+      "invariants": [
+        "Pendant la leçon : origin LIVE, draft_id nul ; après R15, rattachement au brouillon du même auteur sous verrou. Ancre facultative complète ; repère non qualifié non publiable ; thème/statut distincts des notes finales."
+      ],
+      "lifecycle": [],
+      "initialSection": "Entités GPS et publication",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Pendant la leçon : origin LIVE, draft_id nul ; après R15, rattachement au brouillon du même auteur sous verrou. Ancre facultative complète ; repère non qualifié non publiable ; thème/statut distincts des notes finales.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "GeometrySnapshot",
+      "fields": [
+        "id, school_id, capture_id, capture_version, manifest, created_at"
+      ],
+      "invariants": [
+        "Ensemble immuable des chunks/segments publiés et lacunes ; soumis aux retraits et à la purge."
+      ],
+      "lifecycle": [],
+      "initialSection": "Entités GPS et publication",
+      "firstGate": "G2",
+      "kind": "projection ou contrat",
+      "justification": "Ensemble immuable des chunks/segments publiés et lacunes ; soumis aux retraits et à la purge.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CapturePublication",
+      "fields": [
+        "id, school_id, capture_id, report_revision_id UNIQUE, geometry_snapshot_id, observations_snapshot, published_at, withdrawn_at?",
+        "Stockage du snapshot distingué de sa projection `availability`"
+      ],
+      "invariants": [
+        "Au plus une capture par révision au pilote ; versions/textes/ancrages figés, droits courants et purge des dérivés.",
+        "Les vues WITHDRAWN/DELETED ne contiennent plus de coordonnées ou ancrages ; purge des objets associés suivant R48."
+      ],
+      "lifecycle": [],
+      "initialSection": "Entités GPS et publication",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Au plus une capture par révision au pilote ; versions/textes/ancrages figés, droits courants et purge des dérivés. Les vues WITHDRAWN/DELETED ne contiennent plus de coordonnées ou ancrages ; purge des objets associés suivant R48.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "SchoolSite / Room",
+      "fields": [
+        "id, school_id, name, address, time_zone / site_id, approved_capacity, enabled"
+      ],
+      "invariants": [
+        "Salle et site dans la même école ; ne pas confondre capacité matérielle avec plafond de profil."
+      ],
+      "lifecycle": [],
+      "initialSection": "Catalogue, achats et ledger",
+      "firstGate": "G1",
+      "kind": "groupe de concepts",
+      "justification": "Salle et site dans la même école ; ne pas confondre capacité matérielle avec plafond de profil.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "ServiceProductVersion",
+      "fields": [
+        "id, school_id, product_key, version, type, category_code?, site_id?, duration_minutes?, unit_label, unit_price_cents, valid_from, valid_until?, terms_version_id"
+      ],
+      "invariants": [
+        "Version immuable après vente ; unité explicite ; référence à Offering distincte."
+      ],
+      "lifecycle": [],
+      "initialSection": "Catalogue, achats et ledger",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Version immuable après vente ; unité explicite ; référence à Offering distincte.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "PackOfferVersion / PackComponent",
+      "fields": [
+        "id, school_id, offer_key, version, total_cents, terms_version_id / product_version_id, quantity, option_key?"
+      ],
+      "invariants": [
+        "Pas de packs récursifs ; composants référencés et total explicite."
+      ],
+      "lifecycle": [],
+      "initialSection": "Catalogue, achats et ledger",
+      "firstGate": "G2",
+      "kind": "groupe de concepts",
+      "justification": "Pas de packs récursifs ; composants référencés et total explicite.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "Purchase",
+      "fields": [
+        "id, school_id, learner_id, offer_version_id?, accepted_components_snapshot, total_cents, policy_snapshot, rights_activation_mode, created_at"
+      ],
+      "invariants": [
+        "Prix/conditions immuables ; compte unique ; corrections tracées."
+      ],
+      "lifecycle": [],
+      "initialSection": "Catalogue, achats et ledger",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Prix/conditions immuables ; compte unique ; corrections tracées.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "EntitlementLot",
+      "fields": [
+        "id, school_id, learner_id, purchase_id, product_version_id, granted_quantity, expires_at?, version",
+        "`usableQuantity` projetée, suspension ou désactivation sans effacer le registre"
+      ],
+      "invariants": [
+        "Bénéficiaire et service compatibles ; pas d’équivalence implicite de durées.",
+        "Recalcul avec finance ; au service, `0 <= usable <= available`. Ne pas matérialiser une valeur périmée comme autorisation."
+      ],
+      "lifecycle": [],
+      "initialSection": "Catalogue, achats et ledger",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Bénéficiaire et service compatibles ; pas d’équivalence implicite de durées. Recalcul avec finance ; au service, `0 <= usable <= available`. Ne pas matérialiser une valeur périmée comme autorisation.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "EntitlementMovement",
+      "fields": [
+        "id, school_id, lot_id, type, quantity, reservation_ref?, source_movement_id?, operation_id, occurred_at",
+        "preuve de remise facultative uniquement sur CONSUME direct EXAM_SUPPORT/EXTERNAL_SERVICE ; pas une nouvelle table de paiement"
+      ],
+      "invariants": [
+        "Append-only ; mouvements liés ; RESTORE ne duplique pas la restauration.",
+        "[R107](../03-fonctionnel/regles-etats.md#r107)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Catalogue, achats et ledger",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Append-only ; mouvements liés ; RESTORE ne duplique pas la restauration. [R107](../03-fonctionnel/regles-etats.md#r107)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "EntitlementHold",
+      "fields": [
+        "id, school_id, lot_id, lesson_id?, enrollment_id?, quantity, status"
+      ],
+      "invariants": [
+        "Un propriétaire ; consommation/libération atomique ; les mouvements font foi."
+      ],
+      "lifecycle": [],
+      "initialSection": "Catalogue, achats et ledger",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Un propriétaire ; consommation/libération atomique ; les mouvements font foi.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "RegulatoryProfileVersion (API : RegulatoryProfile)",
+      "fields": [
+        "id, school_id, jurisdiction, course_type, effective_from/to, structure_rules, eligibility_rules, evidence_rules, approved_by/at, source_urls, status"
+      ],
+      "invariants": [
+        "Référence approuvée et datée par école ; profils 2027 non qualifiés restent DRAFT_REQUIRES_REVIEW. Sources publiques communes possibles ; adoption d’école explicite."
+      ],
+      "lifecycle": [],
+      "initialSection": "Séries, présences et exigences",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Référence approuvée et datée par école ; profils 2027 non qualifiés restent DRAFT_REQUIRES_REVIEW. Sources publiques communes possibles ; adoption d’école explicite.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CourseTemplate",
+      "fields": [
+        "id, school_id, product_version_id, requirement_type, title, profile_version_id"
+      ],
+      "invariants": [
+        "Modèle configurable, pas un horaire ni une présence."
+      ],
+      "lifecycle": [],
+      "initialSection": "Séries, présences et exigences",
+      "firstGate": "G3",
+      "kind": "concept de données",
+      "justification": "Modèle configurable, pas un horaire ni une présence.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CourseSession",
+      "fields": [
+        "id, school_id, template_id, product_version_id, profile_version_id, capacity, status, offer_revision, version, audience, terms_snapshot, enrollment_deadline, cancellation_deadline",
+        "`requirementTypeSnapshot` non nul, lié au modèle copié, profil/produit compatibles",
+        "teachingLanguage choisie explicitement avant publication, immuable ensuite"
+      ],
+      "invariants": [
+        "Séries et capacité validées ; offre_version stable face aux simples changements de places.",
+        "Figé à publication ; un PUT du modèle n’a aucun effet transitif.",
+        "[R105](../03-fonctionnel/regles-etats.md#r105)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Séries, présences et exigences",
+      "firstGate": "G3",
+      "kind": "concept de données",
+      "justification": "Séries et capacité validées ; offre_version stable face aux simples changements de places. Figé à publication ; un PUT du modèle n’a aucun effet transitif. [R105](../03-fonctionnel/regles-etats.md#r105)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CourseOccurrence",
+      "fields": [
+        "id, school_id, session_id, block_code, start_at, end_at, time_zone, room_id, instructor_membership_id, version"
+      ],
+      "invariants": [
+        "Une occurrence réservée par série ; ressources non chevauchantes ; structure de profil respectée."
+      ],
+      "lifecycle": [],
+      "initialSection": "Séries, présences et exigences",
+      "firstGate": "G3",
+      "kind": "concept de données",
+      "justification": "Une occurrence réservée par série ; ressources non chevauchantes ; structure de profil respectée.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CourseEnrollment",
+      "fields": [
+        "id, school_id, session_id, learner_id, enrollment_cycle, accepted_offer_revision, status, source, registered_by, payment_mode, hold_id?, account_id?, version"
+      ],
+      "invariants": [
+        "Unicité élève/série, même pour concurrence manuel/app. Réinscription après annulation réutilise la relation avec nouvel événement et accord."
+      ],
+      "lifecycle": [],
+      "initialSection": "Séries, présences et exigences",
+      "firstGate": "G3",
+      "kind": "concept de données",
+      "justification": "Unicité élève/série, même pour concurrence manuel/app. Réinscription après annulation réutilise la relation avec nouvel événement et accord.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "AttendanceRecord",
+      "fields": [
+        "id, school_id, occurrence_id, enrollment_id, enrollment_cycle, status, marked_by, marked_at, evidence_document_ids, version",
+        "`enrollmentCycle`, unicité école/occurrence/inscription/cycle"
+      ],
+      "invariants": [
+        "Un état courant par école/occurrence/inscription/cycle, révisions auditées ; pas de suppression d’un passé tenu.",
+        "Pas de relevé fictif version 0. Création version 1 ; corrections versionnées sur cycle courant."
+      ],
+      "lifecycle": [],
+      "initialSection": "Séries, présences et exigences",
+      "firstGate": "G3",
+      "kind": "concept de données",
+      "justification": "Un état courant par école/occurrence/inscription/cycle, révisions auditées ; pas de suppression d’un passé tenu. Pas de relevé fictif version 0. Création version 1 ; corrections versionnées sur cycle courant.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "RequirementRecord",
+      "fields": [
+        "id, school_id, learner_id, type, status, source, evidence_document_ids, reviewed_by/at, version"
+      ],
+      "invariants": [
+        "Un état courant par exigence ; preuve requise pour COMPLETED/EXEMPT."
+      ],
+      "lifecycle": [],
+      "initialSection": "Séries, présences et exigences",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Un état courant par exigence ; preuve requise pour COMPLETED/EXEMPT.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "RequirementTrainingLink",
+      "fields": [
+        "school_id, requirement_id, training_id, approved_profile_version_id"
+      ],
+      "invariants": [
+        "Plusieurs formations couvertes seulement par règle validée, pas par correspondance de libellé."
+      ],
+      "lifecycle": [],
+      "initialSection": "Séries, présences et exigences",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Plusieurs formations couvertes seulement par règle validée, pas par correspondance de libellé.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CampaignIntent / NotificationRecipient",
+      "fields": [
+        "school_id, id, session_id, publication_revision, state / learner_id, kind, eligibility_checked_at"
+      ],
+      "invariants": [
+        "Unique campagne/élève/type ; ciblage relu et identité minimale."
+      ],
+      "lifecycle": [],
+      "initialSection": "Séries, présences et exigences",
+      "firstGate": "G3",
+      "kind": "groupe de concepts",
+      "justification": "Unique campagne/élève/type ; ciblage relu et identité minimale.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "DevicePushRegistration",
+      "fields": [
+        "id, person_id, school_id?, device_id, provider_token_encrypted, platform, state",
+        "route de la liaison vers une appartenance scolaire et sa version ; deliveryEnvironment, bindingVersion dans projection"
+      ],
+      "invariants": [
+        "Token secret révocable, accès du compte courant, jamais utilisé comme droit d’accès.",
+        "Plusieurs écoles autorisées du même propriétaire, jamais deux propriétaires actifs pour un même tuple. Une révocation scolaire ne supprime pas les routes d’autres écoles du même compte."
+      ],
+      "lifecycle": [],
+      "initialSection": "Séries, présences et exigences",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Token secret révocable, accès du compte courant, jamais utilisé comme droit d’accès. Plusieurs écoles autorisées du même propriétaire, jamais deux propriétaires actifs pour un même tuple. Une révocation scolaire ne supprime pas les routes d’autres écoles du même compte.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "SchoolSetup",
+      "fields": [
+        "school_id, current_step, completed_steps, version, configured_by, last_saved_at, status"
+      ],
+      "invariants": [
+        "Un par école ; pas copie des offres. Créé avec provision ; mutations réservées ADMIN."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèle V3 : nouveaux agrégats et projections",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Un par école ; pas copie des offres. Créé avec provision ; mutations réservées ADMIN.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "School.configuration_version",
+      "fields": [
+        "valeur monotone"
+      ],
+      "invariants": [
+        "Incrémentée par configuration ayant effet sur readiness ; activation vérifie la valeur. School DRAFT ajouté explicitement."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèle V3 : nouveaux agrégats et projections",
+      "firstGate": "G1",
+      "kind": "attribut",
+      "justification": "Incrémentée par configuration ayant effet sur readiness ; activation vérifie la valeur. School DRAFT ajouté explicitement.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "OnboardingProgress",
+      "fields": [
+        "school_id, person_id, membership_id, kind, current_step, policy_version_id, skipped_optional_steps, status, version, last_saved_at"
+      ],
+      "invariants": [
+        "Unique par appartenance/kind. Généré lors d’acceptation ; pas par GET. Le statut READY est dérivé des prérequis présents."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèle V3 : nouveaux agrégats et projections",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Unique par appartenance/kind. Généré lors d’acceptation ; pas par GET. Le statut READY est dérivé des prérequis présents.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "LearnerAdministrativeProfile",
+      "fields": [
+        "learner_id, school_id, first_name, last_name, birth_date?, postal_address?, photo_document_id?, version, entered_by, source"
+      ],
+      "invariants": [
+        "Un par dossier scolaire. Noms null autorisés tant que profil non confirmé ; complétion exige valeurs. Lecture détaillée distincte des listes."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèle V3 : nouveaux agrégats et projections",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Un par dossier scolaire. Noms null autorisés tant que profil non confirmé ; complétion exige valeurs. Lecture détaillée distincte des listes.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "ProfileFieldPolicyVersion",
+      "fields": [
+        "school_id, state, effective_from, field_rules, notice_version_id, approved_by"
+      ],
+      "invariants": [
+        "Champs/finalités/stades bornés ; version publiée immuable. Pas de champs arbitraires ni photo obligatoire."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèle V3 : nouveaux agrégats et projections",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Champs/finalités/stades bornés ; version publiée immuable. Pas de champs arbitraires ni photo obligatoire.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "TrainingRequest",
+      "fields": [
+        "learner_id, offering_version_id, state, submitted_by, training_id?, decision_by?, reason?, version"
+      ],
+      "invariants": [
+        "Au plus une PENDING par offre/dossier ; décision et création Training atomiques."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèle V3 : nouveaux agrégats et projections",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Au plus une PENDING par offre/dossier ; décision et création Training atomiques.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "ArchivePreview",
+      "fields": [
+        "school_id, actor_membership_id, created_at, expires_at, selection_hash, row_versions, impacts"
+      ],
+      "invariants": [
+        "Éphémère15min proposée ; ne réserve ni dossier ni place. Aucun secret/bilan dans impacts non autorisés."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèle V3 : nouveaux agrégats et projections",
+      "firstGate": "G4",
+      "kind": "projection ou contrat",
+      "justification": "Éphémère15min proposée ; ne réserve ni dossier ni place. Aucun secret/bilan dans impacts non autorisés.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "ArchiveJob / ArchiveJobRow",
+      "fields": [
+        "auteur, opération, preview_id, statut, lignes learner/version/result, finished_at"
+      ],
+      "invariants": [
+        "Maximum50 ; effet idempotent par job/ligne ; droits relus ; résultats mixtes autorisés."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèle V3 : nouveaux agrégats et projections",
+      "firstGate": "G4",
+      "kind": "groupe de concepts",
+      "justification": "Maximum50 ; effet idempotent par job/ligne ; droits relus ; résultats mixtes autorisés.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "DeviceAssessment",
+      "fields": [
+        "school_id, membership_id, device_id, model, OS/build, qualification_version, state, assessed_at, expires_at"
+      ],
+      "invariants": [
+        "Lié au compte et appareil ; pas coordonnées requises pour diagnostic. Non transposable via partage de connexion."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèle V3 : nouveaux agrégats et projections",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Lié au compte et appareil ; pas coordonnées requises pour diagnostic. Non transposable via partage de connexion.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "ManagementExportRequest",
+      "fields": [
+        "export_id, school_id, actor, kind, filters, columns_version, definitions_version?, data_as_of, expires_at"
+      ],
+      "invariants": [
+        "Réutilise Export privé, distingue PRIVACY/STUDENT_LIST/METRICS. Aucun lien public ; revalidation des droits."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèle V3 : nouveaux agrégats et projections",
+      "firstGate": "G4",
+      "kind": "concept de données",
+      "justification": "Réutilise Export privé, distingue PRIVACY/STUDENT_LIST/METRICS. Aucun lien public ; revalidation des droits.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "MetricsSnapshot",
+      "fields": [
+        "snapshot borné pour export, période/filtres, définitions, unités et résultats"
+      ],
+      "invariants": [
+        "Dérivé et temporaire, jamais source financière primaire ; purge avec export."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèle V3 : nouveaux agrégats et projections",
+      "firstGate": "G4",
+      "kind": "projection ou contrat",
+      "justification": "Dérivé et temporaire, jamais source financière primaire ; purge avec export.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CourseEnrollment / EnrollmentCycle",
+      "fields": [
+        "`acceptedCommercialSnapshot`, `acceptedSelfCancellationDeadline` par cycle"
+      ],
+      "invariants": [
+        "Reconfirmation de dates ne change pas le prix accepté. Historique de cycle conservé même si la relation courante est réutilisée."
+      ],
+      "lifecycle": [],
+      "initialSection": "Précisions relationnelles de la revue V3.2",
+      "firstGate": "G3",
+      "kind": "groupe de concepts",
+      "justification": "Reconfirmation de dates ne change pas le prix accepté. Historique de cycle conservé même si la relation courante est réutilisée.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "LessonCommercialRevision",
+      "fields": [
+        "ID, leçon, révision, sélection, prix, durée prévue, auteur, date, motif ; unicité leçon/révision"
+      ],
+      "invariants": [
+        "Append-only ; projection Lesson expose `commercialRevisionVersion`."
+      ],
+      "lifecycle": [],
+      "initialSection": "Précisions relationnelles de la revue V3.2",
+      "firstGate": "G2",
+      "kind": "concept de données",
+      "justification": "Append-only ; projection Lesson expose `commercialRevisionVersion`.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "LessonPreparation / Preparation",
+      "fields": [
+        "plannedWaypoints, liste ordonnée privée ; identifiant unique par liste, bornes géographiques, initialisation []"
+      ],
+      "invariants": [
+        "[R102](../03-fonctionnel/regles-etats.md#r102)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Compléments de modèle V3.5",
+      "firstGate": "G2",
+      "kind": "groupe de concepts",
+      "justification": "[R102](../03-fonctionnel/regles-etats.md#r102)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CalendarOffer / engagement collectif",
+      "fields": [
+        "Projection de la langue, sans filtrer les engagements personnels"
+      ],
+      "invariants": [
+        "[R105](../03-fonctionnel/regles-etats.md#r105)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Compléments de modèle V3.5",
+      "firstGate": "G3",
+      "kind": "projection ou contrat",
+      "justification": "[R105](../03-fonctionnel/regles-etats.md#r105)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "AccountDeletionPreview",
+      "fields": [
+        "Identité propriétaire, version, expiration, état d’appartenances et information de traitement",
+        "manifeste privé complet avec total et pages, version/hash global ; table enfant ou stockage borné par pages, sans limite utilisateur à 100 écoles"
+      ],
+      "invariants": [
+        "[Contrat global](../03-fonctionnel/compte-suppression-globale.md)",
+        "[Suppression](../03-fonctionnel/compte-suppression-globale.md)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Compléments de modèle V3.5",
+      "firstGate": "G4",
+      "kind": "projection ou contrat",
+      "justification": "[Contrat global](../03-fonctionnel/compte-suppression-globale.md) [Suppression](../03-fonctionnel/compte-suppression-globale.md)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "AccountDeletionRequest",
+      "fields": [
+        "Personne propriétaire, statut/version, preuve de confirmation, dates, politique/rétentions, prochain suivi ; unicité partielle non terminale"
+      ],
+      "invariants": [
+        "[R103/R104](../03-fonctionnel/regles-etats.md#r103)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Compléments de modèle V3.5",
+      "firstGate": "G4",
+      "kind": "concept de données",
+      "justification": "[R103/R104](../03-fonctionnel/regles-etats.md#r103)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "AccountDeletionSchoolTask",
+      "fields": [
+        "Demande globale + école, étape/état idempotents, décision de rétention limitée au responsable compétent"
+      ],
+      "invariants": [
+        "[Orchestration](../03-fonctionnel/compte-suppression-globale.md)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Compléments de modèle V3.5",
+      "firstGate": "G4",
+      "kind": "concept de données",
+      "justification": "[Orchestration](../03-fonctionnel/compte-suppression-globale.md)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "AccountDeletionReceipt",
+      "fields": [
+        "Hash du secret, expiration, portée unique status ; secret rejouable chiffré et borné"
+      ],
+      "invariants": [
+        "[Reçu](../03-fonctionnel/compte-suppression-globale.md)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Compléments de modèle V3.5",
+      "firstGate": "G4",
+      "kind": "concept de données",
+      "justification": "[Reçu](../03-fonctionnel/compte-suppression-globale.md)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "SegmentManifest",
+      "fields": [
+        "lastSequence nullable uniquement si aucun point ; alors aucun chunk attendu"
+      ],
+      "invariants": [
+        "[R43](../03-fonctionnel/regles-etats.md#r43)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Précisions relationnelles V3.6",
+      "firstGate": "G2",
+      "kind": "projection ou contrat",
+      "justification": "[R43](../03-fonctionnel/regles-etats.md#r43)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CourseSession / EnrollmentCycle",
+      "fields": [
+        "clôture et RELEASE des HOLD non utilisés dans le même commit ; historique de présence inchangé"
+      ],
+      "invariants": [
+        "[R106](../03-fonctionnel/regles-etats.md#r106)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Précisions relationnelles V3.6",
+      "firstGate": "G3",
+      "kind": "groupe de concepts",
+      "justification": "[R106](../03-fonctionnel/regles-etats.md#r106)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "PackOfferVersion / Purchase",
+      "fields": [
+        "basePriceLines et optionPrices ; snapshots de lignes/options, total catalogue et dérogation approuvée dans l’achat"
+      ],
+      "invariants": [
+        "[R108](../03-fonctionnel/regles-etats.md#r108)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Précisions relationnelles V3.6",
+      "firstGate": "G2",
+      "kind": "groupe de concepts",
+      "justification": "[R108](../03-fonctionnel/regles-etats.md#r108)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "NotificationPreferences",
+      "fields": [
+        "une ligne version 1 par appartenance, initialisée à l’entrée ; GET sans création ni consentement fabriqué"
+      ],
+      "invariants": [
+        "[Notifications](../03-fonctionnel/calendrier-notifications.md)"
+      ],
+      "lifecycle": [],
+      "initialSection": "Précisions relationnelles V3.6",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "[Notifications](../03-fonctionnel/calendrier-notifications.md)",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "CourseRightSettlement",
+      "fields": [
+        "id, inscription, cycle, source_credit_movement_id, version, statut, résolution, consumption_movement_id?, motif, resolved_by/at"
+      ],
+      "invariants": [
+        "Au plus un suivi REVIEW_REQUIRED par cycle ; historique par mouvement source conservé. Aucun mouvement nouveau par simple lecture. CourseEnrollment expose le dernier suivi, null si jamais requis."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèles complétés V3.7",
+      "firstGate": "G3",
+      "kind": "concept de données",
+      "justification": "Au plus un suivi REVIEW_REQUIRED par cycle ; historique par mouvement source conservé. Aucun mouvement nouveau par simple lecture. CourseEnrollment expose le dernier suivi, null si jamais requis.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "RequirementDecision",
+      "fields": [
+        "décision immuable par RequirementRecord/version, profil, auteur/date, basis de source/cycle/versions des présences et pièces"
+      ],
+      "invariants": [
+        "Index inverses sur les sources ; décision courante nulle lorsque le statut n’est plus final. L’historique restreint n’est pas un accès permanent aux pièces purgées."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèles complétés V3.7",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Index inverses sur les sources ; décision courante nulle lorsque le statut n’est plus final. L’historique restreint n’est pas un accès permanent aux pièces purgées.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "RequirementDecisionBasis",
+      "fields": [
+        "sourceKind, sourceEnrollmentId/cycle?, attendanceVersions, documentVersions"
+      ],
+      "invariants": [
+        "Source interne exacte, ou preuves externes, ou règle d’exemption. Unicité par identifiant dans les listes, pas seulement égalité JSON entière. Auteur/profil conservés par la décision englobante."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèles complétés V3.7",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Source interne exacte, ou preuves externes, ou règle d’exemption. Unicité par identifiant dans les listes, pas seulement égalité JSON entière. Auteur/profil conservés par la décision englobante.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    },
+    {
+      "name": "PushInstallationBinding",
+      "fields": [
+        "application serveur, environnement, empreinte de token, propriétaire, installation, binding_version, état"
+      ],
+      "invariants": [
+        "Un routage global par tuple technique ; chiffrement du token, pas exposition au client dans la lecture. Le serveur authentifie séparément le compte."
+      ],
+      "lifecycle": [],
+      "initialSection": "Modèles complétés V3.7",
+      "firstGate": "G1",
+      "kind": "concept de données",
+      "justification": "Un routage global par tuple technique ; chiffrement du token, pas exposition au client dans la lecture. Le serveur authentifie séparément le compte.",
+      "decisionStatus": "PROPOSED_SCOPE_NOT_IMPLEMENTED"
+    }
+  ]
+}

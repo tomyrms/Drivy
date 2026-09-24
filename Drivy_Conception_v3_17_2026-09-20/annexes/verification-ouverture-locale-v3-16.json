@@ -1,0 +1,11 @@
+{
+  "version": "3.16",
+  "status": "BLOCKED_BY_ENVIRONMENT",
+  "passed": false,
+  "attempted": true,
+  "scope": "DIRECT_FILE_URL_NOT_PART_OF_SET_CONTENT_INTERACTION_SUITE",
+  "error": "net::ERR_BLOCKED_BY_ADMINISTRATOR",
+  "path": "DESIGN/LECON.html",
+  "browser": "Chromium 144.0.7559.96",
+  "explanation": "The environment forbids file:// navigation. This is not a passing local-opening test. Interaction checks load the same HTML bytes using page.set_content. No Safari/Windows opening is claimed."
+}

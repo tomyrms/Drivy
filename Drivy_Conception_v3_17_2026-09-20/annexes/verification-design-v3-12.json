@@ -1,0 +1,518 @@
+{
+  "version": "3.12",
+  "scope": "DESIGN_DOCUMENTATION_ONLY",
+  "nativeTestsExecuted": false,
+  "checks": [
+    {
+      "name": "selected_option_A_status",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "base_palette_matches_selected_direction",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "36_contrast_pairs_recomputed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "canonical_palette_in_document_and_prototype",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "prototype_exactly_generated_from_canonical_sources",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "15_unique_scenes",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "49_screen_coverage_no_duplicates",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "coverage_matches_actual_scene_declarations",
+      "passed": true,
+      "detail": {
+        "listed": 19,
+        "scenes": 19
+      }
+    },
+    {
+      "name": "16_illustrated_33_not_drawn",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "scene_components_have_specifications",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_font_binaries",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_external_runtime_resources",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_runtime_geolocation_or_network_calls",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "api_matches_current_provenance",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "six_visual_exports_exist",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "old_palette_absent_from_active_system",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "direction_not_open_in_decision_register",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "interaction_bindings_match_screen_and_visual_catalog",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "UX21_to_UX32_documented_not_executed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "entrypoints_use_current_review",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "contrastPairs": [
+    {
+      "mode": "light",
+      "foreground": "text",
+      "background": "canvas",
+      "ratio": 15.3045496850621,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 15.3045496850621,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "text",
+      "background": "surface",
+      "ratio": 16.263131530883538,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 16.263131530883538,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "text",
+      "background": "surfaceMuted",
+      "ratio": 14.465947794071939,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 14.465947794071939,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "muted",
+      "background": "canvas",
+      "ratio": 5.934834247855475,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 5.934834247855475,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "muted",
+      "background": "surface",
+      "ratio": 6.306555369026805,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 6.306555369026805,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "muted",
+      "background": "surfaceMuted",
+      "ratio": 5.6096392355629865,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 5.6096392355629865,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "accent",
+      "background": "surface",
+      "ratio": 5.9280910737716,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 5.9280910737716,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "accent",
+      "background": "accentSoft",
+      "ratio": 5.192350532868745,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 5.192350532868745,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "onAccent",
+      "background": "accent",
+      "ratio": 5.9280910737716,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 5.9280910737716,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "onAccent",
+      "background": "accentPressed",
+      "ratio": 8.248051262540473,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 8.248051262540473,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "successText",
+      "background": "successSurface",
+      "ratio": 6.494707106333969,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 6.494707106333969,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "warningText",
+      "background": "warningSurface",
+      "ratio": 6.591488538948294,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 6.591488538948294,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "dangerText",
+      "background": "dangerSurface",
+      "ratio": 5.673726338848244,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 5.673726338848244,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "dangerText",
+      "background": "surface",
+      "ratio": 6.468028086585518,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 6.468028086585518,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "disabledText",
+      "background": "disabledSurface",
+      "ratio": 4.6722416101136455,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 4.6722416101136455,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "controlBorder",
+      "background": "surface",
+      "ratio": 3.700263428750244,
+      "threshold": 3,
+      "passed": true,
+      "recalculated": 3.700263428750244,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "controlBorder",
+      "background": "canvas",
+      "ratio": 3.482162422752644,
+      "threshold": 3,
+      "passed": true,
+      "recalculated": 3.482162422752644,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "light",
+      "foreground": "route",
+      "background": "routeHalo",
+      "ratio": 5.9280910737716,
+      "threshold": 3,
+      "passed": true,
+      "recalculated": 5.9280910737716,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "text",
+      "background": "canvas",
+      "ratio": 16.76765297396248,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 16.76765297396248,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "text",
+      "background": "surface",
+      "ratio": 14.6738563578762,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 14.6738563578762,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "text",
+      "background": "surfaceMuted",
+      "ratio": 12.57338378001612,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 12.57338378001612,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "muted",
+      "background": "canvas",
+      "ratio": 9.520599513243388,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 9.520599513243388,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "muted",
+      "background": "surface",
+      "ratio": 8.331751015788415,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 8.331751015788415,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "muted",
+      "background": "surfaceMuted",
+      "ratio": 7.139111936639465,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 7.139111936639465,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "accent",
+      "background": "surface",
+      "ratio": 7.832560803311278,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 7.832560803311278,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "accent",
+      "background": "accentSoft",
+      "ratio": 5.758148936277487,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 5.758148936277487,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "onAccent",
+      "background": "accent",
+      "ratio": 7.293227552827185,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 7.293227552827185,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "onAccent",
+      "background": "accentPressed",
+      "ratio": 9.25869009937792,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 9.25869009937792,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "successText",
+      "background": "successSurface",
+      "ratio": 8.10920188627312,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 8.10920188627312,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "warningText",
+      "background": "warningSurface",
+      "ratio": 8.76095674950445,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 8.76095674950445,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "dangerText",
+      "background": "dangerSurface",
+      "ratio": 7.818711614449892,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 7.818711614449892,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "dangerText",
+      "background": "surface",
+      "ratio": 9.077972764786939,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 9.077972764786939,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "disabledText",
+      "background": "disabledSurface",
+      "ratio": 7.139111936639465,
+      "threshold": 4.5,
+      "passed": true,
+      "recalculated": 7.139111936639465,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "controlBorder",
+      "background": "surface",
+      "ratio": 4.191756820365288,
+      "threshold": 3,
+      "passed": true,
+      "recalculated": 4.191756820365288,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "controlBorder",
+      "background": "canvas",
+      "ratio": 4.789874045441335,
+      "threshold": 3,
+      "passed": true,
+      "recalculated": 4.789874045441335,
+      "matches": true,
+      "actualPass": true
+    },
+    {
+      "mode": "dark",
+      "foreground": "route",
+      "background": "routeHalo",
+      "ratio": 8.95018039187026,
+      "threshold": 3,
+      "passed": true,
+      "recalculated": 8.95018039187026,
+      "matches": true,
+      "actualPass": true
+    }
+  ],
+  "scenes": 15,
+  "illustratedScreenReferences": 16,
+  "notDrawnScreenReferences": 33,
+  "passed": true,
+  "errors": [],
+  "limits": [
+    "Opaque sRGB contrast only; no global WCAG certification.",
+    "Screenshots are browser compositions, not SwiftUI, MapKit or device tests.",
+    "Business rules and native behaviour are not exercised by these checks."
+  ]
+}

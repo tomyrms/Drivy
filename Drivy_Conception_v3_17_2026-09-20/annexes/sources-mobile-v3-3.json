@@ -1,0 +1,327 @@
+{
+  "version": "3.3",
+  "consultedAt": "2026-09-19",
+  "entries": [
+    {
+      "id": "S62",
+      "title": "Apple Developer, iOS",
+      "url": "https://developer.apple.com/ios/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "La page présente iOS 27 et les évolutions de la plateforme ; le produit ne dépend pas d’Apple Intelligence.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S63",
+      "title": "Apple, Xcode SDKs and system requirements",
+      "url": "https://developer.apple.com/xcode/system-requirements",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Table Xcode 27 avec SDK iOS 27 et macOS Tahoe 26.6 ou ultérieur ; versions bêta séparées. Ne prouve pas la compatibilité des dépendances Drivy.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S64",
+      "title": "Apple, Upcoming Requirements",
+      "url": "https://developer.apple.com/news/upcoming-requirements/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Exigence applicable depuis le 28 avril 2026",
+      "scope": "À compter du 28 avril 2026 : soumissions avec Xcode 26 ou ultérieur et SDK iOS/iPadOS 26 ou ultérieur. Ne définit pas le minimum système des utilisateurs.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S65",
+      "title": "Apple WWDC25, Get to know the new design system",
+      "url": "https://developer.apple.com/videos/play/wwdc2025/356/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "WWDC 2025 ; transcription consultée",
+      "scope": "Transcription : séparation contenu/navigation, matériaux, contrôles système, continuité et adaptation.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S66",
+      "title": "Apple WWDC25, Meet Liquid Glass",
+      "url": "https://developer.apple.com/videos/play/wwdc2025/219/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "WWDC 2025 ; transcription consultée",
+      "scope": "Transcription : rôle du matériau et adaptation du système, pas une prescription de rendre toutes les surfaces transparentes.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S67",
+      "title": "Nielsen Norman Group, 10 Usability Heuristics",
+      "url": "https://www.nngroup.com/articles/ten-usability-heuristics/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Principes de visibilité, contrôle, cohérence et prévention des erreurs. Source primaire de ces heuristiques, pas étude de Drivy.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S68",
+      "title": "W3C, Web Content Accessibility Guidelines 2.2",
+      "url": "https://www.w3.org/TR/WCAG22/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Référence web pour contraste, reflow, focus, cibles, alternatives au glisser et authentification. Adaptation native à vérifier séparément.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S69",
+      "title": "Merriam-Webster, slop",
+      "url": "https://www.merriam-webster.com/dictionary/slop",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Acception numérique : contenu de faible qualité généralement produit en quantité par IA. Ce n’est pas un détecteur de style ni une certification UX.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S70",
+      "title": "React Native, Accessibility",
+      "url": "https://reactnative.dev/docs/accessibility",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Propriétés sémantiques et différences entre VoiceOver et TalkBack. Partage du code ne vaut pas équivalence des résultats.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S71",
+      "title": "Expo, GlassEffect",
+      "url": "https://docs.expo.dev/versions/latest/sdk/glass-effect/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "API et contrôles de disponibilité Liquid Glass ; rendu à qualifier avec accessibilité et binaire effectif.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S72",
+      "title": "Expo, Maps",
+      "url": "https://docs.expo.dev/versions/latest/sdk/maps/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Documentation latest consultée, non version verrouillée",
+      "scope": "Statut ALPHA affiché ; Apple Maps sur iOS, Google Maps sur Android ; build natif nécessaire.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S73",
+      "title": "Apple WWDC24, What’s new in location authorization",
+      "url": "https://developer.apple.com/videos/play/wwdc2024/10212/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "WWDC 2024 ; transcription consultée",
+      "scope": "Transcription : CLServiceSession, When In Use et sessions explicites de fond ; distinguer terminaison système et arrêt volontaire.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S74",
+      "title": "Expo, Location",
+      "url": "https://docs.expo.dev/versions/latest/sdk/location/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Documentation latest consultée, non version verrouillée",
+      "scope": "Capture de fond, tâches de niveau module, development build, permissions propres au wrapper et limites de terminaison.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S75",
+      "title": "Expo, SecureStore",
+      "url": "https://docs.expo.dev/versions/latest/sdk/securestore/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Keychain/Keystore, persistance à réinstallation variable, biométrie et sauvegardes ; pas stockage des gros trajets.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S76",
+      "title": "Expo, SQLite",
+      "url": "https://docs.expo.dev/versions/latest/sdk/sqlite/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "SQLCipher configurable dans un build natif ; ne prouve pas que le chiffrement est activé dans un binaire.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S77",
+      "title": "IETF, RFC 8252 OAuth 2.0 for Native Apps",
+      "url": "https://www.rfc-editor.org/rfc/rfc8252.html",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Octobre 2017",
+      "scope": "Authentification dans un user-agent externe à l’app et PKCE pour le client public.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S78",
+      "title": "Expo, iOS Universal Links",
+      "url": "https://docs.expo.dev/linking/ios-universal-links/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Mise à jour affichée : 3 juin 2026",
+      "scope": "Association AASA et Associated Domains ; validation de liens installés et repli web.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S79",
+      "title": "Android Developers, App Links",
+      "url": "https://developer.android.com/training/app-links",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Liens HTTPS vérifiés, association de domaine et application ; ne constitue pas une autorisation métier.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S80",
+      "title": "Expo, Notifications",
+      "url": "https://docs.expo.dev/versions/latest/sdk/notifications/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Intégration notifications et jetons natifs ; distinguer acceptation par un transport et état métier confirmé.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S81",
+      "title": "Android Developers, Location permissions",
+      "url": "https://developer.android.com/develop/sensors-and-location/location/permissions",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Localisation précise/approximative et avant-plan/arrière-plan ; autorisations contextuelles.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S82",
+      "title": "Android Developers, Foreground service types",
+      "url": "https://developer.android.com/develop/background-work/services/fgs/service-types",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Type location, permissions et restrictions de lancement ; ne pas confondre FGS actif et permission générale en arrière-plan.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S83",
+      "title": "Android Developers, Notification runtime permission",
+      "url": "https://developer.android.com/develop/ui/compose/notifications/notification-permission",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "POST_NOTIFICATIONS à partir d’Android 13 ; ce droit n’est pas nécessaire pour démarrer un FGS, qui doit néanmoins avoir sa notification.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S84",
+      "title": "Android Developers, Build adaptive apps",
+      "url": "https://developer.android.com/develop/ui/compose/layouts/adaptive/get-started-with-adaptive-apps",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Mise en page suivant fenêtre, compositions list-detail et navigation adaptée ; exemples Compose non directement du JSX.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S85",
+      "title": "Android Developers, Display content edge-to-edge",
+      "url": "https://developer.android.com/develop/ui/views/layout/edge-to-edge",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Bords système, insets et ciblage Android 15/API 35 ; ne pas figer les hauteurs des barres.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S86",
+      "title": "Android Developers, Predictive back",
+      "url": "https://developer.android.com/develop/ui/compose/system/predictive-back",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Navigation retour prédictive et coopération avec les transitions système ; adaptation des bibliothèques à qualifier.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S87",
+      "title": "Android Developers, Support 16 KB page sizes",
+      "url": "https://developer.android.com/guide/practices/page-sizes",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Compatibilité des bibliothèques natives avec les pages mémoire de 16 Ko ; contrôles du binaire et appareils compatibles.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S88",
+      "title": "Google Play, Target API level requirements",
+      "url": "https://support.google.com/googleplay/android-developer/answer/11926878?hl=en",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Exigence applicable depuis le 31 août 2026",
+      "scope": "Depuis le 31 août 2026, nouvelles apps et mises à jour téléphone/tablette : Android 16/API 36 ou ultérieur, hors exceptions explicitées par Google.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S89",
+      "title": "Expo, Runtime versions and updates",
+      "url": "https://docs.expo.dev/eas-update/runtime-versions/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Compatibilité d’une mise à jour avec le code natif du binaire ; une modification native exige un runtime compatible.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S90",
+      "title": "OWASP, Mobile Application Security Verification Standard",
+      "url": "https://mas.owasp.org/MASVS/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Catégories de vérification de sécurité mobile. Aucun niveau de conformité déclaré par cette documentation.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S91",
+      "title": "Apple, Offering account deletion in your app",
+      "url": "https://developer.apple.com/support/offering-account-deletion-in-your-app/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Déclenchement de suppression de compte dans l’app ; désactivation insuffisante ; information sur délais et données à conserver.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S92",
+      "title": "Google Play, Account deletion requirements",
+      "url": "https://support.google.com/googleplay/android-developer/answer/13327111?hl=en",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Parcours de demande de suppression dans l’app et ressource web pour les apps concernées ; suppression de données associées.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S93",
+      "title": "Apple, App privacy details",
+      "url": "https://developer.apple.com/app-store/app-privacy-details/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Déclarations sur les données collectées, liens à l’identité, tiers et tracking au sens d’Apple.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S94",
+      "title": "Apple, App Review Guidelines",
+      "url": "https://developer.apple.com/app-store/review/guidelines/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Contexte des permissions, arrière-plan, suppression et achats. Section 3.1.3(e) : biens/services consommés hors app distincts du contenu numérique.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S95",
+      "title": "Expo, Privacy manifests",
+      "url": "https://docs.expo.dev/guides/apple-privacy/",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Mise à jour affichée : 29 juillet 2026",
+      "scope": "PrivacyInfo.xcprivacy et configuration Expo ; raisons adaptées aux API réellement utilisées, ne pas copier un code de raison au hasard.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    },
+    {
+      "id": "S96",
+      "title": "react-native-maps, README du projet",
+      "url": "https://github.com/react-native-maps/react-native-maps",
+      "consultedAt": "2026-09-19",
+      "publishedOrUpdated": "Page évolutive ; date de publication non établie",
+      "scope": "Composants iOS/Android et matrice de compatibilité React Native/Fabric. Alternative à qualifier, pas dépendance déjà retenue.",
+      "limitation": "Capacité ou recommandation documentaire, pas validation de Drivy."
+    }
+  ],
+  "limitations": [
+    "Sources primaires techniques et source lexicographique consultées en ligne.",
+    "Certaines URLs reconsultent des sources déjà présentes dans la référence : 35 entrées ne signifie pas 35 éditeurs différents.",
+    "Les pages DocC ne retournant que du JavaScript ne constituent pas une preuve détaillée ; les transcriptions WWDC accessibles les remplacent.",
+    "Aucune application concurrente nouvellement installée ou testée ; recherche documentaire, pas entretien utilisateur."
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "version": "3.8",
+  "sourceArchives": [
+    {
+      "file": "Drivy_Dossier_Conception_v2_2026-09-19.zip",
+      "sha256Before": "f251377e53137bff7652a9aca5acd2442e6ca34eb0b7b960b448f3a827a6d491",
+      "sha256After": "f251377e53137bff7652a9aca5acd2442e6ca34eb0b7b960b448f3a827a6d491",
+      "unchanged": true
+    },
+    {
+      "file": "Drivy_Dossier_Conception_v3_6_2026-09-19.zip",
+      "sha256Before": "24118cdc478bb26bb8668e40139f4be7ff415f117b3fe4bbe1ffad0552c132d0",
+      "sha256After": "24118cdc478bb26bb8668e40139f4be7ff415f117b3fe4bbe1ffad0552c132d0",
+      "unchanged": true
+    },
+    {
+      "file": "Drivy_Dossier_Conception_v3_5_2026-09-19.zip",
+      "sha256Before": "0e0f926511eaaf04092ff8b39e2ce94db9986de5267da0533c17be400fba4833",
+      "sha256After": "0e0f926511eaaf04092ff8b39e2ce94db9986de5267da0533c17be400fba4833",
+      "unchanged": true
+    },
+    {
+      "file": "Drivy_Dossier_Conception_v3_4_2026-09-19.zip",
+      "sha256Before": "aad169063997bb29b637b53a152e5307015c8791a4e6fdbbd0552efa448ab092",
+      "sha256After": "aad169063997bb29b637b53a152e5307015c8791a4e6fdbbd0552efa448ab092",
+      "unchanged": true
+    },
+    {
+      "file": "Drivy_Dossier_Conception_v3_7_2026-09-19.zip",
+      "sha256Before": "9becd5aa62ede6e77a0ed7ba6d11305ec778d3c0f8c1c64c7cf88f2f2599e494",
+      "sha256After": "9becd5aa62ede6e77a0ed7ba6d11305ec778d3c0f8c1c64c7cf88f2f2599e494",
+      "unchanged": true
+    },
+    {
+      "file": "Drivy_Dossier_Conception_v3_2_2026-09-19.zip",
+      "sha256Before": "d2fdd77751c120d0d7551c38449c99d56e887355fb7183e103b8af8b3252ff3b",
+      "sha256After": "d2fdd77751c120d0d7551c38449c99d56e887355fb7183e103b8af8b3252ff3b",
+      "unchanged": true
+    },
+    {
+      "file": "Drivy_Dossier_Conception_v3_1_2026-09-19.zip",
+      "sha256Before": "9e9ed9d763116ac0ef38a85c77f1eb40a8a17310a0fa0e358fa41abfff83bd84",
+      "sha256After": "9e9ed9d763116ac0ef38a85c77f1eb40a8a17310a0fa0e358fa41abfff83bd84",
+      "unchanged": true
+    },
+    {
+      "file": "Drivy_Dossier_Conception_v3_3_2026-09-19.zip",
+      "sha256Before": "4ddfc41b942b44a8a83ca2bc2408fae17ab6a4e6c650cfdc88c3c9822ab9944c",
+      "sha256After": "4ddfc41b942b44a8a83ca2bc2408fae17ab6a4e6c650cfdc88c3c9822ab9944c",
+      "unchanged": true
+    },
+    {
+      "file": "Drivy_Dossier_Conception_v3_2026-09-19.zip",
+      "sha256Before": "ee8ad1491e13c006eb1e6da13f61fbcf6687f0214bce70afbac1f3f3dd42a2ae",
+      "sha256After": "ee8ad1491e13c006eb1e6da13f61fbcf6687f0214bce70afbac1f3f3dd42a2ae",
+      "unchanged": true
+    },
+    {
+      "file": "Drivy_Dossier_Conception_2026-09-19.zip",
+      "sha256Before": "44d68c7e8570c5d7b9ceb099521e67ae02a201a00afcde6435782f688f316ec0",
+      "sha256After": "44d68c7e8570c5d7b9ceb099521e67ae02a201a00afcde6435782f688f316ec0",
+      "unchanged": true
+    },
+    {
+      "file": "Drivy-master.zip",
+      "sha256Before": "017fe85938e393a503f03b10681967ff001c4cca0b32fe60c33a0153e775d5e3",
+      "sha256After": "017fe85938e393a503f03b10681967ff001c4cca0b32fe60c33a0153e775d5e3",
+      "unchanged": true
+    }
+  ],
+  "apiUnchanged": true,
+  "passed": true
+}

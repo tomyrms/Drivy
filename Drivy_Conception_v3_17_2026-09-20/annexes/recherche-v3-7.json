@@ -1,0 +1,86 @@
+{
+  "version": "3.7",
+  "method": "Sources primaires consultées par recherche web ; pas test de produit.",
+  "entries": [
+    {
+      "id": "S111",
+      "title": "Apple, Registering your app with APNs",
+      "url": "https://developer.apple.com/documentation/usernotifications/registering-your-app-with-apns",
+      "retrievalURL": "https://developer.apple.com/tutorials/data/documentation/usernotifications/registering-your-app-with-apns.json",
+      "consultedAt": "2026-09-19",
+      "sourceStatus": "CURRENT_DOCUMENTATION",
+      "observedScope": "Token propre à appareil/application, récupération au lancement, envoi au serveur et association aux comptes ; ne pas considérer une copie persistée comme token permanent.",
+      "limits": "Ne prouve ni possession cryptographique par le compte ni rappel des notifications. Les règles de bindingVersion sont une conception Drivy."
+    },
+    {
+      "id": "S112",
+      "title": "Apple, APS Environment Entitlement",
+      "url": "https://developer.apple.com/documentation/bundleresources/entitlements/aps-environment",
+      "retrievalURL": "https://developer.apple.com/tutorials/data/documentation/bundleresources/entitlements/aps-environment.json",
+      "consultedAt": "2026-09-19",
+      "sourceStatus": "CURRENT_DOCUMENTATION",
+      "observedScope": "Environnement development/production sélectionné par le profil de signature pour le service APNs.",
+      "limits": "APNS_SANDBOX/PRODUCTION sont des valeurs Drivy ; leur correspondance doit être testée sur le binaire réellement signé."
+    },
+    {
+      "id": "S113",
+      "title": "Apple, Getting the User’s Location",
+      "url": "https://developer.apple.com/library/archive/documentation/UserExperience/Conceptual/LocationAwarenessPG/CoreLocation/CoreLocation.html",
+      "retrievalURL": "https://developer.apple.com/library/archive/documentation/UserExperience/Conceptual/LocationAwarenessPG/CoreLocation/CoreLocation.html",
+      "consultedAt": "2026-09-19",
+      "sourceStatus": "ARCHIVED_2016",
+      "observedScope": "Guide archivé : présence possible de positions en cache, date/qualité à examiner ; UIRequiredDeviceCapabilities filtre les appareils pouvant installer.",
+      "limits": "Ne pas reprendre ses exemples d’autorisation ou de fond comme règles iOS 26/27 ; les quinze secondes de l’exemple ne sont pas un seuil Drivy. Aucun code de log des coordonnées n’est repris."
+    },
+    {
+      "id": "S114",
+      "title": "W3C, Understanding SC 3.3.4",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html",
+      "retrievalURL": "https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html",
+      "consultedAt": "2026-09-19",
+      "sourceStatus": "INFORMATIVE_GUIDANCE",
+      "observedScope": "Pour éviter erreurs importantes, prévoir vérification, correction, confirmation ou réversibilité adaptées ; pas confirmation pour chaque sauvegarde.",
+      "limits": "Texte explicatif du critère web, non certification de l’interface native ni obligation légale déduite pour Drivy."
+    },
+    {
+      "id": "S115",
+      "title": "PostgreSQL 18, Explicit Locking",
+      "url": "https://www.postgresql.org/docs/18/explicit-locking.html",
+      "retrievalURL": "https://www.postgresql.org/docs/18/explicit-locking.html",
+      "consultedAt": "2026-09-19",
+      "sourceStatus": "PRIMARY_TECHNICAL_DOCUMENTATION",
+      "observedScope": "Modes de verrous en conflit et ordre cohérent pour limiter interblocages.",
+      "limits": "Le protocole transactionnel Drivy proposé exige des tests réels ; une page consultée ne prouve pas sa réalisation."
+    },
+    {
+      "id": "S116",
+      "title": "Apple, Releases",
+      "url": "https://developer.apple.com/news/releases/",
+      "retrievalURL": "https://developer.apple.com/news/releases/",
+      "consultedAt": "2026-09-19",
+      "sourceStatus": "DATED_RELEASE_INDEX",
+      "observedScope": "Index consulté : iOS/iPadOS 27.0 (24A437) et Xcode 27 (27A266a) le 14 septembre 2026 ; bêtas étiquetées séparément.",
+      "limits": "Ne pas présenter une bêta comme version stable ou une version Apple comme binaire Drivy testé. Index évolutif, à relire lors du build."
+    },
+    {
+      "id": "S117",
+      "title": "Apple, Xcode system requirements",
+      "url": "https://developer.apple.com/xcode/system-requirements/",
+      "retrievalURL": "https://developer.apple.com/xcode/system-requirements/",
+      "consultedAt": "2026-09-19",
+      "sourceStatus": "CURRENT_REQUIREMENTS",
+      "observedScope": "Tableau consulté : Xcode 27 requiert macOS Tahoe 26.6 ou ultérieur ; SDK, compilateur et deployment targets listés séparément.",
+      "limits": "Ne fixe pas le minimum commercial de Drivy ni la compatibilité de toutes ses dépendances."
+    }
+  ],
+  "notRevalidated": [
+    "Tarifs des dix écoles",
+    "Profils réglementaires suisses exhaustifs",
+    "Toutes les versions/dépendances annoncées historiquement"
+  ],
+  "accessLimitations": [
+    "Certaines pages Apple nécessitent JavaScript ; représentations JSON officielles utilisées quand accessibles.",
+    "Référence Core Location 2016 explicitement archivée, pas référence actuelle des sessions de fond.",
+    "Installation openapi-spec-validator indisponible dans le runtime."
+  ]
+}

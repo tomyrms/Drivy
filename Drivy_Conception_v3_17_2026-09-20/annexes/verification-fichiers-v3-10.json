@@ -1,0 +1,739 @@
+{
+  "version": "3.10",
+  "scope": "SCHEMAS_AND_ISOLATED_DOCUMENTARY_MODELS",
+  "productCodeExercised": false,
+  "storageRequestsExecuted": false,
+  "schemaCases": [
+    {
+      "id": "SC230",
+      "title": "Document READY admissible",
+      "schema": "Document",
+      "expectedValid": true,
+      "beforeValid": true,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC231",
+      "title": "Document READY sans MIME",
+      "schema": "Document",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC232",
+      "title": "Document READY vide",
+      "schema": "Document",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC233",
+      "title": "Document READY exécutable",
+      "schema": "Document",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC234",
+      "title": "Document READY trop gros",
+      "schema": "Document",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC235",
+      "title": "Document READY avec rejet",
+      "schema": "Document",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC236",
+      "title": "Rejet peut décrire le vrai fichier trop gros",
+      "schema": "Document",
+      "expectedValid": true,
+      "beforeValid": true,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC237",
+      "title": "Quarantaine sans type déterminé",
+      "schema": "Document",
+      "expectedValid": true,
+      "beforeValid": true,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC238",
+      "title": "Photo READY admissible",
+      "schema": "Document",
+      "expectedValid": true,
+      "beforeValid": true,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC239",
+      "title": "Photo READY PDF",
+      "schema": "Document",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC240",
+      "title": "Photo au-delà 2 MiB",
+      "schema": "Document",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC241",
+      "title": "Photo liée à une leçon",
+      "schema": "Document",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC242",
+      "title": "Photo sous audience privée incompatible",
+      "schema": "Document",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC243",
+      "title": "Logo READY admissible",
+      "schema": "SchoolAsset",
+      "expectedValid": true,
+      "beforeValid": true,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC244",
+      "title": "Logo READY PDF",
+      "schema": "SchoolAsset",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC245",
+      "title": "Logo READY sans type",
+      "schema": "SchoolAsset",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC246",
+      "title": "Logo READY trop gros",
+      "schema": "SchoolAsset",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC247",
+      "title": "Logo READY vide",
+      "schema": "SchoolAsset",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC248",
+      "title": "Ticket PUT sûr de forme",
+      "schema": "UploadTicket",
+      "expectedValid": true,
+      "beforeValid": false,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC249",
+      "title": "Ticket sans méthode",
+      "schema": "UploadTicket",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC250",
+      "title": "Ticket mauvaise méthode",
+      "schema": "UploadTicket",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC251",
+      "title": "Ticket FTP",
+      "schema": "UploadTicket",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC252",
+      "title": "Ticket HTTP",
+      "schema": "UploadTicket",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC253",
+      "title": "En-tête bearer injecté",
+      "schema": "UploadTicket",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC254",
+      "title": "Cookie injecté",
+      "schema": "UploadTicket",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC255",
+      "title": "Condition absente",
+      "schema": "UploadTicket",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC256",
+      "title": "Checksum base64 correct",
+      "schema": "UploadTicket",
+      "expectedValid": true,
+      "beforeValid": false,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC257",
+      "title": "Checksum hex envoyé en base64",
+      "schema": "UploadTicket",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC258",
+      "title": "Ticket logo même profil",
+      "schema": "AssetUploadTicket",
+      "expectedValid": true,
+      "beforeValid": false,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC259",
+      "title": "DownloadTicket HTTPS",
+      "schema": "DownloadTicket",
+      "expectedValid": true,
+      "beforeValid": true,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC260",
+      "title": "DownloadTicket HTTP refusé",
+      "schema": "DownloadTicket",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC261",
+      "title": "AssetDownloadTicket HTTPS",
+      "schema": "AssetDownloadTicket",
+      "expectedValid": true,
+      "beforeValid": true,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC262",
+      "title": "AssetDownloadTicket HTTP refusé",
+      "schema": "AssetDownloadTicket",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC263",
+      "title": "ExportDownloadTicket HTTPS",
+      "schema": "ExportDownloadTicket",
+      "expectedValid": true,
+      "beforeValid": true,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC264",
+      "title": "ExportDownloadTicket HTTP refusé",
+      "schema": "ExportDownloadTicket",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC265",
+      "title": "CSV READY complet",
+      "schema": "Export",
+      "expectedValid": true,
+      "beforeValid": false,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC266",
+      "title": "ZIP PRIVACY complet",
+      "schema": "Export",
+      "expectedValid": true,
+      "beforeValid": false,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC267",
+      "title": "Gestion présentée ZIP",
+      "schema": "Export",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC268",
+      "title": "Privacy présentée CSV",
+      "schema": "Export",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC269",
+      "title": "READY sans checksum",
+      "schema": "Export",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC270",
+      "title": "READY sans expiration",
+      "schema": "Export",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC271",
+      "title": "READY nom avec chemin",
+      "schema": "Export",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC272",
+      "title": "READY nom CRLF",
+      "schema": "Export",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC273",
+      "title": "READY mauvais suffixe",
+      "schema": "Export",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC274",
+      "title": "CSV READY sans nombre lignes",
+      "schema": "Export",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC275",
+      "title": "Ancien READY sans métadonnées",
+      "schema": "Export",
+      "expectedValid": false,
+      "beforeValid": true,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC276",
+      "title": "PREPARING sans contenu",
+      "schema": "Export",
+      "expectedValid": true,
+      "beforeValid": false,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC277",
+      "title": "EXPIRED expose encore contenu",
+      "schema": "Export",
+      "expectedValid": false,
+      "beforeValid": false,
+      "afterValid": false,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    },
+    {
+      "id": "SC278",
+      "title": "EXPIRED métadonnées nulles",
+      "schema": "Export",
+      "expectedValid": true,
+      "beforeValid": false,
+      "afterValid": true,
+      "passed": true,
+      "meaning": "Identical JSON payload, not an application execution"
+    }
+  ],
+  "sameInvalidNowRejected": 18,
+  "newCases": 49,
+  "modelCases": [
+    {
+      "name": "origin exact",
+      "actual": true,
+      "expected": true,
+      "passed": true
+    },
+    {
+      "name": "port standard explicite",
+      "actual": true,
+      "expected": true,
+      "passed": true
+    },
+    {
+      "name": "suffixe trompeur",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "userinfo",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "http",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "port inconnu",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "fragment",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "fragment vide",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "controle CRLF",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "origine API non stockage",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "promotion courante",
+      "actual": {
+        "applied": true,
+        "unchanged": false
+      },
+      "expected": {
+        "applied": true,
+        "unchanged": false
+      },
+      "passed": true
+    },
+    {
+      "name": "suppression avant résultat",
+      "actual": {
+        "applied": false,
+        "unchanged": true
+      },
+      "expected": {
+        "applied": false,
+        "unchanged": true
+      },
+      "passed": true
+    },
+    {
+      "name": "ancienne génération",
+      "actual": {
+        "applied": false,
+        "unchanged": true
+      },
+      "expected": {
+        "applied": false,
+        "unchanged": true
+      },
+      "passed": true
+    },
+    {
+      "name": "ancienne version",
+      "actual": {
+        "applied": false,
+        "unchanged": true
+      },
+      "expected": {
+        "applied": false,
+        "unchanged": true
+      },
+      "passed": true
+    },
+    {
+      "name": "scanner indisponible",
+      "actual": {
+        "applied": false,
+        "unchanged": true
+      },
+      "expected": {
+        "applied": false,
+        "unchanged": true
+      },
+      "passed": true
+    },
+    {
+      "name": "droit de traitement révoqué",
+      "actual": {
+        "applied": false,
+        "unchanged": true
+      },
+      "expected": {
+        "applied": false,
+        "unchanged": true
+      },
+      "passed": true
+    },
+    {
+      "name": "octets reçus URL expirée",
+      "actual": "FINALIZE_CURRENT",
+      "expected": "FINALIZE_CURRENT",
+      "passed": true
+    },
+    {
+      "name": "octets absents ticket valide",
+      "actual": "PUT_SAME_BODY",
+      "expected": "PUT_SAME_BODY",
+      "passed": true
+    },
+    {
+      "name": "octets absents URL expirée",
+      "actual": "EXPLICIT_NEW_INTENT",
+      "expected": "EXPLICIT_NEW_INTENT",
+      "passed": true
+    },
+    {
+      "name": "déjà validé",
+      "actual": "READ_CURRENT",
+      "expected": "READ_CURRENT",
+      "passed": true
+    },
+    {
+      "name": "intention nettoyée",
+      "actual": "EXPLICIT_NEW_INTENT",
+      "expected": "EXPLICIT_NEW_INTENT",
+      "passed": true
+    },
+    {
+      "name": "droits perdus",
+      "actual": "REFUSE",
+      "expected": "REFUSE",
+      "passed": true
+    }
+  ],
+  "modelCount": 22,
+  "checks": [
+    {
+      "name": "All_current_schema_cases_match_expectation",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Same_invalid_payloads_now_rejected",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Exports_expose_CSV_and_ZIP",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "readDocumentContent_no_store",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "readDocumentContent_no_json_success",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "readAssetContent_no_store",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "readAssetContent_no_json_success",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "readExportContent_no_store",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "readExportContent_no_json_success",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Methods_routes_not_artificially_added",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Contract_and_doc_registry_versions",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Reference_models",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "passed": true,
+  "limitations": [
+    "No real S3, HTTP cache, file parser, Swift build, network capture or database transaction executed.",
+    "Models illustrate a proposed policy; they do not prove the production code uses it.",
+    "JSON Schema shape does not enforce origin allowlists, compute SHA-256 or prevent concurrent writes."
+  ]
+}

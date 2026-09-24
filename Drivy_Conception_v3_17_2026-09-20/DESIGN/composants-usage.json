@@ -1,0 +1,811 @@
+{
+  "version": "3.17",
+  "source": "DESIGN/atelier/ui.js",
+  "tokenSource": "annexes/tokens-proposition.json",
+  "status": "HTML_IMPLEMENTATIONS_AND_PLANNED_USAGE_NOT_SWIFT_LIBRARY",
+  "components": {
+    "DS01": {
+      "renderer": "workspaceHeader / pageTitle / head",
+      "variants": [
+        "object",
+        "capture",
+        "replay"
+      ],
+      "reason": "Same hierarchy adapted to the task; immersive map header is not an administrative page."
+    },
+    "DS02": {
+      "renderer": "UI.button / UI.iconButton",
+      "variants": [
+        "primary",
+        "secondary",
+        "quiet",
+        "danger",
+        "icon"
+      ],
+      "reason": "Action emphasis and geometry, not a screen-specific implementation."
+    },
+    "DS03": {
+      "renderer": "UI.field / UI.search",
+      "variants": [
+        "single",
+        "multiline",
+        "choice",
+        "search"
+      ],
+      "reason": "One field renderer; long text and short structured inputs have explicit variants."
+    },
+    "DS04": {
+      "renderer": "UI.lessonRow",
+      "variants": [
+        "staff",
+        "learner",
+        "current"
+      ],
+      "reason": "Shared appointment data and geometry, authorized content varies."
+    },
+    "DS05": {
+      "renderer": "captions / domain labels",
+      "variants": [
+        "neutral",
+        "success",
+        "warning",
+        "danger"
+      ],
+      "reason": "Domain text remains explicit, color is never the identifier."
+    },
+    "DS06": {
+      "renderer": "UI.training",
+      "variants": [
+        "single-read",
+        "multiple-choice"
+      ],
+      "reason": "A single formation does not need an empty menu."
+    },
+    "DS07": {
+      "renderer": "UI.observationRow / UI.statusAction",
+      "variants": [
+        "navigate",
+        "select-for-report",
+        "read-only",
+        "live-status-choice"
+      ],
+      "reason": "Accessory depends on consequence; skill evaluation is a separate semantic domain."
+    },
+    "DS08": {
+      "renderer": "UI.state",
+      "variants": [
+        "local",
+        "offline",
+        "success"
+      ],
+      "reason": "Not the same as a published result."
+    },
+    "DS09": {
+      "renderer": "UI.empty",
+      "variants": [
+        "empty-data",
+        "empty-query",
+        "not-observed"
+      ],
+      "reason": "Never a substitute for an error."
+    },
+    "DS10": {
+      "renderer": "UI.state / UI.field error",
+      "variants": [
+        "page",
+        "field"
+      ],
+      "reason": "Context retained and retry supported."
+    },
+    "DS11": {
+      "renderer": "UI.modal + consequence content",
+      "variants": [
+        "booking",
+        "publication",
+        "discard"
+      ],
+      "reason": "Before/after or recipient stated, no generic OK."
+    },
+    "DS12": {
+      "renderer": "UI.row with document projection",
+      "variants": [
+        "ready-preview",
+        "analyzing-no-preview",
+        "rejected"
+      ],
+      "reason": "Technical state never implies human validation."
+    },
+    "DS14": {
+      "renderer": "agendaPage + UI.lessonRow",
+      "variants": [
+        "day-list",
+        "learner-commitments"
+      ],
+      "reason": "Historical week view remains complementary, not reimplemented here."
+    },
+    "DS15": {
+      "renderer": "UI.sheetHeader / UI.dialog / UI.modal",
+      "variants": [
+        "map-step",
+        "compact-task",
+        "wide-window"
+      ],
+      "reason": "Same shell, focus and dismissal contract, adaptive presentation."
+    },
+    "DS16": {
+      "renderer": "reportReadPage",
+      "variants": [
+        "preview",
+        "published-snapshot"
+      ],
+      "reason": "Shared projection explicit; drafts remain private."
+    },
+    "DS22": {
+      "renderer": "UI.nav",
+      "variants": [
+        "staff",
+        "learner",
+        "wide-rail"
+      ],
+      "reason": "Same destinations for a role, not a menu per page."
+    },
+    "DS25": {
+      "renderer": "UI.row",
+      "variants": [
+        "navigate",
+        "select",
+        "read"
+      ],
+      "reason": "Canonical entity row instead of person/document/settings copies."
+    }
+  },
+  "plannedOnlyComponents": [
+    "DS13",
+    "DS19",
+    "DS20",
+    "DS21",
+    "DS23",
+    "DS24"
+  ],
+  "specializedMapComponents": [
+    "DS17",
+    "DS18"
+  ],
+  "screenUsage": [
+    {
+      "screen": "E01",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS09",
+        "DS10"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E02",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS11",
+        "DS25"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E03",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS04",
+        "DS14",
+        "DS22"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "agenda"
+      ]
+    },
+    {
+      "screen": "E04",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS04",
+        "DS06",
+        "DS17",
+        "DS25"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "lesson"
+      ]
+    },
+    {
+      "screen": "E05",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS06",
+        "DS11",
+        "DS15"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "planning"
+      ]
+    },
+    {
+      "screen": "E06",
+      "components": [
+        "DS01",
+        "DS03",
+        "DS09",
+        "DS15",
+        "DS25"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "students"
+      ]
+    },
+    {
+      "screen": "E07",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS06",
+        "DS12",
+        "DS25"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "student"
+      ]
+    },
+    {
+      "screen": "E08",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS07",
+        "DS08",
+        "DS11",
+        "DS15",
+        "DS16"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "report",
+        "preview"
+      ]
+    },
+    {
+      "screen": "E09",
+      "components": [
+        "DS01",
+        "DS07",
+        "DS12",
+        "DS16",
+        "DS18"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "shared"
+      ]
+    },
+    {
+      "screen": "E10",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS12",
+        "DS15",
+        "DS25"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "documents"
+      ]
+    },
+    {
+      "screen": "E11",
+      "components": [
+        "DS01",
+        "DS03",
+        "DS11",
+        "DS13",
+        "DS15"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E12",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS14"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E13",
+      "components": [
+        "DS01",
+        "DS05",
+        "DS22",
+        "DS25"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "school"
+      ]
+    },
+    {
+      "screen": "E14",
+      "components": [
+        "DS01",
+        "DS04",
+        "DS06",
+        "DS22",
+        "DS25"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "learner"
+      ]
+    },
+    {
+      "screen": "E15",
+      "components": [
+        "DS01",
+        "DS06",
+        "DS07",
+        "DS16",
+        "DS25"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "progress"
+      ]
+    },
+    {
+      "screen": "E16",
+      "components": [
+        "DS01",
+        "DS03",
+        "DS05",
+        "DS11",
+        "DS25"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E17",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS08",
+        "DS11",
+        "DS25"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E18",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS11",
+        "DS15"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E19",
+      "components": [
+        "DS01",
+        "DS03",
+        "DS15",
+        "DS22",
+        "DS25"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "account"
+      ]
+    },
+    {
+      "screen": "E20",
+      "components": [
+        "DS01",
+        "DS03",
+        "DS11",
+        "DS12"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E21",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS08",
+        "DS10",
+        "DS11"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E22",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS04",
+        "DS08",
+        "DS22",
+        "DS25"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "home"
+      ]
+    },
+    {
+      "screen": "E23",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS07",
+        "DS08",
+        "DS15",
+        "DS17",
+        "DS18"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "capture",
+        "categories",
+        "status"
+      ]
+    },
+    {
+      "screen": "E24",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS07",
+        "DS15",
+        "DS18"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "replay"
+      ]
+    },
+    {
+      "screen": "E25",
+      "components": [
+        "DS01",
+        "DS04",
+        "DS06",
+        "DS14",
+        "DS19",
+        "DS22"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "learner-agenda"
+      ]
+    },
+    {
+      "screen": "E26",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS11",
+        "DS19",
+        "DS20"
+      ],
+      "status": "HISTORICAL_VARIANT_ILLUSTRATED",
+      "routes": []
+    },
+    {
+      "screen": "E27",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS11",
+        "DS20"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E28",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS05",
+        "DS11",
+        "DS20",
+        "DS25"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E29",
+      "components": [
+        "DS01",
+        "DS03",
+        "DS06",
+        "DS21",
+        "DS25"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E30",
+      "components": [
+        "DS01",
+        "DS13",
+        "DS21"
+      ],
+      "status": "HISTORICAL_VARIANT_ILLUSTRATED",
+      "routes": []
+    },
+    {
+      "screen": "E31",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS11",
+        "DS20"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E32",
+      "components": [
+        "DS01",
+        "DS05",
+        "DS22",
+        "DS25"
+      ],
+      "status": "CURRENT_VARIANT_ILLUSTRATED",
+      "routes": [
+        "notifications"
+      ]
+    },
+    {
+      "screen": "E33",
+      "components": [
+        "DS01",
+        "DS22",
+        "DS24",
+        "DS25"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E34",
+      "components": [
+        "DS01",
+        "DS03",
+        "DS06",
+        "DS11",
+        "DS25"
+      ],
+      "status": "HISTORICAL_VARIANT_ILLUSTRATED",
+      "routes": []
+    },
+    {
+      "screen": "E35",
+      "components": [
+        "DS01",
+        "DS06",
+        "DS12",
+        "DS13",
+        "DS16",
+        "DS25"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E36",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS10",
+        "DS11"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E37",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS08",
+        "DS11"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E38",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS06",
+        "DS23"
+      ],
+      "status": "HISTORICAL_VARIANT_ILLUSTRATED",
+      "routes": []
+    },
+    {
+      "screen": "E39",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS05",
+        "DS11",
+        "DS23"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E40",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS23"
+      ],
+      "status": "HISTORICAL_VARIANT_ILLUSTRATED",
+      "routes": []
+    },
+    {
+      "screen": "E41",
+      "components": [
+        "DS01",
+        "DS03",
+        "DS06",
+        "DS23"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E42",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS05",
+        "DS23"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E43",
+      "components": [
+        "DS01",
+        "DS05",
+        "DS23",
+        "DS25"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E44",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS05",
+        "DS17",
+        "DS23"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E45",
+      "components": [
+        "DS01",
+        "DS03",
+        "DS24"
+      ],
+      "status": "HISTORICAL_VARIANT_ILLUSTRATED",
+      "routes": []
+    },
+    {
+      "screen": "E46",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS11",
+        "DS24"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E47",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS23"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E48",
+      "components": [
+        "DS01",
+        "DS03",
+        "DS06",
+        "DS25"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    },
+    {
+      "screen": "E49",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS03",
+        "DS08",
+        "DS10",
+        "DS11",
+        "DS15"
+      ],
+      "status": "SPECIFIED_PATTERN_NOT_RENDERED",
+      "routes": []
+    }
+  ],
+  "exceptions": [
+    {
+      "case": "Immersive capture/replay",
+      "reason": "No bottom navigation overlays active task; close returns to Séance without stopping GPS."
+    },
+    {
+      "case": "Read vs selection vs immediate mutation",
+      "reason": "Chevron is reserved for navigation; checked state selects; status action commits with explicit instruction."
+    },
+    {
+      "case": "Tablet and accessibility text",
+      "reason": "Same components reflow; side-by-side detail is not a second data model."
+    }
+  ],
+  "guard": "Adding a new renderer for an existing role requires a documented gap or a reusable variant, with small/dark/large-text and focus regression tests."
+}

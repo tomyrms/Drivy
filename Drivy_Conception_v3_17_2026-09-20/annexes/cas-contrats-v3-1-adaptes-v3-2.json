@@ -1,0 +1,1066 @@
+{
+  "status": "SCHEMA_VALIDATION_ONLY",
+  "description": "Données fictives. Cas positifs et négatifs de structure, pas exécution du service, contrôle des droits, signature ou recette appareil. Rejoués en V3.2 avec champs obligatoires ajoutés aux fixtures ; cas originaux conservés dans cas-contrats-v3-1.json.",
+  "cases": [
+    {
+      "id": "SC001",
+      "title": "PATCH téléphone sans retransmettre les noms",
+      "schema": "AdministrativeProfileCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "policyVersionId": "00000000-0000-4000-8000-000000000002",
+        "contactPhone": "+41000000000"
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC002",
+      "title": "PATCH sans aucun champ modifié",
+      "schema": "AdministrativeProfileCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "policyVersionId": "00000000-0000-4000-8000-000000000002"
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC003",
+      "title": "Champ inconnu refusé",
+      "schema": "AdministrativeProfileCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "policyVersionId": "00000000-0000-4000-8000-000000000002",
+        "contactPhone": "+41000000000",
+        "admin": true
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC004",
+      "title": "Photo facultative",
+      "schema": "ProfileFieldRule",
+      "value": {
+        "field": "profilePhotoDocumentId",
+        "requirement": "OPTIONAL",
+        "stage": "OPTIONAL",
+        "purposeCode": "PERSONALISATION",
+        "explanation": "Photo facultative pour personnaliser le profil."
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC005",
+      "title": "Photo obligatoire interdite",
+      "schema": "ProfileFieldRule",
+      "value": {
+        "field": "profilePhotoDocumentId",
+        "requirement": "REQUIRED",
+        "stage": "JOIN",
+        "purposeCode": "PERSONALISATION",
+        "explanation": "Photo facultative pour personnaliser le profil."
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC006",
+      "title": "Nom à l’entrée",
+      "schema": "ProfileFieldRule",
+      "value": {
+        "field": "firstName",
+        "requirement": "REQUIRED",
+        "stage": "JOIN",
+        "purposeCode": "IDENTIFICATION",
+        "explanation": "Identifier le dossier scolaire."
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC007",
+      "title": "Nom incohérent facultatif",
+      "schema": "ProfileFieldRule",
+      "value": {
+        "field": "firstName",
+        "requirement": "OPTIONAL",
+        "stage": "JOIN",
+        "purposeCode": "IDENTIFICATION",
+        "explanation": "Identifier le dossier scolaire."
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC008",
+      "title": "Politique avec deux noms et photo facultative",
+      "schema": "ProfileFieldPolicyCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "effectiveFrom": "2026-09-19T10:00:00Z",
+        "fields": [
+          {
+            "field": "firstName",
+            "requirement": "REQUIRED",
+            "stage": "JOIN",
+            "purposeCode": "IDENTIFICATION",
+            "explanation": "Identifier le dossier scolaire."
+          },
+          {
+            "field": "lastName",
+            "requirement": "REQUIRED",
+            "stage": "JOIN",
+            "purposeCode": "IDENTIFICATION",
+            "explanation": "Identifier le dossier scolaire."
+          },
+          {
+            "field": "profilePhotoDocumentId",
+            "requirement": "OPTIONAL",
+            "stage": "OPTIONAL",
+            "purposeCode": "PERSONALISATION",
+            "explanation": "Photo facultative pour personnaliser le profil."
+          }
+        ],
+        "noticeVersionId": "00000000-0000-4000-8000-000000000002",
+        "impactAcknowledged": true
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC009",
+      "title": "Politique avec nom de famille manquant",
+      "schema": "ProfileFieldPolicyCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "effectiveFrom": "2026-09-19T10:00:00Z",
+        "fields": [
+          {
+            "field": "firstName",
+            "requirement": "REQUIRED",
+            "stage": "JOIN",
+            "purposeCode": "IDENTIFICATION",
+            "explanation": "Identifier le dossier scolaire."
+          },
+          {
+            "field": "profilePhotoDocumentId",
+            "requirement": "OPTIONAL",
+            "stage": "OPTIONAL",
+            "purposeCode": "PERSONALISATION",
+            "explanation": "Photo facultative pour personnaliser le profil."
+          }
+        ],
+        "noticeVersionId": "00000000-0000-4000-8000-000000000002",
+        "impactAcknowledged": true
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC010",
+      "title": "Politique avec prénom dupliqué",
+      "schema": "ProfileFieldPolicyCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "effectiveFrom": "2026-09-19T10:00:00Z",
+        "fields": [
+          {
+            "field": "firstName",
+            "requirement": "REQUIRED",
+            "stage": "JOIN",
+            "purposeCode": "IDENTIFICATION",
+            "explanation": "Identifier le dossier scolaire."
+          },
+          {
+            "field": "firstName",
+            "requirement": "REQUIRED",
+            "stage": "JOIN",
+            "purposeCode": "IDENTIFICATION",
+            "explanation": "Identifier le dossier scolaire."
+          },
+          {
+            "field": "lastName",
+            "requirement": "REQUIRED",
+            "stage": "JOIN",
+            "purposeCode": "IDENTIFICATION",
+            "explanation": "Identifier le dossier scolaire."
+          }
+        ],
+        "noticeVersionId": "00000000-0000-4000-8000-000000000002",
+        "impactAcknowledged": true
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC011",
+      "title": "Inscription volontaire élève",
+      "schema": "EnrollCourseCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "learnerId": "00000000-0000-4000-8000-000000000002",
+        "acceptedOfferRevision": 2,
+        "commercialSelection": {
+          "mode": "ENTITLEMENT",
+          "serviceProductVersionId": "00000000-0000-4000-8000-000000000003",
+          "quantity": 1,
+          "entitlementLotId": "00000000-0000-4000-8000-000000000004",
+          "acceptedTermsVersionId": "00000000-0000-4000-8000-000000000005"
+        },
+        "acceptedOccurrenceIds": [
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000008",
+          "00000000-0000-4000-8000-000000000009"
+        ],
+        "source": "SELF",
+        "requestEvidenceNote": null
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC012",
+      "title": "Personnel sans preuve de demande",
+      "schema": "EnrollCourseCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "learnerId": "00000000-0000-4000-8000-000000000002",
+        "acceptedOfferRevision": 2,
+        "commercialSelection": {
+          "mode": "ENTITLEMENT",
+          "serviceProductVersionId": "00000000-0000-4000-8000-000000000003",
+          "quantity": 1,
+          "entitlementLotId": "00000000-0000-4000-8000-000000000004",
+          "acceptedTermsVersionId": "00000000-0000-4000-8000-000000000005"
+        },
+        "acceptedOccurrenceIds": [
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000008",
+          "00000000-0000-4000-8000-000000000009"
+        ],
+        "source": "RECORDED_REQUEST",
+        "requestEvidenceNote": null
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC013",
+      "title": "Demande reçue hors application documentée",
+      "schema": "EnrollCourseCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "learnerId": "00000000-0000-4000-8000-000000000002",
+        "acceptedOfferRevision": 2,
+        "commercialSelection": {
+          "mode": "ENTITLEMENT",
+          "serviceProductVersionId": "00000000-0000-4000-8000-000000000003",
+          "quantity": 1,
+          "entitlementLotId": "00000000-0000-4000-8000-000000000004",
+          "acceptedTermsVersionId": "00000000-0000-4000-8000-000000000005"
+        },
+        "acceptedOccurrenceIds": [
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000008",
+          "00000000-0000-4000-8000-000000000009"
+        ],
+        "source": "RECORDED_REQUEST",
+        "requestEvidenceNote": "Demande explicite reçue par téléphone ; opérateur authentifié."
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC014",
+      "title": "SELF avec fausse note opérateur",
+      "schema": "EnrollCourseCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "learnerId": "00000000-0000-4000-8000-000000000002",
+        "acceptedOfferRevision": 2,
+        "commercialSelection": {
+          "mode": "ENTITLEMENT",
+          "serviceProductVersionId": "00000000-0000-4000-8000-000000000003",
+          "quantity": 1,
+          "entitlementLotId": "00000000-0000-4000-8000-000000000004",
+          "acceptedTermsVersionId": "00000000-0000-4000-8000-000000000005"
+        },
+        "acceptedOccurrenceIds": [
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000008",
+          "00000000-0000-4000-8000-000000000009"
+        ],
+        "source": "SELF",
+        "requestEvidenceNote": "Saisi par opérateur"
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC015",
+      "title": "Occurrences dupliquées",
+      "schema": "EnrollCourseCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "learnerId": "00000000-0000-4000-8000-000000000002",
+        "acceptedOfferRevision": 2,
+        "commercialSelection": {
+          "mode": "ENTITLEMENT",
+          "serviceProductVersionId": "00000000-0000-4000-8000-000000000003",
+          "quantity": 1,
+          "entitlementLotId": "00000000-0000-4000-8000-000000000004",
+          "acceptedTermsVersionId": "00000000-0000-4000-8000-000000000005"
+        },
+        "acceptedOccurrenceIds": [
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000006"
+        ],
+        "source": "SELF",
+        "requestEvidenceNote": null
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC016",
+      "title": "Sélection GPS versionnée sans note",
+      "schema": "CaptureSelection",
+      "value": {
+        "captureId": "00000000-0000-4000-8000-000000000003",
+        "selectedObservationIds": [],
+        "expectedCaptureVersion": 3,
+        "observationVersions": []
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC017",
+      "title": "Sélection GPS sans version attendue",
+      "schema": "CaptureSelection",
+      "value": {
+        "captureId": "00000000-0000-4000-8000-000000000003",
+        "selectedObservationIds": [],
+        "observationVersions": []
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC018",
+      "title": "Observation non située",
+      "schema": "GeoObservationCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "draftId": "00000000-0000-4000-8000-000000000002",
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": null,
+        "text": "Observation pédagogique non située."
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC019",
+      "title": "Observation située complète",
+      "schema": "GeoObservationCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "draftId": "00000000-0000-4000-8000-000000000002",
+        "captureId": "00000000-0000-4000-8000-000000000003",
+        "segmentId": "00000000-0000-4000-8000-000000000004",
+        "pointSequence": 1,
+        "competencyId": null,
+        "text": "Observation pédagogique non située."
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC020",
+      "title": "Ancrage partiellement renseigné",
+      "schema": "GeoObservationCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "draftId": "00000000-0000-4000-8000-000000000002",
+        "captureId": "00000000-0000-4000-8000-000000000003",
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": null,
+        "text": "Observation pédagogique non située."
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC021",
+      "title": "Durée entière en secondes",
+      "schema": "MetricValue",
+      "value": {
+        "id": "M02",
+        "status": "AVAILABLE",
+        "value": 11100,
+        "unit": "SECONDS",
+        "numerator": null,
+        "denominator": null,
+        "missingCount": 0,
+        "explanation": null
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC022",
+      "title": "Durée avec mauvaise unité",
+      "schema": "MetricValue",
+      "value": {
+        "id": "M02",
+        "status": "AVAILABLE",
+        "value": 11100,
+        "unit": "COUNT",
+        "numerator": null,
+        "denominator": null,
+        "missingCount": 0,
+        "explanation": null
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC023",
+      "title": "Durée fractionnaire",
+      "schema": "MetricValue",
+      "value": {
+        "id": "M02",
+        "status": "AVAILABLE",
+        "value": 1.5,
+        "unit": "SECONDS",
+        "numerator": null,
+        "denominator": null,
+        "missingCount": 0,
+        "explanation": null
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC024",
+      "title": "Encaissement net signé",
+      "schema": "MetricValue",
+      "value": {
+        "id": "M06",
+        "status": "AVAILABLE",
+        "value": -10500,
+        "unit": "CHF_CENTS",
+        "numerator": null,
+        "denominator": null,
+        "missingCount": 0,
+        "explanation": null
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC025",
+      "title": "Centimes fractionnaires interdits",
+      "schema": "MetricValue",
+      "value": {
+        "id": "M06",
+        "status": "AVAILABLE",
+        "value": 10.5,
+        "unit": "CHF_CENTS",
+        "numerator": null,
+        "denominator": null,
+        "missingCount": 0,
+        "explanation": null
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC026",
+      "title": "Ratio borné",
+      "schema": "MetricValue",
+      "value": {
+        "id": "M04",
+        "status": "AVAILABLE",
+        "value": 0.45,
+        "unit": "RATIO",
+        "numerator": null,
+        "denominator": null,
+        "missingCount": 0,
+        "explanation": null
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC027",
+      "title": "Ratio supérieur à un",
+      "schema": "MetricValue",
+      "value": {
+        "id": "M04",
+        "status": "AVAILABLE",
+        "value": 1.1,
+        "unit": "RATIO",
+        "numerator": null,
+        "denominator": null,
+        "missingCount": 0,
+        "explanation": null
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC028",
+      "title": "Valeur absente disponible",
+      "schema": "MetricValue",
+      "value": {
+        "id": "M02",
+        "status": "AVAILABLE",
+        "value": null,
+        "unit": "SECONDS",
+        "numerator": null,
+        "denominator": null,
+        "missingCount": 0,
+        "explanation": null
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC029",
+      "title": "Mesure non applicable",
+      "schema": "MetricValue",
+      "value": {
+        "id": "M02",
+        "status": "NOT_APPLICABLE",
+        "value": null,
+        "unit": "SECONDS",
+        "numerator": null,
+        "denominator": null,
+        "missingCount": 0,
+        "explanation": null
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC030",
+      "title": "Série et valeur de même identifiant",
+      "schema": "MetricPoint",
+      "value": {
+        "metricId": "M02",
+        "bucketStartDate": "2026-09-01",
+        "bucketEndDateExclusive": "2026-10-01",
+        "value": {
+          "id": "M02",
+          "status": "AVAILABLE",
+          "value": 11100,
+          "unit": "SECONDS",
+          "numerator": null,
+          "denominator": null,
+          "missingCount": 0,
+          "explanation": null
+        }
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC031",
+      "title": "Série et valeur de mauvais identifiant",
+      "schema": "MetricPoint",
+      "value": {
+        "metricId": "M01",
+        "bucketStartDate": "2026-09-01",
+        "bucketEndDateExclusive": "2026-10-01",
+        "value": {
+          "id": "M02",
+          "status": "AVAILABLE",
+          "value": 11100,
+          "unit": "SECONDS",
+          "numerator": null,
+          "denominator": null,
+          "missingCount": 0,
+          "explanation": null
+        }
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC032",
+      "title": "Audience globale",
+      "schema": "CourseAudience",
+      "value": {
+        "mode": "ALL_ACTIVE_LEARNERS",
+        "siteIds": [],
+        "categoryCodes": [],
+        "languages": []
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC033",
+      "title": "Audience par catégorie explicite",
+      "schema": "CourseAudience",
+      "value": {
+        "mode": "FILTERED",
+        "siteIds": [],
+        "categoryCodes": [
+          "B"
+        ],
+        "languages": []
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC034",
+      "title": "Audience géographique non supportée",
+      "schema": "CourseAudience",
+      "value": {
+        "mode": "FILTERED",
+        "siteIds": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "categoryCodes": [
+          "B"
+        ],
+        "languages": []
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC035",
+      "title": "Audience linguistique non supportée",
+      "schema": "CourseAudience",
+      "value": {
+        "mode": "FILTERED",
+        "siteIds": [],
+        "categoryCodes": [
+          "B"
+        ],
+        "languages": [
+          "fr"
+        ]
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC036",
+      "title": "Audience filtrée sans critère",
+      "schema": "CourseAudience",
+      "value": {
+        "mode": "FILTERED",
+        "siteIds": [],
+        "categoryCodes": [],
+        "languages": []
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC037",
+      "title": "Audience globale avec critère caché",
+      "schema": "CourseAudience",
+      "value": {
+        "mode": "ALL_ACTIVE_LEARNERS",
+        "siteIds": [],
+        "categoryCodes": [
+          "B"
+        ],
+        "languages": []
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC038",
+      "title": "Prêt à activer sans espace déjà actif",
+      "schema": "SchoolReadiness",
+      "value": {
+        "schoolId": "00000000-0000-4000-8000-000000000001",
+        "configurationVersion": 1,
+        "computedAt": "2026-09-19T10:00:00Z",
+        "activationReady": true,
+        "activationBlockers": [],
+        "capabilities": [
+          {
+            "capability": "CAN_USE_WORKSPACE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          },
+          {
+            "capability": "CAN_PLAN_LESSON",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          },
+          {
+            "capability": "CAN_CAPTURE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          },
+          {
+            "capability": "CAN_PUBLISH_COURSE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          }
+        ]
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC039",
+      "title": "Prêt à activer avec blocage contradictoire",
+      "schema": "SchoolReadiness",
+      "value": {
+        "schoolId": "00000000-0000-4000-8000-000000000001",
+        "configurationVersion": 1,
+        "computedAt": "2026-09-19T10:00:00Z",
+        "activationReady": true,
+        "activationBlockers": [
+          {
+            "code": "SETUP_INCOMPLETE",
+            "message": "Configuration à terminer",
+            "field": null,
+            "purpose": null,
+            "resourceId": null,
+            "destinationKey": null
+          }
+        ],
+        "capabilities": [
+          {
+            "capability": "CAN_USE_WORKSPACE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          },
+          {
+            "capability": "CAN_PLAN_LESSON",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          },
+          {
+            "capability": "CAN_CAPTURE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          },
+          {
+            "capability": "CAN_PUBLISH_COURSE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          }
+        ]
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC040",
+      "title": "Préparation avec capacité dupliquée",
+      "schema": "SchoolReadiness",
+      "value": {
+        "schoolId": "00000000-0000-4000-8000-000000000001",
+        "configurationVersion": 1,
+        "computedAt": "2026-09-19T10:00:00Z",
+        "activationReady": true,
+        "activationBlockers": [],
+        "capabilities": [
+          {
+            "capability": "CAN_USE_WORKSPACE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          },
+          {
+            "capability": "CAN_USE_WORKSPACE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          },
+          {
+            "capability": "CAN_USE_WORKSPACE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          },
+          {
+            "capability": "CAN_USE_WORKSPACE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          }
+        ]
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC041",
+      "title": "Préparation bloquée sans motif",
+      "schema": "SchoolReadiness",
+      "value": {
+        "schoolId": "00000000-0000-4000-8000-000000000001",
+        "configurationVersion": 1,
+        "computedAt": "2026-09-19T10:00:00Z",
+        "activationReady": false,
+        "activationBlockers": [],
+        "capabilities": [
+          {
+            "capability": "CAN_USE_WORKSPACE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          },
+          {
+            "capability": "CAN_PLAN_LESSON",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          },
+          {
+            "capability": "CAN_CAPTURE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          },
+          {
+            "capability": "CAN_PUBLISH_COURSE",
+            "ready": false,
+            "blockers": [
+              {
+                "code": "SETUP_INCOMPLETE",
+                "message": "Configuration à terminer",
+                "field": null,
+                "purpose": null,
+                "resourceId": null,
+                "destinationKey": null
+              }
+            ]
+          }
+        ]
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC042",
+      "title": "Configuration modules explicite",
+      "schema": "SchoolModules",
+      "value": {
+        "gpsEnabled": true,
+        "packsEnabled": false,
+        "collectiveCoursesEnabled": true,
+        "courseOffersVisibleByDefault": true
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC043",
+      "title": "Module manquant dans la projection",
+      "schema": "SchoolModules",
+      "value": {
+        "packsEnabled": false,
+        "collectiveCoursesEnabled": true,
+        "courseOffersVisibleByDefault": true
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC044",
+      "title": "Commande d’envoi avec preuve dédiée forme uniquement",
+      "schema": "TrackChunkCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "segmentIndex": 0,
+        "segmentStartedAt": "2026-09-19T10:00:00Z",
+        "segmentStartReason": "START",
+        "contentHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "points": [
+          {
+            "sequence": 0,
+            "elapsedMs": 0,
+            "capturedAt": "2026-09-19T10:00:00Z",
+            "latitude": 0,
+            "longitude": 0,
+            "accuracyMeters": 5
+          }
+        ],
+        "signedUploadAuthorization": "FIXTURE_NON_SIGNEE"
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC045",
+      "title": "Ancienne preuve de collecte employée pour envoyer",
+      "schema": "TrackChunkCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "segmentIndex": 0,
+        "segmentStartedAt": "2026-09-19T10:00:00Z",
+        "segmentStartReason": "START",
+        "contentHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "points": [
+          {
+            "sequence": 0,
+            "elapsedMs": 0,
+            "capturedAt": "2026-09-19T10:00:00Z",
+            "latitude": 0,
+            "longitude": 0,
+            "accuracyMeters": 5
+          }
+        ],
+        "signedCaptureAuthorization": "FIXTURE_NON_SIGNEE"
+      },
+      "expectedValid": false
+    },
+    {
+      "id": "SC046",
+      "title": "Continuation de segment explicite",
+      "schema": "ReplaySegment",
+      "value": {
+        "segmentId": "00000000-0000-4000-8000-000000000001",
+        "segmentIndex": 0,
+        "points": [
+          {
+            "sequence": 0,
+            "elapsedMs": 0,
+            "capturedAt": "2026-09-19T10:00:00Z",
+            "latitude": 0,
+            "longitude": 0,
+            "accuracyMeters": 5
+          }
+        ],
+        "hasGapBefore": false,
+        "qualityLabel": "AVAILABLE",
+        "continuesFromPreviousPage": false,
+        "continuesOnNextPage": true
+      },
+      "expectedValid": true
+    },
+    {
+      "id": "SC047",
+      "title": "Continuation manquante",
+      "schema": "ReplaySegment",
+      "value": {
+        "segmentId": "00000000-0000-4000-8000-000000000001",
+        "segmentIndex": 0,
+        "points": [
+          {
+            "sequence": 0,
+            "elapsedMs": 0,
+            "capturedAt": "2026-09-19T10:00:00Z",
+            "latitude": 0,
+            "longitude": 0,
+            "accuracyMeters": 5
+          }
+        ],
+        "hasGapBefore": false,
+        "qualityLabel": "AVAILABLE",
+        "continuesFromPreviousPage": false
+      },
+      "expectedValid": false
+    }
+  ]
+}

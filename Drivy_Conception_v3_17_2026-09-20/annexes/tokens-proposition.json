@@ -1,0 +1,135 @@
+{
+  "status": "direction_A_selected_values_reference_pending_visual_acceptance",
+  "colors": {
+    "light": {
+      "canvas": "#F7F8FA",
+      "surface": "#FFFFFF",
+      "surfaceMuted": "#EEF2F7",
+      "text": "#18212B",
+      "muted": "#536174",
+      "accent": "#245BD6",
+      "accentPressed": "#1947AD",
+      "onAccent": "#FFFFFF",
+      "accentSoft": "#EAF0FE",
+      "successText": "#17633D",
+      "successSurface": "#E9F5EE",
+      "warningText": "#7A4D00",
+      "warningSurface": "#FFF3D6",
+      "dangerText": "#B02B37",
+      "dangerSurface": "#FDECEF",
+      "border": "#D9E0E9",
+      "controlBorder": "#78869A",
+      "disabledText": "#5D6A7C",
+      "disabledSurface": "#E8EDF3",
+      "route": "#245BD6",
+      "routeHalo": "#FFFFFF",
+      "mapCanvas": "#E8EDF2",
+      "mapPark": "#DDEBDF",
+      "mapWater": "#DCEBFA"
+    },
+    "dark": {
+      "canvas": "#10151C",
+      "surface": "#19222E",
+      "surfaceMuted": "#222E3E",
+      "text": "#F2F5FA",
+      "muted": "#B0BCCC",
+      "accent": "#91B5FF",
+      "accentPressed": "#B4CCFF",
+      "onAccent": "#10264D",
+      "accentSoft": "#233859",
+      "successText": "#98DBB4",
+      "successSurface": "#18372A",
+      "warningText": "#F2CB83",
+      "warningSurface": "#382D19",
+      "dangerText": "#FFADB4",
+      "dangerSurface": "#40252D",
+      "border": "#34445A",
+      "controlBorder": "#71849D",
+      "disabledText": "#B0BCCC",
+      "disabledSurface": "#222E3E",
+      "route": "#91B5FF",
+      "routeHalo": "#10151C",
+      "mapCanvas": "#202A36",
+      "mapPark": "#263B35",
+      "mapWater": "#203A54"
+    }
+  },
+  "spacing": [
+    4,
+    8,
+    12,
+    16,
+    24,
+    32,
+    48
+  ],
+  "version": "3.8",
+  "layout": {
+    "breakpointsLogical": {
+      "compactMaxExclusive": 600,
+      "wideMinInclusive": 1024
+    },
+    "mapPanelMin": 320,
+    "mapPanelMax": 400,
+    "mapUsefulMin": 480,
+    "notes": "Propositions de prototype : largeur de fenêtre disponible et texte agrandi priment ; unités CSS/points/dp non pixels physiques."
+  },
+  "minimumTouchTargetsByPlatform": {
+    "webCSS": 44,
+    "iOSPoints": 44,
+    "AndroidDp": 48
+  },
+  "primaryAndCriticalTouchTargetsByPlatform": {
+    "webCSS": 48,
+    "iOSPoints": 48,
+    "AndroidDp": 48
+  },
+  "nativeControlPolicy": "Conserver composants système qualifiés et leurs comportements ; minima Drivy applicables aux contrôles tactiles personnalisés.",
+  "materialPolicy": {
+    "content": "opaque_readable_default",
+    "nativeChrome": "platform_material_when_qualified",
+    "fallback": "opaque_same_semantics",
+    "contrastOnMap": "requires_rendered_verification",
+    "forbidGlobalGlassTheme": true
+  },
+  "direction": "A · Cartographie native",
+  "colorSpace": "sRGB",
+  "typography": {
+    "platformFont": "system",
+    "appleBodyStyle": "body",
+    "appleBodyReferencePt": 17,
+    "webBodyReferencePx": 16,
+    "webDenseReferencePx": 14,
+    "metadataReference": 14,
+    "weights": [
+      400,
+      500,
+      600,
+      700
+    ],
+    "paragraphMaxCh": 65,
+    "doNotBundleFonts": true,
+    "referenceSizesNotFixedDynamicType": true
+  },
+  "radii": {
+    "field": 12,
+    "content": 16,
+    "mapPanel": 24,
+    "nativeControls": "system_geometry_not_overridden"
+  },
+  "motionMs": {
+    "feedback": 120,
+    "context": 180,
+    "reduceMotion": 0,
+    "note": "Durées Drivy proposées pour animations custom ; ne pas surcharger les transitions système."
+  },
+  "routeRendering": {
+    "widthPt": 5,
+    "haloWidthPt": 9,
+    "observationDiameterPt": 28,
+    "observationHitAreaPt": 48,
+    "measurementsOnly": true,
+    "neverConnectGaps": true,
+    "mapTokensAreSchematicOnly": true
+  }
+}

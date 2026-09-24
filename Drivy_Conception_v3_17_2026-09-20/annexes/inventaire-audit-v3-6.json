@@ -1,0 +1,1166 @@
+{
+  "sourceVersion": "3.5",
+  "targetVersion": "3.6",
+  "sourceFileCount": 139,
+  "sourceMarkdownCount": 63,
+  "coverage": {
+    "identity_access_onboarding": "Cross-read identity, membership, onboarding, profile, permissions and global deletion; V36-06/07.",
+    "planning_occupation": "Rechecked planning, collective commitments, price revisions and global authorization boundary; proposals about vehicle scope preserved.",
+    "gps_reports_documents": "Cross-read GPS, publication, no-GPS path, transfer, file states, Swift and current DTOs; V36-01/02.",
+    "courses_packs_finance": "Cross-read presence, enrollment, closure, rights, payments, offer snapshots and service delivery; V36-03/04/05.",
+    "calendar_notifications": "Rechecked offers vs commitments, language, preferences, initial state and enrollment intent; V36-07.",
+    "web_tablet_ux": "Screen/flow consequences updated and native stack preserved; no new app prototype or real accessibility test.",
+    "archive_deletion_security": "Cross-read obligations, last admin, privacy requests, purge, access revocation, transaction ordering; V36-06.",
+    "metrics_export": "Cross-read denominators, service delivery and payments to avoid new false lesson/revenue counts; no production data.",
+    "technical_contracts_sync": "All operation/schema references and structural validators; selected transaction invariants and migration fields; no full OpenAPI metaschema tooling available.",
+    "roadmap_tests_trace": "Current phases, bidirectional T links, new cases and unresolved choices; all product scenarios remain unexecuted.",
+    "research_design_history": "User decisions distinguished from recommendations. External revalidation targeted, not all historical commercial/legal observations."
+  },
+  "limitations": [
+    "Structural traversal of all files is not an assertion that every external fact was revalidated.",
+    "Semantic findings are supported by before-correction excerpts.",
+    "No app code, binary, user interface or real service was tested."
+  ],
+  "files": [
+    {
+      "path": "00-synthese.md",
+      "bytes": 8785,
+      "sourceSHA256": "a24b76294c3a6264dd7b7aa00540b0aad19a29f5d8be87ca32535fe0c2af0aa2",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "01-fonctionnalites-prevues.md",
+      "bytes": 18138,
+      "sourceSHA256": "e98f15865d49950837eaa2255b453698bc0e4d91dd57d83aa7009341bb08d155",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "01-recherche/audit-existant.md",
+      "bytes": 14115,
+      "sourceSHA256": "3424fc6db38d15041fcf1cdd9b77338fd98c0ebfab5850fc24e95cfb25672a60",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "01-recherche/auto-ecoles-suisses.md",
+      "bytes": 8234,
+      "sourceSHA256": "047c682aae2ad6843309b6e6a3ede72ca8657a59c4ede2f8a495198498352737",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "01-recherche/benchmark.md",
+      "bytes": 10487,
+      "sourceSHA256": "7b3d1a018baecec2050054f92d582e884e4dc447e09958828ed830e474101d6f",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "01-recherche/inventaire-decisions.md",
+      "bytes": 50170,
+      "sourceSHA256": "4f5c676f89a16b0b3c301b8682653719ae2ae8ad14daa3ea0dde32ca4801ae93",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "01-recherche/ui-ux-mobile-etat-art.md",
+      "bytes": 8918,
+      "sourceSHA256": "dc90403752e13247804c7bb069043dcdf8ec0ef6ef60d9c8912cb6e1afeba8ff",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "01-recherche/vision-perimetre.md",
+      "bytes": 6885,
+      "sourceSHA256": "64da73e35584eb1e0633bf4ca099d33c2d62c2ec61308b2f84e0d5648e4e46ee",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "01-recherche/web-tablette-onboarding.md",
+      "bytes": 7109,
+      "sourceSHA256": "447fcc8f96712e2aa78a73cad21569fe01554b99fb421f1455f721e5b3831b15",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "02-experience/architecture-information.md",
+      "bytes": 4611,
+      "sourceSHA256": "60e71bac15b85e7f9d743d3cd00c4aec91731adc931b171e4fe0032ba2f9a3b5",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "02-experience/design-system.md",
+      "bytes": 16969,
+      "sourceSHA256": "c11362c823d015954f99d838d66da8c37c0fa64cba274967e10e555a10803d2c",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "02-experience/directions-artistiques.md",
+      "bytes": 6331,
+      "sourceSHA256": "32724a9966b34f095ed6a8807c6c8dd45e83fa45d402db9a85c0a781f58290a9",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "02-experience/ecrans.md",
+      "bytes": 70408,
+      "sourceSHA256": "251831c223ff84e2a7691394144eeab85f94fab6ee86391a7fa44e463c0b69a3",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "02-experience/parcours.md",
+      "bytes": 29170,
+      "sourceSHA256": "9d7160961d3bd07fbf3896d9916088c483173124038b46237e040c626ce55482",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "02-experience/patterns-mobile-parcours.md",
+      "bytes": 10436,
+      "sourceSHA256": "ffa7120203ce602e6c9a44a90a44f069cfa9316f2d4751a86f2dcf2ec9233bc7",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "02-experience/plateformes-tablette-web.md",
+      "bytes": 11347,
+      "sourceSHA256": "bcf4261061935bbe086d89aef2dd3e15b985500cf8215c9f84eacf1423083641",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "02-experience/qualite-ui-ux-anti-slop.md",
+      "bytes": 10418,
+      "sourceSHA256": "48d96fac33f61a86aa7dcfed3513bf0e012220cf6b0cbbe2da93948ccc1b8835",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "02-experience/wireframes.md",
+      "bytes": 14041,
+      "sourceSHA256": "c65f299d02c315db6449c88aebb5b64da8dd2f6782f3a78b200daab08c651674",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/bilans-documents.md",
+      "bytes": 10007,
+      "sourceSHA256": "211d4e9feb8e95894b10eb1f48ba573bee50cb3b7f98b522eb4b69bd6644ddbb",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/calendrier-notifications.md",
+      "bytes": 11025,
+      "sourceSHA256": "0226299373997f2ebdfd0b84bf3c04dc874614eac77c6cb0d049e1de3121f5ff",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/catalogue-packs.md",
+      "bytes": 10883,
+      "sourceSHA256": "77d84d006121e541d12369b9a7ec5f659121441824c591fe8be09144aee0be09",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/compte-suppression-globale.md",
+      "bytes": 10496,
+      "sourceSHA256": "8f2fc01b800e8f24b4b7da2f7e3fb0e4b4c1570cf1d46f8f60a1e60b44168d60",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/cours-collectifs.md",
+      "bytes": 15963,
+      "sourceSHA256": "6473fb3afd7dbb9282ac8e89b918cd3101631ef106428487c61f8976059c008f",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/extensions.md",
+      "bytes": 7873,
+      "sourceSHA256": "d81466004d728f960bd3dc0fa5b4e3bca605d6c105b6bcf4ab8cbdac0cd5dc22",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/gestion-web-archivage.md",
+      "bytes": 12633,
+      "sourceSHA256": "c2d51a1bb1b9cbf38d8fdb771b2d0864e36a2519dd48e87730ba7d367aea4158",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/gps-replay.md",
+      "bytes": 16987,
+      "sourceSHA256": "c2ba49e284324db9d498918dd45257ebc83c9d4cb1d838162d2283466ba0bb2f",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/hors-ligne-vie-privee.md",
+      "bytes": 10600,
+      "sourceSHA256": "74cd532ea3ca8280824ac50b10375e5e9c40b687a6b13a1469ef7aae2c059046",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/identites-formations.md",
+      "bytes": 18533,
+      "sourceSHA256": "b6cd2e24a049a16a63e50687a6c6d9598bc93723dfb45385981dc6d91b77b0eb",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/onboarding.md",
+      "bytes": 20382,
+      "sourceSHA256": "d59f56b269a120bdf31b6d5ad3380e3aa65a93e2cb0d3e1aa4acff882d73ea00",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/paiements-communications.md",
+      "bytes": 9774,
+      "sourceSHA256": "a1790186a1c1e50648fc4677344d28685857fe444eb7eab2bd43130d006f0330",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/planning-lecons.md",
+      "bytes": 19964,
+      "sourceSHA256": "2bdd0f9d72542224fa4856ba86edc7ab8b5492f8b2dc04c883100d4fa711f132",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/regles-etats.md",
+      "bytes": 83202,
+      "sourceSHA256": "0ebeff6c395b8e7688b160679c0cbf75d6be8347a28556b985394ae31381b802",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/roles-permissions.md",
+      "bytes": 13225,
+      "sourceSHA256": "2530aa59c016369b65a843b515fafd27ccbc0d8832b064b2d6b25bd854a34b16",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "03-fonctionnel/statistiques.md",
+      "bytes": 13487,
+      "sourceSHA256": "77169e16f70ad6cf0f2692170a5a2874cde8740ab5a484b604e76d9181b108aa",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/api.md",
+      "bytes": 46214,
+      "sourceSHA256": "8d7e6eab407bd2576cce7699dc65336a5fbb49eed252ca5069bbdf1f80abd76b",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/architecture-client-swift.md",
+      "bytes": 18643,
+      "sourceSHA256": "55517640e6d57aa90dbe7840daf8bcb47e2d244bea1354c9c4f8ae015a6d19ce",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/architecture-decisions.md",
+      "bytes": 21637,
+      "sourceSHA256": "201861f86d03a21073c091852aa8577124fdfb5c443c18caaa73f5262baa342f",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/fichiers-temps-communications.md",
+      "bytes": 14254,
+      "sourceSHA256": "6e8e307a64124cc67661a33cc5aa2582fc40ec2bf8a4713ca2823b9a6c160b00",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/integration-ios-ipados.md",
+      "bytes": 12838,
+      "sourceSHA256": "56e119e77a312f12974c6438391eae45c0dfc5d0fd7f6eba62df3c1cd6d4a6d3",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/integration-mobile-transverse.md",
+      "bytes": 18242,
+      "sourceSHA256": "87ec214df99f77734a2bd85fda0870fcafe532bb06d0308046ce64ba1b19268a",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/modele-donnees.md",
+      "bytes": 38041,
+      "sourceSHA256": "77b14d4c301247bdcb0cdb15b1fac923ae62a06d39654395a01c85e974ccf547",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/openapi.yaml",
+      "bytes": 1096115,
+      "sourceSHA256": "b8e3a68b54cb94b32519bd46212a1b9e6a653661ba412ac7dfab7916c2bf9977",
+      "classification": "CONTRACT",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/preparation-android.md",
+      "bytes": 11597,
+      "sourceSHA256": "3fb192b63b99b8c99a532db20e62d42f73b8b33caeb797decf4b1884800d223c",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/securite-vie-privee.md",
+      "bytes": 22480,
+      "sourceSHA256": "f9f75c6c278d2877ed132be500a69f1fc75cdfa1731a7f218a756871dfe90186",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/synchronisation.md",
+      "bytes": 22155,
+      "sourceSHA256": "77c3371997a3fe2764d943ed524c26944d1f818fce6f4b1d43ba6fe27207036e",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/transactions-v2.md",
+      "bytes": 13772,
+      "sourceSHA256": "ecad9900f9fd27b82cb669479c12719313434dc6487487676c8b12ba44c1e2d1",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "04-technique/transactions-v3.md",
+      "bytes": 12854,
+      "sourceSHA256": "90c65bc737f44a31552ded200a8fb8eddcc78a5eefddc78f3ab5f3f17e079e59",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "05-realisation/deploiement-exploitation.md",
+      "bytes": 22402,
+      "sourceSHA256": "7e7d9b61fe146b69340a5b80516f1de33c9a93e4d49ca1a1facdf836bc889af2",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "05-realisation/migration.md",
+      "bytes": 13702,
+      "sourceSHA256": "3ad672436fa9135d2057568217392ea5dd51671a50933fa2892e0ca597b76d8c",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "05-realisation/qualification-mobile-ui-ux.md",
+      "bytes": 54206,
+      "sourceSHA256": "3152967d48d3f94d1dafd7c67bb434dc08dfdfb1fda343cd793f8f7601fb51a6",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "05-realisation/roadmap-backlog.md",
+      "bytes": 12148,
+      "sourceSHA256": "024a4f3d3967af224c2950cdd8cd0690f441a6d43b0c605494e0fc2a2ef52b17",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "05-realisation/tests-recette.md",
+      "bytes": 273240,
+      "sourceSHA256": "17cb34fd4543941c9d6ad51d64dd8fa3a40d688fae429a250fb1794e277ec7f8",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "06-gouvernance/audit-corrections-v3-1.md",
+      "bytes": 24510,
+      "sourceSHA256": "1918818eba8bbc9ee5dff9266be1530792968449f016b2da76fcaa443032f620",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "06-gouvernance/audit-corrections-v3-2.md",
+      "bytes": 18728,
+      "sourceSHA256": "53e15e3e80d114cbc4fb869fc230f2df8cc178452b62ebf63cbc4bf192676af9",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "06-gouvernance/audit-corrections-v3-5.md",
+      "bytes": 10921,
+      "sourceSHA256": "0538ef8e3f3bb74a0ed33150c16292f454e05cc1307ef2b11dff89500103390f",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "06-gouvernance/changements-v2.md",
+      "bytes": 3414,
+      "sourceSHA256": "9cacc742439e80db9c97b18e6d1936f017605239428fe163f46a89e340812546",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "06-gouvernance/changements-v3-3.md",
+      "bytes": 8015,
+      "sourceSHA256": "eb7b1c83ab63c6cce9c594ec35b6c521ad7776d11a2806066163607d02e8c7e2",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "06-gouvernance/changements-v3-4.md",
+      "bytes": 9291,
+      "sourceSHA256": "d7645dc46e0c1dec557e6f211f34eed053add6daa32ca69d81cf0d12b6cf3a35",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "06-gouvernance/changements-v3.md",
+      "bytes": 3809,
+      "sourceSHA256": "39339c1ccccaa0c89ab6411633502f217f14f8aa7015ea0dc6a424858b0ba440",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "06-gouvernance/glossaire-decisions-questions.md",
+      "bytes": 27542,
+      "sourceSHA256": "8ed98630e339b0e29d036ff6240b223d0aa672c28c6173b67b8ee4fab93d7a95",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "06-gouvernance/revue-coherence.md",
+      "bytes": 2908,
+      "sourceSHA256": "2454bdd771a3c8533fbdb62a4580cc84e69256e25f3e2e22dd1be693656b9ff1",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "06-gouvernance/sources.md",
+      "bytes": 59164,
+      "sourceSHA256": "166693860e6f27a47f62ed3d92201cd2467dab11d48c85452a659d9fb9ff9df6",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "06-gouvernance/tracabilite.md",
+      "bytes": 111044,
+      "sourceSHA256": "b635d354c7631c9712502b2f8938d0b77307e663f3d3811212a4b5e0d39392dd",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "LIRE_DOSSIER.html",
+      "bytes": 3278862,
+      "sourceSHA256": "e7ac9e20cd721ed4da0e4ebd93ae45eadfaf567ae3fb7bbf1c61d34cb0a8a0f3",
+      "classification": "GENERATED_READER",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "README.md",
+      "bytes": 17209,
+      "sourceSHA256": "7ab34fc42ab4eeeedbb35ab8e87311ff350ae51e869ae62e7cf10d8e62e3b69c",
+      "classification": "REFERENCE_MARKDOWN",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "SHA256SUMS.txt",
+      "bytes": 13858,
+      "sourceSHA256": "9ed481c0430cb02a5e5dd37efbd4c8042fe9fcea04c7a54fbfcfd9261d8b3a46",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/cas-contrats-v3-1-adaptes-v3-2.json",
+      "bytes": 31397,
+      "sourceSHA256": "b79b9db61a9176d98fd454d9ac5719f75a0f23e05bff5801055d441c123c842e",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/cas-contrats-v3-1-adaptes-v3-5.json",
+      "bytes": 31540,
+      "sourceSHA256": "38d0c0f73e6d6d29642502831b5e21717aa64b98de3a3906d47f65518b4a8c20",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/cas-contrats-v3-1.json",
+      "bytes": 31277,
+      "sourceSHA256": "5cc4c1095cf9c731f2d64c2053b9965dfd01b9504c07566f1270991ba603f1ae",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/cas-contrats-v3-2-adaptes-v3-5.json",
+      "bytes": 101361,
+      "sourceSHA256": "27ad2c5ace78d1514202679a5735f52e8503d91224b1cd7e35bae4c804170dab",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/cas-contrats-v3-2.json",
+      "bytes": 101150,
+      "sourceSHA256": "c7b2ce295aa5f66b6df40267ebb683176b6683a775bd7b7fea7dcc6a724f8ffb",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/cas-contrats-v3-5.json",
+      "bytes": 21883,
+      "sourceSHA256": "ca75ed75dd239640fd73e0f873a70325d83bdcef815a455603909c419aa70c39",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/comparaison-contrats-v3-1-v3-2.json",
+      "bytes": 16165,
+      "sourceSHA256": "3aaad0ffe51ab39a3d92339eae8df687a39ced810c1e4a2ff79eeca887ee1567",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/comparaison-contrats-v3-4-v3-5.json",
+      "bytes": 7827,
+      "sourceSHA256": "79e86ed3d1e84200baf46e272c77549e228814df51ad282cbe9a8a125f0fae69",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/contrat-changements-v3-2.json",
+      "bytes": 1677,
+      "sourceSHA256": "4b14ba9e3f99631546e71125ef5b7647250c41ee78138903989c93732129b0e9",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/controle-transversal-v3-1.json",
+      "bytes": 19622,
+      "sourceSHA256": "d8d130631620b892f9a52794dbac3d1efc8256fc4172f363ea821b4d99c442f6",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/controle-v3-1-avant-correction.json",
+      "bytes": 8517,
+      "sourceSHA256": "06dc47ee1e321c6eab551194d8a08d80b915fa72fafb00a0497952e0995552b8",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/controle-v3-2-avant-enrichissement.json",
+      "bytes": 17581,
+      "sourceSHA256": "822ff4e725f70aa3158548a782b99f54cb019ad09f43538792bc5778377ce9ad",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/controle-v3-4-avant-correction.json",
+      "bytes": 17582,
+      "sourceSHA256": "05fda039da0f8c0ba5c3a5515bf42e7a0c78e1e82257dfb173331e30f3b53926",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/controle-v3-avant-correction.json",
+      "bytes": 2275,
+      "sourceSHA256": "9bf680951b526ac56a54d5795db828a1133b39e2b716601bc4a2a98418a7ce69",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/corrections-v3-1-vers-v3-2.patch",
+      "bytes": 450688,
+      "sourceSHA256": "41190552ef1a6318bf839a9039e2ce005ee2291b76b17f4651bb800bf7a7c02e",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/corrections-v3-3-vers-v3-4.patch",
+      "bytes": 368504,
+      "sourceSHA256": "de0fc57485f3b5007e47b123006d635ed998f5bcfa5b2f4ea2441ab62f47dfdb",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/corrections-v3-4-vers-v3-5.patch",
+      "bytes": 708712,
+      "sourceSHA256": "8f7999b86e20f1e375651005137a223695aa2a879983f6a874fa9ab69f4163a7",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/corrections-v3-vers-v3-1.patch",
+      "bytes": 303857,
+      "sourceSHA256": "df827feec4e5f00f322ed5ed913b21f634bdbd76746d37b27fc7949cd210e4f7",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/enrichissement-v3-2-vers-v3-3.patch",
+      "bytes": 215561,
+      "sourceSHA256": "22624c6e23dae8b9c58c0563a087fc451ebd9fffb92c37216120a88cfbca1235",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/exemples-v3.json",
+      "bytes": 6691,
+      "sourceSHA256": "0d49211c3bde0ff75978fb49c1d5e8b9c552cffa42d610ba51fdcf99fa84328c",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/fixtures-statistiques-v3.json",
+      "bytes": 707,
+      "sourceSHA256": "41b1c679d64b65564f26c868b3715e5061134b645ce76bbc0a591d145f28aeb8",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/generer-lecteur.py",
+      "bytes": 13728,
+      "sourceSHA256": "060e8c0a5304dec4c8acbc4b82c518268cce772015ff315a7c3124038c2cf8b4",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "annexes/inventaire-revue-v3-1.json",
+      "bytes": 25537,
+      "sourceSHA256": "d648bb7eb3e6a694901268fb6cedf17842b5d231cf083e9f4e4b8dd6f8243d22",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/inventaire-revue-v3-2.json",
+      "bytes": 22961,
+      "sourceSHA256": "6659c2ca46c203293b45318377a2df8eb85c1cc3cacc3eb877de694afd5cdfa9",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/inventaire-revue-v3-3.json",
+      "bytes": 2823,
+      "sourceSHA256": "46d624bbdca696edf38a76b6b1164cbbf05a7b6c753aa8b4505cfc0ebdb11b64",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/lecteur-v3-2-1440.png",
+      "bytes": 274052,
+      "sourceSHA256": "f66fd146dd651f52ee4d6441db46619216402271add3a11c5ccdbbd1b91ff4db",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/lecteur-v3-2-390.png",
+      "bytes": 71118,
+      "sourceSHA256": "da4eb119f0ba1ecb8d2fa964436949c12ac05657211234ddc981ba5305635bec",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/lecteur-v3-2-834.png",
+      "bytes": 210454,
+      "sourceSHA256": "cfdd4bbfa2e710ac7a0198b4d2d2f1724576759275ff97e426d784220990551f",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/lecteur-v3-3-1440.png",
+      "bytes": 212480,
+      "sourceSHA256": "98debb2da6e4125b97a288a6428d7d9fe770f605ec5983436f27f95c1a07c35c",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/lecteur-v3-3-390.png",
+      "bytes": 74194,
+      "sourceSHA256": "9bb6a2aa6abd9d7a09beca41546d3ee9acd7b1e84a95f4508281430b213959c0",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/lecteur-v3-3-834.png",
+      "bytes": 136768,
+      "sourceSHA256": "74b2495d863dbf6cc98b7008084e38e56e4d4c932b9ba38faf869e53f3f818cd",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/lecteur-v3-4-1440.png",
+      "bytes": 208172,
+      "sourceSHA256": "b188197125ee94cf4ac435f32164e94da0b97a8b92c842e1130712fb04913c8b",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/lecteur-v3-4-390.png",
+      "bytes": 69497,
+      "sourceSHA256": "cdc2661ed0727e31e29b6f19b8be0085e485210162bee5a363d315e5198aad89",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/lecteur-v3-4-834.png",
+      "bytes": 140329,
+      "sourceSHA256": "6e197807553f28ed9ddde5dcdaee66a873a7f1f3bd58c24d9882051266768b87",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/lecteur-v3-5-1440.png",
+      "bytes": 235518,
+      "sourceSHA256": "cf3bba87c31d5793a0636f956bf6e19bf63f5acc5c5bdf0e633f014e679078ed",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/lecteur-v3-5-390.png",
+      "bytes": 74669,
+      "sourceSHA256": "9d09363889a0d6d4d3ed6518b1d4cdfb45aacd5e00e5253f11770e5d3224ab47",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/lecteur-v3-5-834.png",
+      "bytes": 178583,
+      "sourceSHA256": "d4d42a86c6df33d553d01eac45c024051459fb872686d9858b851328eb33ee8d",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/matrice-build-mobile-v3-3.json",
+      "bytes": 3544,
+      "sourceSHA256": "dab2d581b5b7cbfef97c1c1f02580934a86280422587b324dbcb70c1a69857d3",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/matrice-build-mobile-v3-4.json",
+      "bytes": 5317,
+      "sourceSHA256": "f7c3e4822d479662fd47d8b75becbfc7f1fb0c3dc7ca66dfe9a12299c0f28e3b",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/plan-revue-v3-5.json",
+      "bytes": 685,
+      "sourceSHA256": "e47da09ceb43ac3454deff1c8b16a20e2c7a4d21978bf17f04e81c65a9122a2d",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/preuves-archive.json",
+      "bytes": 8873,
+      "sourceSHA256": "548214573b87b0fd6c0d3d21b784791ec12c21e6af0ec6feca0ff6069dff6ff1",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/preuves-audit-v3-1.json",
+      "bytes": 37669,
+      "sourceSHA256": "9dd37163f456a310decf020ea30bd083f88b71c6b5cc1afab40bc6ca818a738d",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/preuves-audit-v3-2.json",
+      "bytes": 52286,
+      "sourceSHA256": "9c336f9bcd4a2b17d43e2b554eef869290d682a7ba9472cf89681049e5c14b59",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/preuves-audit-v3-5.json",
+      "bytes": 15482,
+      "sourceSHA256": "be4efd24d265a934832d9ffb70bd99bf2c3f2497d498bb86a7f68684e7fd2508",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/provenance-v3-3.json",
+      "bytes": 428,
+      "sourceSHA256": "0d09c1ef269cc997993075c376dfae25a3ca61ea26563939e940584c772f84b6",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/provenance-v3-4.json",
+      "bytes": 18822,
+      "sourceSHA256": "9e7cfdbf620f24241c8eb458bbea6cbc7dafefc1205aa0c2aacb6d44b94a7548",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/provenance-v3-5.json",
+      "bytes": 18637,
+      "sourceSHA256": "556e0a49a05198a2638dc9a0399ce64b17f976a5c35c2d35243a97fce8ae9bd4",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/qualification-mobile-v3-3.json",
+      "bytes": 35499,
+      "sourceSHA256": "c71c6efa6f8c9b62414695e2ef54f4cae70425b764e50889e769f2a285e29bb1",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/qualification-mobile-v3-4.json",
+      "bytes": 45422,
+      "sourceSHA256": "632a9eeb04373d3acb961572cbf11dbaa10726febce98dad4bfebc5340497eaf",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/regles-v3.json",
+      "bytes": 9254,
+      "sourceSHA256": "f6d885a793c2d9abaf5559b4e5a9a7cd43a34572c899f624ad5f841b5c948ab0",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "annexes/schemas-base-v3-4.json",
+      "bytes": 372290,
+      "sourceSHA256": "e7f494a2eab41dc539eda5c9c18a07485b55979555645604a843299b862d631b",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/sources-mobile-v3-3.json",
+      "bytes": 18174,
+      "sourceSHA256": "90f71926aae5da98038c47452a9ca0e804b91cae7f9cc5b93859002cf3f8703d",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/sources-mobile-v3-4.json",
+      "bytes": 26101,
+      "sourceSHA256": "1ba4f95ec0bae6345ffeaad8cd727807df534814fd504710d8c4d7897ce36158",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/tokens-proposition.json",
+      "bytes": 1939,
+      "sourceSHA256": "78a7b1e98eb4314a2448cacd5a5efaa6b6fd50b674e5fcb7147ac70bdd3d4d16",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/traceabilite.json",
+      "bytes": 166863,
+      "sourceSHA256": "5c5bfe79eeffbe48878fac8ee93401b82d6fa35b1f09b25276725453a7579a24",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "annexes/verification-documentaire.json",
+      "bytes": 22075,
+      "sourceSHA256": "81373fe364b6dc30320c1302ac84bae30c820cf9b4999787b702b072a802fef1",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "annexes/verification-lecteur.json",
+      "bytes": 1780,
+      "sourceSHA256": "e341dcec2fda685fbb095eb181ba9061449fe69fd3e0c17facbea4bf3b7a999a",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "annexes/verification-mobile-v3-3.json",
+      "bytes": 1070,
+      "sourceSHA256": "7788ab7b159c06d7f10f743d1c4e844eeb3e2b1f4c6bc1bfddd09d3ab503365d",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/verification-mobile-v3-4.json",
+      "bytes": 1089,
+      "sourceSHA256": "7e5bbc8f16d3afe767ef968214f9e0ee4a041ef0c30f32915c5bf50cabf08ab7",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/verification-mobile-v3-5.json",
+      "bytes": 1136,
+      "sourceSHA256": "4f8015de323be4cf29ac710f920c8f38d540a40cc05a741ba2b5f5bb59a410e4",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/verification-originaux.json",
+      "bytes": 2486,
+      "sourceSHA256": "688a3565001f19b6299fc4ee1e9d2937b0d830a65fd2f0fe3748b887d800667a",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "annexes/verification-swift-v3-4.json",
+      "bytes": 3779,
+      "sourceSHA256": "a91b9b70f97a1bd9111758cf2f8a98d8d0c3db091c8a877f08a2397ee2e456dc",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/verification-swift-v3-5.json",
+      "bytes": 3859,
+      "sourceSHA256": "2449d9b778fa8edb34d7bb069feae64d055b3bb5ab6f7b24e8c9a67b84b5cfd5",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/verification-v3-5.json",
+      "bytes": 5257,
+      "sourceSHA256": "98fce1bfc5c1f2aee5486b2e07d77a294cba8b9c278f44fea8388275613d0407",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/verifier-contrats-transversaux.py",
+      "bytes": 4391,
+      "sourceSHA256": "d3b41a890b60c4ffc1ef6be62cff5e591a22ce4375b3e32efc9531909c457440",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/verifier-documentation.py",
+      "bytes": 14569,
+      "sourceSHA256": "5323458583c039c37df66ce429ba79a74ab0361e380fa2bdb499acd68a4074d3",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "annexes/verifier-lecteur.py",
+      "bytes": 4771,
+      "sourceSHA256": "a9bfcc268dcbd3bddd0c8b2d1eb21a1b678c2e490621ac399a382bddd94a9d50",
+      "classification": "ANNEX_OR_VERIFIER",
+      "presentInConsolidatedCopy": true,
+      "modified": true
+    },
+    {
+      "path": "annexes/verifier-mobile-v3-3.py",
+      "bytes": 6487,
+      "sourceSHA256": "dd43f40cb1c77c54a26b1d20c4b51ab2b28cc053cf04b2f061d8a649360ba113",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/verifier-mobile-v3-4.py",
+      "bytes": 6501,
+      "sourceSHA256": "e630f964d146bb6a376288c30ddf2a8311b1c82eac5bd5f871dbceb91de2c9df",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/verifier-mobile-v3-5.py",
+      "bytes": 6635,
+      "sourceSHA256": "fb661dc358e03df6b219bbd7bca7a76f13ee31198f214364c7b1eba9eea4a2f8",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/verifier-swift-v3-4.py",
+      "bytes": 4702,
+      "sourceSHA256": "d2a87ab38f51ea0a7155265afafb4daa8c70bfbe88d5b547e5b576f3417c62ce",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/verifier-swift-v3-5.py",
+      "bytes": 4773,
+      "sourceSHA256": "993ad38662ce19a2565a2d6191a064af7469bcc6fb1df3653483bb8175b8ac7f",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    },
+    {
+      "path": "annexes/verifier-v3-5.py",
+      "bytes": 4946,
+      "sourceSHA256": "77929571e0a57cad704b4dca7e596eb28a6c640ebf183dba841ccdf297167658",
+      "classification": "HISTORICAL_PROVENANCE",
+      "presentInConsolidatedCopy": true,
+      "modified": false
+    }
+  ],
+  "currentMarkdownCount": 64,
+  "newPaths": [
+    "06-gouvernance/audit-corrections-v3-6.md",
+    "annexes/__pycache__/verifier-contrats-transversaux.cpython-313.pyc",
+    "annexes/adaptation-fixtures-v3-6.json",
+    "annexes/cas-contrats-v3-1-adaptes-v3-6.json",
+    "annexes/cas-contrats-v3-2-adaptes-v3-6.json",
+    "annexes/cas-contrats-v3-5-adaptes-v3-6.json",
+    "annexes/cas-contrats-v3-6.json",
+    "annexes/comparaison-contrats-v3-5-v3-6.json",
+    "annexes/controle-v3-5-avant-correction.json",
+    "annexes/corrections-v3-5-vers-v3-6.patch",
+    "annexes/inventaire-audit-v3-6.json",
+    "annexes/lecteur-v3-6-1440.png",
+    "annexes/lecteur-v3-6-390.png",
+    "annexes/lecteur-v3-6-834.png",
+    "annexes/preuves-audit-v3-6.json",
+    "annexes/provenance-v3-6.json",
+    "annexes/schemas-base-v3-5.json",
+    "annexes/verification-contrats-transversaux-v3-6.json",
+    "annexes/verification-mobile-v3-6.json",
+    "annexes/verification-modele-prix-v3-6.json",
+    "annexes/verification-swift-v3-6.json",
+    "annexes/verification-v3-6.json",
+    "annexes/verifier-mobile-v3-6.py",
+    "annexes/verifier-swift-v3-6.py",
+    "annexes/verifier-v3-6.py"
+  ]
+}

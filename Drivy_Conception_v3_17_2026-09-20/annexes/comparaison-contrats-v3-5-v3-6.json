@@ -1,0 +1,410 @@
+{
+  "version": "3.6",
+  "baseVersion": "3.5",
+  "scope": "SAME_FICTITIOUS_PAYLOADS_JSON_SCHEMA_ONLY",
+  "productTestsExecuted": false,
+  "caseCount": 40,
+  "previouslyAcceptedNowRejected": 6,
+  "results": [
+    {
+      "id": "SC143",
+      "schema": "PublishCommand",
+      "beforeSchema": "PublishCommand",
+      "beforeValid": false,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC144",
+      "schema": "PublishCommand",
+      "beforeSchema": "PublishCommand",
+      "beforeValid": true,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": true
+    },
+    {
+      "id": "SC145",
+      "schema": "PublishCommand",
+      "beforeSchema": "PublishCommand",
+      "beforeValid": false,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC146",
+      "schema": "PublishCommand",
+      "beforeSchema": "PublishCommand",
+      "beforeValid": false,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC147",
+      "schema": "PublishedTextObservation",
+      "beforeSchema": "PublishedTextObservation",
+      "beforeValid": null,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC148",
+      "schema": "PublishedTextObservation",
+      "beforeSchema": "PublishedTextObservation",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC149",
+      "schema": "PublishedTextObservation",
+      "beforeSchema": "PublishedTextObservation",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC150",
+      "schema": "SegmentManifest",
+      "beforeSchema": "SegmentManifest",
+      "beforeValid": false,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC151",
+      "schema": "SegmentManifest",
+      "beforeSchema": "SegmentManifest",
+      "beforeValid": true,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": true
+    },
+    {
+      "id": "SC152",
+      "schema": "SegmentManifest",
+      "beforeSchema": "SegmentManifest",
+      "beforeValid": true,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": true
+    },
+    {
+      "id": "SC153",
+      "schema": "SegmentManifest",
+      "beforeSchema": "SegmentManifest",
+      "beforeValid": true,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": true
+    },
+    {
+      "id": "SC154",
+      "schema": "SegmentManifest",
+      "beforeSchema": "SegmentManifest",
+      "beforeValid": true,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC155",
+      "schema": "SegmentManifest",
+      "beforeSchema": "SegmentManifest",
+      "beforeValid": false,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC156",
+      "schema": "RecordServiceDeliveryCommand",
+      "beforeSchema": "RecordServiceDeliveryCommand",
+      "beforeValid": null,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC157",
+      "schema": "RecordServiceDeliveryCommand",
+      "beforeSchema": "RecordServiceDeliveryCommand",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC158",
+      "schema": "RecordServiceDeliveryCommand",
+      "beforeSchema": "RecordServiceDeliveryCommand",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC159",
+      "schema": "EntitlementMovement",
+      "beforeSchema": "EntitlementMovement",
+      "beforeValid": false,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC160",
+      "schema": "EntitlementMovement",
+      "beforeSchema": "EntitlementMovement",
+      "beforeValid": false,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC161",
+      "schema": "EntitlementMovement",
+      "beforeSchema": "EntitlementMovement",
+      "beforeValid": false,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC162",
+      "schema": "EntitlementMovement",
+      "beforeSchema": "EntitlementMovement",
+      "beforeValid": false,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC163",
+      "schema": "CloseCourseCommand",
+      "beforeSchema": "ReasonCommand",
+      "beforeValid": false,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC164",
+      "schema": "CloseCourseCommand",
+      "beforeSchema": "ReasonCommand",
+      "beforeValid": true,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": true
+    },
+    {
+      "id": "SC165",
+      "schema": "CloseCourseCommand",
+      "beforeSchema": "ReasonCommand",
+      "beforeValid": false,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC166",
+      "schema": "CloseCourseCommand",
+      "beforeSchema": "ReasonCommand",
+      "beforeValid": false,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC167",
+      "schema": "UnusedCourseRightDecision",
+      "beforeSchema": "UnusedCourseRightDecision",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC168",
+      "schema": "UnusedCourseRightDecision",
+      "beforeSchema": "UnusedCourseRightDecision",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC169",
+      "schema": "UnusedCourseRightDecision",
+      "beforeSchema": "UnusedCourseRightDecision",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC170",
+      "schema": "PackBasePriceLine",
+      "beforeSchema": "PackBasePriceLine",
+      "beforeValid": null,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC171",
+      "schema": "PackBasePriceLine",
+      "beforeSchema": "PackBasePriceLine",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC172",
+      "schema": "PackOptionPrice",
+      "beforeSchema": "PackOptionPrice",
+      "beforeValid": null,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC173",
+      "schema": "PackOptionPrice",
+      "beforeSchema": "PackOptionPrice",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC174",
+      "schema": "PurchasePriceOverride",
+      "beforeSchema": "PurchasePriceOverride",
+      "beforeValid": null,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC175",
+      "schema": "PurchasePriceOverride",
+      "beforeSchema": "PurchasePriceOverride",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC176",
+      "schema": "AccountDeletionPreview",
+      "beforeSchema": "AccountDeletionPreview",
+      "beforeValid": false,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC177",
+      "schema": "AccountDeletionPreview",
+      "beforeSchema": "AccountDeletionPreview",
+      "beforeValid": true,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": true
+    },
+    {
+      "id": "SC178",
+      "schema": "AccountDeletionPreview",
+      "beforeSchema": "AccountDeletionPreview",
+      "beforeValid": false,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC179",
+      "schema": "AccountDeletionPreview",
+      "beforeSchema": "AccountDeletionPreview",
+      "beforeValid": false,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC180",
+      "schema": "AccountDeletionPreview",
+      "beforeSchema": "AccountDeletionPreview",
+      "beforeValid": false,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": false,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC181",
+      "schema": "AccountDeletionMembershipPage",
+      "beforeSchema": "AccountDeletionMembershipPage",
+      "beforeValid": null,
+      "afterValid": true,
+      "expectedAfterValid": true,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    },
+    {
+      "id": "SC182",
+      "schema": "AccountDeletionMembershipPage",
+      "beforeSchema": "AccountDeletionMembershipPage",
+      "beforeValid": null,
+      "afterValid": false,
+      "expectedAfterValid": false,
+      "newSchema": true,
+      "previouslyAcceptedNowRejected": false
+    }
+  ]
+}

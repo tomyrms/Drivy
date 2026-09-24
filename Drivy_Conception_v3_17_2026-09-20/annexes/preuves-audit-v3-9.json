@@ -1,0 +1,173 @@
+{
+  "version": "3.9",
+  "sourceVersion": "3.8",
+  "linesReferToSourceNotCorrectedFiles": true,
+  "sourceProofs": [
+    {
+      "path": "DESIGN/assets/maquettes.template.html",
+      "sourceSHA256": "ecd645022144f5c4ba29747d8ffa603bedcef61ff1b5db41cdbb0b05b87600b0",
+      "matches": [
+        {
+          "sourceLine": 44,
+          "pattern": "Consulter la leçon",
+          "excerpt": "</h3><div class=\"meta\">Permis B · École Horizon</div><button class=\"plain-link\" data-scene=\"seance\">Consulter la leçon</button></div>${registered?calendarCourse(true):''}</div></div><div><div class=\"sectionlabel\">Cours disponibles</div>${registered?'<p class=\"meta\">Aucune autre offre dans ce jeu de démonstration.</p>':calendarCourse(false)}<p class=\"meta\" style=\"margin-top:12px\">Consulter un cours ne t’y inscrit pas.</p></div></div>${bottomnav('student','agenda')}`)}"
+        },
+        {
+          "sourceLine": 69,
+          "pattern": "case 'demoStart'",
+          "excerpt": "('Ouvrir le scénario GPS','demoStart')+action('Sans enregistrement','demoNoGPS','secondary'));break;case 'demoStart':document.getElementById('modal').close();capture='waiting';captureHasPoints=false;go('capture');break;case 'demoNoGPS':document.getElementById('modal').close();go('sans-gps');break;case 'pause':capture='paused';render();break;case 'resume':capture=captureHasPoints?'recording':'waiting';render();break;case 'stop':capture='stopped';render();break;case 'toBilan':modal('Constater la séance',`<p>Arrêter le GPS ne suffit pas à déclarer la leçon réalisée.</p><p>Dans cette démonstration, passez explicitement au scénario d’une séance réalisée pour examiner son bilan.</p><div class=\"notice\">Aucun constat réel, décompte ou paiement n’es"
+        },
+        {
+          "sourceLine": 46,
+          "pattern": "function bilanView",
+          "excerpt": "function bilanView(){return phone(topbar('Bilan de la leçon','Emma Laurent · Permis B')+`<div class=\"padded stack-lg\">${badge('Brouillon · non partagé')}<p class=\"meta\">Scénario : séance déclarée réalisée, bilan non publié.</p><div><h2>Un retour concret.</h2><p class=\"meta\" style=\"margin-top:10px\">Les observations seront visibles après publication.</p></div><label class=\"formfield\"><span>Ce qui a été travaillé</span><textarea>Anticipation des intersections et entrée dans les giratoires.</textarea></label><div class=\"card\"><div class=\"sectionlabel\">Anticipation</div><div class=\"stack\"><label class=\"choice\"><input type=\"radio\" name=\"level\" valu"
+        },
+        {
+          "sourceLine": 46,
+          "pattern": "previewBilan",
+          "excerpt": " tôt et verbaliser la décision à l’arrêt.</textarea></label>${action('Prévisualiser avant partage','previewBilan','full','doc')}<p class=\"meta\">La saisie de cette maquette n’est ni conservée ni envoyée.</p></div>`)}"
+        },
+        {
+          "sourceLine": 67,
+          "pattern": "getPointAtLength",
+          "excerpt": "eplay-dot').forEach(dot=>{const p=document.getElementById(dot.dataset.path);if(!p)return;const xy=p.getPointAtLength(p.getTotalLength()*replaySecond/2700);dot.setAttribute('cx',xy.x);dot.setAttribute('cy',xy.y)});document.querySelectorAll('[data-action=play]').forEach(b=>{b.innerHTML=icon(playing?'pause':'play');b.setAttribute('aria-label',playing?'Mettre en pause':'Lire le trajet fictif')});document.querySelectorAll('[data-action=speed]').forEach(b=>b.textContent='×'+speed)}"
+        },
+        {
+          "sourceLine": 68,
+          "pattern": "function filterStudents",
+          "excerpt": "function filterStudents(){let q=(document.getElementById('studentSearch')?.value||'').toLocaleLowerCase('fr'),f=document.getElementById('studentFilter')?.value||'all',n=0;document.querySelectorAll('[data-student-row]').forEach(row=>{const s=students[+row.dataset.studentRow];const show=s.name.toLocaleLowerCase('fr').includes(q)&&(f==='all'||(f==='archive'?s.status==='Archivé':s.status!=='Archivé'));row.hidden=!show;if(show)n++});document.getElementById('studentCount').textContent=n?`${n} dossier${n>1?'s':''} fictif${n>1?'s':''}`:'Aucun dossier ne correspond au filtre.'}"
+        },
+        {
+          "sourceLine": 69,
+          "pattern": "demoArchive",
+          "excerpt": "</p>`,s.count?action('Revenir au dossier','closeModal','secondary'):action('Archiver dans la démo','demoArchive','danger')+action('Annuler','closeModal','secondary'));break}case 'demoArchive':students[selectedStudent].status='Archivé';document.getElementById('modal').close();render();toast('Archivage simulé uniquement.');break;case 'weekList':{const g=document.querySelector('.grid-week'),l=document.querySelector('.week-list');g.style.display='none';l.style.display='block';b.textContent='Liste affichée';break}case 'invite':modal('Inviter un élève',`<label class=\"formfield\"><span>Email d’invitation</span><input type=\"email\" placeholder=\"Exemple uniquement\" autocomplete=\"off\"></label><p class=\"meta\">Ce prototype n’envoie aucun email. L’accepta"
+        }
+      ]
+    },
+    {
+      "path": "03-fonctionnel/bilans-documents.md",
+      "sourceSHA256": "b7a4099638c460fabb58a2aabe282539c53c09f57a4e3e73c08b656ca93f71a7",
+      "matches": [
+        {
+          "sourceLine": 27,
+          "pattern": "constat",
+          "excerpt": "Saisir ce qui a été travaillé, le constat et la prochaine étape. Pour les compétences effectivement observées, choisir un niveau textuel et un contexte ; les autres restent non observées. Prévisualiser exactement la version élève, vérifier les pièces READY, puis publier connecté. Le serveur crée une révision immuable et recalcule les compétences concernées. L’élève voit une date, un bilan, un contexte et la prochaine action, pas une moyenne."
+        }
+      ]
+    },
+    {
+      "path": "04-technique/openapi.yaml",
+      "sourceSHA256": "37cd5686860079dc29c7b4f9e57d189e0e13747d6e32c1f1c3dc7c90f578fc81",
+      "matches": [
+        {
+          "sourceLine": 29157,
+          "pattern": "SaveDraftCommand:",
+          "excerpt": "    SaveDraftCommand:"
+        },
+        {
+          "sourceLine": 27271,
+          "pattern": "ObservationInput:",
+          "excerpt": "    ObservationInput:"
+        }
+      ]
+    },
+    {
+      "path": "annexes/verifier-prototype-v3-8.py",
+      "sourceSHA256": "9ef13aa62519fb93e4d7205dad10179dad4a0d2509eb866b4e751f9140277dca",
+      "matches": [
+        {
+          "sourceLine": 92,
+          "pattern": "150%",
+          "excerpt": "':large,'passed':not errors,'errors':errors,'limits':['No Swift build, native device or real API.','150% prototype text does not emulate all Dynamic Type categories.','No VoiceOver/TalkBack or user tests.','Body overflow and button bounds are not an exhaustive accessibility audit.']}"
+        },
+        {
+          "sourceLine": 26,
+          "pattern": "for width in",
+          "excerpt": "        for width in [390,834,1440]:"
+        },
+        {
+          "sourceLine": 36,
+          "pattern": "large=[]",
+          "excerpt": "        large=[]"
+        }
+      ]
+    },
+    {
+      "path": "DESIGN/06-livraison-validation.md",
+      "sourceSHA256": "b54193d381ab9d98a591b83939bdb79410bbda80d06d695d3e8cd6d5dfd64d75",
+      "matches": [
+        {
+          "sourceLine": 21,
+          "pattern": "UX03",
+          "excerpt": "| UX03 · Sortir de la carte | Fermer puis retrouver la séance ; état de capture inchangé par simple navigation. | NON EXÉCUTÉ SUR APP |"
+        },
+        {
+          "sourceLine": 27,
+          "pattern": "UX09",
+          "excerpt": "| UX09 · Résultat encore en cours | Simuler 202 puis refus/confirmation ; ne jamais afficher Inscrit avant réponse finale. | NON EXÉCUTÉ SUR APP |"
+        },
+        {
+          "sourceLine": 29,
+          "pattern": "UX11",
+          "excerpt": "| UX11 · Texte et reflow | Tester tailles Dynamic Type maximales puis web 320 CSS px ; formulaires lisibles, planning avec liste équivalente. | NON EXÉCUTÉ SUR APP |"
+        }
+      ]
+    }
+  ],
+  "browserProbesBefore": {
+    "student_navigation": {
+      "startCommandsExposed": 1,
+      "staffNavExposed": true
+    },
+    "capture_return": {
+      "state": "waiting",
+      "savedPointsVisible": false
+    },
+    "bilan_fields": {
+      "count": 2,
+      "labels": [
+        "Ce qui a été travaillé",
+        "À travailler ensuite"
+      ],
+      "canClearLevel": 0
+    },
+    "preview": {
+      "containsEnteredText": false
+    },
+    "draftNavigation": {
+      "retained": false
+    },
+    "replayAnchor": {
+      "expected": [
+        575,
+        230
+      ],
+      "actual": [
+        575,
+        320.39923095703125
+      ]
+    },
+    "gap": {
+      "positionVisible": true,
+      "fullPathDrawn": 1
+    },
+    "filterAfterArchive": {
+      "query": "",
+      "filter": "all",
+      "count": "5 dossiers fictifs",
+      "focus": "<body><header class=\"top\"><div><a class=\"brand\" href=\"#overview\"><span class=\"brand-mark\" aria-hidde"
+    },
+    "modalClose": {
+      "focus": "previewBilan"
+    },
+    "inputTextScale": {
+      "normal": "17px",
+      "enlarged": "25.5px"
+    },
+    "emptyFilter": {
+      "count": "Aucun dossier ne correspond au filtre.",
+      "detail": "EL\nActif\nEmma Laurent\nFormation B · École Horizon\nDossier\nEngagements\nProchaine leçon\n\n21 sept. · 09:00\n\nEngagements à venir\n\n3 engagements\n\nLes notes et trajets privés ne sont pas affichés par le seu"
+    }
+  },
+  "scope": "Reproduced HTML prototype behaviours, not defects reproduced in the native application."
+}

@@ -1,0 +1,354 @@
+{
+  "version": "3.1",
+  "status": "DOCUMENTARY_CHECKS_ONLY",
+  "productTestsExecuted": false,
+  "errors": [],
+  "checks": {
+    "markdown": {
+      "files": 49,
+      "internalLinks": 2692,
+      "externalLinksNotRevalidated": 58
+    },
+    "schemaRegressions": {
+      "total": 47,
+      "positive": 20,
+      "negative": 27,
+      "passed": true,
+      "productCodeExercised": false,
+      "results": [
+        {
+          "id": "SC001",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC002",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC003",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC004",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC005",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC006",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC007",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC008",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC009",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC010",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC011",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC012",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC013",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC014",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC015",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC016",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC017",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC018",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC019",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC020",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC021",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC022",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC023",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC024",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC025",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC026",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC027",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC028",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC029",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC030",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC031",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC032",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC033",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC034",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC035",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC036",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC037",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC038",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC039",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC040",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC041",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC042",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC043",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC044",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC045",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC046",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC047",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        }
+      ]
+    },
+    "api": {
+      "operations": 191,
+      "schemas": 323,
+      "internalRefsResolved": 2817,
+      "schemaAndAnnexExamplesChecked": 21,
+      "mediaTypeExamplesChecked": 6,
+      "totalPositiveExamplesChecked": 27,
+      "openapiVersion": "3.1.0",
+      "fullOpenApiMetaSchemaValidation": false,
+      "note": "YAML, refs, paramètres de routes, schémas JSON2020-12 et exemples seulement ; pas validation OpenAPI complète ou serveur."
+    },
+    "catalogueConsistency": {
+      "apiRegistryEntries": 191,
+      "proseApiRows": 191,
+      "testRegistryEntries": 260,
+      "methodPathsAndIdentifiersChecked": true,
+      "featureTestReverseLinksChecked": true,
+      "meaning": "Relations documentaires, pas autorisation ni transaction exécutée."
+    },
+    "traceability": {
+      "features": 23,
+      "capabilities": 72,
+      "rules": 100,
+      "journeys": 28,
+      "screens": 48,
+      "apiOperations": 191,
+      "testSpecifications": 260
+    },
+    "fictitiousArithmetic": {
+      "calculated": {
+        "lessonCount": 3,
+        "durationSeconds": 11100,
+        "distinctLearners": 2,
+        "courseFillRatio": 0.45,
+        "netRecordedCents": 147000,
+        "netAfterReversalCents": 136000
+      },
+      "matches": true,
+      "productCodeExercised": false
+    },
+    "limitations": [
+      "Aucun build ni test métier exécuté",
+      "Aucune qualification réelle GPS/tablette",
+      "Aucun entretien utilisateur ou mesure marché",
+      "Pas audit juridique, de sécurité ni charge réel",
+      "Liens externes historiques non tous revalidés en V3.1",
+      "Pas validateur intégral méta-schéma OpenAPI installé"
+    ]
+  },
+  "errorCount": 0,
+  "passed": true
+}

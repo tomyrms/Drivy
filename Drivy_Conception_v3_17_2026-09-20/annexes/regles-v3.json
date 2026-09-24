@@ -1,0 +1,454 @@
+{
+  "status": "Index ; texte canonique unique dans regles-etats.md",
+  "version": "3.10",
+  "rules": [
+    {
+      "id": "R01",
+      "document": "03-fonctionnel/regles-etats.md#r01"
+    },
+    {
+      "id": "R02",
+      "document": "03-fonctionnel/regles-etats.md#r02"
+    },
+    {
+      "id": "R03",
+      "document": "03-fonctionnel/regles-etats.md#r03"
+    },
+    {
+      "id": "R04",
+      "document": "03-fonctionnel/regles-etats.md#r04"
+    },
+    {
+      "id": "R05",
+      "document": "03-fonctionnel/regles-etats.md#r05"
+    },
+    {
+      "id": "R06",
+      "document": "03-fonctionnel/regles-etats.md#r06"
+    },
+    {
+      "id": "R07",
+      "document": "03-fonctionnel/regles-etats.md#r07"
+    },
+    {
+      "id": "R08",
+      "document": "03-fonctionnel/regles-etats.md#r08"
+    },
+    {
+      "id": "R09",
+      "document": "03-fonctionnel/regles-etats.md#r09"
+    },
+    {
+      "id": "R10",
+      "document": "03-fonctionnel/regles-etats.md#r10"
+    },
+    {
+      "id": "R11",
+      "document": "03-fonctionnel/regles-etats.md#r11"
+    },
+    {
+      "id": "R12",
+      "document": "03-fonctionnel/regles-etats.md#r12"
+    },
+    {
+      "id": "R13",
+      "document": "03-fonctionnel/regles-etats.md#r13"
+    },
+    {
+      "id": "R14",
+      "document": "03-fonctionnel/regles-etats.md#r14"
+    },
+    {
+      "id": "R15",
+      "document": "03-fonctionnel/regles-etats.md#r15"
+    },
+    {
+      "id": "R16",
+      "document": "03-fonctionnel/regles-etats.md#r16"
+    },
+    {
+      "id": "R17",
+      "document": "03-fonctionnel/regles-etats.md#r17"
+    },
+    {
+      "id": "R18",
+      "document": "03-fonctionnel/regles-etats.md#r18"
+    },
+    {
+      "id": "R19",
+      "document": "03-fonctionnel/regles-etats.md#r19"
+    },
+    {
+      "id": "R20",
+      "document": "03-fonctionnel/regles-etats.md#r20"
+    },
+    {
+      "id": "R21",
+      "document": "03-fonctionnel/regles-etats.md#r21"
+    },
+    {
+      "id": "R22",
+      "document": "03-fonctionnel/regles-etats.md#r22"
+    },
+    {
+      "id": "R23",
+      "document": "03-fonctionnel/regles-etats.md#r23"
+    },
+    {
+      "id": "R24",
+      "document": "03-fonctionnel/regles-etats.md#r24"
+    },
+    {
+      "id": "R25",
+      "document": "03-fonctionnel/regles-etats.md#r25"
+    },
+    {
+      "id": "R26",
+      "document": "03-fonctionnel/regles-etats.md#r26"
+    },
+    {
+      "id": "R27",
+      "document": "03-fonctionnel/regles-etats.md#r27"
+    },
+    {
+      "id": "R28",
+      "document": "03-fonctionnel/regles-etats.md#r28"
+    },
+    {
+      "id": "R29",
+      "document": "03-fonctionnel/regles-etats.md#r29"
+    },
+    {
+      "id": "R30",
+      "document": "03-fonctionnel/regles-etats.md#r30"
+    },
+    {
+      "id": "R31",
+      "document": "03-fonctionnel/regles-etats.md#r31"
+    },
+    {
+      "id": "R32",
+      "document": "03-fonctionnel/regles-etats.md#r32"
+    },
+    {
+      "id": "R33",
+      "document": "03-fonctionnel/regles-etats.md#r33"
+    },
+    {
+      "id": "R34",
+      "document": "03-fonctionnel/regles-etats.md#r34"
+    },
+    {
+      "id": "R35",
+      "document": "03-fonctionnel/regles-etats.md#r35"
+    },
+    {
+      "id": "R36",
+      "document": "03-fonctionnel/regles-etats.md#r36"
+    },
+    {
+      "id": "R37",
+      "document": "03-fonctionnel/regles-etats.md#r37"
+    },
+    {
+      "id": "R38",
+      "document": "03-fonctionnel/regles-etats.md#r38"
+    },
+    {
+      "id": "R39",
+      "document": "03-fonctionnel/regles-etats.md#r39"
+    },
+    {
+      "id": "R40",
+      "document": "03-fonctionnel/regles-etats.md#r40"
+    },
+    {
+      "id": "R41",
+      "document": "03-fonctionnel/regles-etats.md#r41"
+    },
+    {
+      "id": "R42",
+      "document": "03-fonctionnel/regles-etats.md#r42"
+    },
+    {
+      "id": "R43",
+      "document": "03-fonctionnel/regles-etats.md#r43"
+    },
+    {
+      "id": "R44",
+      "document": "03-fonctionnel/regles-etats.md#r44"
+    },
+    {
+      "id": "R45",
+      "document": "03-fonctionnel/regles-etats.md#r45"
+    },
+    {
+      "id": "R46",
+      "document": "03-fonctionnel/regles-etats.md#r46"
+    },
+    {
+      "id": "R47",
+      "document": "03-fonctionnel/regles-etats.md#r47"
+    },
+    {
+      "id": "R48",
+      "document": "03-fonctionnel/regles-etats.md#r48"
+    },
+    {
+      "id": "R49",
+      "document": "03-fonctionnel/regles-etats.md#r49"
+    },
+    {
+      "id": "R50",
+      "document": "03-fonctionnel/regles-etats.md#r50"
+    },
+    {
+      "id": "R51",
+      "document": "03-fonctionnel/regles-etats.md#r51"
+    },
+    {
+      "id": "R52",
+      "document": "03-fonctionnel/regles-etats.md#r52"
+    },
+    {
+      "id": "R53",
+      "document": "03-fonctionnel/regles-etats.md#r53"
+    },
+    {
+      "id": "R54",
+      "document": "03-fonctionnel/regles-etats.md#r54"
+    },
+    {
+      "id": "R55",
+      "document": "03-fonctionnel/regles-etats.md#r55"
+    },
+    {
+      "id": "R56",
+      "document": "03-fonctionnel/regles-etats.md#r56"
+    },
+    {
+      "id": "R57",
+      "document": "03-fonctionnel/regles-etats.md#r57"
+    },
+    {
+      "id": "R58",
+      "document": "03-fonctionnel/regles-etats.md#r58"
+    },
+    {
+      "id": "R59",
+      "document": "03-fonctionnel/regles-etats.md#r59"
+    },
+    {
+      "id": "R60",
+      "document": "03-fonctionnel/regles-etats.md#r60"
+    },
+    {
+      "id": "R61",
+      "document": "03-fonctionnel/regles-etats.md#r61"
+    },
+    {
+      "id": "R62",
+      "document": "03-fonctionnel/regles-etats.md#r62"
+    },
+    {
+      "id": "R63",
+      "document": "03-fonctionnel/regles-etats.md#r63"
+    },
+    {
+      "id": "R64",
+      "document": "03-fonctionnel/regles-etats.md#r64"
+    },
+    {
+      "id": "R65",
+      "document": "03-fonctionnel/regles-etats.md#r65"
+    },
+    {
+      "id": "R66",
+      "document": "03-fonctionnel/regles-etats.md#r66"
+    },
+    {
+      "id": "R67",
+      "document": "03-fonctionnel/regles-etats.md#r67"
+    },
+    {
+      "id": "R68",
+      "document": "03-fonctionnel/regles-etats.md#r68"
+    },
+    {
+      "id": "R69",
+      "document": "03-fonctionnel/regles-etats.md#r69"
+    },
+    {
+      "id": "R70",
+      "document": "03-fonctionnel/regles-etats.md#r70"
+    },
+    {
+      "id": "R71",
+      "document": "03-fonctionnel/regles-etats.md#r71"
+    },
+    {
+      "id": "R72",
+      "document": "03-fonctionnel/regles-etats.md#r72"
+    },
+    {
+      "id": "R73",
+      "document": "03-fonctionnel/regles-etats.md#r73"
+    },
+    {
+      "id": "R74",
+      "document": "03-fonctionnel/regles-etats.md#r74"
+    },
+    {
+      "id": "R75",
+      "document": "03-fonctionnel/regles-etats.md#r75"
+    },
+    {
+      "id": "R76",
+      "document": "03-fonctionnel/regles-etats.md#r76"
+    },
+    {
+      "id": "R77",
+      "document": "03-fonctionnel/regles-etats.md#r77"
+    },
+    {
+      "id": "R78",
+      "document": "03-fonctionnel/regles-etats.md#r78"
+    },
+    {
+      "id": "R79",
+      "document": "03-fonctionnel/regles-etats.md#r79"
+    },
+    {
+      "id": "R80",
+      "document": "03-fonctionnel/regles-etats.md#r80"
+    },
+    {
+      "id": "R81",
+      "document": "03-fonctionnel/regles-etats.md#r81"
+    },
+    {
+      "id": "R82",
+      "document": "03-fonctionnel/regles-etats.md#r82"
+    },
+    {
+      "id": "R83",
+      "document": "03-fonctionnel/regles-etats.md#r83"
+    },
+    {
+      "id": "R84",
+      "document": "03-fonctionnel/regles-etats.md#r84"
+    },
+    {
+      "id": "R85",
+      "document": "03-fonctionnel/regles-etats.md#r85"
+    },
+    {
+      "id": "R86",
+      "document": "03-fonctionnel/regles-etats.md#r86"
+    },
+    {
+      "id": "R87",
+      "document": "03-fonctionnel/regles-etats.md#r87"
+    },
+    {
+      "id": "R88",
+      "document": "03-fonctionnel/regles-etats.md#r88"
+    },
+    {
+      "id": "R89",
+      "document": "03-fonctionnel/regles-etats.md#r89"
+    },
+    {
+      "id": "R90",
+      "document": "03-fonctionnel/regles-etats.md#r90"
+    },
+    {
+      "id": "R91",
+      "document": "03-fonctionnel/regles-etats.md#r91"
+    },
+    {
+      "id": "R92",
+      "document": "03-fonctionnel/regles-etats.md#r92"
+    },
+    {
+      "id": "R93",
+      "document": "03-fonctionnel/regles-etats.md#r93"
+    },
+    {
+      "id": "R94",
+      "document": "03-fonctionnel/regles-etats.md#r94"
+    },
+    {
+      "id": "R95",
+      "document": "03-fonctionnel/regles-etats.md#r95"
+    },
+    {
+      "id": "R96",
+      "document": "03-fonctionnel/regles-etats.md#r96"
+    },
+    {
+      "id": "R97",
+      "document": "03-fonctionnel/regles-etats.md#r97"
+    },
+    {
+      "id": "R98",
+      "document": "03-fonctionnel/regles-etats.md#r98"
+    },
+    {
+      "id": "R99",
+      "document": "03-fonctionnel/regles-etats.md#r99"
+    },
+    {
+      "id": "R100",
+      "document": "03-fonctionnel/regles-etats.md#r100"
+    },
+    {
+      "id": "R101",
+      "document": "03-fonctionnel/regles-etats.md#r101"
+    },
+    {
+      "id": "R102",
+      "document": "03-fonctionnel/regles-etats.md#r102"
+    },
+    {
+      "id": "R103",
+      "document": "03-fonctionnel/regles-etats.md#r103"
+    },
+    {
+      "id": "R104",
+      "document": "03-fonctionnel/regles-etats.md#r104"
+    },
+    {
+      "id": "R105",
+      "document": "03-fonctionnel/regles-etats.md#r105"
+    },
+    {
+      "id": "R106",
+      "document": "03-fonctionnel/regles-etats.md#r106"
+    },
+    {
+      "id": "R107",
+      "document": "03-fonctionnel/regles-etats.md#r107"
+    },
+    {
+      "id": "R108",
+      "document": "03-fonctionnel/regles-etats.md#r108"
+    },
+    {
+      "id": "R109",
+      "document": "03-fonctionnel/regles-etats.md#r109"
+    },
+    {
+      "id": "R110",
+      "document": "03-fonctionnel/regles-etats.md#r110"
+    },
+    {
+      "id": "R111",
+      "document": "03-fonctionnel/regles-etats.md#r111"
+    },
+    {
+      "id": "R112",
+      "document": "03-fonctionnel/regles-etats.md#r112"
+    }
+  ]
+}

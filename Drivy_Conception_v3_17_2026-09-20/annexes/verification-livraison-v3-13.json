@@ -1,0 +1,107 @@
+{
+  "version": "3.13",
+  "scope": "DOCUMENTARY_RELEASE_ONLY",
+  "executedAtUTC": "2026-09-19T23:21:48.104839+00:00",
+  "requestedBrowserChecks": true,
+  "passed": true,
+  "allChecksExecuted": true,
+  "reports": [
+    {
+      "script": "verifier-environnement.py",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_ENVIRONMENT_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "report": "annexes/verification-environnement-v3-13.json"
+    },
+    {
+      "script": "verifier-documentation.py",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_CHECKS_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "report": "annexes/verification-documentaire.json"
+    },
+    {
+      "script": "verifier-coherence-v3-13.py",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_COHERENCE_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "report": "annexes/verification-coherence-v3-13.json"
+    },
+    {
+      "script": "verifier-reference-v3-13.py",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_CHECKS_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "report": "annexes/verification-reference-v3-13.json"
+    },
+    {
+      "script": "verifier-fichiers-v3-13.py",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "SCHEMAS_AND_ISOLATED_DOCUMENTARY_MODELS",
+      "errorCount": 0,
+      "errors": [],
+      "report": "annexes/verification-fichiers-v3-13.json"
+    },
+    {
+      "script": "verifier-mobile-swift-v3-13.py",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "MOBILE_SWIFT_DOCUMENTATION_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "report": "annexes/verification-mobile-swift-v3-13.json"
+    },
+    {
+      "script": "verifier-design-v3-13.py",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DESIGN_DOCUMENTATION_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "report": "annexes/verification-design-v3-13.json"
+    },
+    {
+      "script": "verifier-prototype-v3-13.py",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_HTML_PROTOTYPE_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "report": "annexes/verification-prototype-v3-13.json"
+    },
+    {
+      "script": "verifier-live-prototype-v3-13.py",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_HTML_MEMORY_AND_DTO_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "report": "annexes/verification-live-prototype-v3-13.json"
+    },
+    {
+      "script": "verifier-lecteur-v3-13.py",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_READER_ONLY",
+      "errorCount": 0,
+      "errors": [],
+      "report": "annexes/verification-lecteur-v3-13.json"
+    }
+  ],
+  "productTestsExecuted": false,
+  "nativeBuildExecuted": false,
+  "limits": [
+    "A passing documentary release does not establish product correctness, safety or legal compliance.",
+    "All browser checks listed here are documentary HTML checks, not native product tests.",
+    "The integrity manifest is checked separately after reports are finalized."
+  ]
+}

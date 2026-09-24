@@ -1,0 +1,269 @@
+{
+  "version": "3.14",
+  "status": "DOCUMENTARY_PROTOTYPES_NOT_APP",
+  "scenes": [
+    {
+      "id": "VIS01",
+      "key": "seance",
+      "title": "Préparer une leçon",
+      "screens": [
+        "E22",
+        "E04"
+      ],
+      "platform": "iPhone",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS06",
+        "DS17",
+        "DS22"
+      ],
+      "intent": "Élève, objectifs et choix GPS avant le départ.",
+      "role": "STAFF"
+    },
+    {
+      "id": "VIS02",
+      "key": "capture",
+      "title": "Enregistrer une leçon",
+      "screens": [
+        "E23"
+      ],
+      "platform": "iPhone",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS08",
+        "DS17",
+        "DS18"
+      ],
+      "intent": "Carte dominante, bulle Signaler fixe, instant figé, thème et statut explicites. Observations privées en mémoire de démonstration.",
+      "role": "STAFF"
+    },
+    {
+      "id": "VIS03",
+      "key": "sans-gps",
+      "title": "Réaliser sans GPS",
+      "screens": [
+        "E04"
+      ],
+      "platform": "iPhone",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS07",
+        "DS09"
+      ],
+      "intent": "Objectifs, observations privées et bilan sans position ni carte désactivée.",
+      "role": "STAFF"
+    },
+    {
+      "id": "VIS04",
+      "key": "replay",
+      "title": "Revoir un trajet",
+      "screens": [
+        "E24",
+        "E09"
+      ],
+      "platform": "iPhone",
+      "components": [
+        "DS01",
+        "DS05",
+        "DS16",
+        "DS18"
+      ],
+      "intent": "Revoir un moment sur le trajet ; version publiée distincte des observations privées de cette visite.",
+      "role": "STUDENT"
+    },
+    {
+      "id": "VIS05",
+      "key": "agenda",
+      "title": "Agenda de l’élève",
+      "screens": [
+        "E25"
+      ],
+      "platform": "iPhone",
+      "components": [
+        "DS04",
+        "DS14",
+        "DS19",
+        "DS22"
+      ],
+      "intent": "Engagements distincts des offres sans inscription.",
+      "role": "STUDENT"
+    },
+    {
+      "id": "VIS06",
+      "key": "cours",
+      "title": "S’inscrire à une série",
+      "screens": [
+        "E26"
+      ],
+      "platform": "iPhone",
+      "components": [
+        "DS02",
+        "DS05",
+        "DS11",
+        "DS19",
+        "DS20"
+      ],
+      "intent": "Toutes les dates ; états disponible/en cours/inscrit/complet/à reconfirmer.",
+      "role": "STUDENT"
+    },
+    {
+      "id": "VIS07",
+      "key": "bilan",
+      "title": "Préparer le bilan",
+      "screens": [
+        "E08"
+      ],
+      "platform": "iPhone",
+      "components": [
+        "DS03",
+        "DS06",
+        "DS07",
+        "DS11",
+        "DS12"
+      ],
+      "intent": "Point travaillé, constat, prochaine étape, sélection explicite des observations privées et niveau contextualisé facultatif.",
+      "role": "STAFF"
+    },
+    {
+      "id": "VIS08",
+      "key": "profil",
+      "title": "Accueillir un élève",
+      "screens": [
+        "E40"
+      ],
+      "platform": "iPhone",
+      "components": [
+        "DS03",
+        "DS09",
+        "DS12",
+        "DS23"
+      ],
+      "intent": "Identité utile et photo facultative ; aucun GPS demandé au profil.",
+      "role": "STUDENT"
+    },
+    {
+      "id": "VIS09",
+      "key": "pack",
+      "title": "Lire un pack",
+      "screens": [
+        "E30"
+      ],
+      "platform": "iPhone",
+      "components": [
+        "DS05",
+        "DS13",
+        "DS21"
+      ],
+      "intent": "Droits de types différents et paiement dans deux groupes.",
+      "role": "STUDENT"
+    },
+    {
+      "id": "VIS10",
+      "key": "ipad-capture",
+      "title": "La leçon sur iPad",
+      "screens": [
+        "E23"
+      ],
+      "platform": "iPad",
+      "components": [
+        "DS01",
+        "DS02",
+        "DS08",
+        "DS17",
+        "DS18",
+        "DS22"
+      ],
+      "intent": "Carte et signalement adaptés à la largeur utile ; fenêtre compacte sans perdre la sélection en cours.",
+      "role": "STAFF"
+    },
+    {
+      "id": "VIS11",
+      "key": "ipad-agenda",
+      "title": "Agenda du moniteur sur iPad",
+      "screens": [
+        "E03"
+      ],
+      "platform": "iPad",
+      "components": [
+        "DS04",
+        "DS14",
+        "DS15",
+        "DS22"
+      ],
+      "intent": "Semaine et détail ; vue liste sur fenêtre trop étroite.",
+      "role": "STAFF"
+    },
+    {
+      "id": "VIS12",
+      "key": "web-eleves",
+      "title": "Gérer les dossiers",
+      "screens": [
+        "E34",
+        "E07"
+      ],
+      "platform": "Web",
+      "components": [
+        "DS01",
+        "DS03",
+        "DS06",
+        "DS11",
+        "DS22"
+      ],
+      "intent": "Recherche, tableau/détail, archivage via aperçu.",
+      "role": "STAFF"
+    },
+    {
+      "id": "VIS13",
+      "key": "web-activite",
+      "title": "Consulter l’activité",
+      "screens": [
+        "E45"
+      ],
+      "platform": "Web",
+      "components": [
+        "DS05",
+        "DS13",
+        "DS24"
+      ],
+      "intent": "Mesures, période, définition et limites, pas de données de trace privées.",
+      "role": "STAFF"
+    },
+    {
+      "id": "VIS14",
+      "key": "web-ecole",
+      "title": "Configurer une école",
+      "screens": [
+        "E38"
+      ],
+      "platform": "Web",
+      "components": [
+        "DS03",
+        "DS06",
+        "DS23"
+      ],
+      "intent": "Catégories, prestations et modules ; aucune configuration GPS imposée.",
+      "role": "STAFF"
+    },
+    {
+      "id": "VIS15",
+      "key": "mes-lecons",
+      "title": "Mes leçons et prochaine séance",
+      "screens": [
+        "E14",
+        "E04"
+      ],
+      "platform": "iPhone",
+      "components": [
+        "DS01",
+        "DS04",
+        "DS05",
+        "DS22"
+      ],
+      "intent": "Consultation élève sans commandes de capture ni brouillon du moniteur.",
+      "role": "STUDENT"
+    }
+  ]
+}

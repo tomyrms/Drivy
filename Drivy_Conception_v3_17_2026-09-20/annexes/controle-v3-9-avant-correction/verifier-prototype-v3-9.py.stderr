@@ -1,0 +1,88 @@
+2.9s 15_scenes_plus_overview: True
+layout 1 320 light
+layout 1 320 dark
+layout 1 390 light
+layout 1 390 dark
+layout 1 834 light
+layout 1 834 dark
+layout 1 1440 light
+layout 1 1440 dark
+layout 2 320 light
+layout 2 320 dark
+layout 2 390 light
+layout 2 390 dark
+layout 2 834 light
+layout 2 834 dark
+layout 2 1440 light
+layout 2 1440 dark
+4.5s normal_layouts_no_document_overflow: True
+4.5s normal_buttons_no_horizontal_clipping: True
+4.5s 200_percent_layouts_no_document_overflow: True
+4.5s 200_percent_buttons_no_horizontal_clipping: True
+4.6s student_lesson_is_read_only: True
+4.6s student_view_only_published_context: True
+4.6s route_change_focus_not_lost: True
+4.7s destination_focus_visible_after_long_page: True
+4.8s unillustrated_staff_link_does_not_open_student_screen: True
+4.8s modal_closes_with_escape: True
+5.0s open_capture_hides_new_start: True
+5.0s capture_retains_state_after_close_return: True
+5.1s no_gps_transition_does_not_silently_drop_capture: True
+5.1s pause_focus_moves_to_resume: True
+5.2s resume_focus_moves_to_pause: True
+5.2s waiting_has_no_measured_geometry: True
+5.2s empty_pause_resume_stays_empty: True
+5.3s empty_stop_stays_empty: True
+5.3s stop_does_not_complete_lesson: True
+5.4s bilan_has_no_default_grade: True
+5.4s no_gps_composition_has_no_disabled_map: True
+5.5s three_required_bilan_fields: True
+5.5s draft_without_grade_contract: True
+5.6s empty_constat_blocks_preview: True
+5.6s preview_uses_edited_text_and_escapes_markup: True
+5.6s dialog_label_and_initial_focus: True
+5.7s dialog_tab_keeps_focus_inside: True
+5.7s dialog_focus_returns_to_opener: True
+5.7s draft_fields_retained_across_views: True
+5.7s observed_grade_requires_context: True
+5.7s draft_with_grade_and_context_contract: True
+5.8s grade_context_in_exact_preview: True
+5.8s removing_grade_encodes_absence_not_zero: True
+5.8s cleared_grade_contract: True
+5.9s draft_preview_rejects_overlong_text: True
+5.9s overlong_draft_rejected_by_contract: True
+5.9s unicode_draft_4000_codepoints_contract: True
+6.0s unicode_draft_not_cut_at_2000_scalars: True
+6.0s reload_does_not_claim_persistent_draft: True
+6.1s all_course_dates_before_submission: True
+6.2s pending_is_not_confirmation: True
+6.2s unknown_keeps_same_pending_intent: True
+6.3s pending_to_full_has_no_registration: True
+6.3s refused_course_does_not_reserve_right: True
+6.6s confirmed_course_moves_to_commitments: True
+6.6s unsimulated_day_stays_labelled_21: True
+6.6s only_confirmed_right_is_reserved: True
+6.7s reconfirmed_time_visible: True
+6.8s second_observation_position_matches_timestamp: True
+6.9s second_observation_text_matches_time: True
+6.9s gap_has_no_moving_position: True
+6.9s gap_has_two_nonconnected_measured_paths: True
+6.9s gap_boundaries_remain_real_samples: True
+6.9s no_future_observation_shown: True
+6.9s next_from_start_goes_first_annotation: True
+6.9s withdrawn_replay_contains_no_geometry: True
+7.1s archive_preview_explains_not_account_deletion: True
+7.1s archive_retains_query_filter: True
+7.1s hidden_archived_selection_removed: True
+7.1s archive_focus_returns_to_search: True
+7.2s filter_can_be_cleared: True
+7.2s archive_is_visible_on_explicit_reselection: True
+7.3s future_commitments_still_block_archive: True
+7.3s empty_filter_has_no_stale_dossier: True
+7.4s onboarding_memory_retained: True
+7.4s form_text_genuinely_doubles: True
+7.6s grade_labels_genuinely_double: True
+7.7s school_choices_remain_demo_memory: True
+7.7s malformed_hash_falls_back_safely: True
+7.7s no_javascript_exceptions: True
+7.7s no_external_prototype_requests: True

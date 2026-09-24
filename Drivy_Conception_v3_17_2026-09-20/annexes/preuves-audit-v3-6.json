@@ -1,0 +1,691 @@
+{
+  "sourceVersion": "3.5",
+  "sourceZIP": "Drivy_Dossier_Conception_v3_5_2026-09-19.zip",
+  "evidence": [
+    {
+      "finding": "V36-01",
+      "sourcePath": "04-technique/openapi.yaml",
+      "sha256": "b8e3a68b54cb94b32519bd46212a1b9e6a653661ba412ac7dfab7916c2bf9977",
+      "matches": [
+        {
+          "line": 26820,
+          "text": "    ReportRevision:",
+          "context": {
+            "startLine": 26818,
+            "endLine": 26828,
+            "lines": [
+              "      - observations",
+              "      - attachmentIds",
+              "    ReportRevision:",
+              "      type: object",
+              "      additionalProperties: false",
+              "      properties:",
+              "        id:",
+              "          type: string",
+              "          format: uuid",
+              "        schoolId:",
+              "          type: string"
+            ]
+          }
+        },
+        {
+          "line": 28652,
+          "text": "    PublishCommand:",
+          "context": {
+            "startLine": 28650,
+            "endLine": 28660,
+            "lines": [
+              "      - observations",
+              "      - attachmentIds",
+              "    PublishCommand:",
+              "      type: object",
+              "      additionalProperties: false",
+              "      properties:",
+              "        operationId:",
+              "          type: string",
+              "          format: uuid",
+              "        expectedPublicationVersion:",
+              "          type: integer"
+            ]
+          }
+        },
+        {
+          "line": 28671,
+          "text": "        captureSelection:",
+          "context": {
+            "startLine": 28669,
+            "endLine": 28679,
+            "lines": [
+              "          - type: string",
+              "          - type: 'null'",
+              "        captureSelection:",
+              "          anyOf:",
+              "          - $ref: '#/components/schemas/CaptureSelection'",
+              "          - type: 'null'",
+              "      required:",
+              "      - operationId",
+              "      - expectedPublicationVersion",
+              "      - captureSelection",
+              "      description: captureSelection obligatoire, null signifie publier sans trajet. Une omission ne réutilise ni n’élargit"
+            ]
+          }
+        },
+        {
+          "line": 32714,
+          "text": "    CaptureSelection:",
+          "context": {
+            "startLine": 32712,
+            "endLine": 32722,
+            "lines": [
+              "            type: integer",
+              "            minimum: 0",
+              "    CaptureSelection:",
+              "      type: object",
+              "      additionalProperties: false",
+              "      properties:",
+              "        captureId:",
+              "          type: string",
+              "          format: uuid",
+              "        selectedObservationIds:",
+              "          type: array"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-01",
+      "sourcePath": "03-fonctionnel/bilans-documents.md",
+      "sha256": "211d4e9feb8e95894b10eb1f48ba573bee50cb3b7f98b522eb4b69bd6644ddbb",
+      "matches": [
+        {
+          "line": 94,
+          "text": "Un bilan peut être partagé sans attendre un transfert GPS. L’ajout ultérieur du trajet exige une nouvelle publication explicite, pas la mutation silencieuse de la révision déjà lue. Une trace partielle est annoncée comme telle. L’annotation peut rester textuelle sans géolocalisation ; le refus de capture ne retire aucune compétence du référentiel.",
+          "context": {
+            "startLine": 92,
+            "endLine": 102,
+            "lines": [
+              "F08 peut publier une capture par le lien CapturePublication associé à la nouvelle ReportRevision. Les observations situées sont une collection distincte des évaluations qualitatives finales, afin de permettre plusieurs passages sur une même compétence. L’auteur choisit celles rendues publiques ; une mesure transférée ou une annotation sauvegardée ne devient pas visible automatiquement.",
+              "",
+              "Un bilan peut être partagé sans attendre un transfert GPS. L’ajout ultérieur du trajet exige une nouvelle publication explicite, pas la mutation silencieuse de la révision déjà lue. Une trace partielle est annoncée comme telle. L’annotation peut rester textuelle sans géolocalisation ; le refus de capture ne retire aucune compétence du référentiel.",
+              "",
+              "F09 gère également preuve de formation externe et justificatifs de présence collective, sous audience administrative habilitée. Un document READY signifie contrôlé techniquement, pas « exigence accomplie ». Les corrections de présence et l’attribution de COMPLETED/EXEMPT appartiennent au workflow F18. L’effacement des coordonnées et dérivés de trajet peut laisser la révision non géographique sous conservation justifiée, conformément à R19/R48.",
+              "",
+              "",
+              "## Profil et grands écrans V3",
+              "",
+              "PROFILE_PHOTO est un purpose distinct de PERMIT, LESSON_SUPPORT et ADMINISTRATIVE. Il est lié au learnerId de l’école, facultatif, JPEG/PNG au maximum 2 MiB, sans trainingId/lessonId. Réutiliser intention de dépôt, quarantaine, décodage/réencodage, retrait EXIF, scan et publication READY de F09. Modifier profilePhotoDocumentId exige un document READY appartenant à ce dossier. Les téléchargements gardent l’autorisation ; LEARNER_SHARED signifie cet élève et le personnel habilité, pas toute la liste des élèves. Suppression de photo revient aux initiales, sans bloquer onboarding ni formation.",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-02",
+      "sourcePath": "04-technique/openapi.yaml",
+      "sha256": "b8e3a68b54cb94b32519bd46212a1b9e6a653661ba412ac7dfab7916c2bf9977",
+      "matches": [
+        {
+          "line": 32485,
+          "text": "    SegmentManifest:",
+          "context": {
+            "startLine": 32483,
+            "endLine": 32493,
+            "lines": [
+              "      - acknowledgedAt",
+              "      - duplicate",
+              "    SegmentManifest:",
+              "      type: object",
+              "      additionalProperties: false",
+              "      properties:",
+              "        segmentId:",
+              "          type: string",
+              "          format: uuid",
+              "        segmentIndex:",
+              "          type: integer"
+            ]
+          }
+        },
+        {
+          "line": 32506,
+          "text": "        lastSequence:",
+          "context": {
+            "startLine": 32504,
+            "endLine": 32514,
+            "lines": [
+              "          type: integer",
+              "          minimum: 0",
+              "        lastSequence:",
+              "          type: integer",
+              "          minimum: 0",
+              "        endReason:",
+              "          type: string",
+              "          enum:",
+              "          - STOP",
+              "          - PAUSE",
+              "          - APP_TERMINATED"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-03",
+      "sourcePath": "03-fonctionnel/cours-collectifs.md",
+      "sha256": "6473fb3afd7dbb9282ac8e89b918cd3101631ef106428487c61f8976059c008f",
+      "matches": []
+    },
+    {
+      "finding": "V36-03",
+      "sourcePath": "04-technique/openapi.yaml",
+      "sha256": "b8e3a68b54cb94b32519bd46212a1b9e6a653661ba412ac7dfab7916c2bf9977",
+      "matches": [
+        {
+          "line": 18060,
+          "text": "      operationId: closeCourseSession",
+          "context": {
+            "startLine": 18058,
+            "endLine": 18068,
+            "lines": [
+              "  /v1/schools/{schoolId}/course-sessions/{sessionId}/close:",
+              "    post:",
+              "      operationId: closeCourseSession",
+              "      summary: AP138 · closeCourseSession",
+              "      tags:",
+              "      - F18",
+              "      description: Règles R01–R105, autorisation courante et transactions documentées ; aucun état métier confirmé par simple",
+              "        écriture locale.",
+              "      parameters:",
+              "      - name: schoolId",
+              "        in: path"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-04",
+      "sourcePath": "03-fonctionnel/catalogue-packs.md",
+      "sha256": "77d84d006121e541d12369b9a7ec5f659121441824c591fe8be09144aee0be09",
+      "matches": [
+        {
+          "line": 24,
+          "text": "L’adhésion à l’école, une formation pour un permis et un achat sont distincts. Une prestation externe donne un droit ou un accès à remettre, pas une présence de cours. Un composant « inscription offerte » est un élément de prix/frais, pas une leçon.",
+          "context": {
+            "startLine": 22,
+            "endLine": 32,
+            "lines": [
+              "ServiceProductVersion représente une prestation : type, catégorie, durée contractuelle, unité, prix, site, période et conditions. PackOfferVersion contient la liste versionnée des composants et un total convenu. Purchase fige les composants réellement choisis, le prix final et les conditions. EntitlementLot contient les droits du bénéficiaire ; EntitlementMovement conserve chaque accord, immobilisation, utilisation, libération ou restauration.",
+              "",
+              "L’adhésion à l’école, une formation pour un permis et un achat sont distincts. Une prestation externe donne un droit ou un accès à remettre, pas une présence de cours. Un composant « inscription offerte » est un élément de prix/frais, pas une leçon.",
+              "",
+              "## Parcours nominal",
+              "",
+              "Le personnel habilité CONFIGURE_CATALOG crée une nouvelle version de produit/pack. Avant activation il vérifie le libellé, la durée, la quantité, les sites et les conditions ; une modification de tarif ne réécrit pas les ventes existantes.",
+              "",
+              "Pour vendre, le personnel sélectionne l’élève et l’offre versionnée, fait confirmer les conditions puis crée l’achat. Les droits sont accordés selon la politique : soit après paiement intégral pour un pack prépayé strict, soit utilisables immédiatement si l’école autorise la facturation ultérieure. Cette dernière possibilité doit être explicite dans l’achat et ne peut être changée silencieusement après utilisation.",
+              "",
+              "À la réservation d’une leçon ou d’un cours compatible, le système montre les droits utilisables et le solde après réservation. Un HOLD diminue le disponible. À réalisation d’une leçon, il devient CONSUME. Un cours collectif utilise la politique R54. Le paiement est enregistré sur le compte de l’achat ou de la prestation unitaire, pas sur chaque utilisation couverte par pack."
+            ]
+          }
+        },
+        {
+          "line": 42,
+          "text": "| Accompagnement examen | Un droit de service examen | Au constat de prestation effectivement réalisée. |",
+          "context": {
+            "startLine": 40,
+            "endLine": 50,
+            "lines": [
+              "| 10 × conduite 45 minutes | Dix unités du service versionné | Une leçon réalisée ; double séance selon quantité réservée. |",
+              "| Sensibilisation | Un droit de série compatible | Réservé à inscription, consommé selon R54. |",
+              "| Accompagnement examen | Un droit de service examen | Au constat de prestation effectivement réalisée. |",
+              "| Inscription offerte | Frais à zéro dans le snapshot | Pas de décompte pédagogique. |",
+              "",
+              "L’élève pourrait voir « Conduite : 7 disponibles, 1 réservée, 2 utilisées ; sensibilisation : à réserver ; paiement du pack : réglé ». Cette projection illustre le modèle, elle ne décrit pas un utilisateur réel. Acheter ce pack ne l’inscrit pas automatiquement à la prochaine sensibilisation.",
+              "",
+              "## Quantités et compatibilité",
+              "",
+              "Une unité de 45 minutes ne devient pas une unité de 60 minutes au changement de grille. Une double leçon utilise deux unités seulement si le service acheté le prévoit. Aucun arrondi de durée GPS ne calcule le nombre de droits à consommer. Le prix d’un pack composite n’est pas divisé arbitrairement par ses composants pour inventer leurs valeurs de remboursement.",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-04",
+      "sourcePath": "04-technique/openapi.yaml",
+      "sha256": "b8e3a68b54cb94b32519bd46212a1b9e6a653661ba412ac7dfab7916c2bf9977",
+      "matches": [
+        {
+          "line": 15005,
+          "text": "      operationId: restoreEntitlement",
+          "context": {
+            "startLine": 15003,
+            "endLine": 15013,
+            "lines": [
+              "  /v1/schools/{schoolId}/entitlements/{lotId}/restore:",
+              "    post:",
+              "      operationId: restoreEntitlement",
+              "      summary: AP114 · restoreEntitlement",
+              "      tags:",
+              "      - F17",
+              "      description: Règles R01–R105, autorisation courante et transactions documentées ; aucun état métier confirmé par simple",
+              "        écriture locale.",
+              "      parameters:",
+              "      - name: schoolId",
+              "        in: path"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-05",
+      "sourcePath": "03-fonctionnel/catalogue-packs.md",
+      "sha256": "77d84d006121e541d12369b9a7ec5f659121441824c591fe8be09144aee0be09",
+      "matches": [
+        {
+          "line": 18,
+          "text": "Le premier produit prend en charge un prix fixe unitaire, des packs à prix fixe, des options sélectionnées à l’achat, les dates d’effet, la déclinaison par site et les frais ponctuels définis. Des règles complexes arbitraires, coupons combinables, prorata automatique et échéanciers programmatiques restent différés. Un prix convenu exceptionnel peut être saisi par personnel autorisé avec motif et snapshot, sans inventer un moteur de promotions.",
+          "context": {
+            "startLine": 16,
+            "endLine": 26,
+            "lines": [
+              "L’école choisit ses catégories, les prestations qu’elle réalise, leur unité et leur durée, les lieux/sites et la devise du pilote. Une petite école sans packs n’a qu’un tarif par prestation et les conditions de réservation. L’activation des packs révèle les composants ; l’activation de cours révèle les règles de place. Les garanties de sécurité et les profils réglementaires ne sont pas des options commerciales.",
+              "",
+              "Le premier produit prend en charge un prix fixe unitaire, des packs à prix fixe, des options sélectionnées à l’achat, les dates d’effet, la déclinaison par site et les frais ponctuels définis. Des règles complexes arbitraires, coupons combinables, prorata automatique et échéanciers programmatiques restent différés. Un prix convenu exceptionnel peut être saisi par personnel autorisé avec motif et snapshot, sans inventer un moteur de promotions.",
+              "",
+              "## Modèle et responsabilités",
+              "",
+              "ServiceProductVersion représente une prestation : type, catégorie, durée contractuelle, unité, prix, site, période et conditions. PackOfferVersion contient la liste versionnée des composants et un total convenu. Purchase fige les composants réellement choisis, le prix final et les conditions. EntitlementLot contient les droits du bénéficiaire ; EntitlementMovement conserve chaque accord, immobilisation, utilisation, libération ou restauration.",
+              "",
+              "L’adhésion à l’école, une formation pour un permis et un achat sont distincts. Une prestation externe donne un droit ou un accès à remettre, pas une présence de cours. Un composant « inscription offerte » est un élément de prix/frais, pas une leçon.",
+              "",
+              "## Parcours nominal"
+            ]
+          }
+        },
+        {
+          "line": 67,
+          "text": "Montants entiers en centimes CHF ; quantités entières positives au pilote ; durée d’unité explicitée. Un pack ne contient pas de pack récursif. Composants maximum proposé : 32, options maximum 16 ; la somme des lignes affichées et ajustements doit correspondre au total accepté. Un rabais informatif déjà inclus n’est pas appliqué une seconde fois. La référence externe de paiement est facultative ; ne jamais enregistrer de carte bancaire.",
+          "context": {
+            "startLine": 65,
+            "endLine": 75,
+            "lines": [
+              "## Données et validations",
+              "",
+              "Montants entiers en centimes CHF ; quantités entières positives au pilote ; durée d’unité explicitée. Un pack ne contient pas de pack récursif. Composants maximum proposé : 32, options maximum 16 ; la somme des lignes affichées et ajustements doit correspondre au total accepté. Un rabais informatif déjà inclus n’est pas appliqué une seconde fois. La référence externe de paiement est facultative ; ne jamais enregistrer de carte bancaire.",
+              "",
+              "Les écritures sont append-only, sous version et idempotence. L’audit conserve auteur, cause et relations ; les exports comptables ne sont pas appelés factures homologuées. Les conditions de validité, reliquats, transfert d’école et responsabilité fiscale restent des champs et questions explicites, pas des règles inventées.",
+              "",
+              "## Recette et décision de pilote",
+              "",
+              "Les scénarios couvrent l’école sans packs, pack composite, nouvelle grille, double leçon, première présence collective, annulation, transfert de formation, dernier droit concurrent, double facturation interdite et preuve externe. Les jeux de données sont fictifs. Avant pilote réel, chaque école valide ses propres conditions et un exemple de remboursement partiel ; aucune règle commerciale litigieuse ne doit être improvisée par le développeur.",
+              "",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-05",
+      "sourcePath": "04-technique/openapi.yaml",
+      "sha256": "b8e3a68b54cb94b32519bd46212a1b9e6a653661ba412ac7dfab7916c2bf9977",
+      "matches": [
+        {
+          "line": 30667,
+          "text": "    PackOfferCommand:",
+          "context": {
+            "startLine": 30665,
+            "endLine": 30675,
+            "lines": [
+              "      - validUntil",
+              "      - enabled",
+              "    PackOfferCommand:",
+              "      type: object",
+              "      additionalProperties: false",
+              "      properties:",
+              "        operationId:",
+              "          type: string",
+              "          format: uuid",
+              "        offerKey:",
+              "          type: string"
+            ]
+          }
+        },
+        {
+          "line": 30777,
+          "text": "    PurchaseCommand:",
+          "context": {
+            "startLine": 30775,
+            "endLine": 30785,
+            "lines": [
+              "      - termsVersionId",
+              "      - status",
+              "    PurchaseCommand:",
+              "      type: object",
+              "      additionalProperties: false",
+              "      properties:",
+              "        operationId:",
+              "          type: string",
+              "          format: uuid",
+              "        learnerId:",
+              "          type: string"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-06",
+      "sourcePath": "03-fonctionnel/compte-suppression-globale.md",
+      "sha256": "8f2fc01b800e8f24b4b7da2f7e3fb0e4b4c1570cf1d46f8f60a1e60b44168d60",
+      "matches": [
+        {
+          "line": 17,
+          "text": "AP193 produit un aperçu expirant proposé après quinze minutes. AP194 vérifie sa version, ses conditions et l’identité. Une modification des appartenances depuis l’aperçu demande une relecture explicite. Une dette, un élève archivé ou le fait d’être le dernier administrateur ne rendent pas le dépôt de demande inaccessible. Au-delà de 100 appartenances, l’aperçu API refuse toute liste tronquée et l’interface propose un dossier assisté équivalent ; cette limite est technique proposée, pas un droit de refuser la suppression.",
+          "context": {
+            "startLine": 15,
+            "endLine": 25,
+            "lines": [
+              "La session est réauthentifiée par le fournisseur d’identité : le serveur vérifie fraîcheur/auth_time et le contexte d’authentification, pas un booléen fourni par le client. Borne de fraîcheur proposée : cinq minutes, à approuver et matérialiser dans la configuration d’identité. Une panne d’identité suspend la demande sans afficher de succès ; un parcours d’assistance vérifiant la personne reste documenté, sans numéro de téléphone arbitrairement obligatoire.",
+              "",
+              "AP193 produit un aperçu expirant proposé après quinze minutes. AP194 vérifie sa version, ses conditions et l’identité. Une modification des appartenances depuis l’aperçu demande une relecture explicite. Une dette, un élève archivé ou le fait d’être le dernier administrateur ne rendent pas le dépôt de demande inaccessible. Au-delà de 100 appartenances, l’aperçu API refuse toute liste tronquée et l’interface propose un dossier assisté équivalent ; cette limite est technique proposée, pas un droit de refuser la suppression.",
+              "",
+              "Après confirmation, afficher « Demande de suppression reçue », le statut et le prochain point de suivi. Conserver un reçu de suivi sécurisé. La révocation des accès ordinaires intervient à PROCESSING et non lors de la simple ouverture de l’écran. L’enregistrement GPS en cours doit d’abord pouvoir être arrêté localement, sans réseau ; le retrait de la demande ne redémarre jamais une capture.",
+              "",
+              "## 3. Contrat public de conception",
+              "",
+              "| Opération | Rôle et résultat |",
+              "|---|---|",
+              "| AP193 POST /v1/me/account-deletion-previews | Propriétaire authentifié, aperçu global privé ; pas d’action destructive. |"
+            ]
+          }
+        },
+        {
+          "line": 54,
+          "text": "**Dernier administrateur.** Une procédure de continuité doit être convenue avant le pilote : contact vérifié du représentant de l’école, transfert explicitement accepté ou fermeture coordonnée de l’espace scolaire. Aucun nouveau responsable n’est nommé automatiquement, et le support ne s’attribue pas ADMIN par commodité. Ce cas ne bloque pas l’enregistrement de la demande ; il exige un traitement humain borné avec suivi communiqué, pas une attente indéfinie masquée. La procédure, les pouvoirs légitimes et les délais restent à valider en DM06 avant le lancement. Le compte ne passe pas faussement COMPLETED tant que le traitement convenu n’est pas réconcilié.",
+          "context": {
+            "startLine": 52,
+            "endLine": 62,
+            "lines": [
+              "Les obligations contractuelles et les données soumises à une conservation justifiée ne sont pas supprimées aveuglément. Elles sont inventoriées par catégorie, finalité, autorité responsable, durée/règle et contrôle d’accès ; expliquer à la personne ce qui demeure. Une créance ne rend pas le compte actif à vie. Les anonymisations effectives et les suppressions sont distinguées dans le manifeste.",
+              "",
+              "**Dernier administrateur.** Une procédure de continuité doit être convenue avant le pilote : contact vérifié du représentant de l’école, transfert explicitement accepté ou fermeture coordonnée de l’espace scolaire. Aucun nouveau responsable n’est nommé automatiquement, et le support ne s’attribue pas ADMIN par commodité. Ce cas ne bloque pas l’enregistrement de la demande ; il exige un traitement humain borné avec suivi communiqué, pas une attente indéfinie masquée. La procédure, les pouvoirs légitimes et les délais restent à valider en DM06 avant le lancement. Le compte ne passe pas faussement COMPLETED tant que le traitement convenu n’est pas réconcilié.",
+              "",
+              "La suppression vise Drivy et ses liaisons d’identité, pas le compte personnel Apple/Google externe. Révoquer les sessions/refresh tokens et les autorisations de fournisseur applicables ; vérifier la politique du fournisseur choisi. Une restauration rejoue les tombstones avant réouverture des accès et ne réactive pas le compte par un ancien refresh token. Une inscription ultérieure est une nouvelle relation, pas la résurrection automatique des archives.",
+              "",
+              "## 6. Reçu et sécurité",
+              "",
+              "ReceiptToken : secret opaque à entropie élevée (au moins 256 bits proposés), généré serveur et lié exclusivement au suivi d’une demande. Vérification par hash et comparaison sûre ; le secret peut être conservé chiffré pour rejeu idempotent borné, jamais en clair dans les logs. Le client natif le garde dans Keychain. Le web ne le persiste pas dans localStorage ; session de suivi HTTP-only gérée par BFF et anti-CSRF si une écriture y est ultérieurement ajoutée.",
+              "",
+              "AP198 n’accepte que le reçu dans Authorization, ne renvoie que statut, code de message, dernière mise à jour et prochain suivi. Un token OIDC normal n’y fonctionne pas ; le reçu n’ouvre aucun /v1/me ni route scolaire. No-store, rate-limit et aucune donnée personnelle dans URL, analytics, notification ou email de suivi. La fin de validité est annoncée au dépôt ; durée proposée de 90 jours, révisable selon délais réels. Après expiration/perte, une récupération assistée vérifie l’identité sans exposer la demande à un tiers. Une suppression plus longue ne doit pas devenir impossible à suivre : communiquer une prolongation sécurisée ou une voie vérifiée avant expiration."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-06",
+      "sourcePath": "04-technique/transactions-v2.md",
+      "sha256": "ecad9900f9fd27b82cb669479c12719313434dc6487487676c8b12ba44c1e2d1",
+      "matches": [
+        {
+          "line": 106,
+          "text": "**Ordre commun proposé :** verrou de coordination scolaire si nécessaire ; lignes d’appartenance/délégations dans un ordre stable avec verrou compatible de lecture ; agrégats de planning ; personnes/ressources ; droits ; comptes ; SchoolSyncClock en dernier. Les vérifications d’identité initiales ne remplacent pas la relecture de portée dans cette transaction. La révocation/modification de grant prend le verrou incompatible correspondant avant son commit. Un chemin court n’acquiert jamais ensuite le verrou de coordination large.",
+          "context": {
+            "startLine": 104,
+            "endLine": 114,
+            "lines": [
+              "## Autorisation et frontière de commit",
+              "",
+              "**Ordre commun proposé :** verrou de coordination scolaire si nécessaire ; lignes d’appartenance/délégations dans un ordre stable avec verrou compatible de lecture ; agrégats de planning ; personnes/ressources ; droits ; comptes ; SchoolSyncClock en dernier. Les vérifications d’identité initiales ne remplacent pas la relecture de portée dans cette transaction. La révocation/modification de grant prend le verrou incompatible correspondant avant son commit. Un chemin court n’acquiert jamais ensuite le verrou de coordination large.",
+              "",
+              "Les uploads GPS gardent leur chemin sans verrou de planning, mais vérifient appartenance/choix/capture sous leurs verrous avant publication de métadonnées ; un objet de staging refusé est purgé. Cette discipline exploite les mécanismes de verrouillage documentés par PostgreSQL [S60](../06-gouvernance/sources.md#s60). Elle est une proposition d’implémentation à vérifier avec deux connexions réelles, pas un résultat d’un test SQL effectué ici.",
+              "",
+              "## Révision commerciale et retour de prépaiement insuffisant",
+              "",
+              "AP42 revalide sous le chemin large la version de leçon, produit, anciens/nouveaux lots et éventuel compte. Si `commercialChange` est requis et manque, la commande s’arrête sans déplacer. Sinon contrôler la quantité contractuelle, l’augmentation nette de droits, les sommes, la version de compte et R24, puis écrire ancienne/nouvelle révision, mouvements compensatoires, nouveaux engagements et outbox au même commit. Il ne suffit pas de déplacer d’abord puis de réécrire le prix.",
+              "",
+              "Un mouvement financier sur un achat prend ce même chemin pour calculer son effet sur les droits selon [R53](../03-fonctionnel/regles-etats.md#r53). Si une réservation gagne avant la correction, son HOLD reste un engagement confirmé à traiter ; si la correction gagne, la réservation suivante voit les droits suspendus. Il n’existe aucun interstice où l’API confirmerait des droits nouveaux sur un paiement déjà invalidé. Les prestations déjà réalisées ne sont pas effacées."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-06",
+      "sourcePath": "04-technique/transactions-v3.md",
+      "sha256": "90c65bc737f44a31552ded200a8fb8eddcc78a5eefddc78f3ab5f3f17e079e59",
+      "matches": [
+        {
+          "line": 8,
+          "text": "Ce document complète les [transactions GPS, packs et cours](transactions-v2.md), toujours applicables. Les règles canoniques R73–R100 sont dans [Règles](../03-fonctionnel/regles-etats.md). Les noms de tables sont conceptuels ; les extraits ne sont pas une migration SQL livrée. Conserver l’ordre de verrou école → agrégat → dépendances pour éviter des ordres contradictoires avec le planning.",
+          "context": {
+            "startLine": 6,
+            "endLine": 16,
+            "lines": [
+              "## Portée",
+              "",
+              "Ce document complète les [transactions GPS, packs et cours](transactions-v2.md), toujours applicables. Les règles canoniques R73–R100 sont dans [Règles](../03-fonctionnel/regles-etats.md). Les noms de tables sont conceptuels ; les extraits ne sont pas une migration SQL livrée. Conserver l’ordre de verrou école → agrégat → dépendances pour éviter des ordres contradictoires avec le planning.",
+              "",
+              "## TX3-01 · Provision, invitation et activation de l’école",
+              "",
+              "La provision pilote par opérateur autorisé crée School DRAFT, SchoolSetup version1 et invitation au responsable, avec événement d’audit. L’invitation garde la sécurité F02 et n’attribue les rôles qu’après acceptation de la bonne identité. Il n’existe pas de route de provision publique dans l’API documentaire. Un outillage opérateur futur doit avoir sa recette avant le premier pilote.",
+              "",
+              "L’ADMIN complète les agrégats F13/F17/F18 par leurs commandes ; saveSchoolSetup conserve seulement étape/progression. Une commande validant une section n’exécute pas implicitement tous les autres domaines. Un échec sur une offre n’efface pas le contact scolaire déjà sauvegardé.",
+              "",
+              "Pour activateSchool : authentifier et autoriser ADMIN ; vérifier operationId/payload et If-Match ; prendre verrou école ; relire configurationVersion, notices/politiques approuvées et prérequis activationReady calculés sur la configuration DRAFT, sans exiger ACTIVE ; passer DRAFT→ACTIVE et marquer SchoolSetup COMPLETED ; écrire Operation/Audit/Outbox atomiquement ; commit ; seulement ensuite afficher espace actif. Si le contexte a changé depuis la revue : conflit ou SETUP_INCOMPLETE, pas activation partielle."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-07",
+      "sourcePath": "04-technique/openapi.yaml",
+      "sha256": "b8e3a68b54cb94b32519bd46212a1b9e6a653661ba412ac7dfab7916c2bf9977",
+      "matches": [
+        {
+          "line": 32139,
+          "text": "    RecordingChoice:",
+          "context": {
+            "startLine": 32137,
+            "endLine": 32147,
+            "lines": [
+              "        - 00000000-0000-4000-8000-000000000017",
+              "        reason: Présence constatée par le formateur ; exemple fictif.",
+              "    RecordingChoice:",
+              "      type: object",
+              "      additionalProperties: false",
+              "      properties:",
+              "        id:",
+              "          type: string",
+              "          format: uuid",
+              "        schoolId:",
+              "          type: string"
+            ]
+          }
+        },
+        {
+          "line": 33136,
+          "text": "    NotificationPreferences:",
+          "context": {
+            "startLine": 33134,
+            "endLine": 33144,
+            "lines": [
+              "      - platform",
+              "      - providerToken",
+              "    NotificationPreferences:",
+              "      type: object",
+              "      additionalProperties: false",
+              "      properties:",
+              "        version:",
+              "          type: integer",
+              "          minimum: 1",
+              "        courseOffersInApp:",
+              "          type: boolean"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-07",
+      "sourcePath": "04-technique/transactions-v3.md",
+      "sha256": "90c65bc737f44a31552ded200a8fb8eddcc78a5eefddc78f3ab5f3f17e079e59",
+      "matches": [
+        {
+          "line": 22,
+          "text": "L’acceptation d’invitation F02 crée/réutilise Membership et Learner sans formation implicite. Elle initialise OnboardingProgress par kind applicable et le profil administratif scolaire minimal, version1. Avant que les noms aient été confirmés, ce profil peut contenir firstName/lastName null avec readiness MINIMAL ; les commandes permettant de terminer le profil exigent les deux valeurs non vides. Ce stade n’est pas une inscription confirmée à un cours.",
+          "context": {
+            "startLine": 20,
+            "endLine": 30,
+            "lines": [
+              "## TX3-02 · Entrée d’une personne et reprise multi-appareils",
+              "",
+              "L’acceptation d’invitation F02 crée/réutilise Membership et Learner sans formation implicite. Elle initialise OnboardingProgress par kind applicable et le profil administratif scolaire minimal, version1. Avant que les noms aient été confirmés, ce profil peut contenir firstName/lastName null avec readiness MINIMAL ; les commandes permettant de terminer le profil exigent les deux valeurs non vides. Ce stade n’est pas une inscription confirmée à un cours.",
+              "",
+              "Le profil scolaire porte source/acteur ; les noms administratifs ne remplacent pas le nom de connexion. Le client sauvegarde via If-Match ; la lecture de progression n’a pas d’effet de création. Le retour vers l’app/web lit le même objet. CompleteMyOnboarding verrouille le progrès, recalcule minimum/politique applicable et marque COMPLETED ; il ne crée aucune Training, place, paiement ou RecordingChoice. Si des données manquent pour une future action, ce sera un prérequis ciblé R81, non un échec caché du wizard.",
+              "",
+              "Photo : intention F09 puis fichier READY ; saveAdministrativeProfile ne peut pointer que le document privé de ce learnerId avec purpose PROFILE_PHOTO. L’effacement du fichier retire la référence et rend l’avatar initiales, pas un profil invalide. Le réencodage retire les métadonnées de localisation.",
+              "",
+              "## TX3-03 · Approuver une formation souhaitée",
+              "",
+              "Le choix élève crée TrainingRequest PENDING, clé unique active `(schoolId,learnerId,offeringVersionId)` ; avoir déjà une Training compatible est signalé. Décision ADMIN : verrou école puis demande/dossier ; vérifier version, Learner actif, catégorie/offre disponible, référentiel approuvé et instructorMembershipId autorisé. Créer Training et affectation (ou relier une Training compatible après revue explicite), mettre demande APPROVED avec trainingId et auteur ; audit/outbox/Operation puis commit. Un rejet ne touche aucun PermitCheck."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-08",
+      "sourcePath": "04-technique/synchronisation.md",
+      "sha256": "77c3371997a3fe2764d943ed524c26944d1f818fce6f4b1d43ba6fe27207036e",
+      "matches": [
+        {
+          "line": 143,
+          "text": "Les [frontières mobiles](integration-mobile-transverse.md) détaillent le cycle natif, le verrouillage, les clés, les sauvegardes et le point sûr d’application d’une mise à jour. Elles n’autorisent aucune nouvelle mutation hors ligne. Le runtime JS ne doit pas être supposé continuellement actif en fond ; le collecteur qualifié et ses écritures durables respectent les limites documentées ci-dessus. La réconciliation après arrêt forcé rend le trajet partiel au lieu d’inventer les points absents.",
+          "context": {
+            "startLine": 141,
+            "endLine": 151,
+            "lines": [
+              "## Réalisation native, stockage et mise à jour",
+              "",
+              "Les [frontières mobiles](integration-mobile-transverse.md) détaillent le cycle natif, le verrouillage, les clés, les sauvegardes et le point sûr d’application d’une mise à jour. Elles n’autorisent aucune nouvelle mutation hors ligne. Le runtime JS ne doit pas être supposé continuellement actif en fond ; le collecteur qualifié et ses écritures durables respectent les limites documentées ci-dessus. La réconciliation après arrêt forcé rend le trajet partiel au lieu d’inventer les points absents.",
+              "",
+              "",
+              "## Liaison avec le client Swift natif",
+              "",
+              "Les invariants ci-dessus restent identiques. Le [coordinateur Swift](architecture-client-swift.md#capture) détient le journal indépendamment des vues, revalide après suspension et ne confond pas annulation de tâche UI avec annulation serveur. Le [client HTTP](architecture-client-swift.md#api-swift) conserve ETags, clés d’opération, absence/null et erreurs ; les DTO conditionnels ne sont pas simplifiés pour un générateur. Android implémentera les mêmes contrats séparément.",
+              "",
+              "",
+              "## Révocation globale et repères (V3.5)"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-08",
+      "sourcePath": "annexes/traceabilite.json",
+      "sha256": "5c5bfe79eeffbe48878fac8ee93401b82d6fa35b1f09b25276725453a7579a24",
+      "matches": [
+        {
+          "line": 3,
+          "text": "  \"version\": \"3.4\",",
+          "context": {
+            "startLine": 1,
+            "endLine": 11,
+            "lines": [
+              "{",
+              "  \"status\": \"Référence documentaire V3, non implémentée\",",
+              "  \"version\": \"3.4\",",
+              "  \"date\": \"2026-09-19\",",
+              "  \"features\": [",
+              "    {",
+              "      \"feature\": \"F01\",",
+              "      \"needs\": [",
+              "        \"B05\"",
+              "      ],",
+              "      \"capabilities\": ["
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "finding": "V36-08",
+      "sourcePath": "04-technique/integration-mobile-transverse.md",
+      "sha256": "87ec214df99f77734a2bd85fda0870fcafe532bb06d0308046ce64ba1b19268a",
+      "matches": [
+        {
+          "line": 101,
+          "text": "## 8. Suppression globale : contrat V3.5, validation avant publication",
+          "context": {
+            "startLine": 99,
+            "endLine": 109,
+            "lines": [
+              "",
+              "<a id=\"cloture-compte\"></a>",
+              "## 8. Suppression globale : contrat V3.5, validation avant publication",
+              "",
+              "La [spécification F01/F14](../03-fonctionnel/compte-suppression-globale.md) définit désormais AP193–AP198, J29/E49, états et suivi après révocation. AP76–AP80 restent scolaires et ne suffisent pas à clôturer une identité multi-écoles. Distinguer SUBMITTED et COMPLETED, et ne jamais remplacer suppression par désactivation.",
+              "",
+              "DM06 n’est pas déclaré « terminé » : le contrat est complété, mais le fournisseur d’identité, l’orchestration, la continuité du dernier administrateur, les rétentions, les délais et les essais restent à valider avant publication. Les exigences des stores restent celles des [S91/S92](../06-gouvernance/sources.md#s91), avec reconsultation Apple [S106](../06-gouvernance/sources.md#s106). Le reçu limité ne donne aucun accès aux leçons, écoles, trajets ou anciennes sessions.",
+              "",
+              "## 8. Suppression de compte global : contrat à compléter avant publication",
+              "",
+              "**Lacune identifiée, non cachée :** AP76–AP80 instruisent des demandes dans une école. Ils ne définissent pas toute la clôture d’identité globale quand une personne n’a plus d’école ou appartient à plusieurs écoles. L’enrichissement UI/mobile ne prétend pas corriger ce manque en renommant une action existante. Les deux stores décrivent des obligations de suppression de compte pour les apps concernées. [S91](../06-gouvernance/sources.md#s91), [S92](../06-gouvernance/sources.md#s92)."
+            ]
+          }
+        },
+        {
+          "line": 107,
+          "text": "## 8. Suppression de compte global : contrat à compléter avant publication",
+          "context": {
+            "startLine": 105,
+            "endLine": 115,
+            "lines": [
+              "DM06 n’est pas déclaré « terminé » : le contrat est complété, mais le fournisseur d’identité, l’orchestration, la continuité du dernier administrateur, les rétentions, les délais et les essais restent à valider avant publication. Les exigences des stores restent celles des [S91/S92](../06-gouvernance/sources.md#s91), avec reconsultation Apple [S106](../06-gouvernance/sources.md#s106). Le reçu limité ne donne aucun accès aux leçons, écoles, trajets ou anciennes sessions.",
+              "",
+              "## 8. Suppression de compte global : contrat à compléter avant publication",
+              "",
+              "**Lacune identifiée, non cachée :** AP76–AP80 instruisent des demandes dans une école. Ils ne définissent pas toute la clôture d’identité globale quand une personne n’a plus d’école ou appartient à plusieurs écoles. L’enrichissement UI/mobile ne prétend pas corriger ce manque en renommant une action existante. Les deux stores décrivent des obligations de suppression de compte pour les apps concernées. [S91](../06-gouvernance/sources.md#s91), [S92](../06-gouvernance/sources.md#s92).",
+              "",
+              "**Workflow proposé à contractualiser :** depuis Compte, présenter « Supprimer mon compte Drivy », distinct de « Quitter l’école » et des demandes sur un trajet. Expliquer accès perdus, traitements scolaires concernés, données devant éventuellement être conservées, délai annoncé et point de contact. Réauthentifier de façon proportionnée, recueillir une confirmation explicite et créer une demande durable dédupliquée.",
+              "",
+              "L’orchestrateur d’identité recense les appartenances et responsabilités, traite les accès et tokens, coordonne les instructions de données avec chaque responsable et expose l’avancement à la personne. Il ne supprime pas toute l’école ni les dossiers d’autres personnes parce que le demandeur était administrateur. La transmission d’une responsabilité doit être résolue explicitement ; elle ne devient pas un obstacle indéfini ni une obligation arbitraire d’appeler un support.",
+              "",
+              "Les données à conserver pour un motif applicable sont minimisées et leur traitement séparé de l’accès à l’app. Les identifiants révoqués ne peuvent plus produire d’upload, même avec un lien ancien. Envoyer une confirmation de traitement et rendre accessible la procédure web concernée sans réinstallation. Les sauvegardes suivent les tombstones et procédures déjà documentés."
+            ]
+          }
+        },
+        {
+          "line": 117,
+          "text": "**Sortie requise avant store public :** contrat global versionné (hors simple scope scolaire), états/erreurs, propriétaire du traitement, règles de rétention validées et scénarios de bout en bout. Aucune nouvelle route n’est inventée dans l’OpenAPI de cette passe ; son absence est un **blocage de publication** explicite, pas une fonctionnalité livrée. Les [décisions ouvertes V3.4](../06-gouvernance/changements-v3-4.md#decisions) en assurent le suivi.",
+          "context": {
+            "startLine": 115,
+            "endLine": 125,
+            "lines": [
+              "Les données à conserver pour un motif applicable sont minimisées et leur traitement séparé de l’accès à l’app. Les identifiants révoqués ne peuvent plus produire d’upload, même avec un lien ancien. Envoyer une confirmation de traitement et rendre accessible la procédure web concernée sans réinstallation. Les sauvegardes suivent les tombstones et procédures déjà documentés.",
+              "",
+              "**Sortie requise avant store public :** contrat global versionné (hors simple scope scolaire), états/erreurs, propriétaire du traitement, règles de rétention validées et scénarios de bout en bout. Aucune nouvelle route n’est inventée dans l’OpenAPI de cette passe ; son absence est un **blocage de publication** explicite, pas une fonctionnalité livrée. Les [décisions ouvertes V3.4](../06-gouvernance/changements-v3-4.md#decisions) en assurent le suivi.",
+              "",
+              "## 9. Sécurité et observabilité vérifiables",
+              "",
+              "Utiliser OWASP MASVS pour structurer les essais stockage, authentification, réseau, plateforme, code et confidentialité. [S90](../06-gouvernance/sources.md#s90). TLS avec validation standard, absence de clés serveur dans l’app et droits courants restent nécessaires. Le certificate pinning n’est pas ajouté comme formule magique : une éventuelle adoption exige modèle de menace, rotation et récupération, sans casser l’accès légitime lors d’un renouvellement.",
+              "",
+              "Mesures proposées : temps jusqu’à un état UI reconnu, latence d’écriture locale, taille des files, taux de reprise d’envoi, incidents de capture et interruptions expliquées. Aucune télémétrie de production ne doit exiger la trace complète pour comprendre un crash. Les budgets chiffrés et consentements sont fixés avant collecte, avec jeux fictifs et essais contrôlés.",
+              "",
+              "## 10. Livrables d’intégration"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

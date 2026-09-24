@@ -1,0 +1,458 @@
+{
+  "version": "3.2",
+  "baseMarkdownFiles": 49,
+  "currentMarkdownFiles": 50,
+  "method": "Inventaire exhaustif et contrôles transversaux ; approfondissement sémantique des transitions identifiées. Ce fichier ne certifie pas la vérité de chaque affirmation ni une étude de marché renouvelée.",
+  "files": [
+    {
+      "file": "00-synthese.md",
+      "lines": 66,
+      "sha256": "ce6cad6826ca60efd0d122d5bbb9c51585e1ae45498b81a915a8bd43a84194bd",
+      "sourceExists": true,
+      "sourceSha256": "4eaf5b45d323907d588d6ca82dc4bfad63734744974ac90272f0259aa544de55",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "01-recherche/audit-existant.md",
+      "lines": 200,
+      "sha256": "9f5ab10a1e107b1f541452f0d2f28e91cd5c4d8ddc0ef7da7bf4250b44928e5d",
+      "sourceExists": true,
+      "sourceSha256": "feb39eb0074dec426934fc77cb23b5e1618f98d5c8749a21d7d25caed2979209",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "01-recherche/auto-ecoles-suisses.md",
+      "lines": 57,
+      "sha256": "b54940a9198387d51be88d5ffd0aacf4b1ade102b3023d00e83a1c656bb38eca",
+      "sourceExists": true,
+      "sourceSha256": "edf69ef7a02b86ef178ed6013d230444a27136de5dfe1ea2a84cd467d378d26c",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "01-recherche/benchmark.md",
+      "lines": 81,
+      "sha256": "7c8a4e0d2570a4839793eedf46e41e8f65082765e1a1c4f445b7885dcc2a9f9c",
+      "sourceExists": true,
+      "sourceSha256": "6f8d1e6c973f92ab88f2c514ae870f3e57e3aa0eb891e090a50dec9c8a4b2792",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "01-recherche/inventaire-decisions.md",
+      "lines": 742,
+      "sha256": "40f7aca8d672e4fc389ac5b30da72f71e7747a4eeb53b5f7f53d1589e58e4048",
+      "sourceExists": true,
+      "sourceSha256": "5a19dce1091d0bea24e00db66d4416b834f7f47dfa15b47be84cda0431b2a64c",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "01-recherche/vision-perimetre.md",
+      "lines": 63,
+      "sha256": "df2e583ca1dca080b4c5de3f1d8f4ec0e168cfb31316e6a578edbf3e5bf74c9d",
+      "sourceExists": true,
+      "sourceSha256": "8950a19722e4353783ebf39676366f86b6598f1e4fa4bc9b473e401753e98f74",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "01-recherche/web-tablette-onboarding.md",
+      "lines": 46,
+      "sha256": "221ce1891d5d5e53913471da8bbc4de33a8cfc8b893aa02af116af43456c8031",
+      "sourceExists": true,
+      "sourceSha256": "ab841a0e0efa17105cc0a3f09197ae06d00f7e41ccaaeab1bf0bd3ea30544095",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "02-experience/architecture-information.md",
+      "lines": 57,
+      "sha256": "0034746b188252bbc6549a7ae5c9c93c5cd65ed34ed2cb1fee640b33b80b77fc",
+      "sourceExists": true,
+      "sourceSha256": "7a1baf5006ab65a74cae86f0a7ea0b1131eda9728bc1c638fd9307197ac61918",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "02-experience/design-system.md",
+      "lines": 149,
+      "sha256": "fc5ea233f29016d419fc2b4ff12aca634ab8cfcec5bc850c798b6603b1cc03b0",
+      "sourceExists": true,
+      "sourceSha256": "7dd88dfd4f1bea3765797d590af2d4e893695cd4ad50858d387a9bb2256de4c8",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "02-experience/directions-artistiques.md",
+      "lines": 50,
+      "sha256": "8b59b7b237d378792a5bd7d8ce0a6e227804f67e6dfc71e54cfb0c4c409e285f",
+      "sourceExists": true,
+      "sourceSha256": "01e020c45ddd1cca325761a31dca97e9a2ad68858c20f7858b6bd31dc0b4a050",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "02-experience/ecrans.md",
+      "lines": 1017,
+      "sha256": "3fedaef14c4b6ed6a45056a0b33aadb3825f84c8f029877e162005fc6340eb24",
+      "sourceExists": true,
+      "sourceSha256": "9d20d6dd87dcbfcfea2541e8c6b9fc7ef108a1ece29b87a0ee54ec97f8609155",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "02-experience/parcours.md",
+      "lines": 359,
+      "sha256": "4c6fba981108323a4b15b07d993bdd84103ff48ba75cf3e8b479f62e9f93f2af",
+      "sourceExists": true,
+      "sourceSha256": "4ce2b36b000f1743703c1aa91f66f929980a7fae8204a4afd14d40a2e58e6bc9",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "02-experience/plateformes-tablette-web.md",
+      "lines": 83,
+      "sha256": "8880bd369b9357f461c2d422e3d71e0983d014134a198e970370194ccf600043",
+      "sourceExists": true,
+      "sourceSha256": "d618c8f3a19cfa86b2828f825f553c4d0aef8165a83010db8cd64fa3d922f86d",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "02-experience/wireframes.md",
+      "lines": 265,
+      "sha256": "f6d9dea9b9911d772807718c963a629010ea2304b054069af5fc36b0d095edce",
+      "sourceExists": true,
+      "sourceSha256": "302d271728131a71d38aafdc781f90c624b7008b040a9637e9b3f79685435061",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "03-fonctionnel/bilans-documents.md",
+      "lines": 103,
+      "sha256": "b93e0f5be0f57f259cf5482408a83b6af4873943e231307f8173e6013bc439ec",
+      "sourceExists": true,
+      "sourceSha256": "50c9447d99283ed5b43016312fbc9fe66355fb57029f881008217d03606357a1",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "03-fonctionnel/calendrier-notifications.md",
+      "lines": 88,
+      "sha256": "3698617df84909e3c134790ed54379c75f7c2a141104c78cb615997bccaa2bee",
+      "sourceExists": true,
+      "sourceSha256": "b8dee073e641512f9bf16a892d2c9f67dd7f5e1f6fc6e27abcc850a685313551",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "03-fonctionnel/catalogue-packs.md",
+      "lines": 91,
+      "sha256": "4a99579f3b8db7eca0f7155a90e9cf9124d7591bac2127ef9132a8d91e99f6bd",
+      "sourceExists": true,
+      "sourceSha256": "811a0c26789575b7c59fc3823c6b8349b13e63fdcd7c0ad8cdc5e5295b6b9940",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "03-fonctionnel/cours-collectifs.md",
+      "lines": 129,
+      "sha256": "fbda65b82385212d2ca4fff87170c3879abcaea0900d01d4fa87775f4396dcb6",
+      "sourceExists": true,
+      "sourceSha256": "1382f32cd5c735a6608ad98a59ed207f4d5868a02be77790a19de6974cfe363b",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "03-fonctionnel/extensions.md",
+      "lines": 96,
+      "sha256": "13c761675ee598ef65aebeb9ba118c5c4b05cd32efbc8a864889a15b749d8785",
+      "sourceExists": true,
+      "sourceSha256": "1a5173f8914bef767eb7d24076b4349714d8555e8238ae41ef79bc5db79d8229",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "03-fonctionnel/gestion-web-archivage.md",
+      "lines": 110,
+      "sha256": "9b6b239fefaf42f1778d86a7c925aadc7a59e4c46bd788ad4bba115a2ecc4522",
+      "sourceExists": true,
+      "sourceSha256": "ea42f18fe0f3feddf59874bc3b2dbec3fd439896f51697ca03eb7a473318e895",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "03-fonctionnel/gps-replay.md",
+      "lines": 124,
+      "sha256": "4cfa321dd636fba3ff4161e979e3354d9faa3a5e7a132108b0d4d3b2a9cc611f",
+      "sourceExists": true,
+      "sourceSha256": "0f4dc6177e73324c424eb37a49c4e43af2e608278605383f9e9d6d34c2e7c310",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "03-fonctionnel/hors-ligne-vie-privee.md",
+      "lines": 105,
+      "sha256": "362d9e2002b046425a0f266b95cb0ebd713b8c79013a394910278f61ff82a737",
+      "sourceExists": true,
+      "sourceSha256": "a260de87c3af7099ba5a86afc56b079ee48e8b54404c19498d2e4fe98240d1b9",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "03-fonctionnel/identites-formations.md",
+      "lines": 185,
+      "sha256": "48b94a561bce6de609dee08ef72b2b226a3fc4451d7b4cf156e8b1dea1c9afc7",
+      "sourceExists": true,
+      "sourceSha256": "d9b77ac681a2de0423673f527db0d1febd0325fce4bc4170f879c9d5cbc5b795",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "03-fonctionnel/onboarding.md",
+      "lines": 149,
+      "sha256": "5c40bd673ad9a909a5530992cf015236ab4b84b7b9ec0cc2a32234faaeeed0e8",
+      "sourceExists": true,
+      "sourceSha256": "3778b10cc1eed622cb7781b00791a675bedfa5026ef130242329d16a067048e8",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "03-fonctionnel/paiements-communications.md",
+      "lines": 100,
+      "sha256": "a51d64644fa38d9aa960b4bcbb41b33d4dcaed9bb306ead8bc0d21be0495b88b",
+      "sourceExists": true,
+      "sourceSha256": "8fb75d8a6f59a835234789c3cb5b71bb412ae4551cf998c21b053c3fc1e98796",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "03-fonctionnel/planning-lecons.md",
+      "lines": 202,
+      "sha256": "f48625147f70ab97a78332f3453ed78b35d7fc37367c68074ffdbd312394d404",
+      "sourceExists": true,
+      "sourceSha256": "ca864c823a531db2661be93fc770a281426c3a0d6cfdae52dac2be2850f89e45",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "03-fonctionnel/regles-etats.md",
+      "lines": 745,
+      "sha256": "58cde0e32ea906f856f3044d40407d5bda423429379de415a4bc076633ed4a44",
+      "sourceExists": true,
+      "sourceSha256": "7697e30f7eb719347b1ad0e13770d78ac37902a4aa7191e513a607f90559e31c",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "03-fonctionnel/roles-permissions.md",
+      "lines": 107,
+      "sha256": "271a125e7254544a32f3505c3ba3825d78f98cb00a2aeccf9685447273e68414",
+      "sourceExists": true,
+      "sourceSha256": "4275ba9e20049a4ef82bf1c45e358473697e35e0e782c7d3203735163051c841",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "03-fonctionnel/statistiques.md",
+      "lines": 116,
+      "sha256": "9c36192320b2aa0ff7bc25325ea7b3a746a9f6e071bc60178eeb88df5845e439",
+      "sourceExists": true,
+      "sourceSha256": "b6a339332f5724551c3de9e376bed386081bc94409ae7981cb3a8d5933e451b9",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "04-technique/api.md",
+      "lines": 370,
+      "sha256": "887be1bf7d2b0bf8ab5f91452ebf2413f1f86319424925e185158bec5ff235ec",
+      "sourceExists": true,
+      "sourceSha256": "f20ff1c653394cfbe926ca263b7e37745377bd0c89d5b8c0a7ca38bfe7f35b65",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "04-technique/architecture-decisions.md",
+      "lines": 159,
+      "sha256": "c055c5fff6a11d93c735e11cffa141695265a26921482367773d3f782572251a",
+      "sourceExists": true,
+      "sourceSha256": "56303d0e12de885ba3b89aacd8b033a0c22aaa523515805c2436f9645f3435f6",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "04-technique/fichiers-temps-communications.md",
+      "lines": 97,
+      "sha256": "03b04cd1ffb2eeb715264ed8eace0e50a276917256d6a1eb46289d46bd3802d5",
+      "sourceExists": true,
+      "sourceSha256": "da3e9c8627a1cfaa4c1d6cd6e20f01458b1be7604132d310b4ae44d2901ee177",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "04-technique/modele-donnees.md",
+      "lines": 306,
+      "sha256": "81e6eb01afb587fea82f91b8414d56e9f754cf75d3422455950c43a31d633d1e",
+      "sourceExists": true,
+      "sourceSha256": "57c92fcac23822b800300e7f215dde04119c0705049e2d57ee65fdf062dee74e",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "04-technique/securite-vie-privee.md",
+      "lines": 145,
+      "sha256": "6c21d9b7fc03db73e4192554f92c04c0d166b2d9f6dd4bf515099efd84d86c77",
+      "sourceExists": true,
+      "sourceSha256": "aaba4858a0534d925fa22ec519ba10c8395f7f620df881280ccbea959b314149",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "04-technique/synchronisation.md",
+      "lines": 139,
+      "sha256": "44642d1d72f9985a38130b9d90afacb63a7f7b35a397789609b5cba60133eb6e",
+      "sourceExists": true,
+      "sourceSha256": "363e1da7292b3529507e99d4d9539b63fbf117fdfddbb8f457db324d806bc910",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "04-technique/transactions-v2.md",
+      "lines": 118,
+      "sha256": "5b68ba287e26eb20781bf1bbe1f93f2254c31e49b40b5173e7fc12d3f69f2154",
+      "sourceExists": true,
+      "sourceSha256": "88b35a5d10bb59f9f9daddcf0703fc0182bc0b3ff068cc0561aa5ac48c515d17",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "04-technique/transactions-v3.md",
+      "lines": 96,
+      "sha256": "0420f4f5ec34402faf00b48a7d064ab0bcda09c3be35fa47ce372a663b52ad16",
+      "sourceExists": true,
+      "sourceSha256": "e34228066bdd81f42dd8c780b7d73c1e4e561581477947ea4af22f9b88e35ad5",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "05-realisation/deploiement-exploitation.md",
+      "lines": 140,
+      "sha256": "699e33ce39870b9ab377f560e4ed63d39fc075d5ad2af8c9549166460e250a88",
+      "sourceExists": true,
+      "sourceSha256": "2cc1a3f0e5d0afa7f4dfc9f2af4d3f180ebfd18348305ed47a07cd0d85ae5406",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "05-realisation/migration.md",
+      "lines": 89,
+      "sha256": "2f422ff1c8ee595726f00cf96d5227f7299ec7fd25fa3a8e9ae2d154e91888ac",
+      "sourceExists": true,
+      "sourceSha256": "ceab64bd91bf157f2bee4b96aa4122fc0c24b5da798e2fea9fb168baaba00005",
+      "changed": true,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "05-realisation/roadmap-backlog.md",
+      "lines": 88,
+      "sha256": "dc7b978665ea6f091e4b0be4d96bd75eed65c58b9157eb329f4601c6e2fcb9c5",
+      "sourceExists": true,
+      "sourceSha256": "7213a9870d96aab15a05cd30b5560f77b675c4f957d3a3bceaa73716f696ec87",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "05-realisation/tests-recette.md",
+      "lines": 3921,
+      "sha256": "02ffea0832a5d1767f0651ef0b3f5bc3ccf52c6dffae099d628cdaac2820e56a",
+      "sourceExists": true,
+      "sourceSha256": "4cbc08a83640b2369c31562a10c0fb2015a72ef0794dfa1823aa3b52167e3739",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-1.md",
+      "lines": 254,
+      "sha256": "c6f8353476ca303375c3f3529f80b711538f60470dcac35b11a4655aaaa0732f",
+      "sourceExists": true,
+      "sourceSha256": "c6f8353476ca303375c3f3529f80b711538f60470dcac35b11a4655aaaa0732f",
+      "changed": false,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-2.md",
+      "lines": 189,
+      "sha256": "fa03a02e4cbb7272259513650eda0739b958ab9f3137c25261569b649f02491f",
+      "sourceExists": false,
+      "sourceSha256": null,
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "06-gouvernance/changements-v2.md",
+      "lines": 34,
+      "sha256": "d02a48c4b3e6db5c48729f27ec753a368521de963c7d50ded66b5bf94d547e73",
+      "sourceExists": true,
+      "sourceSha256": "d02a48c4b3e6db5c48729f27ec753a368521de963c7d50ded66b5bf94d547e73",
+      "changed": false,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "06-gouvernance/changements-v3.md",
+      "lines": 42,
+      "sha256": "815139ecfc93586f3f66b6238802dad4dd37cfcc1d3f458351f40b90968c1190",
+      "sourceExists": true,
+      "sourceSha256": "815139ecfc93586f3f66b6238802dad4dd37cfcc1d3f458351f40b90968c1190",
+      "changed": false,
+      "scope": "Contrôle documentaire transversal ; contenu de contexte conservé, sans nouvelle validation externe de chaque affirmation."
+    },
+    {
+      "file": "06-gouvernance/glossaire-decisions-questions.md",
+      "lines": 390,
+      "sha256": "68d29ca101f0a96eab86f33cde5e51d688e91b1bec0cd7c245bbbd6c480659e7",
+      "sourceExists": true,
+      "sourceSha256": "8b1a7b7adf8b4e18b8dfe94099d3e81c3404ca4feec4cd25cfe67b47ed266486",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "06-gouvernance/revue-coherence.md",
+      "lines": 34,
+      "sha256": "14ccfe7adf5d2ceedb025e7383ac09a0a8adfad6dd5bd0330f76d26ff532437c",
+      "sourceExists": true,
+      "sourceSha256": "742dfab4052004413dc276bc8d70f028cc7e1f47cf7fa4fdc905b9f5a0c34099",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "06-gouvernance/sources.md",
+      "lines": 412,
+      "sha256": "250a2946a4c059ba7d8f31857b12bdb745abde66562295e7ea1638d05fdd1323",
+      "sourceExists": true,
+      "sourceSha256": "6a6c6503acfef6d70d9f33ae8977334dc9fb870cf04576397e50447807fb82dd",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "06-gouvernance/tracabilite.md",
+      "lines": 355,
+      "sha256": "e0ad81ab71436c355eb7ccba08e34843dd812058364506a0a4ba86a3d2a7656a",
+      "sourceExists": true,
+      "sourceSha256": "d2aa725f4cd93670c0676bf0e7c46fdc6517e3d144cddc770c5c23ca809e9b1b",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    },
+    {
+      "file": "README.md",
+      "lines": 150,
+      "sha256": "f13cf37405e0923513d5e02ce2b9247a5725518c1a3b7f845a20530707f04365",
+      "sourceExists": true,
+      "sourceSha256": "31743e09c75b1be5c8d252e7608a270d9b31d99b015d0efcdedff25d694be0e3",
+      "changed": true,
+      "scope": "Liens/ancres et références inclus dans le contrôle global ; recoupement sémantique ciblé et corrections décrits par D01–D11."
+    }
+  ]
+}

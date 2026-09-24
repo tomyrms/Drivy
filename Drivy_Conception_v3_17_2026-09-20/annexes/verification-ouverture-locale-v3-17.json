@@ -1,0 +1,10 @@
+{
+  "status": "NOT_QUALIFIED_BLOCKED",
+  "opened": false,
+  "error": "Page.goto: net::ERR_BLOCKED_BY_ADMINISTRATOR at file:///mnt/data/Drivy_Conception_v3_17_2026-09-20/DESIGN/APPLICATION.html\nCall log:\n  - navigating to \"file:///mnt/data/Drivy_Conception_v3_17_2026-09-20/DESIGN/APPLICATION.html\", waiting until \"load\"\n",
+  "version": "3.17",
+  "atUTC": "2026-09-20T17:38:28.009373+00:00",
+  "browser": "144.0.7559.96",
+  "scope": "DIRECT_FILE_URL_ONLY",
+  "functionalSuitesUse": "page.set_content"
+}

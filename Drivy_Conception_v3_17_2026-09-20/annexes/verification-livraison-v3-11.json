@@ -1,0 +1,99 @@
+{
+  "version": "3.11",
+  "scope": "DOCUMENTARY_RELEASE_ONLY",
+  "executionMode": "Aggregation of actually executed checks; final live and reader runs launched separately after the grouped run. Not a claim that the last grouped command completed.",
+  "executedAtUTC": "2026-09-19T20:13:52.985470+00:00",
+  "requestedBrowserChecks": true,
+  "passed": true,
+  "allChecksExecuted": true,
+  "reports": [
+    {
+      "script": "verifier-environnement.py",
+      "report": "verification-environnement-v3-11.json",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_ENVIRONMENT_ONLY",
+      "reportSHA256": "8110282fb304f3e604069436f9ecb370111a692fd228a2d59e4f01b3e751453d",
+      "errorCount": 0
+    },
+    {
+      "script": "verifier-documentation.py",
+      "report": "verification-documentaire.json",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_CHECKS_ONLY",
+      "reportSHA256": "aec4ad021c4d9d965fe3052159c741c633511d6580954776ca80ddb1d1ecfa6e",
+      "errorCount": 0
+    },
+    {
+      "script": "verifier-reference-v3-11.py",
+      "report": "verification-reference-v3-11.json",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_CHECKS_ONLY",
+      "reportSHA256": "1640314a582318e524e475616da190d04d6c414f63d4fcbc58a8ea5533bb0f90",
+      "errorCount": 0
+    },
+    {
+      "script": "verifier-fichiers-v3-11.py",
+      "report": "verification-fichiers-v3-11.json",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "SCHEMAS_AND_ISOLATED_DOCUMENTARY_MODELS",
+      "reportSHA256": "5497bb277adc194f8465b710edb687235084e3ecd7344181ef24db8e9a0a5029",
+      "errorCount": 0
+    },
+    {
+      "script": "verifier-mobile-swift-v3-11.py",
+      "report": "verification-mobile-swift-v3-11.json",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "MOBILE_SWIFT_DOCUMENTATION_ONLY",
+      "reportSHA256": "f6ab27132907b9750cf85ee420bd2b97eba377cdcb9ca7159bb203c1d5999e4c",
+      "errorCount": 0
+    },
+    {
+      "script": "verifier-design-v3-11.py",
+      "report": "verification-design-v3-11.json",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DESIGN_DOCUMENTATION_ONLY",
+      "reportSHA256": "2ad51155abd36dfecb467f82335346806e7282ee544f07a11d966a479a48b5ed",
+      "errorCount": 0
+    },
+    {
+      "script": "verifier-prototype-v3-11.py",
+      "report": "verification-prototype-v3-11.json",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_HTML_PROTOTYPE_ONLY",
+      "reportSHA256": "29efcce4761fbd3a7a7c1d43069400adb4552d38ba09cb72c150fca5f4332072",
+      "errorCount": 0
+    },
+    {
+      "script": "verifier-live-prototype-v3-11.py",
+      "report": "verification-live-prototype-v3-11.json",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_HTML_MEMORY_AND_DTO_ONLY",
+      "reportSHA256": "c749b84da0896fc5d532b1f8f39ba6b6fada53877c062b9c65259ae0bc3032b8",
+      "errorCount": 0
+    },
+    {
+      "script": "verifier-lecteur-v3-11.py",
+      "report": "verification-lecteur-v3-11.json",
+      "status": "PASSED",
+      "passed": true,
+      "scope": "DOCUMENTARY_READER_ONLY",
+      "reportSHA256": "5ade011deb3d2c9156ca1bcc0319abd896bd664b31fcc5a5417be98162e186f1",
+      "errorCount": 0
+    }
+  ],
+  "productTestsExecuted": false,
+  "nativeBuildExecuted": false,
+  "windowsExecuted": false,
+  "limits": [
+    "File, schema and HTML checks only; no service, native build, physical device or user test.",
+    "Input/output integrity does not establish complete semantic correctness of all prose."
+  ]
+}

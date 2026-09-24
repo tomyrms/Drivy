@@ -1,0 +1,904 @@
+{
+  "version": "3.15",
+  "executedAtUTC": "2026-09-20T13:39:41.587508+00:00",
+  "passed": true,
+  "errorCount": 0,
+  "status": "PASSED",
+  "scope": "HTML_DOCUMENTARY_PROTOTYPE_NOT_NATIVE_APP",
+  "environment": {
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "python": "3.13.5",
+    "browser": "144.0.7559.96",
+    "navigation": "page.set_content; no real file URL on managed Chromium"
+  },
+  "checks": [
+    {
+      "check": "Three clearly identified fixture observations",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Opening does not add an event",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "No default category or status",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Theme selection does not save",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Theme plus explicit status adds one event",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Frozen moment and position preserved",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Private no publication fields",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Undo removes only last addition",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Cancellation does not save",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Escape cancels and focus restored",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Marker has no default qualification",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "No GPS is not a disabled map",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Observation without GPS has no anchor",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Offline still saves private observation",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Offline banner does not claim synced",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Save error does not produce success",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Save error visibly reported",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Pause changes state without ending lesson",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Pause cannot invent a fresh position",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Stop confirmation is explicit",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Stop GPS keeps lesson and observations",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Observation allowed after GPS stops",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Lesson end does not publish or erase observations",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Replay x1 runs on elapsed time",
+      "passed": true,
+      "details": 0.6334000000007336
+    },
+    {
+      "check": "Manual map pan does not pause playback",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "No forced recenter during manual exploration",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Recenter does not reset replay time",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Next observation aligns the time",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Edit text retained safely",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Qualification updates existing observation, not duplicate",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Replay focus restored after editing",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Dialog focus trapped",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Background inert in dialog",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "64 layouts: visible primary/close, 44px targets, no horizontal text clipping",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "Reload resets volatile demo state",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "No script error in executed suite",
+      "passed": true,
+      "details": []
+    }
+  ],
+  "layouts": [
+    {
+      "size": "phone",
+      "scale": "normal",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "normal",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "normal",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "normal",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "large",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "large",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "large",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "large",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "large",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "large",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "large",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "phone",
+      "scale": "large",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "normal",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "normal",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "normal",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "normal",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "large",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "large",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "large",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "large",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "large",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "large",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "large",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "small",
+      "scale": "large",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet-compact",
+      "scale": "large",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "normal",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "large",
+      "theme": "light",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "large",
+      "theme": "light",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "large",
+      "theme": "light",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "large",
+      "theme": "light",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "large",
+      "theme": "dark",
+      "view": "capture",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "large",
+      "theme": "dark",
+      "view": "categories",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "large",
+      "theme": "dark",
+      "view": "status",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    },
+    {
+      "size": "tablet",
+      "scale": "large",
+      "theme": "dark",
+      "view": "replay",
+      "undersized": [],
+      "onScreen": true,
+      "clipped": [],
+      "sheetHorizontal": false,
+      "deviceHorizontal": false
+    }
+  ],
+  "nativeTests": "NOT_EXECUTED",
+  "roadSafety": "NOT_QUALIFIED"
+}

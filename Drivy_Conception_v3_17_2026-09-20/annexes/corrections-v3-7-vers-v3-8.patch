@@ -1,0 +1,1558 @@
+--- v3.7/00-synthese.md
++++ v3.8/00-synthese.md
+@@ -1,9 +1,9 @@
+ # Synthèse : Drivy, sur le terrain et au bureau
+ 
+-> Référence de conception **3.7 · 19 septembre 2026**. [Index](README.md).
++> Référence de conception **3.8 · 19 septembre 2026**. [Index](README.md).
+ > Exigences intégrées ; choix détaillés proposés à valider. Pas une application implémentée.
+ 
+-## Référence courante V3.7
++## Référence courante V3.8
+ 
+ La V3.7 remplace la V3.6 et approfondit les interactions entre présences, droits, preuves pédagogiques, capture GPS et notifications. Le choix **Swift natif iPhone/iPad** reste accepté ; GPS facultatif, tablette, web, cours collectifs, packs et anti-slop restent conservés. Android est un client futur distinct, non un prérequis du pilote Apple.
+ 
+@@ -84,3 +84,7 @@
+ ## Consolidation V3.7
+ 
+ Le nouveau dossier remplace V3.6. Il sépare la correction factuelle d’une présence du règlement de son droit, fige les sources de validation pédagogique, précise l’admission des mesures GPS et le routage natif des notifications. Les orientations Swift/GPS/tablette/web/cours/packs restent inchangées. La recherche externe vérifie seulement les mécanismes cités ; la politique de régularisation proposée et les essais physiques restent à valider. [Corrections et preuves](06-gouvernance/audit-corrections-v3-7.md).
++
++## Direction artistique décidée et dossier visuel
++
++**Option A · Cartographie native** : fond clair, bleu franc, panneaux lisibles et carte au premier plan pendant la séance. Le [dossier DESIGN](DESIGN/README.md) est l’entrée visuelle ; ses [maquettes navigables](DESIGN/MAQUETTES.html) déclinent téléphone, iPad et web. La direction est acceptée ; les détails visuels et l’intégration Swift restent à éprouver. Aucun changement de périmètre fonctionnel ni de contrat API n’est inclus dans cette passe de design.
+--- v3.7/01-fonctionnalites-prevues.md
++++ v3.8/01-fonctionnalites-prevues.md
+@@ -1,6 +1,6 @@
+ # Fonctionnalités prévues de Drivy
+ 
+-> Référence V3.7 · 19 septembre 2026 · [Index](README.md) · [Rapport de revue](06-gouvernance/audit-corrections-v3-7.md).
++> Référence V3.8 · 19 septembre 2026 · [Index](README.md) · [Rapport de revue](06-gouvernance/audit-corrections-v3-7.md).
+ 
+ ## Ce que signifie cette liste
+ 
+@@ -114,3 +114,7 @@
+ Les 23 fonctions gardent leur périmètre. Une présence peut maintenant être rectifiée même si le droit du pack rendu a déjà été utilisé ; un suivi distinct reste à régler par le responsable. Une validation de formation dépend de versions de preuves identifiables et repasse à vérifier si ces preuves changent. Le GPS ne récupère pas un ancien point comme départ de la nouvelle leçon. Le push natif suit l’installation et le compte courants ; le centre web n’est pas un nouveau service Web Push.
+ 
+ Ces corrections n’ajoutent ni décompte automatique depuis le GPS, ni note d’aptitude générée, ni fusion automatique de captures. **Choix R109 à approuver :** autoriser ADMIN à renoncer explicitement à consommer un droit sans remboursement d’argent. Les versions, matériel, règles suisses applicables, délais de suppression et budgets restent au registre. [Rapport V3.7](06-gouvernance/audit-corrections-v3-7.md).
++
++## Design retenu et état des maquettes
++
++La direction A **Cartographie native**, claire et bleue, est choisie par le porteur. Le [dossier DESIGN](DESIGN/README.md) contient palette claire/sombre, composants, cartographie, états et maquettes. Les 14 compositions illustrent certains écrans ; les autres conservent leurs spécifications et familles visuelles, sans prétendre être dessinés. Les 23 fonctions ne changent pas. Le contrat reste 3.7.0 ; les règles d’école, les droits et les confirmations ne sont pas remplacés par les comportements simulés du prototype.
+--- v3.7/01-recherche/audit-existant.md
++++ v3.8/01-recherche/audit-existant.md
+@@ -1,6 +1,6 @@
+ # Audit fonctionnel de l’archive et limites de preuve
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Périmètre réellement accessible
+--- v3.7/01-recherche/auto-ecoles-suisses.md
++++ v3.8/01-recherche/auto-ecoles-suisses.md
+@@ -1,6 +1,6 @@
+ # Dix auto-écoles suisses : observations et traduction dans Drivy
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; solutions détaillées proposées, à valider. [Index](../README.md).
+ 
+ ## Méthode et niveau de preuve
+--- v3.7/01-recherche/benchmark.md
++++ v3.8/01-recherche/benchmark.md
+@@ -1,6 +1,6 @@
+ # Benchmark observé et enseignements de conception
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Question de départ
+--- v3.7/01-recherche/inventaire-decisions.md
++++ v3.8/01-recherche/inventaire-decisions.md
+@@ -1,6 +1,6 @@
+ # Inventaire fonctionnel et matrice de décision
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Lecture de la matrice
+--- v3.7/01-recherche/ui-ux-mobile-etat-art.md
++++ v3.8/01-recherche/ui-ux-mobile-etat-art.md
+@@ -1,6 +1,6 @@
+ # Recherche UI/UX et mobile : décisions pour Drivy
+ 
+-> Référence 3.7 · Recherche du 19 septembre 2026. [Index](../README.md). Sources primaires techniques, source lexicographique pour « slop » ; conclusions produit proposées, pas efficacité mesurée.
++> Référence 3.8 · Recherche du 19 septembre 2026. [Index](../README.md). Sources primaires techniques, source lexicographique pour « slop » ; conclusions produit proposées, pas efficacité mesurée.
+ 
+ ## Ce que cette recherche doit résoudre
+ 
+@@ -39,7 +39,7 @@
+ 
+ **Puis la continuité.** Fermer une feuille, afficher une autre destination ou faire pivoter l’iPad ne termine pas la collecte. Le retour système n’est pas un bouton d’arrêt caché. Les opérations encore inconnues restent reprises avec leur identité, jamais recréées pour rendre l’écran artificiellement rassurant.
+ 
+-**Enfin l’expression visuelle.** Le Carnet cartographique conserve une identité typographique et sémantique, tandis que les contrôles natifs respectent leur plateforme. L’identité scolaire nom/logo/contact ne change ni les erreurs, ni l’avertissement GPS, ni les contrastes nécessaires. L’accent scolaire libre n’est pas configurable au pilote.
++**Enfin l’expression visuelle.** La direction A Cartographie native conserve une identité typographique et sémantique, tandis que les contrôles natifs respectent leur plateforme. L’identité scolaire nom/logo/contact ne change ni les erreurs, ni l’avertissement GPS, ni les contrastes nécessaires. L’accent scolaire libre n’est pas configurable au pilote.
+ 
+ ## Ce que « AI slop » apporte réellement au projet
+ 
+--- v3.7/01-recherche/vision-perimetre.md
++++ v3.8/01-recherche/vision-perimetre.md
+@@ -1,6 +1,6 @@
+ # Vision produit et périmètre de référence
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; solutions détaillées proposées, à valider. [Index](../README.md).
+ 
+ ## Proposition de valeur
+--- v3.7/01-recherche/web-tablette-onboarding.md
++++ v3.8/01-recherche/web-tablette-onboarding.md
+@@ -1,6 +1,6 @@
+ # Web, tablettes et accueil : fondements et limites de preuve
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; choix détaillés proposés, à valider. [Index](../README.md).
+ 
+ ## Origine de cette révision
+--- v3.7/02-experience/architecture-information.md
++++ v3.8/02-experience/architecture-information.md
+@@ -1,6 +1,6 @@
+ # Architecture de l’information : terrain, apprentissage et gestion
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences intégrées ; solutions proposées, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Un produit, trois contextes d’usage
+--- v3.7/02-experience/design-system.md
++++ v3.8/02-experience/design-system.md
+@@ -1,11 +1,11 @@
+ # Système de design, états et accessibilité
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
+-> Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
++> Statut : **direction A choisie par le porteur** ; valeurs et détails de rendu de référence à vérifier sur maquettes puis dans Swift. [Index](../README.md).
+ 
+ ## Fondations et statut
+ 
+-Direction de référence proposée : **Carnet cartographique**. Les variables ci-dessous sont des décisions de design proposées, pas des styles hérités de l’ancienne application. Les règles métier restent dans [R01–R108](../03-fonctionnel/regles-etats.md). Une couleur ne doit jamais modifier le sens d’un statut.
++Direction de référence : **A · Cartographie native**, choisie par le porteur dans la conversation. Elle remplace la recommandation ivoire/pétrole. Le [dossier DESIGN](../DESIGN/README.md) rassemble les spécifications visuelles et les maquettes. Les valeurs ci-dessous concrétisent cette direction ; elles ne sont ni héritées de l’ancienne app, ni toutes approuvées pixel par pixel. Les règles métier restent dans [Règles métier](../03-fonctionnel/regles-etats.md). Une couleur ne doit jamais modifier le sens d’un statut.
+ 
+ Les exigences de contraste s’appuient sur WCAG 2.2 : contraste du texte usuel 4,5:1 ; grands textes et éléments non textuels pertinents 3:1, avec leurs conditions d’application. Les minima internes proposés pour les contrôles tactiles personnalisés sont 44 points iOS, 48 dp Android et 44 pixels CSS web ; les commandes principales/critiques visent au moins 48 dans leur unité. Ces choix Drivy ne sont ni une citation universelle d’Apple ni une prétention de conformité globale. [S28](../06-gouvernance/sources.md#s28).
+ 
+@@ -13,48 +13,81 @@
+ 
+ | Variable | Clair | Sombre | Usage |
+ |---|---|---|---|
+-| `canvas` | `#F6F4EF` | `#141B1D` | Fond général |
+-| `surface` | `#FFFFFF` | `#1D282B` | Panneau de lecture |
+-| `text` | `#1B2426` | `#F2F5F4` | Texte principal |
+-| `muted` | `#536267` | `#B3C2C1` | Métadonnées lisibles, pas texte désactivé |
+-| `accent` | `#145B63` | `#93D0D1` | Action primaire et sélection |
+-| `onAccent` | `#FFFFFF` | `#143337` | Texte sur action primaire |
+-| `successText` | `#23634A` | `#A6DABD` | Texte de succès |
+-| `successSurface` | `#E6F2E9` | `#20392C` | Surface de succès |
+-| `warningText` | `#785000` | `#F4D185` | Texte de vigilance |
+-| `warningSurface` | `#FFF2CC` | `#3A301D` | Surface de vigilance |
+-| `dangerText` | `#A12F36` | `#FFB6BA` | Texte d’erreur et action destructive |
+-| `dangerSurface` | `#FDEBED` | `#44242A` | Surface d’erreur |
+-| `border` | `#CFD7D6` | `#718A8D` | Séparation décorative ; ne suffit pas seul à identifier un champ |
+-
+-Le bord clair est un séparateur, pas le contour unique d’un contrôle. Les champs interactifs utilisent une bordure à contraste renforcé dérivée de `muted`, et le focus utilise `accent` avec espace de séparation. Les états désactivés gardent un libellé lisible et une explication ; ne pas s’appuyer sur l’opacité seule pour expliquer un refus.
++| `canvas` | `#F7F8FA` | `#10151C` | Fond général |
++| `surface` | `#FFFFFF` | `#19222E` | Panneau de lecture opaque |
++| `surfaceMuted` | `#EEF2F7` | `#222E3E` | Groupe secondaire |
++| `text` | `#18212B` | `#F2F5FA` | Texte principal |
++| `muted` | `#536174` | `#B0BCCC` | Métadonnées et aide lisibles |
++| `accent` | `#245BD6` | `#91B5FF` | Action primaire, lien et sélection |
++| `accentPressed` | `#1947AD` | `#B4CCFF` | Fond primaire pressé |
++| `onAccent` | `#FFFFFF` | `#10264D` | Contenu sur action primaire |
++| `accentSoft` | `#EAF0FE` | `#233859` | Fond de sélection secondaire |
++| `successText` | `#17633D` | `#98DBB4` | Succès confirmé, avec texte |
++| `successSurface` | `#E9F5EE` | `#18372A` | Surface de succès |
++| `warningText` | `#7A4D00` | `#F2CB83` | Vigilance nécessitant attention |
++| `warningSurface` | `#FFF3D6` | `#382D19` | Surface de vigilance |
++| `dangerText` | `#B02B37` | `#FFADB4` | Erreur et action destructive |
++| `dangerSurface` | `#FDECEF` | `#40252D` | Surface d’erreur |
++| `border` | `#D9E0E9` | `#34445A` | Séparation décorative uniquement |
++| `controlBorder` | `#78869A` | `#71849D` | Bord de contrôle custom identifiable |
++| `disabledText` | `#5D6A7C` | `#B0BCCC` | Texte indisponible, raison séparée |
++| `disabledSurface` | `#E8EDF3` | `#222E3E` | Fond indisponible |
++| `route` | `#245BD6` | `#91B5FF` | Trait de trajet mesuré, rôle distinct de la marque |
++| `routeHalo` | `#FFFFFF` | `#10151C` | Halo de contraste du trajet |
++| `mapCanvas` | `#E8EDF2` | `#202A36` | Fond de la carte schématique du prototype uniquement |
++| `mapPark` | `#DDEBDF` | `#263B35` | Parc schématique uniquement |
++| `mapWater` | `#DCEBFA` | `#203A54` | Eau schématique uniquement |
++
++Le bord clair est un séparateur, pas le contour unique d’un contrôle. Les champs interactifs utilisent le token `controlBorder` à contraste renforcé, et le focus utilise `accent` avec espace de séparation. Les états désactivés gardent un libellé lisible et une explication ; ne pas s’appuyer sur l’opacité seule pour expliquer un refus.
+ 
+ ## Vérification calculée des paires prévues
+ 
+ Ces ratios ont été calculés sur les valeurs sRGB opaques du tableau. Ils ne valident pas une interface rendue, une image, une transparence, un dégradé ni tous les états de composants. Arrondis à deux décimales.
+ 
+-| Mode | Premier plan | Arrière-plan | Ratio |
+-|---|---|---|---|
+-| light | `text` | `canvas` | 14.40:1 |
+-| light | `text` | `surface` | 15.83:1 |
+-| light | `muted` | `canvas` | 5.77:1 |
+-| light | `muted` | `surface` | 6.34:1 |
+-| light | `onAccent` | `accent` | 7.76:1 |
+-| light | `successText` | `successSurface` | 6.17:1 |
+-| light | `warningText` | `warningSurface` | 6.39:1 |
+-| light | `dangerText` | `dangerSurface` | 6.14:1 |
+-| dark | `text` | `canvas` | 15.90:1 |
+-| dark | `text` | `surface` | 13.77:1 |
+-| dark | `muted` | `canvas` | 9.47:1 |
+-| dark | `muted` | `surface` | 8.20:1 |
+-| dark | `onAccent` | `accent` | 7.82:1 |
+-| dark | `successText` | `successSurface` | 7.95:1 |
+-| dark | `warningText` | `warningSurface` | 8.83:1 |
+-| dark | `dangerText` | `dangerSurface` | 8.26:1 |
++| Mode | Premier plan | Arrière-plan | Ratio | Cible interne |
++|---|---|---|---|---|
++| light | `text` | `canvas` | 15.30:1 | 4.5:1 |
++| light | `text` | `surface` | 16.26:1 | 4.5:1 |
++| light | `text` | `surfaceMuted` | 14.47:1 | 4.5:1 |
++| light | `muted` | `canvas` | 5.93:1 | 4.5:1 |
++| light | `muted` | `surface` | 6.31:1 | 4.5:1 |
++| light | `muted` | `surfaceMuted` | 5.61:1 | 4.5:1 |
++| light | `accent` | `surface` | 5.93:1 | 4.5:1 |
++| light | `accent` | `accentSoft` | 5.19:1 | 4.5:1 |
++| light | `onAccent` | `accent` | 5.93:1 | 4.5:1 |
++| light | `onAccent` | `accentPressed` | 8.25:1 | 4.5:1 |
++| light | `successText` | `successSurface` | 6.49:1 | 4.5:1 |
++| light | `warningText` | `warningSurface` | 6.59:1 | 4.5:1 |
++| light | `dangerText` | `dangerSurface` | 5.67:1 | 4.5:1 |
++| light | `dangerText` | `surface` | 6.47:1 | 4.5:1 |
++| light | `disabledText` | `disabledSurface` | 4.67:1 | 4.5:1 |
++| light | `controlBorder` | `surface` | 3.70:1 | 3:1 |
++| light | `controlBorder` | `canvas` | 3.48:1 | 3:1 |
++| light | `route` | `routeHalo` | 5.93:1 | 3:1 |
++| dark | `text` | `canvas` | 16.77:1 | 4.5:1 |
++| dark | `text` | `surface` | 14.67:1 | 4.5:1 |
++| dark | `text` | `surfaceMuted` | 12.57:1 | 4.5:1 |
++| dark | `muted` | `canvas` | 9.52:1 | 4.5:1 |
++| dark | `muted` | `surface` | 8.33:1 | 4.5:1 |
++| dark | `muted` | `surfaceMuted` | 7.14:1 | 4.5:1 |
++| dark | `accent` | `surface` | 7.83:1 | 4.5:1 |
++| dark | `accent` | `accentSoft` | 5.76:1 | 4.5:1 |
++| dark | `onAccent` | `accent` | 7.29:1 | 4.5:1 |
++| dark | `onAccent` | `accentPressed` | 9.26:1 | 4.5:1 |
++| dark | `successText` | `successSurface` | 8.11:1 | 4.5:1 |
++| dark | `warningText` | `warningSurface` | 8.76:1 | 4.5:1 |
++| dark | `dangerText` | `dangerSurface` | 7.82:1 | 4.5:1 |
++| dark | `dangerText` | `surface` | 9.08:1 | 4.5:1 |
++| dark | `disabledText` | `disabledSurface` | 7.14:1 | 4.5:1 |
++| dark | `controlBorder` | `surface` | 4.19:1 | 3:1 |
++| dark | `controlBorder` | `canvas` | 4.79:1 | 3:1 |
++| dark | `route` | `routeHalo` | 8.95:1 | 3:1 |
++
++Calcul sans arrondi avant décision ; les valeurs affichées sont arrondies. Le contrôle des textes désactivés est une exigence interne plus prudente, pas une obligation WCAG universelle. Les tokens `map*` illustrent seulement une carte fictive : MapKit conserve son propre fond, ses labels et ses attributions. [Méthode W3C](../06-gouvernance/sources.md#s121).
+ 
+ ## Typographie et rythme
+ 
+-Police système : San Francisco sur iOS via le système, Roboto/system sans-serif sur Android, pile `system-ui` sur web. Aucune police binaire n’est distribuée dans le dossier. Les interfaces utilisent les réglages de taille et de contraste de la plateforme, sans figer une police par écran.
++Police système : SF via les styles sémantiques SwiftUI sur iOS/iPadOS, police système de la future interface Android, pile `system-ui` sur web. Le corps Apple de référence est 17 pt ; le web démarre à 16 CSS px et les tableaux denses à 14 CSS px, avec zoom/reflow. Les nombres du tableau sont des repères et non des limites à Dynamic Type. [Typographie Apple](../06-gouvernance/sources.md#s120). Aucune police binaire n’est distribuée dans le dossier. Les interfaces utilisent les réglages de taille et de contraste de la plateforme, sans figer une police par écran.
+ 
+ | Rôle | Taille de départ | Interligne indicatif | Usage |
+ |---|---|---|---|
+@@ -66,7 +99,7 @@
+ 
+ Ces valeurs sont des points logiques natifs ou pixels CSS selon plateforme, non des pixels physiques. Respecter Dynamic Type/font scaling ; hauteur des blocs liée au contenu. Ne pas tronquer un nom ou une prochaine étape à une ligne sans moyen de lire la totalité. Les horaires utilisent des chiffres tabulaires si disponibles ; le texte pédagogique reste proportionnel.
+ 
+-Échelle d’espacement : 4, 8, 12, 16, 24, 32, 48. Marges mobiles 16 ; section séparée de 24 ; titre et contenu de 12. Coins proposés 8 pour champs/boutons personnalisés et 12 pour panneaux de contenu ; ces tokens ne remplacent pas la géométrie des contrôles natifs iOS/Android. Pas de gros arrondis ajoutés systématiquement aux contenus. Pas d’ombre sur chaque groupe : une séparation de surface et un espacement suffisent.
++Échelle d’espacement : 4, 8, 12, 16, 24, 32, 48. Marges mobiles 16 ; section séparée de 24 ; titre et contenu de 12. Coins proposés 12 pour champs personnalisés, 16 pour panneaux de contenu et 24 pour grands panneaux cartographiques ; ces tokens ne remplacent pas la géométrie des contrôles natifs iOS/Android. Pas de gros arrondis ajoutés systématiquement aux contenus. Pas d’ombre sur chaque groupe : une séparation de surface et un espacement suffisent.
+ 
+ ## Catalogue des composants
+ 
+@@ -158,3 +191,13 @@
+ 
+ 
+ La densité du workspace n’impose pas celle de la carte pendant la leçon. Complet/Inscrit/Archivé ne sont jamais distingués par la couleur seule. Les wireframes textuels décrivent des intentions à tester, pas une validation d’ergonomie.
++
++## Mise en œuvre de la direction A
++
++Les [fiches DS](../DESIGN/02-composants.md) complètent l’anatomie et les interactions sans dupliquer les règles serveur. [Cartographie](../DESIGN/03-cartographie.md) fixe traits, interruptions et caméra. [Maquettes et couverture](../DESIGN/04-ecrans-reference.md) distinguent les écrans illustrés des écrans seulement spécifiés.
++
++Ne pas recolorer les contrôles iOS dessinés par le système avec les valeurs de surface custom : les composants natifs, leur contraste accru et leur comportement sous Réduire la transparence priment. Liquid Glass est une couche de commandes, pas un thème de contenu intégral. Les maquettes HTML montrent une surface opaque de référence, pas une simulation fidèle du moteur Liquid Glass. [S118](../06-gouvernance/sources.md#s118), [S119](../06-gouvernance/sources.md#s119).
++
++## Spécification visuelle et composants spécialisés
++
++Le [catalogue détaillé](../DESIGN/02-composants.md) prolonge DS01–DS16 sans les renommer : DS17 état de capture, DS18 chronologie, DS19 offre collective, DS20 dates de série, DS21 droits de pack, DS22 navigation adaptative, DS23 étape d’accueil, DS24 indicateur défini. Les [14 compositions](../DESIGN/04-ecrans-reference.md) les mettent en situation. Les valeurs JSON de ce document sont leur seule palette canonique.
+--- v3.7/02-experience/directions-artistiques.md
++++ v3.8/02-experience/directions-artistiques.md
+@@ -1,54 +1,27 @@
+-# Trois directions artistiques pour un produit GPS et pédagogique
++# Direction choisie et historique des explorations
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
+-> Exigences du porteur intégrées ; solutions détaillées proposées, à valider. [Index](../README.md).
++> Drivy · Référence 3.8 · **Option A choisie par le porteur** · [Index](../README.md).
+ 
+-## Ce qui change, ce qui ne doit pas être hérité
++## Référence active : A · Cartographie native
+ 
+-Le GPS central ne justifie pas de reprendre les anciens fonds de routes, effets ou onglets. La carte est désormais un outil fonctionnel, pas une texture décorative. Les trois pistes ci-dessous proposent une composition, une densité et des interactions différentes ; le choix final reste à tester. Les polices sont des recommandations système, aucun fichier de police n’est livré.
++L’utilisateur a retenu l’option A de la comparaison présentée dans la conversation : fond gris presque blanc, panneaux blancs, texte encre et bleu franc. Cette décision remplace la recommandation ivoire/pétrole du dossier V3.8. La description complète est dans [DESIGN/01-direction-artistique.md](../DESIGN/01-direction-artistique.md), les valeurs dans le [système de design](design-system.md), les [maquettes](../DESIGN/MAQUETTES.html) dans le dossier visuel.
+ 
+-## Piste 1 : Carnet cartographique
++La carte et la relation trajet/observations restent centrales pendant la leçon et le replay. Hors séance, les listes, fiches et tableaux sont fonctionnels, sans fond cartographique décoratif. Le mode sans GPS garde un parcours entier. Tablette : carte/panneau si l’espace suffit. Web : listes et dossiers plus denses, sous les mêmes permissions.
+ 
+-**Intention :** relier le récit de la leçon à son trajet. Sur la séance, carte dominante avec panneau inférieur sobre affichant l’élève, l’objectif et l’état de capture. Sur le bilan, une chronologie verticale fait correspondre observation et passage ; le texte reste exploitable sans carte. Dans l’agenda, offres pointillées et rendez-vous pleins, toujours nommés.
++**Décidé :** orientation A. **Proposé et à tester :** variantes sombre, densités, tokens détaillés, microtextes, gestes et représentations précises. Choisir cette direction n’approuve pas automatiquement une maquette au pixel près.
+ 
+-Typographie système SF sur iOS, police système sans-serif adaptée ailleurs ; chiffres tabulaires pour heure et capacité, hiérarchie forte entre titre de séance, objectif et métadonnées. Surfaces ivoire/blanc et texte encre, accent de sélection bleu pétrole ; le rouge est réservé aux situations d’alerte réelles, pas aux refus GPS. Les couleurs scolaires s’appliquent à l’identité, pas aux signaux de sécurité. Icônes simples et libellés textuels ; espacements fondés sur le système de design existant révisé.
++## Historique, non prescriptif
+ 
+-Interactions : gestes de carte standards, suivi caméra réactivé seulement par recentrage, fiche détaillée pour consentement ou inscription, pas de carousel essentiel. Risque : carte et texte peuvent se disputer l’espace ; prévoir panneau redimensionnable et lecture textuelle à grands caractères. Le refus GPS doit ouvrir une séance normale, pas une carte grisée culpabilisante.
++| Exploration antérieure | Apport conservé | Ce qui n’est plus une instruction active |
++|---|---|---|
++| Carnet cartographique, ancien Carnet clair | Trajet lié à un récit pédagogique, texte autonome sans GPS | Palette ivoire/pétrole et statut de piste encore à choisir |
++| Atelier de séance | Densité utile au personnel, zones stables | Console graphique générale imposée à tous les élèves |
++| Étapes de parcours | Prochaine étape compréhensible | Tunnel séquentiel pour toutes les actions |
++| Option B graphite de la conversation | Comparaison ayant aidé l’arbitrage | Une seconde identité en compétition avec A |
++| Option C minérale de la conversation | Alternative chaleureuse examinée | Palette active sur une partie de l’app |
+ 
+-## Piste 2 : Atelier de séance
++Les archives précédentes conservent les explorations intégrales ; il n’est pas nécessaire de les recopier comme directives concurrentes. L’identité scolaire reste nom/logo/coordonnées au pilote, selon [F13](../03-fonctionnel/identites-formations.md#f13). La phrase ancienne sur des accents recolorés par l’école est remplacée par cette règle ; aucun endpoint de thème n’est ajouté.
+ 
+-**Intention :** une console de travail pour le moniteur avec grande lisibilité opérationnelle. En portrait, une action dominante et trois zones stables : élève, capture, objectifs. Le replay en écran large propose carte et annotations en colonnes. Le planning et le suivi de capacités utilisent des lignes compactes, moins de grandes cartes.
++## Comment valider maintenant
+ 
+-Typographie système avec poids marqués et alignement des valeurs ; surfaces neutres plus contrastées, accent unique sobre. Iconographie utilitaire. Densité plus élevée et navigation clavier optimisée pour le personnel. Interaction orientée commandes explicites, confirmations courtes et états de serveur toujours visibles.
+-
+-Risque : un vocabulaire de console peut sembler technique côté élève ; adapter sa lecture sans créer une deuxième application incohérente. Les grands boutons de capture ne doivent pas encourager les manipulations en mouvement.
+-
+-## Piste 3 : Étapes de parcours
+-
+-**Intention :** guider l’élève par la prochaine étape et intégrer la carte comme page centrale de chaque leçon. Composition plus narrative : dernière séance, observation principale, prochaine action ; cartes de séries multi-dates avec étapes d’inscription puis de présence. L’écran live reste très dépouillé.
+-
+-Typographie plus expressive sur les titres, texte courant système, grands espaces et surfaces discrètes. Couleurs de progression qualitatives et labels textuels ; aucun score global ou confetti d’aptitude. Interaction par séquences courtes avec retour contextuel.
+-
+-Risque : trop d’étapes peut ralentir le personnel et faire passer la carte au second plan. L’agenda doit rester accessible en un geste et les formulaires ne doivent pas fragmenter artificiellement les dates d’une série.
+-
+-## Comparaison de conception
+-
+-| Critère | Carnet cartographique | Atelier de séance | Étapes de parcours |
+-|---|---|---|---|
+-| Lien trajet et explication | Carte et chronologie coordonnées | Carte et commandes de travail | Carte dans le récit d’une leçon |
+-| Travail personnel dense | Correct avec vue large | Le plus compact | Plus de transitions |
+-| Lisibilité élève | Texte et situations concrètes | Demande une simplification dédiée | Très guidée |
+-| Cours collectifs | Fiche de série dans calendrier clair | Tableau de capacités efficace | Séquence d’inscription très explicite |
+-| Risque principal | Encombrement carte/notes | Aspect technique | GPS trop secondaire hors lecture |
+-
+-**Recommandation : Carnet cartographique**, évolution de l’hypothèse Carnet clair, parce que le trajet devient un outil central et que le texte reste une alternative entière. Ce n’est pas un vote utilisateur ni une direction déjà approuvée. Tester simultanément avec/sans trace, grands caractères, dernière place, cours complet et série multi-dates avant gel.
+-
+-Le [système de design](design-system.md) et les [wireframes](wireframes.md) décrivent l’implémentation documentaire de cette piste. Ils ne constituent pas des captures d’une app développée.
+-
+-## Déclinaison web et tablette
+-
+-La piste Carnet cartographique reste recommandée. Sur tablette elle exploite l’espace pour mettre en relation carte et observations, puis liste et détail hors séance. Sur web elle devient un bureau sobre de données : hiérarchie, colonnes utiles et actions contextualisées, sans forcer une carte décorative dans les statistiques. Le wizard reprend les mêmes composants mais réduit la densité à une tâche par étape. L’identité de l’école colore des accents contrôlés, pas les sémantiques de danger ou les contrastes. Aucun écran haute fidélité ni test graphique n’est revendiqué.
+-
+-## Portée native et qualité V3.4
+-
+-Le Carnet cartographique reste la recommandation ; aucune quatrième direction n’est ajoutée pour suivre une mode. La [charte anti-slop](qualite-ui-ux-anti-slop.md) juge la pertinence, le contenu et le comportement, non une origine supposée à partir des couleurs. Sur iOS 26/27, [les contrôles natifs](../04-technique/integration-ios-ipados.md) peuvent adopter les matériaux système sans rendre les cartes de contenu translucides. Sur Android, l’identité commune n’impose pas une copie des contrôles Apple.
++Comparer les mêmes données et états en clair/sombre, avec texte agrandi, sur téléphone, iPad et web. Vérifier notamment capture et sans capture, replay privé et publié, cours disponible et complet, inscription en cours et confirmée. Les captures du prototype ne sont ni un build Swift ni un essai d’utilisateurs. [Recette design](../DESIGN/06-livraison-validation.md).
+--- v3.7/02-experience/ecrans.md
++++ v3.8/02-experience/ecrans.md
+@@ -1,6 +1,6 @@
+ # Spécifications des 49 écrans et de leurs états
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Conventions d’écran
+@@ -1064,3 +1064,6 @@
+ 
+ **Complément V3.6 :** aperçu avec nombre total d’écoles et pages privées du même manifeste. Confirmer la totalité sans imposer de charger toutes les pages ni d’appeler le support. Pour le dernier ADMIN, statut IN_REVIEW et suivi interne avant PROCESSING, sans fermeture d’école automatique.
+ 
++## Déclinaison visuelle de référence 3.8
++
++La direction choisie est [A · Cartographie native](../DESIGN/01-direction-artistique.md). La [matrice visuelle](../DESIGN/04-ecrans-reference.md) attribue une famille aux 49 écrans et identifie ceux illustrés ; elle ne prétend pas dessiner tous leurs états. VIS01–VIS14 sont des compositions, pas de nouveaux écrans E ni des capacités serveur supplémentaires. Le [prototype](../DESIGN/MAQUETTES.html) utilise uniquement des données fictives.
+--- v3.7/02-experience/parcours.md
++++ v3.8/02-experience/parcours.md
+@@ -1,6 +1,6 @@
+ # Parcours de bout en bout et exceptions
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Vue d’ensemble
+--- v3.7/02-experience/patterns-mobile-parcours.md
++++ v3.8/02-experience/patterns-mobile-parcours.md
+@@ -1,6 +1,6 @@
+ # Patterns appliqués : téléphone, tablette et web
+ 
+-> Référence 3.7 · Spécifications d’interaction complémentaires aux [49 écrans](ecrans.md). Pas de nouveaux écrans ni de nouvelle navigation imposés.
++> Référence 3.8 · Spécifications d’interaction complémentaires aux [49 écrans](ecrans.md). Pas de nouveaux écrans ni de nouvelle navigation imposés.
+ 
+ ## Cadre commun
+ 
+--- v3.7/02-experience/plateformes-tablette-web.md
++++ v3.8/02-experience/plateformes-tablette-web.md
+@@ -1,6 +1,6 @@
+ # Une expérience cohérente sur téléphone, tablette et web
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; choix détaillés proposés, à valider. [Index](../README.md).
+ 
+ ## Décision de produit
+@@ -87,3 +87,7 @@
+ La [politique iOS/iPadOS](../04-technique/integration-ios-ipados.md) couvre l’étude de 26 et 27. Android reste une disponibilité ultérieure : les contrats sont examinés dès G0 Apple et son [prototype natif distinct](../04-technique/preparation-android.md) est réalisé à GA0 avant le chantier Android. Aucune compilation Android n’est un prérequis implicite au pilote Apple. Les seuils de largeur ci-dessus sont internes à Drivy, non des constantes officielles Apple/Android.
+ 
+ Les [patterns](patterns-mobile-parcours.md) précisent caméra manuelle, replay accessible, choix avec/sans GPS et états d’inscription. Les préférences système de texte, mouvement/transparence, clavier et retour ont une adaptation native ; le web ne copie pas littéralement les matériaux Apple. Les [preuves MOB](../05-realisation/qualification-mobile-ui-ux.md) sont nécessaires avant déclarer ces supports qualifiés.
++
++## Expression visuelle choisie
++
++L’option A est déclinée dans [VIS01–VIS14](../DESIGN/04-ecrans-reference.md), dont une séance et un agenda iPad et trois compositions web. Les [règles de livraison](../DESIGN/06-livraison-validation.md) séparent point natif, pixel CSS, densité, police système et comportement de fenêtre. Aucun rendu de navigateur ne valide à lui seul SwiftUI ou Dynamic Type.
+--- v3.7/02-experience/qualite-ui-ux-anti-slop.md
++++ v3.8/02-experience/qualite-ui-ux-anti-slop.md
+@@ -1,6 +1,6 @@
+ # Qualité UI/UX et prévention de l’AI slop
+ 
+-> Référence 3.7 · [Index](../README.md). Cette charte est une exigence de qualité proposée pour Drivy, pas une mesure automatique de l’origine d’un contenu.
++> Référence 3.8 · [Index](../README.md). Cette charte est une exigence de qualité proposée pour Drivy, pas une mesure automatique de l’origine d’un contenu.
+ 
+ ## Définition utile et frontière
+ 
+@@ -10,7 +10,7 @@
+ 
+ ## Identité à maintenir
+ 
+-Le **Carnet cartographique** place le trajet réel et son explication au centre. L’identité repose sur l’organisation de la leçon, les mots du métier, des surfaces de lecture stables et une cartographie sobre. Elle ne dépend pas d’une décoration de route serpentante derrière chaque formulaire, d’un dégradé omniprésent ou d’une grille de statistiques sans source.
++Le **Cartographie native (option A)** place le trajet réel et son explication au centre. L’identité repose sur l’organisation de la leçon, les mots du métier, des surfaces de lecture stables et une cartographie sobre. Elle ne dépend pas d’une décoration de route serpentante derrière chaque formulaire, d’un dégradé omniprésent ou d’une grille de statistiques sans source.
+ 
+ Les composants standard iOS/Android sont des points d’appui, pas des signes de manque d’originalité. L’originalité doit se voir dans la pertinence pédagogique, pas dans un bouton Retour réinventé. Les effets ne sont admis que s’ils indiquent profondeur, continuité ou état. Le [système de design](design-system.md) reste la référence des tokens ; cette charte n’introduit pas un deuxième thème concurrent.
+ 
+--- v3.7/02-experience/wireframes.md
++++ v3.8/02-experience/wireframes.md
+@@ -1,9 +1,9 @@
+ # Wireframes documentaires du cœur GPS et des cours
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; solutions détaillées proposées, à valider. [Index](../README.md).
+ 
+-Ces compositions sont des schémas textuels de conception, pas des captures de Drivy ni une application développée. Personnes, horaires et soldes sont fictifs. Les états et actions exacts sont décrits dans [E01–E31](ecrans.md). La direction retenue comme recommandation est Carnet cartographique.
++Ces compositions sont des schémas textuels de conception, pas des captures de Drivy ni une application développée. Personnes, horaires et soldes sont fictifs. Les états et actions exacts sont décrits dans [E01–E31](ecrans.md). La direction A, Cartographie native, est choisie par le porteur ; voir le [dossier design](../DESIGN/README.md).
+ 
+ ## E22 : avant une leçon
+ 
+@@ -263,3 +263,7 @@
+ ```
+ 
+ Ces chiffres sont la fixture fictive de F23 et non les statistiques d’une vraie école.
++
++## Maquettes de la direction retenue
++
++Ces wireframes décrivent encore les structures. La référence visuelle courante est maintenant le [dossier DESIGN](../DESIGN/README.md), avec [maquettes HTML](../DESIGN/MAQUETTES.html) et captures. Les règles de ce fichier ne prouvent pas une validation native ; les dessins du prototype ne remplacent pas les états métier.
+--- v3.7/03-fonctionnel/bilans-documents.md
++++ v3.8/03-fonctionnel/bilans-documents.md
+@@ -1,6 +1,6 @@
+ # Bilans, progression et documents
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Mode d’emploi
+--- v3.7/03-fonctionnel/calendrier-notifications.md
++++ v3.8/03-fonctionnel/calendrier-notifications.md
+@@ -1,6 +1,6 @@
+ # F19 : calendrier d’offres et notifications ciblées
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; solutions détaillées proposées, à valider. [Index](../README.md).
+ 
+ <a id="f19"></a>
+--- v3.7/03-fonctionnel/catalogue-packs.md
++++ v3.8/03-fonctionnel/catalogue-packs.md
+@@ -1,6 +1,6 @@
+ # F17 : prestations, packs composites et droits de consommation
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; solutions détaillées proposées, à valider. [Index](../README.md).
+ 
+ <a id="f17"></a>
+--- v3.7/03-fonctionnel/compte-suppression-globale.md
++++ v3.8/03-fonctionnel/compte-suppression-globale.md
+@@ -1,6 +1,6 @@
+ # Supprimer son compte Drivy : parcours global
+ 
+-> Référence V3.7 · [Index](../README.md) · F01/F14 · [R103/R104](regles-etats.md#r103). Complément de conception explicite, pas un système exécuté ni une conformité certifiée.
++> Référence V3.8 · [Index](../README.md) · F01/F14 · [R103/R104](regles-etats.md#r103). Complément de conception explicite, pas un système exécuté ni une conformité certifiée.
+ 
+ ## 1. Objectif et frontières
+ 
+--- v3.7/03-fonctionnel/cours-collectifs.md
++++ v3.8/03-fonctionnel/cours-collectifs.md
+@@ -1,6 +1,6 @@
+ # F18 : cours collectifs, inscription volontaire et présences
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; solutions détaillées proposées, à valider. [Index](../README.md).
+ 
+ <a id="f18"></a>
+--- v3.7/03-fonctionnel/extensions.md
++++ v3.8/03-fonctionnel/extensions.md
+@@ -1,6 +1,6 @@
+ # Extensions, reclassements et exclusions
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; solutions détaillées proposées, à valider. [Index](../README.md).
+ 
+ ## Ce que signifie secondaire
+--- v3.7/03-fonctionnel/gestion-web-archivage.md
++++ v3.8/03-fonctionnel/gestion-web-archivage.md
+@@ -1,6 +1,6 @@
+ # Espace web de gestion et cycle de vie des élèves
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; choix détaillés proposés, à valider. [Index](../README.md).
+ 
+ <a id="f22"></a>
+--- v3.7/03-fonctionnel/gps-replay.md
++++ v3.8/03-fonctionnel/gps-replay.md
+@@ -1,6 +1,6 @@
+ # F15 et F16 : capture volontaire, replay et apprentissage
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; solutions détaillées proposées, à valider. [Index](../README.md).
+ 
+ <a id="f15"></a>
+--- v3.7/03-fonctionnel/hors-ligne-vie-privee.md
++++ v3.8/03-fonctionnel/hors-ligne-vie-privee.md
+@@ -1,6 +1,6 @@
+ # Hors ligne, archivage et droits sur les données
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Mode d’emploi
+--- v3.7/03-fonctionnel/identites-formations.md
++++ v3.8/03-fonctionnel/identites-formations.md
+@@ -1,6 +1,6 @@
+ # Identités, formations et administration
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Mode d’emploi
+--- v3.7/03-fonctionnel/onboarding.md
++++ v3.8/03-fonctionnel/onboarding.md
+@@ -1,6 +1,6 @@
+ # Accueil progressif : école, moniteur et élève
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; choix détaillés proposés, à valider. [Index](../README.md).
+ 
+ ## Intention et périmètre
+--- v3.7/03-fonctionnel/paiements-communications.md
++++ v3.8/03-fonctionnel/paiements-communications.md
+@@ -1,6 +1,6 @@
+ # Journal de règlements et communications
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Mode d’emploi
+--- v3.7/03-fonctionnel/planning-lecons.md
++++ v3.8/03-fonctionnel/planning-lecons.md
+@@ -1,6 +1,6 @@
+ # Disponibilités, réservation, préparation et résultat
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Mode d’emploi
+--- v3.7/03-fonctionnel/regles-etats.md
++++ v3.8/03-fonctionnel/regles-etats.md
+@@ -1,6 +1,6 @@
+ # Règles métier et machines à états
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Autorité de ce document
+--- v3.7/03-fonctionnel/roles-permissions.md
++++ v3.8/03-fonctionnel/roles-permissions.md
+@@ -1,6 +1,6 @@
+ # Rôles, périmètres et changements d’accès
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Principes d’autorisation
+--- v3.7/03-fonctionnel/statistiques.md
++++ v3.8/03-fonctionnel/statistiques.md
+@@ -1,6 +1,6 @@
+ # Statistiques d’activité : définitions, portée et contrôle
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; choix détaillés proposés, à valider. [Index](../README.md).
+ 
+ <a id="f23"></a>
+--- v3.7/04-technique/api.md
++++ v3.8/04-technique/api.md
+@@ -1,6 +1,6 @@
+ # Contrats API, erreurs et exemples de transaction
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Statut et portée
+--- v3.7/04-technique/architecture-client-swift.md
++++ v3.8/04-technique/architecture-client-swift.md
+@@ -1,6 +1,6 @@
+ # Architecture du client Apple en Swift natif
+ 
+-> Référence 3.7 · 19 septembre 2026 · [Index](../README.md). **Décision du porteur : Swift natif pour iPhone/iPad.** Les choix détaillés ci-dessous sont des recommandations d’implémentation. Aucun projet Xcode ni code de l’ancienne application n’est modifié ou compilé dans cette livraison.
++> Référence 3.8 · 19 septembre 2026 · [Index](../README.md). **Décision du porteur : Swift natif pour iPhone/iPad.** Les choix détaillés ci-dessous sont des recommandations d’implémentation. Aucun projet Xcode ni code de l’ancienne application n’est modifié ou compilé dans cette livraison.
+ 
+ <a id="decision"></a>
+ ## 1. Décision, portée et invariants conservés
+@@ -161,3 +161,7 @@
+ Le collecteur applique la [provenance des mesures R111](../03-fonctionnel/regles-etats.md#r111), avec source mesurée et horloge de réception distinctes. Les doubles de source doivent livrer une ancienne position, plusieurs mesures en lot et un callback après scellement ; la vue n’utilise jamais une coordonnée par défaut comme premier point. Swift `Date` ne remplace pas l’horloge monotone du bail.
+ 
+ Le client API décode `rightSettlement=null`, REVIEW_REQUIRED et les résolutions sans transformer une régularisation en paiement. Une attendance confirmée peut exiger la relecture d’exigences invalidées ; un écran quitté n’annule pas cette transaction. Le profil d’application fournit l’environnement APNs de manière contrôlée, sans convertir arbitrairement WEB ou une valeur inconnue en IOS. Les champs de preuve côté serveur ne sont pas générés par l’UI Swift pour accélérer une validation.
++
++## Référence graphique choisie
++
++L’option A Cartographie native est choisie. Utiliser les [tokens canoniques](../annexes/tokens-proposition.json), la [spécification des composants](../DESIGN/02-composants.md) et la [livraison Swift](../DESIGN/06-livraison-validation.md). Le prototype HTML illustre composition et microtextes ; **il ne doit pas être embarqué dans une WebView pour remplacer le client Swift**. Les composants et classes CSS ne deviennent ni DTO ni sources de vérité métier.
+--- v3.7/04-technique/architecture-decisions.md
++++ v3.8/04-technique/architecture-decisions.md
+@@ -1,6 +1,6 @@
+ # Architecture cible et décisions techniques argumentées
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Contraintes et niveau d’engagement
+--- v3.7/04-technique/fichiers-temps-communications.md
++++ v3.8/04-technique/fichiers-temps-communications.md
+@@ -1,6 +1,6 @@
+ # Fichiers, temps, formats et communications
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Dépôt de pièces et identité scolaire
+--- v3.7/04-technique/integration-ios-ipados.md
++++ v3.8/04-technique/integration-ios-ipados.md
+@@ -1,6 +1,6 @@
+ # Intégration Swift native : iOS et iPadOS 26 / 27
+ 
+-> Référence 3.7 · [Index](../README.md). Swift natif confirmé par le porteur. Guide de réalisation à qualifier ; aucun build ni appareil n’a été testé dans cette passe. [Architecture Apple de référence](architecture-client-swift.md).
++> Référence 3.8 · [Index](../README.md). Swift natif confirmé par le porteur. Guide de réalisation à qualifier ; aucun build ni appareil n’a été testé dans cette passe. [Architecture Apple de référence](architecture-client-swift.md).
+ 
+ ## 1. Support et outillage
+ 
+--- v3.7/04-technique/integration-mobile-transverse.md
++++ v3.8/04-technique/integration-mobile-transverse.md
+@@ -1,6 +1,6 @@
+ # Intégration mobile transverse : frontières, cycle de vie et distribution
+ 
+-> Référence 3.7 · [Index](../README.md). Propositions d’implémentation pour le client natif. Les [contrats API](api.md) et [règles métier](../03-fonctionnel/regles-etats.md) restent les autorités correspondantes.
++> Référence 3.8 · [Index](../README.md). Propositions d’implémentation pour le client natif. Les [contrats API](api.md) et [règles métier](../03-fonctionnel/regles-etats.md) restent les autorités correspondantes.
+ 
+ ## 1. Une architecture mobile limitée au nécessaire
+ 
+--- v3.7/04-technique/modele-donnees.md
++++ v3.8/04-technique/modele-donnees.md
+@@ -1,6 +1,6 @@
+ # Modèle de données, contraintes et cycles de vie
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Conventions normatives proposées
+--- v3.7/04-technique/preparation-android.md
++++ v3.8/04-technique/preparation-android.md
+@@ -1,6 +1,6 @@
+ # Préparer Android : client futur distinct et contrats communs
+ 
+-> Référence 3.7 · [Index](../README.md). Android téléphone/tablette est prévu pour une disponibilité ultérieure ; aucune compatibilité de binaire n’est déclarée acquise.
++> Référence 3.8 · [Index](../README.md). Android téléphone/tablette est prévu pour une disponibilité ultérieure ; aucune compatibilité de binaire n’est déclarée acquise.
+ 
+ ## Ce qui commence maintenant
+ 
+--- v3.7/04-technique/securite-vie-privee.md
++++ v3.8/04-technique/securite-vie-privee.md
+@@ -1,6 +1,6 @@
+ # Sécurité, données personnelles et cadre suisse à valider
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Portée et statut juridique
+--- v3.7/04-technique/synchronisation.md
++++ v3.8/04-technique/synchronisation.md
+@@ -1,6 +1,6 @@
+ # Synchronisation, concurrence et continuité hors ligne
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Contrat de continuité
+--- v3.7/04-technique/transactions-v2.md
++++ v3.8/04-technique/transactions-v2.md
+@@ -1,6 +1,6 @@
+ # Transactions critiques : GPS, packs et places de cours
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; solutions détaillées proposées, à valider. [Index](../README.md).
+ 
+ ## Autorité et périmètre
+--- v3.7/04-technique/transactions-v3.md
++++ v3.8/04-technique/transactions-v3.md
+@@ -1,6 +1,6 @@
+ # Transactions V3 : accueil, archivage, appareils et mesures
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Conception proposée ; aucune implémentation ou recette produit revendiquée. [Index](../README.md).
+ 
+ ## Portée
+--- v3.7/05-realisation/deploiement-exploitation.md
++++ v3.8/05-realisation/deploiement-exploitation.md
+@@ -1,6 +1,6 @@
+ # Déploiement, observabilité et procédures d’exploitation
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Modèle d’exploitation proportionné
+--- v3.7/05-realisation/migration.md
++++ v3.8/05-realisation/migration.md
+@@ -1,6 +1,6 @@
+ # Migration éventuelle, conservation et transition
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Ce qui est connu et inconnu
+--- v3.7/05-realisation/qualification-mobile-ui-ux.md
++++ v3.8/05-realisation/qualification-mobile-ui-ux.md
+@@ -1,6 +1,6 @@
+ # Qualification mobile et UI/UX
+ 
+-> Référence 3.7 · [Index](../README.md). **60 scénarios complémentaires spécifiés, aucun exécuté.** Ils ne sont pas ajoutés aux 382 scénarios métier T comme si une nouvelle fonctionnalité avait été livrée.
++> Référence 3.8 · [Index](../README.md). **60 scénarios complémentaires spécifiés, aucun exécuté.** Ils ne sont pas ajoutés aux 382 scénarios métier T comme si une nouvelle fonctionnalité avait été livrée.
+ 
+ ## Références et autorité
+ 
+--- v3.7/05-realisation/roadmap-backlog.md
++++ v3.8/05-realisation/roadmap-backlog.md
+@@ -1,6 +1,6 @@
+ # Roadmap : terrain, web et accueil dans un même parcours
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Conception proposée ; aucune implémentation ou recette produit revendiquée. [Index](../README.md).
+ 
+ ## Engagement et limites
+--- v3.7/05-realisation/tests-recette.md
++++ v3.8/05-realisation/tests-recette.md
+@@ -1,6 +1,6 @@
+ # Stratégie de tests, fixtures et recettes détaillées
+ 
+-> Drivy · Dossier de conception 3.7 · 19 septembre 2026
++> Drivy · Dossier de conception 3.8 · 19 septembre 2026
+ > Statut : proposition de référence, à valider avant réalisation. [Index](../README.md).
+ 
+ ## Statut de cette campagne
+--- v3.7/06-gouvernance/glossaire-decisions-questions.md
++++ v3.8/06-gouvernance/glossaire-decisions-questions.md
+@@ -1,6 +1,6 @@
+ # Glossaire, décisions et questions de validation
+ 
+-> Drivy · Référence de conception 3.7 · 19 septembre 2026
++> Drivy · Référence de conception 3.8 · 19 septembre 2026
+ > Exigences du porteur intégrées ; solutions détaillées proposées, à valider. [Index](../README.md).
+ 
+ ## Statuts documentaires
+@@ -64,9 +64,9 @@
+ **Application :** [règles](../03-fonctionnel/regles-etats.md), [roadmap](../05-realisation/roadmap-backlog.md), [traçabilité](tracabilite.md).
+ 
+ <a id="d05"></a>
+-### D05 · Carnet cartographique
+-
+-**Statut :** REC. **Choix :** Piste recommandée, non validée graphiquement. Remplace Carnet clair comme composition de référence.
++### D05 · Cartographie native, option A
++
++**Statut :** CHOIX UTILISATEUR ACCEPTÉ. **Choix :** Direction A claire et bleue, choisie dans la conversation. Remplace la recommandation ivoire/pétrole. Les détails des maquettes et de la palette étendue sont des spécifications de référence à éprouver, pas une validation de rendu natif. Voir [DESIGN](../DESIGN/README.md).
+ 
+ **Application :** [règles](../03-fonctionnel/regles-etats.md), [roadmap](../05-realisation/roadmap-backlog.md), [traçabilité](tracabilite.md).
+ 
+@@ -256,9 +256,9 @@
+ <a id="q07"></a>
+ ### Q07 · DA et validation du parcours
+ 
+-**Question :** La composition Carnet cartographique est-elle approuvée après essai avec et sans trace ?
+-
+-**Proposition et impact :** Trois pistes conservées ; test de compréhension du calendrier et du refus GPS avant gel visuel.
++**Direction décidée :** option A, Cartographie native. **Question restante :** les maquettes, leur densité et leurs interactions sont-elles confortables avec et sans trace sur les appareils pilotes ?
++
++**Proposition et impact :** éprouver les [maquettes de la direction retenue](../DESIGN/README.md) ; les autres pistes sont historiques. Tester compréhension du calendrier, état de capture et alternative sans GPS avant gel visuel. Le choix A ne vaut pas validation de chaque pixel ou du logo définitif.
+ 
+ <a id="q08"></a>
+ ### Q08 · Organisation et cas particuliers
+--- v3.7/06-gouvernance/revue-coherence.md
++++ v3.8/06-gouvernance/revue-coherence.md
+@@ -1,62 +1,58 @@
+-# Revue de cohérence documentaire V3.7
++# Revue de cohérence documentaire V3.8
+ 
+-> 19 septembre 2026 · [Index](../README.md) · [Rapport détaillé](audit-corrections-v3-7.md)
++> 19 septembre 2026 · [Index](../README.md) · [Changements](changements-v3-8.md). Cette passe complète le design et contrôle ses dépendances ; ce n’est pas un nouvel audit exhaustif de l’application.
+ 
+-## Référence et résultats reproductibles
++## Rapports courants et périmètres
+ 
+-Le dossier courant est **V3.7**, avec un contrat **3.7.0**. Les cinq scripts de référence antérieurs ont été exécutés sur une copie de la V3.6 avant correction et ont réussi. Les [résultats initiaux](../annexes/controle-v3-6-avant-correction.json) ne sont pas réattribués à cette livraison. Le dernier approfondissement porte sur quatre jonctions à risque ; les contrôles structurels parcourent le dossier complet. Ce n’est pas une nouvelle vérification de toutes les affirmations commerciales et juridiques historiques.
++| Contrôle | Rapport et portée réelle |
++|---|---|
++| Documentation et contrat | [Rapport documentaire](../annexes/verification-documentaire.json) : liens locaux, registres, références, exemples et cas JSON Schema. |
++| Non-régression du contrat hérité | [Référence V3.8](../annexes/verification-reference-v3-8.json) : exigences de contrat V3.7 conservées ; seule l’attente de version du registre documentaire passe à 3.8. |
++| Mobile et Swift | [Contrôles documentaires](../annexes/verification-mobile-swift-v3-8.json) : clauses, registres, choix natif et statuts non exécutés. L’attente d’inventaire passe de 65 à 73 Markdown. |
++| Tokens et couverture design | [Rapport design](../annexes/verification-design-v3-8.json) : palette, 36 contrastes opaques, correspondance des 14 vues et des 49 références E, absence de polices binaires. |
++| Prototype visuel | [Rapport navigateur](../annexes/verification-prototype-v3-8.json) : 90 cas de rendu, 14 de grand texte et 27 assertions. Aucun service réel. |
++| Lecteur des documents | [Rapport lecteur](../annexes/verification-lecteur-v3-8.json) : navigation, ancres et recherche dans les 73 documents. |
++| Origine | [Provenance V3.8](../annexes/provenance-v3-8.json), [intégrité](../annexes/verification-integrite-v3-8.json) et manifeste SHA-256. |
+ 
+-| Rapport | Ce qu’il vérifie réellement |
+-|---|---|
+-| [Vérification documentaire](../annexes/verification-documentaire.json) | Liens, ancres, identifiants, traçabilité, schémas, exemples et cas de forme. |
+-| [Vérification transversale](../annexes/verification-contrats-transversaux-v3-7.json) | Conventions HTTP, listes, enveloppes, sélections et clauses des routes. |
+-| [Vérification V3.7](../annexes/verification-v3-7.json) | Contrats nouveaux et hérités, états, preuves et cas comparés. |
+-| [Comparaison V3.6/V3.7](../annexes/comparaison-contrats-v3-6-v3-7.json) | Mêmes fixtures contre les schémas avant/après ; types nouveaux distingués. |
+-| [Modèle tarifaire isolé](../annexes/verification-modele-prix-v3-7.json) | 14 jeux fictifs de prix et refus attendus, pas code du serveur. |
+-| [Modèles d’états et de mesures](../annexes/verification-modeles-v3-7.json) | 22 cas synthétiques de régularisation et d’admission GPS, sans appareil ni base réelle. |
+-| [Vérification mobile](../annexes/verification-mobile-v3-7.json) | Exigences, scénarios, sources et qualification déclarée, pas exécution sur appareil. |
+-| [Vérification Swift](../annexes/verification-swift-v3-7.json) | Décision native, registres et anciennes dépendances recherchées dans les références actives. |
+-| [Lecteur HTML](../annexes/verification-lecteur.json) | Navigation, ancres, recherche et tailles de fenêtre simulées dans Chromium. |
+-| [Originaux](../annexes/verification-originaux.json) | Empreintes des dix archives sources avant/après. |
+-| [Inventaire](../annexes/inventaire-audit-v3-7.json) | Fichiers, catégories, source immuable et portée de lecture/contrôle. |
++Les rapports versionnés V3.7 et antérieurs restent des résultats historiques. Le contrat API courant reste **3.7.0** et ne change pas avec la palette. Le nouveau rapport documentaire est en **3.8**.
+ 
+-## Exécuter les vérificateurs
++## Reproduire les contrôles
+ 
+-Depuis le dossier extrait, avec Python 3 et les dépendances indiquées par les scripts :
++Depuis le dossier extrait :
+ 
+ ```sh
++python annexes/generer-maquettes.py
++python annexes/verifier-design-v3-8.py --write-report
++python annexes/verifier-reference-v3-8.py --write-report
++python annexes/verifier-mobile-swift-v3-8.py --write-report
+ python annexes/verifier-documentation.py --write-report
+-python annexes/verifier-contrats-transversaux.py
+-python annexes/verifier-v3-7.py --write-report
+-python annexes/verifier-mobile-v3-7.py --write-report
+-python annexes/verifier-swift-v3-7.py --write-report
+-python annexes/verifier-modeles-v3-7.py --write-report
+ python annexes/generer-lecteur.py
+-python annexes/verifier-lecteur.py --chromium /chemin/vers/chromium
++python annexes/verifier-prototype-v3-8.py --write-report --screens --chromium /chemin/vers/chromium
++python annexes/verifier-lecteur-v3-8.py --write-report --chromium /chemin/vers/chromium
+ ```
+ 
+-Dépendances : PyYAML, jsonschema et referencing ; markdown-it-py et beautifulsoup4 pour les liens/lecteur ; Playwright et Chromium pour les essais du lecteur. Les scripts versionnés antérieurs sont historiques : ne pas mélanger leurs attentes et le contrat courant. Aucune exécution ne réalise d’écriture dans l’application.
++Dépendances : Python 3.11+, PyYAML, jsonschema, referencing, markdown-it-py et beautifulsoup4 ; Playwright et Chromium pour les deux contrôles de navigateur. Le chemin Chromium est facultatif si le navigateur est détecté. Les scripts de maquettes ne développent pas l’application. Régénérer le manifeste après modification volontaire d’un artefact ou rapport.
+ 
+-Le vérificateur transversal écrit sur la sortie standard ; le rapport courant sauvegarde cette sortie. Les scripts avec `--write-report` mettent à jour leurs rapports. Régénérer le manifeste SHA-256 après toute modification volontaire, y compris d’un rapport réexécuté.
++Les adaptateurs versionnés n’assouplissent aucun schéma métier : ils recontrôlent la version documentaire et le nombre de fichiers mis à jour. Ils n’écrivent pas dans les rapports historiques. Les anciens tests dépendant du compte fixe de documents doivent être exécutés via ces adaptateurs.
+ 
+-## Interpréter les nombres
++## Ce que vérifient les maquettes
+ 
+-La référence contient **65 Markdown**, **23 fonctions**, **72 capacités**, **112 règles**, **29 parcours**, **49 écrans**, **201 opérations API** et **374 schémas**. Le nombre de liens et les messages exacts viennent du dernier rapport, pas d’un total historique recopié. Les nombres documentaires ne mesurent pas la qualité produit.
++La galerie est contrôlée en clair et sombre à 390, 834 et 1440 pixels CSS, soit 15 vues (14 compositions + la planche) × 3 largeurs × 2 thèmes = **90 rendus**. Les quatorze compositions ont aussi un passage à texte agrandi de 150 % dans le navigateur. Le contrôle repère le débordement horizontal du document et la troncature horizontale des boutons principaux, pas toutes les collisions possibles.
+ 
+-**229 cas de schéma** : 182 antérieurs rejoués et 47 nouveaux. Deux objets d’inscription antérieurs reçoivent `rightSettlement: null`, sans changer leur résultat attendu ; l’[adaptation](../annexes/adaptation-cas-v3-7.json) conserve les sources originales et l’explication. Les adaptations V3.6 des manifests/chunks restent également identifiées. T323 conserve son identifiant avec résultat révisé par R109 ; ce changement de politique ne devient pas rétroactivement un test réussi de V3.6.
++Les interactions vérifiées incluent : attente de premier point sans tracé, pause/reprise sans inventer de mesure, arrêt distinct de la fin de leçon, absence de niveau présélectionné, inscription explicite et en attente, passage d’une offre confirmée dans les engagements, cours complet, horaires reconfirmés, retrait de trajet, observation suivante, recherche élève, aperçu d’archive, blocage par engagements futurs et fermeture de dialogue au clavier.
+ 
+-Dans la comparaison, **deux mêmes payloads** auparavant admis sont refusés par le contrat courant. Distinguer restriction de forme, ajout d’un champ désormais obligatoire et type auparavant inexistant. Cette comparaison ne démontre ni faille exploitée ni validation sémantique complète d’un service.
++Les images livrées sont des captures effectivement produites par Chromium. Les pages sont chargées par `set_content` dans cet environnement où les URL `file://` sont bloquées ; les liens documentaires relatifs sont vérifiés séparément. Le lecteur et la galerie ne dépendent pas d’un réseau pour leur texte et leur code. Les contrôles de présence et de dimensions ne remplacent pas une revue humaine.
+ 
+-Les **14 cas tarifaires** et **22 cas de modèles isolés** sont exécutés en Python. Les seconds utilisent dix cas de transition de droit et douze cas de temps/mesures synthétiques. Ces modèles explicitent une interprétation des règles ; ils ne remplacent pas les tests indépendants de leur implémentation, des preuves ou d’un flux Core Location réel.
++## Compteurs et statut du produit
+ 
+-## Ce qui n’est pas exécuté
++**73 fichiers Markdown, 23 fonctions de haut niveau et 49 écrans fonctionnels.** Les 14 compositions illustrent 15 de ces références ; les 34 autres ont une famille visuelle et des spécifications, mais pas de maquette dessinée annoncée. Les 24 composants DS regroupent les composants précédents et leurs compléments, pas 24 fonctions métier.
+ 
+-**382 scénarios métier T et 60 scénarios MOB** restent **NOT_EXECUTED**. Les **six combinaisons de builds/appareils** restent **NOT_QUALIFIED**. Aucun serveur Drivy n’a reçu de commande ; aucun build Xcode, trajet physique, transaction PostgreSQL concurrente, chiffrement réel, restauration de sauvegarde, suppression de compte fournisseur ou recette utilisateur n’est revendiqué.
++Le contrat conserve 201 opérations, 374 schémas et 229 cas de validation de forme. **382 scénarios métier et 60 scénarios mobiles restent NOT_EXECUTED**. Les six combinaisons de builds/appareils restent NOT_QUALIFIED. Les vingt critères de recette design UX sont à appliquer à l’implémentation et à l’usage réel.
+ 
+-Un validateur intégral du méta-schéma OpenAPI n’a pas pu être installé dans cet environnement. Les contrôles disponibles examinent JSON Schema, références, routes, paramètres et exemples ; ils ne prouvent pas la conformité intégrale OpenAPI ni la compatibilité avec un générateur Swift.
++Aucun build Swift, mesure de batterie, trajet routier, transaction concurrente, paiement, envoi APNs, suppression de compte ou essai utilisateur n’est effectué. La carte fictive n’est pas une capture de MapKit. Le texte agrandi HTML n’est pas une qualification complète Dynamic Type. Les paires de couleurs ne certifient pas WCAG pour l’interface entière et ne testent pas les matériaux translucides natifs.
+ 
+-Le lecteur est chargé dans Chromium pour vérifier son contenu et sa navigation. Les tailles de fenêtre sont simulées ; le mode précis d’ouverture et ses limites sont consignés dans son rapport. Ses captures ne constituent pas une maquette native ou un test d’accessibilité de Drivy.
++Le validateur intégral du méta-schéma OpenAPI n’est pas revendiqué ; les contrôles JSON Schema, références, paramètres et exemples sont exécutés. Les sources Apple/W3C ajoutées étayent le design ; les anciennes versions techniques et offres commerciales ne sont pas présentées comme toutes revalidées.
+ 
+-Les [sept sources de recherche courante](../annexes/recherche-v3-7.json) sont limitées aux mécanismes nécessaires aux corrections et à l’état des outils Apple. Les tarifs des écoles et les profils réglementaires scolaires ne sont pas tous reconfirmés. Les politiques de droits, preuves, rétentions et lancement restent au [registre des arbitrages](audit-corrections-v3-7.md#decisions).
++## Relecture et suite
+ 
+-**Aucune erreur détectée par ces contrôles ne signifie absence de tout défaut.** Cette livraison est une référence de conception consolidée, pas un produit certifié.
++La revue humaine de cette passe vérifie les planches claire/sombre, la séance iPad, le web et l’alternative sans GPS. Les détails de marque et les vues non illustrées sont identifiés comme travail futur de design. Les arbitrages métier et le blocage opérationnel DM06 restent au registre général. **Aucune erreur détectée par ces contrôles ne signifie que le produit est entièrement validé.**
+--- v3.7/06-gouvernance/sources.md
++++ v3.8/06-gouvernance/sources.md
+@@ -914,3 +914,59 @@
+ **Portée vérifiée :** Tableau consulté : Xcode 27 requiert macOS Tahoe 26.6 ou ultérieur ; SDK, compilateur et deployment targets listés séparément.
+ 
+ **Limite :** Ne fixe pas le minimum commercial de Drivy ni la compatibilité de toutes ses dépendances.
++
++<a id="s118"></a>
++## S118 · Apple, Get to know the new design system (design V3.8)
++
++**Source primaire :** [Apple, Get to know the new design system](https://developer.apple.com/videos/play/wwdc2025/356/). **Consultation :** 19 septembre 2026.
++
++**Portée :** Transcription WWDC25 : hiérarchie par composition, couche de commandes et continuité entre tailles. Pas preuve d’ergonomie de Drivy. Les choix d’application au produit sont des propositions de conception. Ni certification d’accessibilité, ni build iOS/iPadOS, ni test utilisateur.
++
++<a id="s119"></a>
++## S119 · Apple HIG, Materials (design V3.8)
++
++**Source primaire :** [Apple HIG, Materials](https://developer.apple.com/tutorials/data/design/human-interface-guidelines/materials.json). **Consultation :** 19 septembre 2026.
++
++**Portée :** Représentation JSON officielle consultée après page HTML nécessitant JavaScript. Matériaux système et séparation du contenu ; le prototype ne reproduit pas leur moteur. Les choix d’application au produit sont des propositions de conception. Ni certification d’accessibilité, ni build iOS/iPadOS, ni test utilisateur.
++
++<a id="s120"></a>
++## S120 · Apple HIG, Typography (design V3.8)
++
++**Source primaire :** [Apple HIG, Typography](https://developer.apple.com/tutorials/data/design/human-interface-guidelines/typography.json). **Consultation :** 19 septembre 2026.
++
++**Portée :** Représentation JSON officielle. Texte lisible, hiérarchie, styles système et adaptation des tailles. Les mesures Drivy restent à tester. Les choix d’application au produit sont des propositions de conception. Ni certification d’accessibilité, ni build iOS/iPadOS, ni test utilisateur.
++
++<a id="s121"></a>
++## S121 · W3C, Contrast Minimum (design V3.8)
++
++**Source primaire :** [W3C, Contrast Minimum](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html). **Consultation :** 19 septembre 2026.
++
++**Portée :** Texte courant 4,5:1 et grand texte 3:1 avec conditions et exceptions ; comparaison sans arrondir. Tests opaques seulement. Les choix d’application au produit sont des propositions de conception. Ni certification d’accessibilité, ni build iOS/iPadOS, ni test utilisateur.
++
++<a id="s122"></a>
++## S122 · W3C, Non-text Contrast (design V3.8)
++
++**Source primaire :** [W3C, Non-text Contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html). **Consultation :** 19 septembre 2026.
++
++**Portée :** Contraste 3:1 des informations graphiques nécessaires, selon conditions. Pas obligation de contraster chaque séparateur décoratif. Les choix d’application au produit sont des propositions de conception. Ni certification d’accessibilité, ni build iOS/iPadOS, ni test utilisateur.
++
++<a id="s123"></a>
++## S123 · W3C, Use of Color (design V3.8)
++
++**Source primaire :** [W3C, Use of Color](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html). **Consultation :** 19 septembre 2026.
++
++**Portée :** Une couleur ne suffit pas à transmettre un état. Drivy ajoute libellés, marqueurs et différences de forme. Les choix d’application au produit sont des propositions de conception. Ni certification d’accessibilité, ni build iOS/iPadOS, ni test utilisateur.
++
++<a id="s124"></a>
++## S124 · W3C, Focus Not Obscured Minimum (design V3.8)
++
++**Source primaire :** [W3C, Focus Not Obscured Minimum](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html). **Consultation :** 19 septembre 2026.
++
++**Portée :** Focus non totalement masqué par les contenus créés par l’auteur. Drivy vise un contrôle et son contexte visibles. Les choix d’application au produit sont des propositions de conception. Ni certification d’accessibilité, ni build iOS/iPadOS, ni test utilisateur.
++
++<a id="s125"></a>
++## S125 · W3C, Reflow (design V3.8)
++
++**Source primaire :** [W3C, Reflow](https://www.w3.org/WAI/WCAG22/Understanding/reflow.html). **Consultation :** 19 septembre 2026.
++
++**Portée :** Reflow à largeur 320 CSS px dans les conditions du critère ; exceptions pour contenus bidimensionnels. Le planning a une alternative liste. Les choix d’application au produit sont des propositions de conception. Ni certification d’accessibilité, ni build iOS/iPadOS, ni test utilisateur.
+--- v3.7/README.md
++++ v3.8/README.md
+@@ -1,194 +1,158 @@
+-# Drivy · Dossier de conception intégré V3.7
++# Drivy · Dossier de conception V3.8
+ 
+-**Version 3.7 · 19 septembre 2026 · Français**
++**19 septembre 2026 · 73 documents Markdown · Swift natif iPhone/iPad · Web · Android futur**
+ 
+-**GPS central et facultatif. Tablette à part entière. Web de gestion. Accueil progressif. Offres scolaires adaptées. Cours visibles, inscription volontaire.**
++La direction **A · Cartographie native** est choisie : une interface claire et précise, un bleu franc, une carte centrale pendant la séance et des panneaux de lecture stables. La V3.8 intègre un dossier design visible et des maquettes. Elle remplace la V3.7 documentaire ; le contrat métier reste 3.7.0 inchangé.
+ 
+-La V3.7 corrige et remplace la V3.6 : **Swift natif confirmé pour iPhone/iPad**, intégrations Apple directes, web séparé et futur client Android distinct. UI/UX, iOS/iPadOS 26/27 et charte anti-slop restent intégrés. Elle conserve les corrections antérieures, la recherche sur dix auto-écoles et les parcours GPS/cours/packs dans une référence unique. Swift natif est la décision du porteur ; les détails d’intégration et les minimums d’OS restent des recommandations à qualifier. Le code et les archives d’origine ne sont pas modifiés.
++## Commencer par le design
+ 
+-[Lire les corrections V3.7](06-gouvernance/audit-corrections-v3-7.md) · [Liste des fonctionnalités prévues](01-fonctionnalites-prevues.md) · [Architecture Swift native](04-technique/architecture-client-swift.md) · [Lire la synthèse](00-synthese.md) · [Lecteur HTML autonome](LIRE_DOSSIER.html)
++**[Ouvrir les maquettes navigables](DESIGN/MAQUETTES.html)** · **[Entrer dans le dossier DESIGN](DESIGN/README.md)** · [Changements 3.8](06-gouvernance/changements-v3-8.md)
+ 
+-## Commencer par votre usage
++[Planche iPhone claire](DESIGN/assets/planche-iphone-clair.png) · [Planche sombre](DESIGN/assets/planche-iphone-sombre.png) · [Capture iPad](DESIGN/assets/ipad-capture-clair.png) · [Gestion web](DESIGN/assets/web-eleves-clair.png)
+ 
+-| Question | Référence |
+-|---|---|
+-| Quelles fonctions sont prévues, différées ou exclues ? | [Catalogue lisible](01-fonctionnalites-prevues.md) |
+-| Quelles corrections et validations restent après la revue ? | [Rapport V3.7](06-gouvernance/audit-corrections-v3-7.md) |
+-| Comment organiser le client Swift natif ? | [Architecture Apple](04-technique/architecture-client-swift.md) |
+-| Comment intégrer iOS et iPadOS 26/27 ? | [Guide iOS](04-technique/integration-ios-ipados.md) |
+-| Comment préparer Android sans le promettre déjà livré ? | [Guide Android](04-technique/preparation-android.md) |
+-| Comment éviter une production UI/UX générique ou trompeuse ? | [Qualité et anti-slop](02-experience/qualite-ui-ux-anti-slop.md) |
+-| Quelles preuves mobile faut-il obtenir ? | [Qualification MOB](05-realisation/qualification-mobile-ui-ux.md) |
+-| Comment téléphone, tablette et web se complètent-ils ? | [Plateformes et compositions](02-experience/plateformes-tablette-web.md) |
+-| Comment accueillir école, élève et moniteur ? | [Onboarding progressif](03-fonctionnel/onboarding.md) |
+-| Comment gérer et archiver les élèves en détail ? | [Workspace et archivage](03-fonctionnel/gestion-web-archivage.md) |
+-| Quelles statistiques sont réellement calculables ? | [M01–M09 et données sources](03-fonctionnel/statistiques.md) |
+-| Comment le GPS reste central sans être obligatoire ? | [GPS, replay et observations](03-fonctionnel/gps-replay.md) |
+-| Comment publier une sensibilisation et réserver une place ? | [Cours collectifs](03-fonctionnel/cours-collectifs.md) |
+-| Comment adapter les offres et packs de l’école ? | [Prestations et droits](03-fonctionnel/catalogue-packs.md) |
+-| Qu’est-ce qui reste à approuver ? | [Décisions et questions](06-gouvernance/glossaire-decisions-questions.md) |
++Les 14 compositions utilisent des données fictives et des cartes schématiques. Le thème sombre, le texte agrandi et certains états peuvent être parcourus. **Ce ne sont ni une application connectée, ni des captures SwiftUI, ni un projet Figma.** La direction A est acceptée ; les détails visuels restent à valider et à qualifier sur appareils.
+ 
+-## Périmètre documentaire
++## Comprendre le produit
+ 
+-**65 fichiers Markdown**, dont cet index : **23 fonctions, 72 capacités, 112 règles, 29 parcours, 49 écrans, 201 opérations API et 382 scénarios de recette spécifiés.** S’y ajoutent **16 exigences d’intégration et 60 scénarios mobile/UX à exécuter**. Ce sont des volumes documentaires, pas des fonctions implémentées. Le contrat est en **3.7.0**. DM06 est contractualisé, mais son traitement opérationnel reste un blocage de publication avant validation.
++[Vision synthétique](00-synthese.md) · [23 fonctions prévues](01-fonctionnalites-prevues.md) · [Lecteur documentaire complet](LIRE_DOSSIER.html) · [Décisions restantes](06-gouvernance/glossaire-decisions-questions.md)
+ 
+-Les [contrôles documentaires](06-gouvernance/revue-coherence.md) sont séparés des tests métier à réaliser. Les fixtures sont fictives. Les captures éventuelles du lecteur vérifient sa lecture, pas le design ou le fonctionnement du produit.
++GPS et exploitation pédagogique restent centraux mais facultatifs. Les cours sont visibles sans inscription automatique. Tablette, gestion web, onboarding et packs configurables restent au cœur. Le code et les archives sources sont conservés.
++
++## Périmètre et preuve
++
++Les 23 fonctions, 49 écrans métier, 201 opérations et 374 schémas restent ceux de la référence fonctionnelle. Le design associe une famille aux 49 écrans et illustre 15 d’entre eux dans 14 compositions ; les 34 autres ne sont pas annoncés comme maquettes dessinées. Les 382 scénarios métier et 60 scénarios mobiles restent à exécuter. Les contrôles documentaires et du prototype ne prouvent ni un build Swift ni l’usage sur route.
++
++[Contrôles et reproduction](06-gouvernance/revue-coherence.md) · [Couverture visuelle](DESIGN/04-ecrans-reference.md) · [Tokens canoniques](annexes/tokens-proposition.json)
++
++**Avant publication publique : DM06 reste un blocage opérationnel.** La suppression globale du compte est contractualisée, mais les procédures, délais, rétentions et le cas du dernier administrateur doivent être validés et exécutés. Le design ne ferme pas ce point.
+ 
+ ## Index complet
+ 
+-[00 · Synthèse de référence](00-synthese.md) · [01 · Fonctions prévues](01-fonctionnalites-prevues.md)
+-
+-### Recherche et vision
++### Design : direction retenue et maquettes
+ 
+ | Document | Référence |
+ |---|---|
+-| [Audit fonctionnel de l’archive et limites de preuve](01-recherche/audit-existant.md) | `audit-existant` |
+-| [Dix auto-écoles suisses : observations et traduction dans Drivy](01-recherche/auto-ecoles-suisses.md) | `auto-ecoles-suisses` |
+-| [Benchmark observé et enseignements de conception](01-recherche/benchmark.md) | `benchmark` |
+-| [Inventaire fonctionnel et matrice de décision](01-recherche/inventaire-decisions.md) | `inventaire-decisions` |
+-| [Vision produit et périmètre de référence](01-recherche/vision-perimetre.md) | `vision-perimetre` |
+-| [Web, tablettes et accueil : fondements et limites de preuve](01-recherche/web-tablette-onboarding.md) | `web-tablette-onboarding` |
+-| [Recherche UI/UX, plateformes et état vérifié](01-recherche/ui-ux-mobile-etat-art.md) | `ui-ux-mobile-etat-art` |
++| [Direction A · Cartographie native](DESIGN/01-direction-artistique.md) | Référence active |
++| [Composants · Anatomie et comportement](DESIGN/02-composants.md) | Référence active |
++| [Carte, capture et replay · Grammaire visuelle](DESIGN/03-cartographie.md) | Référence active |
++| [Écrans de référence et couverture](DESIGN/04-ecrans-reference.md) | Référence active |
++| [Contenu et états · Dire exactement ce qui se passe](DESIGN/05-contenu-etats.md) | Référence active |
++| [Livraison du design et recette](DESIGN/06-livraison-validation.md) | Référence active |
++| [DESIGN · Drivy / Cartographie native](DESIGN/README.md) | Référence active |
+ 
+-### Expérience, web et tablette
++### Recherche et périmètre
+ 
+ | Document | Référence |
+ |---|---|
+-| [Architecture de l’information : terrain, apprentissage et gestion](02-experience/architecture-information.md) | `architecture-information` |
+-| [Système de design, états et accessibilité](02-experience/design-system.md) | `design-system` |
+-| [Trois directions artistiques pour un produit GPS et pédagogique](02-experience/directions-artistiques.md) | `directions-artistiques` |
+-| [Spécifications des 49 écrans et de leurs états](02-experience/ecrans.md) | `ecrans` |
+-| [Parcours de bout en bout et exceptions](02-experience/parcours.md) | `parcours` |
+-| [Une expérience cohérente sur téléphone, tablette et web](02-experience/plateformes-tablette-web.md) | `plateformes-tablette-web` |
+-| [Wireframes documentaires du cœur GPS et des cours](02-experience/wireframes.md) | `wireframes` |
+-| [Qualité UI/UX et prévention de l’AI slop](02-experience/qualite-ui-ux-anti-slop.md) | `qualite-ui-ux-anti-slop` |
+-| [Six patterns appliqués aux parcours](02-experience/patterns-mobile-parcours.md) | `patterns-mobile-parcours` |
++| [Audit fonctionnel de l’archive et limites de preuve](01-recherche/audit-existant.md) | Référence active |
++| [Dix auto-écoles suisses : observations et traduction dans Drivy](01-recherche/auto-ecoles-suisses.md) | Référence active |
++| [Benchmark observé et enseignements de conception](01-recherche/benchmark.md) | Référence active |
++| [Inventaire fonctionnel et matrice de décision](01-recherche/inventaire-decisions.md) | Référence active |
++| [Recherche UI/UX et mobile : décisions pour Drivy](01-recherche/ui-ux-mobile-etat-art.md) | Référence active |
++| [Vision produit et périmètre de référence](01-recherche/vision-perimetre.md) | Référence active |
++| [Web, tablettes et accueil : fondements et limites de preuve](01-recherche/web-tablette-onboarding.md) | Référence active |
++
++### Expérience et écrans
++
++| Document | Référence |
++|---|---|
++| [Architecture de l’information : terrain, apprentissage et gestion](02-experience/architecture-information.md) | Référence active |
++| [Système de design, états et accessibilité](02-experience/design-system.md) | Référence active |
++| [Direction choisie et historique des explorations](02-experience/directions-artistiques.md) | Référence active |
++| [Spécifications des 49 écrans et de leurs états](02-experience/ecrans.md) | Référence active |
++| [Parcours de bout en bout et exceptions](02-experience/parcours.md) | Référence active |
++| [Patterns appliqués : téléphone, tablette et web](02-experience/patterns-mobile-parcours.md) | Référence active |
++| [Une expérience cohérente sur téléphone, tablette et web](02-experience/plateformes-tablette-web.md) | Référence active |
++| [Qualité UI/UX et prévention de l’AI slop](02-experience/qualite-ui-ux-anti-slop.md) | Référence active |
++| [Wireframes documentaires du cœur GPS et des cours](02-experience/wireframes.md) | Référence active |
+ 
+ ### Spécifications fonctionnelles
+ 
+ | Document | Référence |
+ |---|---|
+-| [Suppression globale du compte](03-fonctionnel/compte-suppression-globale.md) | `compte-suppression-globale` |
+-| [Bilans, progression et documents](03-fonctionnel/bilans-documents.md) | `bilans-documents` |
+-| [F19 : calendrier d’offres et notifications ciblées](03-fonctionnel/calendrier-notifications.md) | `calendrier-notifications` |
+-| [F17 : prestations, packs composites et droits de consommation](03-fonctionnel/catalogue-packs.md) | `catalogue-packs` |
+-| [F18 : cours collectifs, inscription volontaire et présences](03-fonctionnel/cours-collectifs.md) | `cours-collectifs` |
+-| [Extensions, reclassements et exclusions](03-fonctionnel/extensions.md) | `extensions` |
+-| [Espace web de gestion et cycle de vie des élèves](03-fonctionnel/gestion-web-archivage.md) | `gestion-web-archivage` |
+-| [F15 et F16 : capture volontaire, replay et apprentissage](03-fonctionnel/gps-replay.md) | `gps-replay` |
+-| [Hors ligne, archivage et droits sur les données](03-fonctionnel/hors-ligne-vie-privee.md) | `hors-ligne-vie-privee` |
+-| [Identités, formations et administration](03-fonctionnel/identites-formations.md) | `identites-formations` |
+-| [Accueil progressif : école, moniteur et élève](03-fonctionnel/onboarding.md) | `onboarding` |
+-| [Journal de règlements et communications](03-fonctionnel/paiements-communications.md) | `paiements-communications` |
+-| [Disponibilités, réservation, préparation et résultat](03-fonctionnel/planning-lecons.md) | `planning-lecons` |
+-| [Règles métier et machines à états](03-fonctionnel/regles-etats.md) | `regles-etats` |
+-| [Rôles, périmètres et changements d’accès](03-fonctionnel/roles-permissions.md) | `roles-permissions` |
+-| [Statistiques d’activité : définitions, portée et contrôle](03-fonctionnel/statistiques.md) | `statistiques` |
++| [Bilans, progression et documents](03-fonctionnel/bilans-documents.md) | Référence active |
++| [F19 : calendrier d’offres et notifications ciblées](03-fonctionnel/calendrier-notifications.md) | Référence active |
++| [F17 : prestations, packs composites et droits de consommation](03-fonctionnel/catalogue-packs.md) | Référence active |
++| [Supprimer son compte Drivy : parcours global](03-fonctionnel/compte-suppression-globale.md) | Référence active |
++| [F18 : cours collectifs, inscription volontaire et présences](03-fonctionnel/cours-collectifs.md) | Référence active |
++| [Extensions, reclassements et exclusions](03-fonctionnel/extensions.md) | Référence active |
++| [Espace web de gestion et cycle de vie des élèves](03-fonctionnel/gestion-web-archivage.md) | Référence active |
++| [F15 et F16 : capture volontaire, replay et apprentissage](03-fonctionnel/gps-replay.md) | Référence active |
++| [Hors ligne, archivage et droits sur les données](03-fonctionnel/hors-ligne-vie-privee.md) | Référence active |
++| [Identités, formations et administration](03-fonctionnel/identites-formations.md) | Référence active |
++| [Accueil progressif : école, moniteur et élève](03-fonctionnel/onboarding.md) | Référence active |
++| [Journal de règlements et communications](03-fonctionnel/paiements-communications.md) | Référence active |
++| [Disponibilités, réservation, préparation et résultat](03-fonctionnel/planning-lecons.md) | Référence active |
++| [Règles métier et machines à états](03-fonctionnel/regles-etats.md) | Référence active |
++| [Rôles, périmètres et changements d’accès](03-fonctionnel/roles-permissions.md) | Référence active |
++| [Statistiques d’activité : définitions, portée et contrôle](03-fonctionnel/statistiques.md) | Référence active |
+ 
+ ### Fondations techniques
+ 
+ | Document | Référence |
+ |---|---|
+-| [Contrats API, erreurs et exemples de transaction](04-technique/api.md) | `api` |
+-| [Architecture du client Apple Swift natif](04-technique/architecture-client-swift.md) | `architecture-client-swift` |
+-| [Architecture cible et décisions techniques argumentées](04-technique/architecture-decisions.md) | `architecture-decisions` |
+-| [Fichiers, temps, formats et communications](04-technique/fichiers-temps-communications.md) | `fichiers-temps-communications` |
+-| [Modèle de données, contraintes et cycles de vie](04-technique/modele-donnees.md) | `modele-donnees` |
+-| [Sécurité, données personnelles et cadre suisse à valider](04-technique/securite-vie-privee.md) | `securite-vie-privee` |
+-| [Synchronisation, concurrence et continuité hors ligne](04-technique/synchronisation.md) | `synchronisation` |
+-| [Transactions critiques : GPS, packs et places de cours](04-technique/transactions-v2.md) | `transactions-v2` |
+-| [Transactions V3 : accueil, archivage, appareils et mesures](04-technique/transactions-v3.md) | `transactions-v3` |
+-| [Intégration iOS et iPadOS 26/27](04-technique/integration-ios-ipados.md) | `integration-ios-ipados` |
+-| [Préparation Android téléphone/tablette](04-technique/preparation-android.md) | `preparation-android` |
+-| [Intégration mobile transverse](04-technique/integration-mobile-transverse.md) | `integration-mobile-transverse` |
++| [Contrats API, erreurs et exemples de transaction](04-technique/api.md) | Référence active |
++| [Architecture du client Apple en Swift natif](04-technique/architecture-client-swift.md) | Référence active |
++| [Architecture cible et décisions techniques argumentées](04-technique/architecture-decisions.md) | Référence active |
++| [Fichiers, temps, formats et communications](04-technique/fichiers-temps-communications.md) | Référence active |
++| [Intégration Swift native : iOS et iPadOS 26 / 27](04-technique/integration-ios-ipados.md) | Référence active |
++| [Intégration mobile transverse : frontières, cycle de vie et distribution](04-technique/integration-mobile-transverse.md) | Référence active |
++| [Modèle de données, contraintes et cycles de vie](04-technique/modele-donnees.md) | Référence active |
++| [Préparer Android : client futur distinct et contrats communs](04-technique/preparation-android.md) | Référence active |
++| [Sécurité, données personnelles et cadre suisse à valider](04-technique/securite-vie-privee.md) | Référence active |
++| [Synchronisation, concurrence et continuité hors ligne](04-technique/synchronisation.md) | Référence active |
++| [Transactions critiques : GPS, packs et places de cours](04-technique/transactions-v2.md) | Référence active |
++| [Transactions V3 : accueil, archivage, appareils et mesures](04-technique/transactions-v3.md) | Référence active |
+ 
+ ### Réalisation et qualité
+ 
+ | Document | Référence |
+ |---|---|
+-| [Déploiement, observabilité et procédures d’exploitation](05-realisation/deploiement-exploitation.md) | `deploiement-exploitation` |
+-| [Migration éventuelle, conservation et transition](05-realisation/migration.md) | `migration` |
+-| [Roadmap : terrain, web et accueil dans un même parcours](05-realisation/roadmap-backlog.md) | `roadmap-backlog` |
+-| [Stratégie de tests, fixtures et recettes détaillées](05-realisation/tests-recette.md) | `tests-recette` |
+-| [Qualification mobile et UI/UX](05-realisation/qualification-mobile-ui-ux.md) | `qualification-mobile-ui-ux` |
++| [Déploiement, observabilité et procédures d’exploitation](05-realisation/deploiement-exploitation.md) | Référence active |
++| [Migration éventuelle, conservation et transition](05-realisation/migration.md) | Référence active |
++| [Qualification mobile et UI/UX](05-realisation/qualification-mobile-ui-ux.md) | Référence active |
++| [Roadmap : terrain, web et accueil dans un même parcours](05-realisation/roadmap-backlog.md) | Référence active |
++| [Stratégie de tests, fixtures et recettes détaillées](05-realisation/tests-recette.md) | Référence active |
+ 
+-### Gouvernance et traçabilité
++### Gouvernance et historiques
+ 
+ | Document | Référence |
+ |---|---|
+-| [Deuxième revue corrective V3.1 → V3.2](06-gouvernance/audit-corrections-v3-2.md) | `audit-corrections-v3-2` |
+-| [Journal de consolidation : de la V1 à Drivy V2 (historique conservé)](06-gouvernance/changements-v2.md) | `changements-v2` |
+-| [Journal de consolidation : Drivy V2 vers V3](06-gouvernance/changements-v3.md) | `changements-v3` |
+-| [Glossaire, décisions et questions de validation](06-gouvernance/glossaire-decisions-questions.md) | `glossaire-decisions-questions` |
+-| [Audit et compléments V3.5](06-gouvernance/audit-corrections-v3-5.md) | `audit-corrections-v3-5` |
+-| [Revue de cohérence V3.7](06-gouvernance/revue-coherence.md) | `revue-coherence` |
+-| [Historique des corrections V3 → V3.1](06-gouvernance/audit-corrections-v3-1.md) | `audit-corrections-v3-1` |
+-| [Sources, provenance et limites](06-gouvernance/sources.md) | `sources` |
+-| [Swift natif confirmé et corrections V3.4](06-gouvernance/changements-v3-4.md) | `changements-v3-4` |
+-| [Historique de l’enrichissement V3.3](06-gouvernance/changements-v3-3.md) | `changements-v3-3` |
+-| [Traçabilité intégrée V3.7](06-gouvernance/tracabilite.md) | `tracabilite` |
+-| [Historique des corrections V3.6](06-gouvernance/audit-corrections-v3-6.md) | `audit-corrections-v3-6` |
+-| [Audit courant V3.7](06-gouvernance/audit-corrections-v3-7.md) | `audit-corrections-v3-7` |
++| [Audit et corrections : Drivy V3 vers V3.1](06-gouvernance/audit-corrections-v3-1.md) | Historique |
++| [Deuxième revue : corrections de Drivy V3.1 vers V3.2](06-gouvernance/audit-corrections-v3-2.md) | Historique |
++| [Revue complète et compléments : Drivy V3.4 vers V3.5](06-gouvernance/audit-corrections-v3-5.md) | Historique |
++| [Audit et consolidation : Drivy V3.5 vers V3.6](06-gouvernance/audit-corrections-v3-6.md) | Historique |
++| [Recherches et corrections : Drivy V3.6 vers V3.7](06-gouvernance/audit-corrections-v3-7.md) | Historique |
++| [Journal de consolidation : de la V1 à Drivy V2](06-gouvernance/changements-v2.md) | Historique |
++| [Enrichissement V3.3 : UI/UX, iOS 26/27 et préparation Android](06-gouvernance/changements-v3-3.md) | Historique |
++| [V3.4 : Swift natif devient la référence Apple](06-gouvernance/changements-v3-4.md) | Historique |
++| [V3.8 · Direction A et dossier design concret](06-gouvernance/changements-v3-8.md) | Référence active |
++| [Journal de consolidation : Drivy V2 vers V3](06-gouvernance/changements-v3.md) | Historique |
++| [Glossaire, décisions et questions de validation](06-gouvernance/glossaire-decisions-questions.md) | Référence active |
++| [Revue de cohérence documentaire V3.7](06-gouvernance/revue-coherence.md) | Référence active |
++| [Sources, provenance et limites](06-gouvernance/sources.md) | Référence active |
++| [Traçabilité intégrée V3.7](06-gouvernance/tracabilite.md) | Référence active |
+ 
+-## Contrats, exemples et contrôles
++## Artefacts et reproduction
+ 
+ | Fichier | Usage |
+ |---|---|
+-| [OpenAPI](04-technique/openapi.yaml) | Contrat documentaire 3.7.0 ; aucun serveur réel ou secret. |
+-| [Exemples fictifs](annexes/exemples-v3.json) | Corps de commandes et objets vérifiables contre les schémas. |
+-| [Fixture statistiques](annexes/fixtures-statistiques-v3.json) | Calculs attendus, pas données d’école réelle. |
+-| [Traçabilité structurée](annexes/traceabilite.json) | Relations fonctions/règles/parcours/écrans/API/tests. |
+-| [Index des règles](annexes/regles-v3.json) | Renvois vers leur référence unique. |
+-| [Tokens de design](annexes/tokens-proposition.json) | Propositions, seuils adaptatifs et couleurs, pas thème approuvé. |
+-| [Preuves de l’audit initial](annexes/preuves-archive.json) | Relevé V1/V2 conservé, pas nouvel audit dynamique de l’app. |
+-| [Rapport de contrôle](annexes/verification-documentaire.json) | Résultats réellement obtenus et limites. |
+-| [Vérification du lecteur](annexes/verification-lecteur.json) | Tests de navigation/rendu du lecteur, distincts de l’app. |
+-| [Intégrité des originaux](annexes/verification-originaux.json) | Comparaison des empreintes des archives initiales. |
+-| [Cas de contrats V3.7](annexes/cas-contrats-v3-7.json) | 47 nouveaux cas ; 182 antérieurs rejoués, adaptations explicites séparées. |
+-| [Comparaison des contrats](annexes/comparaison-contrats-v3-6-v3-7.json) | Régressions de forme vérifiées avant/après, pas bugs reproduits du service. |
+-| [Preuves de revue courante](annexes/preuves-audit-v3-7.json) | Repérages V3.6 avant correction. |
+-| [Diff documentaire courant](annexes/corrections-v3-6-vers-v3-7.patch) | Changements V3.6 vers V3.7 sur les références textuelles. |
+-| [Modèles isolés de référence](annexes/verification-modeles-v3-7.json) | 22 cas d’états et de mesures synthétiques, pas tests du serveur ou d’un GPS réel. |
+-| [Vérificateur documentaire](annexes/verifier-documentation.py) | Contrôles reproductibles du dossier ; pas tests de l’application. |
+-| [Empreintes SHA-256](SHA256SUMS.txt) | Intégrité des fichiers livrés, hors manifeste lui-même. |
++| [OpenAPI](04-technique/openapi.yaml) | Contrat 3.7.0 inchangé ; pas de serveur livré. |
++| [Traçabilité métier](annexes/traceabilite.json) | Document 3.8 et contrat 3.7.0 distingués. |
++| [Scènes design](DESIGN/scenes.json) | Identifiants VIS et références E/DS. |
++| [Couverture des écrans](DESIGN/couverture-ecrans.json) | Illustré ou seulement spécifié, sans gonfler le compte. |
++| [Contrastes calculés](DESIGN/contrastes.json) | Paires opaques, pas certification de l’interface. |
++| [Source du prototype](DESIGN/assets/maquettes.template.html) | HTML éditable, données fictives, aucun appel métier. |
++| [Générateur du prototype](annexes/generer-maquettes.py) | Injecte les mêmes tokens et scènes dans la galerie. |
++| [Vérificateur documentaire](annexes/verifier-documentation.py) | Liens, registres, schémas et exemples. |
++| [Vérification de référence](annexes/verifier-reference-v3-8.py) | Contrôles hérités de contrat avec version documentaire actuelle. |
++| [Contrôles design](annexes/verifier-design-v3-8.py) | Tokens, couverture et cohérence de génération. |
++| [Contrôles navigateur](annexes/verifier-prototype-v3-8.py) | Rendu et interactions fictives, pas tests de l’app. |
++| [Provenance](annexes/provenance-v3-8.json) | Archive source et contrat identifiés par empreintes. |
++| [SHA-256](SHA256SUMS.txt) | Intégrité de la livraison, hors manifeste lui-même. |
+ 
+-## Lire hors ligne
++## Lire hors ligne et limites
+ 
+-Extraire l’archive entière. `LIRE_DOSSIER.html` rassemble tous les textes : navigation, recherche dans les documents, liens internes et impression du document courant ou de l’ensemble. Aucun service distant n’est nécessaire pour les textes. Les annexes s’ouvrent depuis le dossier extrait ; les sources externes requièrent une connexion.
++Extraire tout le ZIP. `LIRE_DOSSIER.html` rassemble les Markdown avec recherche ; `DESIGN/MAQUETTES.html` rassemble les compositions. Les textes et maquettes ne chargent aucun service distant. Les liens de sources nécessitent Internet ; les liens annexes demandent le dossier extrait.
+ 
+-Les wireframes sont textuels et les diagrammes Mermaid fournis comme source. Un éditeur compatible peut rendre Mermaid ; le lecteur HTML conserve le code lisible, sans chargement d’un service distant. Ce ne sont pas des maquettes haute fidélité.
+-
+-## Statut des informations
+-
+-**Exigence** : besoin exprimé par le porteur. **Observation** : fait réellement relevé et sourcé, avec limites. **Recommandation** : choix de conception proposé. **Hypothèse** : comportement ou contrainte à éprouver. **Non vérifié** : ne pas transformer en fait acquis.
+-
+-La fréquence des tablettes chez les moniteurs n’a pas été mesurée ; les offres commerciales des dix écoles ne sont pas des devis ni une enquête représentative. Le récit WhatsApp chez Luc’s vient du porteur. Matériel, versions, conditions commerciales, réglementations, fournisseurs et données personnelles exigent les validations précisées dans la roadmap. Le GPS ne devient ni surveillance permanente ni notation automatique.
+-
+-## Références actuelles et historiques
+-
+-Les spécifications actives et le contrat **3.7.0** font autorité ensemble. Les journaux V2 à V3.6, anciens schémas et résultats de contrôles précédents sont des **historiques**, pas des règles concurrentes. Le lecteur signale les journaux anciens. Les scripts numérotés d’une ancienne version ne qualifient pas le contrat courant. Le [journal V3.4](06-gouvernance/changements-v3-4.md) conserve la décision Swift sans rouvrir le choix d’un framework partagé.
+-
+-La passe V3.7 complète les corrections de présence et le règlement distinct des droits, la validation des preuves de formation, l’admission des mesures GPS et le rattachement des notifications à l’installation et au compte. Les bornes GPS, les rétentions, les politiques commerciales et les performances ne deviennent pas des décisions approuvées du seul fait d’être décrites.
+-
+-## Annexes spécifiques UI/UX et mobile
+-
+-[Sources héritées et recherche courante](annexes/sources-mobile-v3-7.json) · [Relevé des sept références de cette passe](annexes/recherche-v3-7.json) · [Registre MX/MOB](annexes/qualification-mobile-v3-7.json) · [Matrice de builds à qualifier](annexes/matrice-build-mobile-v3-4.json) · [Contrôle mobile](annexes/verification-mobile-v3-7.json) · [Contrôle Swift](annexes/verification-swift-v3-7.json) · [Provenance actuelle](annexes/provenance-v3-7.json).
+-
+-La matrice conserve son nom historique V3.4 car aucune de ses six combinaisons n’a été qualifiée sur appareil depuis sa création. Une chaîne Xcode/SwiftPM mentionnée n’est pas une compilation exécutée. Les registres et rapports ci-dessus décrivent V3.7, contrairement aux rapports historiques conservés.
+-
+-## Reproduire les contrôles V3.7
+-
+-Depuis le dossier extrait :
+-
+-```sh
+-python annexes/verifier-documentation.py --write-report
+-python annexes/verifier-contrats-transversaux.py
+-python annexes/verifier-v3-7.py --write-report
+-python annexes/verifier-mobile-v3-7.py --write-report
+-python annexes/verifier-swift-v3-7.py --write-report
+-python annexes/verifier-modeles-v3-7.py --write-report
+-python annexes/generer-lecteur.py
+-python annexes/verifier-lecteur.py --chromium /chemin/vers/chromium
+-```
+-
+-Python 3, PyYAML, jsonschema, referencing, markdown-it-py et beautifulsoup4 servent aux contrôles documentaires. Playwright et Chromium servent seulement au lecteur. La [revue de cohérence](06-gouvernance/revue-coherence.md) détaille résultats, conditions et limites. Réexécuter un rapport modifie son fichier ; régénérer le manifeste d’intégrité après une modification volontaire. Aucun de ces scripts ne développe, ne compile ou ne migre Drivy.
++Les diagrammes Mermaid et anciens wireframes demeurent documentaires. Les nouveaux visuels sont des compositions de navigateur, pas des écrans natifs finalisés. Aucun fichier de police n’est inclus. Les recherches commerciales et techniques antérieures restent datées ; cette passe ne les déclare pas toutes revalidées.
+--- v3.7/annexes/generer-lecteur.py
++++ v3.8/annexes/generer-lecteur.py
+@@ -9,10 +9,10 @@
+ from markdown_it import MarkdownIt
+ from bs4 import BeautifulSoup
+ ROOT=Path(__file__).resolve().parents[1]
+-CSS='\n:root{color-scheme:light;--ink:#1b2b30;--muted:#627477;--brand:#145b63;--line:#dce5e4;--paper:#fff;--canvas:#f2f5f3;--sidebar:300px}\n*{box-sizing:border-box}html{scroll-behavior:auto}body{margin:0;background:var(--canvas);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px;line-height:1.7}a{color:#11606b;text-underline-offset:3px;overflow-wrap:anywhere}a:hover{color:#073f47}button,input{font:inherit}button{cursor:pointer;min-height:44px;border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink);padding:8px 13px}button:hover{background:#eaf2ef}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #d2a448;outline-offset:3px}.skip{position:absolute;top:-100px;left:15px;background:white;z-index:20;padding:10px}.skip:focus{top:10px}\nheader{position:fixed;inset:0 0 auto 0;height:78px;background:#103c43;color:#eef7f6;z-index:10;display:flex;align-items:center;gap:20px;padding:0 26px;box-shadow:0 2px 12px #14313614}.brand{font-size:25px;letter-spacing:3px;font-weight:750;color:white;text-decoration:none}.edition{border-left:1px solid #71999d;padding-left:20px;line-height:1.4}.edition strong{display:block;font-weight:600;font-size:14px}.edition span{font-size:12px;color:#bed4d2}.header-actions{margin-left:auto;display:flex;gap:8px}.header-actions button{background:transparent;border-color:#5d8388;color:white;font-size:13px}.menu-toggle{display:none}\n.sidebar{position:fixed;top:78px;bottom:0;left:0;width:var(--sidebar);background:#fcfdfb;border-right:1px solid var(--line);overflow:auto;padding:22px 16px 40px;z-index:9}.searchlabel{font-size:12px;color:var(--muted);font-weight:650;display:block;margin-bottom:5px}.searchbox{width:100%;min-height:43px;border:1px solid #c3d3d1;border-radius:8px;padding:8px 10px;background:white}.searchcount{font-size:11px;color:var(--muted);margin:7px 3px 14px;min-height:18px}.navgroup h2{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#607e7e;margin:25px 10px 9px}.navlink{display:block;font-size:12px;line-height:1.5;padding:9px 11px;border-radius:6px;margin:2px 0;text-decoration:none;color:#365455}.navlink:hover{background:#edf3f1}.navlink[aria-current=page]{background:#dfeee8;color:#0d4c4e;font-weight:650;border-left:3px solid #237368;padding-left:8px}\nmain{margin-left:var(--sidebar);padding:112px 46px 68px;min-width:0}.document{display:none;max-width:1140px;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:36px 42px 48px;box-shadow:0 6px 24px #29403905;min-width:0;margin:0 auto 28px}.document.active,body.all-docs .document{display:block}.docmeta{color:#68837e;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;letter-spacing:.2px;margin-bottom:15px;overflow-wrap:anywhere}h1{font-size:32px;line-height:1.2;letter-spacing:-.8px;margin:0 0 22px;font-weight:740}h2{font-size:22px;line-height:1.35;margin:34px 0 16px;letter-spacing:-.3px}h3{font-size:17px;line-height:1.4;margin:26px 0 10px}h4{font-size:15px}p{margin:13px 0}blockquote{margin:20px 0;padding:8px 17px;border-left:3px solid #7caba0;color:#516b67;background:#f6f9f6;font-size:13px}blockquote p{margin:4px 0}ul,ol{padding-left:24px}li{margin:6px 0}strong{font-weight:650}hr{border:none;border-top:1px solid var(--line);margin:28px 0}\n.table-scroll{overflow:auto;max-width:100%;border:1px solid var(--line);border-radius:8px;margin:18px 0}table{border-collapse:collapse;width:100%;font-size:12px;line-height:1.65}th{background:#eaf3ef;color:#254f4c;font-size:11px;text-align:left;font-weight:700;padding:12px;border-bottom:1px solid #cbdcda;vertical-align:top}td{padding:11px 12px;vertical-align:top;border-bottom:1px solid #e5edeb;min-width:105px;overflow-wrap:anywhere}tr:last-child td{border-bottom:none}tr:nth-child(even) td{background:#fbfcfa}td:first-child{min-width:65px}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86em;padding:2px 4px;background:#eff4f1;border-radius:4px;overflow-wrap:anywhere}pre{overflow:auto;max-width:100%;padding:20px;background:#143039;color:#e3eeee;border-radius:8px;font-size:12px;line-height:1.6;tab-size:4}pre code{background:none;color:inherit;padding:0;overflow-wrap:normal;white-space:pre;font-size:inherit}a[id],h1[id],h2[id],h3[id]{scroll-margin-top:100px}.reader-note{font-size:11px;text-align:center;color:#73827e;margin:18px auto;max-width:900px}.backdrop{display:none}\n@media(max-width:1100px){:root{--sidebar:260px}main{padding:104px 24px 50px}.document{padding:28px}h1{font-size:28px}}\n@media(max-width:850px){:root{--sidebar:290px}.menu-toggle{display:block}.sidebar{transform:translateX(-100%);transition:transform .12s}.nav-open .sidebar{transform:translateX(0)}main{margin-left:0;padding:99px 18px 40px}.nav-open .backdrop{display:block;position:fixed;inset:78px 0 0;background:#11262b55;z-index:8}header{padding:0 17px;gap:14px}.edition{padding-left:14px}.header-actions{gap:5px}.document{padding:26px}.nav-open .sidebar{box-shadow:10px 0 30px #21333222}}\n@media(max-width:520px){header{height:72px;padding:0 12px;gap:10px}.brand{font-size:19px;letter-spacing:2px}.edition{display:none}.header-actions button{font-size:11px;padding:7px 9px}.header-actions{gap:6px}.sidebar{top:72px}.nav-open .backdrop{top:72px}main{padding:88px 10px 28px}.document{border-radius:10px;padding:22px 17px}h1{font-size:26px}h2{font-size:20px}body{font-size:14px}.docmeta{font-size:10px}td{min-width:135px;padding:9px;font-size:11px}th{padding:9px}pre{font-size:10px;padding:13px}}\n@media(prefers-reduced-motion:reduce){*{transition:none!important}}\n@media print{header,.sidebar,.backdrop,.reader-note{display:none!important}body{background:white;font-size:11px}main{margin:0;padding:0}.document{box-shadow:none;border:0;margin:0;padding:0}.document:not(.active){display:none}body.all-docs .document{display:block;break-before:page}h1{font-size:24px}h2{font-size:18px}pre{white-space:pre-wrap;background:#edf2ef;color:black;font-size:9px}.table-scroll{overflow:visible}table{font-size:9px}th,td{min-width:0;padding:6px}a{color:inherit}}\n\n[hidden]{display:none!important}\n'
+-SCRIPT_TAIL=" const search=document.getElementById('search'); const count=document.getElementById('searchcount');\nconst menu=document.getElementById('menu'), all=document.getElementById('all');\nfunction closeNav(){document.body.classList.remove('nav-open');menu.setAttribute('aria-expanded','false')}\nfunction route(){let id;try{id=decodeURIComponent(location.hash.slice(1))}catch{ id='doc-readme'};if(id==='main'){document.getElementById('main').focus();return};let target=document.getElementById(id||'doc-readme');let section=target?.closest('.document')||document.getElementById('doc-readme');\n documents.forEach(d=>d.classList.toggle('active',d===section));navlinks.forEach(a=>{if(a.dataset.doc===section.id)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});\n document.title=(searchIndex.find(x=>x.id===section.id)?.title||'Drivy')+' · Drivy V3.7';closeNav();\n if(target&&target!==section){requestAnimationFrame(()=>target.scrollIntoView({block:'start'}))}else requestAnimationFrame(()=>window.scrollTo(0,0));\n}\nwindow.addEventListener('hashchange',route);\nmenu.addEventListener('click',()=>{const open=document.body.classList.toggle('nav-open');menu.setAttribute('aria-expanded',String(open))});\ndocument.getElementById('backdrop').addEventListener('click',closeNav);document.addEventListener('keydown',e=>{if(e.key==='Escape')closeNav()});\nall.addEventListener('click',()=>{const active=document.body.classList.toggle('all-docs');all.textContent=active?'Un document':'Tout afficher';all.setAttribute('aria-pressed',String(active));if(!active)route()});\ndocument.getElementById('print').addEventListener('click',()=>window.print());\nsearch.addEventListener('input',()=>{const q=search.value.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('fr').trim();let n=0;\n navlinks.forEach(a=>{const item=searchIndex.find(x=>x.id===a.dataset.doc);const text=(item.title+' '+item.text).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('fr');let match=!q||text.includes(q);a.hidden=!match;if(match)n++});\n document.querySelectorAll('.navgroup').forEach(g=>g.hidden=![...g.querySelectorAll('.navlink')].some(x=>!x.hidden));count.textContent=q?n+' document(s) contenant votre recherche':'49 documents · Lecture hors ligne';\n}); route();\n"
++CSS='\n:root{color-scheme:light;--ink:#18212b;--muted:#536174;--brand:#245bd6;--line:#d9e0e9;--paper:#fff;--canvas:#f7f8fa;--sidebar:300px}\n*{box-sizing:border-box}html{scroll-behavior:auto}body{margin:0;background:var(--canvas);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px;line-height:1.7}a{color:#245bd6;text-underline-offset:3px;overflow-wrap:anywhere}a:hover{color:#1947ad}button,input{font:inherit}button{cursor:pointer;min-height:44px;border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink);padding:8px 13px}button:hover{background:#eef2f7}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #245bd6;outline-offset:3px}.skip{position:absolute;top:-100px;left:15px;background:white;z-index:20;padding:10px}.skip:focus{top:10px}\nheader{position:fixed;inset:0 0 auto 0;height:78px;background:#182a4c;color:#f2f5fa;z-index:10;display:flex;align-items:center;gap:20px;padding:0 26px;box-shadow:0 2px 12px #18212b14}.brand{font-size:25px;letter-spacing:3px;font-weight:750;color:white;text-decoration:none}.edition{border-left:1px solid #71849d;padding-left:20px;line-height:1.4}.edition strong{display:block;font-weight:600;font-size:14px}.edition span{font-size:12px;color:#b0bccc}.header-actions{margin-left:auto;display:flex;gap:8px}.header-actions button{background:transparent;border-color:#71849d;color:white;font-size:13px}.menu-toggle{display:none}\n.sidebar{position:fixed;top:78px;bottom:0;left:0;width:var(--sidebar);background:#ffffff;border-right:1px solid var(--line);overflow:auto;padding:22px 16px 40px;z-index:9}.searchlabel{font-size:12px;color:var(--muted);font-weight:650;display:block;margin-bottom:5px}.searchbox{width:100%;min-height:43px;border:1px solid #78869a;border-radius:8px;padding:8px 10px;background:white}.searchcount{font-size:11px;color:var(--muted);margin:7px 3px 14px;min-height:18px}.navgroup h2{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#536174;margin:25px 10px 9px}.navlink{display:block;font-size:12px;line-height:1.5;padding:9px 11px;border-radius:6px;margin:2px 0;text-decoration:none;color:#536174}.navlink:hover{background:#eef2f7}.navlink[aria-current=page]{background:#eaf0fe;color:#1947ad;font-weight:650;border-left:3px solid #245bd6;padding-left:8px}\nmain{margin-left:var(--sidebar);padding:112px 46px 68px;min-width:0}.document{display:none;max-width:1140px;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:36px 42px 48px;box-shadow:0 6px 24px #18212b05;min-width:0;margin:0 auto 28px}.document.active,body.all-docs .document{display:block}.docmeta{color:#536174;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;letter-spacing:.2px;margin-bottom:15px;overflow-wrap:anywhere}h1{font-size:32px;line-height:1.2;letter-spacing:-.8px;margin:0 0 22px;font-weight:740}h2{font-size:22px;line-height:1.35;margin:34px 0 16px;letter-spacing:-.3px}h3{font-size:17px;line-height:1.4;margin:26px 0 10px}h4{font-size:15px}p{margin:13px 0}blockquote{margin:20px 0;padding:8px 17px;border-left:3px solid #78869a;color:#536174;background:#f7f8fa;font-size:13px}blockquote p{margin:4px 0}ul,ol{padding-left:24px}li{margin:6px 0}strong{font-weight:650}hr{border:none;border-top:1px solid var(--line);margin:28px 0}\n.table-scroll{overflow:auto;max-width:100%;border:1px solid var(--line);border-radius:8px;margin:18px 0}table{border-collapse:collapse;width:100%;font-size:12px;line-height:1.65}th{background:#eef2f7;color:#18212b;font-size:11px;text-align:left;font-weight:700;padding:12px;border-bottom:1px solid #d9e0e9;vertical-align:top}td{padding:11px 12px;vertical-align:top;border-bottom:1px solid #d9e0e9;min-width:105px;overflow-wrap:anywhere}tr:last-child td{border-bottom:none}tr:nth-child(even) td{background:#f7f8fa}td:first-child{min-width:65px}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86em;padding:2px 4px;background:#eef2f7;border-radius:4px;overflow-wrap:anywhere}pre{overflow:auto;max-width:100%;padding:20px;background:#19222e;color:#f2f5fa;border-radius:8px;font-size:12px;line-height:1.6;tab-size:4}pre code{background:none;color:inherit;padding:0;overflow-wrap:normal;white-space:pre;font-size:inherit}a[id],h1[id],h2[id],h3[id]{scroll-margin-top:100px}.reader-note{font-size:11px;text-align:center;color:#536174;margin:18px auto;max-width:900px}.backdrop{display:none}\n@media(max-width:1100px){:root{--sidebar:260px}main{padding:104px 24px 50px}.document{padding:28px}h1{font-size:28px}}\n@media(max-width:850px){:root{--sidebar:290px}.menu-toggle{display:block}.sidebar{transform:translateX(-100%);transition:transform .12s}.nav-open .sidebar{transform:translateX(0)}main{margin-left:0;padding:99px 18px 40px}.nav-open .backdrop{display:block;position:fixed;inset:78px 0 0;background:#18212b55;z-index:8}header{padding:0 17px;gap:14px}.edition{padding-left:14px}.header-actions{gap:5px}.document{padding:26px}.nav-open .sidebar{box-shadow:10px 0 30px #18212b22}}\n@media(max-width:520px){header{height:72px;padding:0 12px;gap:10px}.brand{font-size:19px;letter-spacing:2px}.edition{display:none}.header-actions button{font-size:11px;padding:7px 9px}.header-actions{gap:6px}.sidebar{top:72px}.nav-open .backdrop{top:72px}main{padding:88px 10px 28px}.document{border-radius:10px;padding:22px 17px}h1{font-size:26px}h2{font-size:20px}body{font-size:14px}.docmeta{font-size:10px}td{min-width:135px;padding:9px;font-size:11px}th{padding:9px}pre{font-size:10px;padding:13px}}\n@media(prefers-reduced-motion:reduce){*{transition:none!important}}\n@media print{header,.sidebar,.backdrop,.reader-note{display:none!important}body{background:white;font-size:11px}main{margin:0;padding:0}.document{box-shadow:none;border:0;margin:0;padding:0}.document:not(.active){display:none}body.all-docs .document{display:block;break-before:page}h1{font-size:24px}h2{font-size:18px}pre{white-space:pre-wrap;background:#eef2f7;color:black;font-size:9px}.table-scroll{overflow:visible}table{font-size:9px}th,td{min-width:0;padding:6px}a{color:inherit}}\n\n[hidden]{display:none!important}\n'
++SCRIPT_TAIL=" const search=document.getElementById('search'); const count=document.getElementById('searchcount');\nconst menu=document.getElementById('menu'), all=document.getElementById('all');\nfunction closeNav(){document.body.classList.remove('nav-open');menu.setAttribute('aria-expanded','false')}\nfunction route(){let id;try{id=decodeURIComponent(location.hash.slice(1))}catch{ id='doc-readme'};if(id==='main'){document.getElementById('main').focus();return};let target=document.getElementById(id||'doc-readme');let section=target?.closest('.document')||document.getElementById('doc-readme');\n documents.forEach(d=>d.classList.toggle('active',d===section));navlinks.forEach(a=>{if(a.dataset.doc===section.id)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});\n document.title=(searchIndex.find(x=>x.id===section.id)?.title||'Drivy')+' · Drivy V3.8';closeNav();\n if(target&&target!==section){requestAnimationFrame(()=>target.scrollIntoView({block:'start'}))}else requestAnimationFrame(()=>window.scrollTo(0,0));\n}\nwindow.addEventListener('hashchange',route);\nmenu.addEventListener('click',()=>{const open=document.body.classList.toggle('nav-open');menu.setAttribute('aria-expanded',String(open))});\ndocument.getElementById('backdrop').addEventListener('click',closeNav);document.addEventListener('keydown',e=>{if(e.key==='Escape')closeNav()});\nall.addEventListener('click',()=>{const active=document.body.classList.toggle('all-docs');all.textContent=active?'Un document':'Tout afficher';all.setAttribute('aria-pressed',String(active));if(!active)route()});\ndocument.getElementById('print').addEventListener('click',()=>window.print());\nsearch.addEventListener('input',()=>{const q=search.value.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('fr').trim();let n=0;\n navlinks.forEach(a=>{const item=searchIndex.find(x=>x.id===a.dataset.doc);const text=(item.title+' '+item.text).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('fr');let match=!q||text.includes(q);a.hidden=!match;if(match)n++});\n document.querySelectorAll('.navgroup').forEach(g=>g.hidden=![...g.querySelectorAll('.navlink')].some(x=>!x.hidden));count.textContent=q?n+' document(s) contenant votre recherche':'49 documents · Lecture hors ligne';\n}); route();\n"
+ 
+-CSS += '\n.document{scroll-margin-top:110px}.document [id]{scroll-margin-top:110px}\n'
++CSS += '\n.document img{max-width:100%;height:auto}.document{scroll-margin-top:110px}.document [id]{scroll-margin-top:110px}\n'
+ 
+ def slug(s):
+     s=re.sub(r'<[^>]+>','',s.lower().strip())
+@@ -22,7 +22,7 @@
+ def build():
+     files=sorted(ROOT.rglob('*.md'),key=lambda x:('0' if x.name=='README.md' else '1')+str(x.relative_to(ROOT)))
+     md=MarkdownIt('commonmark',{'html':True}).enable('table')
+-    groups={'00':'Commencer','01':'01 · Recherche et vision','02':'02 · Expérience','03':'03 · Fonctionnel','04':'04 · Technique','05':'05 · Réalisation','06':'06 · Gouvernance'}
++    groups={'00':'Commencer','DE':'DESIGN · Direction A','01':'01 · Recherche et vision','02':'02 · Expérience','03':'03 · Fonctionnel','04':'04 · Technique','05':'05 · Réalisation','06':'06 · Gouvernance'}
+     nav={k:[] for k in groups};sections=[];index=[]
+     for f in files:
+         rel=f.relative_to(ROOT);ident=docid(rel);text=f.read_text();tokens=md.parse(text);seen=Counter()
+@@ -42,14 +42,19 @@
+             if dest.suffix=='.md':a['href']='#'+docid(dest)+(('--'+unquote(u.fragment)) if u.fragment else '')
+             elif dest.name=='LIRE_DOSSIER.html':a['href']='#doc-readme'
+             else:a['href']=dest.as_posix()+('#'+u.fragment if u.fragment else '')
++        for image in soup.find_all('img',src=True):
++            u=urlsplit(image['src'])
++            if not u.scheme and not image['src'].startswith('//'):
++                target=(f.parent/unquote(u.path)).resolve()
++                if target.is_relative_to(ROOT):image['src']=target.relative_to(ROOT).as_posix()
+         for table in soup.find_all('table'):
+             wrap=soup.new_tag('div',attrs={'class':'table-scroll','tabindex':'0'});table.wrap(wrap)
+             for th in table.find_all('th'):th['scope']='col'
+         title=soup.h1.get_text(' ',strip=True) if soup.h1 else f.stem
+-        historical=(rel.parts[0]=='06-gouvernance' and (f.name.startswith('changements-') or f.name.startswith('audit-corrections-')) and f.name!='audit-corrections-v3-7.md')
++        historical=(rel.parts[0]=='06-gouvernance' and (f.name.startswith('changements-') or f.name.startswith('audit-corrections-')) and f.name!='changements-v3-8.md')
+         if historical:
+             notice=soup.new_tag('blockquote')
+-            notice.string='Historique : ce document décrit une version antérieure. Pour développer Drivy, utiliser la référence V3.7 et son contrat 3.7.0, pas les décisions abandonnées de ce journal.'
++            notice.string='Historique : ce document décrit une version antérieure. Pour développer Drivy, utiliser la référence V3.8 et son contrat 3.7.0, pas les décisions abandonnées de ce journal.'
+             soup.insert(0,notice)
+             title += ' [historique]' 
+         group=rel.parts[0][:2] if len(rel.parts)>1 else '00'
+@@ -59,8 +64,8 @@
+     navbar=''.join(f'<div class="navgroup"><h2>{groups.get(k,k)}</h2>{"".join(items)}</div>' for k,items in nav.items())
+     search_json=json.dumps(index,ensure_ascii=False).replace('</',r'<\/')
+     script="const documents=[...document.querySelectorAll('.document')],navlinks=[...document.querySelectorAll('.navlink')];const searchIndex="+search_json+';'+SCRIPT_TAIL.replace('49 documents',str(len(files))+' documents')
+-    content='<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Dossier Drivy V3.7 corrigé, documentation et audit."><title>Drivy · Dossier V3.7</title><style>'+CSS+'</style></head><body>'
+-    content+='<a class="skip" href="#main">Aller au contenu</a><header><a class="brand" href="#doc-readme">DRIVY</a><div class="edition"><strong>Référence de conception · V3.7</strong><span>Swift natif · iPhone / iPad · Web · Android futur</span></div><div class="header-actions"><button class="menu-toggle" id="menu" aria-controls="sidebar" aria-expanded="false">Sommaire</button><button id="all" aria-pressed="false">Tout afficher</button><button id="print">Imprimer</button></div></header><div class="backdrop" id="backdrop"></div>'
++    content='<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Dossier Drivy V3.8 corrigé, documentation et audit."><title>Drivy · Dossier V3.8</title><style>'+CSS+'</style></head><body>'
++    content+='<a class="skip" href="#main">Aller au contenu</a><header><a class="brand" href="#doc-readme">DRIVY</a><div class="edition"><strong>Référence de conception · V3.8</strong><span>Swift natif · iPhone / iPad · Web · Android futur</span></div><div class="header-actions"><button class="menu-toggle" id="menu" aria-controls="sidebar" aria-expanded="false">Sommaire</button><button id="all" aria-pressed="false">Tout afficher</button><button id="print">Imprimer</button></div></header><div class="backdrop" id="backdrop"></div>'
+     content+='<aside class="sidebar" id="sidebar" aria-label="Documents"><label class="searchlabel" for="search">Rechercher dans le dossier</label><input class="searchbox" id="search" type="search" autocomplete="off" placeholder="Ex. publication, activation, D09"><div class="searchcount" id="searchcount" aria-live="polite">'+str(len(files))+' documents · Lecture hors ligne</div><nav>'+navbar+'</nav></aside>'
+     content+='<main id="main" tabindex="-1">'+''.join(sections)+'<p class="reader-note">Documentation de conception corrigée. Aucun écran de l’application n’est implémenté dans ce lecteur.</p></main><noscript><style>.document{display:block!important}</style>JavaScript désactivé : documents affichés à la suite.</noscript><script>'+script+'</script></body></html>'
+     (ROOT/'LIRE_DOSSIER.html').write_text(content,encoding='utf-8')
+--- v3.7/annexes/tokens-proposition.json
++++ v3.8/annexes/tokens-proposition.json
+@@ -1,35 +1,57 @@
+ {
+-  "status": "documentation_only_proposed",
++  "status": "direction_A_selected_values_reference_pending_visual_acceptance",
+   "colors": {
+     "light": {
+-      "canvas": "#F6F4EF",
++      "canvas": "#F7F8FA",
+       "surface": "#FFFFFF",
+-      "text": "#1B2426",
+-      "muted": "#536267",
+-      "accent": "#145B63",
++      "surfaceMuted": "#EEF2F7",
++      "text": "#18212B",
++      "muted": "#536174",
++      "accent": "#245BD6",
++      "accentPressed": "#1947AD",
+       "onAccent": "#FFFFFF",
+-      "successText": "#23634A",
+-      "successSurface": "#E6F2E9",
+-      "warningText": "#785000",
+-      "warningSurface": "#FFF2CC",
+-      "dangerText": "#A12F36",
+-      "dangerSurface": "#FDEBED",
+-      "border": "#CFD7D6"
++      "accentSoft": "#EAF0FE",
++      "successText": "#17633D",
++      "successSurface": "#E9F5EE",
++      "warningText": "#7A4D00",
++      "warningSurface": "#FFF3D6",
++      "dangerText": "#B02B37",
++      "dangerSurface": "#FDECEF",
++      "border": "#D9E0E9",
++      "controlBorder": "#78869A",
++      "disabledText": "#5D6A7C",
++      "disabledSurface": "#E8EDF3",
++      "route": "#245BD6",
++      "routeHalo": "#FFFFFF",
++      "mapCanvas": "#E8EDF2",
++      "mapPark": "#DDEBDF",
++      "mapWater": "#DCEBFA"
+     },
+     "dark": {
+-      "canvas": "#141B1D",
+-      "surface": "#1D282B",
+-      "text": "#F2F5F4",
+-      "muted": "#B3C2C1",
+-      "accent": "#93D0D1",
+-      "onAccent": "#143337",
+-      "successText": "#A6DABD",
+-      "successSurface": "#20392C",
+-      "warningText": "#F4D185",
+-      "warningSurface": "#3A301D",
+-      "dangerText": "#FFB6BA",
+-      "dangerSurface": "#44242A",
+-      "border": "#718A8D"
++      "canvas": "#10151C",
++      "surface": "#19222E",
++      "surfaceMuted": "#222E3E",
++      "text": "#F2F5FA",
++      "muted": "#B0BCCC",
++      "accent": "#91B5FF",
++      "accentPressed": "#B4CCFF",
++      "onAccent": "#10264D",
++      "accentSoft": "#233859",
++      "successText": "#98DBB4",
++      "successSurface": "#18372A",
++      "warningText": "#F2CB83",
++      "warningSurface": "#382D19",
++      "dangerText": "#FFADB4",
++      "dangerSurface": "#40252D",
++      "border": "#34445A",
++      "controlBorder": "#71849D",
++      "disabledText": "#B0BCCC",
++      "disabledSurface": "#222E3E",
++      "route": "#91B5FF",
++      "routeHalo": "#10151C",
++      "mapCanvas": "#202A36",
++      "mapPark": "#263B35",
++      "mapWater": "#203A54"
+     }
+   },
+   "spacing": [
+@@ -41,7 +63,7 @@
+     32,
+     48
+   ],
+-  "version": "3.3",
++  "version": "3.8",
+   "layout": {
+     "breakpointsLogical": {
+       "compactMaxExclusive": 600,
+@@ -69,5 +91,45 @@
+     "fallback": "opaque_same_semantics",
+     "contrastOnMap": "requires_rendered_verification",
+     "forbidGlobalGlassTheme": true
++  },
++  "direction": "A · Cartographie native",
++  "colorSpace": "sRGB",
++  "typography": {
++    "platformFont": "system",
++    "appleBodyStyle": "body",
++    "appleBodyReferencePt": 17,
++    "webBodyReferencePx": 16,
++    "webDenseReferencePx": 14,
++    "metadataReference": 14,
++    "weights": [
++      400,
++      500,
++      600,
++      700
++    ],
++    "paragraphMaxCh": 65,
++    "doNotBundleFonts": true,
++    "referenceSizesNotFixedDynamicType": true
++  },
++  "radii": {
++    "field": 12,
++    "content": 16,
++    "mapPanel": 24,
++    "nativeControls": "system_geometry_not_overridden"
++  },
++  "motionMs": {
++    "feedback": 120,
++    "context": 180,
++    "reduceMotion": 0,
++    "note": "Durées Drivy proposées pour animations custom ; ne pas surcharger les transitions système."
++  },
++  "routeRendering": {
++    "widthPt": 5,
++    "haloWidthPt": 9,
++    "observationDiameterPt": 28,
++    "observationHitAreaPt": 48,
++    "measurementsOnly": true,
++    "neverConnectGaps": true,
++    "mapTokensAreSchematicOnly": true
+   }
+ }
+--- v3.7/annexes/traceabilite.json
++++ v3.8/annexes/traceabilite.json
+@@ -9817,7 +9817,7 @@
+     "testSpecifications": 382
+   },
+   "validationMeaning": "Relations documentaires contrôlées, pas couverture exécutable ni recette produit. Tests métier NOT_EXECUTED.",
+-  "documentVersion": "3.7",
++  "documentVersion": "3.8",
+   "apiContractVersion": "3.7.0",
+   "mobileSupplement": {
+     "requirements": 16,
+--- v3.7/annexes/verification-documentaire.json
++++ v3.8/annexes/verification-documentaire.json
+@@ -1,13 +1,13 @@
+ {
+-  "version": "3.7",
++  "version": "3.8",
+   "status": "DOCUMENTARY_CHECKS_ONLY",
+   "productTestsExecuted": false,
+   "errors": [],
+   "checks": {
+     "markdown": {
+-      "files": 65,
+-      "internalLinks": 5045,
+-      "externalLinksNotRevalidated": 118
++      "files": 73,
++      "internalLinks": 5182,
++      "externalLinksNotRevalidated": 126
+     },
+     "schemaRegressions": {
+       "total": 229,
+@@ -1437,7 +1437,7 @@
+       "Aucune qualification réelle GPS/tablette",
+       "Aucun entretien utilisateur ou mesure marché",
+       "Pas audit juridique, de sécurité ni charge réel",
+-      "Liens externes historiques non tous revalidés en V3.7",
++      "Liens externes historiques non tous revalidés en V3.8",
+       "Pas validateur intégral méta-schéma OpenAPI installé"
+     ],
+     "crossContract": {
+--- v3.7/annexes/verifier-documentation.py
++++ v3.8/annexes/verifier-documentation.py
+@@ -22,7 +22,7 @@
+     return re.sub(r'\s+','-',s)
+ 
+ def main()->dict:
+-    report={'version':'3.7','status':'DOCUMENTARY_CHECKS_ONLY','productTestsExecuted':False,'errors':[], 'checks':{}}
++    report={'version':'3.8','status':'DOCUMENTARY_CHECKS_ONLY','productTestsExecuted':False,'errors':[], 'checks':{}}
+     errors=report['errors'];checks=report['checks'];files=sorted(ROOT.rglob('*.md'))
+     anchors={};links=[];md=MarkdownIt('commonmark',{'html':True}).enable('table')
+     for f in files:
+@@ -166,7 +166,7 @@
+     fixture=json.loads((ROOT/'annexes/fixtures-statistiques-v3.json').read_text());calc={'lessonCount':len(fixture['lessonMinutes']),'durationSeconds':60*sum(fixture['lessonMinutes']),'distinctLearners':len(set(fixture['lessonLearnerKeys'])),'courseFillRatio':sum(fixture['occupiedSeats'])/sum(fixture['courseCapacities']),'netRecordedCents':sum(fixture['receiptsCents'])-sum(fixture['refundsCents']),'netAfterReversalCents':sum(fixture['receiptsCents'])-sum(fixture['refundsCents'])-fixture['reversedReceiptCents']}
+     if calc!=fixture['expected']:errors.append({'type':'FIXTURE_ARITHMETIC','actual':calc})
+     checks['fictitiousArithmetic']={'calculated':calc,'matches':calc==fixture['expected'],'productCodeExercised':False}
+-    checks['limitations']=['Aucun build ni test métier exécuté','Aucune qualification réelle GPS/tablette','Aucun entretien utilisateur ou mesure marché','Pas audit juridique, de sécurité ni charge réel','Liens externes historiques non tous revalidés en V3.7','Pas validateur intégral méta-schéma OpenAPI installé']
++    checks['limitations']=['Aucun build ni test métier exécuté','Aucune qualification réelle GPS/tablette','Aucun entretien utilisateur ou mesure marché','Pas audit juridique, de sécurité ni charge réel','Liens externes historiques non tous revalidés en V3.8','Pas validateur intégral méta-schéma OpenAPI installé']
+     module_spec=importlib.util.spec_from_file_location('drivy_contract_lint',ROOT/'annexes/verifier-contrats-transversaux.py')
+     module=importlib.util.module_from_spec(module_spec);module_spec.loader.exec_module(module)
+     cross=module.check(ROOT);checks['crossContract']=cross

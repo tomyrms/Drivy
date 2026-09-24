@@ -1,0 +1,98 @@
+{
+  "version": "3.12",
+  "scope": "DOCUMENTARY_RELEASE_ONLY",
+  "executedAtUTC": "2026-09-19T23:03:03.105550+00:00",
+  "aggregationMode": "INDIVIDUAL_EXECUTIONS_CURRENT_WORKTREE",
+  "passed": true,
+  "allChecksExecuted": true,
+  "requestedBrowserChecks": true,
+  "reports": [
+    {
+      "script": "verifier-environnement.py",
+      "report": "annexes/verification-environnement-v3-12.json",
+      "status": "PASSED",
+      "passed": true,
+      "errorCount": 0,
+      "scope": "DOCUMENTARY_ENVIRONMENT_ONLY"
+    },
+    {
+      "script": "verifier-documentation.py",
+      "report": "annexes/verification-documentaire.json",
+      "status": "PASSED",
+      "passed": true,
+      "errorCount": 0,
+      "scope": "DOCUMENTARY_CHECKS_ONLY"
+    },
+    {
+      "script": "verifier-coherence-v3-12.py",
+      "report": "annexes/verification-coherence-v3-12.json",
+      "status": "PASSED",
+      "passed": true,
+      "errorCount": 0,
+      "scope": "DOCUMENTARY_COHERENCE_ONLY"
+    },
+    {
+      "script": "verifier-reference-v3-12.py",
+      "report": "annexes/verification-reference-v3-12.json",
+      "status": "PASSED",
+      "passed": true,
+      "errorCount": 0,
+      "scope": "DOCUMENTARY_CHECKS_ONLY"
+    },
+    {
+      "script": "verifier-fichiers-v3-12.py",
+      "report": "annexes/verification-fichiers-v3-12.json",
+      "status": "PASSED",
+      "passed": true,
+      "errorCount": 0,
+      "scope": "SCHEMAS_AND_ISOLATED_DOCUMENTARY_MODELS"
+    },
+    {
+      "script": "verifier-mobile-swift-v3-12.py",
+      "report": "annexes/verification-mobile-swift-v3-12.json",
+      "status": "PASSED",
+      "passed": true,
+      "errorCount": 0,
+      "scope": "MOBILE_SWIFT_DOCUMENTATION_ONLY"
+    },
+    {
+      "script": "verifier-design-v3-12.py",
+      "report": "annexes/verification-design-v3-12.json",
+      "status": "PASSED",
+      "passed": true,
+      "errorCount": 0,
+      "scope": "DESIGN_DOCUMENTATION_ONLY"
+    },
+    {
+      "script": "verifier-prototype-v3-12.py",
+      "report": "annexes/verification-prototype-v3-12.json",
+      "status": "PASSED",
+      "passed": true,
+      "errorCount": 0,
+      "scope": "DOCUMENTARY_HTML_PROTOTYPE_ONLY"
+    },
+    {
+      "script": "verifier-live-prototype-v3-12.py",
+      "report": "annexes/verification-live-prototype-v3-12.json",
+      "status": "PASSED",
+      "passed": true,
+      "errorCount": 0,
+      "scope": "DOCUMENTARY_HTML_MEMORY_AND_DTO_ONLY"
+    },
+    {
+      "script": "verifier-lecteur-v3-12.py",
+      "report": "annexes/verification-lecteur-v3-12.json",
+      "status": "PASSED",
+      "passed": true,
+      "errorCount": 0,
+      "scope": "DOCUMENTARY_READER_ONLY"
+    }
+  ],
+  "productTestsExecuted": false,
+  "nativeBuildExecuted": false,
+  "limits": [
+    "The aggregate summarizes current reports created by executed checkers; it is not a product test.",
+    "Passing browser reports validate only documentary HTML prototypes and reader.",
+    "Integrity is verified separately after the final manifest is regenerated."
+  ]
+}

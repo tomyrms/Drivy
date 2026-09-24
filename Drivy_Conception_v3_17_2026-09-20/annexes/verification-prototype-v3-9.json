@@ -1,0 +1,2718 @@
+{
+  "version": "3.9",
+  "scope": "DOCUMENTARY_HTML_PROTOTYPE_ONLY",
+  "nativeTestsExecuted": false,
+  "apiVersion": "3.7.0",
+  "browserLayoutCases": 128,
+  "largeTextCases": 120,
+  "largeTextFactor": 2,
+  "checks": [
+    {
+      "name": "15_scenes_plus_overview",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "normal_layouts_no_document_overflow",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "normal_buttons_no_horizontal_clipping",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "200_percent_layouts_no_document_overflow",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "200_percent_buttons_no_horizontal_clipping",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "student_lesson_is_read_only",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "student_view_only_published_context",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "route_change_focus_not_lost",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "destination_focus_visible_after_long_page",
+      "passed": true,
+      "detail": {
+        "top": 90.375,
+        "bottom": 123.96875,
+        "headerBottom": -420,
+        "height": 1100
+      }
+    },
+    {
+      "name": "unillustrated_staff_link_does_not_open_student_screen",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "modal_closes_with_escape",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "open_capture_hides_new_start",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "capture_retains_state_after_close_return",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_gps_transition_does_not_silently_drop_capture",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "pause_focus_moves_to_resume",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "resume_focus_moves_to_pause",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "waiting_has_no_measured_geometry",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "empty_pause_resume_stays_empty",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "empty_stop_stays_empty",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "stop_does_not_complete_lesson",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "bilan_has_no_default_grade",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_gps_composition_has_no_disabled_map",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "three_required_bilan_fields",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "draft_without_grade_contract",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "empty_constat_blocks_preview",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "preview_uses_edited_text_and_escapes_markup",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "dialog_label_and_initial_focus",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "dialog_tab_keeps_focus_inside",
+      "passed": true,
+      "detail": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "dialog_focus_returns_to_opener",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "draft_fields_retained_across_views",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "observed_grade_requires_context",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "draft_with_grade_and_context_contract",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "grade_context_in_exact_preview",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "removing_grade_encodes_absence_not_zero",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "cleared_grade_contract",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "draft_preview_rejects_overlong_text",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "overlong_draft_rejected_by_contract",
+      "passed": true,
+      "detail": [
+        "'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' is too long"
+      ]
+    },
+    {
+      "name": "unicode_draft_4000_codepoints_contract",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "unicode_draft_not_cut_at_2000_scalars",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "reload_does_not_claim_persistent_draft",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "all_course_dates_before_submission",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "pending_is_not_confirmation",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "unknown_keeps_same_pending_intent",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "pending_to_full_has_no_registration",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "refused_course_does_not_reserve_right",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "confirmed_course_moves_to_commitments",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "unsimulated_day_stays_labelled_21",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "only_confirmed_right_is_reserved",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "reconfirmed_time_visible",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "second_observation_position_matches_timestamp",
+      "passed": true,
+      "detail": [
+        575,
+        230
+      ]
+    },
+    {
+      "name": "second_observation_text_matches_time",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "gap_has_no_moving_position",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "gap_has_two_nonconnected_measured_paths",
+      "passed": true,
+      "detail": 2
+    },
+    {
+      "name": "gap_boundaries_remain_real_samples",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_future_observation_shown",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "next_from_start_goes_first_annotation",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "withdrawn_replay_contains_no_geometry",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "archive_preview_explains_not_account_deletion",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "archive_retains_query_filter",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "hidden_archived_selection_removed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "archive_focus_returns_to_search",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "filter_can_be_cleared",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "archive_is_visible_on_explicit_reselection",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "future_commitments_still_block_archive",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "empty_filter_has_no_stale_dossier",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "onboarding_memory_retained",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "form_text_genuinely_doubles",
+      "passed": true,
+      "detail": {
+        "normal": 17,
+        "large": 34
+      }
+    },
+    {
+      "name": "grade_labels_genuinely_double",
+      "passed": true,
+      "detail": {
+        "normal": 16,
+        "large": 32
+      }
+    },
+    {
+      "name": "school_choices_remain_demo_memory",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "malformed_hash_falls_back_safely",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_javascript_exceptions",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "no_external_prototype_requests",
+      "passed": true,
+      "detail": []
+    }
+  ],
+  "layoutCases": [
+    {
+      "scene": "overview",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 320,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "overview",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "overview",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 390,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "overview",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "overview",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 834,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "overview",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "overview",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "overview",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 1,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    }
+  ],
+  "largeTextLayouts": [
+    {
+      "scene": "seance",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 320,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 320,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 390,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 390,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 834,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 834,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 1440,
+      "theme": "light",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    },
+    {
+      "scene": "mes-lecons",
+      "width": 1440,
+      "theme": "dark",
+      "textScale": 2,
+      "body": true,
+      "content": true,
+      "badButtons": []
+    }
+  ],
+  "draftContractCases": [
+    {
+      "name": "draft_without_grade_contract",
+      "expectedValid": true,
+      "valid": true,
+      "errors": [],
+      "command": {
+        "operationId": "00000000-0000-4000-8000-000000000039",
+        "workedOn": "Anticipation des intersections et entrée dans les giratoires.",
+        "observationText": "L’observation a commencé plus tôt après un rappel verbal.",
+        "nextStep": "Commencer l’observation plus tôt et verbaliser la décision à l’arrêt.",
+        "observations": [],
+        "attachmentIds": []
+      }
+    },
+    {
+      "name": "draft_with_grade_and_context_contract",
+      "expectedValid": true,
+      "valid": true,
+      "errors": [],
+      "command": {
+        "operationId": "00000000-0000-4000-8000-000000000039",
+        "workedOn": "Travail UNIQUE à conserver.",
+        "observationText": "Constat saisi <script>nePasExecuter()</script> & exact.",
+        "nextStep": "Commencer l’observation plus tôt et verbaliser la décision à l’arrêt.",
+        "observations": [
+          {
+            "competencyId": "00000000-0000-4000-8000-000000000008",
+            "level": "GUIDED",
+            "context": "Après un rappel, à la seconde intersection."
+          }
+        ],
+        "attachmentIds": []
+      }
+    },
+    {
+      "name": "cleared_grade_contract",
+      "expectedValid": true,
+      "valid": true,
+      "errors": [],
+      "command": {
+        "operationId": "00000000-0000-4000-8000-000000000039",
+        "workedOn": "Travail UNIQUE à conserver.",
+        "observationText": "Constat saisi <script>nePasExecuter()</script> & exact.",
+        "nextStep": "Commencer l’observation plus tôt et verbaliser la décision à l’arrêt.",
+        "observations": [],
+        "attachmentIds": []
+      }
+    },
+    {
+      "name": "overlong_draft_rejected_by_contract",
+      "expectedValid": false,
+      "valid": false,
+      "errors": [
+        "'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' is too long"
+      ],
+      "command": {
+        "operationId": "00000000-0000-4000-8000-000000000039",
+        "workedOn": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "observationText": "Constat saisi <script>nePasExecuter()</script> & exact.",
+        "nextStep": "Commencer l’observation plus tôt et verbaliser la décision à l’arrêt.",
+        "observations": [],
+        "attachmentIds": []
+      }
+    },
+    {
+      "name": "unicode_draft_4000_codepoints_contract",
+      "expectedValid": true,
+      "valid": true,
+      "errors": [],
+      "command": {
+        "operationId": "00000000-0000-4000-8000-000000000039",
+        "workedOn": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+        "observationText": "Constat saisi <script>nePasExecuter()</script> & exact.",
+        "nextStep": "Commencer l’observation plus tôt et verbaliser la décision à l’arrêt.",
+        "observations": [],
+        "attachmentIds": []
+      }
+    }
+  ],
+  "passed": true,
+  "errors": [],
+  "limits": [
+    "No native Swift, real API, geolocation, APNs or school data.",
+    "200% CSS text is not native Dynamic Type or a complete WCAG audit.",
+    "Measured bounds do not exhaustively test all collisions; manual visual review remains necessary.",
+    "Edited demonstration values are in-memory only and reset on page reload."
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "version": "3.17",
+  "executedAtUTC": "2026-09-20T17:35:58.176180+00:00",
+  "scope": "DOCUMENTARY_SOURCE_INVARIANTS_NOT_PRODUCT_TESTS",
+  "passed": true,
+  "checks": [
+    {
+      "name": "49 screens with explicit rendering status and canonical components",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "17 current screens, 20 compositions and 23 any-illustrated",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "All 49 screens appear in component usage",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Single component-library definition",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Map delegates observationRow",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Map delegates field",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Map delegates sheetHeader",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Map delegates dialog",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Workspace uses shared observation, field and modal",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Both entries include same source files",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "API, tokens and business registry unchanged",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "Current compiled files regenerate identically",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "No external runtime scripts or fonts",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Negative: duplicate screen rejected",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Negative: unknown component rejected",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Negative: unexecuted native status enforced",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Negative: inflated coverage rejected",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Negative: a modified baseline would be rejected",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "errorCount": 0
+}

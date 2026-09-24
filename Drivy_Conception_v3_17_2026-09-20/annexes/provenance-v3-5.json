@@ -1,0 +1,433 @@
+{
+  "version": "3.5",
+  "baseArchive": "Drivy_Dossier_Conception_v3_4_2026-09-19.zip",
+  "baseArchiveSHA256": "aad169063997bb29b637b53a152e5307015c8791a4e6fdbbd0552efa448ab092",
+  "openapiSHA256": "b8e3a68b54cb94b32519bd46212a1b9e6a653661ba412ac7dfab7916c2bf9977",
+  "openapiContractVersion": "3.5.0",
+  "applicationCodeModified": false,
+  "nativeBuildExecuted": false,
+  "ownerDecision": "SWIFT_NATIVE_IPHONE_IPAD",
+  "newMarkdownFiles": [
+    "01-fonctionnalites-prevues.md",
+    "03-fonctionnel/compte-suppression-globale.md",
+    "06-gouvernance/audit-corrections-v3-5.md"
+  ],
+  "schemaCaseFiles": [
+    "cas-contrats-v3-1-adaptes-v3-5.json",
+    "cas-contrats-v3-2-adaptes-v3-5.json",
+    "cas-contrats-v3-5.json"
+  ],
+  "notes": [
+    "Constats et propositions distingués dans audit V3.5.",
+    "API documentaire complétée avant implémentation ; pas API déployée ni tests business exécutés."
+  ],
+  "textReferenceChanges": [
+    {
+      "file": "00-synthese.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "fc7a10c91d644363ce1cd94b3a6336d909257ae32a3f11e783884377f12b6d29",
+      "afterSHA256": "a24b76294c3a6264dd7b7aa00540b0aad19a29f5d8be87ca32535fe0c2af0aa2"
+    },
+    {
+      "file": "01-fonctionnalites-prevues.md",
+      "status": "ADDED",
+      "beforeSHA256": null,
+      "afterSHA256": "e98f15865d49950837eaa2255b453698bc0e4d91dd57d83aa7009341bb08d155"
+    },
+    {
+      "file": "01-recherche/audit-existant.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "49305cc16c611325108effdc7c157186286fcbbd0645ca92b0bb51d059094f94",
+      "afterSHA256": "3424fc6db38d15041fcf1cdd9b77338fd98c0ebfab5850fc24e95cfb25672a60"
+    },
+    {
+      "file": "01-recherche/auto-ecoles-suisses.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "734dc6f2e6bb65e5c34149e04945557591388664ca5cc1dc53f6c2680cba31cd",
+      "afterSHA256": "047c682aae2ad6843309b6e6a3ede72ca8657a59c4ede2f8a495198498352737"
+    },
+    {
+      "file": "01-recherche/benchmark.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "4c0a52d36c67ed15c7e39f1e14564acc6be23ba4aa2b5aaebfafc70cbbe4c10d",
+      "afterSHA256": "7b3d1a018baecec2050054f92d582e884e4dc447e09958828ed830e474101d6f"
+    },
+    {
+      "file": "01-recherche/inventaire-decisions.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "dc839a74efd6354261f7530354969efc840d8c31a385efdb5f9775df877d0b01",
+      "afterSHA256": "4f5c676f89a16b0b3c301b8682653719ae2ae8ad14daa3ea0dde32ca4801ae93"
+    },
+    {
+      "file": "01-recherche/ui-ux-mobile-etat-art.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "ac51aa909cdeae8cc9fe639fb867b301f03466ef23c1e447e315e9a935f33070",
+      "afterSHA256": "dc90403752e13247804c7bb069043dcdf8ec0ef6ef60d9c8912cb6e1afeba8ff"
+    },
+    {
+      "file": "01-recherche/vision-perimetre.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "4d768444664a8a32030878295f357b5cf059f9207007bef36df481f354ea64f2",
+      "afterSHA256": "64da73e35584eb1e0633bf4ca099d33c2d62c2ec61308b2f84e0d5648e4e46ee"
+    },
+    {
+      "file": "01-recherche/web-tablette-onboarding.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "4c41853d533cc413ed0f689437cabcb6e11e1bfbda6ea4c71fe8acb4c3eb5701",
+      "afterSHA256": "447fcc8f96712e2aa78a73cad21569fe01554b99fb421f1455f721e5b3831b15"
+    },
+    {
+      "file": "02-experience/architecture-information.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "e671943551df1a80dac5aaef9a5969db905f8ec121f29332b3fee41a51837364",
+      "afterSHA256": "60e71bac15b85e7f9d743d3cd00c4aec91731adc931b171e4fe0032ba2f9a3b5"
+    },
+    {
+      "file": "02-experience/design-system.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "3e14b1b09f5f2353c249c4466172f0ed3434983fb6a4968f755cbb37fa009191",
+      "afterSHA256": "c11362c823d015954f99d838d66da8c37c0fa64cba274967e10e555a10803d2c"
+    },
+    {
+      "file": "02-experience/directions-artistiques.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "57ecb3c6960faec7972702218b0d8f078d594d5e79d128ace6e18666e1237c59",
+      "afterSHA256": "32724a9966b34f095ed6a8807c6c8dd45e83fa45d402db9a85c0a781f58290a9"
+    },
+    {
+      "file": "02-experience/ecrans.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "100d1831f6b5a4f53d07e50c5a6cf2062b7eaa0d89b103c08cb9449f2413cf8f",
+      "afterSHA256": "251831c223ff84e2a7691394144eeab85f94fab6ee86391a7fa44e463c0b69a3"
+    },
+    {
+      "file": "02-experience/parcours.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "b6cfd9407c15bf3db1e52e281ae4f34cb4ba4ca59559bf3b38f71bb1bc54f231",
+      "afterSHA256": "9d7160961d3bd07fbf3896d9916088c483173124038b46237e040c626ce55482"
+    },
+    {
+      "file": "02-experience/patterns-mobile-parcours.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "2dc068566ead38c024d1673812adee932028318fc236fa54b765e7e1d5ac82bc",
+      "afterSHA256": "ffa7120203ce602e6c9a44a90a44f069cfa9316f2d4751a86f2dcf2ec9233bc7"
+    },
+    {
+      "file": "02-experience/plateformes-tablette-web.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "431b10098691d11e0bc3b0900fc8b6fc347ef83b365692220ac7e05d64b450fc",
+      "afterSHA256": "bcf4261061935bbe086d89aef2dd3e15b985500cf8215c9f84eacf1423083641"
+    },
+    {
+      "file": "02-experience/qualite-ui-ux-anti-slop.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "7374cce018128e9607f84e9a59e394c2505b7364c453e2d917e68e4fbfb2e4b4",
+      "afterSHA256": "48d96fac33f61a86aa7dcfed3513bf0e012220cf6b0cbbe2da93948ccc1b8835"
+    },
+    {
+      "file": "02-experience/wireframes.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "a3eb0e4fb58b827823796e30a913ff2dd8bc78b6bf4d983e0ee744ffacbbc4e6",
+      "afterSHA256": "c65f299d02c315db6449c88aebb5b64da8dd2f6782f3a78b200daab08c651674"
+    },
+    {
+      "file": "03-fonctionnel/bilans-documents.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "1a570b58ddfa715458b2be40d5415f9c755888fd41ee05714e908690b830b320",
+      "afterSHA256": "211d4e9feb8e95894b10eb1f48ba573bee50cb3b7f98b522eb4b69bd6644ddbb"
+    },
+    {
+      "file": "03-fonctionnel/calendrier-notifications.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "a81d0d38ea27969594071b7e9879e2b5cfcfa66829974e241bd88d429e30d077",
+      "afterSHA256": "0226299373997f2ebdfd0b84bf3c04dc874614eac77c6cb0d049e1de3121f5ff"
+    },
+    {
+      "file": "03-fonctionnel/catalogue-packs.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "97cf0da8be742c4a54f907855f1133c926dea29e5b0ceba067bd530d74ca745b",
+      "afterSHA256": "77d84d006121e541d12369b9a7ec5f659121441824c591fe8be09144aee0be09"
+    },
+    {
+      "file": "03-fonctionnel/compte-suppression-globale.md",
+      "status": "ADDED",
+      "beforeSHA256": null,
+      "afterSHA256": "8f2fc01b800e8f24b4b7da2f7e3fb0e4b4c1570cf1d46f8f60a1e60b44168d60"
+    },
+    {
+      "file": "03-fonctionnel/cours-collectifs.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "869016b4b9c7fdb1f379961a7cee7fbc10f3f75238284826282d35538b7b3674",
+      "afterSHA256": "6473fb3afd7dbb9282ac8e89b918cd3101631ef106428487c61f8976059c008f"
+    },
+    {
+      "file": "03-fonctionnel/extensions.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "f82f60c3e4f5c635bb213f0df2db0194f670bd016df16ebbad6d7b5b8bf2fad4",
+      "afterSHA256": "d81466004d728f960bd3dc0fa5b4e3bca605d6c105b6bcf4ab8cbdac0cd5dc22"
+    },
+    {
+      "file": "03-fonctionnel/gestion-web-archivage.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "68c69297fdf6cdba92b745df0245996c831da857d87ab2b7d4d51ff8dd666aa9",
+      "afterSHA256": "c2d51a1bb1b9cbf38d8fdb771b2d0864e36a2519dd48e87730ba7d367aea4158"
+    },
+    {
+      "file": "03-fonctionnel/gps-replay.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "9ef793a6b9a276682907596fb8bd2026377e9c302a4dbee1c5d6d503a4910dbe",
+      "afterSHA256": "c2ba49e284324db9d498918dd45257ebc83c9d4cb1d838162d2283466ba0bb2f"
+    },
+    {
+      "file": "03-fonctionnel/hors-ligne-vie-privee.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "f291cca14ab03e340e37bd7110aed1b211c41077b526aca0de76d25b3c4238e4",
+      "afterSHA256": "74cd532ea3ca8280824ac50b10375e5e9c40b687a6b13a1469ef7aae2c059046"
+    },
+    {
+      "file": "03-fonctionnel/identites-formations.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "ccf4ae2d8f02807bab93516d35ed4cf421d690f4d4aa7b46e4b7e09859cf37fa",
+      "afterSHA256": "b6cd2e24a049a16a63e50687a6c6d9598bc93723dfb45385981dc6d91b77b0eb"
+    },
+    {
+      "file": "03-fonctionnel/onboarding.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "806bd08d4d3f34c79e2476eda6388caf1274422a4372175a1b6f67f194981195",
+      "afterSHA256": "d59f56b269a120bdf31b6d5ad3380e3aa65a93e2cb0d3e1aa4acff882d73ea00"
+    },
+    {
+      "file": "03-fonctionnel/paiements-communications.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "bfef813e820928aa1276f8998aff9466cf14065181848dcab255d2ce95f98493",
+      "afterSHA256": "a1790186a1c1e50648fc4677344d28685857fe444eb7eab2bd43130d006f0330"
+    },
+    {
+      "file": "03-fonctionnel/planning-lecons.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "c40ffa03889b4b57fd0ef077a2bc44148a78a555eece3932c983a6e0d32e21bb",
+      "afterSHA256": "2bdd0f9d72542224fa4856ba86edc7ab8b5492f8b2dc04c883100d4fa711f132"
+    },
+    {
+      "file": "03-fonctionnel/regles-etats.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "ed21f83e34c1ee5109b022d92477cbcc84506f5adcea130bc66c71ef2119675a",
+      "afterSHA256": "0ebeff6c395b8e7688b160679c0cbf75d6be8347a28556b985394ae31381b802"
+    },
+    {
+      "file": "03-fonctionnel/roles-permissions.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "b3c28e1a4dc18b06d42abbb9e2ee85f2a35bf16f2c46a03330699fb2ada13569",
+      "afterSHA256": "2530aa59c016369b65a843b515fafd27ccbc0d8832b064b2d6b25bd854a34b16"
+    },
+    {
+      "file": "03-fonctionnel/statistiques.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "19d092efc8dd96ec817b13ab7b95666b532db235a4490a91b55e16bb0d876797",
+      "afterSHA256": "77169e16f70ad6cf0f2692170a5a2874cde8740ab5a484b604e76d9181b108aa"
+    },
+    {
+      "file": "04-technique/api.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "1a957871c8d6824ab37ae924d79bfed489d2794cf32019288b4e26870518cecc",
+      "afterSHA256": "8d7e6eab407bd2576cce7699dc65336a5fbb49eed252ca5069bbdf1f80abd76b"
+    },
+    {
+      "file": "04-technique/architecture-client-swift.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "0bdb1a5a50fabee96b69d24010ada8c0c6f23fb4d74d156729ea18f64de7ffe2",
+      "afterSHA256": "55517640e6d57aa90dbe7840daf8bcb47e2d244bea1354c9c4f8ae015a6d19ce"
+    },
+    {
+      "file": "04-technique/architecture-decisions.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "249239df80823fe6d19600f6726055ec95862e8dc50f12af9420e36791b6dd5c",
+      "afterSHA256": "201861f86d03a21073c091852aa8577124fdfb5c443c18caaa73f5262baa342f"
+    },
+    {
+      "file": "04-technique/fichiers-temps-communications.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "7784275cc134eed63d802e6f1e3265eb615394ff697eb38fcc5519488776b878",
+      "afterSHA256": "6e8e307a64124cc67661a33cc5aa2582fc40ec2bf8a4713ca2823b9a6c160b00"
+    },
+    {
+      "file": "04-technique/integration-ios-ipados.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "d026b99a747af37ee59939ac4969bcc8a93c7aa9c10c88c80851b1b2caf16e38",
+      "afterSHA256": "56e119e77a312f12974c6438391eae45c0dfc5d0fd7f6eba62df3c1cd6d4a6d3"
+    },
+    {
+      "file": "04-technique/integration-mobile-transverse.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "add529a01ac91a7c9185fe176d34b7cebe0e1e03b138cc7288ac02d0b2628b5b",
+      "afterSHA256": "87ec214df99f77734a2bd85fda0870fcafe532bb06d0308046ce64ba1b19268a"
+    },
+    {
+      "file": "04-technique/modele-donnees.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "a8b933253a0ad6b47acaa7fb2132fb9f676381da9aa33e485239031bd9b9a13d",
+      "afterSHA256": "77b14d4c301247bdcb0cdb15b1fac923ae62a06d39654395a01c85e974ccf547"
+    },
+    {
+      "file": "04-technique/openapi.yaml",
+      "status": "MODIFIED",
+      "beforeSHA256": "cbe018b32bc6920262f6f80902c2373f51db2dc547a6985bace40238a02a9f9e",
+      "afterSHA256": "b8e3a68b54cb94b32519bd46212a1b9e6a653661ba412ac7dfab7916c2bf9977"
+    },
+    {
+      "file": "04-technique/preparation-android.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "dbf0f12b8b0e937920139fb0720d9680227ae495890bc9a8fafa4297f5ace68f",
+      "afterSHA256": "3fb192b63b99b8c99a532db20e62d42f73b8b33caeb797decf4b1884800d223c"
+    },
+    {
+      "file": "04-technique/securite-vie-privee.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "d0dbd9cfa4a287822b7c33b0fb548b6445fffebedb536edc4603a604f294fa09",
+      "afterSHA256": "f9f75c6c278d2877ed132be500a69f1fc75cdfa1731a7f218a756871dfe90186"
+    },
+    {
+      "file": "04-technique/synchronisation.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "09effeb6033396486673548750c0c56f979a732fb29e34b509789e3976686cf1",
+      "afterSHA256": "77c3371997a3fe2764d943ed524c26944d1f818fce6f4b1d43ba6fe27207036e"
+    },
+    {
+      "file": "04-technique/transactions-v2.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "ecaf562db35b026e2adc707235c475f53d641bca5e597ff2432ef634b50b1a9e",
+      "afterSHA256": "ecad9900f9fd27b82cb669479c12719313434dc6487487676c8b12ba44c1e2d1"
+    },
+    {
+      "file": "04-technique/transactions-v3.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "1f479b781e34017d18643becc3de52633acbb5117d69395e7998b0d48239996d",
+      "afterSHA256": "90c65bc737f44a31552ded200a8fb8eddcc78a5eefddc78f3ab5f3f17e079e59"
+    },
+    {
+      "file": "05-realisation/deploiement-exploitation.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "17878531e98fa75d5cf6469fa2911f5d03c04f4276121547cce4377dd841858a",
+      "afterSHA256": "7e7d9b61fe146b69340a5b80516f1de33c9a93e4d49ca1a1facdf836bc889af2"
+    },
+    {
+      "file": "05-realisation/migration.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "88cd5d049a78e2b26638fa02a37e1d549f409fcf3212f6bf529fbfb322c8e63a",
+      "afterSHA256": "3ad672436fa9135d2057568217392ea5dd51671a50933fa2892e0ca597b76d8c"
+    },
+    {
+      "file": "05-realisation/qualification-mobile-ui-ux.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "c861b986637d08c468052c4c88d59e5477a626fb881914360f7bc1fa3a2951c1",
+      "afterSHA256": "3152967d48d3f94d1dafd7c67bb434dc08dfdfb1fda343cd793f8f7601fb51a6"
+    },
+    {
+      "file": "05-realisation/roadmap-backlog.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "56aa320199c94df976b05df3880b7a44b87553aad4a761f594e4a16b3cd0f192",
+      "afterSHA256": "024a4f3d3967af224c2950cdd8cd0690f441a6d43b0c605494e0fc2a2ef52b17"
+    },
+    {
+      "file": "05-realisation/tests-recette.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "042b4afe914912b25185e0a00e1445119568b5c448721c18120d57add9078e1e",
+      "afterSHA256": "17cb34fd4543941c9d6ad51d64dd8fa3a40d688fae429a250fb1794e277ec7f8"
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-5.md",
+      "status": "ADDED",
+      "beforeSHA256": null,
+      "afterSHA256": "0538ef8e3f3bb74a0ed33150c16292f454e05cc1307ef2b11dff89500103390f"
+    },
+    {
+      "file": "06-gouvernance/glossaire-decisions-questions.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "6ea0643cafa723e272c06d85282bc2514bec0f04811ad8c1fef23f9493c63ea2",
+      "afterSHA256": "8ed98630e339b0e29d036ff6240b223d0aa672c28c6173b67b8ee4fab93d7a95"
+    },
+    {
+      "file": "06-gouvernance/revue-coherence.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "c55100aab33c82b8e1ede59a690de4520510ce5c17669783e4c11e2fe1b48e9f",
+      "afterSHA256": "2454bdd771a3c8533fbdb62a4580cc84e69256e25f3e2e22dd1be693656b9ff1"
+    },
+    {
+      "file": "06-gouvernance/sources.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "f731bffc05cdbe9bc1f69a9d05d097fdda879618d24a41cde1195dd9fc9b9e61",
+      "afterSHA256": "166693860e6f27a47f62ed3d92201cd2467dab11d48c85452a659d9fb9ff9df6"
+    },
+    {
+      "file": "06-gouvernance/tracabilite.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "05932a36c3f5b62d0e92275eec0fe133eb3d90d2a5528f59c17702caa780b6cd",
+      "afterSHA256": "b635d354c7631c9712502b2f8938d0b77307e663f3d3811212a4b5e0d39392dd"
+    },
+    {
+      "file": "README.md",
+      "status": "MODIFIED",
+      "beforeSHA256": "8bb857474e6af421eed0ec5ac9b61c179a8efba541754ba72896725d7562eb62",
+      "afterSHA256": "7ab34fc42ab4eeeedbb35ab8e87311ff350ae51e869ae62e7cf10d8e62e3b69c"
+    },
+    {
+      "file": "annexes/cas-contrats-v3-5.json",
+      "status": "ADDED",
+      "beforeSHA256": null,
+      "afterSHA256": "ca75ed75dd239640fd73e0f873a70325d83bdcef815a455603909c419aa70c39"
+    },
+    {
+      "file": "annexes/generer-lecteur.py",
+      "status": "MODIFIED",
+      "beforeSHA256": "405cba75c5f05f18aafd138aa6f8d887ffef602d2fdd9dc5b0658ab75a5232f8",
+      "afterSHA256": "060e8c0a5304dec4c8acbc4b82c518268cce772015ff315a7c3124038c2cf8b4"
+    },
+    {
+      "file": "annexes/regles-v3.json",
+      "status": "MODIFIED",
+      "beforeSHA256": "5a77bd3de8623660e543496516e34c44847ad92fdee81d043758428c18007126",
+      "afterSHA256": "f6d885a793c2d9abaf5559b4e5a9a7cd43a34572c899f624ad5f841b5c948ab0"
+    },
+    {
+      "file": "annexes/traceabilite.json",
+      "status": "MODIFIED",
+      "beforeSHA256": "e6612267852d401c4ed257842d71fb7dfb9e5ef090706529f943a677d530d807",
+      "afterSHA256": "5c5bfe79eeffbe48878fac8ee93401b82d6fa35b1f09b25276725453a7579a24"
+    },
+    {
+      "file": "annexes/verifier-documentation.py",
+      "status": "MODIFIED",
+      "beforeSHA256": "d1e50801655b2289ab202d332ddd78526c3d4a0d94324c50ad7ca6aa157495a6",
+      "afterSHA256": "5323458583c039c37df66ce429ba79a74ab0361e380fa2bdb499acd68a4074d3"
+    },
+    {
+      "file": "annexes/verifier-lecteur.py",
+      "status": "MODIFIED",
+      "beforeSHA256": "3ad6be4fb570b62ac05f4a67ac64751a86332354c9047f488be65a25bb7afa96",
+      "afterSHA256": "a9bfcc268dcbd3bddd0c8b2d1eb21a1b678c2e490621ac399a382bddd94a9d50"
+    },
+    {
+      "file": "annexes/verifier-mobile-v3-5.py",
+      "status": "ADDED",
+      "beforeSHA256": null,
+      "afterSHA256": "fb661dc358e03df6b219bbd7bca7a76f13ee31198f214364c7b1eba9eea4a2f8"
+    },
+    {
+      "file": "annexes/verifier-swift-v3-5.py",
+      "status": "ADDED",
+      "beforeSHA256": null,
+      "afterSHA256": "993ad38662ce19a2565a2d6191a064af7469bcc6fb1df3653483bb8175b8ac7f"
+    },
+    {
+      "file": "annexes/verifier-v3-5.py",
+      "status": "ADDED",
+      "beforeSHA256": null,
+      "afterSHA256": "77929571e0a57cad704b4dca7e596eb28a6c640ebf183dba841ccdf297167658"
+    }
+  ],
+  "markdownFiles": 63,
+  "sourcesRechecked": [
+    "S106",
+    "S107"
+  ]
+}

@@ -1,0 +1,2855 @@
+{
+  "version": "3.17",
+  "scope": "HTML workspace + inherited map regression, not native",
+  "passed": true,
+  "interactionChecks": 55,
+  "layoutCombinations": 256,
+  "checks": [
+    {
+      "name": "Home is default application entry",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Staff tabs follow canonical IA",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Home enters existing map without reconstructing observations",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Leaving map preserves capture and added observation",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Search matches accents and keeps input focus",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Tab restores prior detail and person",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Back restores search text and result",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Empty search is not a network error",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Formation filter has two matches",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Filter dialog closes and restores focus",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Training A does not borrow B lesson or reports",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Training with no report stays empty",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Review does not reserve or mutate a lesson",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Pause overlap yields conflict without reservation",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Conflict preserves form values",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Explicit confirmation adds one lesson and updates agenda",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Leaving touched planning requires a consequence choice",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Discarding keeps original reservation",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Offline reservation visibly unavailable",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Connection change preserves draft fields",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Form error associated to a permanent label",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Injected last-minute conflict gives no fake success",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Preview does not publish",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Preview shows only selected report observation",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Live session events are not borrowed by completed lesson report",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "User text escaped rather than parsed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Explicit publication confirmation names recipient",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Publication is an explicit copied projection",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Publishing does not alter private live events",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Subsequent draft edits cannot mutate shared snapshot",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Offline draft saves locally and not publicly",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Offline publish is disabled with reason",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Failed local save retains text and stays unsaved",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Incomplete draft cannot publish",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Unanalysed document has no preview",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Ready fixture has a preview",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Upload simulation never auto-validates permit",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Workspace sheet traps keyboard focus",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Underlying content inert in workspace sheet",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Escape closes and returns to originating action",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Account appearance uses SAME map tokens",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Appearance persists across workspace and map",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Learner canonical tabs",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Learner cannot enter staff report route via router",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Learner has no staff live controls",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Shared read has no publish or draft tools",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Learner training switch has isolated empty state",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Page error distinct from empty and retryable",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Page retry restores fixture rather than fabricated zero",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Workspace layout matrix",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "Agenda uses canonical appointment renderer",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Dossier uses canonical training selector",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Report uses common observation row",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "Map observation list uses the SAME observation component",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "No Javascript exceptions",
+      "passed": true,
+      "detail": []
+    }
+  ],
+  "matrix": [
+    {
+      "route": "home",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "home",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "agenda",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "students",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "student",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "lesson",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "planning",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "report",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "preview",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "shared",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "documents",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "account",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "notifications",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "school",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "learner-agenda",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "phone",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "phone",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "phone",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "small",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "small",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "small",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "small",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "tablet-compact",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "tablet-compact",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "tablet",
+      "theme": "light",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "normal",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    },
+    {
+      "route": "progress",
+      "size": "tablet",
+      "theme": "dark",
+      "scale": "large",
+      "horizontal": false,
+      "undersized": [],
+      "clipped": [],
+      "navVisible": true
+    }
+  ],
+  "environment": {
+    "python": "3.13.5",
+    "system": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "browser": "/usr/bin/chromium",
+    "loading": "set_content; file URL separately blocked by administrator"
+  },
+  "native": "NOT_EXECUTED",
+  "server": "NOT_EXECUTED",
+  "userTests": "NOT_EXECUTED"
+}

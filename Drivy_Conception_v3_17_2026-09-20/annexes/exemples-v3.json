@@ -1,0 +1,205 @@
+{
+  "status": "Fictitious specification examples; no live data",
+  "examples": [
+    {
+      "schema": "EnrollCourseCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000001",
+        "learnerId": "00000000-0000-4000-8000-000000000002",
+        "acceptedOfferRevision": 2,
+        "commercialSelection": {
+          "mode": "ENTITLEMENT",
+          "serviceProductVersionId": "00000000-0000-4000-8000-000000000003",
+          "quantity": 1,
+          "entitlementLotId": "00000000-0000-4000-8000-000000000004",
+          "acceptedTermsVersionId": "00000000-0000-4000-8000-000000000005"
+        },
+        "acceptedOccurrenceIds": [
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000008",
+          "00000000-0000-4000-8000-000000000009"
+        ],
+        "source": "SELF",
+        "requestEvidenceNote": null
+      }
+    },
+    {
+      "schema": "StartCaptureCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000010",
+        "deviceId": "00000000-0000-4000-8000-000000000011",
+        "choiceId": "00000000-0000-4000-8000-000000000012",
+        "choiceVersion": 1,
+        "noticeVersionId": "00000000-0000-4000-8000-000000000013",
+        "explicitStartConfirmed": true,
+        "deviceAssessmentId": "00000000-0000-4000-8000-000000000031"
+      }
+    },
+    {
+      "schema": "RecordingChoiceCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000014",
+        "lessonId": "00000000-0000-4000-8000-000000000015",
+        "status": "REFUSED",
+        "noticeVersionId": "00000000-0000-4000-8000-000000000013",
+        "source": "SELF"
+      }
+    },
+    {
+      "schema": "AttendanceCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000016",
+        "status": "PRESENT",
+        "evidenceDocumentIds": [
+          "00000000-0000-4000-8000-000000000017"
+        ],
+        "reason": "Présence constatée par le formateur ; exemple fictif."
+      }
+    },
+    {
+      "schema": "PurchaseCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000018",
+        "learnerId": "00000000-0000-4000-8000-000000000002",
+        "offerVersionId": "00000000-0000-4000-8000-000000000019",
+        "acceptedOfferVersion": 1,
+        "selectedOptionKeys": [],
+        "acceptedTermsVersionId": "00000000-0000-4000-8000-000000000005",
+        "rightsActivationMode": "AFTER_FULL_PAYMENT",
+        "acceptanceSource": "IN_PERSON",
+        "reason": "Vente d’exemple, données fictives."
+      }
+    },
+    {
+      "schema": "CreateLessonCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000020",
+        "trainingId": "00000000-0000-4000-8000-000000000021",
+        "instructorMembershipId": "00000000-0000-4000-8000-000000000022",
+        "plannedStart": "2026-10-05T12:00:00Z",
+        "plannedEnd": "2026-10-05T12:45:00Z",
+        "timeZone": "Europe/Zurich",
+        "meetingPoint": "Lieu fictif",
+        "agreedPriceCents": 0,
+        "bufferMinutes": 15,
+        "policyVersionId": "00000000-0000-4000-8000-000000000023",
+        "commercialSelection": {
+          "mode": "ENTITLEMENT",
+          "serviceProductVersionId": "00000000-0000-4000-8000-000000000003",
+          "quantity": 1,
+          "entitlementLotId": "00000000-0000-4000-8000-000000000004",
+          "acceptedTermsVersionId": "00000000-0000-4000-8000-000000000005"
+        }
+      }
+    },
+    {
+      "schema": "Account",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000024",
+        "ownerType": "PURCHASE",
+        "ownerId": "00000000-0000-4000-8000-000000000025",
+        "version": 1,
+        "currency": "CHF",
+        "plannedPriceCents": 146000,
+        "chargeCents": 146000,
+        "netReceivedCents": 0,
+        "balanceCents": 146000,
+        "charges": [
+          {
+            "id": "00000000-0000-4000-8000-000000000026",
+            "schoolId": "00000000-0000-4000-8000-000000000027",
+            "version": 1,
+            "accountId": "00000000-0000-4000-8000-000000000024",
+            "kind": "INITIAL",
+            "amountSignedCents": 146000,
+            "reason": "Vente du pack d’exemple, prix total déjà remisé."
+          }
+        ],
+        "payments": []
+      }
+    },
+    {
+      "schema": "AdministrativeProfileCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000101",
+        "firstName": "Élève",
+        "lastName": "Fictif",
+        "birthDate": null,
+        "postalAddress": null,
+        "profilePhotoDocumentId": null,
+        "policyVersionId": "00000000-0000-4000-8000-000000000102"
+      }
+    },
+    {
+      "schema": "SchoolActivationCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000103",
+        "expectedConfigurationVersion": 4,
+        "reviewAcknowledged": true
+      }
+    },
+    {
+      "schema": "TrainingRequestCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000104",
+        "offeringVersionId": "00000000-0000-4000-8000-000000000105"
+      }
+    },
+    {
+      "schema": "ArchivePreviewCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000106",
+        "selections": [
+          {
+            "learnerId": "00000000-0000-4000-8000-000000000107",
+            "version": 3
+          }
+        ]
+      }
+    },
+    {
+      "schema": "ArchiveCommitCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000108",
+        "previewId": "00000000-0000-4000-8000-000000000109",
+        "reason": "Fin de relation courante ; exemple fictif",
+        "acknowledgedWarningCodes": [
+          "UNUSED_ENTITLEMENTS"
+        ]
+      }
+    },
+    {
+      "schema": "ManagementExportCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000110",
+        "kind": "STUDENT_LIST",
+        "listFilters": {
+          "status": "ACTIVE",
+          "trainingStatus": null,
+          "categoryCode": null,
+          "instructorMembershipId": null,
+          "requiresAction": null
+        },
+        "metricFilters": null,
+        "fromDate": null,
+        "toDateExclusive": null,
+        "columnsVersion": "STUDENTS_MINIMAL_V1"
+      }
+    },
+    {
+      "schema": "MetricValue",
+      "value": {
+        "id": "M06",
+        "status": "AVAILABLE",
+        "value": 147000,
+        "unit": "CHF_CENTS",
+        "numerator": null,
+        "denominator": null,
+        "missingCount": 0,
+        "explanation": "Encaissements enregistrés nets fictifs ; pas bénéfice."
+      }
+    }
+  ],
+  "version": "3.2"
+}

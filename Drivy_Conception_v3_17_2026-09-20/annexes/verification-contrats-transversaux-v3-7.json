@@ -1,0 +1,19 @@
+{
+  "status": "CROSS_CONTRACT_DOCUMENTARY_ONLY",
+  "productCodeExercised": false,
+  "version": "3.7.0",
+  "checks": {
+    "operations": 201,
+    "successBranches": 318,
+    "ordinaryLimitParameters": 35,
+    "ordinaryPageSchemas": 35,
+    "pendingContracts": 116
+  },
+  "errorCount": 0,
+  "errors": [],
+  "passed": true,
+  "limitations": [
+    "Enveloppes, bornes et présence de clauses seulement ; les règles de service et transactions ne sont pas exécutées.",
+    "Pas de validation intégrale du méta-schéma OpenAPI."
+  ]
+}

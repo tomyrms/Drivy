@@ -1,0 +1,41 @@
+{
+  "version": "3.14",
+  "kind": "FICTITIOUS_CANVAS_NOT_GEOGRAPHIC",
+  "baseTime": "2026-09-21T07:00:00.000Z",
+  "defaultSecond": 1490,
+  "captureId": "00000000-0000-4000-8000-000000000150",
+  "segmentId": "00000000-0000-4000-8000-000000000151",
+  "themes": [
+    {
+      "id": "00000000-0000-4000-8000-000000000108",
+      "label": "Priorité à droite",
+      "icon": "priority"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000111",
+      "label": "Stationnement",
+      "icon": "parking"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000112",
+      "label": "Signalisation",
+      "icon": "sign"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000109",
+      "label": "Giratoire",
+      "icon": "roundabout"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000113",
+      "label": "Observation",
+      "icon": "eye"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000110",
+      "label": "Anticipation",
+      "icon": "anticipate"
+    }
+  ],
+  "meaning": "Identifiants, catégories et ancre de démonstration. Pas de coordonnées GPS, serveur, stockage durable ou publication. Les points x/y proviennent du replay fictif."
+}

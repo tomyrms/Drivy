@@ -1,0 +1,296 @@
+import Foundation
+import SQLCipher
+
+// La connexion C reste dans cet acteur ; son propriétaire privé la ferme à sa libération.
+actor SQLCipherSessionStore: SessionStore {
+    private let database: CipherConnection
+    private let url: URL
+    private let protectFiles: Bool
+
+    static func openDefault() throws -> SQLCipherSessionStore {
+        let url = try ProtectedStorage.directory().appendingPathComponent("sessions.sqlite")
+        let exists = FileManager.default.fileExists(atPath: url.path)
+        let key = try DeviceKeyStore.loadOrCreate(databaseExists: exists)
+        return try SQLCipherSessionStore(url: url, key: key)
+    }
+
+    // Les clés et chemins injectés servent aux tests, jamais à un stockage alternatif de production.
+    init(url: URL, key: Data, protectFiles: Bool = true) throws {
+        guard key.count == 32 else { throw SessionError.keyUnavailable }
+        self.url = url
+        self.protectFiles = protectFiles
+        if protectFiles { try ProtectedStorage.protectDatabaseFiles(at: url) }
+        let database = try CipherConnection(url: url, key: key)
+        let version = try database.integer("PRAGMA user_version")
+        guard version <= 1 else { throw SessionError.unsupportedSchema }
+        if version == 0 {
+            try database.transaction {
+                try database.execute("""
+                    CREATE TABLE session (
+                        id TEXT PRIMARY KEY NOT NULL, started_at REAL NOT NULL,
+                        state TEXT NOT NULL CHECK(state IN ('active','completed','interrupted')),
+                        data BLOB NOT NULL
+                    );
+                    CREATE UNIQUE INDEX one_active_session ON session(state) WHERE state='active';
+                    CREATE TABLE point (
+                        id TEXT PRIMARY KEY NOT NULL, session_id TEXT NOT NULL REFERENCES session(id),
+                        timestamp REAL NOT NULL, data BLOB NOT NULL,
+                        UNIQUE(session_id, timestamp)
+                    );
+                    CREATE INDEX point_order ON point(session_id,timestamp);
+                    CREATE TABLE observation (
+                        id TEXT PRIMARY KEY NOT NULL, session_id TEXT NOT NULL REFERENCES session(id),
+                        observed_at REAL NOT NULL, data BLOB NOT NULL
+                    );
+                    CREATE INDEX observation_order ON observation(session_id,observed_at);
+                    PRAGMA user_version=1;
+                    """)
+            }
+        }
+        if protectFiles { try ProtectedStorage.protectDatabaseFiles(at: url) }
+        self.database = database
+    }
+
+    func sessions() throws -> [DrivingSession] {
+        try database.records("SELECT data FROM session ORDER BY started_at DESC", as: DrivingSession.self)
+            .map { try hydrated($0) }
+    }
+
+    func session(id: UUID) throws -> DrivingSession { try hydrated(metadata(id)) }
+
+    func create(_ session: DrivingSession) throws {
+        guard session.state == .active, session.points.isEmpty, session.observations.isEmpty else {
+            throw SessionError.sessionClosed
+        }
+        try write {
+            guard try database.integer("SELECT COUNT(*) FROM session WHERE state='active'") == 0 else {
+                throw SessionError.sessionAlreadyActive
+            }
+            try database.execute("INSERT INTO session(id,started_at,state,data) VALUES(?,?,?,?)",
+                [.text(session.id.uuidString), .number(session.startedAt.timeIntervalSince1970),
+                 .text(session.state.rawValue), .blob(try JSONEncoder().encode(session))])
+        }
+    }
+
+    func append(_ point: RecordedPoint, to sessionID: UUID) throws {
+        try write {
+            let session = try metadata(sessionID)
+            guard session.state == .active, session.usesGPS else { throw SessionError.sessionClosed }
+            guard point.latitude.isFinite, point.longitude.isFinite, point.accuracy.isFinite,
+                  (-90...90).contains(point.latitude), (-180...180).contains(point.longitude),
+                  (0...100).contains(point.accuracy), point.timestamp >= session.startedAt,
+                  point.receivedAt >= point.timestamp.addingTimeInterval(-2) else { throw SessionError.invalidPoint }
+            let existing = try database.records("SELECT data FROM point WHERE id=? AND session_id=?",
+                [.text(point.id.uuidString), .text(sessionID.uuidString)], as: RecordedPoint.self)
+            if let first = existing.first {
+                guard first == point else { throw SessionError.invalidPoint }
+                return
+            }
+            try database.execute("INSERT INTO point(id,session_id,timestamp,data) VALUES(?,?,?,?)",
+                [.text(point.id.uuidString), .text(sessionID.uuidString),
+                 .number(point.timestamp.timeIntervalSince1970), .blob(try JSONEncoder().encode(point))])
+        }
+    }
+
+    func append(_ observation: LessonObservation, to sessionID: UUID) throws {
+        try write {
+            let session = try metadata(sessionID)
+            guard session.state == .active else { throw SessionError.sessionClosed }
+            guard observation.note.count <= 1_000, observation.observedAt >= session.startedAt else {
+                throw SessionError.invalidObservation
+            }
+            if let anchor = observation.anchorPointID {
+                let points = try database.records("SELECT data FROM point WHERE id=? AND session_id=?",
+                    [.text(anchor.uuidString), .text(sessionID.uuidString)], as: RecordedPoint.self)
+                guard let point = points.first, point.timestamp <= observation.observedAt,
+                      observation.observedAt.timeIntervalSince(point.timestamp) <= 15 else {
+                    throw SessionError.invalidObservation
+                }
+            }
+            let existing = try database.records("SELECT data FROM observation WHERE id=? AND session_id=?",
+                [.text(observation.id.uuidString), .text(sessionID.uuidString)], as: LessonObservation.self)
+            if let first = existing.first {
+                guard first == observation else { throw SessionError.invalidObservation }
+                return
+            }
+            try database.execute("INSERT INTO observation(id,session_id,observed_at,data) VALUES(?,?,?,?)",
+                [.text(observation.id.uuidString), .text(sessionID.uuidString),
+                 .number(observation.observedAt.timeIntervalSince1970), .blob(try JSONEncoder().encode(observation))])
+        }
+    }
+
+    func finish(_ id: UUID, at date: Date, state: SessionState) throws {
+        guard state != .active else { throw SessionError.sessionClosed }
+        try write {
+            var session = try metadata(id)
+            guard session.state == .active else { return }
+            session.endedAt = max(date, session.startedAt)
+            session.state = state
+            try saveMetadata(session)
+        }
+    }
+
+    func updateSummary(_ text: String, for id: UUID) throws {
+        guard text.count <= 10_000 else { throw SessionError.invalidObservation }
+        try write {
+            var session = try metadata(id)
+            session.summary = text
+            try saveMetadata(session)
+        }
+    }
+
+    func recoverInterruptedSessions() throws {
+        try write {
+            for var session in try database.records("SELECT data FROM session WHERE state='active'", as: DrivingSession.self) {
+                // L’instant de fermeture forcée est inconnu : retenir le dernier fait durable.
+                let full = try hydrated(session)
+                session.endedAt = ([session.startedAt] + full.points.map(\.timestamp) + full.observations.map(\.observedAt)).max()
+                session.state = .interrupted
+                try saveMetadata(session)
+            }
+        }
+    }
+
+    func deleteSession(_ id: UUID) throws {
+        try write {
+            let session = try metadata(id)
+            guard session.state != .active else { throw SessionError.sessionStillActive }
+            try database.execute("DELETE FROM observation WHERE session_id=?", [.text(id.uuidString)])
+            try database.execute("DELETE FROM point WHERE session_id=?", [.text(id.uuidString)])
+            try database.execute("DELETE FROM session WHERE id=?", [.text(id.uuidString)])
+        }
+        // secure_delete efface les cellules ; ce checkpoint retire aussi les anciennes pages du WAL.
+        guard try database.integer("PRAGMA wal_checkpoint(TRUNCATE)") == 0 else { throw SessionError.storageUnavailable }
+    }
+
+    private func metadata(_ id: UUID) throws -> DrivingSession {
+        guard let session = try database.records("SELECT data FROM session WHERE id=?",
+            [.text(id.uuidString)], as: DrivingSession.self).first else { throw SessionError.missingSession }
+        return session
+    }
+
+    private func hydrated(_ metadata: DrivingSession) throws -> DrivingSession {
+        var result = metadata
+        result.points = try database.records("SELECT data FROM point WHERE session_id=? ORDER BY timestamp,id",
+            [.text(metadata.id.uuidString)], as: RecordedPoint.self)
+        result.observations = try database.records("SELECT data FROM observation WHERE session_id=? ORDER BY observed_at,id",
+            [.text(metadata.id.uuidString)], as: LessonObservation.self)
+        return result
+    }
+
+    private func saveMetadata(_ session: DrivingSession) throws {
+        try database.execute("UPDATE session SET state=?,data=? WHERE id=?",
+            [.text(session.state.rawValue), .blob(try JSONEncoder().encode(session)), .text(session.id.uuidString)])
+    }
+
+    private func write(_ body: () throws -> Void) throws {
+        if protectFiles { try ProtectedStorage.protectDatabaseFiles(at: url) }
+        try database.transaction(body)
+        // Les fichiers annexes héritent du dossier protégé ; vérifier aussi leur politique explicite.
+        if protectFiles { try ProtectedStorage.protectDatabaseFiles(at: url) }
+    }
+}
+
+private enum SQLValue {
+    case text(String), number(Double), blob(Data)
+}
+
+private final class CipherConnection {
+    private var handle: OpaquePointer?
+    private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
+    init(url: URL, key: Data) throws {
+        var pointer: OpaquePointer?
+        guard sqlite3_open_v2(url.path, &pointer, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK,
+              let pointer else {
+            if let pointer { sqlite3_close_v2(pointer) }
+            throw SessionError.storageUnavailable
+        }
+        handle = pointer
+        do {
+            let hex = key.map { String(format: "%02x", $0) }.joined()
+            try execute("PRAGMA key = \"x'\(hex)'\"")
+            guard !(try strings("PRAGMA cipher_version")).isEmpty else { throw SessionError.encryptionUnavailable }
+            _ = try integer("SELECT COUNT(*) FROM sqlite_master")
+            guard try integer("PRAGMA cipher_status") == 1 else { throw SessionError.encryptionUnavailable }
+            try execute("PRAGMA cipher_memory_security=ON; PRAGMA temp_store=MEMORY; PRAGMA foreign_keys=ON; PRAGMA secure_delete=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;")
+            sqlite3_busy_timeout(handle, 2_000)
+        } catch {
+            sqlite3_close_v2(pointer)
+            handle = nil
+            throw error
+        }
+    }
+
+    deinit { sqlite3_close_v2(handle) }
+
+    func transaction(_ body: () throws -> Void) throws {
+        try execute("BEGIN IMMEDIATE")
+        do { try body(); try execute("COMMIT") }
+        catch { try? execute("ROLLBACK"); throw error }
+    }
+
+    func execute(_ sql: String, _ values: [SQLValue] = []) throws {
+        if values.isEmpty {
+            guard sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK else { throw SessionError.storageUnavailable }
+            return
+        }
+        let statement = try prepare(sql, values)
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw SessionError.storageUnavailable }
+    }
+
+    func integer(_ sql: String) throws -> Int {
+        let statement = try prepare(sql, [])
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else { throw SessionError.storageUnavailable }
+        return Int(sqlite3_column_int64(statement, 0))
+    }
+
+    func strings(_ sql: String) throws -> [String] {
+        let statement = try prepare(sql, [])
+        defer { sqlite3_finalize(statement) }
+        var result: [String] = []
+        while true {
+            let status = sqlite3_step(statement)
+            if status == SQLITE_DONE { return result }
+            guard status == SQLITE_ROW, let text = sqlite3_column_text(statement, 0) else { throw SessionError.storageUnavailable }
+            result.append(String(cString: text))
+        }
+    }
+
+    func records<T: Decodable>(_ sql: String, _ values: [SQLValue] = [], as: T.Type) throws -> [T] {
+        let statement = try prepare(sql, values)
+        defer { sqlite3_finalize(statement) }
+        var result: [T] = []
+        while true {
+            let status = sqlite3_step(statement)
+            if status == SQLITE_DONE { return result }
+            guard status == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0) else { throw SessionError.storageUnavailable }
+            let data = Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 0)))
+            result.append(try JSONDecoder().decode(T.self, from: data))
+        }
+    }
+
+    private func prepare(_ sql: String, _ values: [SQLValue]) throws -> OpaquePointer {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            throw SessionError.storageUnavailable
+        }
+        do {
+            for (offset, value) in values.enumerated() {
+                let index = Int32(offset + 1)
+                let status: Int32
+                switch value {
+                case .text(let text):
+                    status = text.withCString { sqlite3_bind_text(statement, index, $0, -1, transient) }
+                case .number(let number): status = sqlite3_bind_double(statement, index, number)
+                case .blob(let data):
+                    status = data.withUnsafeBytes { sqlite3_bind_blob(statement, index, $0.baseAddress, Int32($0.count), transient) }
+                }
+                guard status == SQLITE_OK else { throw SessionError.storageUnavailable }
+            }
+            return statement
+        } catch { sqlite3_finalize(statement); throw error }
+    }
+}

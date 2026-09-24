@@ -1,0 +1,36 @@
+{
+  "version": "3.8",
+  "scope": "DOCUMENTATION_DESIGN_AND_BROWSER_PROTOTYPE",
+  "nativeApplicationTestsExecuted": false,
+  "reports": [
+    {
+      "report": "annexes/verification-documentaire.json",
+      "passed": true
+    },
+    {
+      "report": "annexes/verification-reference-v3-8.json",
+      "passed": true
+    },
+    {
+      "report": "annexes/verification-mobile-swift-v3-8.json",
+      "passed": true
+    },
+    {
+      "report": "annexes/verification-design-v3-8.json",
+      "passed": true
+    },
+    {
+      "report": "annexes/verification-prototype-v3-8.json",
+      "passed": true
+    },
+    {
+      "report": "annexes/verification-lecteur-v3-8.json",
+      "passed": true
+    },
+    {
+      "report": "annexes/verification-integrite-v3-8.json",
+      "passed": true
+    }
+  ],
+  "passed": true
+}

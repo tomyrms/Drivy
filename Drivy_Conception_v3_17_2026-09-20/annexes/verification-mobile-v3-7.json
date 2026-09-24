@@ -1,0 +1,32 @@
+{
+  "version": "3.7",
+  "status": "DOCUMENTARY_CHECKS_ONLY",
+  "productTestsExecuted": false,
+  "checkedAt": "2026-09-19",
+  "checks": {
+    "mobileRequirements": 16,
+    "mobileCasesNotExecuted": 60,
+    "sourceEntriesTracked": 51,
+    "newSourceEntriesV34": 9,
+    "unqualifiedBuildRows": 6,
+    "qualityCriteria": 10,
+    "appliedPatterns": 6,
+    "apiMatchesCurrentProvenance": true,
+    "apiSHA256": "37cd5686860079dc29c7b4f9e57d189e0e13747d6e32c1f1c3dc7c90f578fc81",
+    "businessScenariosCurrent": 382,
+    "businessScenariosAtOriginalMobileIntroduction": 284,
+    "businessScenariosBaselineV36": 350,
+    "caseProseAndRegistryChecked": true,
+    "touchTokensConsistent": true,
+    "globalDeletionOperationalGateDisclosed": true
+  },
+  "errorCount": 0,
+  "errors": [],
+  "passed": true,
+  "limitations": [
+    "Contrôles de structure/relations, pas exécution des scénarios MOB ou T.",
+    "Présence d’une clause ne démontre pas que son implémentation est correcte.",
+    "Aucun verdict automatisé sur esthétique, AI slop, conformité juridique ou compatibilité physique.",
+    "URLs sources vérifiées syntaxiquement ici ; consultations web séparées dans le registre."
+  ]
+}

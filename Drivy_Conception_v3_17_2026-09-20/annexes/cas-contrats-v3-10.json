@@ -1,0 +1,1207 @@
+{
+  "version": "3.10",
+  "status": "DOCUMENTARY_SCHEMA_CASES",
+  "productCodeExercised": false,
+  "cases": [
+    {
+      "id": "SC230",
+      "title": "Document READY admissible",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": null,
+        "purpose": "ADMINISTRATIVE",
+        "audience": "STAFF_RESTRICTED",
+        "displayName": "Justificatif fictif",
+        "status": "READY",
+        "detectedMime": "application/pdf",
+        "bytes": 4096,
+        "rejectionCode": null
+      },
+      "expectedValid": true,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC231",
+      "title": "Document READY sans MIME",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": null,
+        "purpose": "ADMINISTRATIVE",
+        "audience": "STAFF_RESTRICTED",
+        "displayName": "Justificatif fictif",
+        "status": "READY",
+        "detectedMime": null,
+        "bytes": 4096,
+        "rejectionCode": null
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC232",
+      "title": "Document READY vide",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": null,
+        "purpose": "ADMINISTRATIVE",
+        "audience": "STAFF_RESTRICTED",
+        "displayName": "Justificatif fictif",
+        "status": "READY",
+        "detectedMime": "application/pdf",
+        "bytes": 0,
+        "rejectionCode": null
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC233",
+      "title": "Document READY exécutable",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": null,
+        "purpose": "ADMINISTRATIVE",
+        "audience": "STAFF_RESTRICTED",
+        "displayName": "Justificatif fictif",
+        "status": "READY",
+        "detectedMime": "application/x-msdownload",
+        "bytes": 4096,
+        "rejectionCode": null
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC234",
+      "title": "Document READY trop gros",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": null,
+        "purpose": "ADMINISTRATIVE",
+        "audience": "STAFF_RESTRICTED",
+        "displayName": "Justificatif fictif",
+        "status": "READY",
+        "detectedMime": "application/pdf",
+        "bytes": 10485761,
+        "rejectionCode": null
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC235",
+      "title": "Document READY avec rejet",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": null,
+        "purpose": "ADMINISTRATIVE",
+        "audience": "STAFF_RESTRICTED",
+        "displayName": "Justificatif fictif",
+        "status": "READY",
+        "detectedMime": "application/pdf",
+        "bytes": 4096,
+        "rejectionCode": "FILE_TYPE_NOT_ALLOWED"
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC236",
+      "title": "Rejet peut décrire le vrai fichier trop gros",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": null,
+        "purpose": "ADMINISTRATIVE",
+        "audience": "STAFF_RESTRICTED",
+        "displayName": "Justificatif fictif",
+        "status": "REJECTED",
+        "detectedMime": "application/x-msdownload",
+        "bytes": 10485761,
+        "rejectionCode": "FILE_TOO_LARGE"
+      },
+      "expectedValid": true,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC237",
+      "title": "Quarantaine sans type déterminé",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": null,
+        "purpose": "ADMINISTRATIVE",
+        "audience": "STAFF_RESTRICTED",
+        "displayName": "Justificatif fictif",
+        "status": "QUARANTINED",
+        "detectedMime": null,
+        "bytes": 4096,
+        "rejectionCode": null
+      },
+      "expectedValid": true,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC238",
+      "title": "Photo READY admissible",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": null,
+        "purpose": "PROFILE_PHOTO",
+        "audience": "LEARNER_SHARED",
+        "displayName": "Justificatif fictif",
+        "status": "READY",
+        "detectedMime": "image/jpeg",
+        "bytes": 2000,
+        "rejectionCode": null
+      },
+      "expectedValid": true,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC239",
+      "title": "Photo READY PDF",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": null,
+        "purpose": "PROFILE_PHOTO",
+        "audience": "LEARNER_SHARED",
+        "displayName": "Justificatif fictif",
+        "status": "READY",
+        "detectedMime": "application/pdf",
+        "bytes": 2000,
+        "rejectionCode": null
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC240",
+      "title": "Photo au-delà 2 MiB",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": null,
+        "purpose": "PROFILE_PHOTO",
+        "audience": "LEARNER_SHARED",
+        "displayName": "Justificatif fictif",
+        "status": "READY",
+        "detectedMime": "image/jpeg",
+        "bytes": 2097153,
+        "rejectionCode": null
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC241",
+      "title": "Photo liée à une leçon",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": "00000000-0000-4000-8000-000000000009",
+        "purpose": "PROFILE_PHOTO",
+        "audience": "LEARNER_SHARED",
+        "displayName": "Justificatif fictif",
+        "status": "READY",
+        "detectedMime": "image/jpeg",
+        "bytes": 2000,
+        "rejectionCode": null
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC242",
+      "title": "Photo sous audience privée incompatible",
+      "schema": "Document",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+        "trainingId": null,
+        "lessonId": null,
+        "purpose": "PROFILE_PHOTO",
+        "audience": "STAFF_RESTRICTED",
+        "displayName": "Justificatif fictif",
+        "status": "READY",
+        "detectedMime": "image/jpeg",
+        "bytes": 2000,
+        "rejectionCode": null
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC243",
+      "title": "Logo READY admissible",
+      "schema": "SchoolAsset",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000004",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "purpose": "LOGO",
+        "status": "READY",
+        "displayName": "Logo fictif",
+        "bytes": 1024,
+        "detectedMime": "image/png"
+      },
+      "expectedValid": true,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC244",
+      "title": "Logo READY PDF",
+      "schema": "SchoolAsset",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000004",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "purpose": "LOGO",
+        "status": "READY",
+        "displayName": "Logo fictif",
+        "bytes": 1024,
+        "detectedMime": "application/pdf"
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC245",
+      "title": "Logo READY sans type",
+      "schema": "SchoolAsset",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000004",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "purpose": "LOGO",
+        "status": "READY",
+        "displayName": "Logo fictif",
+        "bytes": 1024,
+        "detectedMime": null
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC246",
+      "title": "Logo READY trop gros",
+      "schema": "SchoolAsset",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000004",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "purpose": "LOGO",
+        "status": "READY",
+        "displayName": "Logo fictif",
+        "bytes": 2097153,
+        "detectedMime": "image/png"
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC247",
+      "title": "Logo READY vide",
+      "schema": "SchoolAsset",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000004",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "purpose": "LOGO",
+        "status": "READY",
+        "displayName": "Logo fictif",
+        "bytes": 0,
+        "detectedMime": "image/png"
+      },
+      "expectedValid": false,
+      "finding": "V310-03",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC248",
+      "title": "Ticket PUT sûr de forme",
+      "schema": "UploadTicket",
+      "value": {
+        "document": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "schoolId": "00000000-0000-4000-8000-000000000002",
+          "version": 1,
+          "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+          "trainingId": null,
+          "lessonId": null,
+          "purpose": "ADMINISTRATIVE",
+          "audience": "STAFF_RESTRICTED",
+          "displayName": "Justificatif fictif",
+          "status": "PENDING_UPLOAD",
+          "detectedMime": null,
+          "bytes": 0,
+          "rejectionCode": null
+        },
+        "uploadId": "00000000-0000-4000-8000-000000000005",
+        "uploadUrl": "https://staging.drivy.invalid/upload/object?signature=fictif",
+        "expiresAt": "2026-09-19T16:00:00Z",
+        "method": "PUT",
+        "requiredHeaders": {
+          "content-type": "application/pdf",
+          "if-none-match": "*"
+        }
+      },
+      "expectedValid": true,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC249",
+      "title": "Ticket sans méthode",
+      "schema": "UploadTicket",
+      "value": {
+        "document": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "schoolId": "00000000-0000-4000-8000-000000000002",
+          "version": 1,
+          "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+          "trainingId": null,
+          "lessonId": null,
+          "purpose": "ADMINISTRATIVE",
+          "audience": "STAFF_RESTRICTED",
+          "displayName": "Justificatif fictif",
+          "status": "PENDING_UPLOAD",
+          "detectedMime": null,
+          "bytes": 0,
+          "rejectionCode": null
+        },
+        "uploadId": "00000000-0000-4000-8000-000000000005",
+        "uploadUrl": "https://staging.drivy.invalid/upload/object?signature=fictif",
+        "expiresAt": "2026-09-19T16:00:00Z",
+        "requiredHeaders": {
+          "content-type": "application/pdf",
+          "if-none-match": "*"
+        }
+      },
+      "expectedValid": false,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC250",
+      "title": "Ticket mauvaise méthode",
+      "schema": "UploadTicket",
+      "value": {
+        "document": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "schoolId": "00000000-0000-4000-8000-000000000002",
+          "version": 1,
+          "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+          "trainingId": null,
+          "lessonId": null,
+          "purpose": "ADMINISTRATIVE",
+          "audience": "STAFF_RESTRICTED",
+          "displayName": "Justificatif fictif",
+          "status": "PENDING_UPLOAD",
+          "detectedMime": null,
+          "bytes": 0,
+          "rejectionCode": null
+        },
+        "uploadId": "00000000-0000-4000-8000-000000000005",
+        "uploadUrl": "https://staging.drivy.invalid/upload/object?signature=fictif",
+        "expiresAt": "2026-09-19T16:00:00Z",
+        "method": "POST",
+        "requiredHeaders": {
+          "content-type": "application/pdf",
+          "if-none-match": "*"
+        }
+      },
+      "expectedValid": false,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC251",
+      "title": "Ticket FTP",
+      "schema": "UploadTicket",
+      "value": {
+        "document": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "schoolId": "00000000-0000-4000-8000-000000000002",
+          "version": 1,
+          "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+          "trainingId": null,
+          "lessonId": null,
+          "purpose": "ADMINISTRATIVE",
+          "audience": "STAFF_RESTRICTED",
+          "displayName": "Justificatif fictif",
+          "status": "PENDING_UPLOAD",
+          "detectedMime": null,
+          "bytes": 0,
+          "rejectionCode": null
+        },
+        "uploadId": "00000000-0000-4000-8000-000000000005",
+        "uploadUrl": "ftp://staging.drivy.invalid/object",
+        "expiresAt": "2026-09-19T16:00:00Z",
+        "method": "PUT",
+        "requiredHeaders": {
+          "content-type": "application/pdf",
+          "if-none-match": "*"
+        }
+      },
+      "expectedValid": false,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC252",
+      "title": "Ticket HTTP",
+      "schema": "UploadTicket",
+      "value": {
+        "document": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "schoolId": "00000000-0000-4000-8000-000000000002",
+          "version": 1,
+          "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+          "trainingId": null,
+          "lessonId": null,
+          "purpose": "ADMINISTRATIVE",
+          "audience": "STAFF_RESTRICTED",
+          "displayName": "Justificatif fictif",
+          "status": "PENDING_UPLOAD",
+          "detectedMime": null,
+          "bytes": 0,
+          "rejectionCode": null
+        },
+        "uploadId": "00000000-0000-4000-8000-000000000005",
+        "uploadUrl": "http://staging.drivy.invalid/object",
+        "expiresAt": "2026-09-19T16:00:00Z",
+        "method": "PUT",
+        "requiredHeaders": {
+          "content-type": "application/pdf",
+          "if-none-match": "*"
+        }
+      },
+      "expectedValid": false,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC253",
+      "title": "En-tête bearer injecté",
+      "schema": "UploadTicket",
+      "value": {
+        "document": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "schoolId": "00000000-0000-4000-8000-000000000002",
+          "version": 1,
+          "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+          "trainingId": null,
+          "lessonId": null,
+          "purpose": "ADMINISTRATIVE",
+          "audience": "STAFF_RESTRICTED",
+          "displayName": "Justificatif fictif",
+          "status": "PENDING_UPLOAD",
+          "detectedMime": null,
+          "bytes": 0,
+          "rejectionCode": null
+        },
+        "uploadId": "00000000-0000-4000-8000-000000000005",
+        "uploadUrl": "https://staging.drivy.invalid/upload/object?signature=fictif",
+        "expiresAt": "2026-09-19T16:00:00Z",
+        "method": "PUT",
+        "requiredHeaders": {
+          "content-type": "application/pdf",
+          "if-none-match": "*",
+          "Authorization": "Bearer fictif"
+        }
+      },
+      "expectedValid": false,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC254",
+      "title": "Cookie injecté",
+      "schema": "UploadTicket",
+      "value": {
+        "document": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "schoolId": "00000000-0000-4000-8000-000000000002",
+          "version": 1,
+          "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+          "trainingId": null,
+          "lessonId": null,
+          "purpose": "ADMINISTRATIVE",
+          "audience": "STAFF_RESTRICTED",
+          "displayName": "Justificatif fictif",
+          "status": "PENDING_UPLOAD",
+          "detectedMime": null,
+          "bytes": 0,
+          "rejectionCode": null
+        },
+        "uploadId": "00000000-0000-4000-8000-000000000005",
+        "uploadUrl": "https://staging.drivy.invalid/upload/object?signature=fictif",
+        "expiresAt": "2026-09-19T16:00:00Z",
+        "method": "PUT",
+        "requiredHeaders": {
+          "content-type": "application/pdf",
+          "if-none-match": "*",
+          "Cookie": "session=fictif"
+        }
+      },
+      "expectedValid": false,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC255",
+      "title": "Condition absente",
+      "schema": "UploadTicket",
+      "value": {
+        "document": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "schoolId": "00000000-0000-4000-8000-000000000002",
+          "version": 1,
+          "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+          "trainingId": null,
+          "lessonId": null,
+          "purpose": "ADMINISTRATIVE",
+          "audience": "STAFF_RESTRICTED",
+          "displayName": "Justificatif fictif",
+          "status": "PENDING_UPLOAD",
+          "detectedMime": null,
+          "bytes": 0,
+          "rejectionCode": null
+        },
+        "uploadId": "00000000-0000-4000-8000-000000000005",
+        "uploadUrl": "https://staging.drivy.invalid/upload/object?signature=fictif",
+        "expiresAt": "2026-09-19T16:00:00Z",
+        "method": "PUT",
+        "requiredHeaders": {
+          "content-type": "application/pdf"
+        }
+      },
+      "expectedValid": false,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC256",
+      "title": "Checksum base64 correct",
+      "schema": "UploadTicket",
+      "value": {
+        "document": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "schoolId": "00000000-0000-4000-8000-000000000002",
+          "version": 1,
+          "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+          "trainingId": null,
+          "lessonId": null,
+          "purpose": "ADMINISTRATIVE",
+          "audience": "STAFF_RESTRICTED",
+          "displayName": "Justificatif fictif",
+          "status": "PENDING_UPLOAD",
+          "detectedMime": null,
+          "bytes": 0,
+          "rejectionCode": null
+        },
+        "uploadId": "00000000-0000-4000-8000-000000000005",
+        "uploadUrl": "https://staging.drivy.invalid/upload/object?signature=fictif",
+        "expiresAt": "2026-09-19T16:00:00Z",
+        "method": "PUT",
+        "requiredHeaders": {
+          "content-type": "application/pdf",
+          "if-none-match": "*",
+          "x-amz-checksum-sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa="
+        }
+      },
+      "expectedValid": true,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC257",
+      "title": "Checksum hex envoyé en base64",
+      "schema": "UploadTicket",
+      "value": {
+        "document": {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "schoolId": "00000000-0000-4000-8000-000000000002",
+          "version": 1,
+          "ownerLearnerId": "00000000-0000-4000-8000-000000000003",
+          "trainingId": null,
+          "lessonId": null,
+          "purpose": "ADMINISTRATIVE",
+          "audience": "STAFF_RESTRICTED",
+          "displayName": "Justificatif fictif",
+          "status": "PENDING_UPLOAD",
+          "detectedMime": null,
+          "bytes": 0,
+          "rejectionCode": null
+        },
+        "uploadId": "00000000-0000-4000-8000-000000000005",
+        "uploadUrl": "https://staging.drivy.invalid/upload/object?signature=fictif",
+        "expiresAt": "2026-09-19T16:00:00Z",
+        "method": "PUT",
+        "requiredHeaders": {
+          "content-type": "application/pdf",
+          "if-none-match": "*",
+          "x-amz-checksum-sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "expectedValid": false,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC258",
+      "title": "Ticket logo même profil",
+      "schema": "AssetUploadTicket",
+      "value": {
+        "asset": {
+          "id": "00000000-0000-4000-8000-000000000004",
+          "schoolId": "00000000-0000-4000-8000-000000000002",
+          "version": 1,
+          "purpose": "LOGO",
+          "status": "PENDING_UPLOAD",
+          "displayName": "Logo fictif",
+          "bytes": 0,
+          "detectedMime": null
+        },
+        "uploadId": "00000000-0000-4000-8000-000000000005",
+        "uploadUrl": "https://staging.drivy.invalid/upload/object?signature=fictif",
+        "expiresAt": "2026-09-19T16:00:00Z",
+        "method": "PUT",
+        "requiredHeaders": {
+          "content-type": "image/png",
+          "if-none-match": "*"
+        }
+      },
+      "expectedValid": true,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC259",
+      "title": "DownloadTicket HTTPS",
+      "schema": "DownloadTicket",
+      "value": {
+        "documentId": "00000000-0000-4000-8000-000000000001",
+        "url": "https://api.drivy.invalid/v1/content?ticket=fictif",
+        "expiresAt": "2026-09-19T16:00:00Z"
+      },
+      "expectedValid": true,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC260",
+      "title": "DownloadTicket HTTP refusé",
+      "schema": "DownloadTicket",
+      "value": {
+        "documentId": "00000000-0000-4000-8000-000000000001",
+        "url": "http://api.drivy.invalid/content",
+        "expiresAt": "2026-09-19T16:00:00Z"
+      },
+      "expectedValid": false,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC261",
+      "title": "AssetDownloadTicket HTTPS",
+      "schema": "AssetDownloadTicket",
+      "value": {
+        "assetId": "00000000-0000-4000-8000-000000000001",
+        "url": "https://api.drivy.invalid/v1/content?ticket=fictif",
+        "expiresAt": "2026-09-19T16:00:00Z"
+      },
+      "expectedValid": true,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC262",
+      "title": "AssetDownloadTicket HTTP refusé",
+      "schema": "AssetDownloadTicket",
+      "value": {
+        "assetId": "00000000-0000-4000-8000-000000000001",
+        "url": "http://api.drivy.invalid/content",
+        "expiresAt": "2026-09-19T16:00:00Z"
+      },
+      "expectedValid": false,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC263",
+      "title": "ExportDownloadTicket HTTPS",
+      "schema": "ExportDownloadTicket",
+      "value": {
+        "exportId": "00000000-0000-4000-8000-000000000001",
+        "url": "https://api.drivy.invalid/v1/content?ticket=fictif",
+        "expiresAt": "2026-09-19T16:00:00Z"
+      },
+      "expectedValid": true,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC264",
+      "title": "ExportDownloadTicket HTTP refusé",
+      "schema": "ExportDownloadTicket",
+      "value": {
+        "exportId": "00000000-0000-4000-8000-000000000001",
+        "url": "http://api.drivy.invalid/content",
+        "expiresAt": "2026-09-19T16:00:00Z"
+      },
+      "expectedValid": false,
+      "finding": "V310-02",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC265",
+      "title": "CSV READY complet",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": null,
+        "status": "READY",
+        "expiresAt": "2026-09-20T16:00:00Z",
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "STUDENT_LIST",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": "students-v1",
+        "rowCount": 1,
+        "contentType": "text/csv",
+        "fileName": "drivy-eleves.csv",
+        "bytes": 60,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expectedValid": true,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC266",
+      "title": "ZIP PRIVACY complet",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": "00000000-0000-4000-8000-000000000008",
+        "status": "READY",
+        "expiresAt": "2026-09-20T16:00:00Z",
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "PRIVACY",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": null,
+        "rowCount": null,
+        "contentType": "application/zip",
+        "fileName": "drivy-donnees.zip",
+        "bytes": 60,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expectedValid": true,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC267",
+      "title": "Gestion présentée ZIP",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": null,
+        "status": "READY",
+        "expiresAt": "2026-09-20T16:00:00Z",
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "STUDENT_LIST",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": "students-v1",
+        "rowCount": 1,
+        "contentType": "application/zip",
+        "fileName": "drivy.zip",
+        "bytes": 60,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expectedValid": false,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC268",
+      "title": "Privacy présentée CSV",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": "00000000-0000-4000-8000-000000000008",
+        "status": "READY",
+        "expiresAt": "2026-09-20T16:00:00Z",
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "PRIVACY",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": null,
+        "rowCount": null,
+        "contentType": "text/csv",
+        "fileName": "drivy.csv",
+        "bytes": 60,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expectedValid": false,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC269",
+      "title": "READY sans checksum",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": null,
+        "status": "READY",
+        "expiresAt": "2026-09-20T16:00:00Z",
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "STUDENT_LIST",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": "students-v1",
+        "rowCount": 1,
+        "contentType": "text/csv",
+        "fileName": "drivy-eleves.csv",
+        "bytes": 60,
+        "sha256": null
+      },
+      "expectedValid": false,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC270",
+      "title": "READY sans expiration",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": null,
+        "status": "READY",
+        "expiresAt": null,
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "STUDENT_LIST",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": "students-v1",
+        "rowCount": 1,
+        "contentType": "text/csv",
+        "fileName": "drivy-eleves.csv",
+        "bytes": 60,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expectedValid": false,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC271",
+      "title": "READY nom avec chemin",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": null,
+        "status": "READY",
+        "expiresAt": "2026-09-20T16:00:00Z",
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "STUDENT_LIST",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": "students-v1",
+        "rowCount": 1,
+        "contentType": "text/csv",
+        "fileName": "../eleves.csv",
+        "bytes": 60,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expectedValid": false,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC272",
+      "title": "READY nom CRLF",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": null,
+        "status": "READY",
+        "expiresAt": "2026-09-20T16:00:00Z",
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "STUDENT_LIST",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": "students-v1",
+        "rowCount": 1,
+        "contentType": "text/csv",
+        "fileName": "eleves\r\n.csv",
+        "bytes": 60,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expectedValid": false,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC273",
+      "title": "READY mauvais suffixe",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": null,
+        "status": "READY",
+        "expiresAt": "2026-09-20T16:00:00Z",
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "STUDENT_LIST",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": "students-v1",
+        "rowCount": 1,
+        "contentType": "text/csv",
+        "fileName": "eleves.zip",
+        "bytes": 60,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expectedValid": false,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC274",
+      "title": "CSV READY sans nombre lignes",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": null,
+        "status": "READY",
+        "expiresAt": "2026-09-20T16:00:00Z",
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "STUDENT_LIST",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": "students-v1",
+        "contentType": "text/csv",
+        "fileName": "drivy-eleves.csv",
+        "bytes": 60,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expectedValid": false,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC275",
+      "title": "Ancien READY sans métadonnées",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": null,
+        "status": "READY",
+        "expiresAt": "2026-09-20T16:00:00Z",
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "STUDENT_LIST",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": "students-v1",
+        "rowCount": 1
+      },
+      "expectedValid": false,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC276",
+      "title": "PREPARING sans contenu",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": null,
+        "status": "PREPARING",
+        "expiresAt": null,
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "STUDENT_LIST",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": "students-v1",
+        "rowCount": null,
+        "contentType": null,
+        "fileName": null,
+        "bytes": null,
+        "sha256": null
+      },
+      "expectedValid": true,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC277",
+      "title": "EXPIRED expose encore contenu",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": null,
+        "status": "EXPIRED",
+        "expiresAt": "2026-09-20T16:00:00Z",
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "STUDENT_LIST",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": "students-v1",
+        "rowCount": 1,
+        "contentType": "text/csv",
+        "fileName": "drivy-eleves.csv",
+        "bytes": 60,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expectedValid": false,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    },
+    {
+      "id": "SC278",
+      "title": "EXPIRED métadonnées nulles",
+      "schema": "Export",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "schoolId": "00000000-0000-4000-8000-000000000002",
+        "version": 1,
+        "privacyRequestId": null,
+        "status": "EXPIRED",
+        "expiresAt": "2026-09-20T16:00:00Z",
+        "manifest": [
+          "learner:00000000-0000-4000-8000-000000000003"
+        ],
+        "kind": "STUDENT_LIST",
+        "createdByMembershipId": "00000000-0000-4000-8000-000000000007",
+        "columnsVersion": "students-v1",
+        "rowCount": 1,
+        "contentType": null,
+        "fileName": null,
+        "bytes": null,
+        "sha256": null
+      },
+      "expectedValid": true,
+      "finding": "V310-04",
+      "comparisonMeaning": "SAME_PAYLOAD_SHAPE_NOT_PRODUCT_EXECUTION"
+    }
+  ]
+}

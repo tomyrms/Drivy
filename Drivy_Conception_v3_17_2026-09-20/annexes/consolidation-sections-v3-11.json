@@ -1,0 +1,355 @@
+{
+  "version": "3.11",
+  "screenSupplementsMerged": 6,
+  "roadmapChronologicalLayersMerged": 9,
+  "modelRowsBefore": 113,
+  "modelLogicalEntriesAfter": 101,
+  "sectionTitlesAndAliases": [
+    {
+      "file": "00-synthese.md",
+      "from": "Référence courante V3.10",
+      "to": "Référence active et portée"
+    },
+    {
+      "file": "00-synthese.md",
+      "from": "Consolidation V3.9 : le rendu doit refléter le contrat",
+      "to": "Fidélité du rendu au contrat"
+    },
+    {
+      "file": "00-synthese.md",
+      "from": "Compléments de la référence V3.10",
+      "to": "Fichiers et continuité native"
+    },
+    {
+      "file": "01-fonctionnalites-prevues.md",
+      "from": "Compléments métier hérités de la V3.7",
+      "to": "Preuves, corrections et cohérence métier"
+    },
+    {
+      "file": "01-fonctionnalites-prevues.md",
+      "from": "Précision de couverture V3.9",
+      "to": "Couverture visuelle et limites de preuve"
+    },
+    {
+      "file": "01-fonctionnalites-prevues.md",
+      "from": "Compléments V3.10 : mêmes fonctions, transitions plus précises",
+      "to": "Fichiers, exports et transitions natives"
+    },
+    {
+      "file": "04-technique/modele-donnees.md",
+      "from": "Précisions de modèle V3.1",
+      "to": "Statuts, snapshots et occupation historique"
+    },
+    {
+      "file": "04-technique/modele-donnees.md",
+      "from": "Précisions relationnelles de la revue V3.2",
+      "to": "Contraintes relationnelles et cycles"
+    },
+    {
+      "file": "04-technique/modele-donnees.md",
+      "from": "Compléments de modèle V3.5",
+      "to": "Préparation, offres et suppression globale"
+    },
+    {
+      "file": "04-technique/modele-donnees.md",
+      "from": "Précisions relationnelles V3.6",
+      "to": "Structures de publication, segments et préférences"
+    },
+    {
+      "file": "04-technique/modele-donnees.md",
+      "from": "Modèles complétés V3.7",
+      "to": "Preuves, régularisations et installations push"
+    },
+    {
+      "file": "04-technique/modele-donnees.md",
+      "from": "Exports et générations de fichiers V3.10",
+      "to": "Générations immuables de fichiers et exports"
+    },
+    {
+      "file": "04-technique/architecture-client-swift.md",
+      "from": "Contrat courant V3.7 et apports hérités",
+      "to": "Contrat courant et séparation des couches"
+    },
+    {
+      "file": "04-technique/architecture-client-swift.md",
+      "from": "Contrats de publication, remise et clôture V3.6",
+      "to": "Publication, remise et clôture"
+    },
+    {
+      "file": "04-technique/architecture-client-swift.md",
+      "from": "Compléments de qualification V3.7",
+      "to": "Qualification des sources et des interruptions"
+    },
+    {
+      "file": "04-technique/architecture-client-swift.md",
+      "from": "Traduction des corrections de maquettes V3.9",
+      "to": "Correspondance entre maquettes et composants natifs"
+    },
+    {
+      "file": "04-technique/synchronisation.md",
+      "from": "Révocation globale et repères (V3.5)",
+      "to": "Révocation globale et repères"
+    },
+    {
+      "file": "04-technique/synchronisation.md",
+      "from": "Données ajoutées en V3.6",
+      "to": "Données de publication et préférences à synchroniser"
+    },
+    {
+      "file": "04-technique/synchronisation.md",
+      "from": "V3.7 : dépendances nouvelles, sans nouvelles écritures hors ligne",
+      "to": "Dépendances et restrictions des écritures hors ligne"
+    },
+    {
+      "file": "04-technique/integration-ios-ipados.md",
+      "from": "Revue V3.10 : contenu sensible hors de la vue courante",
+      "to": "Contenu sensible hors de la vue courante"
+    },
+    {
+      "file": "04-technique/api.md",
+      "from": "Précisions contractuelles V3.1",
+      "to": "Projections, publications et contrôle des versions"
+    },
+    {
+      "file": "04-technique/api.md",
+      "from": "Portée du contrat pour l’intégration mobile V3.4",
+      "to": "Contrat partagé et intégration native"
+    },
+    {
+      "file": "04-technique/api.md",
+      "from": "Révision 3.5 : clôture globale et compléments de contrats",
+      "to": "Suppression globale, langues et préférences"
+    },
+    {
+      "file": "04-technique/api.md",
+      "from": "Compléments hérités de la révision 3.6.0",
+      "to": "Publication textuelle et conditions commerciales"
+    },
+    {
+      "file": "04-technique/api.md",
+      "from": "Compléments contractuels V3.7",
+      "to": "Preuves d’exigence et corrections de cours"
+    },
+    {
+      "file": "04-technique/api.md",
+      "from": "Compléments V3.10 : transfert et formats binaires",
+      "to": "Transfert, scellement et formats binaires"
+    },
+    {
+      "file": "04-technique/transactions-v3.md",
+      "from": "V3.7 : archive et routage",
+      "to": "Archivage et routage des notifications"
+    },
+    {
+      "file": "04-technique/transactions-v2.md",
+      "from": "V3.7 : présence, preuve et régularisation",
+      "to": "Présence, preuve et régularisation"
+    },
+    {
+      "file": "04-technique/securite-vie-privee.md",
+      "from": "Suppression globale et secrets de suivi (V3.5)",
+      "to": "Suppression globale et secrets de suivi"
+    },
+    {
+      "file": "04-technique/securite-vie-privee.md",
+      "from": "Frontières précisées V3.6",
+      "to": "Frontières d’accès et responsabilité des données"
+    },
+    {
+      "file": "04-technique/securite-vie-privee.md",
+      "from": "Menaces croisées ajoutées V3.7",
+      "to": "Menaces croisées sur preuves et notifications"
+    },
+    {
+      "file": "04-technique/fichiers-temps-communications.md",
+      "from": "Contrôles ajoutés V3.7",
+      "to": "Contrôles de provenances et de permissions"
+    },
+    {
+      "file": "04-technique/preparation-android.md",
+      "from": "Contrats V3.7 partagés sans disponibilité Android implicite",
+      "to": "Contrats partagés sans disponibilité Android implicite"
+    },
+    {
+      "file": "04-technique/integration-mobile-transverse.md",
+      "from": "V3.7 : appartenance, preuve et notifications en transit",
+      "to": "Appartenance, preuve et notifications en transit"
+    },
+    {
+      "file": "05-realisation/tests-recette.md",
+      "from": "Non-régression de la revue corrective V3.1",
+      "to": "Recettes d’activation, publication et gestion"
+    },
+    {
+      "file": "05-realisation/tests-recette.md",
+      "from": "Non-régression additionnelle V3.2",
+      "to": "Recettes des contrats et transactions"
+    },
+    {
+      "file": "05-realisation/tests-recette.md",
+      "from": "Recettes d’intégration mobile V3.4",
+      "to": "Recettes d’intégration mobile"
+    },
+    {
+      "file": "05-realisation/tests-recette.md",
+      "from": "Recettes supplémentaires V3.7",
+      "to": "Recettes des preuves, sources et notifications"
+    },
+    {
+      "file": "05-realisation/qualification-mobile-ui-ux.md",
+      "from": "Compléments natifs V3.7",
+      "to": "Qualification des sources natives"
+    },
+    {
+      "file": "05-realisation/deploiement-exploitation.md",
+      "from": "Publication mobile V3.4",
+      "to": "Publication mobile"
+    },
+    {
+      "file": "05-realisation/deploiement-exploitation.md",
+      "from": "Pipeline Apple natif V3.4",
+      "to": "Pipeline Apple natif"
+    },
+    {
+      "file": "05-realisation/deploiement-exploitation.md",
+      "from": "Contrôles opérationnels supplémentaires V3.6",
+      "to": "Contrôles de reprise et de conservation"
+    },
+    {
+      "file": "05-realisation/deploiement-exploitation.md",
+      "from": "Exploitation V3.7",
+      "to": "Exploitation des corrections et des preuves"
+    },
+    {
+      "file": "02-experience/architecture-information.md",
+      "from": "Contrôle des destinations illustrées V3.9",
+      "to": "Destinations illustrées et respect des rôles"
+    },
+    {
+      "file": "02-experience/plateformes-tablette-web.md",
+      "from": "Qualification mobile V3.4",
+      "to": "Qualification mobile par plateforme"
+    },
+    {
+      "file": "02-experience/design-system.md",
+      "from": "Précisions vérifiées en V3.9",
+      "to": "Rendu des états et contenu exact"
+    },
+    {
+      "file": "01-recherche/ui-ux-mobile-etat-art.md",
+      "from": "Décision d’application de la recherche V3.4",
+      "to": "Application de la recherche aux clients natifs"
+    },
+    {
+      "file": "01-recherche/ui-ux-mobile-etat-art.md",
+      "from": "Reconsultation ciblée V3.7",
+      "to": "Sources mobiles reconsultées et limites"
+    },
+    {
+      "file": "03-fonctionnel/onboarding.md",
+      "from": "Permissions et continuité mobile V3.4",
+      "to": "Permissions et continuité mobile"
+    },
+    {
+      "file": "03-fonctionnel/identites-formations.md",
+      "from": "Vérification de permis : cohérence du contrat V3.5",
+      "to": "Décisions du contrôle de permis"
+    },
+    {
+      "file": "03-fonctionnel/calendrier-notifications.md",
+      "from": "Précisions V3.5",
+      "to": "Langue des offres et préférences de communication"
+    },
+    {
+      "file": "03-fonctionnel/planning-lecons.md",
+      "from": "Préparation cartographique complétée (V3.5)",
+      "to": "Repères cartographiques de préparation"
+    },
+    {
+      "file": "03-fonctionnel/hors-ligne-vie-privee.md",
+      "from": "Cycle local et compte global V3.4",
+      "to": "Cycle local et compte global"
+    },
+    {
+      "file": "03-fonctionnel/roles-permissions.md",
+      "from": "Identité globale et protections de choix (V3.5)",
+      "to": "Identité globale et protections de choix"
+    },
+    {
+      "file": "03-fonctionnel/roles-permissions.md",
+      "from": "Actions complétées V3.6",
+      "to": "Droits sur les services et demandes globales"
+    },
+    {
+      "file": "03-fonctionnel/roles-permissions.md",
+      "from": "Délégations et nouvelles corrections V3.7",
+      "to": "Délégations, preuves et régularisations"
+    },
+    {
+      "file": "03-fonctionnel/gps-replay.md",
+      "from": "Profil de collecte mobile V3.4",
+      "to": "Profil de collecte native"
+    },
+    {
+      "file": "03-fonctionnel/gps-replay.md",
+      "from": "Consentement et préparation : précisions V3.5",
+      "to": "Choix GPS et repères de préparation"
+    },
+    {
+      "file": "03-fonctionnel/gestion-web-archivage.md",
+      "from": "Précisions de cohérence V3.1",
+      "to": "Prévisualisation, grants et opérations de gestion"
+    },
+    {
+      "file": "03-fonctionnel/statistiques.md",
+      "from": "Effets des corrections V3.7",
+      "to": "Effets des corrections sur les indicateurs"
+    },
+    {
+      "file": "06-gouvernance/glossaire-decisions-questions.md",
+      "from": "Arbitrages explicités par la revue V3.2",
+      "to": "Arbitrages de transactions et conditions commerciales"
+    },
+    {
+      "file": "06-gouvernance/glossaire-decisions-questions.md",
+      "from": "Décisions et termes mobiles V3.4",
+      "to": "Décisions et termes mobiles"
+    },
+    {
+      "file": "06-gouvernance/glossaire-decisions-questions.md",
+      "from": "Décisions techniques de réalisation V3.4",
+      "to": "Décisions techniques de réalisation"
+    },
+    {
+      "file": "06-gouvernance/glossaire-decisions-questions.md",
+      "from": "Arbitrages et vocabulaire V3.7",
+      "to": "Arbitrages sur preuves et corrections"
+    },
+    {
+      "file": "06-gouvernance/glossaire-decisions-questions.md",
+      "from": "Compléments de réalisation V3.10",
+      "to": "Décisions de fichiers, export et protection native"
+    },
+    {
+      "file": "DESIGN/02-composants.md",
+      "from": "Précisions d’interaction V3.9",
+      "to": "Comportements des formulaires et de la navigation"
+    },
+    {
+      "file": "DESIGN/05-contenu-etats.md",
+      "from": "Microtextes ajoutés lors du contrôle V3.9",
+      "to": "Microtextes des états de reprise et de conflit"
+    },
+    {
+      "file": "DESIGN/03-cartographie.md",
+      "from": "Temps du replay et réouverture : référence V3.9",
+      "to": "Temps du replay et réouverture"
+    },
+    {
+      "file": "DESIGN/README.md",
+      "from": "Corrections des interactions V3.9",
+      "to": "Interactions et limites du prototype"
+    }
+  ],
+  "meaning": "Roadmap and screen supplements integrated; model entries grouped; other current headings clarified with old anchors. Targeted consolidation, not a claim of complete prose rewrite."
+}

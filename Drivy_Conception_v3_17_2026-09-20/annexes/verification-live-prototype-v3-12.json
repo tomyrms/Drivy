@@ -1,0 +1,199 @@
+{
+  "version": "3.12",
+  "scope": "DOCUMENTARY_HTML_MEMORY_AND_DTO_ONLY",
+  "checks": [
+    {
+      "name": "marker_created_private",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "marker_command_valid_without_fabricated_anchor",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "theme_status_not_prefilled",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "missing_qualification_keeps_form_open",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "rotation_retains_form",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "qualified_command_valid",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "saving_observation_keeps_capture",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "live_events_retrievable_in_bilan",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "nothing_selected_or_graded",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "marker_not_selectable_for_publication",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "selecting_event_does_not_grade",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "preview_contains_exact_escaped_selection",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "stop_available_without_saving_form",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "stop_does_not_complete",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_gps_observation_valid",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "explicit_theme_used_when_optional_note_empty",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "marker_qualification_retains_event_time",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "qualified_marker_command_valid",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "qualification_does_not_auto_select",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "private_live_events_not_in_student_replay",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "fresh_document_clears_demo_memory_explicitly",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_network_requests",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "no_javascript_errors",
+      "passed": true,
+      "detail": []
+    }
+  ],
+  "dtoCases": [
+    {
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000110001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": null,
+        "text": "Moment à qualifier",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T07:20:01.000Z",
+        "eventKind": "MARKER",
+        "eventStatus": null
+      },
+      "passed": true,
+      "errors": []
+    },
+    {
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000110002",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "00000000-0000-4000-8000-000000000108",
+        "text": "Priorité observée <script>interdit()</script>",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T07:20:02.000Z",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION"
+      },
+      "passed": true,
+      "errors": []
+    },
+    {
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000110003",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "00000000-0000-4000-8000-000000000109",
+        "text": "Giratoire",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T07:20:03.000Z",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "POSITIVE"
+      },
+      "passed": true,
+      "errors": []
+    },
+    {
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000110001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "00000000-0000-4000-8000-000000000110",
+        "text": "Anticipation",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T07:20:01.000Z",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "TO_REWORK"
+      },
+      "passed": true,
+      "errors": []
+    }
+  ],
+  "passed": true,
+  "errors": [],
+  "nativeTestsExecuted": false,
+  "limits": [
+    "No persistence, GPS, backend, SQL transaction or publication executed.",
+    "No user test, driving safety test or native Dynamic Type/accessibility validation.",
+    "Scenarios T407–T422 remain NOT_EXECUTED on a product."
+  ]
+}

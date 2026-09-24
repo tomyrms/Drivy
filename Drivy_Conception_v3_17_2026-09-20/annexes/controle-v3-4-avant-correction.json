@@ -1,0 +1,745 @@
+{
+  "version": "3.4",
+  "status": "DOCUMENTARY_CHECKS_ONLY",
+  "productTestsExecuted": false,
+  "errors": [],
+  "checks": {
+    "markdown": {
+      "files": 60,
+      "internalLinks": 4484,
+      "externalLinksNotRevalidated": 105
+    },
+    "schemaRegressions": {
+      "total": 109,
+      "positive": 49,
+      "negative": 60,
+      "passed": true,
+      "productCodeExercised": false,
+      "results": [
+        {
+          "id": "SC001",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC002",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC003",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC004",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC005",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC006",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC007",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC008",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC009",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC010",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC011",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC012",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC013",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC014",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC015",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC016",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC017",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC018",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC019",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC020",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC021",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC022",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC023",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC024",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC025",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC026",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC027",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC028",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC029",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC030",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC031",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC032",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC033",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC034",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC035",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC036",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC037",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC038",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC039",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC040",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC041",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC042",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC043",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC044",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC045",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC046",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC047",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC048",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC049",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC050",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC051",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC052",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC053",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC054",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC055",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC056",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC057",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC058",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC059",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC060",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC061",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC062",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC063",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC064",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC065",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC066",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC067",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC068",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC069",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC070",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC071",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC072",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC073",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC074",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC075",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC076",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC077",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC078",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC079",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC080",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC081",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC082",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC083",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC084",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC085",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC086",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC087",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC088",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC089",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC090",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC091",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC092",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC093",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC094",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC095",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC096",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC097",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC098",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC099",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC100",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC101",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC102",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC103",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC104",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC105",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC106",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC107",
+          "expectedValid": true,
+          "actualValid": true,
+          "passed": true
+        },
+        {
+          "id": "SC108",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        },
+        {
+          "id": "SC109",
+          "expectedValid": false,
+          "actualValid": false,
+          "passed": true
+        }
+      ]
+    },
+    "api": {
+      "operations": 192,
+      "schemas": 344,
+      "internalRefsResolved": 2964,
+      "schemaAndAnnexExamplesChecked": 21,
+      "mediaTypeExamplesChecked": 6,
+      "totalPositiveExamplesChecked": 27,
+      "openapiVersion": "3.1.0",
+      "fullOpenApiMetaSchemaValidation": false,
+      "note": "YAML, refs, paramètres de routes, schémas JSON2020-12 et exemples seulement ; pas validation OpenAPI complète ou serveur."
+    },
+    "catalogueConsistency": {
+      "apiRegistryEntries": 192,
+      "proseApiRows": 192,
+      "testRegistryEntries": 284,
+      "methodPathsAndIdentifiersChecked": true,
+      "featureTestReverseLinksChecked": true,
+      "meaning": "Relations documentaires, pas autorisation ni transaction exécutée."
+    },
+    "traceability": {
+      "features": 23,
+      "capabilities": 72,
+      "rules": 100,
+      "journeys": 28,
+      "screens": 48,
+      "apiOperations": 192,
+      "testSpecifications": 284
+    },
+    "fictitiousArithmetic": {
+      "calculated": {
+        "lessonCount": 3,
+        "durationSeconds": 11100,
+        "distinctLearners": 2,
+        "courseFillRatio": 0.45,
+        "netRecordedCents": 147000,
+        "netAfterReversalCents": 136000
+      },
+      "matches": true,
+      "productCodeExercised": false
+    },
+    "limitations": [
+      "Aucun build ni test métier exécuté",
+      "Aucune qualification réelle GPS/tablette",
+      "Aucun entretien utilisateur ou mesure marché",
+      "Pas audit juridique, de sécurité ni charge réel",
+      "Liens externes historiques non tous revalidés en V3.4",
+      "Pas validateur intégral méta-schéma OpenAPI installé"
+    ],
+    "crossContract": {
+      "status": "CROSS_CONTRACT_DOCUMENTARY_ONLY",
+      "productCodeExercised": false,
+      "version": "3.2.0",
+      "checks": {
+        "operations": 192,
+        "successBranches": 304,
+        "ordinaryLimitParameters": 34,
+        "ordinaryPageSchemas": 34,
+        "pendingContracts": 114
+      },
+      "errorCount": 0,
+      "errors": [],
+      "passed": true,
+      "limitations": [
+        "Enveloppes, bornes et présence de clauses seulement ; les règles de service et transactions ne sont pas exécutées.",
+        "Pas de validation intégrale du méta-schéma OpenAPI."
+      ]
+    }
+  },
+  "errorCount": 0,
+  "passed": true
+}

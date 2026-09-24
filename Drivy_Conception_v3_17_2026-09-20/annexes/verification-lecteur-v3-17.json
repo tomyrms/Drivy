@@ -1,0 +1,79 @@
+{
+  "version": "3.17",
+  "scope": "READER_AND_COMPLEMENTARY_GALLERY_SMOKE_ONLY",
+  "passed": true,
+  "errorCount": 0,
+  "checks": [
+    {
+      "check": "Reader title V3.17",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Every Markdown file is a reader section",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Unique reader ids",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Reader internal links and images resolve",
+      "passed": true,
+      "details": []
+    },
+    {
+      "check": "Current audit distinguished from historical audit",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Reader starts with one document",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Route resolves to design entry",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Search filters navigation",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Clear restores navigation",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Mobile contents opens",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Escape closes contents",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Complementary gallery advertises current reference",
+      "passed": true,
+      "details": null
+    },
+    {
+      "check": "Complementary gallery loads without JS error",
+      "passed": true,
+      "details": []
+    }
+  ],
+  "environment": {
+    "python": "3.13.5",
+    "browser": "144.0.7559.96"
+  },
+  "previousFullGalleryInteractions": "NOT_RERUN",
+  "nativeTestsExecuted": false
+}

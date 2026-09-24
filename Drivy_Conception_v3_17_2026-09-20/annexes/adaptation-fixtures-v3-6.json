@@ -1,0 +1,61 @@
+{
+  "notProductionMigration": true,
+  "changes": [
+    {
+      "file": "annexes/cas-contrats-v3-2-adaptes-v3-6.json",
+      "id": "SC107",
+      "before": {
+        "segmentId": "00000000-0000-4000-8000-000000000001",
+        "segmentIndex": 0,
+        "expectedChunkIndices": [
+          0,
+          1
+        ],
+        "expectedPointCount": 0,
+        "lastSequence": 0,
+        "endReason": "STOP"
+      },
+      "after": {
+        "segmentId": "00000000-0000-4000-8000-000000000001",
+        "segmentIndex": 0,
+        "expectedChunkIndices": [
+          0,
+          1
+        ],
+        "expectedPointCount": 2,
+        "lastSequence": 1,
+        "endReason": "STOP"
+      },
+      "expectedValidUnchanged": true,
+      "reason": "D10 continue de tester l’unicité des chunks sur un segment non vide ; R43 exige zéro chunk pour zéro point. Les originaux restent conservés."
+    },
+    {
+      "file": "annexes/cas-contrats-v3-2-adaptes-v3-6.json",
+      "id": "SC108",
+      "before": {
+        "segmentId": "00000000-0000-4000-8000-000000000001",
+        "segmentIndex": 0,
+        "expectedChunkIndices": [
+          0,
+          0
+        ],
+        "expectedPointCount": 0,
+        "lastSequence": 0,
+        "endReason": "STOP"
+      },
+      "after": {
+        "segmentId": "00000000-0000-4000-8000-000000000001",
+        "segmentIndex": 0,
+        "expectedChunkIndices": [
+          0,
+          0
+        ],
+        "expectedPointCount": 2,
+        "lastSequence": 1,
+        "endReason": "STOP"
+      },
+      "expectedValidUnchanged": false,
+      "reason": "D10 continue de tester l’unicité des chunks sur un segment non vide ; R43 exige zéro chunk pour zéro point. Les originaux restent conservés."
+    }
+  ]
+}

@@ -1,0 +1,830 @@
+{
+  "status": "CROSS_CONTRACT_DOCUMENTARY_ONLY",
+  "productCodeExercised": false,
+  "version": "3.1.0",
+  "checks": {
+    "operations": 191,
+    "successBranches": 188,
+    "ordinaryLimitParameters": 34,
+    "ordinaryPageSchemas": 34,
+    "pendingContracts": 113
+  },
+  "errorCount": 192,
+  "errors": [
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "SchoolPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "MemberPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "InvitationPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "LearnerPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "CurriculumPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "OfferingPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "TrainingPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "AssignmentPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "PermitCheckPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "AvailabilityRulePage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "ClosurePage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "LessonPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "ReportRevisionPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "DocumentPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "NotificationPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "PrivacyRequestPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "AuditEventPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "SchoolPolicyPage"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "SchoolSitePageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "RoomPageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "ServiceProductVersionPageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "PackOfferVersionPageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "PurchasePageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "EntitlementLotPageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "EntitlementMovementPageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "RequirementRecordPageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "RegulatoryProfilePageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "CourseTemplatePageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "CourseSessionPageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "CourseEnrollmentPageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "AttendanceRecordPageV2"
+    },
+    {
+      "type": "PAGE_ITEMS_LIMIT",
+      "schema": "GeoObservationPageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "updateSchool"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "updateMember"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "revokeMember"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createInvitation"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "resendInvitation"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "revokeInvitation"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "updateLearner"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "archiveLearner"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createOfferingVersion"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createCurriculumVersion"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createTraining"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "setTrainingState"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createAssignment"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "endAssignment"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "reviewPermit"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createAvailabilityRule"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "updateAvailabilityRule"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "removeAvailabilityRule"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createClosure"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "removeClosure"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createLesson"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "moveLesson"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "cancelLesson"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "markNoShow"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "savePreparation"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "saveWish"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "completeLesson"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "correctOutcome"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createCorrectionDraft"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "saveDraft"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "publishDraft"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "withdrawPublication"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createUploadIntent"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "completeUpload"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createDownloadTicket"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "requestDocumentDeletion"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "recordPayment"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "recordRefund"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "adjustCharge"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "markNotificationViewed"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "retryDelivery"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "getOperationResult"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createSnapshot"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createPrivacyRequest"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "recordPrivacyDecision"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createExport"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "getExportDownloadTicket"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createAssetUploadIntent"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "completeAssetUpload"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "getAssetDownloadTicket"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "approveOutcomeCorrection"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "reversePaymentEntry"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createSchoolPolicy"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listSites"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listSites",
+      "status": "200",
+      "schema": "SchoolSitePageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createSite"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listRooms"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listRooms",
+      "status": "200",
+      "schema": "RoomPageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createRoom"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listServiceProductVersions"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listServiceProductVersions",
+      "status": "200",
+      "schema": "ServiceProductVersionPageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createServiceProductVersion"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listPackOfferVersions"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listPackOfferVersions",
+      "status": "200",
+      "schema": "PackOfferVersionPageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createPackOfferVersion"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "updateSite"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "updateRoom"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "archiveServiceProductVersion"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "archivePackOfferVersion"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listLearnerPurchases"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listLearnerPurchases",
+      "status": "200",
+      "schema": "PurchasePageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "recordPurchase"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "cancelPurchase"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listLearnerEntitlements"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listLearnerEntitlements",
+      "status": "200",
+      "schema": "EntitlementLotPageV2"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listEntitlementMovements"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listEntitlementMovements",
+      "status": "200",
+      "schema": "EntitlementMovementPageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "restoreEntitlement"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "recordAccountPayment"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "recordAccountRefund"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "adjustAccountCharge"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "reverseAccountPayment"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listLearnerRequirements",
+      "status": "200",
+      "schema": "RequirementRecordPageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "declareLearnerRequirement"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "reviewRequirement"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listRegulatoryProfiles"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listRegulatoryProfiles",
+      "status": "200",
+      "schema": "RegulatoryProfilePageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createRegulatoryProfileDraft"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "approveRegulatoryProfile"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listCourseTemplates"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listCourseTemplates",
+      "status": "200",
+      "schema": "CourseTemplatePageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createCourseTemplate"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "updateCourseTemplate"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listCourseSessions"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listCourseSessions",
+      "status": "200",
+      "schema": "CourseSessionPageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createCourseSession"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "updateCourseDraft"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "publishCourseSession"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "unpublishCourseSession"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "rescheduleCourseSession"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "changeCourseCapacity"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "cancelCourseSession"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "closeCourseSession"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listCourseEnrollments"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listCourseEnrollments",
+      "status": "200",
+      "schema": "CourseEnrollmentPageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "enrollCourse"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listLearnerCourseEnrollments"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listLearnerCourseEnrollments",
+      "status": "200",
+      "schema": "CourseEnrollmentPageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "cancelCourseEnrollment"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "reconfirmCourseEnrollment"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listCourseAttendance"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listCourseAttendance",
+      "status": "200",
+      "schema": "AttendanceRecordPageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "recordCourseAttendance"
+    },
+    {
+      "type": "ATTENDANCE_CYCLE_PATH"
+    },
+    {
+      "type": "ATTENDANCE_CREATE_PRECONDITION"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "registerPushDevice"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "revokePushDevice"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "updateNotificationPreferences"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "recordRecordingChoice"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "authorizeCapture"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "uploadTrackChunk"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "stopCapture"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "finalizeCapture"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "withdrawCapturePublication"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "getReplay"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listGeoObservations"
+    },
+    {
+      "type": "SUCCESS_ENVELOPE",
+      "operation": "listGeoObservations",
+      "status": "200",
+      "schema": "GeoObservationPageV2"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createGeoObservation"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "updateGeoObservation"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "removeDraftGeoObservation"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "saveSchoolSetup"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "activateSchool"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listProfileFieldPolicies"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createProfileFieldPolicy"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "publishProfileFieldPolicy"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "saveMyOnboarding"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "completeMyOnboarding"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "saveAdministrativeProfile"
+    },
+    {
+      "type": "QUERY_LIMIT",
+      "operation": "listTrainingRequests"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createTrainingRequest"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "decideTrainingRequest"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "withdrawTrainingRequest"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createArchivePreview"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "restoreLearner"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "startBulkArchive"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "createManagementExport"
+    },
+    {
+      "type": "PENDING_RESPONSE_UNDECLARED",
+      "operation": "assessCaptureDevice"
+    },
+    {
+      "type": "DUPLICATE_PACK_OPTIONS"
+    },
+    {
+      "type": "DUPLICATE_CHUNK_INDICES"
+    },
+    {
+      "type": "MISSING_RESCHEDULE_DEADLINE",
+      "field": "enrollmentDeadline"
+    },
+    {
+      "type": "MISSING_RESCHEDULE_DEADLINE",
+      "field": "selfCancellationDeadline"
+    },
+    {
+      "type": "SYNC_DOMAIN_MISSING",
+      "domains": [
+        "ADMINISTRATIVE_PROFILE",
+        "CAPTURE",
+        "COURSE_ENROLLMENT",
+        "COURSE_SESSION",
+        "ENTITLEMENT",
+        "PROFILE_POLICY",
+        "PURCHASE",
+        "RECORDING_CHOICE",
+        "REQUIREMENT"
+      ]
+    },
+    {
+      "type": "INVALIDATION_ACTION_MISSING"
+    },
+    {
+      "type": "REQUIRED_PROJECTION_FIELD",
+      "schema": "CourseSession",
+      "field": "requirementTypeSnapshot"
+    },
+    {
+      "type": "REQUIRED_PROJECTION_FIELD",
+      "schema": "CourseEnrollment",
+      "field": "acceptedCommercialSnapshot"
+    },
+    {
+      "type": "REQUIRED_PROJECTION_FIELD",
+      "schema": "CourseEnrollment",
+      "field": "acceptedSelfCancellationDeadline"
+    },
+    {
+      "type": "REQUIRED_PROJECTION_FIELD",
+      "schema": "AttendanceRecord",
+      "field": "enrollmentCycle"
+    },
+    {
+      "type": "REQUIRED_PROJECTION_FIELD",
+      "schema": "EntitlementLot",
+      "field": "usableQuantity"
+    },
+    {
+      "type": "REQUIRED_PROJECTION_FIELD",
+      "schema": "CapturePublication",
+      "field": "availability"
+    },
+    {
+      "type": "REQUIRED_PROJECTION_FIELD",
+      "schema": "Lesson",
+      "field": "commercialRevisionVersion"
+    }
+  ],
+  "passed": false,
+  "limitations": [
+    "Enveloppes, bornes et présence de clauses seulement ; les règles de service et transactions ne sont pas exécutées.",
+    "Pas de validation intégrale du méta-schéma OpenAPI."
+  ]
+}

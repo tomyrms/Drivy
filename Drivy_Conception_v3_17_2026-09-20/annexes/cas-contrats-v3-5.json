@@ -1,0 +1,721 @@
+{
+  "version": "3.5",
+  "status": "DOCUMENTARY_SCHEMA_CASES",
+  "productCodeExercised": false,
+  "cases": [
+    {
+      "id": "SC110",
+      "title": "Approbation sans preuve refusée",
+      "schema": "PermitCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "physicalSeen": false,
+        "categoryCode": "B",
+        "decision": "APPROVED"
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC111",
+      "title": "Contrôle physique autorisable",
+      "schema": "PermitCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "physicalSeen": true,
+        "categoryCode": "B",
+        "decision": "APPROVED"
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC112",
+      "title": "Pièce référencée, contrôle service encore requis",
+      "schema": "PermitCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "physicalSeen": false,
+        "categoryCode": "B",
+        "decision": "APPROVED",
+        "documentId": "00000000-0000-4000-8000-000000000035"
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC113",
+      "title": "Rejet sans motif refusé",
+      "schema": "PermitCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "physicalSeen": false,
+        "categoryCode": "B",
+        "decision": "REJECTED"
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC114",
+      "title": "Motif espaces refusé",
+      "schema": "PermitCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "physicalSeen": false,
+        "categoryCode": "B",
+        "decision": "REJECTED",
+        "reason": "   "
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC115",
+      "title": "Rejet motivé",
+      "schema": "PermitCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "physicalSeen": false,
+        "categoryCode": "B",
+        "decision": "REJECTED",
+        "reason": "Pièce illisible, renvoyer une copie."
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC116",
+      "title": "Repère manuel valide",
+      "schema": "PlannedWaypoint",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000035",
+        "label": "Giratoire à préparer",
+        "latitude": 46.99,
+        "longitude": 6.93,
+        "note": null
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC117",
+      "title": "Latitude impossible",
+      "schema": "PlannedWaypoint",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000035",
+        "label": "Giratoire à préparer",
+        "latitude": 91,
+        "longitude": 6.93,
+        "note": null
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC118",
+      "title": "Longitude impossible",
+      "schema": "PlannedWaypoint",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000035",
+        "label": "Giratoire à préparer",
+        "latitude": 46.99,
+        "longitude": -181,
+        "note": null
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC119",
+      "title": "Préparation avec repère",
+      "schema": "PreparationCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "goals": [],
+        "plannedWaypoints": [
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          }
+        ]
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC120",
+      "title": "Préparation omission conserve",
+      "schema": "PreparationCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "goals": []
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC121",
+      "title": "Préparation [] efface",
+      "schema": "PreparationCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "goals": [],
+        "plannedWaypoints": []
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC122",
+      "title": "Préparation au-delà budget",
+      "schema": "PreparationCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "goals": [],
+        "plannedWaypoints": [
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "label": "Giratoire à préparer",
+            "latitude": 46.99,
+            "longitude": 6.93,
+            "note": null
+          }
+        ]
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC123",
+      "title": "Confirmation personnelle vraie",
+      "schema": "AccountDeletionSubmitCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "previewId": "00000000-0000-4000-8000-000000000035",
+        "previewVersion": 1,
+        "confirmAccountDeletion": true
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC124",
+      "title": "Confirmation fausse refusée",
+      "schema": "AccountDeletionSubmitCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "previewId": "00000000-0000-4000-8000-000000000035",
+        "previewVersion": 1,
+        "confirmAccountDeletion": false
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC125",
+      "title": "Personne tierce dans corps refusée",
+      "schema": "AccountDeletionSubmitCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "previewId": "00000000-0000-4000-8000-000000000035",
+        "previewVersion": 1,
+        "confirmAccountDeletion": true,
+        "personId": "00000000-0000-4000-8000-000000000035"
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC126",
+      "title": "Version aperçu zéro refusée",
+      "schema": "AccountDeletionSubmitCommand",
+      "value": {
+        "operationId": "00000000-0000-4000-8000-000000000035",
+        "previewId": "00000000-0000-4000-8000-000000000035",
+        "previewVersion": 0,
+        "confirmAccountDeletion": true
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC127",
+      "title": "Demande reçue non terminée",
+      "schema": "AccountDeletionRequest",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000035",
+        "version": 1,
+        "status": "SUBMITTED",
+        "submittedAt": "2026-09-19T12:00:00Z",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "withdrawalAllowed": true,
+        "statusMessage": "Demande reçue",
+        "retentionSummary": "",
+        "nextUpdateAt": "2026-09-19T12:00:00Z",
+        "completedAt": null
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC128",
+      "title": "Demande reçue datée terminée refusée",
+      "schema": "AccountDeletionRequest",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000035",
+        "version": 1,
+        "status": "SUBMITTED",
+        "submittedAt": "2026-09-19T12:00:00Z",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "withdrawalAllowed": true,
+        "statusMessage": "Demande reçue",
+        "retentionSummary": "",
+        "nextUpdateAt": "2026-09-19T12:00:00Z",
+        "completedAt": "2026-09-19T12:00:00Z"
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC129",
+      "title": "PROCESSING retirable refusé",
+      "schema": "AccountDeletionRequest",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000035",
+        "version": 1,
+        "status": "PROCESSING",
+        "submittedAt": "2026-09-19T12:00:00Z",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "withdrawalAllowed": true,
+        "statusMessage": "Demande reçue",
+        "retentionSummary": "",
+        "nextUpdateAt": "2026-09-19T12:00:00Z",
+        "completedAt": null
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC130",
+      "title": "PROCESSING non retirable",
+      "schema": "AccountDeletionRequest",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000035",
+        "version": 1,
+        "status": "PROCESSING",
+        "submittedAt": "2026-09-19T12:00:00Z",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "withdrawalAllowed": false,
+        "statusMessage": "Demande reçue",
+        "retentionSummary": "",
+        "nextUpdateAt": "2026-09-19T12:00:00Z",
+        "completedAt": null
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC131",
+      "title": "COMPLETED sans date refusé",
+      "schema": "AccountDeletionRequest",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000035",
+        "version": 1,
+        "status": "COMPLETED",
+        "submittedAt": "2026-09-19T12:00:00Z",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "withdrawalAllowed": false,
+        "statusMessage": "Demande reçue",
+        "retentionSummary": "",
+        "nextUpdateAt": "2026-09-19T12:00:00Z",
+        "completedAt": null
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC132",
+      "title": "COMPLETED daté",
+      "schema": "AccountDeletionRequest",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000035",
+        "version": 1,
+        "status": "COMPLETED",
+        "submittedAt": "2026-09-19T12:00:00Z",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "withdrawalAllowed": false,
+        "statusMessage": "Demande reçue",
+        "retentionSummary": "",
+        "nextUpdateAt": "2026-09-19T12:00:00Z",
+        "completedAt": "2026-09-19T12:00:00Z"
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC133",
+      "title": "Reçu pauvre en données",
+      "schema": "AccountDeletionReceipt",
+      "value": {
+        "status": "PROCESSING",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "messageCode": "DELETION_IN_PROGRESS",
+        "nextUpdateAt": "2026-09-19T12:00:00Z"
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC134",
+      "title": "Reçu révélant école refusé",
+      "schema": "AccountDeletionReceipt",
+      "value": {
+        "status": "PROCESSING",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "messageCode": "DELETION_IN_PROGRESS",
+        "nextUpdateAt": "2026-09-19T12:00:00Z",
+        "schoolName": "École fictive"
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC135",
+      "title": "Reçu révélant email refusé",
+      "schema": "AccountDeletionReceipt",
+      "value": {
+        "status": "PROCESSING",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "messageCode": "DELETION_IN_PROGRESS",
+        "nextUpdateAt": "2026-09-19T12:00:00Z",
+        "email": "fictif@example.invalid"
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC136",
+      "title": "Série avec langue explicite",
+      "schema": "CourseSession",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000001",
+        "version": 1,
+        "templateId": "00000000-0000-4000-8000-000000000001",
+        "title": "x",
+        "productVersionId": "00000000-0000-4000-8000-000000000001",
+        "profileVersionId": "00000000-0000-4000-8000-000000000001",
+        "status": "DRAFT",
+        "offerRevision": 1,
+        "capacity": 1,
+        "remainingSeats": 0,
+        "occurrences": [],
+        "audience": {
+          "mode": "ALL_ACTIVE_LEARNERS",
+          "siteIds": [],
+          "categoryCodes": [],
+          "languages": []
+        },
+        "unitPriceCentsSnapshot": 0,
+        "termsVersionId": "00000000-0000-4000-8000-000000000001",
+        "enrollmentDeadline": "2026-10-01T12:00:00+02:00",
+        "selfCancellationDeadline": "2026-10-01T12:00:00+02:00",
+        "generatedAt": "2026-10-01T12:00:00+02:00",
+        "requirementTypeSnapshot": "x",
+        "teachingLanguage": "fr"
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC137",
+      "title": "Série sans langue refusée",
+      "schema": "CourseSession",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000001",
+        "version": 1,
+        "templateId": "00000000-0000-4000-8000-000000000001",
+        "title": "x",
+        "productVersionId": "00000000-0000-4000-8000-000000000001",
+        "profileVersionId": "00000000-0000-4000-8000-000000000001",
+        "status": "DRAFT",
+        "offerRevision": 1,
+        "capacity": 1,
+        "remainingSeats": 0,
+        "occurrences": [],
+        "audience": {
+          "mode": "ALL_ACTIVE_LEARNERS",
+          "siteIds": [],
+          "categoryCodes": [],
+          "languages": []
+        },
+        "unitPriceCentsSnapshot": 0,
+        "termsVersionId": "00000000-0000-4000-8000-000000000001",
+        "enrollmentDeadline": "2026-10-01T12:00:00+02:00",
+        "selfCancellationDeadline": "2026-10-01T12:00:00+02:00",
+        "generatedAt": "2026-10-01T12:00:00+02:00",
+        "requirementTypeSnapshot": "x"
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC138",
+      "title": "Code langue hors catalogue",
+      "schema": "CourseSession",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "schoolId": "00000000-0000-4000-8000-000000000001",
+        "version": 1,
+        "templateId": "00000000-0000-4000-8000-000000000001",
+        "title": "x",
+        "productVersionId": "00000000-0000-4000-8000-000000000001",
+        "profileVersionId": "00000000-0000-4000-8000-000000000001",
+        "status": "DRAFT",
+        "offerRevision": 1,
+        "capacity": 1,
+        "remainingSeats": 0,
+        "occurrences": [],
+        "audience": {
+          "mode": "ALL_ACTIVE_LEARNERS",
+          "siteIds": [],
+          "categoryCodes": [],
+          "languages": []
+        },
+        "unitPriceCentsSnapshot": 0,
+        "termsVersionId": "00000000-0000-4000-8000-000000000001",
+        "enrollmentDeadline": "2026-10-01T12:00:00+02:00",
+        "selfCancellationDeadline": "2026-10-01T12:00:00+02:00",
+        "generatedAt": "2026-10-01T12:00:00+02:00",
+        "requirementTypeSnapshot": "x",
+        "teachingLanguage": "xx"
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC139",
+      "title": "Permis final avec contrôleur et preuve",
+      "schema": "PermitCheck",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000035",
+        "schoolId": "00000000-0000-4000-8000-000000000035",
+        "version": 1,
+        "trainingId": "00000000-0000-4000-8000-000000000035",
+        "documentId": null,
+        "physicalSeen": true,
+        "categoryCode": "B",
+        "validUntil": null,
+        "decision": "APPROVED",
+        "reviewerMembershipId": "00000000-0000-4000-8000-000000000035",
+        "reviewedAt": "2026-09-19T12:00:00Z",
+        "reason": null,
+        "isExpired": false
+      },
+      "expectedValid": true,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC140",
+      "title": "Permis final sans contrôleur refusé",
+      "schema": "PermitCheck",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000035",
+        "schoolId": "00000000-0000-4000-8000-000000000035",
+        "version": 1,
+        "trainingId": "00000000-0000-4000-8000-000000000035",
+        "documentId": null,
+        "physicalSeen": true,
+        "categoryCode": "B",
+        "validUntil": null,
+        "decision": "APPROVED",
+        "reviewerMembershipId": null,
+        "reviewedAt": "2026-09-19T12:00:00Z",
+        "reason": null,
+        "isExpired": false
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC141",
+      "title": "Permis final sans preuve refusé",
+      "schema": "PermitCheck",
+      "value": {
+        "id": "00000000-0000-4000-8000-000000000035",
+        "schoolId": "00000000-0000-4000-8000-000000000035",
+        "version": 1,
+        "trainingId": "00000000-0000-4000-8000-000000000035",
+        "documentId": null,
+        "physicalSeen": false,
+        "categoryCode": "B",
+        "validUntil": null,
+        "decision": "APPROVED",
+        "reviewerMembershipId": "00000000-0000-4000-8000-000000000035",
+        "reviewedAt": "2026-09-19T12:00:00Z",
+        "reason": null,
+        "isExpired": false
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    },
+    {
+      "id": "SC142",
+      "title": "Reçu état/message contradictoires refusé",
+      "schema": "AccountDeletionReceipt",
+      "value": {
+        "status": "PROCESSING",
+        "messageCode": "DELETION_COMPLETED",
+        "updatedAt": "2026-09-19T12:00:00Z",
+        "nextUpdateAt": null
+      },
+      "expectedValid": false,
+      "finding": "V3.5"
+    }
+  ]
+}

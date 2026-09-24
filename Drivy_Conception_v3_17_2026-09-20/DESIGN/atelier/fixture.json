@@ -1,0 +1,173 @@
+{
+  "version": "3.16",
+  "kind": "FICTITIOUS_CANVAS_NOT_GEOGRAPHIC",
+  "student": "Emma Laurent",
+  "durationSeconds": 1490,
+  "baseTime": "2026-09-21T07:00:00.000Z",
+  "themes": [
+    {
+      "id": "00000000-0000-4000-8000-000000000108",
+      "label": "Priorité à droite",
+      "icon": "priority"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000111",
+      "label": "Stationnement",
+      "icon": "parking"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000112",
+      "label": "Signalisation",
+      "icon": "sign"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000109",
+      "label": "Giratoire",
+      "icon": "roundabout"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000113",
+      "label": "Observation",
+      "icon": "eye"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000110",
+      "label": "Anticipation",
+      "icon": "anticipate"
+    }
+  ],
+  "points": [
+    {
+      "t": 0,
+      "x": 79,
+      "y": 645
+    },
+    {
+      "t": 260,
+      "x": 79,
+      "y": 519
+    },
+    {
+      "t": 480,
+      "x": 178,
+      "y": 519
+    },
+    {
+      "t": 674,
+      "x": 178,
+      "y": 418
+    },
+    {
+      "t": 950,
+      "x": 178,
+      "y": 293
+    },
+    {
+      "t": 1130,
+      "x": 283,
+      "y": 293
+    },
+    {
+      "t": 1490,
+      "x": 283,
+      "y": 365
+    }
+  ],
+  "observations": [
+    {
+      "id": "demo-01",
+      "second": 260,
+      "theme": "00000000-0000-4000-8000-000000000112",
+      "status": "TO_REWORK",
+      "note": "",
+      "kind": "QUALIFIED",
+      "anchor": {
+        "x": 79,
+        "y": 519
+      },
+      "visibility": "PRIVATE"
+    },
+    {
+      "id": "demo-02",
+      "second": 674,
+      "theme": "00000000-0000-4000-8000-000000000108",
+      "status": "ATTENTION",
+      "note": "Observer avant de s’engager.",
+      "kind": "QUALIFIED",
+      "anchor": {
+        "x": 178,
+        "y": 418
+      },
+      "visibility": "PRIVATE"
+    },
+    {
+      "id": "demo-03",
+      "second": 1130,
+      "theme": "00000000-0000-4000-8000-000000000111",
+      "status": "POSITIVE",
+      "note": "",
+      "kind": "QUALIFIED",
+      "anchor": {
+        "x": 283,
+        "y": 293
+      },
+      "visibility": "PRIVATE"
+    }
+  ],
+  "limits": "Coordonnées x/y fictives, jamais latitude/longitude. Données initiales de démonstration, mémoire volatile, aucune capture GPS, aucun envoi réseau, aucun bilan publié.",
+  "densityObservations": [
+    {
+      "id": "dense-01",
+      "second": 680,
+      "theme": "00000000-0000-4000-8000-000000000109",
+      "status": "TO_REWORK",
+      "note": "Exemple fictif rapproché.",
+      "kind": "QUALIFIED",
+      "anchor": {
+        "x": 178,
+        "y": 414.7
+      },
+      "visibility": "PRIVATE"
+    },
+    {
+      "id": "dense-02",
+      "second": 683,
+      "theme": "00000000-0000-4000-8000-000000000113",
+      "status": "ATTENTION",
+      "note": "Exemple fictif au même instant.",
+      "kind": "QUALIFIED",
+      "anchor": {
+        "x": 178,
+        "y": 413.1
+      },
+      "visibility": "PRIVATE"
+    },
+    {
+      "id": "dense-03",
+      "second": 683,
+      "theme": "00000000-0000-4000-8000-000000000112",
+      "status": "POSITIVE",
+      "note": "Autre observation, même instant, identité distincte.",
+      "kind": "QUALIFIED",
+      "anchor": {
+        "x": 178,
+        "y": 413.1
+      },
+      "visibility": "PRIVATE"
+    },
+    {
+      "id": "dense-04",
+      "second": 700,
+      "theme": null,
+      "status": null,
+      "note": "Repère fictif non qualifié.",
+      "kind": "MARKER",
+      "anchor": {
+        "x": 178,
+        "y": 403.9
+      },
+      "visibility": "PRIVATE"
+    }
+  ],
+  "densityLimits": "Quatre événements optionnels de démonstration, jamais fusionnés. Tous restent accessibles via la liste et précédent/suivant. Le chevauchement des repères reste une limite de ce prototype, pas une solution native de clustering."
+}

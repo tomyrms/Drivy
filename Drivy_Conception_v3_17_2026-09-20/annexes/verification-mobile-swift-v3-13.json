@@ -1,0 +1,202 @@
+{
+  "version": "3.13",
+  "scope": "MOBILE_SWIFT_DOCUMENTATION_ONLY",
+  "nativeTestsExecuted": false,
+  "reports": {
+    "mobile": {
+      "version": "3.13",
+      "status": "DOCUMENTARY_CHECKS_ONLY",
+      "productTestsExecuted": false,
+      "checkedAt": "2026-09-19",
+      "checks": {
+        "mobileRequirements": 16,
+        "mobileCasesNotExecuted": 68,
+        "sourceEntriesTracked": 51,
+        "newSourceEntriesV34": 9,
+        "unqualifiedBuildRows": 6,
+        "qualityCriteria": 10,
+        "appliedPatterns": 6,
+        "apiMatchesCurrentProvenance": true,
+        "apiSHA256": "faafee1e1d5b67f52fa1e8508e5c3d8c695699eafe3405963edbc1737e7b6855",
+        "businessScenariosCurrent": 422,
+        "businessScenariosAtOriginalMobileIntroduction": 284,
+        "businessScenariosBaselineV36": 350,
+        "caseProseAndRegistryChecked": true,
+        "touchTokensConsistent": true,
+        "globalDeletionOperationalGateDisclosed": true
+      },
+      "errorCount": 0,
+      "errors": [],
+      "passed": true,
+      "limitations": [
+        "Contrôles de structure/relations, pas exécution des scénarios MOB ou T.",
+        "Présence d’une clause ne démontre pas que son implémentation est correcte.",
+        "Aucun verdict automatisé sur esthétique, AI slop, conformité juridique ou compatibilité physique.",
+        "URLs sources vérifiées syntaxiquement ici ; consultations web séparées dans le registre."
+      ],
+      "sourceCheckerVersion": "3.7"
+    },
+    "swift": {
+      "version": "3.13",
+      "scope": "DOCUMENTATION_NOT_SWIFT_COMPILATION",
+      "productTestsExecuted": false,
+      "checks": [
+        {
+          "check": "Legacy_mobile_stack_absent_from_active_reference",
+          "passed": true,
+          "details": {
+            "activeDocuments": 71,
+            "matches": [],
+            "excludedFiles": [
+              "06-gouvernance/audit-corrections-v3-1.md",
+              "06-gouvernance/audit-corrections-v3-2.md",
+              "06-gouvernance/audit-corrections-v3-5.md",
+              "06-gouvernance/audit-corrections-v3-6.md",
+              "06-gouvernance/changements-v2.md",
+              "06-gouvernance/changements-v3-3.md",
+              "06-gouvernance/changements-v3-4.md",
+              "06-gouvernance/changements-v3.md",
+              "06-gouvernance/sources.md"
+            ]
+          }
+        },
+        {
+          "check": "Native_registry_no_legacy_stack:annexes/qualification-mobile-v3-13.json",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_registry_no_legacy_stack:annexes/matrice-build-mobile-v3-4.json",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_architecture_clause:Swift natif",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_architecture_clause:SwiftUI",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_architecture_clause:Core Location",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_architecture_clause:MapKit",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_architecture_clause:URLSession",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_architecture_clause:Keychain",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_architecture_clause:SQLCipher",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_architecture_clause:MainActor",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_architecture_clause:await",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_architecture_clause:Swift Testing",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_architecture_clause:XCTest",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_architecture_clause:GA0",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Native_decision_accepted",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Android_not_required_for_Apple_G0",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Four_Apple_rows_native_unqualified",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Two_Android_rows_future_unqualified",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "No_legacy_runtime_fields",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Twelve_added_Swift_cases",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Current_requirements_no_legacy_framework_sources",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "OpenAPI_matches_current_provenance",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "No_native_build_claimed",
+          "passed": true,
+          "details": null
+        },
+        {
+          "check": "Current_markdown_count",
+          "passed": true,
+          "details": 80
+        },
+        {
+          "check": "Global_deletion_operational_gate_explicit",
+          "passed": true,
+          "details": null
+        }
+      ],
+      "passed": true,
+      "errorCount": 0,
+      "errors": [],
+      "limitations": [
+        "Lexical and structural checks do not prove all semantic consistency.",
+        "No native code, permissions, OS behaviour or encryption was executed.",
+        "Historical journals and source register deliberately retain previous technology names."
+      ],
+      "sourceCheckerVersion": "3.7"
+    }
+  },
+  "passed": true,
+  "adaptation": "Current registry/provenance, exact T/MOB and document counts; previous assertions retained."
+}

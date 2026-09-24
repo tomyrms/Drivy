@@ -1,0 +1,947 @@
+{
+  "version": "3.8",
+  "scope": "DOCUMENTARY_HTML_PROTOTYPE_ONLY",
+  "loadingMethod": "Playwright set_content; file URLs blocked by environment; relative document links checked separately",
+  "nativeTestsExecuted": false,
+  "browserLayoutCases": 90,
+  "largeTextCases": 14,
+  "checks": [
+    {
+      "name": "14_scenes_plus_overview",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "all_layouts_have_content_and_no_body_horizontal_overflow",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "visible_primary_buttons_do_not_clip_text_horizontally",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "large_text_layout",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "no_gps_view_has_no_map",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "first_fix_waiting_has_no_measured_geometry",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "pause_resume_without_points_does_not_invent_route",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "stop_empty_does_not_invent_route",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "stop_is_not_automatically_lesson_completion",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_assessment_level_preselected",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "explicit_registration_dialog",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "dialog_has_accessible_label",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "pending_not_confirmed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "confirmed_course_moves_to_commitments",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "unsimulated_day_does_not_change_visible_selection",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "full_course_cannot_register",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "accepted_new_times_visible",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "confirmed_course_right_is_reserved",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "withdrawn_trace_has_no_geometry",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "next_observation_changes_time_and_text",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "student_search_finds_one",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "archive_preview_before_action",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "archive_changes_only_demo_state",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "future_commitments_block_archive",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "modal_closes_with_escape",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no_javascript_exceptions",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "no_external_requests_from_prototype",
+      "passed": true,
+      "detail": []
+    }
+  ],
+  "layoutCases": [
+    {
+      "scene": "overview",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 390,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "overview",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 390,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "overview",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 834,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "overview",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 834,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "overview",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 1440,
+      "theme": "light",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "overview",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "seance",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "capture",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "sans-gps",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "replay",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "agenda",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "cours",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "bilan",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "profil",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "pack",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-capture",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "ipad-agenda",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-eleves",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-activite",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    },
+    {
+      "scene": "web-ecole",
+      "width": 1440,
+      "theme": "dark",
+      "body": true,
+      "stage": true,
+      "badButtons": []
+    }
+  ],
+  "largeTextLayouts": [
+    {
+      "scene": "seance",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "capture",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "sans-gps",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "replay",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "agenda",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "cours",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "bilan",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "profil",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "pack",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "ipad-capture",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "ipad-agenda",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "web-eleves",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "web-activite",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    },
+    {
+      "scene": "web-ecole",
+      "noBodyOverflow": true,
+      "noClippedButtons": true
+    }
+  ],
+  "passed": true,
+  "errors": [],
+  "limits": [
+    "No Swift build, native device or real API.",
+    "150% prototype text does not emulate all Dynamic Type categories.",
+    "No VoiceOver/TalkBack or user tests.",
+    "Body overflow and button bounds are not an exhaustive accessibility audit."
+  ]
+}

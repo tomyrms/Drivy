@@ -1,0 +1,1159 @@
+{
+  "version": "3.7",
+  "baseVersion": "3.6",
+  "baseFiles": 164,
+  "baseMarkdownFiles": 64,
+  "currentMarkdownFiles": 65,
+  "structuralCoverage": "Tous les Markdown, liens, identifiants, schémas, registres, exemples et cas des vérificateurs courants.",
+  "semanticDeepReview": "Présence/droits ; exigence/preuves ; mesure GPS/séance ; notifications/compte ; dépendances et métadonnées actives. Ne prétend pas revalider chaque affirmation commerciale ou juridique de l’historique.",
+  "entries": [
+    {
+      "file": "00-synthese.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "c6f239816fef4d4d5a579f663cfebd4950f93752b1d889423cf49fc5f075c013",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "01-fonctionnalites-prevues.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "21ab54c195b9380e49503f2e2abdae86ca74983a547a81ce854eef8dfb166f88",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "01-recherche/audit-existant.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "1ffbb3cc085cabaf4a5e55f924a8f926bbd44c560b985b3b61d86fef824e8057",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "01-recherche/auto-ecoles-suisses.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "5b2e9ba48eda68ba2c07696f2c4e9e833c4d741fe239ee1fca841fbf056e4594",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "01-recherche/benchmark.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "75d9a7558e6dfa317bfb329eadc5f9bffdfea41e93d28ea349b012ef61c14d43",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "01-recherche/inventaire-decisions.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "16883e01bd4cd60f623907a93fcc1b9438f9194c10ee8a01f66f56b09e72905a",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "01-recherche/ui-ux-mobile-etat-art.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "e5fef83a5675399cb1ba01d8f81dacb6f382e10e683a62b5b96b902335069376",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "01-recherche/vision-perimetre.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "6d6ddce308d9013cf3fcae562a526dd8e3ff4ba3a20004066ffe22bcc4043ee4",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "01-recherche/web-tablette-onboarding.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "1cb3a773afc36734278bedbc1200816586618601460e04c1564ab804cfb08cb4",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "02-experience/architecture-information.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "a18d62b11044646f5161799d9174f47720cb75db6d16cead151546381a1d0fac",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "02-experience/design-system.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "fecfd0d498f1a2c837ba60dc03d9ce3522b08bd0d2ba2d39d6de862c56e25adc",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "02-experience/directions-artistiques.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "5c0d20ea96c2fcad6c69704a624e5b0e9586cecd9d7b1a0520ea6f72203a1503",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "02-experience/ecrans.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "dc801d3a73faa17a4713b81ddca8e870261c5be0ef948ce29ee75c3d26617b59",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "02-experience/parcours.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "72b14141f816acdb392e54206a1ecb702f793c241f3effcb28b4ca9b3dea27c1",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "02-experience/patterns-mobile-parcours.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "c4df6be3b8b0f6aa7a5fbe7863adbd31bde124c53dea25878762af5a8702a0e0",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "02-experience/plateformes-tablette-web.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "ececb353a4d9eb18c5acbcac7afec2fe4c30165ee1e79b64def59312146e29d0",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "02-experience/qualite-ui-ux-anti-slop.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "bceb68ee2132ae105916c37050b1a51fc260dd3302cc32bf5421f6875d92bad3",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "02-experience/wireframes.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "c8bb1beca884bd66facb8df4244c58253fbd966d790d3b7746667f75404bad8e",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/bilans-documents.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "31084a9e978078ec656817fd010f2df229e1ab06bcc3c4d07c6c880c711659bc",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/calendrier-notifications.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "2fc8538d5018dc9fa641b874c02ff94b690bc24d30db137443962b6cb4f91082",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/catalogue-packs.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "e823ed01fd58e8c26cab1dec65f1e0a7c0830f86016a10397cccd236a3ff551d",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/compte-suppression-globale.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "7d2a3b66ef10edbf1b49cfd0b64ada386158f668fb2bfa14fd93e9ee721b119a",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/cours-collectifs.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "a4a5aef5d53c6c0625c2b8dabf2cf88c49d525f4bf0ae67e38eee36926486692",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/extensions.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "8150ee640506939625dd98570ed82ffcf9f0d1fc3ba82c6449a940001db3f6f1",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/gestion-web-archivage.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "a910f24cf8fad61328b46e0d1dc365fb5e73f58fd57e805738a24415ae42619b",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/gps-replay.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "7559ba88b36c7e983eb133b3c3d9c71a1c7d7564aca2d5b331850a9a722c1be7",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/hors-ligne-vie-privee.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "e5ea876b8b248a8118fd8c13fe735230413a4c4dcfa97f73c78d1d20a6bd1487",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/identites-formations.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "63589c04706eb1882116cc2ae11ff2420c3b71d182e5f090b92ccc232e9c2b01",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/onboarding.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "6c0e3ccbce8ced7b38b34d88d6b0b073a0f0c12031079c3df2c545bc654ff507",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/paiements-communications.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "1066ea357ab33db0c70e6db1a8b4c84c93d67f6185f51fbac863463a5703d68e",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/planning-lecons.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "3c1f70983cb26272fde2fd74f601b4ae7b2333549851e8b86df69457ecf9c916",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/regles-etats.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "570f2b474155d13ae9496e998f9227336c6abf177e7ce85f9616cbfd3575f365",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/roles-permissions.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "47202bc6d5183369fa3b119f8b345e2fc2d3b1a766fa8d88c436adf5800547b4",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "03-fonctionnel/statistiques.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "e05c4a42d8a1ef375107a1380773b1c1ac7f4e9c6e8c527708780e0879130d6b",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/api.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "140feae625a6b30fa5a705a49ebc6d778a08ce96de784d596ce84c0f7b8e9b7f",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/architecture-client-swift.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "fe12332bfa4439e8a4f0f101bfbb48d499bb72ed06bb7258a58217c7a2f2f0f6",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/architecture-decisions.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "eeaf0e7e1dca9c2b51ba35a695a979a3bf9d84852020596fe1c673d293e65d1d",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/fichiers-temps-communications.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "a33c05a310a09fcb8efea036a8d6b74c2c069a7b57dc719713d3a56e92b101f7",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/integration-ios-ipados.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "635d71bb3943b3f17205734f89b405afa04495deb460f1745ff47a55fc25f089",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/integration-mobile-transverse.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "4f5b8350f251d23ac0724bc2f43c6a07d1a07d75d13b3c852c4a4fab7ecd5a3d",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/modele-donnees.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "c7d352488b9ca5d9327f311150079437bfef64e097513cbba6f71545244eb2fa",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/openapi.yaml",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "d8c1ae255e37af90b1c4654822a4d4513b3e94b3f1420adf98bd12eedb82aa48",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/preparation-android.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "2b6f6a2a2f05d1f255584af0dc81f283a2625641a2658c77dc78485163e5924b",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/securite-vie-privee.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "41fa66a400c1b24e1dc8efcd6f32cf156e8b7483f079097dfc72dede47c9b69f",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/synchronisation.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "c9c89ddcdd30e9db64984d5e0b8715d74b08bf8adcca75e71c3cc45a60b83fdf",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/transactions-v2.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "843a4963e150e139d4f4f6ff12acc5325fa27bb831fe380794885cffd45f47b7",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "04-technique/transactions-v3.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "19e749e5d9806238f00e0cb1bd3f875485f43720b74f1b8329be38b60d1d9df0",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "05-realisation/deploiement-exploitation.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "e2ff658d63d1f95c8a26cfeec7a52e8b3c930c783b769bf40f660613cf98eb44",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "05-realisation/migration.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "b53e492705511de833a78659bef6eea70c75f7fb94ba8df3c88af8c002cb6432",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "05-realisation/qualification-mobile-ui-ux.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "c505224057405fcb70e1d8bb324ed9391831397e2d6e5c812863adc0e7fa4e6e",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "05-realisation/roadmap-backlog.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "dfcb6bd0ff8d33f8e11914e23bb837f25f43d4636ceeb7fd50cf9a08c5a3a140",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "05-realisation/tests-recette.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "376ad7ea275b6e2ad616f03fc11a41bae5b3875966782694b126c26e55704537",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-1.md",
+      "category": "HISTORICAL_MARKDOWN",
+      "sourceSHA256": "1918818eba8bbc9ee5dff9266be1530792968449f016b2da76fcaa443032f620",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-2.md",
+      "category": "HISTORICAL_MARKDOWN",
+      "sourceSHA256": "53e15e3e80d114cbc4fb869fc230f2df8cc178452b62ebf63cbc4bf192676af9",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-5.md",
+      "category": "HISTORICAL_MARKDOWN",
+      "sourceSHA256": "0538ef8e3f3bb74a0ed33150c16292f454e05cc1307ef2b11dff89500103390f",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "06-gouvernance/audit-corrections-v3-6.md",
+      "category": "HISTORICAL_MARKDOWN",
+      "sourceSHA256": "d724ec60be7715dfd6cd425f4399b16972b0a6c249a340997f7d196280e160f4",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "06-gouvernance/changements-v2.md",
+      "category": "HISTORICAL_MARKDOWN",
+      "sourceSHA256": "9cacc742439e80db9c97b18e6d1936f017605239428fe163f46a89e340812546",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "06-gouvernance/changements-v3-3.md",
+      "category": "HISTORICAL_MARKDOWN",
+      "sourceSHA256": "eb7b1c83ab63c6cce9c594ec35b6c521ad7776d11a2806066163607d02e8c7e2",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "06-gouvernance/changements-v3-4.md",
+      "category": "HISTORICAL_MARKDOWN",
+      "sourceSHA256": "d7645dc46e0c1dec557e6f211f34eed053add6daa32ca69d81cf0d12b6cf3a35",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "06-gouvernance/changements-v3.md",
+      "category": "HISTORICAL_MARKDOWN",
+      "sourceSHA256": "39339c1ccccaa0c89ab6411633502f217f14f8aa7015ea0dc6a424858b0ba440",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "06-gouvernance/glossaire-decisions-questions.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "49b2e4b9991650d44a139ea99581989253e90d40c8b19e2a894985528182826a",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "06-gouvernance/revue-coherence.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "4ff7d3360887ec3cf608e208bc3d9f2ea312fa7267aded41924e2602e545ca0b",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "06-gouvernance/sources.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "6f0e83939cdc3c44f5b98bf9bf8375fdb94159615581ed7485c2cf4f8b860163",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "06-gouvernance/tracabilite.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "f1f1aed10e3a877d4a6164e04b6aae03e6975c4ad07afa26150592b4e3a49c2a",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "LIRE_DOSSIER.html",
+      "category": "GENERATED_READER",
+      "sourceSHA256": "e83e962968df4d34a61c48f4025df3bcb84db674123e6bcc76898bf6b4bf989e",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "README.md",
+      "category": "ACTIVE_MARKDOWN",
+      "sourceSHA256": "e3c27a43b7e721975a37b97cdd33ac922ed8ccccf05c85c09997d49ed9f0545d",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "SHA256SUMS.txt",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "34b39d2e655a79214be3d5a70a7a812ece4b4d520756ee7462ac936438a10fc2",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/__pycache__/verifier-contrats-transversaux.cpython-313.pyc",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "98350da3608a46ca0d77d97191d9892afc6b7f279e014c2b5a6c10e7b4a3914d",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "annexes/adaptation-fixtures-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "143f61f8211dfe39b69dd964c6eb877e4f10341f2ba8863149633067838aae18",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/cas-contrats-v3-1-adaptes-v3-2.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "b79b9db61a9176d98fd454d9ac5719f75a0f23e05bff5801055d441c123c842e",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/cas-contrats-v3-1-adaptes-v3-5.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "38d0c0f73e6d6d29642502831b5e21717aa64b98de3a3906d47f65518b4a8c20",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/cas-contrats-v3-1-adaptes-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "3718d12e114d3dcfbf7a5845ae26b4d4298286d2fc7c1bc0141af22ad6534e12",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/cas-contrats-v3-1.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "5cc4c1095cf9c731f2d64c2053b9965dfd01b9504c07566f1270991ba603f1ae",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/cas-contrats-v3-2-adaptes-v3-5.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "27ad2c5ace78d1514202679a5735f52e8503d91224b1cd7e35bae4c804170dab",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/cas-contrats-v3-2-adaptes-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "70482f95fd53b4cdda6cf93f8e4c4804b8ed696f0257588be414379ebd3414c0",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/cas-contrats-v3-2.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "c7b2ce295aa5f66b6df40267ebb683176b6683a775bd7b7fea7dcc6a724f8ffb",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/cas-contrats-v3-5-adaptes-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "4082417d81cca5d0aec454f6ce04cb8b6abd19b2e61a38db488909dcff1777f5",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/cas-contrats-v3-5.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "ca75ed75dd239640fd73e0f873a70325d83bdcef815a455603909c419aa70c39",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/cas-contrats-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "b987fa7542a358822a7b8c406fe0936203aa41f529242d9c5467422b0907be80",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/comparaison-contrats-v3-1-v3-2.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "3aaad0ffe51ab39a3d92339eae8df687a39ced810c1e4a2ff79eeca887ee1567",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/comparaison-contrats-v3-4-v3-5.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "79e86ed3d1e84200baf46e272c77549e228814df51ad282cbe9a8a125f0fae69",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/comparaison-contrats-v3-5-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "a24a7a42768f96836311e572c333c7597ad8780a33e7100780e189b4880f629b",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/contrat-changements-v3-2.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "4b14ba9e3f99631546e71125ef5b7647250c41ee78138903989c93732129b0e9",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/controle-transversal-v3-1.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "d8d130631620b892f9a52794dbac3d1efc8256fc4172f363ea821b4d99c442f6",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/controle-v3-1-avant-correction.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "06dc47ee1e321c6eab551194d8a08d80b915fa72fafb00a0497952e0995552b8",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/controle-v3-2-avant-enrichissement.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "822ff4e725f70aa3158548a782b99f54cb019ad09f43538792bc5778377ce9ad",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/controle-v3-4-avant-correction.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "05fda039da0f8c0ba5c3a5515bf42e7a0c78e1e82257dfb173331e30f3b53926",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/controle-v3-5-avant-correction.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "1f31d6d6af402fbb50a32eb7389ab58d016775ff4a3bff65fcbe05a6760cceee",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/controle-v3-avant-correction.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "9bf680951b526ac56a54d5795db828a1133b39e2b716601bc4a2a98418a7ce69",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/corrections-v3-1-vers-v3-2.patch",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "41190552ef1a6318bf839a9039e2ce005ee2291b76b17f4651bb800bf7a7c02e",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/corrections-v3-3-vers-v3-4.patch",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "de0fc57485f3b5007e47b123006d635ed998f5bcfa5b2f4ea2441ab62f47dfdb",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/corrections-v3-4-vers-v3-5.patch",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "8f7999b86e20f1e375651005137a223695aa2a879983f6a874fa9ab69f4163a7",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/corrections-v3-5-vers-v3-6.patch",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "374c338cb2d5eb1f55a3c90768071acec125e90575673ab00e57b9b17ce87464",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/corrections-v3-vers-v3-1.patch",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "df827feec4e5f00f322ed5ed913b21f634bdbd76746d37b27fc7949cd210e4f7",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/enrichissement-v3-2-vers-v3-3.patch",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "22624c6e23dae8b9c58c0563a087fc451ebd9fffb92c37216120a88cfbca1235",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/exemples-v3.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "0d49211c3bde0ff75978fb49c1d5e8b9c552cffa42d610ba51fdcf99fa84328c",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/fixtures-statistiques-v3.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "41b1c679d64b65564f26c868b3715e5061134b645ce76bbc0a591d145f28aeb8",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/generer-lecteur.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "caed3d3f51e4765753b16753becd609455ba2292034e3decbfa7c727f6d4134f",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "annexes/inventaire-audit-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "df75ff2d1ed76c310716d02bf309ddb615621c5efa0b8bf33455be293e15a1dc",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/inventaire-revue-v3-1.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "d648bb7eb3e6a694901268fb6cedf17842b5d231cf083e9f4e4b8dd6f8243d22",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/inventaire-revue-v3-2.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "6659c2ca46c203293b45318377a2df8eb85c1cc3cacc3eb877de694afd5cdfa9",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/inventaire-revue-v3-3.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "46d624bbdca696edf38a76b6b1164cbbf05a7b6c753aa8b4505cfc0ebdb11b64",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-2-1440.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "f66fd146dd651f52ee4d6441db46619216402271add3a11c5ccdbbd1b91ff4db",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-2-390.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "da4eb119f0ba1ecb8d2fa964436949c12ac05657211234ddc981ba5305635bec",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-2-834.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "cfdd4bbfa2e710ac7a0198b4d2d2f1724576759275ff97e426d784220990551f",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-3-1440.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "98debb2da6e4125b97a288a6428d7d9fe770f605ec5983436f27f95c1a07c35c",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-3-390.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "9bb6a2aa6abd9d7a09beca41546d3ee9acd7b1e84a95f4508281430b213959c0",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-3-834.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "74b2495d863dbf6cc98b7008084e38e56e4d4c932b9ba38faf869e53f3f818cd",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-4-1440.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "b188197125ee94cf4ac435f32164e94da0b97a8b92c842e1130712fb04913c8b",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-4-390.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "cdc2661ed0727e31e29b6f19b8be0085e485210162bee5a363d315e5198aad89",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-4-834.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "6e197807553f28ed9ddde5dcdaee66a873a7f1f3bd58c24d9882051266768b87",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-5-1440.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "cf3bba87c31d5793a0636f956bf6e19bf63f5acc5c5bdf0e633f014e679078ed",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-5-390.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "9d09363889a0d6d4d3ed6518b1d4cdfb45aacd5e00e5253f11770e5d3224ab47",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-5-834.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "d4d42a86c6df33d553d01eac45c024051459fb872686d9858b851328eb33ee8d",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-6-1440.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "3be6c4b462aab3578251ada2a167d4a7bb7f87e02a0233a83283f861c433b4b4",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-6-390.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "12b04457d6c99479423cce94a5c57d23af027e5f3910970629c3e433eb88cab2",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/lecteur-v3-6-834.png",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "a403954ea01cefb9fa8bdd6499f1497a81c585ab1314661e3ce4d98a0ad9bdba",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/matrice-build-mobile-v3-3.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "dab2d581b5b7cbfef97c1c1f02580934a86280422587b324dbcb70c1a69857d3",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/matrice-build-mobile-v3-4.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "f7c3e4822d479662fd47d8b75becbfc7f1fb0c3dc7ca66dfe9a12299c0f28e3b",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/plan-revue-v3-5.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "e47da09ceb43ac3454deff1c8b16a20e2c7a4d21978bf17f04e81c65a9122a2d",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/preuves-archive.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "548214573b87b0fd6c0d3d21b784791ec12c21e6af0ec6feca0ff6069dff6ff1",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/preuves-audit-v3-1.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "9dd37163f456a310decf020ea30bd083f88b71c6b5cc1afab40bc6ca818a738d",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/preuves-audit-v3-2.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "9c336f9bcd4a2b17d43e2b554eef869290d682a7ba9472cf89681049e5c14b59",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/preuves-audit-v3-5.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "be4efd24d265a934832d9ffb70bd99bf2c3f2497d498bb86a7f68684e7fd2508",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/preuves-audit-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "71d7a053b8c5ed9ff378a2c7d72c84b36be4cb97f9ac8c8a43fbef10eaa0e707",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/provenance-v3-3.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "0d09c1ef269cc997993075c376dfae25a3ca61ea26563939e940584c772f84b6",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/provenance-v3-4.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "9e7cfdbf620f24241c8eb458bbea6cbc7dafefc1205aa0c2aacb6d44b94a7548",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/provenance-v3-5.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "556e0a49a05198a2638dc9a0399ce64b17f976a5c35c2d35243a97fce8ae9bd4",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/provenance-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "757fcd8db502b8b3e6ff7f45a11a0e055fbc0372d593927344c8d59eb1781308",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/qualification-mobile-v3-3.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "c71c6efa6f8c9b62414695e2ef54f4cae70425b764e50889e769f2a285e29bb1",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/qualification-mobile-v3-4.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "632a9eeb04373d3acb961572cbf11dbaa10726febce98dad4bfebc5340497eaf",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/regles-v3.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "ab5bb76957bfd86eab35ef7e33109e978939cb0742e5a8309114d8beab4432a6",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "annexes/schemas-base-v3-4.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "e7f494a2eab41dc539eda5c9c18a07485b55979555645604a843299b862d631b",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/schemas-base-v3-5.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "5ec8f22ed4904e69eccb65deb89796937ed1b323d7e372ad896e6c0019aa27b1",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/sources-mobile-v3-3.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "90f71926aae5da98038c47452a9ca0e804b91cae7f9cc5b93859002cf3f8703d",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/sources-mobile-v3-4.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "1ba4f95ec0bae6345ffeaad8cd727807df534814fd504710d8c4d7897ce36158",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/tokens-proposition.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "78a7b1e98eb4314a2448cacd5a5efaa6b6fd50b674e5fcb7147ac70bdd3d4d16",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/traceabilite.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "081535ab9402ae30df6f017231e15386d3d0a3b8d937c14b4082903902e770bc",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "annexes/verification-contrats-transversaux-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "cb1357fdd439e4a19115a5fbbc52e8db0dce3b4e65428da942fbc58346c52aa5",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verification-documentaire.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "a6ffa6deab27eb0ea2c3bd347c4bdcbaef6cd110f075ca626ba87834fc667a09",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "annexes/verification-lecteur.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "e6c5780e41ba7460fccf5e2f863377f05e4aba659ae111a53579eb05d1bf601a",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "annexes/verification-mobile-v3-3.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "7788ab7b159c06d7f10f743d1c4e844eeb3e2b1f4c6bc1bfddd09d3ab503365d",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verification-mobile-v3-4.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "7e5bbc8f16d3afe767ef968214f9e0ee4a041ef0c30f32915c5bf50cabf08ab7",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verification-mobile-v3-5.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "4f8015de323be4cf29ac710f920c8f38d540a40cc05a741ba2b5f5bb59a410e4",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verification-mobile-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "b9289bd61d79164ee59f8661de3d70b148b41879f1ec67aecae654e5ba34de12",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verification-modele-prix-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "551f12f160ff6c4bd7dd7eb18f24fdeda6a57eff1af32f18037ac13cda20fb63",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verification-originaux.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "ae3dde3d64bc45e86cebce7914201127e569c203d7293ff545edbbf5f7d6c878",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "annexes/verification-swift-v3-4.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "a91b9b70f97a1bd9111758cf2f8a98d8d0c3db091c8a877f08a2397ee2e456dc",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verification-swift-v3-5.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "2449d9b778fa8edb34d7bb069feae64d055b3bb5ab6f7b24e8c9a67b84b5cfd5",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verification-swift-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "4ccbf7862023db480e0abbb30cfa62e082f1d72f35f7e6caf7b9b3e0400c5d31",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verification-v3-5.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "98fce1bfc5c1f2aee5486b2e07d77a294cba8b9c278f44fea8388275613d0407",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verification-v3-6.json",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "a5c9734d86999f86c46232f33b85711556e3bb75eddb531343b31cbff08fe60d",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verifier-contrats-transversaux.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "d3b41a890b60c4ffc1ef6be62cff5e591a22ce4375b3e32efc9531909c457440",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verifier-documentation.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "70b62b11b9163a38944fc559adeee7735b9584a8aa885c5706d4405388f05ddb",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "annexes/verifier-lecteur.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "a3f8c793d891a61b2c59d2314ee41bf5d0a5fbc63aca24cfad8aba3c6e3dc923",
+      "presentInCurrent": true,
+      "textChanged": true
+    },
+    {
+      "file": "annexes/verifier-mobile-v3-3.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "dd43f40cb1c77c54a26b1d20c4b51ab2b28cc053cf04b2f061d8a649360ba113",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verifier-mobile-v3-4.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "e630f964d146bb6a376288c30ddf2a8311b1c82eac5bd5f871dbceb91de2c9df",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verifier-mobile-v3-5.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "fb661dc358e03df6b219bbd7bca7a76f13ee31198f214364c7b1eba9eea4a2f8",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verifier-mobile-v3-6.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "7d03e1348c4de7b593592b4d7cc295e2f641303890ae94066bd366ec074c179a",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verifier-swift-v3-4.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "d2a87ab38f51ea0a7155265afafb4daa8c70bfbe88d5b547e5b576f3417c62ce",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verifier-swift-v3-5.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "993ad38662ce19a2565a2d6191a064af7469bcc6fb1df3653483bb8175b8ac7f",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verifier-swift-v3-6.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "e921e11fc0ee74c058bb9f0ec68e68baa81a7c7407adbff2a013a960bd82406c",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verifier-v3-5.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "77929571e0a57cad704b4dca7e596eb28a6c640ebf183dba841ccdf297167658",
+      "presentInCurrent": true,
+      "textChanged": false
+    },
+    {
+      "file": "annexes/verifier-v3-6.py",
+      "category": "ANNEX_OR_CONTRACT",
+      "sourceSHA256": "d54159705dbf1dbc4f5f44e57ebf6cbcec00f530b4ce46290e9c1dbd84a6ba0b",
+      "presentInCurrent": true,
+      "textChanged": false
+    }
+  ]
+}

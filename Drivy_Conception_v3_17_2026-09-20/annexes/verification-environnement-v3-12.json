@@ -1,0 +1,100 @@
+{
+  "version": "3.12",
+  "scope": "DOCUMENTARY_ENVIRONMENT_ONLY",
+  "python": "3.13.5",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "dependencies": {
+    "PyYAML": {
+      "installed": "6.0.3",
+      "locked": "6.0.3"
+    },
+    "jsonschema": {
+      "installed": "4.26.0",
+      "locked": "4.26.0"
+    },
+    "referencing": {
+      "installed": "0.37.0",
+      "locked": "0.37.0"
+    },
+    "markdown-it-py": {
+      "installed": "4.2.0",
+      "locked": "4.2.0"
+    },
+    "beautifulsoup4": {
+      "installed": "4.14.3",
+      "locked": "4.14.3"
+    },
+    "rfc3339-validator": {
+      "installed": "0.1.4",
+      "locked": "0.1.4"
+    },
+    "rfc3986-validator": {
+      "installed": "0.1.1",
+      "locked": "0.1.1"
+    },
+    "attrs": {
+      "installed": "26.1.0",
+      "locked": "26.1.0"
+    },
+    "rpds-py": {
+      "installed": "2026.5.1",
+      "locked": "2026.5.1"
+    },
+    "mdurl": {
+      "installed": "0.1.2",
+      "locked": "0.1.2"
+    },
+    "six": {
+      "installed": "1.17.0",
+      "locked": "1.17.0"
+    },
+    "soupsieve": {
+      "installed": "2.8.4",
+      "locked": "2.8.4"
+    },
+    "typing_extensions": {
+      "installed": "4.16.0",
+      "locked": "4.16.0"
+    }
+  },
+  "formats": [
+    {
+      "format": "date-time",
+      "registered": true,
+      "positiveAccepted": true,
+      "negativeRejected": true
+    },
+    {
+      "format": "date",
+      "registered": true,
+      "positiveAccepted": true,
+      "negativeRejected": true
+    },
+    {
+      "format": "uuid",
+      "registered": true,
+      "positiveAccepted": true,
+      "negativeRejected": true
+    },
+    {
+      "format": "email",
+      "registered": true,
+      "positiveAccepted": true,
+      "negativeRejected": true
+    },
+    {
+      "format": "uri",
+      "registered": true,
+      "positiveAccepted": true,
+      "negativeRejected": true
+    }
+  ],
+  "missingFormatDetectedBySelfTest": true,
+  "passed": true,
+  "errorCount": 0,
+  "errors": [],
+  "limits": [
+    "Only the reported runtime was executed. Explicit UTF-8 does not constitute a Windows qualification.",
+    "Binary format is a transport annotation, not a JSON string content validator."
+  ]
+}

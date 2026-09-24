@@ -1,0 +1,33 @@
+{
+  "version": "3.11",
+  "sourceVersion": "3.10",
+  "markdownSourceCount": 75,
+  "markdownCurrentCount": 78,
+  "genericWhenBefore": 56,
+  "genericWhenAfter": 0,
+  "duplicateProofParagraphsFactored": 350,
+  "oldProductScenarios": 406,
+  "currentProductScenarios": 422,
+  "mobileScenarios": 68,
+  "productScenariosExecuted": 0,
+  "schemaCases": 298,
+  "schemaCasesPositive": 115,
+  "schemaCasesNegative": 183,
+  "existingPrototypeChecks": 72,
+  "livePrototypeChecks": 23,
+  "normalBrowserLayoutCases": 128,
+  "largeTextBrowserLayoutCases": 120,
+  "unchangedTokenFile": true,
+  "unchangedContrastFile": true,
+  "roadmapBytesBefore": 15693,
+  "roadmapBytesAfter": 10255,
+  "testCatalogueBytesBefore": 338148,
+  "testCatalogueBytesAfter": 267032,
+  "textCallsMadeExplicitUTF8": 209,
+  "historicalScriptsMadeExplicitUTF8": 35,
+  "limits": [
+    "Targeted consolidation; not a complete semantic proof of the whole dossier.",
+    "All business and native scenarios remain unexecuted.",
+    "No Windows, real device, PostgreSQL, user, legal, safety or budget validation."
+  ]
+}

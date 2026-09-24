@@ -1,0 +1,68 @@
+{
+  "scope": "BASELINE_V3_ONLY",
+  "originalVerifierRun": {
+    "version": "3.0",
+    "status": "DOCUMENTARY_CHECKS_ONLY",
+    "productTestsExecuted": false,
+    "errors": [],
+    "checks": {
+      "markdown": {
+        "files": 48,
+        "internalLinks": 2522,
+        "externalLinksNotRevalidated": 58
+      },
+      "api": {
+        "operations": 191,
+        "schemas": 321,
+        "internalRefsResolved": 2812,
+        "schemaAndAnnexExamplesChecked": 21,
+        "openapiVersion": "3.1.0",
+        "fullOpenApiMetaSchemaValidation": false,
+        "note": "YAML, refs, paramètres de routes, schémas JSON2020-12 et exemples seulement ; pas validation OpenAPI complète ou serveur."
+      },
+      "traceability": {
+        "features": 23,
+        "capabilities": 72,
+        "rules": 100,
+        "journeys": 28,
+        "screens": 48,
+        "apiOperations": 191,
+        "testSpecifications": 232
+      },
+      "fictitiousArithmetic": {
+        "calculated": {
+          "lessonCount": 3,
+          "durationSeconds": 11100,
+          "distinctLearners": 2,
+          "courseFillRatio": 0.45,
+          "netRecordedCents": 147000,
+          "netAfterReversalCents": 136000
+        },
+        "matches": true,
+        "productCodeExercised": false
+      },
+      "limitations": [
+        "Aucun build ni test métier exécuté",
+        "Aucune qualification réelle GPS/tablette",
+        "Aucun entretien utilisateur ou mesure marché",
+        "Pas audit juridique, de sécurité ni charge réel",
+        "Liens externes historiques non tous revalidés en V3",
+        "Pas validateur intégral méta-schéma OpenAPI installé"
+      ]
+    },
+    "errorCount": 0,
+    "passed": true
+  },
+  "supplementalMediaExamplesRun": {
+    "checked": 6,
+    "errors": [
+      {
+        "path": "/paths//v1/schools/{schoolId}/lessons/{lessonId}/captures/post/requestBody/content/application/json/example",
+        "schema": "#/components/schemas/StartCaptureCommand",
+        "instance": "",
+        "message": "'deviceAssessmentId' is a required property"
+      }
+    ]
+  },
+  "explanation": "Le vérificateur ancien passe ; le contrôle supplémentaire repère une omission obligatoire dans un exemple AP154. Ces données ne sont pas les résultats du dossier V3.1."
+}

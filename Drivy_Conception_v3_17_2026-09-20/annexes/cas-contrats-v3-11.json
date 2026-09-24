@@ -1,0 +1,381 @@
+{
+  "version": "3.11",
+  "scope": "JSON_SCHEMA_ONLY",
+  "productTestsExecuted": false,
+  "cases": [
+    {
+      "id": "SC31101",
+      "schema": "GeoObservationCommand",
+      "expectedValid": true,
+      "description": "Observation LIVE sans GPS et avant brouillon",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION"
+      }
+    },
+    {
+      "id": "SC31102",
+      "schema": "GeoObservationCommand",
+      "expectedValid": true,
+      "description": "Observation LIVE avec triplet complet",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": "10000000-0000-4000-8000-000000000011",
+        "segmentId": "10000000-0000-4000-8000-000000000012",
+        "pointSequence": 12,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION"
+      }
+    },
+    {
+      "id": "SC31103",
+      "schema": "GeoObservationCommand",
+      "expectedValid": true,
+      "description": "Repère privé sans qualification",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": null,
+        "text": "Moment à revoir",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "MARKER",
+        "eventStatus": null
+      }
+    },
+    {
+      "id": "SC31104",
+      "schema": "GeoObservationCommand",
+      "expectedValid": false,
+      "description": "LIVE sans origin",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION"
+      }
+    },
+    {
+      "id": "SC31105",
+      "schema": "GeoObservationCommand",
+      "expectedValid": false,
+      "description": "LIVE sans observedAt",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION"
+      }
+    },
+    {
+      "id": "SC31106",
+      "schema": "GeoObservationCommand",
+      "expectedValid": false,
+      "description": "LIVE sans eventKind",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventStatus": "ATTENTION"
+      }
+    },
+    {
+      "id": "SC31107",
+      "schema": "GeoObservationCommand",
+      "expectedValid": false,
+      "description": "LIVE sans eventStatus",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED"
+      }
+    },
+    {
+      "id": "SC31108",
+      "schema": "GeoObservationCommand",
+      "expectedValid": false,
+      "description": "Valeur interdite observedAt demain",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "demain",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION"
+      }
+    },
+    {
+      "id": "SC31109",
+      "schema": "GeoObservationCommand",
+      "expectedValid": false,
+      "description": "Valeur interdite eventStatus GUIDED",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "GUIDED"
+      }
+    },
+    {
+      "id": "SC31110",
+      "schema": "GeoObservationCommand",
+      "expectedValid": false,
+      "description": "Valeur interdite competencyId None",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": null,
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION"
+      }
+    },
+    {
+      "id": "SC31111",
+      "schema": "GeoObservationCommand",
+      "expectedValid": false,
+      "description": "Valeur interdite origin REVIEW",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "REVIEW",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION"
+      }
+    },
+    {
+      "id": "SC31112",
+      "schema": "GeoObservationCommand",
+      "expectedValid": false,
+      "description": "Repère ne peut prétendre un thème/statut",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "MARKER",
+        "eventStatus": "ATTENTION"
+      }
+    },
+    {
+      "id": "SC31113",
+      "schema": "GeoObservationCommand",
+      "expectedValid": false,
+      "description": "Ancre incomplète refusée",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": "10000000-0000-4000-8000-000000000011",
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION"
+      }
+    },
+    {
+      "id": "SC31114",
+      "schema": "GeoObservationCommand",
+      "expectedValid": false,
+      "description": "Auteur non injectable par client",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION",
+        "authorMembershipId": "10000000-0000-4000-8000-000000000015"
+      }
+    },
+    {
+      "id": "SC31115",
+      "schema": "GeoObservationCommand",
+      "expectedValid": true,
+      "description": "Ancienne observation de revue compatible",
+      "value": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "draftId": "10000000-0000-4000-8000-000000000016",
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite"
+      }
+    },
+    {
+      "id": "SC31116",
+      "schema": "GeoObservation",
+      "expectedValid": true,
+      "description": "Réponse LIVE porte son auteur",
+      "value": {
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION",
+        "id": "10000000-0000-4000-8000-000000000017",
+        "schoolId": "10000000-0000-4000-8000-000000000018",
+        "lessonId": "10000000-0000-4000-8000-000000000019",
+        "trainingId": "10000000-0000-4000-8000-000000000020",
+        "version": 1,
+        "authorMembershipId": "10000000-0000-4000-8000-000000000015"
+      }
+    },
+    {
+      "id": "SC31117",
+      "schema": "GeoObservation",
+      "expectedValid": false,
+      "description": "Réponse LIVE sans auteur refusée",
+      "value": {
+        "draftId": null,
+        "captureId": null,
+        "segmentId": null,
+        "pointSequence": null,
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION",
+        "id": "10000000-0000-4000-8000-000000000017",
+        "schoolId": "10000000-0000-4000-8000-000000000018",
+        "lessonId": "10000000-0000-4000-8000-000000000019",
+        "trainingId": "10000000-0000-4000-8000-000000000020",
+        "version": 1
+      }
+    },
+    {
+      "id": "SC31118",
+      "schema": "PublishedTextObservation",
+      "expectedValid": true,
+      "description": "Snapshot textuel qualifié sans géographie",
+      "value": {
+        "id": "10000000-0000-4000-8000-000000000017",
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "sourceVersion": 2,
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION"
+      }
+    },
+    {
+      "id": "SC31119",
+      "schema": "PublishedTextObservation",
+      "expectedValid": false,
+      "description": "Repère non publiable en snapshot",
+      "value": {
+        "id": "10000000-0000-4000-8000-000000000017",
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "sourceVersion": 2,
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "MARKER",
+        "eventStatus": "ATTENTION"
+      }
+    },
+    {
+      "id": "SC31120",
+      "schema": "PublishedTextObservation",
+      "expectedValid": false,
+      "description": "Snapshot textuel sans identifiant GPS",
+      "value": {
+        "id": "10000000-0000-4000-8000-000000000017",
+        "competencyId": "10000000-0000-4000-8000-000000000008",
+        "text": "Priorité à droite",
+        "sourceVersion": 2,
+        "origin": "LIVE",
+        "observedAt": "2026-09-21T09:15:00+02:00",
+        "eventKind": "QUALIFIED",
+        "eventStatus": "ATTENTION",
+        "captureId": "10000000-0000-4000-8000-000000000011"
+      }
+    }
+  ]
+}

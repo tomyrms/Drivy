@@ -1,0 +1,67 @@
+{
+  "version": "3.7",
+  "status": "DOCUMENT_READER_TESTS_ONLY",
+  "productTestsExecuted": false,
+  "browser": "144.0.7559.96",
+  "loadMode": "set_content, car la politique Chromium de cet environnement bloque file:// ; liens internes testés, ouverture locale file:// non testée",
+  "chromiumExecutable": "/usr/bin/chromium",
+  "checks": [
+    {
+      "check": "allDocumentRoutes",
+      "count": 65,
+      "passed": true
+    },
+    {
+      "check": "domAnchors",
+      "passed": true,
+      "idCount": 2951,
+      "duplicateIds": [],
+      "missingAnchors": []
+    },
+    {
+      "check": "searchAndReset",
+      "matchedDocuments": 5,
+      "noMatchVisible": 0,
+      "resetText": "65 documents · Lecture hors ligne",
+      "passed": true
+    },
+    {
+      "check": "responsiveReader",
+      "width": 1440,
+      "height": 1000,
+      "horizontalPageOverflow": false,
+      "titleBelowHeader": true,
+      "screenshot": "annexes/lecteur-v3-7-1440.png",
+      "passed": true
+    },
+    {
+      "check": "responsiveReader",
+      "width": 834,
+      "height": 1112,
+      "horizontalPageOverflow": false,
+      "titleBelowHeader": true,
+      "screenshot": "annexes/lecteur-v3-7-834.png",
+      "passed": true
+    },
+    {
+      "check": "responsiveReader",
+      "width": 390,
+      "height": 844,
+      "horizontalPageOverflow": false,
+      "titleBelowHeader": true,
+      "screenshot": "annexes/lecteur-v3-7-390.png",
+      "passed": true
+    },
+    {
+      "check": "deepLinkMobileChanges",
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "passed": true,
+  "limitations": [
+    "Fenêtres simulées dans Chromium, pas essais sur téléphone ou tablette physiques.",
+    "Ce lecteur présente les documents, pas des écrans implémentés de Drivy.",
+    "Le rendu final des documents a été observé via captures ; pas de maquettes haute fidélité créées."
+  ]
+}

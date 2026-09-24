@@ -1,0 +1,19 @@
+{
+  "documentVersion": "3.6",
+  "apiContractVersion": "3.6.0",
+  "date": "2026-09-19",
+  "sourceArchive": "Drivy_Dossier_Conception_v3_5_2026-09-19.zip",
+  "sourceSHA256": "0e0f926511eaaf04092ff8b39e2ce94db9986de5267da0533c17be400fba4833",
+  "openapiSHA256": "d8c1ae255e37af90b1c4654822a4d4513b3e94b3f1420adf98bd12eedb82aa48",
+  "nativeBuildExecuted": false,
+  "applicationCodeModified": false,
+  "productTestsExecuted": false,
+  "currentChecks": [
+    "verifier-documentation.py",
+    "verifier-contrats-transversaux.py",
+    "verifier-v3-6.py",
+    "verifier-mobile-v3-6.py",
+    "verifier-swift-v3-6.py"
+  ],
+  "olderScripts": "Historical; do not mix old assertions with current contract."
+}
