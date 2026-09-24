@@ -3,6 +3,7 @@ import SwiftUI
 struct SchoolAgendaView: View {
     let client: SchoolAgendaClient
     @Bindable var workspace: SchoolWorkspace
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var selectedDate = Date()
     @State private var lessons: [SchoolLesson] = []
     @State private var isLoading = false
@@ -43,32 +44,25 @@ struct SchoolAgendaView: View {
             VStack(alignment: .leading, spacing: 24) {
                 weekHeader
                 dayPicker
-                HStack(alignment: .firstTextBaseline) {
-                    Text(dateTitle).font(.title2.weight(.bold))
-                    Spacer()
-                    if !isLoading && error == nil {
-                        Text(dailyLessons.count == 1 ? "1 leçon" : "\(dailyLessons.count) leçons")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    }
-                }
-                if mayPlan {
-                    Button { planningModel = newPlanningModel() } label: {
-                        Label("Planifier une leçon", systemImage: "plus").frame(maxWidth: .infinity, minHeight: 8)
-                    }.buttonStyle(DrivyPrimaryButtonStyle()).accessibilityIdentifier("agenda-plan-lesson")
-                }
+                dayHeading
                 if workspace.membership == nil {
                     ContentUnavailableView("Choisissez votre école", systemImage: "building.2", description: Text("Votre agenda apparaît après la sélection d’une école."))
-                } else if isLoading {
+                } else if isLoading || (loadedScope != scopeKey && error == nil) {
                     ProgressView("Chargement de l’agenda…").frame(maxWidth: .infinity, minHeight: 160)
                 } else if let error {
                     SchoolErrorNotice(message: error, retry: { Task { await loadWeek() } })
                 } else if dailyLessons.isEmpty {
-                    ContentUnavailableView("Une journée libre", systemImage: "calendar", description: Text("Aucune leçon planifiée pour cette date."))
-                        .frame(maxWidth: .infinity, minHeight: 200)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Aucune leçon ce jour.").foregroundStyle(DrivyTheme.muted)
+                        Button("Jour suivant", systemImage: "arrow.right") {
+                            if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
+                        }.frame(minHeight: 44)
+                    }.padding(.vertical, 16)
                 } else {
-                    VStack(spacing: 14) {
+                    LazyVStack(spacing: 0) {
                         ForEach(dailyLessons) { lesson in
                             Button { selectedLesson = lesson } label: { lessonRow(lesson) }.buttonStyle(.plain)
+                            Divider().overlay(DrivyTheme.border)
                         }
                     }
                 }
@@ -104,8 +98,8 @@ struct SchoolAgendaView: View {
 
     private var weekHeader: some View {
         HStack {
-            Text(selectedDate.formatted(.dateTime.month(.wide).year().locale(Locale(identifier: "fr_CH"))))
-                .font(.title3.weight(.semibold))
+            Text(formattedDay(selectedDate, template: "MMMM yyyy"))
+                .font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button { moveWeek(-1) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
                 .accessibilityLabel("Semaine précédente")
@@ -114,48 +108,97 @@ struct SchoolAgendaView: View {
         }
     }
 
-    private var dayPicker: some View {
+    private var dayHeading: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                Text(dateTitle).font(.title2.weight(.bold)).fixedSize()
+                Spacer(minLength: 12)
+                if mayPlan { planButton }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text(dateTitle).font(.title2.weight(.bold))
+                if mayPlan { planButton }
+            }
+        }
+    }
+    private var planButton: some View {
+        Button { planningModel = newPlanningModel() } label: {
+            Label("Planifier", systemImage: "plus").font(.body.weight(.semibold)).frame(minHeight: 44).fixedSize()
+        }
+        .accessibilityLabel("Planifier une leçon")
+        .accessibilityIdentifier("agenda-plan-lesson")
+    }
+    @ViewBuilder private var dayPicker: some View {
+        if typeSize.isAccessibilitySize { compactDayPicker }
+        else {
+            ViewThatFits(in: .horizontal) {
+                weekStrip
+                compactDayPicker
+            }
+        }
+    }
+    private var compactDayPicker: some View {
+        DatePicker("Choisir un jour", selection: $selectedDate, displayedComponents: .date)
+            .environment(\.timeZone, calendar.timeZone)
+            .environment(\.calendar, calendar)
+            .environment(\.locale, Locale(identifier: "fr_CH"))
+    }
+    private var weekStrip: some View {
         HStack(spacing: 4) {
             ForEach(weekDays, id: \.self) { day in
                 let selected = calendar.isDate(day, inSameDayAs: selectedDate)
                 Button { selectedDate = day } label: {
                     VStack(spacing: 9) {
-                        Text(day.formatted(.dateTime.weekday(.narrow).locale(Locale(identifier: "fr_CH"))))
+                        Text(formattedDay(day, template: "EEEEE"))
                             .font(.caption.weight(.medium))
                         Text(String(calendar.component(.day, from: day))).font(.headline)
                         Circle().fill(hasLessons(on: day) ? (selected ? DrivyTheme.onAccent : DrivyTheme.accent) : .clear)
                             .frame(width: 5, height: 5)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 76)
+                    .frame(minWidth: 44, maxWidth: .infinity, minHeight: 76)
                     .foregroundStyle(selected ? DrivyTheme.onAccent : DrivyTheme.text)
-                    .background(selected ? DrivyTheme.accent : DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+                    .background(selected ? DrivyTheme.accent : .clear, in: RoundedRectangle(cornerRadius: 16))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "fr_CH"))))
+                .accessibilityLabel(formattedDay(day, template: "EEEE d MMMM"))
+                .accessibilityValue(hasLessons(on: day) ? "Contient des leçons" : "")
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
             }
         }
     }
 
     private func lessonRow(_ lesson: SchoolLesson) -> some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text(time(lesson.startsAt)).font(.headline.monospacedDigit()).foregroundStyle(DrivyTheme.accent)
-                Text(time(lesson.endsAt)).font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-            }.frame(width: 52, alignment: .leading)
-            RoundedRectangle(cornerRadius: 2).fill(lesson.status == "CANCELLED" ? DrivyTheme.border : DrivyTheme.accent).frame(width: 3)
-            VStack(alignment: .leading, spacing: 7) {
-                Text(learnerName(lesson)).font(.headline).foregroundStyle(DrivyTheme.text)
-                Text("\(lesson.durationMinutes) min · \(lesson.statusLabel)").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                Label(lesson.meetingPoint, systemImage: "mappin.and.ellipse")
-                    .font(.caption).foregroundStyle(DrivyTheme.muted).lineLimit(2)
-            }.frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("\(time(lesson.startsAt)) – \(time(lesson.endsAt))")
+                        .font(.headline.monospacedDigit()).foregroundStyle(DrivyTheme.accent)
+                    lessonSummary(lesson)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(alignment: .top, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text(time(lesson.startsAt)).font(.headline.monospacedDigit()).foregroundStyle(DrivyTheme.accent)
+                        Text(time(lesson.endsAt)).font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+                    }.fixedSize(horizontal: true, vertical: false)
+                    lessonSummary(lesson)
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                        .padding(.top, 4).accessibilityHidden(true)
+                }
+            }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(18)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+        .padding(.vertical, 20).contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+    private func lessonSummary(_ lesson: SchoolLesson) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(learnerName(lesson)).font(.headline).foregroundStyle(DrivyTheme.text)
+            Text("\(lesson.durationMinutes) min · \(lesson.statusLabel)").font(.subheadline)
+                .foregroundStyle(lesson.status == "CANCELLED" ? DrivyTheme.warning : DrivyTheme.muted)
+            Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func learnerName(_ lesson: SchoolLesson) -> String { workspace.learners.first { $0.id == lesson.learnerId }?.displayName ?? "Leçon de conduite" }
@@ -164,7 +207,14 @@ struct SchoolAgendaView: View {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = calendar.timeZone; formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
     }
-    private func hasLessons(on day: Date) -> Bool { lessons.contains { $0.startsAt.map { calendar.isDate($0, inSameDayAs: day) } ?? false } }
+    private func formattedDay(_ date: Date, template: String) -> String {
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = calendar.timeZone
+        formatter.setLocalizedDateFormatFromTemplate(template)
+        return formatter.string(from: date)
+    }
+    private func hasLessons(on day: Date) -> Bool {
+        loadedScope == scopeKey && lessons.contains { $0.startsAt.map { calendar.isDate($0, inSameDayAs: day) } ?? false }
+    }
     private func moveWeek(_ offset: Int) { if let date = calendar.date(byAdding: .weekOfYear, value: offset, to: selectedDate) { selectedDate = date } }
     private func newPlanningModel() -> SchoolPlanningWorkspace? {
         guard let person = workspace.person, let membership = workspace.membership, mayPlan else { return nil }
@@ -222,17 +272,19 @@ private struct SchoolLessonDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     if let lesson {
-                        Text(learnerName).font(.largeTitle.weight(.bold))
+                        Text(learnerName).font(.title.weight(.bold))
                         Label(lesson.statusLabel, systemImage: lesson.status == "COMPLETED" ? "checkmark.circle" : "calendar")
-                            .foregroundStyle(DrivyTheme.accent)
-                        DrivyPanel {
-                            VStack(alignment: .leading, spacing: 18) {
-                                LessonInfoRow(title: "Date", value: lesson.startsAt?.formatted(.dateTime.day().month(.wide).year().locale(Locale(identifier: "fr_CH"))) ?? "—")
-                                LessonInfoRow(title: "Horaire", value: interval(lesson))
-                                LessonInfoRow(title: "Durée", value: "\(lesson.durationMinutes) minutes")
-                                LessonInfoRow(title: "Rendez-vous", value: lesson.meetingPoint)
-                                LessonInfoRow(title: "Prix convenu", value: (Decimal(lesson.priceCentsSnapshot) / 100).formatted(.currency(code: "CHF")))
-                            }
+                            .foregroundStyle(lesson.status == "CANCELLED" ? DrivyTheme.warning : lesson.status == "COMPLETED" ? DrivyTheme.success : DrivyTheme.muted)
+                        VStack(spacing: 0) {
+                            LessonInfoRow(title: "Date", value: lessonDate(lesson))
+                            Divider()
+                            LessonInfoRow(title: "Horaire", value: interval(lesson))
+                            Divider()
+                            LessonInfoRow(title: "Durée", value: "\(lesson.durationMinutes) minutes")
+                            Divider()
+                            LessonInfoRow(title: "Rendez-vous", value: lesson.meetingPoint)
+                            Divider()
+                            LessonInfoRow(title: "Prix convenu", value: (Decimal(lesson.priceCentsSnapshot) / 100).formatted(.currency(code: "CHF")))
                         }
                         if lesson.permitWarning {
                             Label("Le permis d’élève reste à vérifier avant la conduite.", systemImage: "exclamationmark.shield")
@@ -245,7 +297,7 @@ private struct SchoolLessonDetailView: View {
                 .padding(24).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
             }
             .background(DrivyTheme.canvas)
-            .navigationTitle("La leçon").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Leçon").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
             .task { await load() }
             .sheet(item: $planningRoute, onDismiss: { Task { await load() } }) { route in
@@ -265,7 +317,9 @@ private struct SchoolLessonDetailView: View {
         VStack(spacing: 12) {
             if workspace.membership?.roles.contains(where: { ["INSTRUCTOR", "LEARNER"].contains($0) }) == true {
                 Button { showsReport = true } label: {
-                    Label(lesson.status == "COMPLETED" ? "Bilans et suivi" : "Préparer et suivre la leçon", systemImage: "text.book.closed")
+                    Label(workspace.membership?.roles.contains("INSTRUCTOR") == true
+                          ? (lesson.status == "COMPLETED" ? "Bilans et suivi" : "Préparer et suivre la leçon")
+                          : (lesson.status == "COMPLETED" ? "Lire le bilan" : "Voir le suivi de ma leçon"), systemImage: "text.book.closed")
                 }.buttonStyle(DrivyPrimaryButtonStyle())
             }
             if mayManage && lesson.status == "PLANNED" {
@@ -287,6 +341,12 @@ private struct SchoolLessonDetailView: View {
         guard let start = lesson.startsAt, let end = lesson.endsAt else { return "—" }
         return formatter.string(from: start) + " – " + formatter.string(from: end)
     }
+    private func lessonDate(_ lesson: SchoolLesson) -> String {
+        guard let date = lesson.startsAt else { return "—" }
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH")
+        formatter.timeZone = TimeZone(identifier: lesson.timeZone); formatter.dateStyle = .long
+        return formatter.string(from: date)
+    }
     @MainActor private func load() async {
         lesson = nil; error = nil
         let scope = identityScope
@@ -302,10 +362,22 @@ private struct SchoolLessonDetailView: View {
 private struct LessonInfoRow: View {
     let title: String
     let value: String
+    @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(.caption).foregroundStyle(DrivyTheme.muted)
-            Text(value).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-        }.frame(maxWidth: .infinity, alignment: .leading)
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    Text(value).textSelection(.enabled)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 20) {
+                    Text(title).foregroundStyle(DrivyTheme.muted)
+                    Spacer(minLength: 0)
+                    Text(value).multilineTextAlignment(.trailing).textSelection(.enabled)
+                }
+            }
+        }.fixedSize(horizontal: false, vertical: true).padding(.vertical, 14)
+            .accessibilityElement(children: .combine)
     }
 }
