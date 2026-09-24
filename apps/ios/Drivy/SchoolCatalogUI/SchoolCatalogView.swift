@@ -3,6 +3,7 @@ import SwiftUI
 struct SchoolCatalogView: View {
     @Bindable var model: SchoolCatalogWorkspace
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var section: CatalogSection = .offerings
     @State private var editor: SchoolCatalogEditorKind?
     @State private var showsTeam = false
@@ -49,11 +50,11 @@ struct SchoolCatalogView: View {
     private var heading: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(model.school?.name ?? "Votre école").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            Text(model.learner?.displayName ?? "Catalogue des formations").font(.largeTitle.weight(.bold))
-            Text(model.learner == nil
-                ? "Les offres relient une catégorie, un référentiel et les conditions de votre école."
-                : "Choisissez une offre, puis affectez le moniteur qui accompagnera cet élève.")
-                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            Text(model.learner?.displayName ?? "Formations").font(.largeTitle.weight(.bold))
+            if model.learner != nil {
+                Text("Choisissez une offre, puis affectez le moniteur qui accompagnera cet élève.")
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            }
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -92,10 +93,12 @@ struct SchoolCatalogView: View {
 
     private var catalog: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Picker("Catalogue", selection: $section) {
-                ForEach(CatalogSection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            if dynamicTypeSize.isAccessibilitySize {
+                sectionPicker.pickerStyle(.menu)
+                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            } else {
+                sectionPicker.pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
             switch section {
             case .offerings: offerings
             case .curricula: curricula
@@ -104,73 +107,107 @@ struct SchoolCatalogView: View {
         }
     }
 
+    private var sectionPicker: some View {
+        Picker("Afficher", selection: $section) {
+            ForEach(CatalogSection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        }
+        .accessibilityIdentifier("school-catalog-section")
+    }
+
     private var offerings: some View {
         VStack(alignment: .leading, spacing: 16) {
+            if !model.currentOfferings.isEmpty {
+                Text("\(model.currentOfferings.count) offre\(model.currentOfferings.count == 1 ? "" : "s") · \(model.availableOfferings.count) active\(model.availableOfferings.count == 1 ? "" : "s")")
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            }
+            catalogCreateButton("Créer une offre", kind: .offering)
             if model.currentOfferings.isEmpty && !model.isLoading {
                 empty("Votre première offre", text: "Commencez par un référentiel et une procédure. Vous pourrez ensuite définir la durée et le prix de l’offre.", symbol: "steeringwheel")
-            }
-            ForEach(model.currentOfferings) { offer in
-                DrivyPanel {
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text("Catégorie \(offer.categoryCode)").font(.title2.weight(.semibold))
-                                Text(offer.offeringKey).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                            }
-                            Spacer(minLength: 8)
-                            Label(offer.enabled ? "Activée" : "Désactivée", systemImage: offer.enabled ? "checkmark.circle" : "pause.circle")
-                                .font(.caption).foregroundStyle(offer.enabled ? DrivyTheme.success : DrivyTheme.muted)
-                        }
-                        Text("\(offer.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(offer.defaultPriceCents))")
-                            .font(.headline)
-                        Text("Version \(offer.version) · les formations existantes conservent leur offre.")
-                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                        Button("Préparer une nouvelle version") {
-                            clearSources(); sourceOffering = offer; editor = .offering
-                        }.frame(minHeight: 44).disabled(!model.canMutate)
-                    }
+                if model.curricula.isEmpty {
+                    Button("Créer le référentiel") { clearSources(); editor = .curriculum }
+                        .frame(minHeight: 44).disabled(!model.canMutate)
+                }
+                if model.policies.isEmpty {
+                    Button("Créer la procédure") { clearSources(); editor = .policy }
+                        .frame(minHeight: 44).disabled(!model.canMutate)
                 }
             }
-            createButton("Créer une offre", symbol: "plus", kind: .offering)
+            ForEach(model.currentOfferings) { offer in
+                VStack(alignment: .leading, spacing: 12) {
+                    Divider()
+                    Text("Catégorie \(offer.categoryCode)").font(.title3.weight(.semibold))
+                    Text(offer.offeringKey).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    Text("\(offer.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(offer.defaultPriceCents))")
+                        .font(.headline)
+                    Label(offer.enabled ? "Ouverte aux nouvelles formations" : "Fermée aux nouvelles formations",
+                          systemImage: offer.enabled ? "checkmark.circle" : "pause.circle")
+                        .font(.subheadline).foregroundStyle(offer.enabled ? DrivyTheme.success : DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    DisclosureGroup("Contenu de la version \(offer.version)") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            if let curriculum = model.curricula.first(where: { $0.id == offer.curriculumVersionId }) {
+                                Text("Référentiel · révision \(curriculum.revision)")
+                            }
+                            if let policy = model.policies.first(where: { $0.id == offer.policyVersionId }) {
+                                Text("Procédure · version \(policy.version)")
+                            }
+                            Text("Une nouvelle version ne modifie pas les formations déjà ouvertes.")
+                                .foregroundStyle(DrivyTheme.muted)
+                        }.font(.subheadline).padding(.top, 8)
+                    }
+                    Button("Préparer une nouvelle version") {
+                        clearSources(); sourceOffering = offer; editor = .offering
+                    }.frame(minHeight: 44).disabled(!model.canMutate)
+                }.padding(.vertical, 4)
+            }
         }
     }
     private var curricula: some View {
         VStack(alignment: .leading, spacing: 16) {
+            Text("Compétences travaillées dans chaque catégorie.")
+                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            catalogCreateButton("Créer un référentiel", kind: .curriculum)
             if model.curricula.isEmpty && !model.isLoading {
                 empty("Les compétences de votre école", text: "Définissez ce qui sera travaillé dans chaque catégorie. L’approbation vous appartient.", symbol: "list.bullet.rectangle")
             }
-            ForEach(model.curricula) { curriculum in
-                DrivyPanel {
-                    DisclosureGroup {
+            ForEach(model.curricula.sorted { ($0.categoryCode, -$0.revision) < ($1.categoryCode, -$1.revision) }) { curriculum in
+                VStack(alignment: .leading, spacing: 12) {
+                    Divider()
+                    Text("Catégorie \(curriculum.categoryCode)").font(.title3.weight(.semibold))
+                    Text("Révision \(curriculum.revision) · \(curriculum.approved ? "Approuvée par l’école" : "Brouillon")")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    DisclosureGroup("\(curriculum.competencies.count) compétence\(curriculum.competencies.count == 1 ? "" : "s")") {
                         ForEach(curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }) { competency in
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(competency.label).font(.headline)
                                 Text(competency.description).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                             }.padding(.vertical, 8)
                         }
-                        Button("Préparer une nouvelle révision") {
-                            clearSources(); sourceCurriculum = curriculum; editor = .curriculum
-                        }.frame(minHeight: 44).disabled(!model.canMutate)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Catégorie \(curriculum.categoryCode) · révision \(curriculum.revision)").font(.headline)
-                            Text(curriculum.approved ? "Approuvé par l’école" : "Brouillon")
-                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                        }
                     }
-                }
+                    Button("Préparer une nouvelle révision") {
+                        clearSources(); sourceCurriculum = curriculum; editor = .curriculum
+                    }.frame(minHeight: 44).disabled(!model.canMutate)
+                }.padding(.vertical, 4)
             }
-            createButton("Créer un référentiel", symbol: "plus", kind: .curriculum)
         }
     }
     private var policies: some View {
         VStack(alignment: .leading, spacing: 16) {
+            Text("Déroulement et conditions d’annulation par catégorie.")
+                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            catalogCreateButton("Créer une procédure", kind: .policy)
             if model.policies.isEmpty && !model.isLoading {
                 empty("Vos procédures de formation", text: "Précisez le déroulement et les conditions d’annulation de chaque catégorie.", symbol: "doc.text")
             }
-            ForEach(model.policies) { policy in
-                DrivyPanel {
-                    DisclosureGroup {
+            ForEach(model.policies.sorted { ($0.categoryCode, -$0.version) < ($1.categoryCode, -$1.version) }) { policy in
+                VStack(alignment: .leading, spacing: 12) {
+                    Divider()
+                    Text("Catégorie \(policy.categoryCode)").font(.title3.weight(.semibold))
+                    Text("Version \(policy.version) · \(policy.approved ? "Approuvée par l’école" : "Brouillon")")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    DisclosureGroup("Lire la procédure et ses conditions") {
                         VStack(alignment: .leading, spacing: 16) {
                             Text(policy.procedureText).textSelection(.enabled)
                             Text("Annulation").font(.headline)
@@ -180,20 +217,20 @@ struct SchoolCatalogView: View {
                                     Link(url.host ?? "Source", destination: url)
                                 }
                             }
-                            Button("Préparer une nouvelle version") {
-                                clearSources(); sourcePolicy = policy; editor = .policy
-                            }.frame(minHeight: 44).disabled(!model.canMutate)
                         }.font(.subheadline).padding(.top, 12)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Catégorie \(policy.categoryCode) · version \(policy.version)").font(.headline)
-                            Text(policy.approved ? "Approuvée par l’école" : "Brouillon").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                        }
                     }
-                }
+                    Button("Préparer une nouvelle version") {
+                        clearSources(); sourcePolicy = policy; editor = .policy
+                    }.frame(minHeight: 44).disabled(!model.canMutate)
+                }.padding(.vertical, 4)
             }
-            createButton("Créer une procédure", symbol: "plus", kind: .policy)
         }
+    }
+
+    private func catalogCreateButton(_ title: String, kind: SchoolCatalogEditorKind) -> some View {
+        Button { clearSources(); editor = kind } label: { Label(title, systemImage: "plus") }
+            .buttonStyle(DrivyPrimaryButtonStyle())
+            .disabled(!model.canMutate)
     }
 
     private var learnerTrainings: some View {
