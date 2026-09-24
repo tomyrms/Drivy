@@ -61,6 +61,8 @@ final class SchoolAgendaClient {
     private let transport: any SchoolHTTPTransport
     var planningClient: SchoolPlanningClient { SchoolPlanningClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
     var reportClient: SchoolLessonReportClient { SchoolLessonReportClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
+    var captureClient: SchoolCaptureClient { SchoolCaptureClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
+    var reader: any SchoolAPI { DrivyAPIClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
     func scope(person: SchoolPerson, membership: SchoolMembership) -> SchoolCommandScope {
         SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
             membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: baseURL.absoluteString)

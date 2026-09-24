@@ -257,6 +257,8 @@ private struct SchoolLessonDetailView: View {
     @State private var error: String?
     @State private var planningRoute: PlanningRoute?
     @State private var showsReport = false
+    @State private var capturePreparation: SchoolCapturePreparationWorkspace?
+    @State private var mayPrepareCapture = false
 
     private struct PlanningRoute: Identifiable {
         let id = UUID()
@@ -308,13 +310,21 @@ private struct SchoolLessonDetailView: View {
                     SchoolLessonReportView(client: client.reportClient, schoolWorkspace: workspace, lessonID: lessonID, learnerName: learnerName)
                 }.tint(DrivyTheme.accent)
             }
+            .sheet(item: $capturePreparation) { model in
+                SchoolCapturePreparationView(model: model, schoolWorkspace: workspace)
+            }
             .onChange(of: identityScope) { _, _ in
+                capturePreparation?.invalidate(); capturePreparation = nil; mayPrepareCapture = false
                 planningRoute?.model.invalidate(); planningRoute = nil; showsReport = false; lesson = nil; dismiss()
             }
         }.tint(DrivyTheme.accent)
     }
     private func lessonActions(_ lesson: SchoolLesson) -> some View {
         VStack(spacing: 12) {
+            if mayPrepareCapture {
+                Button { openCapturePreparation() } label: { Label("Préparer le GPS", systemImage: "location.circle") }
+                    .buttonStyle(DrivySecondaryButtonStyle()).accessibilityIdentifier("lesson-prepare-gps")
+            }
             if workspace.membership?.roles.contains(where: { ["INSTRUCTOR", "LEARNER"].contains($0) }) == true {
                 Button { showsReport = true } label: {
                     Label(workspace.membership?.roles.contains("INSTRUCTOR") == true
@@ -336,6 +346,12 @@ private struct SchoolLessonDetailView: View {
         let model = SchoolPlanningWorkspace(scope: client.scope(person: person, membership: membership), client: client.planningClient, lesson: lesson)
         planningRoute = PlanningRoute(model: model, cancelling: cancelling)
     }
+    private func openCapturePreparation() {
+        guard mayPrepareCapture, let person = workspace.person, let membership = workspace.membership,
+              membership.schoolId == schoolID else { return }
+        capturePreparation = SchoolCapturePreparationWorkspace(scope: client.scope(person: person, membership: membership),
+            lessonID: lessonID, client: client.captureClient, reader: client.reader, agenda: client)
+    }
     private func interval(_ lesson: SchoolLesson) -> String {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = TimeZone(identifier: lesson.timeZone); formatter.dateFormat = "HH:mm"
         guard let start = lesson.startsAt, let end = lesson.endsAt else { return "—" }
@@ -348,12 +364,19 @@ private struct SchoolLessonDetailView: View {
         return formatter.string(from: date)
     }
     @MainActor private func load() async {
-        lesson = nil; error = nil
+        lesson = nil; error = nil; mayPrepareCapture = false
         let scope = identityScope
         do {
             let loaded = try await client.lesson(schoolID: schoolID, id: lessonID)
             guard identityScope == scope, !Task.isCancelled else { return }
             lesson = loaded
+            if let member = workspace.membership, member.roles.contains("INSTRUCTOR"), member.membershipId == loaded.instructorMembershipId {
+                mayPrepareCapture = true
+            } else if workspace.membership?.roles.contains("LEARNER") == true {
+                let learner = try? await client.reader.learner(schoolID: schoolID, id: loaded.learnerId)
+                guard identityScope == scope, !Task.isCancelled else { return }
+                mayPrepareCapture = learner?.personId == workspace.person?.personId && learner != nil
+            }
         }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? "La leçon n’a pas pu être chargée." }
     }
