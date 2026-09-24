@@ -18,21 +18,29 @@ enum OIDCPolicy {
             && request.responseType == OIDResponseTypeCode && request.codeChallengeMethod == "S256"
     }
 
-    static func request(service: OIDServiceConfiguration, configuration: AppConfiguration) -> OIDAuthorizationRequest {
+    static func request(service: OIDServiceConfiguration, configuration: AppConfiguration, reauthentication: Bool = false) -> OIDAuthorizationRequest {
         // AppAuth génère un state, un nonce et un vérificateur PKCE aléatoires, puis S256.
         OIDAuthorizationRequest(configuration: service, clientId: configuration.clientID, clientSecret: nil,
                                 scopes: [OIDScopeOpenID, OIDScopeProfile, "email"],
                                 redirectURL: configuration.redirectURL, responseType: OIDResponseTypeCode,
-                                additionalParameters: nil)
+                                additionalParameters: reauthentication ? ["prompt": "login", "max_age": "0"] : nil)
     }
 }
 
 @MainActor
 protocol IdentityAuthorizing: AnyObject {
     func authorize(configuration: AppConfiguration, presenting: UIViewController) async throws -> OIDAuthState
+    func reauthorize(configuration: AppConfiguration, presenting: UIViewController) async throws -> OIDAuthState
     func freshToken(for state: OIDAuthState) async throws -> String
     func cancel()
     func handleRedirect(_ url: URL) -> Bool
+}
+
+extension IdentityAuthorizing {
+    func reauthorize(configuration: AppConfiguration, presenting: UIViewController) async throws -> OIDAuthState {
+        // An implementation without a real fresh-login flow cannot claim reauthentication.
+        throw IdentityFailure.reauthentication
+    }
 }
 
 @MainActor
@@ -45,6 +53,14 @@ final class AppAuthAuthorization: IdentityAuthorizing {
     private var refreshContinuation: CheckedContinuation<String, Error>?
 
     func authorize(configuration: AppConfiguration, presenting: UIViewController) async throws -> OIDAuthState {
+        try await authorize(configuration: configuration, presenting: presenting, reauthentication: false)
+    }
+
+    func reauthorize(configuration: AppConfiguration, presenting: UIViewController) async throws -> OIDAuthState {
+        try await authorize(configuration: configuration, presenting: presenting, reauthentication: true)
+    }
+
+    private func authorize(configuration: AppConfiguration, presenting: UIViewController, reauthentication: Bool) async throws -> OIDAuthState {
         cancel()
         let id = UUID()
         operationID = id
@@ -68,7 +84,7 @@ final class AppAuthAuthorization: IdentityAuthorizing {
                     guard let agent = OIDExternalUserAgentIOS(presenting: presenting, prefersEphemeralSession: true) else {
                         self.finishAuthorization(error: IdentityFailure.unavailable); return
                     }
-                    let request = OIDCPolicy.request(service: service, configuration: configuration)
+                    let request = OIDCPolicy.request(service: service, configuration: configuration, reauthentication: reauthentication)
                     self.flow = OIDAuthState.authState(byPresenting: request, externalUserAgent: agent) { [weak self] state, error in
                         let stateArchive = state.flatMap {
                             try? NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: true)

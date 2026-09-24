@@ -3,8 +3,12 @@ import SwiftUI
 struct SchoolConfigurationView: View {
     @Bindable var model: SchoolConfigurationWorkspace
     let openSchool: () -> Void
+    var openProfilePolicy: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var confirmation: Confirmation?
+    @State private var editingPolicy = false
+    @State private var submittingConfirmation = false
+    @State private var confirmationAttempted = false
 
     private enum Confirmation: String, Identifiable {
         case identity, policy, activation
@@ -28,27 +32,38 @@ struct SchoolConfigurationView: View {
                 if let school = model.school {
                     Section {
                         Text(school.name).font(.title2.weight(.bold))
-                        Label(school.status == "ACTIVE" ? "École active" : "École en préparation",
+                        Label(school.status == "ACTIVE" ? "École active" : school.status == "DRAFT" ? "École en préparation" : "École inactive",
                               systemImage: school.status == "ACTIVE" ? "checkmark.seal" : "building.2")
-                            .foregroundStyle(DrivyTheme.muted)
+                            .foregroundStyle(school.status == "ACTIVE" ? DrivyTheme.success : DrivyTheme.muted)
+                        if school.status == "DRAFT" {
+                            Text("Coordonnées, textes de l’école, puis activation.")
+                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        }
                     }
                     identitySection
                     policySection
+                    if let openProfilePolicy, model.policy?.status == "APPROVED" {
+                        Section {
+                            Button("Définir les champs du profil", action: openProfilePolicy)
+                                .frame(minHeight: 48).disabled(model.isBusy)
+                        }
+                    }
                     reviewSection
                 }
             }
             .scrollContentBackground(.hidden)
             .background(DrivyTheme.canvas)
-            .navigationTitle("Préparer l’école")
+            .navigationTitle(model.school?.status == "DRAFT" ? "Préparer l’école" : "Configuration")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
                 ToolbarItem(placement: .topBarTrailing) {
                     if model.isBusy { ProgressView().accessibilityLabel("Enregistrement en cours") }
                 }
             }
             .task { await model.load() }
             .sheet(item: $confirmation) { action in confirmationSheet(action) }
+            .interactiveDismissDisabled(model.isBusy)
         }
         .tint(DrivyTheme.accent)
         .foregroundStyle(DrivyTheme.text)
@@ -56,23 +71,34 @@ struct SchoolConfigurationView: View {
 
     private var identitySection: some View {
         Section {
-            TextField("Nom de l’école", text: $model.name)
-                .textContentType(.organizationName).accessibilityIdentifier("school-config-name")
-            TextField("E-mail de l’école", text: $model.contactEmail)
-                .textContentType(.emailAddress).keyboardType(.emailAddress)
-                .textInputAutocapitalization(.never).autocorrectionDisabled()
-                .accessibilityIdentifier("school-config-email")
-            TextField("Téléphone, facultatif", text: $model.contactPhone)
-                .textContentType(.telephoneNumber).keyboardType(.phonePad)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Nom de l’école").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                TextField("Nom", text: $model.name)
+                    .textContentType(.organizationName).accessibilityIdentifier("school-config-name")
+                    .accessibilityLabel("Nom de l’école")
+            }.padding(.vertical, 4)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("E-mail de l’école").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                TextField("Adresse e-mail", text: $model.contactEmail)
+                    .textContentType(.emailAddress).keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .accessibilityIdentifier("school-config-email").accessibilityLabel("E-mail de l’école")
+            }.padding(.vertical, 4)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Téléphone · facultatif").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                TextField("Numéro", text: $model.contactPhone)
+                    .textContentType(.telephoneNumber).keyboardType(.phonePad)
+                    .accessibilityLabel("Téléphone, facultatif")
+            }.padding(.vertical, 4)
             if let zone = model.school?.timeZone, let timeZone = TimeZone(identifier: zone) {
                 LabeledContent("Fuseau horaire", value: timeZone.localizedName(for: .standard, locale: Locale(identifier: "fr_CH")) ?? zone)
                     .foregroundStyle(DrivyTheme.muted)
             }
-            Button("Enregistrer les coordonnées") { confirmation = .identity }
+            Button("Relire les modifications") { review(.identity) }
                 .frame(minHeight: 44)
                 .disabled(!model.identityIsValid || !model.identityIsEdited)
                 .accessibilityIdentifier("school-config-save-identity")
-        } header: { Text("1. Coordonnées") }
+        } header: { Text("Coordonnées") }
         .disabled(!model.mayEdit)
     }
 
@@ -81,8 +107,32 @@ struct SchoolConfigurationView: View {
             if let policy = model.policy {
                 Label(policy.status == "APPROVED" ? "Version \(policy.version) adoptée" : "Textes à préparer",
                       systemImage: policy.status == "APPROVED" ? "checkmark.document" : "doc.text")
-                    .foregroundStyle(DrivyTheme.muted)
+                    .foregroundStyle(policy.status == "APPROVED" ? DrivyTheme.success : DrivyTheme.muted)
             }
+            if model.policy?.status != "APPROVED" || editingPolicy || model.policyIsEdited {
+                policyFields
+            } else if let policy = model.policy {
+                DisclosureGroup("Consulter les textes adoptés") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Information des personnes").font(.headline)
+                        Text(policy.noticeText).textSelection(.enabled)
+                        Text("Conservation des données").font(.headline)
+                        Text(policy.retentionText).textSelection(.enabled)
+                        if let contact = policy.contactEmail { Text(contact).foregroundStyle(DrivyTheme.muted) }
+                    }.padding(.vertical, 12)
+                }
+                Button("Préparer une nouvelle version") { editingPolicy = true }
+                    .frame(minHeight: 44).disabled(!model.mayEdit)
+            }
+        } header: { Text("Information et conservation") } footer: {
+            if model.policy?.status != "APPROVED" || editingPolicy || model.policyIsEdited {
+                Text("L’adoption s’effectue après relecture des deux textes. La version précédente reste conservée.")
+            }
+        }
+    }
+
+    @ViewBuilder private var policyFields: some View {
+        Group {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Information des personnes").font(.headline)
                 TextEditor(text: $model.noticeText)
@@ -97,15 +147,17 @@ struct SchoolConfigurationView: View {
                     .accessibilityLabel("Conservation des données")
                     .accessibilityIdentifier("school-config-retention")
             }
-            TextField("E-mail de contact pour les données", text: $model.policyContactEmail)
-                .textContentType(.emailAddress).keyboardType(.emailAddress)
-                .textInputAutocapitalization(.never).autocorrectionDisabled()
-            Button("Relire et adopter les textes") { confirmation = .policy }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Contact pour les données").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                TextField("Adresse e-mail", text: $model.policyContactEmail)
+                    .textContentType(.emailAddress).keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .accessibilityLabel("E-mail de contact pour les données")
+            }.padding(.vertical, 4)
+            Button("Relire et adopter les textes") { review(.policy) }
                 .frame(minHeight: 44)
                 .disabled(!model.policyIsValid || (model.policy?.status == "APPROVED" && !model.policyIsEdited))
                 .accessibilityIdentifier("school-config-review-policy")
-        } header: { Text("2. Information et conservation") } footer: {
-            Text("Rédigez les textes de votre école. Leur adoption nécessite votre confirmation après relecture. Aucun texte n’est approuvé automatiquement.")
         }
         .disabled(!model.mayEdit)
     }
@@ -113,14 +165,30 @@ struct SchoolConfigurationView: View {
     private var reviewSection: some View {
         Section {
             if let readiness = model.readiness {
-                if readiness.activationReady {
+                if model.school?.status == "DRAFT", readiness.activationReady {
                     Label("Préparation vérifiée", systemImage: "checkmark.circle")
                         .foregroundStyle(DrivyTheme.success)
-                } else {
+                } else if model.school?.status == "DRAFT" {
                     ForEach(Array(readiness.activationBlockers.enumerated()), id: \.offset) { _, blocker in
                         Label(blocker.message, systemImage: "exclamationmark.circle")
                             .fixedSize(horizontal: false, vertical: true)
                             .foregroundStyle(DrivyTheme.muted)
+                    }
+                }
+                if !readiness.capabilities.isEmpty {
+                    DisclosureGroup("Fonctions de l’école") {
+                        ForEach(readiness.capabilities, id: \.capability) { capability in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label(capabilityTitle(capability.capability), systemImage: capability.ready ? "checkmark.circle" : "circle")
+                                    .font(.headline)
+                                Text(capability.ready ? "Disponible" : "À configurer pour l’utiliser")
+                                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                ForEach(Array(capability.blockers.enumerated()), id: \.offset) { _, blocker in
+                                    Text(blocker.message).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }.padding(.vertical, 8)
+                        }
                     }
                 }
             }
@@ -141,13 +209,15 @@ struct SchoolConfigurationView: View {
                     .frame(minHeight: 44)
                     .accessibilityIdentifier("school-config-open-school")
             } else {
-                Button("Relire et activer l’école") { confirmation = .activation }
+                Button("Relire et activer l’école") { review(.activation) }
                     .frame(minHeight: 44)
                     .disabled(!model.canActivate)
                     .accessibilityIdentifier("school-config-review-activation")
             }
-        } header: { Text("3. Vérification") } footer: {
-            Text("L’activation ouvre l’espace de l’école. Elle ne crée aucun élève et ne publie aucun cours.")
+        } header: { Text(model.school?.status == "ACTIVE" ? "Fonctionnement" : "Activation") } footer: {
+            if model.school?.status == "DRAFT" {
+                Text("L’activation ouvre l’espace de l’école. Les formations et les cours se préparent ensuite.")
+            }
         }
     }
 
@@ -157,6 +227,10 @@ struct SchoolConfigurationView: View {
                 .font(.headline)
             if pending.kind.isInvitation {
                 Text("Une invitation attend sa confirmation. Vous pouvez vérifier son résultat ici ou retrouver sa demande dans Invitations.")
+            }
+            if pending.kind.isProfile {
+                Text("Cette demande concerne un profil ou ses champs. Ouvrez cet écran pour reprendre la même demande.")
+                    .font(.footnote).foregroundStyle(DrivyTheme.muted)
             }
             if pending.scope != model.scope {
                 Text("Vos accès ont changé. Cette demande doit être vérifiée par l’école avant toute nouvelle modification.")
@@ -168,13 +242,15 @@ struct SchoolConfigurationView: View {
             Button("Vérifier le résultat") { Task { await model.verifyPending() } }
                 .frame(minHeight: 44).disabled(model.isBusy || model.isLoading)
                 .accessibilityIdentifier("school-config-verify-command")
-            if !pending.kind.isInvitation && pending.scope == model.scope && !model.pendingRequiresReview {
+            if pending.kind.isConfiguration && pending.scope == model.scope && !model.pendingRequiresReview {
                 Button("Renvoyer la même demande") { Task { await model.retryPending() } }
                     .frame(minHeight: 44).disabled(!model.canRetryPending)
                     .accessibilityIdentifier("school-config-retry-command")
             }
-            Text("Référence : \(pending.id.uuidString)")
-                .font(.caption).foregroundStyle(DrivyTheme.muted).textSelection(.enabled)
+            DisclosureGroup("Référence de la demande") {
+                Text(pending.id.uuidString)
+                    .font(.caption.monospaced()).foregroundStyle(DrivyTheme.muted).textSelection(.enabled)
+            }
         }
     }
 
@@ -198,29 +274,110 @@ struct SchoolConfigurationView: View {
                             .font(.headline)
                     case .activation:
                         Text(model.school?.name ?? "Votre école").font(.title2.weight(.bold))
-                        Text("Vous avez vérifié les coordonnées et adopté les textes d’information et de conservation. Confirmez l’ouverture de l’espace de l’école.")
+                        Text("Les coordonnées et les textes d’information ont été vérifiés. L’activation ouvre l’espace de l’école à ses membres.")
+                        Text("Les formations, réservations et cours se créent séparément.")
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     }
-                    Button(confirmationLabel(action)) {
-                        confirmation = nil
-                        Task {
-                            switch action {
-                            case .identity: await model.saveIdentityAfterConfirmation()
-                            case .policy: await model.adoptPolicyAfterReview()
-                            case .activation: await model.activateAfterReview()
+                    if confirmationAttempted, let error = model.errorMessage {
+                        SchoolErrorNotice(message: error, retry: model.pending == nil && model.needsReload ? {
+                            Task { await model.load() }
+                        } : nil)
+                    }
+                    if confirmationAttempted, model.pending != nil {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Le résultat reste à vérifier. Votre demande est conservée.")
+                                .font(.headline)
+                            Button("Vérifier le résultat") {
+                                Task {
+                                    await model.verifyPending()
+                                    closeConfirmedSheet()
+                                }
+                            }
+                            .frame(minHeight: 44).disabled(model.isBusy || model.isLoading)
+                            if model.canRetryPending {
+                                Button("Renvoyer la même demande") {
+                                    Task { await model.retryPending(); closeConfirmedSheet() }
+                                }.frame(minHeight: 44)
                             }
                         }
                     }
-                    .buttonStyle(DrivyPrimaryButtonStyle())
-                    .accessibilityIdentifier("school-config-confirm-\(action.rawValue)")
                 }
                 .padding(24).frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity)
             }
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    guard canConfirm(action), !submittingConfirmation else { return }
+                    confirmationAttempted = true
+                    submittingConfirmation = true
+                    Task {
+                        switch action {
+                        case .identity: await model.saveIdentityAfterConfirmation()
+                        case .policy: await model.adoptPolicyAfterReview()
+                        case .activation: await model.activateAfterReview()
+                        }
+                        submittingConfirmation = false
+                        closeConfirmedSheet()
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        if submittingConfirmation || model.isBusy { ProgressView() }
+                        Text(submittingConfirmation || model.isBusy ? "Enregistrement…" : model.pending != nil ? "Résultat à vérifier" : confirmationLabel(action))
+                    }
+                }
+                .buttonStyle(DrivyPrimaryButtonStyle())
+                .disabled(!canConfirm(action) || submittingConfirmation)
+                .accessibilityIdentifier("school-config-confirm-\(action.rawValue)")
+                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity)
+                .background(DrivyTheme.surface)
+            }
             .background(DrivyTheme.canvas)
-            .navigationTitle("Votre confirmation")
+            .navigationTitle(confirmationTitle(action))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { confirmation = nil } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(confirmationAttempted ? "Fermer" : "Retour") { confirmation = nil }
+                        .disabled(submittingConfirmation || model.isBusy)
+                }
             }
+            .interactiveDismissDisabled(submittingConfirmation || model.isBusy)
+        }
+    }
+
+    private func review(_ action: Confirmation) {
+        confirmationAttempted = false
+        confirmation = action
+    }
+
+    private func canConfirm(_ action: Confirmation) -> Bool {
+        switch action {
+        case .identity: model.mayEdit && model.identityIsValid && model.identityIsEdited
+        case .policy: model.mayEdit && model.policyIsValid && (model.policy?.status != "APPROVED" || model.policyIsEdited)
+        case .activation: model.canActivate
+        }
+    }
+
+    private func closeConfirmedSheet() {
+        guard model.pending == nil, model.successMessage != nil, model.school != nil,
+              model.accessFailure == nil else { return }
+        confirmation = nil
+        editingPolicy = false
+    }
+
+    private func confirmationTitle(_ action: Confirmation) -> String {
+        switch action {
+        case .identity: "Vos coordonnées"
+        case .policy: "Relire les textes"
+        case .activation: "Activer l’école"
+        }
+    }
+
+    private func capabilityTitle(_ capability: String) -> String {
+        switch capability {
+        case "CAN_USE_WORKSPACE": "Espace de l’école"
+        case "CAN_PLAN_LESSON": "Planification des leçons"
+        case "CAN_CAPTURE": "Enregistrement des trajets"
+        case "CAN_PUBLISH_COURSE": "Publication des cours"
+        default: "Autre fonction"
         }
     }
 

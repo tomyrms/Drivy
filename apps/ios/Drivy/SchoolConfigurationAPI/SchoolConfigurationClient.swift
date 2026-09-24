@@ -49,13 +49,13 @@ final class SchoolConfigurationClient: SchoolConfigurationAPI {
     func operation(schoolID: UUID, id: UUID) async throws -> SchoolOperationReceipt {
         let result: SchoolOperationReceipt = try await request(schoolID: schoolID, suffix: "operations", recordID: id)
         guard result.operationId == id, result.resourceVersion > 0,
-              result.resourceType == "Invitation" || result.resourceId == schoolID,
+              ["Invitation", "ProfileFieldPolicy", "AdministrativeProfile", "OnboardingProgress", "Offering", "Curriculum", "SchoolPolicy", "Training", "Assignment", "Member", "Lesson", "CommercialTermsVersion", "ServiceProductVersion", "AvailabilityRule", "Closure", "Preparation", "Wish", "ReportDraft", "ReportRevision"].contains(result.resourceType) || result.resourceId == schoolID,
               Self.timestamp(result.committedAt) else { throw SchoolConfigurationFailure.invalidResponse }
         return result
     }
 
     func send(_ command: PendingSchoolCommand) async throws -> SchoolCommandResult {
-        guard !command.kind.isInvitation, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,
+        guard command.kind.isConfiguration, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,
               let object = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any],
               let operation = object["operationId"] as? String, UUID(uuidString: operation) == command.id else {
             throw SchoolConfigurationFailure.invalidResponse
@@ -83,7 +83,7 @@ final class SchoolConfigurationClient: SchoolConfigurationAPI {
                 throw SchoolConfigurationFailure.invalidResponse
             }
             return .dataPolicy(result)
-        case .createInvitation, .resendInvitation, .revokeInvitation:
+        default:
             throw SchoolConfigurationFailure.invalidResponse
         }
     }

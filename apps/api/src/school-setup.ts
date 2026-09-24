@@ -1,6 +1,10 @@
+import {authorizeCaptureObservationOperation} from './capture-observations.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
+import { authorizePlanningOperation } from './lessons.js';
+import { authorizeReportOperation } from './lesson-reports.js';
+import { authorizeCaptureOperation } from './captures.js';
 import type { TokenVerifier } from './auth.js';
 import { withActor } from './database.js';
 import { ApiError, notFound } from './errors.js';
@@ -17,12 +21,12 @@ const schoolUpdate = z.object({ operationId:z.uuid(),name:nonBlank(150),timeZone
 const policyCommand = z.object({operationId:z.uuid(),noticeText:nonBlank(20000),retentionText:nonBlank(20000),contactEmail:z.email().max(320),reviewAcknowledged:z.literal(true)}).strict();
 const empty = z.object({}).strict();
 interface SetupRow { school_id:string;version:number;current_step:string;completed_steps:string[];configured_by:string;last_saved_at:Date;completed_at:Date|null }
-interface PolicyRow { school_id:string;version:number;notice_text:string;retention_text:string;contact_email:string|null;approved_by:string|null;approved_at:Date|null }
+interface PolicyRow { school_id:string;version:number;notice_version_id:string;notice_text:string;retention_text:string;contact_email:string|null;approved_by:string|null;approved_at:Date|null }
 interface Blocker { code:string;message:string;field:string|null;purpose:string|null;resourceId:string|null;destinationKey:string|null }
 const blocker = (code:string,message:string,field:string|null=null):Blocker=>({code,message,field,purpose:null,resourceId:null,destinationKey:'SCHOOL_SETUP'});
 function validTimeZone(value:string) { try { new Intl.DateTimeFormat('fr',{timeZone:value}); return !/^[+-]/.test(value); } catch { return false; } }
 function policyProjection(row:PolicyRow) {
-  return {id:row.school_id,schoolId:row.school_id,version:row.version,status:row.approved_at?'APPROVED':'DRAFT',noticeText:row.notice_text,
+  return {id:row.school_id,schoolId:row.school_id,version:row.version,noticeVersionId:row.notice_version_id,status:row.approved_at?'APPROVED':'DRAFT',noticeText:row.notice_text,
     retentionText:row.retention_text,contactEmail:row.contact_email,approvedAt:row.approved_at?.toISOString()??null,approvedByMembershipId:row.approved_by};
 }
 async function policy(db:PoolClient,schoolId:string):Promise<PolicyRow> {
@@ -61,11 +65,12 @@ async function setup(db:PoolClient,school:SchoolRow) {
   return {id:row.school_id,schoolId:row.school_id,version:row.version,status:row.completed_at?'COMPLETED':ready.activationReady?'READY':'IN_PROGRESS',
     currentStep:row.current_step,completedSteps:row.completed_steps,lastSavedAt:row.last_saved_at.toISOString(),configuredByMembershipId:row.configured_by,readiness:ready};
 }
-async function recordSettings(db:PoolClient,school:SchoolRow,memberId:string) {
+export async function recordSettings(db:PoolClient,school:SchoolRow,memberId:string,profileFieldPolicyVersionId?:string) {
   const currentPolicy=await policy(db,school.id);
   await db.query('INSERT INTO drivy.school_settings_version(school_id,version,settings,created_by) VALUES($1,$2,$3,$4)',
     [school.id,school.configurationVersion,JSON.stringify({name:school.name,timeZone:school.timeZone,contactEmail:school.contactEmail,
-      contactPhone:school.contactPhone,modules:school.modules,dataPolicyVersion:currentPolicy.version}),memberId]);
+      contactPhone:school.contactPhone,modules:school.modules,dataPolicyVersion:currentPolicy.version,
+      ...(profileFieldPolicyVersionId?{profileFieldPolicyVersionId}:{})}),memberId]);
 }
 
 export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier}) {
@@ -89,7 +94,14 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
   });
   app.get('/v1/schools/:schoolId/readiness',async request=>envelope(await read(request,readiness,true),request));
   app.get('/v1/schools/:schoolId/data-policy',async(request,reply)=>{
-    const data=await read(request,async(db,school)=>policyProjection(await policy(db,school.id))) as ReturnType<typeof policyProjection>;
+    const identity=await options.verifyToken(request.headers.authorization);const id=schoolID(request);
+    const query=z.object({noticeVersionId:z.uuid().optional()}).strict().parse(request.query);
+    const data=await withActor(options.pool,identity,id,async(db,_actor,member)=>{
+      const row=(await db.query<PolicyRow>(`SELECT * FROM drivy.school_data_policy WHERE school_id=$1
+        AND ($2::uuid IS NULL OR notice_version_id=$2) AND ($3::boolean OR approved_at IS NOT NULL) ORDER BY version DESC LIMIT 1`,
+        [id,query.noticeVersionId ?? null,member?.roles.includes('ADMIN') ?? false])).rows[0];
+      if(!row) throw notFound();return policyProjection(row);
+    });
     reply.header('ETag',`"${data.version}"`); return envelope(data,request);
   });
   app.get('/v1/schools/:schoolId/operations/:operationId',async request=>{
@@ -103,8 +115,22 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
          FROM drivy.operation o JOIN drivy.audit_event a ON a.school_id=o.school_id AND a.actor_person_id=o.actor_person_id AND a.operation_id=o.operation_id
          WHERE o.school_id=$1 AND o.actor_person_id=$2 AND o.operation_id=$3`,[schoolId,actor.personId,operationId]);
       if (!result.rows[0]) throw notFound();
+      const planningCommand=await authorizePlanningOperation(db,schoolId,result.rows[0].commandType,result.rows[0].resourceId);
+      const reportCommand=await authorizeReportOperation(db,schoolId,result.rows[0].commandType,result.rows[0].resourceId);
+      const captureCommand=await authorizeCaptureOperation(db,schoolId,result.rows[0].commandType,result.rows[0].resourceId);
+      const captureObservationCommand=await authorizeCaptureObservationOperation(db,schoolId,result.rows[0].commandType,result.rows[0].resourceId);
       const invitationCommand=['CREATE_INVITATION','RESEND_INVITATION','REVOKE_INVITATION'].includes(result.rows[0].commandType);
-      if (!member.roles.includes('ADMIN') && !(invitationCommand && member.roles.includes('INSTRUCTOR')) && result.rows[0].commandType!=='ACCEPT_INVITATION')
+      const profileCommand=['UPDATE_ADMINISTRATIVE_PROFILE','UPDATE_LEARNER'].includes(result.rows[0].commandType);
+      const onboardingCommand=['SAVE_ONBOARDING','COMPLETE_ONBOARDING'].includes(result.rows[0].commandType);
+      const trainingCommand=result.rows[0].commandType==='CREATE_TRAINING';
+      if(trainingCommand && !(await db.query('SELECT t.id FROM drivy.training t JOIN drivy.learner_profile l ON l.id=t.learner_id AND l.school_id=t.school_id WHERE t.school_id=$1 AND t.id=$2',[schoolId,result.rows[0].resourceId])).rowCount)throw notFound();
+      const ownMemberChange=result.rows[0].commandType==='UPDATE_MEMBER' && result.rows[0].resourceId===member.id;
+      if(profileCommand && !(await db.query('SELECT id FROM drivy.learner_profile WHERE school_id=$1 AND (id=$2 OR profile_id=$2)',[schoolId,result.rows[0].resourceId])).rowCount) throw notFound();
+      if(onboardingCommand) {
+        const progress=(await db.query<{kind:string}>('SELECT kind FROM drivy.onboarding_progress WHERE school_id=$1 AND id=$2',[schoolId,result.rows[0].resourceId])).rows[0];
+        if(!progress || !(progress.kind==='STUDENT'?member.roles.includes('LEARNER'):member.roles.some(role=>['ADMIN','INSTRUCTOR'].includes(role)))) throw notFound();
+      }
+      if (!member.roles.includes('ADMIN') && !(invitationCommand && member.roles.includes('INSTRUCTOR')) && result.rows[0].commandType!=='ACCEPT_INVITATION' && !profileCommand && !onboardingCommand && !(trainingCommand && member.roles.includes('INSTRUCTOR')) && !ownMemberChange && !planningCommand && !reportCommand && !captureCommand && !captureObservationCommand)
         throw new ApiError(403,'SETUP_ACCESS_REQUIRED','Les droits nécessaires à cette opération ne sont plus disponibles.');
       return {...result.rows[0],committedAt:result.rows[0].committedAt.toISOString()};
     });
@@ -153,7 +179,12 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
       await recordSettings(db,current.rows[0]!,actor.membershipId);
       return {data:policyProjection(result.rows[0]!),action:'SchoolDataPolicyAdopted',resourceType:'SchoolDataPolicy',resourceId:id,changedFields:['noticeText','retentionText','contactEmail']};
     });
-    reply.header('ETag',`"${data.version}"`);return envelope(data,request);
+    // Les anciennes preuves G1B restent immuables ; leur projection reçoit l'UUID réel de la même révision.
+    const projected=data.noticeVersionId?data:await withActor(options.pool,identity,id,async(db)=>{
+      const row=(await db.query<PolicyRow>('SELECT * FROM drivy.school_data_policy WHERE school_id=$1 AND version=$2',[id,data.version])).rows[0];
+      if(!row) throw notFound();return policyProjection(row);
+    });
+    reply.header('ETag',`"${projected.version}"`);return envelope(projected,request);
   });
   app.post('/v1/schools/:schoolId/activate',async(request,reply)=>{
     const identity=await options.verifyToken(request.headers.authorization);

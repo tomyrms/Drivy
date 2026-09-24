@@ -46,6 +46,7 @@ struct SchoolDataPolicy: Codable, Sendable, Equatable {
     let contactEmail: String?
     let approvedAt: String?
     let approvedByMembershipId: UUID?
+    var noticeVersionId: UUID? = nil
 }
 
 struct SchoolIdentityCommand: Codable, Sendable, Equatable {

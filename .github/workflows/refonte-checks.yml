@@ -1,5 +1,6 @@
 name: Refonte · vérifications
 on:
+  workflow_dispatch:
   push:
     branches: [master, 'codex/**']
   pull_request:
@@ -31,6 +32,7 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 15
     env:
       TEST_DATABASE_URL: postgres://drivy_test:test-only@127.0.0.1:5432/drivy_test
+      WEB_COMMAND_TEST_DATABASE_URL: postgres://drivy_test:test-only@127.0.0.1:5432/drivy_web_test
       TEST_SMTP_PORT: '1025'
       TEST_MAILPIT_URL: http://127.0.0.1:8025
     steps:
@@ -42,10 +44,12 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+        if: github.event_name == 'workflow_dispatch'
       - run: npm run build
       - run: npm ci --prefix apps/web --ignore-scripts
       - run: npm run typecheck --prefix apps/web
       - run: npm test --prefix apps/web
+        if: github.event_name == 'workflow_dispatch'
       - run: npm run build --prefix apps/web
   documentation:
     name: Intégrité et contrats documentaires

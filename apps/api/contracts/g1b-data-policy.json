@@ -5,11 +5,12 @@
     "SchoolDataPolicy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "schoolId", "version", "status", "noticeText", "retentionText", "contactEmail", "approvedAt", "approvedByMembershipId"],
+      "required": ["id", "schoolId", "version", "noticeVersionId", "status", "noticeText", "retentionText", "contactEmail", "approvedAt", "approvedByMembershipId"],
       "properties": {
         "id": {"type": "string", "format": "uuid"},
         "schoolId": {"type": "string", "format": "uuid"},
         "version": {"type": "integer", "minimum": 1},
+        "noticeVersionId": {"type": "string", "format": "uuid"},
         "status": {"enum": ["DRAFT", "APPROVED"]},
         "noticeText": {"type": "string", "maxLength": 20000},
         "retentionText": {"type": "string", "maxLength": 20000},

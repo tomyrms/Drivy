@@ -148,8 +148,9 @@ describe('G1A · droits réels et isolation', () => {
     await withActor(pool,{ issuer,subject:'demo-instructor' },id.schoolA,async db => {
       const role = await db.query('SELECT current_user,rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user');
       expect(role.rows[0]).toEqual({ current_user:'drivy_app',rolsuper:false,rolbypassrls:false });
-      const rows = await db.query('SELECT school_id FROM drivy.learner_profile');
-      expect(rows.rows.length).toBe(2); expect(rows.rows.every(row=>row.school_id===id.schoolA)).toBe(true);
+      // G1D renforce la RLS : le moniteur ne voit même en SQL que son élève actuellement affecté.
+      const rows = await db.query('SELECT id,school_id FROM drivy.learner_profile');
+      expect(rows.rows).toEqual([{id:id.aliceLearner,school_id:id.schoolA}]);
     });
   });
   it('le contexte scolaire ne fuit pas entre connexions réutilisées', async () => {

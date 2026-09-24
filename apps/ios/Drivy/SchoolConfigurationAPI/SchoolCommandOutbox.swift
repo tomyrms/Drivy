@@ -17,6 +17,49 @@ struct SchoolCommandScope: Codable, Sendable, Equatable {
 enum SchoolCommandKind: String, Codable, Sendable {
     case updateSchool, saveSetup, activate, saveDataPolicy
     case createInvitation, resendInvitation, revokeInvitation
+    case createProfilePolicy, publishProfilePolicy, updateProfile, saveOnboarding, completeOnboarding
+    case createOffering, createCurriculum, createCatalogPolicy, createTraining, createAssignment, updateMember
+    case createLesson, moveLesson, cancelLesson, createCommercialTerms, createServiceProduct
+    case createAvailabilityRule, updateAvailabilityRule, createClosure, removeAvailabilityRule, removeClosure
+    case savePreparation, saveWish, completeLesson, saveReportDraft, publishReportDraft
+    case createObservation, updateObservation, removeObservation
+
+    var isObservation: Bool {
+        switch self {
+        case .createObservation, .updateObservation, .removeObservation: true
+        default: false
+        }
+    }
+
+    var isPlanning: Bool {
+        switch self {
+        case .createLesson, .moveLesson, .cancelLesson, .createCommercialTerms, .createServiceProduct,
+             .createAvailabilityRule, .updateAvailabilityRule, .createClosure, .removeAvailabilityRule, .removeClosure: true
+        default: false
+        }
+    }
+    var isReport: Bool {
+        switch self {
+        case .savePreparation, .saveWish, .completeLesson, .saveReportDraft, .publishReportDraft: true
+        default: false
+        }
+    }
+
+    var isCatalog: Bool {
+        switch self {
+        case .createOffering, .createCurriculum, .createCatalogPolicy, .createTraining, .createAssignment, .updateMember: true
+        default: false
+        }
+    }
+
+    var isProfile: Bool {
+        switch self {
+        case .createProfilePolicy, .publishProfilePolicy, .updateProfile, .saveOnboarding, .completeOnboarding: true
+        default: false
+        }
+    }
+
+    var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog && !isPlanning && !isReport && !isObservation }
 
     var isInvitation: Bool {
         switch self {
@@ -34,6 +77,35 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .createInvitation: "CREATE_INVITATION"
         case .resendInvitation: "RESEND_INVITATION"
         case .revokeInvitation: "REVOKE_INVITATION"
+        case .createProfilePolicy: "CREATE_PROFILE_FIELD_POLICY"
+        case .publishProfilePolicy: "PUBLISH_PROFILE_FIELD_POLICY"
+        case .updateProfile: "UPDATE_ADMINISTRATIVE_PROFILE"
+        case .saveOnboarding: "SAVE_ONBOARDING"
+        case .completeOnboarding: "COMPLETE_ONBOARDING"
+        case .createOffering: "CREATE_OFFERING_VERSION"
+        case .createCurriculum: "CREATE_CURRICULUM_VERSION"
+        case .createCatalogPolicy: "CREATE_SCHOOL_POLICY"
+        case .createTraining: "CREATE_TRAINING"
+        case .createAssignment: "CREATE_ASSIGNMENT"
+        case .updateMember: "UPDATE_MEMBER"
+        case .createLesson: "CREATE_LESSON"
+        case .moveLesson: "MOVE_LESSON"
+        case .cancelLesson: "CANCEL_LESSON"
+        case .createCommercialTerms: "CREATE_COMMERCIAL_TERMS"
+        case .createServiceProduct: "CREATE_SERVICE_PRODUCT"
+        case .createAvailabilityRule: "CREATE_AVAILABILITY_RULE"
+        case .updateAvailabilityRule: "UPDATE_AVAILABILITY_RULE"
+        case .createClosure: "CREATE_CLOSURE"
+        case .removeAvailabilityRule: "REMOVE_AVAILABILITY_RULE"
+        case .removeClosure: "REMOVE_CLOSURE"
+        case .savePreparation: "SAVE_PREPARATION"
+        case .saveWish: "SAVE_WISH"
+        case .completeLesson: "COMPLETE_LESSON"
+        case .saveReportDraft: "SAVE_REPORT_DRAFT"
+        case .publishReportDraft: "PUBLISH_REPORT_DRAFT"
+        case .createObservation: "CREATE_GEO_OBSERVATION"
+        case .updateObservation: "UPDATE_GEO_OBSERVATION"
+        case .removeObservation: "REMOVE_GEO_OBSERVATION"
         }
     }
 
@@ -43,6 +115,25 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .saveSetup: "SchoolSetup"
         case .saveDataPolicy: "SchoolDataPolicy"
         case .createInvitation, .resendInvitation, .revokeInvitation: "Invitation"
+        case .createProfilePolicy, .publishProfilePolicy: "ProfileFieldPolicy"
+        case .updateProfile: "AdministrativeProfile"
+        case .saveOnboarding, .completeOnboarding: "OnboardingProgress"
+        case .createOffering: "Offering"
+        case .createCurriculum: "Curriculum"
+        case .createCatalogPolicy: "SchoolPolicy"
+        case .createTraining: "Training"
+        case .createAssignment: "Assignment"
+        case .updateMember: "Member"
+        case .createLesson, .moveLesson, .cancelLesson, .completeLesson: "Lesson"
+        case .createCommercialTerms: "CommercialTermsVersion"
+        case .createServiceProduct: "ServiceProductVersion"
+        case .createAvailabilityRule, .updateAvailabilityRule, .removeAvailabilityRule: "AvailabilityRule"
+        case .createClosure, .removeClosure: "Closure"
+        case .savePreparation: "Preparation"
+        case .saveWish: "Wish"
+        case .saveReportDraft: "ReportDraft"
+        case .publishReportDraft: "ReportRevision"
+        case .createObservation, .updateObservation, .removeObservation: "GeoObservation"
         }
     }
 }
@@ -56,24 +147,53 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
     let body: Data
     // Absent in v1 G1B archives; creation has no server resource identifier yet.
     let resourceID: UUID?
+    let routeResourceID: UUID?
+    let expectedVersion: Int?
+
+    var ifMatchVersion: Int { expectedVersion ?? resourceVersion }
 
     init(id: UUID, scope: SchoolCommandScope, kind: SchoolCommandKind, resourceVersion: Int,
-         createdAt: Date, body: Data, resourceID: UUID? = nil) {
+         createdAt: Date, body: Data, resourceID: UUID? = nil, routeResourceID: UUID? = nil, expectedVersion: Int? = nil) {
         self.id = id; self.scope = scope; self.kind = kind; self.resourceVersion = resourceVersion
         self.createdAt = createdAt; self.body = body; self.resourceID = resourceID
+        self.routeResourceID = routeResourceID; self.expectedVersion = expectedVersion
     }
 
     var hasValidTarget: Bool {
+        if !kind.isProfile && !kind.isCatalog && !kind.isPlanning && !kind.isReport && !kind.isObservation && (routeResourceID != nil || expectedVersion != nil) { return false }
         switch kind {
-        case .createInvitation: resourceVersion == 0 && resourceID == nil
-        case .resendInvitation, .revokeInvitation: resourceVersion > 0 && resourceID != nil
-        default: resourceVersion > 0 && resourceID == nil
+        case .createObservation:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
+        case .updateObservation, .removeObservation:
+            return (1...2_147_483_647).contains(resourceVersion) && resourceID != nil && routeResourceID != nil && expectedVersion == nil
+        case .createCommercialTerms, .createServiceProduct, .createAvailabilityRule, .createClosure:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && expectedVersion == nil
+        case .createLesson:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
+        case .moveLesson, .cancelLesson, .updateAvailabilityRule, .removeAvailabilityRule, .removeClosure, .completeLesson, .saveReportDraft:
+            return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
+        case .savePreparation, .saveWish:
+            return resourceVersion > 0 && resourceID != nil && routeResourceID != nil && expectedVersion == nil
+        case .publishReportDraft:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && (expectedVersion ?? 0) > 0
+        case .createOffering, .createCurriculum, .createCatalogPolicy:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && expectedVersion == nil
+        case .createTraining, .createAssignment:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
+        case .updateMember:
+            return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
+        case .createProfilePolicy: return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && ifMatchVersion > 0
+        case .updateProfile: return resourceVersion > 0 && resourceID != nil && routeResourceID != nil && expectedVersion == nil
+        case .publishProfilePolicy, .saveOnboarding, .completeOnboarding: return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
+        case .createInvitation: return resourceVersion == 0 && resourceID == nil
+        case .resendInvitation, .revokeInvitation: return resourceVersion > 0 && resourceID != nil
+        default: return resourceVersion > 0 && resourceID == nil
         }
     }
 
     func matches(_ receipt: SchoolOperationReceipt) -> Bool {
         guard hasValidTarget else { return false }
-        let expectedID = kind.isInvitation ? resourceID : scope.schoolID
+        let expectedID = kind.isConfiguration ? scope.schoolID : resourceID
         return receipt.operationId == id && receipt.commandType == kind.operationType
             && receipt.resourceType == kind.resourceType && receipt.resourceVersion > resourceVersion
             && (expectedID == nil || receipt.resourceId == expectedID)

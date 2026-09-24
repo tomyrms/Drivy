@@ -143,66 +143,69 @@ struct QualificationRootView: View {
     }
 }
 
-private struct StartSessionView: View {
+struct StartSessionView: View {
     @Bindable var controller: SessionController
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    Image(systemName: "location")
-                        .font(.largeTitle)
-                        .foregroundStyle(DrivyTheme.accent)
-                        .accessibilityHidden(true)
-                    Text("Le trajet est facultatif.")
-                        .font(.title.weight(.bold))
-                    Text("Avec le GPS, Drivy conserve votre position pendant cet essai. Sans GPS, vous pouvez noter vos observations et rédiger votre bilan.")
-                        .foregroundStyle(DrivyTheme.muted)
-                    VStack(spacing: 12) {
-                        Button { start(useGPS: true) } label: {
-                            Label("Démarrer avec le GPS", systemImage: "location.fill")
-                        }
-                        .buttonStyle(DrivyPrimaryButtonStyle())
-                        .accessibilityIdentifier("start-with-gps")
-                        Button { start(useGPS: false) } label: {
-                            Label("Continuer sans GPS", systemImage: "note.text")
-                        }
-                        .buttonStyle(DrivySecondaryButtonStyle())
-                        .accessibilityIdentifier("start-without-gps")
+                VStack(alignment: .leading, spacing: 28) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                            .font(.system(size: 30, weight: .medium)).foregroundStyle(DrivyTheme.accent)
+                            .frame(width: 68, height: 68)
+                            .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 22))
+                            .accessibilityHidden(true)
+                        Text("Un trajet à retenir").font(.largeTitle.weight(.bold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("Choisissez comment garder les moments de votre séance.")
+                            .font(.body).foregroundStyle(DrivyTheme.muted)
+                    }
+                    VStack(spacing: 14) {
+                        startOption(title: "Avec le GPS", detail: "Parcours, observations et bilan", symbol: "location.fill", useGPS: true)
+                        startOption(title: "Sans GPS", detail: "Observations et bilan", symbol: "text.bubble", useGPS: false)
                     }
                     .disabled(controller.isBusy)
-                    if controller.isBusy {
-                        ProgressView("Préparation de la séance…")
-                    }
-                    if let error = controller.errorMessage {
-                        InlineErrorView(message: error)
-                    }
-                    Text("Le choix du GPS n’active aucun partage. Vous pouvez arrêter la séance à tout moment.")
-                        .font(.footnote)
-                        .foregroundStyle(DrivyTheme.muted)
-                    Text("Jusqu’à 2 h · données sur cet appareil")
-                        .font(.footnote)
-                        .foregroundStyle(DrivyTheme.muted)
+                    if controller.isBusy { ProgressView("Préparation du trajet…").frame(maxWidth: .infinity) }
+                    if let error = controller.errorMessage { InlineErrorView(message: error) }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Privé sur cet appareil", systemImage: "lock").font(.subheadline.weight(.medium))
+                        Text("Aucun partage automatique. Jusqu’à 2 h par trajet.")
+                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                    }.padding(.horizontal, 4)
                 }
-                .padding(24)
-                .frame(maxWidth: 560)
-                .frame(maxWidth: .infinity)
+                .padding(24).padding(.top, 8).frame(maxWidth: 560).frame(maxWidth: .infinity)
             }
-            .background(DrivyTheme.canvas)
-            .navigationTitle("Nouvelle séance")
-            .navigationBarTitleDisplayMode(.inline)
+            .background(DrivyTheme.surface)
+            .navigationTitle("Préparer le trajet").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuler") { dismiss() }
-                        .disabled(controller.isBusy)
-                }
+                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(controller.isBusy) }
             }
         }
         .interactiveDismissDisabled(controller.isBusy)
         .tint(DrivyTheme.accent)
+        .foregroundStyle(DrivyTheme.text)
     }
-
+    private func startOption(title: String, detail: String, symbol: String, useGPS: Bool) -> some View {
+        Button { start(useGPS: useGPS) } label: {
+            HStack(spacing: 16) {
+                Image(systemName: symbol).font(.title2).frame(width: 32)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title).font(.headline)
+                    Text(detail).font(.subheadline).opacity(0.85)
+                }.fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "arrow.right").font(.body.weight(.semibold))
+            }
+            .padding(20).frame(maxWidth: .infinity, minHeight: 96)
+            .foregroundStyle(useGPS ? DrivyTheme.onAccent : DrivyTheme.text)
+            .background(useGPS ? DrivyTheme.accent : DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 22))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(useGPS ? "Démarrer avec le GPS" : "Continuer sans GPS")
+        .accessibilityIdentifier(useGPS ? "start-with-gps" : "start-without-gps")
+    }
     private func start(useGPS: Bool) {
         Task {
             controller.dismissError()
