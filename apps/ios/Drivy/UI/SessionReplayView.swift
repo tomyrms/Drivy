@@ -39,7 +39,7 @@ struct SessionDetailView: View {
                     }
                 }
             } else {
-                ContentUnavailableView("Séance indisponible", systemImage: "doc.questionmark", description: Text("Cette séance ne peut pas être ouverte pour le moment."))
+                ContentUnavailableView("Trajet indisponible", systemImage: "doc.questionmark", description: Text(controller.errorMessage ?? "Ce trajet ne peut pas être ouvert pour le moment."))
                     .safeAreaInset(edge: .top) { closeButton.padding(16).frame(maxWidth: .infinity, alignment: .leading) }
             }
         }
@@ -47,8 +47,8 @@ struct SessionDetailView: View {
         .foregroundStyle(DrivyTheme.text)
         .toolbar(.hidden, for: .navigationBar)
         .tint(DrivyTheme.accent)
-        .confirmationDialog("Supprimer cette séance ?", isPresented: $confirmsDelete, titleVisibility: .visible) {
-            Button("Supprimer la séance", role: .destructive) {
+        .confirmationDialog("Supprimer ce trajet ?", isPresented: $confirmsDelete, titleVisibility: .visible) {
+            Button("Supprimer le trajet", role: .destructive) {
                 Task {
                     isPlaying = false
                     deleting = true
@@ -58,7 +58,7 @@ struct SessionDetailView: View {
                 }
             }
             .accessibilityIdentifier("delete-session-confirm")
-            Button("Conserver la séance", role: .cancel) { }
+            Button("Conserver le trajet", role: .cancel) { }
         } message: {
             Text("Le trajet, les observations et le bilan seront supprimés de cet appareil. Cette action est définitive.")
         }
@@ -138,17 +138,15 @@ struct SessionDetailView: View {
     @ViewBuilder
     private func replayBackground(_ session: DrivingSession, framingInsets: EdgeInsets = EdgeInsets()) -> some View {
         if session.points.isEmpty {
-            VStack(spacing: 14) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 36, weight: .light))
-                    .foregroundStyle(DrivyTheme.accent)
-                    .frame(width: 84, height: 84)
-                    .background(DrivyTheme.accentSoft, in: Circle())
+            VStack(spacing: 12) {
+                Image(systemName: "location.slash")
+                    .font(.title2)
+                    .foregroundStyle(DrivyTheme.muted)
                     .accessibilityHidden(true)
-                Text(session.usesGPS ? "Aucun trajet enregistré" : "Les moments de votre séance")
+                Text(session.usesGPS ? "Aucune position enregistrée" : "Trajet sans GPS")
                     .font(.title3.weight(.semibold))
                     .multilineTextAlignment(.center)
-                Text(session.usesGPS ? "Vos observations restent disponibles." : "Une chronologie, même sans GPS.")
+                Text(session.observations.isEmpty ? "Aucune observation n’a été ajoutée." : "Retrouvez les observations dans la chronologie.")
                     .font(.subheadline)
                     .foregroundStyle(DrivyTheme.muted)
                     .multilineTextAlignment(.center)
@@ -187,7 +185,7 @@ struct SessionDetailView: View {
             closeButton
             VStack(alignment: .leading, spacing: 5) {
                 Text(session.title ?? "Replay").font(.headline).fixedSize(horizontal: false, vertical: true)
-                Label(session.isExample ? "Exemple · données fictives" : "Privé · \(session.startedAt.formatted(.dateTime.day().month(.abbreviated).locale(Locale(identifier: "fr_CH"))))", systemImage: session.isExample ? "sparkles" : "lock")
+                Label(session.isExample ? "Exemple · données fictives" : "Privé · \(session.startedAt.formatted(.dateTime.day().month(.abbreviated).locale(Locale(identifier: "fr_CH"))))", systemImage: session.isExample ? "info.circle" : "lock")
                     .font(.caption)
                     .foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -195,14 +193,14 @@ struct SessionDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             Menu {
                 Button { isPlaying = false; sheet = .information } label: {
-                    Label("Détails de la séance", systemImage: "info.circle")
+                    Label("Détails du trajet", systemImage: "info.circle")
                 }
                 Button { isPlaying = false; sheet = .summary } label: {
-                    Label("Bilan de la séance", systemImage: "note.text")
+                    Label("Bilan personnel", systemImage: "note.text")
                 }
                 Divider()
-                Button(role: .destructive) { confirmsDelete = true } label: {
-                    Label("Supprimer la séance", systemImage: "trash")
+                Button(role: .destructive) { isPlaying = false; confirmsDelete = true } label: {
+                    Label("Supprimer le trajet", systemImage: "trash")
                 }
                 .disabled(deleting)
                 .accessibilityIdentifier("delete-session")
@@ -236,8 +234,15 @@ struct SessionDetailView: View {
     private func replayDock(_ session: DrivingSession) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             selectedMoment(session)
-            timeline(session)
-            transportControls(session)
+            if !session.points.isEmpty || !session.observations.isEmpty {
+                timeline(session)
+                transportControls(session)
+            }
+            if session.state == .interrupted {
+                Label("Enregistrement interrompu", systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(DrivyTheme.warning)
+            }
             Divider()
             Button {
                 isPlaying = false
@@ -245,12 +250,13 @@ struct SessionDetailView: View {
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "square.and.pencil")
-                    Text(session.summary.isEmpty ? "Rédiger le bilan" : "Ouvrir le bilan")
+                    Text(session.summary.isEmpty ? "Rédiger le bilan personnel" : "Ouvrir le bilan personnel")
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                 }
                 .font(.subheadline.weight(.semibold))
-                .frame(minHeight: 36)
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -264,42 +270,49 @@ struct SessionDetailView: View {
         .shadow(color: .black.opacity(0.08), radius: 18, y: 5)
     }
 
+    @ViewBuilder
     private func selectedMoment(_ session: DrivingSession) -> some View {
         let selected = session.observations.first { $0.id == selectedObservationID }
-        return Button {
-            isPlaying = false
-            sheet = .observations
-        } label: {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: selected?.theme.journeySymbol ?? "list.bullet")
-                    .font(.title3)
-                    .foregroundStyle(selected?.status.color ?? DrivyTheme.accent)
-                    .frame(width: 42, height: 42)
-                    .background((selected?.status.color ?? DrivyTheme.accent).opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(selected?.theme.label ?? "\(session.observations.count) observation\(session.observations.count == 1 ? "" : "s")")
-                        .font(.headline)
-                        .foregroundStyle(DrivyTheme.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let selected {
-                        Text("\(selected.status.label) · \(selected.observedAt.sessionElapsed(since: session.startedAt))")
-                            .font(.caption)
-                            .foregroundStyle(DrivyTheme.muted)
-                    } else {
-                        Text("Retrouver un moment")
-                            .font(.caption)
-                            .foregroundStyle(DrivyTheme.muted)
+        if session.observations.isEmpty {
+            Label("Aucune observation", systemImage: "list.bullet")
+                .font(.subheadline)
+                .foregroundStyle(DrivyTheme.muted)
+        } else {
+            Button {
+                isPlaying = false
+                sheet = .observations
+            } label: {
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: selected?.theme.journeySymbol ?? "list.bullet")
+                        .font(.title3)
+                        .foregroundStyle(selected?.status.color ?? DrivyTheme.accent)
+                        .frame(width: 42, height: 42)
+                        .background((selected?.status.color ?? DrivyTheme.accent).opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(selected?.theme.label ?? "\(session.observations.count) observation\(session.observations.count == 1 ? "" : "s")")
+                            .font(.headline)
+                            .foregroundStyle(DrivyTheme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let selected {
+                            Text("\(selected.status.label) · \(selected.observedAt.sessionElapsed(since: session.startedAt))")
+                                .font(.caption)
+                                .foregroundStyle(DrivyTheme.muted)
+                        } else {
+                            Text("Voir les observations")
+                                .font(.caption)
+                                .foregroundStyle(DrivyTheme.muted)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel(selected.map { "\($0.theme.label), \($0.status.label), \($0.observedAt.sessionElapsed(since: session.startedAt))" } ?? "\(session.observations.count) observations")
+            .accessibilityHint("Ouvrir les observations du trajet")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(selected.map { "\($0.theme.label), \($0.status.label)" } ?? "\(session.observations.count) observations")
-        .accessibilityHint("Ouvrir les moments de la séance")
     }
 
     private func timeline(_ session: DrivingSession) -> some View {
@@ -329,10 +342,6 @@ struct SessionDetailView: View {
 
     private func transportControls(_ session: DrivingSession) -> some View {
         HStack(spacing: 0) {
-            Button { isPlaying = false; sheet = .observations } label: {
-                Image(systemName: "list.bullet").frame(maxWidth: .infinity, minHeight: 48)
-            }
-            .accessibilityLabel("Liste des observations")
             Button { jumpObservation(in: session, forward: false) } label: {
                 Image(systemName: "backward.end").frame(maxWidth: .infinity, minHeight: 48)
             }
@@ -376,7 +385,7 @@ struct SessionDetailView: View {
         NavigationStack {
             Group {
                 if session.observations.isEmpty {
-                    ContentUnavailableView("Aucune observation", systemImage: "text.bubble", description: Text("Aucun moment n’a été signalé pendant cette séance."))
+                    ContentUnavailableView("Aucune observation", systemImage: "text.bubble", description: Text("Aucune observation n’a été ajoutée pendant ce trajet."))
                 } else {
                     ScrollView {
                         observationsPreview(session).padding(20)
@@ -384,7 +393,7 @@ struct SessionDetailView: View {
                 }
             }
             .background(DrivyTheme.canvas)
-            .navigationTitle("Les moments")
+            .navigationTitle("Observations")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { sheet = nil } } }
         }
@@ -394,7 +403,7 @@ struct SessionDetailView: View {
 
     private func observationsPreview(_ session: DrivingSession) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(session.observations.sorted { $0.observedAt < $1.observedAt }) { observation in
+            ForEach(orderedObservations(in: session)) { observation in
                 Button {
                     selectedObservationID = observation.id
                     seek(to: observation, in: session)
@@ -436,16 +445,16 @@ struct SessionDetailView: View {
                 }
                 if session.state == .interrupted {
                     Section {
-                        Label("La séance a été interrompue. Seules les données enregistrées sont présentées.", systemImage: "exclamationmark.triangle")
+                        Label("L’enregistrement a été interrompu. Seules les données sauvegardées sont présentées.", systemImage: "exclamationmark.triangle")
                             .foregroundStyle(DrivyTheme.warning)
                     }
                 }
                 Section {
-                    Label("Le trajet, les observations et le bilan sont privés et conservés sur cet appareil.", systemImage: "lock")
+                    Label("Le trajet, les observations et le bilan restent sur cet appareil. Ils ne sont pas partagés avec l’école.", systemImage: "lock")
                     StorageCaption(message: controller.storageStatus)
                 }
             }
-            .navigationTitle("La séance")
+            .navigationTitle("Détails du trajet")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { sheet = nil } } }
         }
@@ -467,15 +476,26 @@ struct SessionDetailView: View {
     }
 
     private func seek(to observation: LessonObservation, in session: DrivingSession) {
-        isPlaying = false
         replayOffset = min(duration(session), max(0, observation.observedAt.timeIntervalSince(session.startedAt)))
     }
 
+    private func orderedObservations(in session: DrivingSession) -> [LessonObservation] {
+        session.observations.enumerated().sorted { left, right in
+            if left.element.observedAt == right.element.observedAt { return left.offset < right.offset }
+            return left.element.observedAt < right.element.observedAt
+        }.map { $0.element }
+    }
+
     private func adjacentObservation(in session: DrivingSession, forward: Bool) -> LessonObservation? {
-        let ordered = session.observations.sorted { $0.observedAt < $1.observedAt }
+        let ordered = orderedObservations(in: session)
+        if let index = ordered.firstIndex(where: { $0.id == selectedObservationID }),
+           abs(ordered[index].observedAt.timeIntervalSince(session.startedAt) - replayOffset) < 0.001 {
+            let nextIndex = index + (forward ? 1 : -1)
+            return ordered.indices.contains(nextIndex) ? ordered[nextIndex] : nil
+        }
         return forward
-            ? ordered.first { $0.observedAt.timeIntervalSince(session.startedAt) > replayOffset + 0.1 }
-            : ordered.last { $0.observedAt.timeIntervalSince(session.startedAt) < replayOffset - 0.1 }
+            ? ordered.first { $0.observedAt.timeIntervalSince(session.startedAt) >= replayOffset }
+            : ordered.last { $0.observedAt.timeIntervalSince(session.startedAt) < replayOffset }
     }
 
     private func jumpObservation(in session: DrivingSession, forward: Bool) {

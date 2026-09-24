@@ -22,3 +22,21 @@ Le build appareil `36049713595` réussit pour `072e724` : IPA 0.6.0/build 16, Re
 Le run ciblé `36049725920` compile le simulateur puis produit dix captures iPhone : les cinq vues en clair et sombre. L’inspection a confirmé la composition du Live, du signalement et du sans GPS, et a révélé deux corrections : cadrer le trajet dans la surface libre au-dessus du panneau Replay, et forcer la date française du bandeau. Le run a été annulé après huit minutes de capture ; aucune capture iPad n’a été produite avant cette limite. La variante iPad existe dans le code, sans preuve visuelle nouvelle sur ce run. Aucune campagne fonctionnelle n’a été exécutée.
 
 À la demande suivante du porteur, les deux trajets fictifs Cernier → Neuchâtel reçoivent un accès direct depuis Séance. Ils restent dans un groupe Exemples dans l’historique et leur origine est visible dans le replay, le bilan et les détails. La carte les annonce comme positions d’exemple. Le cadrage tient compte des commandes flottantes, sans déplacer ni inventer de point d’un trajet réel. Leur création chiffrée et idempotente relève du module Core d’exemples ; l’UI lit l’origine persistée, elle ne reconnaît pas une fixture en comparant un prénom ou un identifiant codé en dur.
+
+## Trajets personnels : états et commandes
+
+La passe suivante applique AS03–AS07 à Live, Historique et Replay, sans modifier le collecteur ni le stockage. L’historique vide montre désormais l’erreur de lecture et son action Réessayer lorsque le contrôleur autorise cette lecture. Le replay indisponible conserve aussi le message d’erreur. Une liste vide n’est plus présentée comme un historique confirmé après une panne.
+
+Sans GPS, le texte dit directement que les observations gardent leur heure sans position. Pendant une sauvegarde ou après un arrêt, le bandeau n’annonce plus un trajet en cours. Une interruption du replay apparaît dans son panneau principal. Les listes de trajets sont plus compactes et leur pictogramme disparaît au texte d’accessibilité. Les exemples restent nommés comme données fictives ; aucun symbole décoratif ne remplace leur origine.
+
+Le replay garde un seul accès à la liste d’observations, quatre commandes de lecture et une action Bilan personnel d’au moins 44 points. Sans point ni observation, il n’offre plus une lecture sans contenu. Précédent/suivant parcourent chaque identifiant dans l’ordre sauvegardé, y compris à heure identique ; sélectionner un repère conserve l’état de lecture selon E24. Le curseur temporel, l’ouverture d’une feuille et la demande de suppression mettent explicitement la lecture en pause. Aucun calcul de géométrie ni comblement de lacune n’est ajouté.
+
+Le bilan personnel indique qu’il reste sur cet appareil et n’est pas partagé avec l’école. Les confirmations, la limite de texte et la fermeture après écriture réussie restent inchangées. Cette dénomination distingue ce parcours du bilan scolaire publié.
+
+### Libellés à reprendre dans les racines, hors de ce lot
+
+- Entrée `Essais locaux` → `Trajets personnels` ; `Revenir à l’essai en cours` → `Revenir au trajet en cours`.
+- Explication proposée : `Les trajets et bilans personnels restent sur cet appareil. Ils ne sont pas partagés dans les dossiers de l’école.`
+- Racine locale `Séance d’essai` → `Trajets personnels`, `Nouvelle séance` → `Nouveau trajet` ; remplacer le panneau générique « Prendre des repères » par l’action et le choix réel avec ou sans GPS. La limite de deux heures reste visible, sans la présenter comme une leçon scolaire.
+
+Ces propositions ne sont pas appliquées aux fichiers Root/Home, réservés à l’intégration. Contrôle de diff effectué ; aucune nouvelle capture ou compilation Apple n’est revendiquée par cette passe. Les effets du texte agrandi, des observations simultanées et de l’interruption restent à confirmer dans le binaire groupé.

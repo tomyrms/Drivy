@@ -24,7 +24,7 @@ struct LiveSessionView: View {
         .background(DrivyTheme.canvas)
         .toolbar(.hidden, for: .navigationBar)
         .confirmationDialog("Terminer ce trajet ?", isPresented: $confirmsStop, titleVisibility: .visible) {
-            Button("Terminer la séance", role: .destructive) { controller.stopSession() }
+            Button("Terminer le trajet", role: .destructive) { controller.stopSession() }
                 .accessibilityIdentifier("stop-session-confirm")
             Button("Continuer", role: .cancel) { }
         } message: { Text("Vous retrouverez le trajet, les observations et le bilan sur cet appareil.") }
@@ -73,16 +73,14 @@ struct LiveSessionView: View {
                 framingInsets: EdgeInsets(top: 100, leading: 0, bottom: 190, trailing: 0))
                 .ignoresSafeArea()
         } else {
-            VStack(spacing: 16) {
-                Image(systemName: "text.bubble")
-                    .font(.system(size: 36, weight: .light))
-                    .foregroundStyle(DrivyTheme.accent)
-                    .frame(width: 88, height: 88)
-                    .background(DrivyTheme.accentSoft, in: Circle())
+            VStack(spacing: 12) {
+                Image(systemName: "location.slash")
+                    .font(.title2)
+                    .foregroundStyle(DrivyTheme.muted)
                     .accessibilityHidden(true)
-                Text("Les moments comptent")
+                Text("Sans GPS")
                     .font(.title2.weight(.semibold))
-                Text("Une observation suffit pour\nretrouver un passage au bilan.")
+                Text("Les observations conservent leur heure, sans position.")
                     .font(.body)
                     .foregroundStyle(DrivyTheme.muted)
                     .multilineTextAlignment(.center)
@@ -104,8 +102,10 @@ struct LiveSessionView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 24))
                 }
                 observationsButton(session)
-                if session.usesGPS && [.denied, .interrupted].contains(controller.gpsStatus) {
-                    Text("Le GPS est indisponible. Vos observations restent enregistrées.")
+                if controller.isBusy && !controller.isCapturing {
+                    ProgressView("Sauvegarde du trajet…")
+                } else if controller.isCapturing && session.usesGPS && [.denied, .interrupted].contains(controller.gpsStatus) {
+                    Text("GPS indisponible. Vous pouvez continuer à signaler sans position.")
                         .font(.body).foregroundStyle(DrivyTheme.muted)
                 }
             }
@@ -127,13 +127,14 @@ struct LiveSessionView: View {
             Button { dismiss() } label: {
                 Image(systemName: "xmark").font(.body.weight(.medium)).frame(width: 44, height: 44)
             }.buttonStyle(.plain).accessibilityLabel("Revenir à Séance")
-                .accessibilityHint("Le trajet continue")
+                .accessibilityHint(controller.isCapturing ? "Le trajet continue" : "Revenir à l’accueil")
             let contentLayout = dynamicTypeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
                 : AnyLayout(HStackLayout(spacing: 8))
             contentLayout {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("Trajet en cours").font(.subheadline.weight(.semibold))
+                    Text(controller.isCapturing ? "Trajet en cours" : controller.isBusy ? "Sauvegarde du trajet" : "Trajet arrêté")
+                        .font(.subheadline.weight(.semibold))
                     HStack(alignment: .center, spacing: 5) {
                         Circle().fill(controller.isCapturing ? DrivyTheme.accent : DrivyTheme.warning).frame(width: 5, height: 5)
                         Text(status(session)).font(.caption).foregroundStyle(DrivyTheme.muted)
@@ -175,8 +176,8 @@ struct LiveSessionView: View {
             reportButton(session)
             if controller.isBusy && !controller.isCapturing {
                 ProgressView("Sauvegarde du trajet…").font(.footnote).frame(maxWidth: .infinity)
-            } else if session.usesGPS && [.denied, .interrupted].contains(controller.gpsStatus) {
-                Text("Le GPS est indisponible. Vos observations restent enregistrées.")
+            } else if controller.isCapturing && session.usesGPS && [.denied, .interrupted].contains(controller.gpsStatus) {
+                Text("GPS indisponible. Vous pouvez continuer à signaler sans position.")
                     .font(.caption).foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -215,7 +216,7 @@ struct LiveSessionView: View {
         .accessibilityIdentifier("report-observation")
     }
     private func status(_ session: DrivingSession) -> String {
-        if !controller.isCapturing { return "Capture arrêtée" }
+        if !controller.isCapturing { return "Enregistrement arrêté" }
         return session.usesGPS ? controller.gpsStatus.label : "Sans GPS · privé"
     }
     private var storageRetry: (() -> Void)? {

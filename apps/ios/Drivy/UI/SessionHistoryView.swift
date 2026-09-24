@@ -12,12 +12,23 @@ struct SessionHistoryView: View {
     var body: some View {
         Group {
             if controller.isLoading {
-                ProgressView("Ouverture des séances…")
+                ProgressView("Ouverture des trajets…")
+            } else if sessions.isEmpty, let error = controller.errorMessage {
+                ContentUnavailableView {
+                    Label("Historique indisponible", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(error)
+                } actions: {
+                    if !controller.isCapturing && !controller.isBusy {
+                        Button("Réessayer") { Task { await controller.load() } }
+                            .buttonStyle(.bordered)
+                    }
+                }
             } else if sessions.isEmpty {
                 ContentUnavailableView {
-                    Label("Vos séances, ici", systemImage: "clock.arrow.circlepath")
+                    Label("Aucun trajet terminé", systemImage: "clock.arrow.circlepath")
                 } description: {
-                    Text("Retrouvez vos trajets, les moments importants et vos bilans après chaque séance.")
+                    Text("Les trajets terminés et leurs bilans personnels apparaîtront ici.")
                 }
             } else {
                 List {
@@ -58,15 +69,17 @@ struct SessionHistoryView: View {
 
 private struct SessionHistoryRow: View {
     let session: DrivingSession
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            Image(systemName: session.usesGPS || !session.points.isEmpty ? "point.topleft.down.to.point.bottomright.curvepath" : "note.text")
-                .font(.title3)
-                .foregroundStyle(DrivyTheme.accent)
-                .frame(width: 44, height: 44)
-                .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 14))
-                .accessibilityHidden(true)
+        HStack(alignment: .top, spacing: 12) {
+            if !dynamicTypeSize.isAccessibilitySize {
+                Image(systemName: session.usesGPS || !session.points.isEmpty ? "point.topleft.down.to.point.bottomright.curvepath" : "note.text")
+                    .font(.body)
+                    .foregroundStyle(DrivyTheme.muted)
+                    .frame(width: 24, height: 24)
+                    .accessibilityHidden(true)
+            }
             VStack(alignment: .leading, spacing: 6) {
                 if let title = session.title { Text(title).font(.headline) }
                 else { Text(session.startedAt, format: .dateTime.day().month(.wide).hour().minute()).font(.headline) }
@@ -107,20 +120,18 @@ struct SummaryEditorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if isExample {
-                        Label("Bilan d’exemple · contenu fictif", systemImage: "sparkles")
+                        Label("Bilan d’exemple · contenu fictif", systemImage: "info.circle")
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(DrivyTheme.muted)
                     }
-                    Text("Votre bilan")
+                    Text("Notes du trajet")
                         .font(.headline)
-                    Text("Les points travaillés, ce que vous avez observé et la prochaine étape.")
-                        .foregroundStyle(DrivyTheme.muted)
                     TextEditor(text: $text)
                         .frame(minHeight: 260)
                         .scrollContentBackground(.hidden)
                         .padding(12)
                         .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 16))
-                        .accessibilityLabel("Texte du bilan local")
+                        .accessibilityLabel("Texte du bilan personnel")
                         .accessibilityIdentifier("summary-text")
                         .disabled(saving)
                     if text.count > 10_000 {
@@ -134,7 +145,7 @@ struct SummaryEditorView: View {
                     if saving {
                         ProgressView("Enregistrement…")
                     }
-                    Text("Enregistrement sur cet appareil uniquement.")
+                    Text("Ce bilan reste sur cet appareil. Il n’est pas partagé avec l’école.")
                         .font(.footnote)
                         .foregroundStyle(DrivyTheme.muted)
                 }
@@ -143,7 +154,7 @@ struct SummaryEditorView: View {
                 .frame(maxWidth: .infinity)
             }
             .background(DrivyTheme.canvas)
-            .navigationTitle("Bilan de la séance")
+            .navigationTitle("Bilan personnel")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
