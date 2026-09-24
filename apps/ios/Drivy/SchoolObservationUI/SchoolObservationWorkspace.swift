@@ -68,9 +68,9 @@ struct SchoolObservationEditor: Identifiable {
         return details.joined(separator: "\n\n")
     }
 
-    func begin(marker: Bool) -> SchoolObservationEditor? {
-        // Date() est prise avant tout réseau ou présentation de feuille.
-        let instant = Date()
+    func begin(marker: Bool, observedAt: Date? = nil) -> SchoolObservationEditor? {
+        // Le Live fournit son instant au geste, avant le chargement du carnet.
+        let instant = observedAt ?? Date()
         guard canAdd, let lesson, !marker || lesson.status == "PLANNED" else { return nil }
         if lesson.status == "PLANNED" {
             let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

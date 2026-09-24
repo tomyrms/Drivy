@@ -5,6 +5,7 @@ struct SchoolObservationEntryView: View {
     let client: SchoolObservationClient
     @Bindable var schoolWorkspace: SchoolWorkspace
     let lessonID: UUID
+    var initialObservedAt: Date? = nil
     @State private var model: SchoolObservationWorkspace?
     @Environment(\.dismiss) private var dismiss
 
@@ -18,7 +19,7 @@ struct SchoolObservationEntryView: View {
     var body: some View {
         Group {
             if let model, model.scope == scope {
-                SchoolObservationView(model: model, schoolWorkspace: schoolWorkspace)
+                SchoolObservationView(model: model, schoolWorkspace: schoolWorkspace, initialObservedAt: initialObservedAt)
             } else {
                 NavigationStack {
                     ProgressView("Vérification de la leçon…")
@@ -27,8 +28,11 @@ struct SchoolObservationEntryView: View {
             }
         }
         .task(id: scopeKey) {
-            model?.invalidate(); model = nil
-            guard let scope else { dismiss(); return }
+            guard let scope else { model?.invalidate(); dismiss(); return }
+            if let model {
+                if model.scope != scope { model.invalidate(); dismiss() }
+                return
+            }
             model = SchoolObservationWorkspace(scope: scope, lessonID: lessonID, client: client)
         }
     }
@@ -37,8 +41,10 @@ struct SchoolObservationEntryView: View {
 struct SchoolObservationView: View {
     @Bindable var model: SchoolObservationWorkspace
     @Bindable var schoolWorkspace: SchoolWorkspace
+    var initialObservedAt: Date? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var route: ObservationRoute?
+    @State private var initialIntentConsumed = false
 
     private enum ObservationRoute: Identifiable {
         case edit(SchoolObservationEditor)
@@ -78,7 +84,7 @@ struct SchoolObservationView: View {
                         .disabled(model.isBusy || model.isLoading || model.accessRevoked)
                 }
             }
-            .task { await model.load() }
+            .task { if !model.loaded { await model.load() }; presentInitialObservation() }
             .sheet(item: $route) { route in
                 switch route {
                 case .edit(let editor): SchoolObservationComposer(model: model, editor: editor)
@@ -90,6 +96,8 @@ struct SchoolObservationView: View {
                 if !matches { route = nil; model.invalidate(); dismiss() }
             }
             .onChange(of: model.accessRevoked) { _, revoked in if revoked { route = nil } }
+            .onChange(of: model.canAdd) { _, canAdd in if canAdd { presentInitialObservation() } }
+            .onChange(of: route?.id) { _, id in if id == nil { presentInitialObservation() } }
         }
         .tint(DrivyTheme.accent).foregroundStyle(DrivyTheme.text)
         .interactiveDismissDisabled(model.isBusy)
@@ -105,6 +113,14 @@ struct SchoolObservationView: View {
         }
     }
     @ViewBuilder private var feedback: some View {
+        if let initialObservedAt, !initialIntentConsumed {
+            Label {
+                Text("Votre appui à \(initialObservedAt.formatted(date: .omitted, time: .standard))")
+            } icon: { Image(systemName: "clock") }
+            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            Text("L’heure est gardée pour la saisie. Aucune observation n’est encore enregistrée.")
+                .font(.caption).foregroundStyle(DrivyTheme.muted)
+        }
         if model.isLoading { ProgressView("Lecture du carnet…") }
         if let error = model.errorMessage { SchoolErrorNotice(message: error) }
         if let message = model.confirmation {
@@ -112,6 +128,12 @@ struct SchoolObservationView: View {
         }
         if let message = model.competenciesMessage { Text(message).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
         if let message = model.draftMessage { Text(message).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
+    }
+    private func presentInitialObservation() {
+        guard !initialIntentConsumed, route == nil, scopeMatches, let initialObservedAt,
+              let editor = model.begin(marker: true, observedAt: initialObservedAt) else { return }
+        initialIntentConsumed = true
+        route = .edit(editor)
     }
     private var actions: some View {
         VStack(spacing: 10) {

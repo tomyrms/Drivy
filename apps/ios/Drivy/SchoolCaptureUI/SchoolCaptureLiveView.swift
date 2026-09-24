@@ -8,6 +8,7 @@ struct SchoolCaptureLiveView: View {
     let learnerName: String
     var closeSaved: (() -> Void)? = nil
     var returnToLesson: (() -> Void)? = nil
+    var signalObservation: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var resetCameraID = UUID()
@@ -243,18 +244,29 @@ struct SchoolCaptureLiveView: View {
         let layout = dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(spacing: 12))
             : AnyLayout(HStackLayout(spacing: 12))
-        return layout {
-            Button {
-                run(controller.canPause ? .pause : .resume)
-            } label: {
-                Label(controller.state == .paused ? "Reprendre" : "Pause", systemImage: controller.state == .paused ? "play.fill" : "pause.fill")
-                    .frame(maxWidth: .infinity, minHeight: 44)
+        return VStack(spacing: 12) {
+            if let signalObservation {
+                Button(action: signalObservation) {
+                    Label("Signaler", systemImage: "text.bubble.fill")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(DrivyPrimaryButtonStyle())
+                .accessibilityLabel("Signaler une observation privée")
+                .accessibilityIdentifier("school-capture-signal-observation")
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(!controller.canPause && !controller.canResume)
-            .accessibilityLabel(controller.state == .paused ? "Reprendre le GPS" : "Mettre le GPS en pause")
-            .accessibilityIdentifier("school-capture-pause-resume")
-            stopButton
+            layout {
+                Button {
+                    run(controller.canPause ? .pause : .resume)
+                } label: {
+                    Label(controller.state == .paused ? "Reprendre" : "Pause", systemImage: controller.state == .paused ? "play.fill" : "pause.fill")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!controller.canPause && !controller.canResume)
+                .accessibilityLabel(controller.state == .paused ? "Reprendre le GPS" : "Mettre le GPS en pause")
+                .accessibilityIdentifier("school-capture-pause-resume")
+                stopButton
+            }
         }
     }
 
