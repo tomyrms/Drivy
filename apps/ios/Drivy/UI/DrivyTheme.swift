@@ -104,8 +104,13 @@ struct InlineErrorView: View {
                 .font(.subheadline)
             if let retry {
                 Button("Réessayer", action: retry)
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 12)
                     .frame(minHeight: 44)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(DrivyTheme.danger, lineWidth: 1)
+                    }
             }
         }
         .foregroundStyle(DrivyTheme.danger)
