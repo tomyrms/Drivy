@@ -15,6 +15,7 @@ struct SessionDetailView: View {
     @State private var confirmsDelete = false
     @State private var deleting = false
     @State private var resetCameraID = UUID()
+    @State private var followsPosition = false
 
     private enum ReplaySheet: String, Identifiable {
         case observations, summary, information
@@ -86,13 +87,13 @@ struct SessionDetailView: View {
     }
 
     private func compactReplay(_ session: DrivingSession) -> some View {
-        replayBackground(session, framingInsets: EdgeInsets(top: 120, leading: 0, bottom: 320, trailing: 0))
+        replayBackground(session)
             .safeAreaInset(edge: .top, spacing: 0) {
                 replayHeader(session).padding(.horizontal, 16).padding(.top, 8)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(alignment: .trailing, spacing: 12) {
-                    if !session.points.isEmpty { fitRouteButton }
+                    if !session.points.isEmpty { mapControls(session) }
                     replayDock(session)
                 }
                 .padding(.horizontal, 16)
@@ -114,7 +115,7 @@ struct SessionDetailView: View {
             .background(DrivyTheme.canvas)
             replayBackground(session)
                 .overlay(alignment: .bottomTrailing) {
-                    if !session.points.isEmpty { fitRouteButton.padding(24) }
+                    if !session.points.isEmpty { mapControls(session).padding(24) }
                 }
         }
     }
@@ -126,6 +127,7 @@ struct SessionDetailView: View {
                 replayBackground(session)
                     .frame(height: 230)
                     .clipShape(RoundedRectangle(cornerRadius: 24))
+                if !session.points.isEmpty { mapControls(session).frame(maxWidth: .infinity, alignment: .trailing) }
                 replayDock(session)
                 if !session.observations.isEmpty { observationsPreview(session) }
             }
@@ -136,7 +138,7 @@ struct SessionDetailView: View {
     }
 
     @ViewBuilder
-    private func replayBackground(_ session: DrivingSession, framingInsets: EdgeInsets = EdgeInsets()) -> some View {
+    private func replayBackground(_ session: DrivingSession) -> some View {
         if session.points.isEmpty {
             VStack(spacing: 12) {
                 Image(systemName: "location.slash")
@@ -162,10 +164,9 @@ struct SessionDetailView: View {
                 showsControls: false,
                 showsEmptyState: false,
                 resetCameraID: resetCameraID,
-                framingInsets: framingInsets,
+                followsPosition: $followsPosition,
                 showsOriginBadge: false
             )
-            .ignoresSafeArea(edges: .bottom)
         }
     }
 
@@ -191,12 +192,16 @@ struct SessionDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            Button { isPlaying = false; sheet = .summary } label: {
+                Text("Bilan").font(.subheadline.weight(.semibold)).frame(minWidth: 44, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(DrivyTheme.accent)
+            .accessibilityLabel("Ouvrir le bilan personnel")
+            .accessibilityIdentifier("edit-summary")
             Menu {
                 Button { isPlaying = false; sheet = .information } label: {
                     Label("Détails du trajet", systemImage: "info.circle")
-                }
-                Button { isPlaying = false; sheet = .summary } label: {
-                    Label("Bilan personnel", systemImage: "note.text")
                 }
                 Divider()
                 Button(role: .destructive) { isPlaying = false; confirmsDelete = true } label: {
@@ -218,21 +223,32 @@ struct SessionDetailView: View {
         .shadow(color: .black.opacity(0.07), radius: 16, y: 4)
     }
 
-    private var fitRouteButton: some View {
-        Button { resetCameraID = UUID() } label: {
-            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.title3)
-                .foregroundStyle(DrivyTheme.text)
-                .frame(width: 48, height: 48)
-                .background(DrivyTheme.surface, in: Circle())
-                .shadow(color: .black.opacity(0.1), radius: 10, y: 3)
+    private func mapControls(_ session: DrivingSession) -> some View {
+        HStack(spacing: 8) {
+            Button { followsPosition.toggle() } label: {
+                Image(systemName: followsPosition ? "location.fill" : "location")
+                    .font(.title3)
+                    .foregroundStyle(followsPosition ? DrivyTheme.accent : DrivyTheme.text)
+                    .frame(width: 48, height: 48)
+                    .background(DrivyTheme.surface, in: Circle())
+            }
+            .disabled(currentPoint(session) == nil && !followsPosition)
+            .accessibilityLabel(followsPosition ? "Arrêter le suivi de position" : "Suivre la position du replay")
+            .accessibilityAddTraits(followsPosition ? [.isSelected] : [])
+            Button { followsPosition = false; resetCameraID = UUID() } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.title3)
+                    .foregroundStyle(DrivyTheme.text)
+                    .frame(width: 48, height: 48)
+                    .background(DrivyTheme.surface, in: Circle())
+            }
+            .accessibilityLabel("Voir tout le trajet")
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Voir tout le trajet")
     }
 
     private func replayDock(_ session: DrivingSession) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             selectedMoment(session)
             if !session.points.isEmpty || !session.observations.isEmpty {
                 timeline(session)
@@ -243,31 +259,10 @@ struct SessionDetailView: View {
                     .font(.footnote)
                     .foregroundStyle(DrivyTheme.warning)
             }
-            Divider()
-            Button {
-                isPlaying = false
-                sheet = .summary
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "square.and.pencil")
-                    Text(session.summary.isEmpty ? "Rédiger le bilan personnel" : "Ouvrir le bilan personnel")
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                }
-                .font(.subheadline.weight(.semibold))
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(DrivyTheme.accent)
-            .accessibilityIdentifier("edit-summary")
             if let error = controller.errorMessage { InlineErrorView(message: error) }
         }
-        .padding(20)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 28))
-        .overlay { RoundedRectangle(cornerRadius: 28).stroke(DrivyTheme.border.opacity(0.7), lineWidth: 0.5) }
-        .shadow(color: .black.opacity(0.08), radius: 18, y: 5)
+        .padding(16)
+        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 24))
     }
 
     @ViewBuilder
@@ -286,8 +281,7 @@ struct SessionDetailView: View {
                     Image(systemName: selected?.theme.journeySymbol ?? "list.bullet")
                         .font(.title3)
                         .foregroundStyle(selected?.status.color ?? DrivyTheme.accent)
-                        .frame(width: 42, height: 42)
-                        .background((selected?.status.color ?? DrivyTheme.accent).opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+                        .frame(width: 32, height: 32)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 5) {
                         Text(selected?.theme.label ?? "\(session.observations.count) observation\(session.observations.count == 1 ? "" : "s")")
@@ -298,6 +292,11 @@ struct SessionDetailView: View {
                             Text("\(selected.status.label) · \(selected.observedAt.sessionElapsed(since: session.startedAt))")
                                 .font(.caption)
                                 .foregroundStyle(DrivyTheme.muted)
+                            if !selected.note.isEmpty {
+                                Text(selected.note).font(.subheadline).foregroundStyle(DrivyTheme.text)
+                                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         } else {
                             Text("Voir les observations")
                                 .font(.caption)
@@ -308,9 +307,11 @@ struct SessionDetailView: View {
                     Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                 }
                 .contentShape(Rectangle())
+                .frame(minHeight: 44)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(selected.map { "\($0.theme.label), \($0.status.label), \($0.observedAt.sessionElapsed(since: session.startedAt))" } ?? "\(session.observations.count) observations")
+            .accessibilityValue(selected?.note ?? "")
             .accessibilityHint("Ouvrir les observations du trajet")
         }
     }
@@ -323,6 +324,7 @@ struct SessionDetailView: View {
             .accessibilityLabel("Instant du trajet")
             .accessibilityValue(replayDate(session).sessionElapsed(since: session.startedAt))
             .accessibilityIdentifier("replay-timeline")
+            observationTicks(session)
             HStack {
                 Text(replayDate(session).sessionElapsed(since: session.startedAt))
                 Spacer()
@@ -338,6 +340,22 @@ struct SessionDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+
+    private func observationTicks(_ session: DrivingSession) -> some View {
+        let totalDuration = duration(session)
+        let selectedID = selectedObservationID
+        return Canvas { context, size in
+            for observation in session.observations {
+                let progress = min(1, max(0, observation.observedAt.timeIntervalSince(session.startedAt) / totalDuration))
+                let x = 14 + CGFloat(progress) * max(0, size.width - 28)
+                let selected = selectedID == observation.id
+                let rect = CGRect(x: x - (selected ? 2 : 1), y: 0, width: selected ? 4 : 2, height: selected ? 8 : 5)
+                context.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(observation.status.color))
+            }
+        }
+        .frame(height: session.observations.isEmpty ? 0 : 8)
+        .accessibilityHidden(true)
     }
 
     private func transportControls(_ session: DrivingSession) -> some View {
@@ -387,8 +405,13 @@ struct SessionDetailView: View {
                 if session.observations.isEmpty {
                     ContentUnavailableView("Aucune observation", systemImage: "text.bubble", description: Text("Aucune observation n’a été ajoutée pendant ce trajet."))
                 } else {
-                    ScrollView {
-                        observationsPreview(session).padding(20)
+                    ScrollViewReader { reader in
+                        ScrollView {
+                            observationsPreview(session).padding(20)
+                        }
+                        .onAppear {
+                            if let selectedObservationID { reader.scrollTo(selectedObservationID, anchor: .center) }
+                        }
                     }
                 }
             }
@@ -422,6 +445,7 @@ struct SessionDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selectedObservationID == observation.id ? [.isSelected] : [])
+                .id(observation.id)
                 .accessibilityHint(observation.anchorPointID == nil ? "Revoir cet instant sans position" : "Revoir ce moment sur le trajet")
                 Divider()
             }

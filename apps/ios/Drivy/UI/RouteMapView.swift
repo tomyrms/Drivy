@@ -15,10 +15,9 @@ struct RouteMapView: View {
     var showsControls = true
     var showsEmptyState = true
     var resetCameraID: UUID? = nil
-    var framingInsets = EdgeInsets()
+    var followsPosition: Binding<Bool> = .constant(false)
     var showsOriginBadge = true
     @State private var camera: MapCameraPosition = .region(JourneyMapRegion.overview)
-    @State private var viewport = CGSize.zero
 
     private struct Segment: Identifiable {
         let id: UUID
@@ -57,14 +56,7 @@ struct RouteMapView: View {
             ForEach(locatedObservations) { item in
                 Annotation(item.observation.theme.label, coordinate: item.point.coordinate) {
                     Button { selectedObservationID = item.id } label: {
-                        Image(systemName: selectedObservationID == item.id ? item.observation.theme.journeySymbol : item.observation.status.symbol)
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(item.observation.status.color)
-                            .frame(width: 38, height: 38)
-                            .background(DrivyTheme.surface, in: Circle())
-                            .overlay(Circle().stroke(item.observation.status.color, lineWidth: 2))
-                            .padding(3)
-                            .contentShape(Circle())
+                        observationMarker(item.observation)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(item.observation.theme.label), \(item.observation.status.label)")
@@ -82,11 +74,6 @@ struct RouteMapView: View {
         }
         .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .mapControls { }
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
-            let changed = viewport != size
-            viewport = size
-            if changed { fitRoute() }
-        }
         .overlay(alignment: .topTrailing) {
             if session.isExample && showsOriginBadge {
                 Text("Exemple · données fictives")
@@ -105,26 +92,67 @@ struct RouteMapView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if showsControls && !session.points.isEmpty {
-                Button { fitRoute() } label: {
+                Button { followsPosition.wrappedValue = false; fitRoute() } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.title3).frame(width: 48, height: 48)
                         .background(DrivyTheme.surface, in: Circle())
                 }.buttonStyle(.plain).accessibilityLabel("Voir tout le trajet").padding(16)
             }
         }
-        .onAppear { fitRoute() }
-        .onChange(of: selectedObservationID) { _, id in
-            guard let item = locatedObservations.first(where: { $0.id == id }) else { return }
-            camera = .region(MKCoordinateRegion(center: item.point.coordinate,
-                span: MKCoordinateSpan(latitudeDelta: 0.004, longitudeDelta: 0.004)))
+        .onAppear { if followsPosition.wrappedValue { followPoint() } else { fitRoute() } }
+        .onChange(of: camera.positionedByUser) { _, byUser in
+            if byUser { followsPosition.wrappedValue = false }
         }
-        .onChange(of: session.points.isEmpty) { wasEmpty, isEmpty in if wasEmpty && !isEmpty { fitRoute() } }
-        .onChange(of: resetCameraID) { _, _ in fitRoute() }
+        .onChange(of: followsPosition.wrappedValue) { _, follows in
+            if follows { followPoint() }
+        }
+        .onChange(of: currentPoint?.id) { _, _ in
+            if followsPosition.wrappedValue && !camera.positionedByUser { followPoint() }
+        }
+        .onChange(of: session.points.isEmpty) { wasEmpty, isEmpty in
+            if wasEmpty && !isEmpty {
+                if followsPosition.wrappedValue { followPoint() } else { fitRoute() }
+            }
+        }
+        .onChange(of: resetCameraID) { _, _ in
+            followsPosition.wrappedValue = false
+            fitRoute()
+        }
         .accessibilityLabel(session.isExample ? "Carte d’un trajet fictif" : "Carte du trajet")
     }
+
+    private func observationMarker(_ observation: LessonObservation) -> some View {
+        let selected = selectedObservationID == observation.id
+        return Image(systemName: selected ? observation.theme.journeySymbol : observation.status.symbol)
+            .font(selected ? .body.weight(.semibold) : .caption2.weight(.bold))
+            .foregroundStyle(selected ? DrivyTheme.text : observation.status.color)
+            .frame(width: selected ? 36 : 22, height: selected ? 36 : 22)
+            .background(DrivyTheme.surface, in: Circle())
+            .overlay(Circle().stroke(observation.status.color, lineWidth: selected ? 2 : 1.5))
+            .overlay(alignment: .bottomTrailing) {
+                if selected {
+                    Image(systemName: observation.status.symbol)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(observation.status.color)
+                        .frame(width: 16, height: 16)
+                        .background(DrivyTheme.surface, in: Circle())
+                        .overlay(Circle().stroke(observation.status.color, lineWidth: 1))
+                        .offset(x: 3, y: 3)
+                }
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Circle())
+    }
+
+    private func followPoint() {
+        guard let point = currentPoint else { return }
+        camera = .region(MKCoordinateRegion(center: point.coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.006, longitudeDelta: 0.006)))
+    }
+
     private func fitRoute() {
         if session.points.isEmpty { camera = .region(JourneyMapRegion.overview) }
-        else if viewport.width > 0 && viewport.height > 0 {
+        else {
             let mapPoints = session.points.map { MKMapPoint($0.coordinate) }
             let minX = mapPoints.map(\.x).min() ?? 0
             let maxX = mapPoints.map(\.x).max() ?? minX
@@ -132,19 +160,12 @@ struct RouteMapView: View {
             let maxY = mapPoints.map(\.y).max() ?? minY
             let center = MKMapPoint(x: (minX + maxX) / 2, y: (minY + maxY) / 2)
             let minimumSpan = MKMapPointsPerMeterAtLatitude(center.coordinate.latitude) * 160
-            let horizontalPadding = 36.0
-            let verticalPadding = 36.0
-            let visibleWidth = max(80, Double(viewport.width - framingInsets.leading - framingInsets.trailing) - 2 * horizontalPadding)
-            let visibleHeight = max(80, Double(viewport.height - framingInsets.top - framingInsets.bottom) - 2 * verticalPadding)
-            let scale = max(max(maxX - minX, minimumSpan) / visibleWidth, max(maxY - minY, minimumSpan) / visibleHeight)
-            let width = scale * Double(viewport.width)
-            let height = scale * Double(viewport.height)
-            // Move the camera south when a bottom dock covers the map so the
-            // complete route is framed in the remaining visible rectangle.
-            let offsetX = Double(framingInsets.trailing - framingInsets.leading) / 2 * scale
-            let offsetY = Double(framingInsets.bottom - framingInsets.top) / 2 * scale
-            camera = .rect(MKMapRect(x: center.x + offsetX - width / 2, y: center.y + offsetY - height / 2, width: width, height: height))
-        } else { camera = .automatic }
+            let width = max(maxX - minX, minimumSpan) * 1.16
+            let height = max(maxY - minY, minimumSpan) * 1.16
+            // MapKit frames this rectangle inside the actual safe area supplied
+            // by the native top and bottom controls, including enlarged text.
+            camera = .rect(MKMapRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height))
+        }
     }
 }
 

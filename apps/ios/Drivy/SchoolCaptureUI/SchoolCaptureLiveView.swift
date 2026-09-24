@@ -11,6 +11,7 @@ struct SchoolCaptureLiveView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var resetCameraID = UUID()
+    @State private var followsPosition = true
     @State private var confirmation: Confirmation?
 
     private enum Command {
@@ -82,6 +83,7 @@ struct SchoolCaptureLiveView: View {
         .onChange(of: controller.captureID) { _, _ in
             confirmation = nil
             resetCameraID = UUID()
+            followsPosition = true
         }
     }
 
@@ -92,7 +94,7 @@ struct SchoolCaptureLiveView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(alignment: .trailing, spacing: 12) {
-                    if controller.pointCount > 0 { fitButton }
+                    if controller.pointCount > 0 { mapControls }
                     commandPanel
                 }
                 .padding(.horizontal, 16).padding(.bottom, 12)
@@ -109,7 +111,7 @@ struct SchoolCaptureLiveView: View {
             }
             .frame(width: 360)
             routeMap.overlay(alignment: .bottomTrailing) {
-                if controller.pointCount > 0 { fitButton.padding(24) }
+                if controller.pointCount > 0 { mapControls.padding(24) }
             }
         }
     }
@@ -120,6 +122,7 @@ struct SchoolCaptureLiveView: View {
                 heading
                 routeMap.frame(height: 230)
                     .clipShape(RoundedRectangle(cornerRadius: 20))
+                if controller.pointCount > 0 { mapControls.frame(maxWidth: .infinity, alignment: .trailing) }
                 sessionInformation
             }
             .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity)
@@ -134,7 +137,7 @@ struct SchoolCaptureLiveView: View {
     }
 
     private var routeMap: some View {
-        SchoolCaptureLiveMap(segments: controller.segments, resetCameraID: resetCameraID)
+        SchoolCaptureLiveMap(segments: controller.segments, resetCameraID: resetCameraID, followsPosition: $followsPosition)
     }
 
     private var heading: some View {
@@ -317,12 +320,21 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    private var fitButton: some View {
-        Button { resetCameraID = UUID() } label: {
-            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.title3).frame(width: 48, height: 48)
-                .background(DrivyTheme.surface, in: Circle())
-        }.buttonStyle(.plain).accessibilityLabel("Voir tout le trajet")
+    private var mapControls: some View {
+        HStack(spacing: 8) {
+            Button { followsPosition.toggle() } label: {
+                Image(systemName: followsPosition ? "location.fill" : "location")
+                    .font(.title3).foregroundStyle(followsPosition ? DrivyTheme.accent : DrivyTheme.text)
+                    .frame(width: 48, height: 48).background(DrivyTheme.surface, in: Circle())
+            }
+            .accessibilityLabel(followsPosition ? "Arrêter le suivi de position" : "Suivre la dernière position enregistrée")
+            .accessibilityAddTraits(followsPosition ? [.isSelected] : [])
+            Button { followsPosition = false; resetCameraID = UUID() } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.title3).frame(width: 48, height: 48)
+                    .background(DrivyTheme.surface, in: Circle())
+            }.accessibilityLabel("Voir tout le trajet")
+        }.buttonStyle(.plain)
     }
 
     private var confirmsAction: Binding<Bool> {
@@ -388,6 +400,7 @@ struct SchoolCaptureLiveView: View {
 private struct SchoolCaptureLiveMap: View {
     let segments: [SchoolCaptureMapSegment]
     let resetCameraID: UUID
+    @Binding var followsPosition: Bool
     @State private var camera: MapCameraPosition = .region(JourneyMapRegion.overview)
 
     private var count: Int { segments.reduce(0) { $0 + $1.measurements.count } }
@@ -417,10 +430,24 @@ private struct SchoolCaptureLiveMap: View {
         }
         .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .mapControls { }
-        .onAppear { if count > 0 { camera = .automatic } }
-        .onChange(of: count) { before, after in if before == 0 && after > 0 { camera = .automatic } }
-        .onChange(of: resetCameraID) { _, _ in camera = count > 0 ? .automatic : .region(JourneyMapRegion.overview) }
+        .onAppear { if followsPosition { followPoint() } else if count > 0 { camera = .automatic } }
+        .onChange(of: camera.positionedByUser) { _, byUser in if byUser { followsPosition = false } }
+        .onChange(of: followsPosition) { _, follows in if follows { followPoint() } }
+        .onChange(of: count) { before, after in
+            if followsPosition && !camera.positionedByUser { followPoint() }
+            else if before == 0 && after > 0 { camera = .automatic }
+        }
+        .onChange(of: resetCameraID) { _, _ in
+            if followsPosition { followPoint() }
+            else { camera = count > 0 ? .automatic : .region(JourneyMapRegion.overview) }
+        }
         .accessibilityLabel("Carte du trajet enregistré")
         .accessibilityValue("\(count) positions enregistrées")
+    }
+
+    private func followPoint() {
+        guard let last else { return }
+        camera = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude),
+            span: MKCoordinateSpan(latitudeDelta: 0.006, longitudeDelta: 0.006)))
     }
 }

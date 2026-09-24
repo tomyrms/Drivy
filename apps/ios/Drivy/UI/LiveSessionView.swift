@@ -3,13 +3,13 @@ import SwiftUI
 struct LiveSessionView: View {
     @Bindable var controller: SessionController
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var observationRequest: ObservationRequest?
     @State private var listedSession: DrivingSession?
     @State private var confirmsStop = false
     @State private var selectedObservationID: UUID?
     @State private var resetCameraID = UUID()
+    @State private var followsPosition = true
 
     private struct ObservationRequest: Identifiable {
         let id = UUID()
@@ -35,34 +35,41 @@ struct LiveSessionView: View {
         .onChange(of: controller.activeSession?.id) { _, id in if id == nil { dismissWhenFinished() } }
     }
 
-    @ViewBuilder
     private func liveContent(_ session: DrivingSession) -> some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            accessibleSession(session)
-        } else {
-            sessionBackground(session)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                HStack {
-                    sessionHeader(session).frame(maxWidth: 620)
-                    if sizeClass == .regular { Spacer(minLength: 0) }
-                }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 12)
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .trailing, spacing: 12) {
-                        if !session.points.isEmpty {
-                            Button { selectedObservationID = nil; resetCameraID = UUID() } label: {
-                                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                    .font(.title3.weight(.medium)).frame(width: 48, height: 48)
-                                    .background(DrivyTheme.surface, in: Circle())
-                            }.buttonStyle(.plain).accessibilityLabel("Voir tout le trajet")
+        GeometryReader { geometry in
+            if dynamicTypeSize.isAccessibilitySize {
+                accessibleSession(session)
+            } else if geometry.size.width >= 760 {
+                HStack(spacing: 0) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            sessionHeader(session)
+                            sessionDock(session)
+                        }.padding(20)
+                    }.frame(width: 360)
+                    sessionBackground(session)
+                        .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
+                            if !session.points.isEmpty { mapControls.padding(24) }
                         }
-                        sessionDock(session)
-                    }.frame(maxWidth: 460)
-                    if sizeClass == .regular { Spacer(minLength: 0) }
-                }.padding(.horizontal, 16).padding(.bottom, 10).padding(.top, 8)
+                }
+            } else {
+                compactSession(session)
             }
         }
+    }
+
+    private func compactSession(_ session: DrivingSession) -> some View {
+        sessionBackground(session)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                sessionHeader(session)
+                    .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 12)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(alignment: .trailing, spacing: 12) {
+                    if !session.points.isEmpty { mapControls }
+                    sessionDock(session)
+                }.padding(.horizontal, 16).padding(.bottom, 10).padding(.top, 8)
+            }
     }
 
     @ViewBuilder
@@ -70,8 +77,7 @@ struct LiveSessionView: View {
         if session.usesGPS {
             RouteMapView(session: session, selectedObservationID: $selectedObservationID,
                 showsControls: false, showsEmptyState: false, resetCameraID: resetCameraID,
-                framingInsets: EdgeInsets(top: 100, leading: 0, bottom: 190, trailing: 0))
-                .ignoresSafeArea()
+                followsPosition: $followsPosition)
         } else {
             VStack(spacing: 12) {
                 Image(systemName: "location.slash")
@@ -97,9 +103,12 @@ struct LiveSessionView: View {
                 sessionHeader(session)
                 if let error = controller.errorMessage { InlineErrorView(message: error, retry: storageRetry) }
                 if session.usesGPS {
-                    RouteMapView(session: session, selectedObservationID: $selectedObservationID, showsEmptyState: false)
+                    RouteMapView(session: session, selectedObservationID: $selectedObservationID,
+                        showsControls: false, showsEmptyState: false, resetCameraID: resetCameraID,
+                        followsPosition: $followsPosition)
                         .frame(height: 230)
                         .clipShape(RoundedRectangle(cornerRadius: 24))
+                    if !session.points.isEmpty { mapControls.frame(maxWidth: .infinity, alignment: .trailing) }
                 }
                 observationsButton(session)
                 if controller.isBusy && !controller.isCapturing {
@@ -120,6 +129,23 @@ struct LiveSessionView: View {
                 .frame(maxWidth: .infinity)
                 .background(DrivyTheme.surface)
         }
+    }
+
+    private var mapControls: some View {
+        HStack(spacing: 8) {
+            Button { followsPosition.toggle() } label: {
+                Image(systemName: followsPosition ? "location.fill" : "location")
+                    .font(.title3).foregroundStyle(followsPosition ? DrivyTheme.accent : DrivyTheme.text)
+                    .frame(width: 48, height: 48).background(DrivyTheme.surface, in: Circle())
+            }
+            .accessibilityLabel(followsPosition ? "Arrêter le suivi de position" : "Suivre la dernière position enregistrée")
+            .accessibilityAddTraits(followsPosition ? [.isSelected] : [])
+            Button { followsPosition = false; resetCameraID = UUID() } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.title3).frame(width: 48, height: 48)
+                    .background(DrivyTheme.surface, in: Circle())
+            }.accessibilityLabel("Voir tout le trajet")
+        }.buttonStyle(.plain)
     }
 
     private func sessionHeader(_ session: DrivingSession) -> some View {
