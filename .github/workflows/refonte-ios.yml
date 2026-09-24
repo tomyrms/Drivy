@@ -91,7 +91,7 @@ jobs:
         run: bash scripts/ios/test-simulator.sh
       - name: Capturer les écrans pour la revue visuelle
         if: inputs.visual_only == true
-        timeout-minutes: 8
+        timeout-minutes: 12
         shell: bash
         env:
           DRIVY_VISUAL_SCREENS: ${{ inputs.visual_screens }}

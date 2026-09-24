@@ -124,6 +124,9 @@ final class SchoolCaptureTransferCoordinator {
         let request = generation
         do {
             let current = try await reconcileCapture(captureID, request: request)
+            let confirmed = try await store.acknowledgedFinalizations(scope: scope)
+            try check(request)
+            if confirmed[captureID] != nil { return current.serverCapture }
             let mutation = try await store.stageFinalization(captureID: captureID, scope: scope,
                 expectedVersion: current.serverCapture.version, allowPartial: allowPartial)
             try check(request)
@@ -154,7 +157,12 @@ final class SchoolCaptureTransferCoordinator {
         // Après admission durable, la fermeture de la vue n'annule pas la lecture
         // de l'accusé. La requête garde ses délais URLSession et sa portée originale.
         let delivery = Task { try await client.send(command) }
-        let result = try await delivery.value
+        let result: SchoolCaptureMutationResult
+        do { result = try await delivery.value }
+        catch SchoolCaptureFailure.finalizationRefused(let code) {
+            try await store.recordFinalizationRefusal(id: command.id, scope: scope, code: code)
+            throw SchoolCaptureFailure.finalizationRefused(code)
+        }
         let receivedAt = ContinuousClock.now
         if case .authorization(let authorization) = result, authorization.capture.captureState == .authorized {
             try check(request)

@@ -102,6 +102,11 @@ final class SchoolCaptureSessionController {
         }
     }
 
+    func rejectRemoteAccess(scope: SchoolCommandScope, captureID: UUID?) {
+        guard permittedScope == scope else { return }
+        remoteStop(captureID: captureID, request: generation)
+    }
+
     func learnerRefused(learnerID: UUID, lessonID: UUID?) {
         guard let active = context, active.session.serverCapture.learnerId == learnerID,
               lessonID == nil || active.session.serverCapture.lessonId == lessonID,
@@ -258,7 +263,9 @@ final class SchoolCaptureSessionController {
         defer { if generation == request { isTransferring = false } }
         do {
             let count = try await active.transfer.transferAvailableData(captureID: active.session.id)
+            let finalized = try await active.transfer.store.acknowledgedFinalizations(scope: active.scope)
             guard generation == request else { return }
+            finalizedSyncState = finalized[active.session.id]?.syncState
             transferMessage = count == 0 ? "Aucun lot en attente." : "Les données envoyées ont été confirmées par l’école."
         } catch {
             guard generation == request else { return }

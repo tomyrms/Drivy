@@ -3,6 +3,7 @@ import Foundation
 enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
     case unauthorized, forbidden, notFound, choiceNotSet, unavailable, invalidResponse, expired, changed
     case rejected(String)
+    case finalizationRefused(String)
 
     var errorDescription: String? {
         switch self {
@@ -15,6 +16,10 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         case .expired: "L’autorisation GPS a expiré. La leçon peut continuer sans GPS."
         case .changed: "La capture a changé. Rechargez son état avant de continuer."
         case .rejected(let message): message
+        case .finalizationRefused(let code):
+            code == "CAPTURE_INCOMPLETE"
+                ? "Des positions manquent. Envoyez les données restantes ou choisissez explicitement un trajet partiel."
+                : "Le trajet a changé pendant l’envoi. Relisez son état puis confirmez à nouveau."
         }
     }
 }
@@ -149,18 +154,20 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         return value
     }
 
-    func privateReplayPage(schoolID: UUID, captureID: UUID, cursor: String? = nil) async throws -> SchoolPrivateReplayPage {
+    func privateReplayPage(schoolID: UUID, captureID: UUID, cursor: String? = nil,
+                           scope: SchoolCommandScope? = nil) async throws -> SchoolPrivateReplayPage {
         var query = [URLQueryItem(name: "limit", value: "100")]
         if let cursor {
             guard !cursor.isEmpty, cursor.count <= 2000 else { throw SchoolCaptureFailure.invalidResponse }
             query.append(URLQueryItem(name: "cursor", value: cursor))
         }
-        let value: SchoolPrivateReplayPage = try await read(schoolPath(schoolID, ["captures", captureID.uuidString, "replay"]), query: query)
+        let value: SchoolPrivateReplayPage = try await read(schoolPath(schoolID, ["captures", captureID.uuidString, "replay"]), query: query, verifying: scope)
         guard value.captureId == captureID, value.reportRevisionId == nil, value.geometrySnapshotId == nil,
               ["SYNCED", "PARTIAL"].contains(value.quality), SchoolLesson.date(value.generatedAt) != nil,
               value.segments.count <= 100, value.observations.count <= 100,
               value.nextCursor == nil || (!value.nextCursor!.isEmpty && value.nextCursor!.count <= 2000),
-              Set(value.segments.map(\.segmentId)).count == value.segments.count,
+              Set(value.segments.flatMap { segment in segment.points.map { "\(segment.segmentId):\($0.sequence)" } }).count
+                  == value.segments.reduce(0, { $0 + $1.points.count }),
               value.segments.reduce(0, { $0 + $1.points.count }) <= 100,
               value.segments.allSatisfy(Self.validSegment),
               Set(value.observations.map(\.id)).count == value.observations.count,
@@ -249,6 +256,11 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         let expectedStatus = mutation.map { $0.kind == .assessDevice || $0.kind == .startCapture ? 201 : 200 } ?? 200
         guard response.status == expectedStatus else {
             let code = type == "application/problem+json" ? (try? JSONDecoder().decode(Problem.self, from: response.data).code) : nil
+            if mutation?.kind == .finalizeCapture, let code,
+               (response.status == 412 && code == "VERSION_CONFLICT")
+                || (response.status == 409 && code == "CAPTURE_INCOMPLETE") {
+                throw SchoolCaptureFailure.finalizationRefused(code)
+            }
             if response.status == 401 { throw SchoolCaptureFailure.unauthorized }
             if let code, let message = Self.rejections[code], (400...499).contains(response.status) { throw SchoolCaptureFailure.rejected(message) }
             if response.status == 403 { throw SchoolCaptureFailure.forbidden }

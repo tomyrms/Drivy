@@ -85,7 +85,7 @@ struct SchoolCapturePoint: Codable, Sendable, Equatable {
     let accuracyMeters: Double
 
     var isValid: Bool {
-        sequence >= 0 && elapsedMs >= 0 && SchoolLesson.date(capturedAt) != nil
+        (0...2_147_483_646).contains(sequence) && (0...10_800_000).contains(elapsedMs) && SchoolLesson.date(capturedAt) != nil
             && latitude.isFinite && longitude.isFinite && accuracyMeters.isFinite
             && (-90...90).contains(latitude) && (-180...180).contains(longitude) && accuracyMeters >= 0
     }

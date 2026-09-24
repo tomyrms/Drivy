@@ -79,7 +79,7 @@ actor SQLCipherSchoolCaptureStore {
     // markAttempted refuse leur émission sous un autre scope : aucun rebinding implicite.
     func pending(scope: SchoolCommandScope, deviceID requestedDevice: UUID) throws -> [SchoolCaptureQueuedMutation] {
         guard requestedDevice == deviceID else { throw SchoolCaptureStorageFailure.invalidContext }
-        return try database.records("SELECT data FROM mutation WHERE workspace=? AND device_id=? AND state<>'acknowledged' ORDER BY created_at,id",
+        return try database.records("SELECT data FROM mutation WHERE workspace=? AND device_id=? AND state IN('queued','attempted') ORDER BY created_at,id",
             [.text(workspace(scope)), .text(deviceID.uuidString)], as: SchoolCaptureQueuedMutation.self)
     }
 
@@ -92,7 +92,7 @@ actor SQLCipherSchoolCaptureStore {
         var result: SchoolCapturePendingMutation?
         try write {
             var queued = try mutation(id, scope: scope)
-            guard queued.state != .acknowledged else { throw SchoolCaptureStorageFailure.uncertainCommand }
+            guard queued.state == .queued || queued.state == .attempted else { throw SchoolCaptureStorageFailure.uncertainCommand }
             if queued.mutation.kind == .uploadChunk {
                 let capture = try session(queued.mutation.targetID, scope: scope)
                 guard capture.serverCapture.publicationState == .privateCapture else { throw SchoolCaptureStorageFailure.closed }
@@ -160,6 +160,19 @@ actor SQLCipherSchoolCaptureStore {
         }
     }
 
+    func recordFinalizationRefusal(id: UUID, scope: SchoolCommandScope, code: String) throws {
+        guard ["VERSION_CONFLICT", "CAPTURE_INCOMPLETE"].contains(code) else { throw SchoolCaptureStorageFailure.invalidReceipt }
+        try write {
+            var queued = try mutation(id, scope: scope)
+            guard queued.mutation.kind == .finalizeCapture, queued.state == .attempted else {
+                throw SchoolCaptureStorageFailure.invalidReceipt
+            }
+            queued.state = .refused
+            queued.resultBody = try JSONEncoder().encode(["code": code])
+            try save(queued)
+        }
+    }
+
     func acceptAuthorization(operationID: UUID, authorization: SchoolCaptureAuthorization, lease: SchoolCaptureLease,
                              scope: SchoolCommandScope, deviceID requestedDevice: UUID) throws -> SchoolCaptureStoredSession {
         let remote = authorization.capture
@@ -207,6 +220,21 @@ actor SQLCipherSchoolCaptureStore {
         let values = try database.records("SELECT data FROM capture WHERE workspace=? AND device_id=? ORDER BY rowid DESC",
             [.text(workspace(scope)), .text(deviceID.uuidString)], as: SchoolCaptureStoredSession.self)
         return values.filter { $0.scope == scope }
+    }
+
+    /// PARTIAL peut aussi désigner une coupure serveur avant AP158. Seul son
+    /// accusé conservé prouve qu'une finalisation a réellement été confirmée.
+    func acknowledgedFinalizations(scope: SchoolCommandScope) throws -> [UUID: SchoolCaptureSession] {
+        let rows = try database.records("SELECT data FROM mutation WHERE workspace=? AND kind=? AND state='acknowledged' ORDER BY created_at",
+            [.text(workspace(scope)), .text(SchoolCaptureMutationKind.finalizeCapture.rawValue)], as: SchoolCaptureQueuedMutation.self)
+        var result: [UUID: SchoolCaptureSession] = [:]
+        for row in rows where row.mutation.scope == scope {
+            guard let bytes = row.resultBody, let capture = try? JSONDecoder().decode(SchoolCaptureSession.self, from: bytes),
+                  capture.id == row.mutation.targetID, capture.schoolId == scope.schoolID,
+                  capture.syncState == .synced || capture.syncState == .partial else { throw SchoolCaptureStorageFailure.invalidReceipt }
+            result[capture.id] = capture
+        }
+        return result
     }
 
     func storedSession(captureID: UUID, scope: SchoolCommandScope) throws -> SchoolCaptureStoredSession {
@@ -374,10 +402,14 @@ actor SQLCipherSchoolCaptureStore {
             let allChunks = try database.records("SELECT data FROM chunk WHERE capture_id=? ORDER BY segment_id,chunk_index",
                 [.text(captureID.uuidString)], as: SchoolCaptureStoredChunk.self)
             guard allowPartial || allChunks.allSatisfy({ $0.receipt != nil }) else { throw SchoolCaptureStorageFailure.uncertainCommand }
-            let existing = try database.records("SELECT data FROM mutation WHERE workspace=? AND kind=? AND target_id=? AND state<>'acknowledged' ORDER BY created_at LIMIT 1",
+            let existing = try database.records("SELECT data FROM mutation WHERE workspace=? AND kind=? AND target_id=? AND state IN('queued','attempted') ORDER BY created_at LIMIT 1",
                 [.text(workspace(scope)), .text(SchoolCaptureMutationKind.finalizeCapture.rawValue), .text(captureID.uuidString)], as: SchoolCaptureQueuedMutation.self).first
             if let existing, existing.mutation.scope != scope { throw SchoolCaptureStorageFailure.changedScope }
-            if let existing { result = existing.mutation; return }
+            if let existing {
+                guard let body = try? JSONDecoder().decode(SchoolFinalizeCaptureBody.self, from: existing.mutation.body),
+                      body.allowPartial == allowPartial else { throw SchoolCaptureStorageFailure.uncertainCommand }
+                result = existing.mutation; return
+            }
             let operationID = UUID(), body = SchoolFinalizeCaptureBody(operationId: operationID, segments: manifest, allowPartial: allowPartial)
             let command = try SchoolCapturePendingMutation.make(id: operationID, scope: scope, kind: .finalizeCapture,
                 targetID: captureID, expectedVersion: expectedVersion, body: body)
@@ -472,13 +504,13 @@ actor SQLCipherSchoolCaptureStore {
         }
         let scopeHash = SHA256.hash(data: try encoded(value.scope)).map { String(format: "%02x", $0) }.joined()
         if !generated {
-            guard try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE workspace=? AND state<>'acknowledged' AND scope_hash<>?",
+            guard try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE workspace=? AND state IN('queued','attempted') AND scope_hash<>?",
                 [.text(workspace(value.scope)), .text(scopeHash)]) == 0 else { throw SchoolCaptureStorageFailure.changedScope }
         }
         // Un changement de droits ou une file pleine ne doit pas empêcher le fait
         // local d'arrêt. markAttempted garde le contrôle de portée lors de l'émission.
         if !generated {
-            guard try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE workspace=? AND state<>'acknowledged'",
+            guard try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE workspace=? AND state IN('queued','attempted')",
                 [.text(workspace(value.scope))]) < 5000 else { throw SchoolCaptureStorageFailure.capacity }
         }
         if !generated {
@@ -486,7 +518,7 @@ actor SQLCipherSchoolCaptureStore {
             case .uploadChunk, .stopCapture, .finalizeCapture: throw SchoolCaptureStorageFailure.invalidContext
             case .assessDevice:
                 guard value.targetID == deviceID else { throw SchoolCaptureStorageFailure.invalidContext }
-                guard try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE workspace=? AND kind=? AND target_id=? AND state<>'acknowledged'",
+                guard try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE workspace=? AND kind=? AND target_id=? AND state IN('queued','attempted')",
                     [.text(workspace(value.scope)), .text(value.kind.rawValue), .text(value.targetID.uuidString)]) == 0 else {
                     throw SchoolCaptureStorageFailure.uncertainCommand
                 }
@@ -494,10 +526,10 @@ actor SQLCipherSchoolCaptureStore {
                 let body = try JSONDecoder().decode(SchoolStartCaptureBody.self, from: value.body)
                 guard body.deviceId == deviceID, body.explicitStartConfirmed,
                       try count("SELECT CAST(COUNT(*) AS TEXT) FROM capture WHERE state IN('ready','recording','paused')") == 0,
-                      try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE kind=? AND state<>'acknowledged'",
+                      try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE kind=? AND state IN('queued','attempted')",
                         [.text(SchoolCaptureMutationKind.startCapture.rawValue)]) == 0 else { throw SchoolCaptureStorageFailure.alreadyActive }
             case .recordChoice:
-                guard try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE workspace=? AND kind=? AND target_id=? AND state<>'acknowledged'",
+                guard try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE workspace=? AND kind=? AND target_id=? AND state IN('queued','attempted')",
                     [.text(workspace(value.scope)), .text(value.kind.rawValue), .text(value.targetID.uuidString)]) == 0 else {
                     throw SchoolCaptureStorageFailure.uncertainCommand
                 }

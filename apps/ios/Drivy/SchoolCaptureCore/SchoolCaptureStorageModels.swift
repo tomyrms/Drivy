@@ -69,7 +69,7 @@ struct SchoolCaptureMeasurement: Sendable {
 }
 
 struct SchoolCaptureQueuedMutation: Codable, Sendable, Identifiable {
-    enum State: String, Codable, Sendable { case queued, attempted, acknowledged }
+    enum State: String, Codable, Sendable { case queued, attempted, acknowledged, refused }
     let mutation: SchoolCapturePendingMutation
     let deviceID: UUID
     var state: State

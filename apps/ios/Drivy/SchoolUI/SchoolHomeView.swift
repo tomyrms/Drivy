@@ -25,6 +25,7 @@ struct SchoolHomeView: View {
     @State private var choosesSchool = false
     @State private var dossierPlanningModel: SchoolPlanningWorkspace?
     @State private var trainingCreationModel: SchoolTrainingCreationWorkspace?
+    @State private var captureHistoryModel: SchoolCaptureHistoryWorkspace?
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -49,6 +50,9 @@ struct SchoolHomeView: View {
         .tint(DrivyTheme.accent)
         .sheet(isPresented: $choosesSchool) { schoolChooser }
         .sheet(item: $dossierPlanningModel) { model in SchoolPlanningView(model: model) }
+        .sheet(item: historyPresentation) { model in
+            SchoolCaptureHistoryView(model: model, workspace: workspace)
+        }
         .sheet(item: $trainingCreationModel, onDismiss: trainingCreationDismissed) { model in
             SchoolTrainingCreationView(model: model)
                 .onChange(of: model.accessRevoked) { _, revoked in
@@ -61,15 +65,24 @@ struct SchoolHomeView: View {
         .onChange(of: workspace.membership?.membershipId) { _, _ in
             dossierPlanningModel?.invalidate(); dossierPlanningModel = nil
             trainingCreationModel?.invalidate(); trainingCreationModel = nil
+            captureHistoryModel?.invalidate(); captureHistoryModel = nil
         }
         .onChange(of: workspace.membership?.accessEpoch) { _, _ in
             dossierPlanningModel?.invalidate(); dossierPlanningModel = nil
             trainingCreationModel?.invalidate(); trainingCreationModel = nil
+            captureHistoryModel?.invalidate(); captureHistoryModel = nil
         }
         .task { await localController.load() }
         .onChange(of: captureController?.isCollecting) { wasCollecting, isCollecting in
             if wasCollecting != true && isCollecting == true { selectedTab = .session }
         }
+    }
+
+    private var historyPresentation: Binding<SchoolCaptureHistoryWorkspace?> {
+        Binding(get: { captureHistoryModel }, set: { value in
+            if let value { captureHistoryModel = value }
+            else { captureHistoryModel?.invalidate(); captureHistoryModel = nil }
+        })
     }
 
     private var sessionTab: some View {
@@ -204,6 +217,14 @@ struct SchoolHomeView: View {
 
     private var schoolActions: some View {
         VStack(alignment: .leading, spacing: 28) {
+            if captureController != nil, agendaClient != nil, workspace.membership?.roles.contains("INSTRUCTOR") == true {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Mes trajets").font(.title3.weight(.semibold)).padding(.bottom, 8)
+                    actionRow("Trajets de l’école", detail: "Retrouver et envoyer les trajets de cet appareil",
+                        symbol: "point.topleft.down.to.point.bottomright.curvepath", action: openCaptureHistory)
+                    Divider()
+                }
+            }
             if openCatalog != nil || openInvitations != nil || openMembers != nil {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Organisation").font(.title3.weight(.semibold)).padding(.bottom, 8)
@@ -235,6 +256,13 @@ struct SchoolHomeView: View {
                 }
             }
         }
+    }
+
+    private func openCaptureHistory() {
+        guard let captureController, let agendaClient, let person = workspace.person,
+              let membership = workspace.membership, membership.roles.contains("INSTRUCTOR") else { return }
+        captureHistoryModel = SchoolCaptureHistoryWorkspace(scope: agendaClient.scope(person: person, membership: membership),
+            client: agendaClient.captureClient, owner: captureController)
     }
 
     private func contactSection(_ school: SchoolDetails) -> some View {
