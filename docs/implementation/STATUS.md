@@ -2,7 +2,7 @@
 
 Mise à jour : 24 septembre 2026. La refonte est en cours ; G0, G1A et G1B ne constituent pas le produit complet.
 
-**G1C testé et déployé, G1D1 en développement :** invitations API/iOS, outbox d’email chiffrée et acceptation web React/BFF sont implémentées. L’API passe **89 tests** sur PostgreSQL 16.14 et 17.11 (57 précédents + 32 F02), avec SMTP Mailpit réel. Le web passe **19 tests**, **10 contrôles** de connexion locale et la [recette complète de 18 contrôles](recette-entree-web.md) SMTP → vérification d’adresse → identité nouvelle → acceptation explicite → un dossier minimal, sans formation. Le [run serveur/web `36033466605`](https://github.com/tomyrms/Drivy/actions/runs/36033466605) réussit. **API et web sont déployés depuis `6ffc103`**, avec **11 contrôles HTTPS publics réussis** et nettoyage de la sonde. Le transport email externe reste à raccorder. **IPA 0.4.0/build 9 compilé et vérifié** ; les tests natifs `36033239715` réussissent : **97/97 iPhone et 4/4 iPad**, zéro échec/ignoré, après correction de deux erreurs de compilation SwiftUI. [PR2 en brouillon](https://github.com/tomyrms/Drivy/pull/2), [déploiement et preuves](preparation-deploiement-web.md), [couverture complète](couverture-produit.md), [tranche F02](g1c-invitations.md), [web/BFF](../../apps/web/README.md). Les profils administratifs G1D1 sont travaillés dans un worktree séparé.
+**G1C testé et déployé, G1D1 en développement :** invitations API/iOS, outbox d’email chiffrée et acceptation web React/BFF sont implémentées. L’API passe **89 tests** sur PostgreSQL 16.14 et 17.11 (57 précédents + 32 F02), avec SMTP Mailpit réel. Le web passe **19 tests**, **10 contrôles** de connexion locale et la [recette complète de 18 contrôles](recette-entree-web.md) SMTP → vérification d’adresse → identité nouvelle → acceptation explicite → un dossier minimal, sans formation. Le [run serveur/web `36033466605`](https://github.com/tomyrms/Drivy/actions/runs/36033466605) réussit. **API et web sont déployés depuis `6ffc103`**, avec **11 contrôles HTTPS publics réussis** et nettoyage de la sonde. Le transport email externe reste à raccorder. **IPA 0.4.0/build 9 compilé et vérifié** ; les tests natifs `36033239715` réussissent : **97/97 iPhone et 4/4 iPad**, zéro échec/ignoré, après correction de deux erreurs de compilation SwiftUI. [PR2 fusionnée](https://github.com/tomyrms/Drivy/pull/2), [déploiement et preuves](preparation-deploiement-web.md), [couverture complète](couverture-produit.md), [tranche F02](g1c-invitations.md), [web/BFF](../../apps/web/README.md). Les profils administratifs G1D1 sont travaillés dans un worktree séparé.
 
 | Élément | État | Preuve / suite |
 |---|---|---|
@@ -20,6 +20,12 @@ Mise à jour : 24 septembre 2026. La refonte est en cours ; G0, G1A et G1B ne co
 | Essais physiques | Installation du premier IPA confirmée ; recette restante | Connexion 0.3.0, VoiceOver, interruptions réseau, GPS et budgets à qualifier |
 | G1 complet / G2 connecté | À poursuivre | SMTP externe, profils/onboarding, formations administrées, planning, leçons et bilans partagés |
 | G3/G4 et pilote G5 | À réaliser | Cours/packs, web de gestion, exploitation et procédures |
+
+## G1D1 en développement isolé
+
+La [PR3 en brouillon](https://github.com/tomyrms/Drivy/pull/3), branche `codex/g1d-profils`, contient API et formulaires natifs de politique de champs, profil scolaire et onboarding. Migration004 et AP16/AP169–177 passent **113 tests** sur PostgreSQL17.11 et16.14 ; typecheck/build réussis. Une revue indépendante a corrigé la portée AP169 non-ADMIN et l’encodage d’adresse native sans complément. Les **27 nouveaux tests Swift et une présentation capturée** sont en cours sur [GitHub Apple](https://github.com/tomyrms/Drivy/actions/runs/36037236148), version0.5.0 ; ne pas les déclarer réussis avant le rapport.
+
+Le web G1D1 a passé34 tests et une revue visuelle synthétique, puis son journal de commandes durable a été mis en chantier : PostgreSQL séparé, chiffrement authentifié, droits et confirmation relus après reconnexion. Le harness intégré OIDC/BFF/API réel et le stockage sont en cours. Les installateurs de cette base distincte et du keyring privé sont préparés, **pas appliqués**. Aucun G1D1 n’est déployé ; l’IPA proposé et l’hébergement restent G1C.
 
 ## Preuves serveur
 

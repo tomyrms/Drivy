@@ -79,6 +79,35 @@ try {
 } finally { await client.end(); }
 """
     execute([node, '--input-type=module', '-e', validation], release, environment | runtime, 'Contrôle runtime/RLS')
+    command_migration = web / 'dist/server/command-migrate.js'
+    if command_migration.exists():
+        web_migration = environment_file(Path('/etc/drivy-refonte/web-migration.env'))
+        web_runtime = environment_file(Path('/etc/drivy-refonte/web.env'))
+        for key, config, role in [('WEB_COMMAND_MIGRATION_DATABASE_URL', web_migration, 'drivy_web_owner'),
+                                  ('WEB_COMMAND_DATABASE_URL', web_runtime, 'drivy_web_runtime')]:
+            parts = urlsplit(config[key])
+            if parts.hostname != 'drivy-db.tailb60275.ts.net' or parts.path != '/drivy_web' or parts.username != role:
+                raise RuntimeError('Connexion du journal web hors base ou rôle attendu.')
+        execute([node, str(command_migration)], web, environment | web_migration, 'Migration du journal web')
+        web_validation = """
+import pg from 'pg';
+const client = new pg.Client({ connectionString: process.env.WEB_COMMAND_DATABASE_URL, connectionTimeoutMillis: 5000 });
+try {
+  await client.connect();
+  const { rows } = await client.query('SELECT rolsuper,rolbypassrls,rolcreatedb,rolcreaterole,rolinherit FROM pg_roles WHERE rolname=current_user');
+  if (!rows[0] || Object.values(rows[0]).some(Boolean)) throw new Error('web_runtime_privilege');
+  const membership = await client.query("SELECT pg_has_role(current_user,'drivy_web_maintenance','MEMBER') AS maintenance,pg_has_role(current_user,'drivy_web_owner','MEMBER') AS owner");
+  if (Object.values(membership.rows[0]).some(Boolean)) throw new Error('web_role_separation');
+  const table = await client.query("SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) AS owner FROM pg_class WHERE oid='drivy_web.profile_command'::regclass");
+  if (!table.rows[0]?.relrowsecurity || !table.rows[0]?.relforcerowsecurity || table.rows[0]?.owner !== 'drivy_web_owner') throw new Error('web_rls_missing');
+  await client.query('BEGIN READ ONLY');
+  await client.query('SET LOCAL ROLE drivy_web_commands');
+  const result = await client.query('SELECT count(*) AS total FROM drivy_web.profile_command');
+  if (result.rows[0].total !== '0') throw new Error('web_rls_context');
+  await client.query('ROLLBACK');
+} finally { await client.end(); }
+"""
+        execute([node, '--input-type=module', '-e', web_validation], web, environment | web_runtime, 'Contrôle runtime/RLS du journal web')
     execute([npm, 'prune', '--omit=dev', '--ignore-scripts'], release, environment, 'Réduction des dépendances runtime')
     if web.exists():
         execute([npm, 'prune', '--omit=dev', '--ignore-scripts'], web, environment, 'Réduction des dépendances web')
