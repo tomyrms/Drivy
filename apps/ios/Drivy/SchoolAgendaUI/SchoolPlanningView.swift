@@ -26,6 +26,9 @@ struct SchoolPlanningView: View {
                 }
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !cancelling && !model.isLoading && model.school != nil { bookingActionBar }
+            }
             .environment(\.timeZone, TimeZone(identifier: model.timeZone) ?? .current)
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -51,7 +54,7 @@ struct SchoolPlanningView: View {
     }
 
     @ViewBuilder private var bookingFields: some View {
-        Section("Le dossier") {
+        Section("Élève et formation") {
             if model.originalLesson == nil {
                 Picker("Élève", selection: Binding(get: { model.learnerID }, set: { id in
                     if let id { Task { await model.selectLearner(id) } }
@@ -101,11 +104,17 @@ struct SchoolPlanningView: View {
                 Text("Aucun moniteur affecté ne couvre ce créneau. Vérifiez les affectations depuis le dossier de l’élève.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
             }
-            DatePicker("Début", selection: $model.startsAt, in: Date()...)
+            DatePicker("Date", selection: $model.startsAt, in: Date()..., displayedComponents: .date)
+                .onChange(of: model.startsAt) { _, _ in model.termsAccepted = false; model.agreementConfirmed = false }
+            DatePicker("Heure", selection: $model.startsAt, displayedComponents: .hourAndMinute)
                 .onChange(of: model.startsAt) { _, _ in model.termsAccepted = false; model.agreementConfirmed = false }
             TextField("Lieu du rendez-vous", text: $model.meetingPoint, axis: .vertical).lineLimit(1...3)
                 .onChange(of: model.meetingPoint) { _, _ in model.agreementConfirmed = false }
-            if model.originalLesson == nil { Stepper("Temps entre deux leçons : \(model.bufferMinutes) min", value: $model.bufferMinutes, in: 0...240, step: 5) }
+            if model.originalLesson == nil {
+                DisclosureGroup("Temps entre deux leçons") {
+                    Stepper("\(model.bufferMinutes) min", value: $model.bufferMinutes, in: 0...240, step: 5)
+                }
+            }
             if model.instructorID != nil {
                 DisclosureGroup("Disponibilités du moniteur") {
                     if model.availability.isEmpty { Text("Aucune ouverture enregistrée. Ajoutez les disponibilités dans les réglages du planning.").font(.subheadline).foregroundStyle(DrivyTheme.muted) }
@@ -172,15 +181,64 @@ struct SchoolPlanningView: View {
                 TextField(model.changesCommercialTerms ? "Motif du changement" : "Motif facultatif", text: $model.reason, axis: .vertical).lineLimit(2...4)
                 Toggle("Le nouvel horaire est convenu", isOn: $model.agreementConfirmed)
             }
+        } footer: { Text("Le permis d’élève reste à vérifier avant la conduite.") }
+    }
+
+    private var bookingActionBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if model.duration > 0 {
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))")
+                        Spacer(minLength: 12)
+                        if let price = bookingPrice { Text(SchoolCatalogFormatting.price(price)).fontWeight(.semibold) }
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))")
+                        if let price = bookingPrice { Text(SchoolCatalogFormatting.price(price)).fontWeight(.semibold) }
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(DrivyTheme.muted)
+            }
+            if !model.validBooking {
+                Text(bookingHint).font(.caption).foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Button {
                 Task { if await model.saveBooking() { dismiss() } }
             } label: {
                 Label(model.originalLesson == nil ? "Confirmer la leçon" : "Confirmer le déplacement", systemImage: "calendar.badge.checkmark")
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }.buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.validBooking)
-                .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
-                .accessibilityIdentifier("planning-confirm")
-        } footer: { Text("Le permis d’élève reste à vérifier avant la conduite.") }
+            }
+            .buttonStyle(DrivyPrimaryButtonStyle())
+            .disabled(!model.validBooking)
+            .accessibilityIdentifier("planning-confirm")
+        }
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .frame(maxWidth: 680).frame(maxWidth: .infinity)
+        .background(DrivyTheme.surface)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    private var bookingPrice: Int64? {
+        if let lesson = model.originalLesson, !model.changesCommercialTerms { return lesson.priceCentsSnapshot }
+        return model.selectedPrice
+    }
+
+    /// Helpful next-step copy only. The workspace remains the sole source of
+    /// client validation and the server still decides whether to book.
+    private var bookingHint: String {
+        if model.isBusy { return "Confirmation par l’école…" }
+        if model.pending != nil { return "Vérifiez d’abord la confirmation en attente." }
+        if model.learnerID == nil { return "Commencez par choisir l’élève." }
+        if model.trainingID == nil { return "Choisissez sa formation." }
+        if model.instructorID == nil { return "Choisissez le moniteur pour cette leçon." }
+        if model.startsAt <= Date() { return "Choisissez un horaire à venir." }
+        if model.meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Indiquez le lieu de rendez-vous." }
+        if model.originalLesson != nil && !model.agreementConfirmed { return "Confirmez que le nouvel horaire est convenu." }
+        if (model.originalLesson == nil || model.changesCommercialTerms) && model.productID == nil { return "Choisissez une prestation pour fixer la durée et le prix." }
+        if (model.originalLesson == nil || model.changesCommercialTerms) && !model.termsAccepted { return "Relisez puis acceptez le prix et les conditions." }
+        return "Vérifiez les informations du rendez-vous avant de confirmer."
     }
     private var cancellationFields: some View {
         Section {

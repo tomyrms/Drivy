@@ -31,7 +31,7 @@ struct SchoolLessonReportView: View {
                 ContentUnavailableView("Sélectionnez votre école", systemImage: "building.2", description: Text("Le bilan est lié à votre compte et à cette école."))
             }
         }
-        .navigationTitle("Préparation et bilan")
+        .navigationTitle(model?.draft != nil ? "Bilan de leçon" : model?.isAuthor == true ? "Préparer la leçon" : "Ma leçon")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -62,22 +62,25 @@ private struct SchoolLessonReportContent: View {
     @State private var showComplete = false
     @State private var showPreview = false
     @State private var showReloadConfirmation = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         Form {
             Section {
-                Text(learnerName).font(.title2.bold())
+                Text(learnerName).font(.title2.bold()).fixedSize(horizontal: false, vertical: true)
                 if let lesson = model.lesson {
-                    Label(lesson.statusLabel, systemImage: "steeringwheel")
-                    if let date = lesson.startsAt { Text(date.formatted(date: .abbreviated, time: .shortened)).foregroundStyle(.secondary) }
+                    Label(model.isAuthor && model.draft != nil ? "Brouillon privé" : lesson.statusLabel,
+                          systemImage: model.isAuthor && model.draft != nil ? "lock" : "steeringwheel")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    if let date = lesson.startsAt { Text(SchoolPlanningFormat.instant(date, zone: lesson.timeZone)).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
                 }
                 if model.isLoading || model.isBusy { ProgressView(model.isBusy ? "Enregistrement…" : "Chargement…") }
                 if let error = model.errorMessage { Text(error).foregroundStyle(DrivyTheme.danger).accessibilityLabel("Erreur : \(error)") }
                 if let message = model.confirmation { Label(message, systemImage: "checkmark.circle").foregroundStyle(DrivyTheme.accent) }
                 if let message = model.information { Text(message).font(.footnote).foregroundStyle(.secondary) }
-                Button("Actualiser les informations") { showReloadConfirmation = true }.disabled(model.isBusy || model.isLoading)
-            }
+            }.listRowBackground(Color.clear)
             if model.pending != nil { pendingSection }
+            if model.isAuthor, model.draft != nil { draftSection }
             if let wish = model.wish {
                 Section("Souhait pour la prochaine leçon") {
                     if model.isOwnLearner {
@@ -95,7 +98,6 @@ private struct SchoolLessonReportContent: View {
                         .disabled(!model.canMutate)
                 } footer: { Text("À confirmer après la conduite et l’arrêt de toute collecte. Le constat ouvre le brouillon privé et inscrit le prix convenu au compte de la leçon.") }
             }
-            if model.isAuthor, model.draft != nil { draftSection }
             if !model.revisions.isEmpty { publishedSection }
             else if model.lesson != nil {
                 Section("Bilan partagé") { Text("Aucun bilan n’a encore été publié.").foregroundStyle(.secondary) }
@@ -122,6 +124,15 @@ private struct SchoolLessonReportContent: View {
         }
         .scrollContentBackground(.hidden)
         .background(DrivyTheme.canvas)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if model.isAuthor && model.draft != nil { draftActionBar }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showReloadConfirmation = true } label: { Label("Actualiser les informations", systemImage: "arrow.clockwise") }
+                    .disabled(model.isBusy || model.isLoading)
+            }
+        }
         .confirmationDialog("Recharger les données de l’école ?", isPresented: $showReloadConfirmation, titleVisibility: .visible) {
             Button("Recharger et remplacer la saisie non enregistrée") { Task { await model.load() } }
             Button("Garder ma saisie", role: .cancel) {}
@@ -164,10 +175,11 @@ private struct SchoolLessonReportContent: View {
     }
     private var draftSection: some View {
         Section {
-            reportField("Travail réalisé", text: $model.workedOn)
-            reportField("Constat", text: $model.observationText)
-            reportField("Prochaine étape", text: $model.nextStep)
+            reportField("Travail réalisé", prompt: "Les situations et exercices abordés", text: $model.workedOn)
+            reportField("À retenir", prompt: "Ce qui a progressé et ce qui reste à travailler", text: $model.observationText)
+            reportField("Prochaine étape", prompt: "L’objectif de la prochaine séance", text: $model.nextStep)
             if !model.competencies.isEmpty {
+                Text("Compétences observées").font(.headline).padding(.top, 8)
                 ForEach(model.competencies) { competency in
                     DisclosureGroup(competency.label) {
                         Picker("Niveau observé", selection: Binding(get: { model.observations.first(where: { $0.id == competency.id })?.level ?? "" }, set: { value in
@@ -189,13 +201,10 @@ private struct SchoolLessonReportContent: View {
                     }.disabled(!model.canMutate)
                 }
             }
-            Button("Enregistrer le brouillon privé") { Task { await model.saveDraft() } }
-                .disabled(!model.canMutate || !model.validTexts || !model.observationsValid || !model.draftChanged)
             if (model.lesson?.publicationVersion ?? 0) > 0 {
                 TextField("Motif de la nouvelle version", text: $model.correctionReason, axis: .vertical).disabled(!model.canMutate)
             }
-            Button { showPreview = true } label: { Label("Relire l’aperçu élève", systemImage: "eye") }.disabled(!model.canPublish)
-        } header: { Text("Brouillon privé") }
+        } header: { Text("Le bilan") }
         footer: {
             Text(model.draftChanged ? "Des modifications ne sont pas encore enregistrées. Enregistrez-les avant de relire l’aperçu et publier." : "Ce brouillon reste privé. Aucun niveau n’est choisi automatiquement ; seules les compétences observées ont besoin d’un contexte.")
         }
@@ -221,11 +230,54 @@ private struct SchoolLessonReportContent: View {
             }
         }
     }
-    private func reportField(_ label: String, text: Binding<String>) -> some View {
+    private var draftActionBar: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 10))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(draftHint).font(.caption).foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            layout {
+                Button { Task { await model.saveDraft() } } label: {
+                    Label("Enregistrer", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(DrivySecondaryButtonStyle())
+                .disabled(!model.canMutate || !model.validTexts || !model.observationsValid || !model.draftChanged)
+                Button { showPreview = true } label: { Label("Aperçu élève", systemImage: "eye") }
+                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canPublish)
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .frame(maxWidth: 680).frame(maxWidth: .infinity)
+        .background(DrivyTheme.surface)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    private var draftHint: String {
+        if model.isBusy { return "Enregistrement…" }
+        if model.pending != nil { return "Vérifiez la confirmation en attente avant de poursuivre." }
+        if !model.canMutate { return "Vérifiez les informations du bilan avant de poursuivre." }
+        if !model.validTexts { return "Un des textes dépasse 4 000 caractères." }
+        if !model.observationsValid { return "Précisez le contexte de chaque compétence retenue." }
+        if model.draftChanged { return "Modifications à enregistrer · le brouillon reste privé." }
+        if [model.workedOn, model.observationText, model.nextStep].contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+            return "Complétez les trois parties pour ouvrir l’aperçu élève."
+        }
+        if (model.lesson?.publicationVersion ?? 0) > 0 && model.correctionReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Indiquez le motif de cette nouvelle version."
+        }
+        return "Brouillon enregistré · prêt à relire."
+    }
+
+    private func reportField(_ label: String, prompt: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(label).font(.headline)
-            TextField(label, text: text, axis: .vertical).lineLimit(3...10).disabled(!model.canMutate)
-            Text("\(text.wrappedValue.unicodeScalars.count)/4 000 caractères").font(.caption).foregroundStyle(.secondary)
+            TextField(prompt, text: text, axis: .vertical).lineLimit(3...10).disabled(!model.canMutate)
+                .accessibilityLabel(label)
+            if text.wrappedValue.unicodeScalars.count > 3_500 {
+                Text("\(text.wrappedValue.unicodeScalars.count)/4 000 caractères").font(.caption)
+                    .foregroundStyle(text.wrappedValue.unicodeScalars.count > 4_000 ? DrivyTheme.danger : DrivyTheme.muted)
+            }
         }.padding(.vertical, 4)
     }
     private func money(_ cents: Int64) -> String { SchoolCatalogFormatting.price(cents) }
@@ -278,32 +330,78 @@ private struct SchoolReportPreviewSheet: View {
     @Bindable var model: SchoolLessonReportWorkspace
     let learnerName: String
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
         NavigationStack {
-            Form {
-                Section { Text(learnerName).font(.title2.bold()); Text("Voici le contenu qui sera partagé avec l’élève.") }
-                Section { SchoolReportTexts(workedOn: model.workedOn, observationText: model.observationText, nextStep: model.nextStep) }
-                if !model.observations.isEmpty {
-                    Section("Compétences observées") {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 30) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(learnerName).font(.title2.bold())
+                        if let lesson = model.lesson, let date = lesson.startsAt {
+                            Text(SchoolPlanningFormat.instant(date, zone: lesson.timeZone))
+                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        }
+                        Label("Non publié · aperçu seulement", systemImage: "eye")
+                            .font(.caption.weight(.medium)).foregroundStyle(DrivyTheme.muted)
+                            .padding(.top, 2)
+                    }
+                    SchoolReportTexts(workedOn: model.workedOn, observationText: model.observationText, nextStep: model.nextStep)
+                    if !model.observations.isEmpty {
+                        Divider()
+                        Text("Compétences observées").font(.title3.weight(.semibold))
                         ForEach(model.observations) { observation in
-                            VStack(alignment: .leading, spacing: 5) {
+                            VStack(alignment: .leading, spacing: 8) {
                                 Text(model.competencies.first(where: { $0.id == observation.id })?.label ?? "Observation de compétence").font(.headline)
-                                Text(observation.levelLabel); Text(observation.context)
+                                Text(observation.levelLabel).font(.subheadline).foregroundStyle(DrivyTheme.accent)
+                                Text(observation.context)
                             }
                         }
                     }
+                    if !model.correctionReason.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Motif de la nouvelle version").font(.headline)
+                            Text(model.correctionReason)
+                        }
+                    }
+                    Text("La publication partage ce bilan avec l’élève. Les notes de préparation restent privées.")
+                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
                 }
-                if !model.correctionReason.isEmpty { Section("Motif de correction") { Text(model.correctionReason) } }
-                Section {
-                    if let error = model.errorMessage { Text(error).foregroundStyle(DrivyTheme.danger) }
-                    Button("Publier ce bilan à l’élève") { Task { if await model.publish() { dismiss() } } }
-                        .disabled(!model.canPublish)
-                } footer: { Text("Seul le contenu de cet aperçu sera partagé. La préparation et le souhait de l’élève restent séparés.") }
+                .padding(24)
+                .frame(maxWidth: 680, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
+            .background(DrivyTheme.surface)
+            .safeAreaInset(edge: .bottom, spacing: 0) { publicationBar }
             .navigationTitle("Aperçu élève")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Revenir au brouillon") { dismiss() } } }
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour", systemImage: "chevron.left") { dismiss() }.disabled(model.isBusy) } }
             .interactiveDismissDisabled(model.isBusy)
         }
+        .tint(DrivyTheme.accent)
+        .foregroundStyle(DrivyTheme.text)
+    }
+
+    private var publicationBar: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 10))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return VStack(alignment: .leading, spacing: 10) {
+            if let error = model.errorMessage {
+                Text(error).font(.footnote).foregroundStyle(DrivyTheme.danger)
+            }
+            if model.isBusy { ProgressView("Publication…").font(.subheadline) }
+            layout {
+                Button("Modifier") { dismiss() }
+                    .buttonStyle(DrivySecondaryButtonStyle()).disabled(model.isBusy)
+                Button("Publier") { Task { if await model.publish() { dismiss() } } }
+                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canPublish)
+                    .accessibilityLabel("Publier ce bilan à l’élève")
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .frame(maxWidth: 680).frame(maxWidth: .infinity)
+        .background(DrivyTheme.surface)
+        .overlay(alignment: .top) { Divider() }
     }
 }
 
@@ -312,7 +410,7 @@ private struct SchoolReportTexts: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             part("Travail réalisé", workedOn)
-            part("Constat", observationText)
+            part("À retenir", observationText)
             part("Prochaine étape", nextStep)
         }.padding(.vertical, 8)
     }
