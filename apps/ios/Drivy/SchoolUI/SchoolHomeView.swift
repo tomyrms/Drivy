@@ -106,6 +106,7 @@ struct SchoolHomeView: View {
                 else { schoolSelection }
             }
             .navigationTitle("École")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar { contextToolbar }
         }
     }
@@ -161,14 +162,8 @@ struct SchoolHomeView: View {
 
     private var schoolHeading: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Image(systemName: "building.2")
-                .font(.title2.weight(.medium))
-                .foregroundStyle(DrivyTheme.accent)
-                .frame(width: 60, height: 60)
-                .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 18))
-                .accessibilityHidden(true)
             Text(workspace.school?.name ?? workspace.membership?.schoolName ?? "Mon école")
-                .font(.largeTitle.weight(.bold))
+                .font(.title.weight(.bold))
                 .fixedSize(horizontal: false, vertical: true)
             if let membership = workspace.membership {
                 Label(SchoolPresentation.roles(membership.roles), systemImage: "person.crop.circle")
@@ -195,48 +190,48 @@ struct SchoolHomeView: View {
     }
 
     private var schoolActions: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Dans votre école").font(.title3.weight(.semibold))
-            VStack(spacing: 0) {
-                actionRow(workspace.isLearnerOnly ? "Mon dossier scolaire" : "Dossiers élèves",
-                    detail: workspace.isLearnerOnly ? "Profil et formations" : "Retrouver les élèves autorisés",
-                    symbol: "person.2", action: { selectedTab = .learners })
-                if let openCatalog {
-                    Divider().padding(.leading, 64)
-                    actionRow("Formations", detail: "Offres, référentiels et procédures", symbol: "steeringwheel", action: openCatalog)
-                }
-                if let openInvitations {
-                    Divider().padding(.leading, 64)
-                    actionRow("Invitations", detail: "Inviter et suivre les accès", symbol: "envelope", action: openInvitations)
-                }
-                if let openMembers {
-                    Divider().padding(.leading, 64)
-                    actionRow("Équipe et accès", detail: "Membres, rôles et autorisations", symbol: "person.2.badge.key", action: openMembers)
-                }
-                if let configureSchool {
-                    Divider().padding(.leading, 64)
-                    actionRow("Configuration de l’école", detail: "Coordonnées, données et activation", symbol: "slider.horizontal.3", action: configureSchool)
-                }
-                if let openProfilePolicy {
-                    Divider().padding(.leading, 64)
-                    actionRow("Champs du profil", detail: "Informations demandées aux élèves", symbol: "list.bullet.rectangle", action: openProfilePolicy)
+        VStack(alignment: .leading, spacing: 28) {
+            if openCatalog != nil || openInvitations != nil || openMembers != nil {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Organisation").font(.title3.weight(.semibold)).padding(.bottom, 8)
+                    if let openCatalog {
+                        actionRow("Formations", detail: "Offres, référentiels et procédures", symbol: "steeringwheel", action: openCatalog)
+                        Divider()
+                    }
+                    if let openInvitations {
+                        actionRow("Invitations", detail: "Inviter et suivre les accès", symbol: "envelope", action: openInvitations)
+                        Divider()
+                    }
+                    if let openMembers {
+                        actionRow("Équipe et accès", detail: "Membres, rôles et autorisations", symbol: "person.2.badge.key", action: openMembers)
+                        Divider()
+                    }
                 }
             }
-            .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+            if configureSchool != nil || openProfilePolicy != nil {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Paramètres").font(.title3.weight(.semibold)).padding(.bottom, 8)
+                    if let configureSchool {
+                        actionRow("Configuration", detail: "Coordonnées et textes de l’école", symbol: "slider.horizontal.3", action: configureSchool)
+                        Divider()
+                    }
+                    if let openProfilePolicy {
+                        actionRow("Champs du profil", detail: "Informations demandées aux élèves", symbol: "list.bullet.rectangle", action: openProfilePolicy)
+                        Divider()
+                    }
+                }
+            }
         }
     }
 
     private func contactSection(_ school: SchoolDetails) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Contacter l’école").font(.title3.weight(.semibold))
-            DrivyPanel {
-                VStack(alignment: .leading, spacing: 18) {
-                    contactValue(school.contactEmail, title: "E-mail", symbol: "envelope")
-                    if let phone = school.contactPhone, !phone.isEmpty {
-                        Divider()
-                        contactValue(phone, title: "Téléphone", symbol: "phone")
-                    }
-                }
+            contactValue(school.contactEmail, title: "E-mail", symbol: "envelope")
+                .padding(.vertical, 8)
+            if let phone = school.contactPhone, !phone.isEmpty {
+                Divider()
+                contactValue(phone, title: "Téléphone", symbol: "phone").padding(.vertical, 8)
             }
         }
     }
@@ -255,31 +250,20 @@ struct SchoolHomeView: View {
     private var accountSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Votre compte").font(.title3.weight(.semibold))
-            DrivyPanel {
-                VStack(alignment: .leading, spacing: 18) {
-                    Text(workspace.person?.displayName ?? "Compte connecté").font(.headline)
-                    Text(roleExplanation).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let openOnboarding {
-                        Button("Mon arrivée dans l’école", action: openOnboarding).frame(minHeight: 44)
-                    }
-                    Button { choosesSchool = true } label: { Label("Changer d’école", systemImage: "building.2") }
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("school-change-school")
-                    Divider()
-                    Button("Se déconnecter", role: .destructive, action: signOut)
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("school-sign-out")
+            VStack(alignment: .leading, spacing: 12) {
+                Text(workspace.person?.displayName ?? "Compte connecté").foregroundStyle(DrivyTheme.muted)
+                if let openOnboarding {
+                    Button("Mon arrivée dans l’école", action: openOnboarding).frame(minHeight: 44)
                 }
+                Button { choosesSchool = true } label: { Label("Changer d’école", systemImage: "building.2") }
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("school-change-school")
+                Divider()
+                Button("Se déconnecter", role: .destructive, action: signOut)
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("school-sign-out")
             }
         }
-    }
-
-    private var roleExplanation: String {
-        let roles = workspace.membership?.roles ?? []
-        if roles.contains("ADMIN") { return "Votre accès Administration permet de gérer cette école et les dossiers qui vous sont autorisés." }
-        if roles.contains("INSTRUCTOR") { return "Votre accès Moniteur donne accès aux élèves qui vous sont affectés par cette école." }
-        return "Votre accès Élève donne accès à votre dossier personnel dans cette école."
     }
 
     private func actionRow(_ title: String, detail: String, symbol: String, action: @escaping () -> Void) -> some View {
@@ -294,7 +278,7 @@ struct SchoolHomeView: View {
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
             }
-            .padding(18)
+            .padding(.vertical, 16)
             .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
             .contentShape(Rectangle())
         }
@@ -303,7 +287,7 @@ struct SchoolHomeView: View {
 
     @ViewBuilder private var schoolSelection: some View {
         if workspace.person?.memberships.isEmpty == true {
-            ContentUnavailableView("Votre école vous attend", systemImage: "building.2",
+            ContentUnavailableView("Aucune école associée", systemImage: "building.2",
                 description: Text("Demandez à votre école de vous donner accès à votre dossier. La carte reste accessible dans Séance."))
                 .background(DrivyTheme.canvas)
         } else {

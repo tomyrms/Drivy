@@ -29,12 +29,6 @@ struct SchoolBrowserView: View {
                     Button(action: openAccount) { Label("Compte", systemImage: "person.crop.circle") }
                         .accessibilityIdentifier("school-account")
                 }
-                if let openInvitations {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button(action: openInvitations) { Label("Invitations", systemImage: "envelope") }
-                            .accessibilityIdentifier("open-school-invitations")
-                    }
-                }
                 if let openAddLearner {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button(action: openAddLearner) { Label("Ajouter un élève", systemImage: "person.badge.plus") }
@@ -78,14 +72,10 @@ struct SchoolBrowserView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(workspace.school?.name ?? workspace.membership?.schoolName ?? "École")
                     .font(.subheadline.weight(.semibold))
-                if let membership = workspace.membership {
-                    Text(SchoolPresentation.roles(membership.roles))
-                        .font(.caption).foregroundStyle(DrivyTheme.muted)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 24)
-            .padding(.vertical, 16)
+            .padding(.vertical, 10)
             learnerList
         }
     }
@@ -117,18 +107,30 @@ struct SchoolBrowserView: View {
                 }
                 .padding(.vertical, 16)
             } else if !workspace.isSearching && !workspace.isLoadingSchool && workspace.school != nil && workspace.learners.isEmpty && workspace.learnersError == nil {
-                ContentUnavailableView(
-                    workspace.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Aucun dossier accessible" : "Aucun résultat",
-                    systemImage: "person.crop.rectangle.stack",
-                    description: Text(workspace.searchText.isEmpty ? "Les dossiers autorisés par votre école apparaîtront ici." : "Essayez un autre nom ou effacez la recherche.")
-                )
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(workspace.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Aucun dossier accessible" : "Aucun résultat")
+                        .font(.headline)
+                    if !workspace.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Essayez un autre nom.").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        Button("Effacer la recherche") { workspace.setSearchText("") }.frame(minHeight: 44)
+                    } else if let openAddLearner {
+                        Button("Ajouter un élève", action: openAddLearner).frame(minHeight: 44)
+                    } else {
+                        Text(workspace.isLearnerOnly ? "Votre école doit vous donner accès à votre dossier." : "Ce compte n’a accès à aucun dossier dans cette école.")
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    }
+                    if workspace.searchText.isEmpty, let openInvitations {
+                        Button("Ouvrir les invitations", action: openInvitations).frame(minHeight: 44)
+                            .accessibilityIdentifier("open-school-invitations")
+                    }
+                }.padding(.vertical, 12)
             }
             ForEach(workspace.learners) { learner in
                 NavigationLink(value: learner.id) {
                     SchoolLearnerRow(learner: learner, isSelected: workspace.selectedLearnerID == learner.id)
                 }
                 .accessibilityIdentifier("school-learner-\(learner.id.uuidString)")
-                .listRowInsets(EdgeInsets(top: 8, leading: 24, bottom: 8, trailing: 20))
+                .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
                 .listRowBackground(workspace.selectedLearnerID == learner.id ? DrivyTheme.accentSoft : DrivyTheme.surface)
             }
             if workspace.nextLearnersCursor != nil {
@@ -165,21 +167,22 @@ struct SchoolChooserView: View {
                     } label: {
                         HStack(spacing: 16) {
                             Image(systemName: "building.2")
-                                .foregroundStyle(DrivyTheme.accent)
-                                .frame(width: 44, height: 44)
-                                .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 14))
+                                .foregroundStyle(DrivyTheme.muted).frame(width: 28)
+                                .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(membership.schoolName).font(.headline).foregroundStyle(DrivyTheme.text)
                                 Text(SchoolPresentation.roles(membership.roles))
                                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                             }
                             Spacer(minLength: 8)
-                            Image(systemName: "chevron.right").foregroundStyle(DrivyTheme.muted)
+                            Image(systemName: workspace.membership?.membershipId == membership.membershipId ? "checkmark" : "chevron.right")
+                                .foregroundStyle(DrivyTheme.muted)
                         }
                         .padding(.vertical, 8)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(workspace.membership?.membershipId == membership.membershipId ? .isSelected : [])
                     .accessibilityIdentifier("school-choice-\(membership.schoolId.uuidString)")
                 }
             } header: {
@@ -194,6 +197,7 @@ struct SchoolChooserView: View {
 private struct SchoolLearnerRow: View {
     let learner: SchoolLearner
     let isSelected: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Text(SchoolPresentation.initials(learner.displayName))
@@ -205,8 +209,10 @@ private struct SchoolLearnerRow: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(learner.displayName).font(.headline)
                     .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.text)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 if let email = learner.contactEmail, !email.isEmpty {
                     Text(email).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 }
                 if learner.archivedAt != nil {
                     Label("Dossier archivé", systemImage: "archivebox")
@@ -219,7 +225,7 @@ private struct SchoolLearnerRow: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
     }
 }
@@ -230,19 +236,13 @@ private struct SchoolOverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 if let school = workspace.school {
-                    Image(systemName: "person.crop.rectangle.stack")
-                        .font(.system(size: 40, weight: .light))
-                        .foregroundStyle(DrivyTheme.muted)
-                        .padding(24)
-                        .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 28))
-                        .accessibilityHidden(true)
-                    Text(workspace.isLearnerOnly ? "Votre dossier scolaire" : "Les dossiers de votre école")
-                        .font(.largeTitle.weight(.bold))
+                    Text(workspace.isLearnerOnly ? "Ouvrir mon dossier" : "Sélectionnez un élève")
+                        .font(.title2.weight(.bold))
                     Text(school.name).font(.headline).foregroundStyle(DrivyTheme.muted)
                     Text(workspace.isLearnerOnly
                         ? "Ouvrez votre dossier pour retrouver votre profil et vos formations."
-                        : "Sélectionnez un élève dans la liste pour retrouver son profil, ses coordonnées et ses formations.")
-                        .font(.title3).foregroundStyle(DrivyTheme.muted)
+                        : "Son profil et ses formations s’afficheront ici.")
+                        .font(.body).foregroundStyle(DrivyTheme.muted)
                 } else if workspace.isLoadingSchool {
                     ProgressView("Ouverture de l’école…")
                 } else if let error = workspace.schoolError {
@@ -269,6 +269,7 @@ private struct SchoolLearnerDetailView: View {
     let trainingClient: SchoolTrainingClient?
     let openCreateTraining: ((SchoolLearner) -> Void)?
     @State private var showsTraining = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ScrollView {
@@ -279,6 +280,10 @@ private struct SchoolLearnerDetailView: View {
                     SchoolErrorNotice(message: error, retry: { Task { await workspace.loadSelectedLearner() } })
                 } else if let learner = workspace.learner {
                     learnerHeading(learner)
+                    if let openPlanning, learner.archivedAt == nil {
+                        Button { openPlanning(learner) } label: { Label("Planifier une leçon", systemImage: "calendar.badge.plus") }
+                            .buttonStyle(DrivyPrimaryButtonStyle()).accessibilityIdentifier("learner-plan-lesson")
+                    }
                     if let openProfile {
                         Button { openProfile(learner) } label: {
                             HStack(spacing: 16) {
@@ -293,25 +298,21 @@ private struct SchoolLearnerDetailView: View {
                                 Spacer(minLength: 8)
                                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                             }
-                            .padding(20)
-                            .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
-                            .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+                            .padding(.vertical, 16)
+                            .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("open-learner-profile")
+                        Divider()
                     }
                     trainings
                     if learner.contactEmail != nil || learner.contactPhone != nil {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Coordonnées").font(.title3.weight(.semibold))
-                            DrivyPanel {
-                                VStack(alignment: .leading, spacing: 20) {
-                                    if let email = learner.contactEmail { SchoolInfoRow(title: "E-mail", value: email) }
-                                    if learner.contactEmail != nil && learner.contactPhone != nil { Divider() }
-                                    if let phone = learner.contactPhone { SchoolInfoRow(title: "Téléphone", value: phone) }
-                                }
-                            }
+                            if let email = learner.contactEmail { SchoolInfoRow(title: "E-mail", value: email) }
+                            if learner.contactEmail != nil && learner.contactPhone != nil { Divider() }
+                            if let phone = learner.contactPhone { SchoolInfoRow(title: "Téléphone", value: phone) }
                         }
                     }
                 }
@@ -334,11 +335,13 @@ private struct SchoolLearnerDetailView: View {
     private func learnerHeading(_ learner: SchoolLearner) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top, spacing: 16) {
-                Text(SchoolPresentation.initials(learner.displayName))
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 60, height: 60)
-                    .background(DrivyTheme.surfaceMuted, in: Circle())
-                    .accessibilityHidden(true)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Text(SchoolPresentation.initials(learner.displayName))
+                        .font(.title3.weight(.semibold))
+                        .frame(width: 60, height: 60)
+                        .background(DrivyTheme.surfaceMuted, in: Circle())
+                        .accessibilityHidden(true)
+                }
                 VStack(alignment: .leading, spacing: 8) {
                     Text(learner.displayName).font(.largeTitle.weight(.bold))
                         .fixedSize(horizontal: false, vertical: true)
@@ -359,23 +362,24 @@ private struct SchoolLearnerDetailView: View {
     }
 
     private var trainings: some View {
-        DrivyPanel {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Formations").font(.title3.weight(.semibold))
-                if let learner = workspace.learner, let openCreateTraining, learner.archivedAt == nil {
-                    Button { openCreateTraining(learner) } label: { Label("Ouvrir une formation", systemImage: "plus.circle") }
-                        .frame(minHeight: 48).accessibilityIdentifier("create-learner-training")
-                }
-                if let learner = workspace.learner, let openPlanning, learner.archivedAt == nil {
-                    Button { openPlanning(learner) } label: { Label("Planifier une leçon", systemImage: "calendar.badge.plus") }
-                        .frame(minHeight: 48).accessibilityIdentifier("learner-plan-lesson")
-                }
-                if let learner = workspace.learner, let openTrainingAdministration, learner.archivedAt == nil {
-                    Button { openTrainingAdministration(learner) } label: {
-                        Label("Affecter un moniteur", systemImage: "person.badge.plus")
+        VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("Formations").font(.title3.weight(.semibold))
+                    Spacer(minLength: 8)
+                    if let learner = workspace.learner, learner.archivedAt == nil,
+                       openCreateTraining != nil || openTrainingAdministration != nil {
+                        Menu {
+                            if let openCreateTraining {
+                                Button { openCreateTraining(learner) } label: { Label("Ouvrir une formation", systemImage: "plus") }
+                                    .accessibilityIdentifier("create-learner-training")
+                            }
+                            if let openTrainingAdministration {
+                                Button { openTrainingAdministration(learner) } label: { Label("Affecter un moniteur", systemImage: "person.badge.plus") }
+                                    .accessibilityIdentifier("manage-learner-trainings")
+                            }
+                        } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
+                        .accessibilityLabel("Gérer les formations")
                     }
-                    .frame(minHeight: 48)
-                    .accessibilityIdentifier("manage-learner-trainings")
                 }
                 if workspace.isLoadingTrainings { ProgressView("Chargement des formations…") }
                 if let error = workspace.trainingsError {
@@ -384,6 +388,9 @@ private struct SchoolLearnerDetailView: View {
                 if !workspace.isLoadingTrainings && workspace.trainings.isEmpty && workspace.trainingsError == nil {
                     Text("Aucune formation accessible dans ce dossier.")
                         .foregroundStyle(DrivyTheme.muted)
+                    if let learner = workspace.learner, let openCreateTraining, learner.archivedAt == nil {
+                        Button("Ouvrir une formation") { openCreateTraining(learner) }.frame(minHeight: 48)
+                    }
                 }
                 ForEach(workspace.trainings) { training in
                     Button {
@@ -417,7 +424,6 @@ private struct SchoolLearnerDetailView: View {
                     .frame(minHeight: 48)
                     .disabled(workspace.isLoadingMoreTrainings)
                 }
-            }
         }
     }
 }
