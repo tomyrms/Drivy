@@ -112,7 +112,7 @@ import Foundation
 
 enum SchoolTrainingAccess {
     static func isRevoked(_ error: Error) -> Bool {
-        error as? SchoolAPIError == .unauthorized || error as? SchoolAPIError == .forbidden
+        error as? SchoolAPIError == .unauthorized || error as? SchoolAPIError == .forbidden || error as? SchoolAPIError == .identityNotLinked
             || error as? SchoolCatalogFailure == .unauthorized || error as? SchoolCatalogFailure == .forbidden
             || error as? SchoolReportFailure == .unauthorized || error as? SchoolReportFailure == .forbidden
     }

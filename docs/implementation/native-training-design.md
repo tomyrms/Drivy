@@ -14,6 +14,8 @@ Relecture ciblée et `git diff --check` effectués. Les trois vues sont destiné
 
 Signalement traité avec l’intégration : l’accès aux bilans et au suivi dépendait de `progress != nil`, donc une panne de AP58 masquait des parcours AP55/56. L’intégration ajoute `canOpenPedagogicalContent`, fondé sur rôle, formation chargée sous les droits courants et absence de révocation/invalidation/chargement. Les deux gardes de présentation utilisent cette propriété ; chaque destination garde ses vérifications serveur. Le parcours lui-même exige toujours son résultat AP58 pour afficher des appréciations.
 
+La revue métier suivante distingue aussi la liste de leçons effectivement chargée (`lessonsLoaded`) et l’erreur de lecture des révisions (`revisionsError`). Le dossier n’annonce une liste vide qu’après une lecture réussie. Une erreur de bilans se présente dans cette section ; son actualisation conserve le dialogue existant protégeant une saisie non enregistrée.
+
 ## Rendu natif ciblé
 
 `JourneyVisualReview` accepte les entrées `catalog`, `dossier` et `bilan`, qui instancient les vraies vues natives du catalogue, de la formation et d’une révision publiée. `SchoolVisualReview` est compilé uniquement en DEBUG sur simulateur, avec la mention visible « Rendu de contrôle · données fictives ».

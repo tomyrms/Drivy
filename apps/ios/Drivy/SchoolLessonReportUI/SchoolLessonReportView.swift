@@ -99,7 +99,11 @@ private struct SchoolLessonReportContent: View {
                 } footer: { Text("À confirmer après la conduite et l’arrêt de toute collecte. Le constat ouvre le brouillon privé et inscrit le prix convenu au compte de la leçon.") }
             }
             if !model.revisions.isEmpty { publishedSection }
-            else if model.lesson != nil {
+            if let error = model.revisionsError {
+                Section("Bilan partagé") {
+                    SchoolErrorNotice(message: error, retry: { showReloadConfirmation = true })
+                }
+            } else if model.revisions.isEmpty, model.lesson != nil, !model.isLoading {
                 Section("Bilan partagé") { Text("Aucun bilan n’a encore été publié.").foregroundStyle(.secondary) }
             }
             if let account = model.account {

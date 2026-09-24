@@ -109,7 +109,7 @@ private struct SchoolTrainingContent: View {
     }
     private var lessons: some View {
         VStack(alignment: .leading, spacing: 24) {
-            if model.lessons.isEmpty && !model.isLoading {
+            if model.lessonsLoaded && model.lessons.isEmpty && !model.isLoading {
                 empty("Aucune leçon", text: "Aucun rendez-vous n’est enregistré pour cette formation.")
             }
             if !model.upcomingLessons.isEmpty {
@@ -137,7 +137,7 @@ private struct SchoolTrainingContent: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Bilans partagés").font(.title2.bold())
             if model.canOpenPedagogicalContent {
-                if model.publishedLessons.isEmpty {
+                if model.lessonsLoaded && model.publishedLessons.isEmpty {
                     empty("Aucun bilan partagé", text: model.nextCursor == nil
                         ? "Les bilans apparaissent après leur publication par le moniteur."
                         : "Aucun bilan dans cette liste. Affichez les leçons suivantes pour poursuivre.")
