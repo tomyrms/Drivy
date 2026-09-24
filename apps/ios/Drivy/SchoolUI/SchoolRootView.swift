@@ -29,9 +29,14 @@ struct SchoolRootView: View {
     @State private var opensInvitationsAfterMembers = false
     @State private var memberLearnerToOpen: SchoolLearner?
     @State private var requestedLearnerID: UUID?
+    @State private var joinWorkspace: SchoolJoinWorkspace?
+    @State private var showsJoinSchool = false
+    @State private var opensJoinAfterAccount = false
+    @State private var joinMembershipToOpen: SchoolMembership?
+    @State private var pendingJoinLink: String?
 
     var body: some View {
-        memberPresentation
+        joinPresentation
             .sheet(isPresented: $showsInvitations, onDismiss: invitationsDismissed) {
                 invitationsSheet
             }
@@ -89,7 +94,10 @@ struct SchoolRootView: View {
             else { workspace?.reset() }
         }
         .onChange(of: identity.isAuthenticated) { _, authenticated in
-            if !authenticated { closeConfiguration(); closeInvitations(); closeProfile(); closeCatalog(); closeMembers(); requestedLearnerID = nil; workspace?.reset() }
+            if !authenticated {
+                closeJoin(); closeConfiguration(); closeInvitations(); closeProfile(); closeCatalog(); closeMembers()
+                requestedLearnerID = nil; workspace?.reset()
+            } else if pendingJoinLink != nil { openJoin() }
         }
         .onChange(of: workspace?.membership?.membershipId) { _, _ in
             if workspace?.isLoadingAccount != true { verifyPresentedScopes() }
@@ -100,6 +108,7 @@ struct SchoolRootView: View {
         .onChange(of: workspace?.isLoadingSchool) { _, loading in
             if loading == false && workspace?.isLoadingAccount != true { verifyPresentedScopes() }
         }
+        .onOpenURL { receiveInvitation($0) }
     }
 
     private var accountPresentation: some View {
@@ -107,7 +116,7 @@ struct SchoolRootView: View {
             SchoolAccountView(identity: identity, workspace: workspace, localController: localController,
                 openLocalTrials: openTrialsFromAccount, configureSchool: accountConfigurationAction,
                 openInvitations: accountInvitationsAction, openProfilePolicy: accountProfilePolicyAction,
-                openOnboarding: accountOnboardingAction, signOut: signOut)
+                openOnboarding: accountOnboardingAction, openJoinSchool: accountJoinAction, signOut: signOut)
         }
     }
 
@@ -132,6 +141,55 @@ struct SchoolRootView: View {
     private var homeTrainingClient: SchoolTrainingClient? {
         guard let configuration else { return nil }
         return SchoolTrainingClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
+    }
+
+    private var joinPresentation: some View {
+        memberPresentation.sheet(isPresented: $showsJoinSchool, onDismiss: joinDismissed) {
+            if let joinWorkspace {
+                SchoolJoinView(model: joinWorkspace, openSchool: { membership in
+                    joinMembershipToOpen = membership; showsJoinSchool = false
+                })
+            }
+        }
+    }
+    private var accountJoinAction: (() -> Void)? {
+        guard configuration != nil, identity.isAuthenticated else { return nil }
+        return { opensJoinAfterAccount = true; showsAccount = false }
+    }
+    private func openJoin() {
+        guard identity.isAuthenticated, let configuration else { return }
+        joinWorkspace?.invalidate()
+        joinWorkspace = SchoolJoinWorkspace(client: SchoolJoinClient(configuration: configuration, tokenSource: identity), link: pendingJoinLink)
+        pendingJoinLink = nil; showsJoinSchool = true
+    }
+    private func closeJoin() { joinWorkspace?.invalidate(); showsJoinSchool = false; joinMembershipToOpen = nil }
+    private func receiveInvitation(_ url: URL) {
+        guard let configuration,
+              (try? SchoolJoinClient.token(from: url.absoluteString, configuration: configuration)) != nil else { return }
+        // An open sheet may already contain an uncertain intention. A new link never replaces it.
+        guard !showsJoinSchool else { return }
+        pendingJoinLink = url.absoluteString
+        if identity.isAuthenticated {
+            guard !showsLocalTrials, !showsSchoolConfiguration, !showsInvitations, !showsProfile, !showsCatalog, !showsMembers else { return }
+            if showsAccount { opensJoinAfterAccount = true; showsAccount = false }
+            else { openJoin() }
+        }
+    }
+    private func joinDismissed() {
+        let membership = joinMembershipToOpen
+        let principal = joinWorkspace?.record?.principal
+        let client = joinWorkspace?.client
+        joinMembershipToOpen = nil; joinWorkspace?.invalidate(); joinWorkspace = nil
+        guard let membership, let principal, let client, identity.isAuthenticated, let workspace else { return }
+        Task {
+            guard (try? await client.principal()) == principal, identity.isAuthenticated else { return }
+            await workspace.loadAccount()
+            guard (try? await client.principal()) == principal, identity.isAuthenticated,
+                  let current = workspace.person?.memberships.first(where: {
+                      $0.schoolId == membership.schoolId && $0.membershipId == membership.membershipId
+                  }) else { return }
+            await workspace.selectSchool(current)
+        }
     }
 
     private var memberPresentation: some View {
@@ -396,6 +454,10 @@ struct SchoolRootView: View {
     }
 
     private func accountDismissed() {
+        if opensJoinAfterAccount {
+            opensJoinAfterAccount = false; openJoin()
+            return
+        }
         if opensTrialsAfterAccount {
             opensTrialsAfterAccount = false
             showsLocalTrials = true
@@ -436,6 +498,12 @@ struct SchoolRootView: View {
 
     @ToolbarContentBuilder
     private var accountToolbar: some ToolbarContent {
+        if identity.isAuthenticated, configuration != nil {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { openJoin() } label: { Label("Rejoindre une école", systemImage: "envelope.open") }
+                    .accessibilityIdentifier("open-join-school")
+            }
+        }
         ToolbarItem(placement: .topBarTrailing) {
             Button { showsAccount = true } label: {
                 Label("Compte", systemImage: "person.crop.circle")
@@ -496,6 +564,10 @@ struct SchoolRootView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     SchoolErrorNotice(message: error)
+                    if identity.isAuthenticated, !workspace.requiresAuthentication {
+                        Button { openJoin() } label: { Label("J’ai une invitation", systemImage: "envelope.open") }
+                            .buttonStyle(DrivySecondaryButtonStyle())
+                    }
                     if workspace.requiresAuthentication {
                         Button("Se reconnecter") {
                             workspace.reset()
@@ -553,6 +625,8 @@ struct SchoolRootView: View {
     }
 
     private func signOut() {
+        pendingJoinLink = nil
+        closeJoin()
         closeMembers()
         closeCatalog()
         closeProfile()
@@ -662,6 +736,7 @@ private struct SchoolAccountView: View {
     let openInvitations: (() -> Void)?
     let openProfilePolicy: (() -> Void)?
     let openOnboarding: (() -> Void)?
+    let openJoinSchool: (() -> Void)?
     let signOut: () -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -687,6 +762,10 @@ private struct SchoolAccountView: View {
                         }
                     }
                     if identity.isAuthenticated {
+                        if let openJoinSchool {
+                            Button(action: openJoinSchool) { Label("Rejoindre une école", systemImage: "envelope.open") }
+                                .accessibilityIdentifier("open-join-school")
+                        }
                         if let openOnboarding {
                             Button("Mon arrivée dans l’école", action: openOnboarding)
                                 .accessibilityIdentifier("open-my-onboarding")
