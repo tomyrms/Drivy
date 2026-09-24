@@ -54,7 +54,7 @@ beforeAll(async()=>{
     expect((await pool.query('SELECT count(*)::int n FROM drivy.school_setup')).rows[0].n).toBe(2);
     expect((await pool.query('SELECT count(*)::int n FROM drivy.school_data_policy WHERE approved_at IS NOT NULL')).rows[0].n).toBe(0);
     const tables=await pool.query("SELECT relname,relrowsecurity,relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r'");
-    expect(tables.rows.length).toBe(15);expect(tables.rows.every(row=>row.relrowsecurity && row.relforcerowsecurity)).toBe(true);
+    expect(tables.rows.length).toBe(17);expect(tables.rows.every(row=>row.relrowsecurity && row.relforcerowsecurity)).toBe(true);
   } finally {await migrationPool.end();}
   keys=await generateKeyPair('RS256');const key=await exportJWK(keys.publicKey);
   app=buildApp({pool,cursorSecret:'secret-test-32-caracteres-minimum',verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/jwks`},
@@ -207,7 +207,9 @@ describe('G1B · écritures idempotentes, droits au commit et rollback PostgreSQ
   });
   it('ADMIN requis pour lectures de configuration et toutes les mutations',async()=>{
     for(const subject of ['demo-instructor','demo-alice']) {
-      for(const path of ['setup','readiness','data-policy']) expect((await call('GET',`${school}/${path}`,undefined,undefined,subject)).statusCode).toBe(403);
+      for(const path of ['setup','readiness']) expect((await call('GET',`${school}/${path}`,undefined,undefined,subject)).statusCode).toBe(403);
+      // G1D ouvre la lecture des notices approuvées aux membres ; le brouillon reste invisible.
+      expect((await call('GET',`${school}/data-policy`,undefined,undefined,subject)).statusCode).toBe(404);
       expect((await call('PATCH',`${school}/setup`,setupBody(),1,subject)).statusCode).toBe(403);
       expect((await call('PUT',`${school}/data-policy`,policyBody(),1,subject)).statusCode).toBe(403);
     }

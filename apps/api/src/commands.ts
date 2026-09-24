@@ -34,6 +34,11 @@ function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 export interface CommandEffect<T> { data:T; action:string; resourceType:string; resourceId:string; resourceVersion?:number; changedFields:string[] }
+export interface CommandGuards<T> {
+  additionalPersons?:(db:PoolClient)=>Promise<string[]>;
+  authorize?:(db:PoolClient,actor:CommandActor,school:SchoolRow)=>Promise<void>;
+  replay?:(db:PoolClient,actor:CommandActor,data:T)=>Promise<T>;
+}
 export const commandHash = (body:unknown,expectedVersion:number|null) => createHash('sha256').update(canonical({body,expectedVersion})).digest('hex');
 export async function recordCommand<T>(db:PoolClient,actor:CommandActor,schoolId:string,commandType:string,operationId:string,hash:string,effect:CommandEffect<T>) {
   const resourceVersion=effect.resourceVersion ?? (effect.data as {version?:number}).version ?? 1;
@@ -46,7 +51,7 @@ export async function recordCommand<T>(db:PoolClient,actor:CommandActor,schoolId
 /** Un seul commit contient l'effet, sa preuve durable et son audit ; aucun appel réseau sous verrou. */
 export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId: string,
   commandType: string, body: { operationId:string }, expectedVersion: number|null,
-  work: (db:PoolClient, actor:CommandActor, school:SchoolRow)=>Promise<CommandEffect<T>>, allowedRoles:string[]=['ADMIN']): Promise<T> {
+  work: (db:PoolClient, actor:CommandActor, school:SchoolRow)=>Promise<CommandEffect<T>>, allowedRoles:string[]=['ADMIN'],guards:CommandGuards<T>={}): Promise<T> {
   const hash = commandHash(body,expectedVersion);
   const db = await pool.connect();
   try {
@@ -60,8 +65,9 @@ export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId:
     const personId = link.rows[0]?.person_id;
     if (!personId) throw new ApiError(403,'IDENTITY_NOT_LINKED','Ce compte ne dispose pas encore d’un accès Drivy.');
     await db.query("SELECT set_config('app.person_id',$1,true)",[personId]);
-    const person = await db.query("SELECT id FROM drivy.person WHERE id=$1 AND status='ACTIVE' FOR SHARE",[personId]);
-    if (!person.rowCount) throw forbidden();
+    const personIds=[...new Set([personId,...(await guards.additionalPersons?.(db) ?? [])])].sort();
+    const person = await db.query("SELECT id FROM drivy.person WHERE id=ANY($1::uuid[]) AND status='ACTIVE' ORDER BY id FOR SHARE",[personIds]);
+    if (person.rowCount!==personIds.length) throw forbidden();
     // La clé est globale pour cet auteur, même si deux commandes ciblent deux écoles.
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`${personId}:${body.operationId.toLowerCase()}`]);
     const preliminary = await db.query<{id:string;roles:string[]}>("SELECT id,roles FROM drivy.membership WHERE school_id=$1 AND person_id=$2 AND status='ACTIVE'",[schoolId,personId]);
@@ -72,6 +78,9 @@ export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId:
     if (!school) throw notFound();
     const member = await db.query<{id:string;roles:string[]}>("SELECT id,roles FROM drivy.membership WHERE school_id=$1 AND person_id=$2 AND status='ACTIVE' FOR SHARE",[schoolId,personId]);
     if (!member.rows[0] || !allowedRoles.some(role=>member.rows[0]!.roles.includes(role))) throw new ApiError(403,'SETUP_ACCESS_REQUIRED','Les droits nécessaires ne sont plus disponibles.');
+    const actor = { personId,membershipId:member.rows[0].id,roles:member.rows[0].roles };
+    await db.query("SELECT set_config('app.membership_id',$1,true)",[actor.membershipId]);
+    await guards.authorize?.(db,actor,school);
     const previous = await db.query<{school_id:string;command_type:string;payload_hash:string;response_data:T}>(
       'SELECT school_id,command_type,payload_hash,response_data FROM drivy.operation WHERE actor_person_id=$1 AND operation_id=$2',[personId,body.operationId]);
     const known = previous.rows[0];
@@ -79,11 +88,11 @@ export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId:
       if (known.school_id !== schoolId || known.command_type !== commandType || known.payload_hash !== hash) {
         throw new ApiError(409,'IDEMPOTENCY_MISMATCH','Cette opération a déjà été utilisée avec un autre contenu ou contexte.');
       }
+      const data=guards.replay?await guards.replay(db,actor,known.response_data):known.response_data;
       await db.query('COMMIT');
-      return known.response_data;
+      return data;
     }
     if (school.status === 'ARCHIVED') throw new ApiError(409,'SCHOOL_ARCHIVED','Cette école archivée ne peut plus être configurée.');
-    const actor = { personId,membershipId:member.rows[0].id,roles:member.rows[0].roles };
     const effect = await work(db,actor,school);
     await recordCommand(db,actor,schoolId,commandType,body.operationId,hash,effect);
     await db.query('COMMIT');
