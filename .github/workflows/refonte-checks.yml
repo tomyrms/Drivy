@@ -43,7 +43,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - run: npm ci --prefix apps/web
+      - run: npm ci --prefix apps/web --ignore-scripts
       - run: npm run typecheck --prefix apps/web
       - run: npm test --prefix apps/web
       - run: npm run build --prefix apps/web
