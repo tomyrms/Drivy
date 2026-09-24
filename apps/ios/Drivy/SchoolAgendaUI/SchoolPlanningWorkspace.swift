@@ -11,7 +11,8 @@ struct SchoolPlanningInstructor: Identifiable {
     let scope: SchoolCommandScope
     let client: SchoolPlanningClient
     private(set) var originalLesson: SchoolLesson?
-    private(set) var roles: [String] = [], grants: [String] = []
+    private(set) var roles: [String] = []
+    private(set) var grants: [String] = []
     private(set) var school: SchoolDetails?
     private(set) var learners: [SchoolLearner] = []
     private(set) var trainings: [SchoolTraining] = []
@@ -24,19 +25,32 @@ struct SchoolPlanningInstructor: Identifiable {
     private(set) var availability: [SchoolAvailabilityRule] = []
     private(set) var closures: [SchoolClosure] = []
     private(set) var pending: PendingSchoolCommand?
-    private(set) var isLoading = false, isBusy = false, needsReload = true
-    private(set) var errorMessage: String?, successMessage: String?
+    private(set) var isLoading = false
+    private(set) var isBusy = false
+    private(set) var needsReload = true
+    private(set) var errorMessage: String?
+    private(set) var successMessage: String?
     private(set) var pendingRequiresReview = false
     private(set) var accessRevoked = false
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
-    @ObservationIgnored private var generation = UUID(), selectionGeneration = UUID(), availabilityGeneration = UUID()
-    @ObservationIgnored private var invalidated = false, storageAvailable = false
-    var learnerID: UUID?, trainingID: UUID?, instructorID: UUID?, productID: UUID?
+    @ObservationIgnored private var generation = UUID()
+    @ObservationIgnored private var selectionGeneration = UUID()
+    @ObservationIgnored private var availabilityGeneration = UUID()
+    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private var storageAvailable = false
+    var learnerID: UUID?
+    var trainingID: UUID?
+    var instructorID: UUID?
+    var productID: UUID?
     var startsAt: Date
-    var meetingPoint = "", bufferMinutes = 10, quantity = 1
-    var termsAccepted = false, agreementConfirmed = false
+    var meetingPoint = ""
+    var bufferMinutes = 10
+    var quantity = 1
+    var termsAccepted = false
+    var agreementConfirmed = false
     var changesCommercialTerms = false
-    var reason = "", cancellationReason = ""
+    var reason = ""
+    var cancellationReason = ""
 
     init(scope: SchoolCommandScope, client: SchoolPlanningClient, date: Date = Date(), lesson: SchoolLesson? = nil,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {

@@ -129,12 +129,26 @@ private struct SchoolPlanningSetupEditor: View {
     @Bindable var model: SchoolPlanningWorkspace
     let request: PlanningSetupEditorRequest
     @Environment(\.dismiss) private var dismiss
-    @State private var label = "", reference = "", category = "", termsText = "", reason = "", price = "", duration = "", unit = ""
+    @State private var label = ""
+    @State private var reference = ""
+    @State private var category = ""
+    @State private var termsText = ""
+    @State private var reason = ""
+    @State private var price = ""
+    @State private var duration = ""
+    @State private var unit = ""
     @State private var termsID: UUID?
-    @State private var validFrom = Date(), validUntil = Date(), starts = Date(), ends = Date().addingTimeInterval(3600)
-    @State private var hasEnd = false, approved = false, enabled = false, confirmed = false
+    @State private var validFrom = Date()
+    @State private var validUntil = Date()
+    @State private var starts = Date()
+    @State private var ends = Date().addingTimeInterval(3600)
+    @State private var hasEnd = false
+    @State private var approved = false
+    @State private var enabled = false
+    @State private var confirmed = false
     @State private var days = Set<Int>()
-    @State private var localStart = "", localEnd = ""
+    @State private var localStart = ""
+    @State private var localEnd = ""
 
     private var title: String {
         switch request.kind {

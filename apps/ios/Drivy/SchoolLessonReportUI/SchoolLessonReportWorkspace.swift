@@ -23,8 +23,12 @@ import Observation
     private(set) var pendingReviewed = false
     private(set) var needsReload = true
     var goals: [SchoolLessonGoal] = []
-    var administrativeNote = "", wishText = ""
-    var workedOn = "", observationText = "", nextStep = "", correctionReason = ""
+    var administrativeNote = ""
+    var wishText = ""
+    var workedOn = ""
+    var observationText = ""
+    var nextStep = ""
+    var correctionReason = ""
     var observations: [SchoolReportObservation] = []
     @ObservationIgnored private let client: SchoolLessonReportClient
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
