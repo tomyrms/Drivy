@@ -13,3 +13,5 @@ Ce module n’est pas encore relié au collecteur local. Le journal chiffré sp�
 Vérification à ce stade : DTO, lectures et vérification de signature compilés dans l’IPA 0.7.0/build21, run36054482531. L’encodage des lots et l’ajustement du bail à la seconde entière du JWT attendent le prochain build. Les vecteurs de signature et l’interopérabilité des chunks restent à exécuter avant l’activation. Aucun appareil ni profil de capture physique n’est déclaré qualifié.
 
 Les clés privées dédiées ont été préparées le 24 septembre sur CT114 par `provision-capture-keys.mjs`, dans `api.env` root0600 avec sauvegarde privée. Aucun service n’a été redémarré par ce provisionnement et aucun profil de qualification n’a été ajouté. Le script conserve les clés existantes lors d’une reprise.
+
+`SchoolCaptureInteropTests` conserve le vecteur ECMAScript fourni par le serveur (zéro négatif et deux exposants, hash`65e7f15eec6b99ce5ca16137a146a690bfabab9017619f8c7657da69e30b1ecd`), ainsi que le refus d’une précision d’exemple négative et d’un instant incohérent avec le segment. Ces trois tests sont écrits **NOT_EXECUTED** ; leur présence n’établit pas encore l’interopérabilité Apple.
