@@ -10,7 +10,7 @@ print(candidates[0]["udid"])
 ')
 xcrun simctl boot "$device_id" || true
 xcrun simctl bootstatus "$device_id" -b
-xcodebuild test \
+xcodebuild test-without-building \
   -project apps/ios/Drivy.xcodeproj -scheme Drivy \
   -destination "platform=iOS Simulator,id=$device_id" \
   -parallel-testing-enabled NO \
@@ -34,7 +34,7 @@ print(candidates[0]["udid"])
 xcrun simctl shutdown "$device_id"
 xcrun simctl boot "$ipad_id" || true
 xcrun simctl bootstatus "$ipad_id" -b
-xcodebuild test \
+xcodebuild test-without-building \
   -project apps/ios/Drivy.xcodeproj -scheme Drivy \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -only-testing:DrivyUITests -parallel-testing-enabled NO \

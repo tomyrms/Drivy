@@ -1,6 +1,8 @@
 # Installer et essayer le premier IPA
 
-Ce build est un laboratoire privé de la refonte. Il sert à qualifier les fondations avant de connecter les données d'une école. Il n'envoie pas les trajets ou observations à un serveur.
+Ce build est un laboratoire local de la refonte. Il sert à qualifier les fondations avant de connecter les données d'une école. Il n'envoie pas les trajets ou observations à un serveur.
+
+Avant les essais de performance, lire les [budgets techniques provisoires G0](budgets-g0.md), identifier l'appareil/build et conserver les cibles retenues. Aucun résultat de cette recette ne remplace les mesures manquantes de DM07.
 
 ## Installation
 

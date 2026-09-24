@@ -49,7 +49,17 @@ jobs:
           xcodegen generate --spec apps/ios/project.yml
           xcodebuild -resolvePackageDependencies -project apps/ios/Drivy.xcodeproj -scheme Drivy
           cp apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved artifacts/ios/Package.resolved
-      - name: Tests unitaires et parcours iPhone
+      - name: Compiler l'application et les tests natifs
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild build-for-testing \
+            -project apps/ios/Drivy.xcodeproj -scheme Drivy \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath artifacts/ios/DerivedData \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee artifacts/ios/simulator-build.log
+      - name: Tests natifs et parcours iPhone puis iPad
         shell: bash
         run: bash scripts/ios/test-simulator.sh
       - name: Construire l'IPA pour iLoader
@@ -80,5 +90,10 @@ jobs:
             artifacts/ios/*.png
             artifacts/ios/*-build.log
             artifacts/ios/*-test.log
+            artifacts/ios/Package.resolved
+            artifacts/ios/xcode.txt
+            artifacts/ios/sdks.txt
+            artifacts/ios/macos.txt
+            artifacts/ios/swift.txt
           if-no-files-found: warn
           retention-days: 14
