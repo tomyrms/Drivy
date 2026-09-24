@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:g1b-data-policy:1",
+  "$defs": {
+    "SchoolDataPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "schoolId", "version", "status", "noticeText", "retentionText", "contactEmail", "approvedAt", "approvedByMembershipId"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "schoolId": {"type": "string", "format": "uuid"},
+        "version": {"type": "integer", "minimum": 1},
+        "status": {"enum": ["DRAFT", "APPROVED"]},
+        "noticeText": {"type": "string", "maxLength": 20000},
+        "retentionText": {"type": "string", "maxLength": 20000},
+        "contactEmail": {"anyOf": [{"type": "string", "format": "email", "maxLength": 320}, {"type": "null"}]},
+        "approvedAt": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]},
+        "approvedByMembershipId": {"anyOf": [{"type": "string", "format": "uuid"}, {"type": "null"}]}
+      },
+      "allOf": [{
+        "if": {"properties": {"status": {"const": "DRAFT"}}},
+        "then": {"properties": {"version": {"const": 1}, "noticeText": {"const": ""}, "retentionText": {"const": ""}, "contactEmail": {"type": "null"}, "approvedAt": {"type": "null"}, "approvedByMembershipId": {"type": "null"}}},
+        "else": {"properties": {"noticeText": {"minLength": 1}, "retentionText": {"minLength": 1}, "contactEmail": {"type": "string"}, "approvedAt": {"type": "string"}, "approvedByMembershipId": {"type": "string"}}}
+      }]
+    },
+    "SchoolDataPolicyEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "data": {"$ref": "#/$defs/SchoolDataPolicy"},
+        "requestId": {"type": "string", "maxLength": 150},
+        "serverTime": {"type": "string", "format": "date-time"}
+      }
+    },
+    "AdoptSchoolDataPolicyCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId", "noticeText", "retentionText", "contactEmail", "reviewAcknowledged"],
+      "properties": {
+        "operationId": {"type": "string", "format": "uuid"},
+        "noticeText": {"type": "string", "minLength": 1, "maxLength": 20000, "pattern": "\\S"},
+        "retentionText": {"type": "string", "minLength": 1, "maxLength": 20000, "pattern": "\\S"},
+        "contactEmail": {"type": "string", "format": "email", "maxLength": 320},
+        "reviewAcknowledged": {"const": true}
+      }
+    }
+  }
+}

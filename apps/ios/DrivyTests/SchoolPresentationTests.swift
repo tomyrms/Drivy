@@ -4,6 +4,27 @@ import XCTest
 
 @MainActor
 final class SchoolPresentationTests: XCTestCase {
+    func testNativeSchoolConfigurationKeepsDraftTextsUnapproved() async throws {
+        let api = ConfigurationAPIStub()
+        let model = SchoolConfigurationWorkspace(scope: ConfigurationFixture.scope(), api: api, outbox: ConfigurationOutboxStub())
+        await model.load()
+        XCTAssertFalse(model.canActivate)
+        XCTAssertTrue(api.commands.isEmpty)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.overrideUserInterfaceStyle = .light
+        let host = UIHostingController(rootView: SchoolConfigurationView(model: model, openSchool: {}))
+        host.overrideUserInterfaceStyle = .light
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible(); model.invalidate() }
+        try await Task.sleep(for: .seconds(1))
+        attach(window, name: "g1b-01-configuration-non-approuvee-fixtures")
+        XCTAssertTrue(api.commands.isEmpty)
+        XCTAssertFalse(model.canActivate)
+    }
+
     func testNativeSchoolViewsWithSyntheticServerResponses() async throws {
         let bundle = Bundle(for: Self.self)
         var fixtures: [String: Data] = [:]

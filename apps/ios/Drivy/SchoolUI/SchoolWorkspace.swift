@@ -97,7 +97,7 @@ final class SchoolWorkspace {
             guard result.id == selected.schoolId else { throw SchoolAPIError.invalidResponse }
             school = result
             isLoadingSchool = false
-            await searchLearners("")
+            if result.status == "ACTIVE" { await searchLearners("") }
         } catch {
             guard scope == schoolScope else { return }
             isLoadingSchool = false
@@ -106,6 +106,10 @@ final class SchoolWorkspace {
     }
 
     func leaveSchool() { clearSchool() }
+
+    func rejectCurrentAccess(requiresAuthentication: Bool) {
+        invalidateAccess(for: requiresAuthentication ? SchoolAPIError.unauthorized : SchoolAPIError.forbidden)
+    }
 
     /// Called by the search field. Purge happens at keystroke time, before the
     /// debounce delay or any transport cancellation can complete.

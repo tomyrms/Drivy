@@ -9,13 +9,24 @@ struct SchoolRootView: View {
     @State private var showsAccount = false
     @State private var showsLocalTrials = false
     @State private var opensTrialsAfterAccount = false
+    @State private var opensConfigurationAfterAccount = false
+    @State private var showsSchoolConfiguration = false
+    @State private var schoolConfiguration: SchoolConfigurationWorkspace?
     @State private var presenter: UIViewController?
 
     var body: some View {
         Group {
             if identity.isAuthenticated, let workspace {
                 if workspace.person != nil, workspace.membership != nil {
-                    SchoolBrowserView(workspace: workspace, openAccount: { showsAccount = true })
+                    if let school = workspace.school, school.status != "ACTIVE" {
+                        NavigationStack {
+                            SchoolPreparationLanding(school: school, mayConfigure: canConfigureSchool, configure: openConfiguration)
+                                .navigationTitle("Mon école")
+                                .toolbar { accountToolbar }
+                        }
+                    } else {
+                        SchoolBrowserView(workspace: workspace, openAccount: { showsAccount = true })
+                    }
                 } else {
                     NavigationStack {
                         accountLanding(workspace)
@@ -39,37 +50,78 @@ struct SchoolRootView: View {
             else { workspace?.reset() }
         }
         .onChange(of: identity.isAuthenticated) { _, authenticated in
-            if !authenticated { workspace?.reset() }
+            if !authenticated { closeConfiguration(); workspace?.reset() }
+        }
+        .onChange(of: workspace?.membership?.membershipId) { _, _ in
+            if workspace?.isLoadingAccount != true { verifyConfigurationScope() }
+        }
+        .onChange(of: workspace?.isLoadingAccount) { _, loading in
+            if loading == false { verifyConfigurationScope() }
+        }
+        .onChange(of: workspace?.isLoadingSchool) { _, loading in
+            if loading == false && workspace?.isLoadingAccount != true { verifyConfigurationScope() }
         }
         .sheet(isPresented: $showsAccount, onDismiss: {
             if opensTrialsAfterAccount {
                 opensTrialsAfterAccount = false
                 showsLocalTrials = true
             }
+            if opensConfigurationAfterAccount {
+                opensConfigurationAfterAccount = false
+                openConfiguration()
+            }
         }) {
             SchoolAccountView(identity: identity, workspace: workspace, localController: localController,
                 openLocalTrials: {
                     opensTrialsAfterAccount = true
                     showsAccount = false
-                }, signOut: signOut)
+                }, configureSchool: canConfigureSchool ? {
+                    opensConfigurationAfterAccount = true
+                    showsAccount = false
+                } : nil, signOut: signOut)
+        }
+        .sheet(isPresented: $showsSchoolConfiguration, onDismiss: {
+            schoolConfiguration?.invalidate()
+            schoolConfiguration = nil
+            if identity.isAuthenticated, workspace?.person != nil {
+                Task { await workspace?.loadAccount() }
+            }
+        }) {
+            if let schoolConfiguration {
+                SchoolConfigurationView(model: schoolConfiguration, openSchool: { showsSchoolConfiguration = false })
+                    .disabled(isCheckingSchoolAccess)
+                    .overlay {
+                        if isCheckingSchoolAccess {
+                            DrivyTheme.canvas.ignoresSafeArea().overlay { ProgressView("Vérification de vos accès…") }
+                        }
+                    }
+                    .onChange(of: schoolConfiguration.accessFailure) { _, failure in
+                        if let failure {
+                            closeConfiguration()
+                            workspace?.rejectCurrentAccess(requiresAuthentication: failure == .unauthorized)
+                        }
+                    }
+            }
         }
         .fullScreenCover(isPresented: $showsLocalTrials) {
-            QualificationRootView(controller: localController)
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    HStack {
-                        Button { showsLocalTrials = false } label: {
-                            Label("Retour à Drivy", systemImage: "chevron.left")
-                                .frame(minHeight: 44)
-                        }
-                        Spacer()
-                        Text("Essais locaux")
-                            .font(.footnote)
-                            .foregroundStyle(DrivyTheme.muted)
+            VStack(spacing: 0) {
+                HStack {
+                    Button { showsLocalTrials = false } label: {
+                        Label("Retour à Drivy", systemImage: "chevron.left")
+                            .frame(minHeight: 44)
                     }
-                    .padding(.horizontal, 16)
-                    .background(DrivyTheme.surface)
+                    Spacer()
+                    Text("Essais locaux")
+                        .font(.footnote)
+                        .foregroundStyle(DrivyTheme.muted)
                 }
-                .task { await localController.load() }
+                .padding(.horizontal, 16)
+                .background(DrivyTheme.surface)
+                QualificationRootView(controller: localController)
+                    .task { await localController.load() }
+            }
+            .tint(DrivyTheme.accent)
+            .background(DrivyTheme.surface)
         }
     }
 
@@ -192,9 +244,46 @@ struct SchoolRootView: View {
     }
 
     private func signOut() {
+        closeConfiguration()
         workspace?.reset()
         showsAccount = false
         Task { await identity.signOut() }
+    }
+
+    private var canConfigureSchool: Bool {
+        configuration != nil && workspace?.membership?.roles.contains("ADMIN") == true
+            && workspace?.school != nil && workspace?.school?.status != "ARCHIVED"
+    }
+
+    private var isCheckingSchoolAccess: Bool {
+        workspace?.isLoadingAccount == true || workspace?.isLoadingSchool == true
+    }
+
+    private func openConfiguration() {
+        guard canConfigureSchool, let configuration, let person = workspace?.person,
+              let membership = workspace?.membership else { return }
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch,
+            apiBaseURL: configuration.apiBaseURL.absoluteString)
+        schoolConfiguration = SchoolConfigurationWorkspace(scope: scope,
+            api: SchoolConfigurationClient(baseURL: configuration.apiBaseURL, tokenSource: identity))
+        showsSchoolConfiguration = true
+    }
+
+    private func verifyConfigurationScope() {
+        guard let model = schoolConfiguration else { return }
+        guard configuration != nil, let person = workspace?.person, let membership = workspace?.membership,
+              membership.roles.contains("ADMIN"), workspace?.school?.status != "ARCHIVED",
+              model.scope.personID == person.personId, model.scope.schoolID == membership.schoolId,
+              model.scope.membershipID == membership.membershipId, model.scope.accessEpoch == membership.accessEpoch else {
+            closeConfiguration()
+            return
+        }
+    }
+
+    private func closeConfiguration() {
+        schoolConfiguration?.invalidate()
+        showsSchoolConfiguration = false
     }
 }
 
@@ -203,6 +292,7 @@ private struct SchoolAccountView: View {
     let workspace: SchoolWorkspace?
     let localController: SessionController
     let openLocalTrials: () -> Void
+    let configureSchool: (() -> Void)?
     let signOut: () -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -219,8 +309,19 @@ private struct SchoolAccountView: View {
                         LabeledContent("École", value: membership.schoolName)
                         Text(SchoolPresentation.roles(membership.roles))
                             .foregroundStyle(DrivyTheme.muted)
+                        if let workspace, (workspace.person?.memberships.count ?? 0) > 1 {
+                            Button("Changer d’école") {
+                                workspace.leaveSchool()
+                                dismiss()
+                            }
+                            .accessibilityIdentifier("school-change-school")
+                        }
                     }
                     if identity.isAuthenticated {
+                        if let configureSchool {
+                            Button("Préparer mon école", action: configureSchool)
+                                .accessibilityIdentifier("open-school-configuration")
+                        }
                         Button("Actualiser mes accès") {
                             dismiss()
                             Task { await workspace?.loadAccount() }

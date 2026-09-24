@@ -62,6 +62,7 @@ jobs:
           Qualification sur appareil physique : NOT_EXECUTED.
           Laboratoire local : séances, GPS facultatif, observations, historique et bilan.
           Accès scolaire : connexion, écoles, élèves et formations si les services sont configurés.
+          Configuration ADMIN : coordonnées, textes de données et activation explicite de l'école.
           Voir schoolConnectionConfigured dans build-info.json ; sans configuration, les accès scolaires sont indisponibles.
           EOF
       - name: Télécharger l'IPA d'essai

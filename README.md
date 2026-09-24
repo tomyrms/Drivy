@@ -4,15 +4,15 @@ Refonte native iPhone/iPad centrée sur la leçon, les observations et le bilan 
 
 ## Réalisation en cours
 
-- `apps/ios` : laboratoire G0 local, avec GPS facultatif, observations et stockage SQLCipher. Premier IPA d'essai 0.1.0 compilé et vérifié sur Apple ; 12 tests Swift réussis. Les parcours UI et les essais physiques restent à qualifier.
-- `apps/api` : six lectures G1A implémentées, identité OIDC et permissions scolaires, PostgreSQL. Typecheck, build et **33 tests ont réussi localement**, dont 20 tests d'intégration avec PostgreSQL réel.
+- `apps/ios` : connexion scolaire AppAuth/PKCE, écoles, élèves et formations en lecture ; laboratoire local avec GPS facultatif, observations et stockage SQLCipher. G1A validé sur simulateurs iPhone/iPad. G1B ajoute les coordonnées, textes de données et activation explicite de l'école ; sa validation Apple est en cours.
+- `apps/api` : lectures G1A et configuration/activation G1B, identité OIDC et permissions scolaires, PostgreSQL. Typecheck, build et **57 tests réussis**, avec PostgreSQL 17.11 et 16.14 réels. G1A est déployé en HTTPS ; le déploiement G1B est en préparation.
 - `docs/implementation` : décisions, protocole de recette et preuves de la réalisation.
 
 Voir [l'état exact](docs/implementation/STATUS.md). Le produit complet comprend aussi planning, bilans partagés, cours collectifs, packs et web de gestion ; ces fonctions restent à réaliser. Le laboratoire G0 ne contient aucune donnée scolaire ni publication serveur.
 
 ## Construire et installer sur iPhone/iPad
 
-Le [premier IPA d'essai 0.1.0](https://github.com/tomyrms/Drivy/actions/runs/36013615026/artifacts/10813951113) est disponible dans l'artefact `Drivy-essai-ebdb6ca202defd49de07a41425efe1274ba97b45` : extraire le ZIP, puis importer `Drivy.ipa` dans iLoader. Le paquet inclut son empreinte SHA-256 et les informations du build. L'identité Apple reste utilisée dans iLoader sur le poste du porteur. Les artefacts GitHub sont conservés 14 jours.
+Le [build connecté 0.2.0/build 4](https://github.com/tomyrms/Drivy/actions/runs/36020145594) contient l'artefact `Drivy-essai-30999d682f40fde1eb4e16ea35e038c491525297` : extraire le ZIP, puis importer `Drivy.ipa` dans iLoader. Le paquet inclut son empreinte SHA-256 et les informations du build. Les identifiants de connexion Drivy sont fournis dans un fichier privé distinct ; aucune clé d'identité n'est incluse dans l'IPA. L'identité Apple reste utilisée dans iLoader sur le poste du porteur. Les artefacts GitHub sont conservés 14 jours.
 
 Le workflow **IPA d'essai · iLoader** compile et vérifie le paquet indépendamment des tests sur simulateurs. Sa réussite ne qualifie donc pas tous les parcours natifs. Le workflow **Refonte · iOS** exécute séparément les tests iPhone/iPad et ne produit son artefact `Drivy-unsigned-<commit>` qu'après leur réussite.
 
@@ -53,4 +53,6 @@ npm.cmd run migrate --workspace @drivy/api
 
 Pour démarrer l'API, fournir `DATABASE_URL`, `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL` et `CURSOR_SECRET` au processus, puis exécuter `npm.cmd run dev:api`. `HOST`/`PORT` valent par défaut `127.0.0.1`/`3001`. Aucun fichier `.env` n'est chargé automatiquement. Le [guide API](apps/api/README.md) décrit chaque variable, les rôles de base et le seed explicite `ALLOW_FIXTURES=true`.
 
-Le fournisseur OIDC doit être configuré et les identités reliées à `(issuer, subject)` avant un parcours authentifié depuis un client. Aucun compte de démonstration n'est créé au démarrage. Le seed utilise exclusivement des identités synthétiques, sans provisionner un fournisseur ou émettre des jetons. L'API G1A est en lecture : elle ne crée pas encore les écoles, invitations, leçons ou bilans.
+Le fournisseur OIDC doit être configuré et les identités reliées à `(issuer, subject)` avant un parcours authentifié depuis un client. Aucun compte de démonstration n'est créé au démarrage. Le seed utilise exclusivement des identités synthétiques, sans provisionner un fournisseur ou émettre des jetons. Le [provisionnement opérateur](docs/implementation/deploiement-refonte.md) crée le premier compte et l'école DRAFT. [G1B](docs/implementation/g1b-school-setup.md) permet ensuite à l'ADMIN de configurer et activer l'école ; invitations, leçons et bilans restent à réaliser.
+
+Le [banc OIDC local](docs/implementation/dev-identity.md) utilise un vrai Keycloak et des connexions navigateur PKCE ; ses 29 contrôles passent. Le [déploiement isolé](docs/implementation/deploiement-refonte.md) et sa [preuve HTTPS](docs/implementation/controle-oidc-deploye.md) documentent l'hébergement réellement raccordé. Les anciennes données et services restent distincts de la refonte.

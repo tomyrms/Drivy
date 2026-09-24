@@ -80,7 +80,7 @@ struct SchoolBrowserView: View {
             }
             ForEach(workspace.learners) { learner in
                 NavigationLink(value: learner.id) {
-                    SchoolLearnerRow(learner: learner)
+                    SchoolLearnerRow(learner: learner, isSelected: workspace.selectedLearnerID == learner.id)
                 }
                 .accessibilityIdentifier("school-learner-\(learner.id.uuidString)")
             }
@@ -143,21 +143,24 @@ struct SchoolChooserView: View {
 
 private struct SchoolLearnerRow: View {
     let learner: SchoolLearner
+    let isSelected: Bool
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Text(SchoolPresentation.initials(learner.displayName))
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isSelected ? DrivyTheme.onAccent : DrivyTheme.text)
                 .frame(width: 44, height: 44)
-                .background(DrivyTheme.surfaceMuted, in: Circle())
+                .background(isSelected ? DrivyTheme.onAccent.opacity(0.16) : DrivyTheme.surfaceMuted, in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 5) {
                 Text(learner.displayName).font(.headline)
+                    .foregroundStyle(isSelected ? DrivyTheme.onAccent : DrivyTheme.text)
                 if let email = learner.contactEmail, !email.isEmpty {
-                    Text(email).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    Text(email).font(.subheadline).foregroundStyle(isSelected ? DrivyTheme.onAccent : DrivyTheme.muted)
                 }
                 if learner.archivedAt != nil {
                     Label("Dossier archivé", systemImage: "archivebox")
-                        .font(.caption).foregroundStyle(DrivyTheme.muted)
+                        .font(.caption).foregroundStyle(isSelected ? DrivyTheme.onAccent : DrivyTheme.muted)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)

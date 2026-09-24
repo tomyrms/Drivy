@@ -169,7 +169,7 @@ info = {
     "ipaSHA256": ipa_hash, "binaries": binary_info,
     "packageResolvedSHA256": hashlib.sha256((stage / "Package.resolved").read_bytes()).hexdigest(),
     "distribution": "Signature locale avec iLoader",
-    "scope": "G0 : séances locales ; G1A : accès scolaire en lecture si configuré",
+    "scope": "G0 : séances locales ; G1A : accès scolaire ; G1B : configuration et activation de l'école si services configurés",
     "schoolConnectionConfigured": all(plist.get(name, '') for name in ('DrivyAPIBaseURL', 'DrivyOIDCIssuer', 'DrivyOIDCClientID')),
     "physicalQualification": "NOT_EXECUTED"
 }

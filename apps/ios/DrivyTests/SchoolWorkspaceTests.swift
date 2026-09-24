@@ -4,6 +4,18 @@ import Testing
 
 @MainActor
 struct SchoolWorkspaceTests {
+    @Test func aDraftSchoolDoesNotRequestActiveSchoolDossiers() async {
+        let api = WorkspaceAPIStub()
+        api.schoolHandler = { WorkspaceFixture.school($0, status: "DRAFT") }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        #expect(workspace.school?.status == "DRAFT")
+        #expect(workspace.membership != nil)
+        #expect(api.learnerQueries.isEmpty)
+        #expect(workspace.learners.isEmpty)
+        #expect(workspace.accountError == nil)
+    }
+
     @Test func switchingSchoolPurgesImmediatelyAndIgnoresItsLateResponse() async throws {
         let api = WorkspaceAPIStub(memberships: [WorkspaceFixture.firstMembership, WorkspaceFixture.secondMembership])
         let workspace = SchoolWorkspace(api: api)
@@ -261,9 +273,9 @@ private enum WorkspaceFixture {
     static let secondMembership = SchoolMembership(membershipId: UUID(), schoolId: secondSchool,
         schoolName: "École test B", roles: ["INSTRUCTOR"], grants: [], accessEpoch: 1)
 
-    static func school(_ id: UUID) -> SchoolDetails {
+    static func school(_ id: UUID, status: String = "ACTIVE") -> SchoolDetails {
         SchoolDetails(id: id, schoolId: id, version: 1, name: "École de test", timeZone: "Europe/Zurich",
-            status: "ACTIVE", contactEmail: "ecole@example.test", contactPhone: nil, logoAssetId: nil,
+            status: status, contactEmail: "ecole@example.test", contactPhone: nil, logoAssetId: nil,
             modules: .init(gpsEnabled: true, packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false), configurationVersion: 1)
     }
     static func learner(id: UUID = learnerID, school: UUID = firstSchool, name: String = "Élève de test", version: Int = 1) -> SchoolLearner {
