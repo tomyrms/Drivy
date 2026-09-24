@@ -36,7 +36,8 @@ function assessmentBlockers(config:CaptureConfig|undefined,input:AssessmentInput
  if(p?.requirePreciseLocation&&!input.preciseLocation)add('PRECISE_LOCATION_REQUIRED','Ce profil exige une localisation précise.','preciseLocation');
  if(input.sampleAgeSeconds===null||(p&&input.sampleAgeSeconds>p.maxSampleAgeSeconds))add('LOCATION_SAMPLE_REQUIRED','Une mesure assez récente est requise.','sampleAgeSeconds');
  if(input.horizontalAccuracyMeters===null||(p&&input.horizontalAccuracyMeters>p.maxHorizontalAccuracyMeters))add('LOCATION_ACCURACY_REQUIRED','La précision mesurée est insuffisante pour ce profil.','horizontalAccuracyMeters');
- if(p&&input.freeBytes<p.minimumFreeBytes)add('LOCAL_STORAGE_REQUIRED','L’espace libre requis manque sur cet appareil.','freeBytes');
+ // Apple E174.1 forbids exporting disk capacity or derived results. iOS checks it locally.
+ if(p&&input.platform==='ANDROID'&&input.freeBytes!==null&&input.freeBytes<p.minimumFreeBytes)add('LOCAL_STORAGE_REQUIRED','L’espace libre requis manque sur cet appareil.','freeBytes');
  if(!input.networkAvailable)add('NETWORK_REQUIRED','Le départ d’une capture exige une connexion.','networkAvailable');
  return {profile:p,blockers};
 }

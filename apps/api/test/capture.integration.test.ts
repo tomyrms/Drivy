@@ -30,7 +30,7 @@ async function call(method:'GET'|'POST'|'PUT',route:string,body?:any,version?:nu
 }
 try{
  const pub=(await call('GET','/v1/capture-keys')).json().data.keys[0];assert.equal(pub.d,undefined);
- const device=randomUUID(),aBody={operationId:randomUUID(),platform:'IOS',deviceClass:'PHONE',modelCode:'TEST',osVersion:'TEST',appBuild:'TEST',permission:'BACKGROUND',preciseLocation:true,sampleAgeSeconds:0,horizontalAccuracyMeters:5,freeBytes:1000,networkAvailable:true};
+ const device=randomUUID(),aBody={operationId:randomUUID(),platform:'IOS',deviceClass:'PHONE',modelCode:'TEST',osVersion:'TEST',appBuild:'TEST',permission:'BACKGROUND',preciseLocation:true,sampleAgeSeconds:0,horizontalAccuracyMeters:5,freeBytes:null,networkAvailable:true};
  let a=await call('POST',`/devices/${device}/assessments`,aBody);assert.equal(a.statusCode,201,JSON.stringify(a.json()));assert.equal(a.json().data.status,'QUALIFIED');
  const unknown=await call('POST',`/devices/${device}/assessments`,{...aBody,operationId:randomUUID(),modelCode:'UNKNOWN'});assert.equal(unknown.json().data.status,'NEEDS_CHECK');
  assert.equal((await call('GET',`/devices/${device}/assessments/${a.json().data.id}`)).json().code,'DEVICE_ASSESSMENT_SUPERSEDED');

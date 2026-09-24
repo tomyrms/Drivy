@@ -41,6 +41,14 @@ AP159 retrait, AP161–164 observations et partage GPS AP54 ne sont pas impléme
 
 ## Autorité et configuration privée
 
+### Adaptation Apple du diagnostic disque
+
+L'implémentation AP190 accepte désormais `freeBytes: null` sur iOS et exige cette absence de mesure ; Android conserve un entier positif ou nul. Il s'agit d'une adaptation explicite au contrat documentaire conservé : le motif Apple E174.1 permet le contrôle local de capacité pour éviter une écriture impossible, mais interdit d'envoyer la mesure ou une information dérivée hors appareil. Aucun booléen dérivé ne la remplace dans le diagnostic. [Documentation Apple des API à motif déclaré](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype).
+
+Le serveur ne prétend donc pas qualifier l'espace libre d'un iPhone. Le départ et la poursuite du collecteur iOS exigent un contrôle local avec effet visible, réalisé par l'adaptateur natif. Le seuil `minimumFreeBytes` du profil serveur reste vérifié pour Android ; la politique de stockage iOS fait partie de sa qualification physique distincte. Aucun profil réel n'est ajouté. Cette adaptation ne transmet ni capacité réelle, ni valeur fictive, ni résultat du contrôle local.
+
+Contrôles exécutés pour cette adaptation : compilation TypeScript et quatre cas de validation de plateforme (iOS null accepté, iOS numérique refusé, Android null refusé, Android numérique accepté). Le scénario PostgreSQL existant emploie maintenant iOS null ; il n'a pas été relancé pour cette seule adaptation à la rédaction de cette note.
+
 `main.ts` appelle `readCaptureConfig()` puis passe `capture` à `buildApp`. Configuration facultative : son absence ne bloque pas l'API générale, donne un diagnostic `NEEDS_CHECK` et refuse AP154 avec `CAPTURE_SERVICE_NOT_CONFIGURED`.
 
 | Variable | Valeur / usage |
