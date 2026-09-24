@@ -92,19 +92,21 @@ final class SchoolCaptureTransferCoordinator {
             try check(request)
             _ = try await reconcileCapture(captureID, request: request)
             let deviceID = await store.installationID()
-            let queue = try await store.pending(scope: scope, deviceID: deviceID)
-            try check(request)
-            let eligible = queue.filter {
-                $0.mutation.scope == scope && $0.mutation.targetID == captureID
-                    && ($0.mutation.kind == .stopCapture || $0.mutation.kind == .uploadChunk)
-            }.sorted {
-                if $0.mutation.kind != $1.mutation.kind { return $0.mutation.kind == .stopCapture }
-                if $0.mutation.createdAt != $1.mutation.createdAt { return $0.mutation.createdAt < $1.mutation.createdAt }
-                return $0.id.uuidString < $1.id.uuidString
-            }
             var confirmed = 0
-            for queued in eligible {
+            // Un arrêt peut être scellé pendant l'upload précédent. Il doit passer
+            // devant les lots déjà présents dès la prochaine émission.
+            while confirmed < 2001 {
+                let queue = try await store.pending(scope: scope, deviceID: deviceID)
                 try check(request)
+                let eligible = queue.filter {
+                    $0.mutation.scope == scope && $0.mutation.targetID == captureID
+                        && ($0.mutation.kind == .stopCapture || $0.mutation.kind == .uploadChunk)
+                }.sorted {
+                    if $0.mutation.kind != $1.mutation.kind { return $0.mutation.kind == .stopCapture }
+                    if $0.mutation.createdAt != $1.mutation.createdAt { return $0.mutation.createdAt < $1.mutation.createdAt }
+                    return $0.id.uuidString < $1.id.uuidString
+                }
+                guard let queued = eligible.first else { break }
                 _ = try await sendPersisted(operationID: queued.id, request: request)
                 confirmed += 1
             }
@@ -151,8 +153,8 @@ final class SchoolCaptureTransferCoordinator {
         let startedAt = ContinuousClock.now
         let result = try await client.send(command)
         let receivedAt = ContinuousClock.now
-        try check(request)
         if case .authorization(let authorization) = result, authorization.capture.captureState == .authorized {
+            try check(request)
             guard let keys, let body = try? JSONDecoder().decode(SchoolStartCaptureBody.self, from: command.body) else {
                 throw SchoolCaptureFailure.invalidResponse
             }
@@ -166,6 +168,9 @@ final class SchoolCaptureTransferCoordinator {
         }
         if case .authorization(let authorization) = result { stopCollection(authorization.capture.id) }
         if case .capture(let projection) = result, projection.captureState != .authorized { stopCollection(projection.id) }
+        // Le résultat d'une commande déjà envoyée reste lié à sa portée originale.
+        // Même si la vue a disparu, son accusé doit être durable avant de refuser le
+        // retour UI ; aucune donnée n'est réaffectée à un autre compte/epoch.
         try await store.acknowledge(id: command.id, scope: scope, result: result)
         try check(request)
         return .confirmed(result)
