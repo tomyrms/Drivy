@@ -1,5 +1,7 @@
 import SwiftUI
 
+enum SchoolHomeTab: Hashable { case session, agenda, learners, school }
+
 /// The map is an entry point, including while a school is being prepared.
 /// School data always remains the projection authorized by SchoolWorkspace.
 struct SchoolHomeView: View {
@@ -17,34 +19,31 @@ struct SchoolHomeView: View {
     var agendaClient: SchoolAgendaClient? = nil
     var openMembers: (() -> Void)? = nil
     var openAddLearner: (() -> Void)? = nil
-    var requestedLearnerID: UUID? = nil
     var trainingClient: SchoolTrainingClient? = nil
-    @State private var selectedTab: HomeTab = .session
+    @Binding var selectedTab: SchoolHomeTab
     @State private var choosesSchool = false
     @State private var dossierPlanningModel: SchoolPlanningWorkspace?
     @State private var trainingCreationModel: SchoolTrainingCreationWorkspace?
-
-    private enum HomeTab: Hashable { case session, agenda, learners, school }
 
     var body: some View {
         TabView(selection: $selectedTab) {
             sessionTab
                 .tabItem { Label("Séance", systemImage: "map") }
-                .tag(HomeTab.session)
+                .tag(SchoolHomeTab.session)
             if let agendaClient {
                 NavigationStack {
                     SchoolAgendaView(client: agendaClient, workspace: workspace)
                         .toolbar { contextToolbar }
                 }
                     .tabItem { Label("Agenda", systemImage: "calendar") }
-                    .tag(HomeTab.agenda)
+                    .tag(SchoolHomeTab.agenda)
             }
             learnersTab
                 .tabItem { Label(workspace.isLearnerOnly ? "Mon dossier" : "Élèves", systemImage: "person.2") }
-                .tag(HomeTab.learners)
+                .tag(SchoolHomeTab.learners)
             schoolTab
                 .tabItem { Label("École", systemImage: "building.2") }
-                .tag(HomeTab.school)
+                .tag(SchoolHomeTab.school)
         }
         .tint(DrivyTheme.accent)
         .sheet(isPresented: $choosesSchool) { schoolChooser }
@@ -67,9 +66,6 @@ struct SchoolHomeView: View {
             trainingCreationModel?.invalidate(); trainingCreationModel = nil
         }
         .task { await localController.load() }
-        .task(id: requestedLearnerID) {
-            if let requestedLearnerID, workspace.selectedLearnerID == requestedLearnerID { selectedTab = .learners }
-        }
     }
 
     private var sessionTab: some View {

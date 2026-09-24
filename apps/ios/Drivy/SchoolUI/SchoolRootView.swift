@@ -1,6 +1,19 @@
 import SwiftUI
 import UIKit
 
+/// La donnée qui ouvre la feuille est aussi celle que reçoit son contenu.
+/// Une intention ne peut donc pas présenter une feuille sans son modèle initial.
+private struct SchoolWorkspaceSheet<Model: AnyObject>: Identifiable {
+    let id = UUID()
+    let model: Model
+}
+
+private struct SchoolMemberSheet: Identifiable {
+    let id = UUID()
+    let model: SchoolMemberWorkspace
+    let mode: SchoolMemberEntryMode
+}
+
 struct SchoolRootView: View {
     let configuration: AppConfiguration?
     @Bindable var identity: IdentitySession
@@ -10,44 +23,71 @@ struct SchoolRootView: View {
     @State private var showsLocalTrials = false
     @State private var opensTrialsAfterAccount = false
     @State private var opensConfigurationAfterAccount = false
-    @State private var showsSchoolConfiguration = false
+    @State private var configurationRoute: SchoolWorkspaceSheet<SchoolConfigurationWorkspace>?
     @State private var schoolConfiguration: SchoolConfigurationWorkspace?
     @State private var opensInvitationsAfterAccount = false
-    @State private var showsInvitations = false
+    @State private var invitationsRoute: SchoolWorkspaceSheet<SchoolInvitationWorkspace>?
     @State private var invitations: SchoolInvitationWorkspace?
     @State private var presenter: UIViewController?
     @State private var profileWorkspace: SchoolProfileWorkspace?
-    @State private var showsProfile = false
+    @State private var profileRoute: SchoolWorkspaceSheet<SchoolProfileWorkspace>?
     @State private var opensProfilePolicyAfterAccount = false
     @State private var opensOnboardingAfterAccount = false
     @State private var opensProfilePolicyAfterConfiguration = false
     @State private var catalogWorkspace: SchoolCatalogWorkspace?
-    @State private var showsCatalog = false
+    @State private var catalogRoute: SchoolWorkspaceSheet<SchoolCatalogWorkspace>?
     @State private var memberWorkspace: SchoolMemberWorkspace?
-    @State private var showsMembers = false
+    @State private var membersRoute: SchoolMemberSheet?
     @State private var memberEntryMode: SchoolMemberEntryMode = .team
     @State private var opensInvitationsAfterMembers = false
     @State private var memberLearnerToOpen: SchoolLearner?
-    @State private var requestedLearnerID: UUID?
     @State private var joinWorkspace: SchoolJoinWorkspace?
-    @State private var showsJoinSchool = false
+    @State private var joinRoute: SchoolWorkspaceSheet<SchoolJoinWorkspace>?
     @State private var opensJoinAfterAccount = false
     @State private var joinMembershipToOpen: SchoolMembership?
     @State private var pendingJoinLink: String?
+    @State private var selectedHomeTab: SchoolHomeTab = .session
+
+    // Les workspaces restent disponibles jusqu’à onDismiss pour la réconciliation.
+    // La présentation, elle, est exclusivement pilotée par un item complet.
+    private var showsSchoolConfiguration: Bool {
+        get { configurationRoute != nil }
+        nonmutating set { configurationRoute = newValue ? schoolConfiguration.map { SchoolWorkspaceSheet(model: $0) } : nil }
+    }
+    private var showsInvitations: Bool {
+        get { invitationsRoute != nil }
+        nonmutating set { invitationsRoute = newValue ? invitations.map { SchoolWorkspaceSheet(model: $0) } : nil }
+    }
+    private var showsProfile: Bool {
+        get { profileRoute != nil }
+        nonmutating set { profileRoute = newValue ? profileWorkspace.map { SchoolWorkspaceSheet(model: $0) } : nil }
+    }
+    private var showsCatalog: Bool {
+        get { catalogRoute != nil }
+        nonmutating set { catalogRoute = newValue ? catalogWorkspace.map { SchoolWorkspaceSheet(model: $0) } : nil }
+    }
+    private var showsMembers: Bool {
+        get { membersRoute != nil }
+        nonmutating set { membersRoute = newValue ? memberWorkspace.map { SchoolMemberSheet(model: $0, mode: memberEntryMode) } : nil }
+    }
+    private var showsJoinSchool: Bool {
+        get { joinRoute != nil }
+        nonmutating set { joinRoute = newValue ? joinWorkspace.map { SchoolWorkspaceSheet(model: $0) } : nil }
+    }
 
     var body: some View {
         joinPresentation
-            .sheet(isPresented: $showsInvitations, onDismiss: invitationsDismissed) {
-                invitationsSheet
+            .sheet(item: $invitationsRoute, onDismiss: invitationsDismissed) { route in
+                invitationsSheet(route.model)
             }
-            .sheet(isPresented: $showsSchoolConfiguration, onDismiss: configurationDismissed) {
-                configurationSheet
+            .sheet(item: $configurationRoute, onDismiss: configurationDismissed) { route in
+                configurationSheet(route.model)
             }
             .fullScreenCover(isPresented: $showsLocalTrials) {
                 localTrialsCover
             }
-            .sheet(isPresented: $showsProfile, onDismiss: profileDismissed) {
-                profileSheet
+            .sheet(item: $profileRoute, onDismiss: profileDismissed) { route in
+                profileSheet(route.model)
             }
     }
 
@@ -73,8 +113,8 @@ struct SchoolRootView: View {
                 openProfile: profileAction, openProfilePolicy: homeProfilePolicyAction,
                 openOnboarding: homeOnboardingAction, openCatalog: homeCatalogAction,
                 openTrainingAdministration: trainingAdministrationAction, agendaClient: homeAgendaClient,
-                openMembers: membersAction, openAddLearner: addLearnerAction, requestedLearnerID: requestedLearnerID,
-                trainingClient: homeTrainingClient)
+                openMembers: membersAction, openAddLearner: addLearnerAction,
+                trainingClient: homeTrainingClient, selectedTab: $selectedHomeTab)
         } else {
             NavigationStack {
                 accountLanding(workspace)
@@ -96,7 +136,7 @@ struct SchoolRootView: View {
         .onChange(of: identity.isAuthenticated) { _, authenticated in
             if !authenticated {
                 closeJoin(); closeConfiguration(); closeInvitations(); closeProfile(); closeCatalog(); closeMembers()
-                requestedLearnerID = nil; workspace?.reset()
+                selectedHomeTab = .session; workspace?.reset()
             } else if pendingJoinLink != nil { openJoin() }
         }
         .onChange(of: workspace?.membership?.membershipId) { _, _ in
@@ -121,15 +161,14 @@ struct SchoolRootView: View {
     }
 
     private var catalogPresentation: some View {
-        accountPresentation.sheet(isPresented: $showsCatalog, onDismiss: catalogDismissed) {
-            if let catalogWorkspace {
-                SchoolCatalogView(model: catalogWorkspace)
-                    .disabled(isCheckingSchoolAccess)
-                    .overlay { accessCheckOverlay }
-                    .onChange(of: catalogWorkspace.accessFailure) { _, failure in
-                        if failure != nil { closeCatalog(); Task { await workspace?.loadAccount() } }
-                    }
-            }
+        accountPresentation.sheet(item: $catalogRoute, onDismiss: catalogDismissed) { route in
+            let catalogWorkspace = route.model
+            SchoolCatalogView(model: catalogWorkspace)
+                .disabled(isCheckingSchoolAccess)
+                .overlay { accessCheckOverlay }
+                .onChange(of: catalogWorkspace.accessFailure) { _, failure in
+                    if failure != nil { closeCatalog(); Task { await workspace?.loadAccount() } }
+                }
         }
     }
 
@@ -144,12 +183,10 @@ struct SchoolRootView: View {
     }
 
     private var joinPresentation: some View {
-        memberPresentation.sheet(isPresented: $showsJoinSchool, onDismiss: joinDismissed) {
-            if let joinWorkspace {
-                SchoolJoinView(model: joinWorkspace, openSchool: { membership in
-                    joinMembershipToOpen = membership; showsJoinSchool = false
-                })
-            }
+        memberPresentation.sheet(item: $joinRoute, onDismiss: joinDismissed) { route in
+            SchoolJoinView(model: route.model, openSchool: { membership in
+                joinMembershipToOpen = membership; showsJoinSchool = false
+            })
         }
     }
     private var accountJoinAction: (() -> Void)? {
@@ -193,21 +230,20 @@ struct SchoolRootView: View {
     }
 
     private var memberPresentation: some View {
-        catalogPresentation.sheet(isPresented: $showsMembers, onDismiss: membersDismissed) {
-            if let memberWorkspace {
-                SchoolMemberView(model: memberWorkspace, identity: identity, mode: memberEntryMode,
-                    openInvitations: {
-                        opensInvitationsAfterMembers = true
-                        showsMembers = false
-                    }, openLearner: { learner in
-                        memberLearnerToOpen = learner
-                        showsMembers = false
-                    })
-                    .disabled(isCheckingSchoolAccess)
-                    .overlay { accessCheckOverlay }
-                    .onChange(of: memberWorkspace.accessRevoked) { _, revoked in if revoked { closeMembers() } }
-                    .onChange(of: memberWorkspace.ownAccessChanged) { _, changed in if changed { showsMembers = false } }
-            }
+        catalogPresentation.sheet(item: $membersRoute, onDismiss: membersDismissed) { route in
+            let memberWorkspace = route.model
+            SchoolMemberView(model: memberWorkspace, identity: identity, mode: route.mode,
+                openInvitations: {
+                    opensInvitationsAfterMembers = true
+                    showsMembers = false
+                }, openLearner: { learner in
+                    memberLearnerToOpen = learner
+                    showsMembers = false
+                })
+                .disabled(isCheckingSchoolAccess)
+                .overlay { accessCheckOverlay }
+                .onChange(of: memberWorkspace.accessRevoked) { _, revoked in if revoked { closeMembers() } }
+                .onChange(of: memberWorkspace.ownAccessChanged) { _, changed in if changed { showsMembers = false } }
         }
     }
     private var membersAction: (() -> Void)? {
@@ -232,15 +268,16 @@ struct SchoolRootView: View {
         let invite = opensInvitationsAfterMembers
         let personID = memberWorkspace?.scope.personID
         let schoolID = memberWorkspace?.scope.schoolID
+        let accessChanged = memberWorkspace?.ownAccessChanged == true || memberWorkspace?.accessRevoked == true
         memberLearnerToOpen = nil; opensInvitationsAfterMembers = false
         memberWorkspace?.invalidate(); memberWorkspace = nil
-        guard identity.isAuthenticated else { return }
+        guard identity.isAuthenticated, accessChanged || learner != nil || invite else { return }
         Task {
-            await workspace?.loadAccount()
+            if accessChanged { await workspace?.loadAccount() }
             guard workspace?.person?.personId == personID, workspace?.membership?.schoolId == schoolID else { return }
             if let learner, learner.schoolId == schoolID {
                 workspace?.selectLearner(learner.id)
-                requestedLearnerID = learner.id
+                selectedHomeTab = .learners
                 await workspace?.loadSelectedLearner()
             }
             if invite { openInvitations() }
@@ -273,35 +310,29 @@ struct SchoolRootView: View {
         if identity.isAuthenticated, workspace?.selectedLearnerID != nil { Task { await workspace?.loadSelectedLearner() } }
     }
 
-    @ViewBuilder
-    private var invitationsSheet: some View {
-        if let invitations {
-            SchoolInvitationsView(model: invitations)
-                .disabled(isCheckingSchoolAccess)
-                .overlay { accessCheckOverlay }
-                .onChange(of: invitations.accessFailure) { _, failure in
-                    if let failure {
-                        closeInvitations()
-                        workspace?.rejectCurrentAccess(requiresAuthentication: failure == .unauthorized)
-                    }
+    private func invitationsSheet(_ invitations: SchoolInvitationWorkspace) -> some View {
+        SchoolInvitationsView(model: invitations)
+            .disabled(isCheckingSchoolAccess)
+            .overlay { accessCheckOverlay }
+            .onChange(of: invitations.accessFailure) { _, failure in
+                if let failure {
+                    closeInvitations()
+                    workspace?.rejectCurrentAccess(requiresAuthentication: failure == .unauthorized)
                 }
-        }
+            }
     }
 
-    @ViewBuilder
-    private var configurationSheet: some View {
-        if let schoolConfiguration {
-            SchoolConfigurationView(model: schoolConfiguration, openSchool: { showsSchoolConfiguration = false },
-                openProfilePolicy: openPolicyFromConfiguration)
-                .disabled(isCheckingSchoolAccess)
-                .overlay { accessCheckOverlay }
-                .onChange(of: schoolConfiguration.accessFailure) { _, failure in
-                    if let failure {
-                        closeConfiguration()
-                        workspace?.rejectCurrentAccess(requiresAuthentication: failure == .unauthorized)
-                    }
+    private func configurationSheet(_ schoolConfiguration: SchoolConfigurationWorkspace) -> some View {
+        SchoolConfigurationView(model: schoolConfiguration, openSchool: { showsSchoolConfiguration = false },
+            openProfilePolicy: openPolicyFromConfiguration)
+            .disabled(isCheckingSchoolAccess)
+            .overlay { accessCheckOverlay }
+            .onChange(of: schoolConfiguration.accessFailure) { _, failure in
+                if let failure {
+                    closeConfiguration()
+                    workspace?.rejectCurrentAccess(requiresAuthentication: failure == .unauthorized)
                 }
-        }
+            }
     }
 
     @ViewBuilder
@@ -311,18 +342,16 @@ struct SchoolRootView: View {
         }
     }
 
-    @ViewBuilder private var profileSheet: some View {
-        if let profileWorkspace {
-            profileContent(profileWorkspace)
-                .disabled(isCheckingSchoolAccess)
-                .overlay { accessCheckOverlay }
-                .onChange(of: profileWorkspace.accessFailure) { _, failure in
-                    if failure != nil {
-                        closeProfile()
-                        Task { await workspace?.loadAccount() }
-                    }
+    private func profileSheet(_ profileWorkspace: SchoolProfileWorkspace) -> some View {
+        profileContent(profileWorkspace)
+            .disabled(isCheckingSchoolAccess)
+            .overlay { accessCheckOverlay }
+            .onChange(of: profileWorkspace.accessFailure) { _, failure in
+                if failure != nil {
+                    closeProfile()
+                    Task { await workspace?.loadAccount() }
                 }
-        }
+            }
     }
     @ViewBuilder private func profileContent(_ model: SchoolProfileWorkspace) -> some View {
         if model.isPolicyManagement { SchoolProfilePolicyView(model: model) }
@@ -484,15 +513,25 @@ struct SchoolRootView: View {
     }
 
     private func configurationDismissed() {
+        let scope = schoolConfiguration?.scope
+        let updatedSchool = schoolConfiguration?.school
+        let schoolChanged = updatedSchool != nil && updatedSchool != workspace?.school
+        let opensPolicy = opensProfilePolicyAfterConfiguration
+        opensProfilePolicyAfterConfiguration = false
         schoolConfiguration?.invalidate()
         schoolConfiguration = nil
-        if opensProfilePolicyAfterConfiguration {
-            opensProfilePolicyAfterConfiguration = false
+        guard identity.isAuthenticated, let scope,
+              workspace?.person?.personId == scope.personID,
+              let membership = workspace?.membership,
+              membership.membershipId == scope.membershipID,
+              membership.accessEpoch == scope.accessEpoch else { return }
+        if schoolChanged {
+            Task {
+                await workspace?.selectSchool(membership)
+                if opensPolicy { openProfilePolicy() }
+            }
+        } else if opensPolicy {
             openProfilePolicy()
-            return
-        }
-        if identity.isAuthenticated, workspace?.person != nil {
-            Task { await workspace?.loadAccount() }
         }
     }
 
