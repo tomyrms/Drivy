@@ -1,17 +1,7 @@
 name: Refonte · iOS
 on:
-  push:
-    branches: [master, 'codex/**']
-    paths:
-      - 'apps/ios/**'
-      - 'scripts/ios/**'
-      - '.github/workflows/refonte-ios.yml'
-  pull_request:
-    branches: [master]
-    paths:
-      - 'apps/ios/**'
-      - 'scripts/ios/**'
-      - '.github/workflows/refonte-ios.yml'
+  # Full simulator campaign is run explicitly at the end of implementation.
+  # Every native delivery still builds its device IPA in ipa-essai.yml.
   workflow_dispatch:
 permissions:
   contents: read

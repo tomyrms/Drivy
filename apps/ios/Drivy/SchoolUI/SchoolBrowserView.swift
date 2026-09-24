@@ -5,28 +5,14 @@ struct SchoolBrowserView: View {
     let openAccount: () -> Void
     var openInvitations: (() -> Void)? = nil
     var openProfile: ((SchoolLearner) -> Void)? = nil
+    var openSchool: (() -> Void)? = nil
     @State private var choosesSchool = false
 
     var body: some View {
         NavigationSplitView {
-            VStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(workspace.school?.name ?? workspace.membership?.schoolName ?? "École")
-                        .font(.headline)
-                    if let membership = workspace.membership {
-                        Text(SchoolPresentation.roles(membership.roles))
-                            .font(.subheadline)
-                            .foregroundStyle(DrivyTheme.muted)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                learnerList
-            }
+            searchableMaster
             .background(DrivyTheme.canvas)
             .navigationTitle(workspace.isLearnerOnly ? "Mon dossier" : "Élèves")
-            .searchable(text: Binding(get: { workspace.searchText }, set: { workspace.setSearchText($0) }), prompt: "Rechercher un nom")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { choosesSchool = true } label: {
@@ -66,6 +52,32 @@ struct SchoolBrowserView: View {
         }
     }
 
+    @ViewBuilder private var searchableMaster: some View {
+        if workspace.school?.status == "ACTIVE", !workspace.isLearnerOnly {
+            masterColumn.searchable(text: Binding(get: { workspace.searchText }, set: { workspace.setSearchText($0) }),
+                placement: .navigationBarDrawer(displayMode: .always), prompt: "Rechercher un élève")
+        } else {
+            masterColumn
+        }
+    }
+
+    private var masterColumn: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(workspace.school?.name ?? workspace.membership?.schoolName ?? "École")
+                    .font(.subheadline.weight(.semibold))
+                if let membership = workspace.membership {
+                    Text(SchoolPresentation.roles(membership.roles))
+                        .font(.caption).foregroundStyle(DrivyTheme.muted)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            learnerList
+        }
+    }
+
     private var learnerList: some View {
         List(selection: Binding(get: { workspace.selectedLearnerID }, set: { workspace.selectLearner($0) })) {
             if workspace.isLoadingSchool || workspace.isSearching {
@@ -79,7 +91,20 @@ struct SchoolBrowserView: View {
             } else if let error = workspace.learnersError {
                 SchoolErrorNotice(message: error, retry: { Task { await workspace.searchLearners(workspace.searchText) } })
             }
-            if !workspace.isSearching && !workspace.isLoadingSchool && workspace.school != nil && workspace.learners.isEmpty && workspace.learnersError == nil {
+            if let school = workspace.school, school.status != "ACTIVE" {
+                VStack(alignment: .leading, spacing: 14) {
+                    Label(school.status == "ARCHIVED" ? "École archivée" : "L’école se prépare", systemImage: "building.2")
+                        .font(.headline)
+                    Text(school.status == "ARCHIVED"
+                        ? "Cette école n’ouvre plus de nouvelles opérations. La carte reste disponible depuis Séance."
+                        : "Les dossiers seront accessibles lorsque l’école sera active. Vous pouvez déjà ouvrir la carte depuis Séance.")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    if let openSchool {
+                        Button("Ouvrir l’espace École", action: openSchool).frame(minHeight: 44)
+                    }
+                }
+                .padding(.vertical, 16)
+            } else if !workspace.isSearching && !workspace.isLoadingSchool && workspace.school != nil && workspace.learners.isEmpty && workspace.learnersError == nil {
                 ContentUnavailableView(
                     workspace.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Aucun dossier accessible" : "Aucun résultat",
                     systemImage: "person.crop.rectangle.stack",
@@ -91,6 +116,8 @@ struct SchoolBrowserView: View {
                     SchoolLearnerRow(learner: learner, isSelected: workspace.selectedLearnerID == learner.id)
                 }
                 .accessibilityIdentifier("school-learner-\(learner.id.uuidString)")
+                .listRowInsets(EdgeInsets(top: 8, leading: 24, bottom: 8, trailing: 20))
+                .listRowBackground(workspace.selectedLearnerID == learner.id ? DrivyTheme.accentSoft : DrivyTheme.surface)
             }
             if workspace.nextLearnersCursor != nil {
                 Button { Task { await workspace.loadMoreLearners() } } label: {
@@ -104,7 +131,10 @@ struct SchoolBrowserView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .refreshable { await workspace.searchLearners(workspace.searchText) }
+        .refreshable {
+            guard workspace.school?.status == "ACTIVE" else { return }
+            await workspace.searchLearners(workspace.searchText)
+        }
     }
 }
 
@@ -156,19 +186,22 @@ private struct SchoolLearnerRow: View {
         HStack(alignment: .top, spacing: 12) {
             Text(SchoolPresentation.initials(learner.displayName))
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isSelected ? DrivyTheme.onAccent : DrivyTheme.text)
+                .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.text)
                 .frame(width: 44, height: 44)
-                .background(isSelected ? DrivyTheme.onAccent.opacity(0.16) : DrivyTheme.surfaceMuted, in: Circle())
+                .background(DrivyTheme.surfaceMuted, in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 5) {
                 Text(learner.displayName).font(.headline)
-                    .foregroundStyle(isSelected ? DrivyTheme.onAccent : DrivyTheme.text)
+                    .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.text)
                 if let email = learner.contactEmail, !email.isEmpty {
-                    Text(email).font(.subheadline).foregroundStyle(isSelected ? DrivyTheme.onAccent : DrivyTheme.muted)
+                    Text(email).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 }
                 if learner.archivedAt != nil {
                     Label("Dossier archivé", systemImage: "archivebox")
-                        .font(.caption).foregroundStyle(isSelected ? DrivyTheme.onAccent : DrivyTheme.muted)
+                        .font(.caption).foregroundStyle(DrivyTheme.muted)
+                } else if learner.profileReadiness == "MINIMAL" || learner.profileReadiness == "ACTION_REQUIRED" {
+                    Text(learner.profileReadiness == "MINIMAL" ? "Profil à compléter" : "Informations à vérifier")
+                        .font(.caption).foregroundStyle(DrivyTheme.muted)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -185,18 +218,19 @@ private struct SchoolOverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 if let school = workspace.school {
-                    Image(systemName: "building.2")
-                        .font(.largeTitle).foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
-                    Text(school.name).font(.largeTitle.weight(.bold))
-                    Text("Choisissez un dossier pour consulter ses informations et ses formations.")
+                    Image(systemName: "person.crop.rectangle.stack")
+                        .font(.system(size: 40, weight: .light))
                         .foregroundStyle(DrivyTheme.muted)
-                    DrivyPanel {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Contacter l’école").font(.headline)
-                            SchoolInfoRow(title: "E-mail", value: school.contactEmail)
-                            if let phone = school.contactPhone { SchoolInfoRow(title: "Téléphone", value: phone) }
-                        }
-                    }
+                        .padding(24)
+                        .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 28))
+                        .accessibilityHidden(true)
+                    Text(workspace.isLearnerOnly ? "Votre dossier scolaire" : "Les dossiers de votre école")
+                        .font(.largeTitle.weight(.bold))
+                    Text(school.name).font(.headline).foregroundStyle(DrivyTheme.muted)
+                    Text(workspace.isLearnerOnly
+                        ? "Ouvrez votre dossier pour retrouver votre profil et vos formations."
+                        : "Sélectionnez un élève dans la liste pour retrouver son profil, ses coordonnées et ses formations.")
+                        .font(.title3).foregroundStyle(DrivyTheme.muted)
                 } else if workspace.isLoadingSchool {
                     ProgressView("Ouverture de l’école…")
                 } else if let error = workspace.schoolError {
@@ -210,7 +244,7 @@ private struct SchoolOverviewView: View {
             .frame(maxWidth: .infinity)
         }
         .background(DrivyTheme.canvas)
-        .navigationTitle("Mon école")
+        .navigationTitle("Dossiers")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -228,30 +262,45 @@ private struct SchoolLearnerDetailView: View {
                 } else if let error = workspace.learnerError {
                     SchoolErrorNotice(message: error, retry: { Task { await workspace.loadSelectedLearner() } })
                 } else if let learner = workspace.learner {
-                    Text(learner.displayName).font(.largeTitle.weight(.bold))
-                    if learner.archivedAt != nil {
-                        Label("Dossier archivé", systemImage: "archivebox").foregroundStyle(DrivyTheme.muted)
-                    }
+                    learnerHeading(learner)
                     if let openProfile {
                         Button { openProfile(learner) } label: {
-                            Label("Compléter le profil scolaire", systemImage: "person.text.rectangle")
+                            HStack(spacing: 16) {
+                                Image(systemName: "person.text.rectangle")
+                                    .font(.title2).foregroundStyle(DrivyTheme.accent).frame(width: 32)
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text("Profil scolaire").font(.headline).foregroundStyle(DrivyTheme.text)
+                                    Text(learner.profileReadiness == "MINIMAL" ? "Compléter les informations utiles" : "Consulter et mettre à jour")
+                                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                }
+                                .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 8)
+                                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                            }
+                            .padding(20)
+                            .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
+                            .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(DrivySecondaryButtonStyle())
+                        .buttonStyle(.plain)
                         .accessibilityIdentifier("open-learner-profile")
                     }
+                    trainings
                     if learner.contactEmail != nil || learner.contactPhone != nil {
-                        DrivyPanel {
-                            VStack(alignment: .leading, spacing: 16) {
-                                Text("Coordonnées").font(.headline)
-                                if let email = learner.contactEmail { SchoolInfoRow(title: "E-mail", value: email) }
-                                if let phone = learner.contactPhone { SchoolInfoRow(title: "Téléphone", value: phone) }
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Coordonnées").font(.title3.weight(.semibold))
+                            DrivyPanel {
+                                VStack(alignment: .leading, spacing: 20) {
+                                    if let email = learner.contactEmail { SchoolInfoRow(title: "E-mail", value: email) }
+                                    if learner.contactEmail != nil && learner.contactPhone != nil { Divider() }
+                                    if let phone = learner.contactPhone { SchoolInfoRow(title: "Téléphone", value: phone) }
+                                }
                             }
                         }
                     }
-                    trainings
                 }
             }
-            .padding(20)
+            .padding(24)
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
         }
@@ -262,6 +311,33 @@ private struct SchoolLearnerDetailView: View {
         .sheet(isPresented: $showsTraining, onDismiss: { workspace.selectTraining(nil) }) {
             SchoolTrainingDetailView(workspace: workspace)
         }
+    }
+
+    private func learnerHeading(_ learner: SchoolLearner) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top, spacing: 16) {
+                Text(SchoolPresentation.initials(learner.displayName))
+                    .font(.title3.weight(.semibold))
+                    .frame(width: 60, height: 60)
+                    .background(DrivyTheme.surfaceMuted, in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(learner.displayName).font(.largeTitle.weight(.bold))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(workspace.school?.name ?? "Dossier scolaire")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                }
+            }
+            if learner.archivedAt != nil {
+                Label("Dossier archivé", systemImage: "archivebox")
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            } else if learner.profileReadiness == "MINIMAL" {
+                Label("Profil à compléter", systemImage: "person.crop.circle.badge.exclamationmark")
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 4)
     }
 
     private var trainings: some View {
@@ -282,7 +358,9 @@ private struct SchoolLearnerDetailView: View {
                         showsTraining = true
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: "steeringwheel").foregroundStyle(DrivyTheme.accent)
+                            Image(systemName: "steeringwheel")
+                                .font(.title2).foregroundStyle(DrivyTheme.muted)
+                                .frame(width: 40, height: 44)
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("Catégorie \(training.categoryCode)").font(.headline)
                                 Text(SchoolPresentation.trainingStatus(training.status))

@@ -143,7 +143,7 @@ struct QualificationRootView: View {
     }
 }
 
-private struct StartSessionView: View {
+struct StartSessionView: View {
     @Bindable var controller: SessionController
     @Environment(\.dismiss) private var dismiss
 
@@ -157,7 +157,7 @@ private struct StartSessionView: View {
                         .accessibilityHidden(true)
                     Text("Le trajet est facultatif.")
                         .font(.title.weight(.bold))
-                    Text("Avec le GPS, Drivy conserve votre position pendant cet essai. Sans GPS, vous pouvez noter vos observations et rédiger votre bilan.")
+                    Text("Avec le GPS, Drivy conserve le parcours de cette séance sur votre appareil. Sans GPS, vous gardez les observations et le bilan.")
                         .foregroundStyle(DrivyTheme.muted)
                     VStack(spacing: 12) {
                         Button { start(useGPS: true) } label: {
@@ -190,7 +190,7 @@ private struct StartSessionView: View {
                 .frame(maxWidth: .infinity)
             }
             .background(DrivyTheme.canvas)
-            .navigationTitle("Nouvelle séance")
+            .navigationTitle("Commencer un trajet")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

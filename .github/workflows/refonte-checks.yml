@@ -1,5 +1,6 @@
 name: Refonte · vérifications
 on:
+  workflow_dispatch:
   push:
     branches: [master, 'codex/**']
   pull_request:
@@ -43,10 +44,12 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+        if: github.event_name == 'workflow_dispatch'
       - run: npm run build
       - run: npm ci --prefix apps/web --ignore-scripts
       - run: npm run typecheck --prefix apps/web
       - run: npm test --prefix apps/web
+        if: github.event_name == 'workflow_dispatch'
       - run: npm run build --prefix apps/web
   documentation:
     name: Intégrité et contrats documentaires

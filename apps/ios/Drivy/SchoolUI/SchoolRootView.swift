@@ -53,17 +53,12 @@ struct SchoolRootView: View {
 
     @ViewBuilder
     private func authenticatedContent(_ workspace: SchoolWorkspace) -> some View {
-        if workspace.person != nil, workspace.membership != nil {
-            if let school = workspace.school, school.status != "ACTIVE" {
-                NavigationStack {
-                    SchoolPreparationLanding(school: school, mayConfigure: canConfigureSchool, configure: openConfiguration)
-                        .navigationTitle("Mon école")
-                        .toolbar { accountToolbar }
-                }
-            } else {
-                SchoolBrowserView(workspace: workspace, openAccount: showAccount,
-                    openInvitations: invitationsAction, openProfile: profileAction)
-            }
+        if workspace.person != nil {
+            SchoolHomeView(workspace: workspace, localController: localController,
+                openAccount: { showAccount() }, signOut: { signOut() },
+                configureSchool: homeConfigurationAction, openInvitations: invitationsAction,
+                openProfile: profileAction, openProfilePolicy: homeProfilePolicyAction,
+                openOnboarding: homeOnboardingAction)
         } else {
             NavigationStack {
                 accountLanding(workspace)
@@ -239,6 +234,21 @@ struct SchoolRootView: View {
         guard canManageInvitations else { return nil }
         let action: () -> Void = { openInvitations() }
         return action
+    }
+
+    private var homeConfigurationAction: (() -> Void)? {
+        guard canConfigureSchool else { return nil }
+        return { openConfiguration() }
+    }
+
+    private var homeProfilePolicyAction: (() -> Void)? {
+        guard canConfigureSchool else { return nil }
+        return { openProfilePolicy() }
+    }
+
+    private var homeOnboardingAction: (() -> Void)? {
+        guard configuration != nil, workspace?.membership != nil else { return nil }
+        return { openOnboarding() }
     }
 
     private var accountConfigurationAction: (() -> Void)? {

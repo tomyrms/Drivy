@@ -25,7 +25,7 @@ struct LiveSessionView: View {
             }
         }
         .background(DrivyTheme.canvas)
-        .navigationTitle("Séance d’essai")
+        .navigationTitle("Trajet en cours")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -34,7 +34,7 @@ struct LiveSessionView: View {
                     .accessibilityHint("Revenir à l’accueil sans arrêter la séance")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Arrêter", role: .destructive) { confirmsStop = true }
+                Button("Terminer", role: .destructive) { confirmsStop = true }
                     .frame(minHeight: 48)
                     .disabled(!controller.isCapturing)
                     .accessibilityIdentifier("session-stop")
@@ -78,40 +78,42 @@ struct LiveSessionView: View {
                 }
                 .padding(.bottom, 20)
             }
-        } else if sizeClass == .regular {
-            HStack(spacing: 0) {
-                VStack(spacing: 0) {
+        } else if session.usesGPS {
+            RouteMapView(session: session, selectedObservationID: $selectedObservationID)
+                .overlay(alignment: .topLeading) {
                     sessionHeader(session)
-                    ScrollView {
-                        observationsPreview(session)
-                            .padding(20)
+                        .frame(maxWidth: sizeClass == .regular ? 360 : .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .shadow(color: .black.opacity(0.08), radius: 12, y: 3)
+                        .padding(.leading, 16)
+                        .padding(.trailing, 76)
+                        .padding(.top, 16)
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    HStack(spacing: 0) {
+                        sessionControls(session).frame(maxWidth: 480)
+                        if sizeClass == .regular { Spacer(minLength: 0) }
                     }
-                    sessionControls(session)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
                 }
-                .frame(width: 350)
-                if session.usesGPS {
-                    RouteMapView(session: session, selectedObservationID: $selectedObservationID)
-                } else {
-                    withoutGPSBackdrop
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
         } else {
-            VStack(spacing: 0) {
-                sessionHeader(session)
-                if session.usesGPS {
-                    RouteMapView(session: session, selectedObservationID: $selectedObservationID)
-                        .safeAreaInset(edge: .bottom, spacing: 0) { sessionControls(session) }
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 24) {
-                            withoutGPSBackdrop
-                            observationsPreview(session)
-                        }
-                        .padding(20)
-                    }
-                    .safeAreaInset(edge: .bottom, spacing: 0) { sessionControls(session) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    sessionHeader(session)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                    withoutGPSBackdrop
+                    observationsPreview(session)
                 }
+                .padding(20)
+                .frame(maxWidth: 680)
+                .frame(maxWidth: .infinity)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                sessionControls(session)
+                    .frame(maxWidth: 480)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
             }
         }
     }
@@ -190,7 +192,10 @@ struct LiveSessionView: View {
     }
 
     private func sessionControls(_ session: DrivingSession) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let actions = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 16))
+        return VStack(alignment: .leading, spacing: 12) {
             if let error = controller.errorMessage {
                 InlineErrorView(message: error, retry: controller.isCapturing ? nil : {
                     Task { await controller.load() }
@@ -203,30 +208,42 @@ struct LiveSessionView: View {
                 .buttonStyle(.plain)
                 .accessibilityHint("Ouvrir la liste pour lire la note complète")
             }
-            Button { listedSession = session } label: {
-                HStack {
-                    Label("Observations (\(session.observations.count))", systemImage: "list.bullet")
-                    Spacer()
-                    Image(systemName: "chevron.right")
+            actions {
+                Button { listedSession = session } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Observations").font(.subheadline.weight(.semibold))
+                        Text("\(session.observations.count) enregistrées")
+                            .font(.caption).foregroundStyle(DrivyTheme.muted)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .font(.subheadline.weight(.medium))
-                .frame(minHeight: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("observation-list")
-            Button {
-                if let context = controller.beginObservation() {
-                    observationRequest = ObservationRequest(context: context, startedAt: session.startedAt)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("observation-list")
+                Button {
+                    if let context = controller.beginObservation() {
+                        observationRequest = ObservationRequest(context: context, startedAt: session.startedAt)
+                    }
+                } label: {
+                    Label("Signaler", systemImage: "plus")
+                        .font(.body.weight(.semibold))
+                        .padding(.horizontal, 20)
+                        .frame(minHeight: 60)
+                        .foregroundStyle(controller.isCapturing ? DrivyTheme.onAccent : DrivyTheme.muted)
+                        .background(controller.isCapturing ? DrivyTheme.accent : DrivyTheme.surfaceMuted, in: Capsule())
                 }
-            } label: {
-                Label("Signaler", systemImage: "plus")
+                .buttonStyle(.plain)
+                .disabled(controller.isBusy || !controller.isCapturing)
+                .accessibilityIdentifier("report-observation")
             }
-            .buttonStyle(DrivyPrimaryButtonStyle())
-            .disabled(controller.isBusy || !controller.isCapturing)
-            .accessibilityIdentifier("report-observation")
-            StorageCaption(message: controller.storageStatus)
+            Text("Sur cet appareil · aucun partage automatique")
+                .font(.caption)
+                .foregroundStyle(DrivyTheme.muted)
+                .frame(maxWidth: .infinity)
         }
         .padding(16)
-        .background(DrivyTheme.surface)
+        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 24))
+        .overlay { RoundedRectangle(cornerRadius: 24).stroke(DrivyTheme.border, lineWidth: 0.5) }
+        .shadow(color: .black.opacity(0.08), radius: 16, y: 4)
     }
 }
