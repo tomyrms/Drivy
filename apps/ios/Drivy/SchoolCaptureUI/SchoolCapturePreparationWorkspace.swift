@@ -69,7 +69,6 @@ import Observation
     func suspend() {
         generation = UUID()
         closeDiagnostic()
-        contextIsCurrent = false
         isBusy = false
         isLoading = false
     }
