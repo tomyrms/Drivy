@@ -49,7 +49,7 @@ final class SchoolConfigurationClient: SchoolConfigurationAPI {
     func operation(schoolID: UUID, id: UUID) async throws -> SchoolOperationReceipt {
         let result: SchoolOperationReceipt = try await request(schoolID: schoolID, suffix: "operations", recordID: id)
         guard result.operationId == id, result.resourceVersion > 0,
-              ["Invitation", "ProfileFieldPolicy", "AdministrativeProfile", "OnboardingProgress", "Offering", "Curriculum", "SchoolPolicy", "Training", "Assignment", "Member"].contains(result.resourceType) || result.resourceId == schoolID,
+              ["Invitation", "ProfileFieldPolicy", "AdministrativeProfile", "OnboardingProgress", "Offering", "Curriculum", "SchoolPolicy", "Training", "Assignment", "Member", "Lesson", "CommercialTermsVersion", "ServiceProductVersion", "AvailabilityRule", "Closure", "Preparation", "Wish", "ReportDraft", "ReportRevision"].contains(result.resourceType) || result.resourceId == schoolID,
               Self.timestamp(result.committedAt) else { throw SchoolConfigurationFailure.invalidResponse }
         return result
     }

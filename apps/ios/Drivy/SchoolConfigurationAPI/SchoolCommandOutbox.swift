@@ -19,6 +19,23 @@ enum SchoolCommandKind: String, Codable, Sendable {
     case createInvitation, resendInvitation, revokeInvitation
     case createProfilePolicy, publishProfilePolicy, updateProfile, saveOnboarding, completeOnboarding
     case createOffering, createCurriculum, createCatalogPolicy, createTraining, createAssignment, updateMember
+    case createLesson, moveLesson, cancelLesson, createCommercialTerms, createServiceProduct
+    case createAvailabilityRule, updateAvailabilityRule, createClosure, removeAvailabilityRule, removeClosure
+    case savePreparation, saveWish, completeLesson, saveReportDraft, publishReportDraft
+
+    var isPlanning: Bool {
+        switch self {
+        case .createLesson, .moveLesson, .cancelLesson, .createCommercialTerms, .createServiceProduct,
+             .createAvailabilityRule, .updateAvailabilityRule, .createClosure, .removeAvailabilityRule, .removeClosure: true
+        default: false
+        }
+    }
+    var isReport: Bool {
+        switch self {
+        case .savePreparation, .saveWish, .completeLesson, .saveReportDraft, .publishReportDraft: true
+        default: false
+        }
+    }
 
     var isCatalog: Bool {
         switch self {
@@ -34,7 +51,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         }
     }
 
-    var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog }
+    var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog && !isPlanning && !isReport }
 
     var isInvitation: Bool {
         switch self {
@@ -63,6 +80,21 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .createTraining: "CREATE_TRAINING"
         case .createAssignment: "CREATE_ASSIGNMENT"
         case .updateMember: "UPDATE_MEMBER"
+        case .createLesson: "CREATE_LESSON"
+        case .moveLesson: "MOVE_LESSON"
+        case .cancelLesson: "CANCEL_LESSON"
+        case .createCommercialTerms: "CREATE_COMMERCIAL_TERMS"
+        case .createServiceProduct: "CREATE_SERVICE_PRODUCT"
+        case .createAvailabilityRule: "CREATE_AVAILABILITY_RULE"
+        case .updateAvailabilityRule: "UPDATE_AVAILABILITY_RULE"
+        case .createClosure: "CREATE_CLOSURE"
+        case .removeAvailabilityRule: "REMOVE_AVAILABILITY_RULE"
+        case .removeClosure: "REMOVE_CLOSURE"
+        case .savePreparation: "SAVE_PREPARATION"
+        case .saveWish: "SAVE_WISH"
+        case .completeLesson: "COMPLETE_LESSON"
+        case .saveReportDraft: "SAVE_REPORT_DRAFT"
+        case .publishReportDraft: "PUBLISH_REPORT_DRAFT"
         }
     }
 
@@ -81,6 +113,15 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .createTraining: "Training"
         case .createAssignment: "Assignment"
         case .updateMember: "Member"
+        case .createLesson, .moveLesson, .cancelLesson, .completeLesson: "Lesson"
+        case .createCommercialTerms: "CommercialTermsVersion"
+        case .createServiceProduct: "ServiceProductVersion"
+        case .createAvailabilityRule, .updateAvailabilityRule, .removeAvailabilityRule: "AvailabilityRule"
+        case .createClosure, .removeClosure: "Closure"
+        case .savePreparation: "Preparation"
+        case .saveWish: "Wish"
+        case .saveReportDraft: "ReportDraft"
+        case .publishReportDraft: "ReportRevision"
         }
     }
 }
@@ -107,8 +148,18 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
     }
 
     var hasValidTarget: Bool {
-        if !kind.isProfile && !kind.isCatalog && (routeResourceID != nil || expectedVersion != nil) { return false }
+        if !kind.isProfile && !kind.isCatalog && !kind.isPlanning && !kind.isReport && (routeResourceID != nil || expectedVersion != nil) { return false }
         switch kind {
+        case .createCommercialTerms, .createServiceProduct, .createAvailabilityRule, .createClosure:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && expectedVersion == nil
+        case .createLesson:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
+        case .moveLesson, .cancelLesson, .updateAvailabilityRule, .removeAvailabilityRule, .removeClosure, .completeLesson, .saveReportDraft:
+            return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
+        case .savePreparation, .saveWish:
+            return resourceVersion > 0 && resourceID != nil && routeResourceID != nil && expectedVersion == nil
+        case .publishReportDraft:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && (expectedVersion ?? 0) > 0
         case .createOffering, .createCurriculum, .createCatalogPolicy:
             return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && expectedVersion == nil
         case .createTraining, .createAssignment:

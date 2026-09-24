@@ -10,6 +10,11 @@ struct SchoolAgendaView: View {
     @State private var requestID = UUID()
     @State private var loadedScope: String?
     @State private var selectedLesson: SchoolLesson?
+    @State private var planningModel: SchoolPlanningWorkspace?
+    @State private var setupModel: SchoolPlanningWorkspace?
+
+    private var identityScope: String { "\(workspace.person?.id.uuidString ?? ""):\(workspace.membership?.id.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)" }
+    private var mayPlan: Bool { workspace.membership?.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) == true && workspace.school?.status == "ACTIVE" }
 
     private var calendar: Calendar {
         var result = Calendar(identifier: .gregorian)
@@ -46,6 +51,11 @@ struct SchoolAgendaView: View {
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     }
                 }
+                if mayPlan {
+                    Button { planningModel = newPlanningModel() } label: {
+                        Label("Planifier une leçon", systemImage: "plus").frame(maxWidth: .infinity, minHeight: 8)
+                    }.buttonStyle(DrivyPrimaryButtonStyle()).accessibilityIdentifier("agenda-plan-lesson")
+                }
                 if workspace.membership == nil {
                     ContentUnavailableView("Choisissez votre école", systemImage: "building.2", description: Text("Votre agenda apparaît après la sélection d’une école."))
                 } else if isLoading {
@@ -74,11 +84,21 @@ struct SchoolAgendaView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Aujourd’hui") { selectedDate = Date() }.font(.subheadline.weight(.medium))
             }
+            if mayPlan {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { setupModel = newPlanningModel() } label: { Label("Réglages du planning", systemImage: "slider.horizontal.3") }
+                }
+            }
         }
         .task(id: scopeKey) { selectedLesson = nil; await loadWeek() }
         .refreshable { await loadWeek() }
         .sheet(item: $selectedLesson) { lesson in
-            SchoolLessonDetailView(client: client, schoolID: lesson.schoolId, lessonID: lesson.id, learnerName: learnerName(lesson))
+            SchoolLessonDetailView(client: client, workspace: workspace, schoolID: lesson.schoolId, lessonID: lesson.id, learnerName: learnerName(lesson))
+        }
+        .sheet(item: $planningModel, onDismiss: { Task { await loadWeek() } }) { model in SchoolPlanningView(model: model) }
+        .sheet(item: $setupModel, onDismiss: { Task { await loadWeek() } }) { model in SchoolPlanningSetupView(model: model) }
+        .onChange(of: identityScope) { _, _ in
+            planningModel?.invalidate(); setupModel?.invalidate(); planningModel = nil; setupModel = nil; selectedLesson = nil
         }
     }
 
@@ -146,6 +166,12 @@ struct SchoolAgendaView: View {
     }
     private func hasLessons(on day: Date) -> Bool { lessons.contains { $0.startsAt.map { calendar.isDate($0, inSameDayAs: day) } ?? false } }
     private func moveWeek(_ offset: Int) { if let date = calendar.date(byAdding: .weekOfYear, value: offset, to: selectedDate) { selectedDate = date } }
+    private func newPlanningModel() -> SchoolPlanningWorkspace? {
+        guard let person = workspace.person, let membership = workspace.membership, mayPlan else { return nil }
+        let day = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: selectedDate) ?? selectedDate
+        let proposed = max(day, Date().addingTimeInterval(3600))
+        return SchoolPlanningWorkspace(scope: client.scope(person: person, membership: membership), client: client.planningClient, date: proposed)
+    }
     @MainActor private func loadWeek() async {
         let id = UUID(); requestID = id; lessons = []; error = nil; loadedScope = nil
         guard let schoolID = workspace.membership?.schoolId, let end = calendar.date(byAdding: .day, value: 7, to: weekStart) else { isLoading = false; return }
@@ -172,12 +198,19 @@ struct SchoolAgendaView: View {
 
 private struct SchoolLessonDetailView: View {
     let client: SchoolAgendaClient
+    @Bindable var workspace: SchoolWorkspace
     let schoolID: UUID
     let lessonID: UUID
     let learnerName: String
     @Environment(\.dismiss) private var dismiss
     @State private var lesson: SchoolLesson?
     @State private var error: String?
+    @State private var planningModel: SchoolPlanningWorkspace?
+    @State private var cancelsLesson = false
+    @State private var showsReport = false
+
+    private var identityScope: String { "\(workspace.person?.id.uuidString ?? ""):\(workspace.membership?.id.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)" }
+    private var mayManage: Bool { workspace.membership?.schoolId == schoolID && workspace.membership?.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) == true }
 
     var body: some View {
         NavigationStack {
@@ -200,6 +233,7 @@ private struct SchoolLessonDetailView: View {
                             Label("Le permis d’élève reste à vérifier avant la conduite.", systemImage: "exclamationmark.shield")
                                 .font(.subheadline).foregroundStyle(DrivyTheme.warning)
                         }
+                        lessonActions(lesson)
                     } else if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
                     else { ProgressView("Ouverture de la leçon…").frame(maxWidth: .infinity, minHeight: 180) }
                 }
@@ -209,7 +243,39 @@ private struct SchoolLessonDetailView: View {
             .navigationTitle("La leçon").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
             .task { await load() }
+            .sheet(item: $planningModel, onDismiss: { Task { await load() } }) { model in
+                SchoolPlanningView(model: model, cancelling: cancelsLesson)
+            }
+            .sheet(isPresented: $showsReport, onDismiss: { Task { await load() } }) {
+                NavigationStack {
+                    SchoolLessonReportView(client: client.reportClient, schoolWorkspace: workspace, lessonID: lessonID, learnerName: learnerName)
+                }.tint(DrivyTheme.accent)
+            }
+            .onChange(of: identityScope) { _, _ in
+                planningModel?.invalidate(); planningModel = nil; showsReport = false; lesson = nil; dismiss()
+            }
         }.tint(DrivyTheme.accent)
+    }
+    private func lessonActions(_ lesson: SchoolLesson) -> some View {
+        VStack(spacing: 12) {
+            if workspace.membership?.roles.contains(where: { ["INSTRUCTOR", "LEARNER"].contains($0) }) == true {
+                Button { showsReport = true } label: {
+                    Label(lesson.status == "COMPLETED" ? "Bilans et suivi" : "Préparer et suivre la leçon", systemImage: "text.book.closed")
+                }.buttonStyle(DrivyPrimaryButtonStyle())
+            }
+            if mayManage && lesson.status == "PLANNED" {
+                if let start = lesson.startsAt, start > Date() {
+                    Button { openPlanning(lesson, cancelling: false) } label: { Label("Déplacer la leçon", systemImage: "calendar.badge.clock") }
+                        .buttonStyle(DrivySecondaryButtonStyle())
+                }
+                Button("Annuler la leçon", role: .destructive) { openPlanning(lesson, cancelling: true) }.frame(minHeight: 48)
+            }
+        }
+    }
+    private func openPlanning(_ lesson: SchoolLesson, cancelling: Bool) {
+        guard let person = workspace.person, let membership = workspace.membership, mayManage else { return }
+        cancelsLesson = cancelling
+        planningModel = SchoolPlanningWorkspace(scope: client.scope(person: person, membership: membership), client: client.planningClient, lesson: lesson)
     }
     private func interval(_ lesson: SchoolLesson) -> String {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = TimeZone(identifier: lesson.timeZone); formatter.dateFormat = "HH:mm"
@@ -218,7 +284,12 @@ private struct SchoolLessonDetailView: View {
     }
     @MainActor private func load() async {
         lesson = nil; error = nil
-        do { lesson = try await client.lesson(schoolID: schoolID, id: lessonID) }
+        let scope = identityScope
+        do {
+            let loaded = try await client.lesson(schoolID: schoolID, id: lessonID)
+            guard identityScope == scope, !Task.isCancelled else { return }
+            lesson = loaded
+        }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? "La leçon n’a pas pu être chargée." }
     }
 }

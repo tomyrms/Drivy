@@ -17,6 +17,7 @@ struct SchoolHomeView: View {
     var agendaClient: SchoolAgendaClient? = nil
     @State private var selectedTab: HomeTab = .session
     @State private var choosesSchool = false
+    @State private var dossierPlanningModel: SchoolPlanningWorkspace?
 
     private enum HomeTab: Hashable { case session, agenda, learners, school }
 
@@ -42,6 +43,13 @@ struct SchoolHomeView: View {
         }
         .tint(DrivyTheme.accent)
         .sheet(isPresented: $choosesSchool) { schoolChooser }
+        .sheet(item: $dossierPlanningModel) { model in SchoolPlanningView(model: model) }
+        .onChange(of: workspace.membership?.membershipId) { _, _ in
+            dossierPlanningModel?.invalidate(); dossierPlanningModel = nil
+        }
+        .onChange(of: workspace.membership?.accessEpoch) { _, _ in
+            dossierPlanningModel?.invalidate(); dossierPlanningModel = nil
+        }
         .task { await localController.load() }
     }
 
@@ -60,7 +68,8 @@ struct SchoolHomeView: View {
         if workspace.membership != nil {
             SchoolBrowserView(workspace: workspace, openAccount: openAccount,
                 openInvitations: openInvitations, openProfile: openProfile,
-                openSchool: { selectedTab = .school }, openTrainingAdministration: openTrainingAdministration)
+                openSchool: { selectedTab = .school }, openTrainingAdministration: openTrainingAdministration,
+                openPlanning: planningAction)
         } else {
             NavigationStack {
                 schoolSelection
@@ -78,6 +87,16 @@ struct SchoolHomeView: View {
             }
             .navigationTitle("École")
             .toolbar { contextToolbar }
+        }
+    }
+    private var planningAction: ((SchoolLearner) -> Void)? {
+        guard let agendaClient, let person = workspace.person, let membership = workspace.membership,
+              workspace.school?.status == "ACTIVE", membership.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) else { return nil }
+        return { learner in
+            let model = SchoolPlanningWorkspace(scope: agendaClient.scope(person: person, membership: membership),
+                client: agendaClient.planningClient, date: Date().addingTimeInterval(3600))
+            model.learnerID = learner.id
+            dossierPlanningModel = model
         }
     }
 

@@ -59,6 +59,12 @@ final class SchoolAgendaClient {
     private let baseURL: URL
     private let tokenSource: any AccessTokenSource
     private let transport: any SchoolHTTPTransport
+    var planningClient: SchoolPlanningClient { SchoolPlanningClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
+    var reportClient: SchoolLessonReportClient { SchoolLessonReportClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
+    func scope(person: SchoolPerson, membership: SchoolMembership) -> SchoolCommandScope {
+        SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: baseURL.absoluteString)
+    }
 
     init(baseURL: URL, tokenSource: any AccessTokenSource, transport: any SchoolHTTPTransport = SchoolURLSessionTransport()) {
         self.baseURL = baseURL; self.tokenSource = tokenSource; self.transport = transport
