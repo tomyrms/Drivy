@@ -479,6 +479,10 @@ actor SQLCipherSchoolCaptureStore {
             case .uploadChunk, .stopCapture, .finalizeCapture: throw SchoolCaptureStorageFailure.invalidContext
             case .assessDevice:
                 guard value.targetID == deviceID else { throw SchoolCaptureStorageFailure.invalidContext }
+                guard try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE workspace=? AND kind=? AND target_id=? AND state<>'acknowledged'",
+                    [.text(workspace(value.scope)), .text(value.kind.rawValue), .text(value.targetID.uuidString)]) == 0 else {
+                    throw SchoolCaptureStorageFailure.uncertainCommand
+                }
             case .startCapture:
                 let body = try JSONDecoder().decode(SchoolStartCaptureBody.self, from: value.body)
                 guard body.deviceId == deviceID, body.explicitStartConfirmed,
