@@ -6,6 +6,7 @@ struct SchoolProfileView: View {
     @State private var confirmsSave = false
     @State private var confirmsComplete = false
     @State private var confirmsDiscard = false
+    @State private var attemptedSave = false
 
     var body: some View {
         NavigationStack {
@@ -16,12 +17,15 @@ struct SchoolProfileView: View {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Fermer") {
                             if model.hasEdits { confirmsDiscard = true } else { dismiss() }
-                        }
+                        }.disabled(model.isBusy)
                     }
                 }
                 .task { await model.load() }
                 .confirmationDialog("Enregistrer ces informations dans le dossier de l’école ?", isPresented: $confirmsSave, titleVisibility: .visible) {
-                    Button("Enregistrer le profil") { Task { _ = await model.saveProfileAfterConfirmation() } }
+                    Button("Enregistrer le profil") {
+                        attemptedSave = true
+                        Task { _ = await model.saveProfileAfterConfirmation() }
+                    }
                 } message: {
                     Text("L’auteur de la saisie sera conservé. Le nom du compte de connexion ne sera pas modifié.")
                 }
@@ -45,7 +49,7 @@ struct SchoolProfileView: View {
             SchoolProfileStatusSections(model: model)
             if let profile = model.profile {
                 Section {
-                    Text(model.isOwnProfile ? "Vos informations dans cette école" : "Informations du dossier scolaire")
+                    Text(model.school?.name ?? "Dossier scolaire")
                         .font(.headline)
                     Text(model.isOwnProfile ? "Saisissez vos noms administratifs tels qu’ils doivent figurer dans le dossier."
                          : "Complétez uniquement les informations confirmées avec l’élève.")
@@ -61,18 +65,6 @@ struct SchoolProfileView: View {
                 if model.editableFields.contains(.postalAddress) { addressSection }
                 Section {
                     Label(profile.profilePhotoDocumentId == nil ? "Photo facultative" : "Une photo est associée au dossier", systemImage: "person.crop.circle")
-                    Text("L’absence de photo n’empêche pas de compléter le profil ni de consulter les formations.")
-                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                }
-                Section {
-                    Button("Enregistrer mes modifications") { confirmsSave = true }
-                        .frame(minHeight: 48)
-                        .disabled(!model.canSaveProfile)
-                        .accessibilityIdentifier("profile-save")
-                    if model.hasEdits && !model.draft.isValid(allowed: model.editableFields, timeZone: model.school?.timeZone ?? "Europe/Zurich") {
-                        Text("Vérifiez les noms, l’e-mail et les champs renseignés. Une naissance doit être une date réelle, non future.")
-                            .font(.footnote).foregroundStyle(DrivyTheme.danger)
-                    }
                 }
                 readinessSection
             }
@@ -81,17 +73,42 @@ struct SchoolProfileView: View {
         }
         .scrollContentBackground(.hidden)
         .background(DrivyTheme.canvas)
+        .safeAreaInset(edge: .bottom) {
+            if model.profile != nil, !model.editableFields.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    if attemptedSave, let error = model.errorMessage {
+                        Text(error).font(.footnote).foregroundStyle(DrivyTheme.danger)
+                    } else if model.hasEdits {
+                        Text(model.draft.isValid(allowed: model.editableFields, timeZone: model.school?.timeZone ?? "Europe/Zurich")
+                            ? "Modifications à enregistrer dans cette école." : "Vérifiez les champs signalés.")
+                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                    }
+                    Button {
+                        confirmsSave = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            if model.isBusy { ProgressView() }
+                            Text(model.isBusy ? "Enregistrement…" : "Enregistrer les modifications")
+                        }
+                    }
+                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canSaveProfile)
+                    .accessibilityIdentifier("profile-save")
+                }
+                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity).background(DrivyTheme.surface)
+            }
+        }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     private func identitySection(_ profile: SchoolAdministrativeProfile) -> some View {
         Section {
             if model.editableFields.contains(.firstName) {
-                TextField("Prénom", text: $model.draft.firstName).textContentType(.givenName)
+                profileField("Prénom", text: $model.draft.firstName).textContentType(.givenName)
                     .accessibilityIdentifier("profile-first-name")
                 fieldExplanation(.firstName)
             } else { LabeledContent("Prénom", value: profile.firstName ?? "À compléter") }
             if model.editableFields.contains(.lastName) {
-                TextField("Nom", text: $model.draft.lastName).textContentType(.familyName)
+                profileField("Nom", text: $model.draft.lastName).textContentType(.familyName)
                     .accessibilityIdentifier("profile-last-name")
                 fieldExplanation(.lastName)
             } else { LabeledContent("Nom", value: profile.lastName ?? "À compléter") }
@@ -103,14 +120,14 @@ struct SchoolProfileView: View {
         if model.editableFields.contains(.contactEmail) || model.editableFields.contains(.contactPhone) {
             Section {
                 if model.editableFields.contains(.contactEmail) {
-                    TextField("E-mail", text: $model.draft.contactEmail)
+                    profileField("E-mail", text: $model.draft.contactEmail)
                         .textContentType(.emailAddress).keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .accessibilityIdentifier("profile-email")
                     fieldExplanation(.contactEmail)
                 }
                 if model.editableFields.contains(.contactPhone) {
-                    TextField("Téléphone", text: $model.draft.contactPhone)
+                    profileField("Téléphone", text: $model.draft.contactPhone)
                         .textContentType(.telephoneNumber).keyboardType(.phonePad)
                         .accessibilityIdentifier("profile-phone")
                     fieldExplanation(.contactPhone)
@@ -132,12 +149,12 @@ struct SchoolProfileView: View {
         Section {
             Toggle("Renseigner une adresse", isOn: $model.draft.hasAddress)
             if model.draft.hasAddress {
-                TextField("Rue et numéro", text: $model.draft.address.line1).textContentType(.streetAddressLine1)
-                TextField("Complément, facultatif", text: Binding(get: { model.draft.address.line2 ?? "" }, set: { model.draft.address.line2 = $0.isEmpty ? nil : $0 }))
+                profileField("Rue et numéro", text: $model.draft.address.line1).textContentType(.streetAddressLine1)
+                profileField("Complément · facultatif", text: Binding(get: { model.draft.address.line2 ?? "" }, set: { model.draft.address.line2 = $0.isEmpty ? nil : $0 }))
                     .textContentType(.streetAddressLine2)
-                TextField("Code postal", text: $model.draft.address.postalCode).textContentType(.postalCode)
-                TextField("Localité", text: $model.draft.address.locality).textContentType(.addressCity)
-                TextField("Code pays, deux lettres", text: $model.draft.address.countryCode)
+                profileField("Code postal", text: $model.draft.address.postalCode).textContentType(.postalCode)
+                profileField("Localité", text: $model.draft.address.locality).textContentType(.addressCity)
+                profileField("Code pays · deux lettres", text: $model.draft.address.countryCode)
                     .textInputAutocapitalization(.characters).autocorrectionDisabled()
             }
             fieldExplanation(.postalAddress)
@@ -147,11 +164,33 @@ struct SchoolProfileView: View {
     @ViewBuilder private func fieldExplanation(_ field: SchoolProfileField) -> some View {
         if let rule = model.applicablePolicy?.fields.first(where: { $0.field == field }) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("\(rule.requirement.label) · \(rule.stage.label)").font(.caption.weight(.medium))
+                Text(rule.requirement == .optional ? "Facultatif" : "\(rule.requirement.label) · \(rule.stage.label)").font(.caption.weight(.medium))
                 Text(rule.explanation).font(.footnote)
             }
             .foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
         }
+        if model.hasEdits, model.editableFields.contains(field),
+           !model.draft.isValid(allowed: [field], timeZone: model.school?.timeZone ?? "Europe/Zurich") {
+            Text(fieldError(field)).font(.footnote).foregroundStyle(DrivyTheme.danger)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    private func fieldError(_ field: SchoolProfileField) -> String {
+        switch field {
+        case .firstName: "Renseignez le prénom, limité à 150 caractères."
+        case .lastName: "Renseignez le nom, limité à 150 caractères."
+        case .contactEmail: "Vérifiez le format de l’adresse e-mail."
+        case .contactPhone: "Le téléphone est limité à 32 caractères."
+        case .birthDate: "Utilisez JJ.MM.AAAA pour une date réelle, non future."
+        case .postalAddress: "Vérifiez la rue, le code postal, la localité et le code pays à deux lettres."
+        case .profilePhotoDocumentId: "Vérifiez la photo du profil."
+        }
+    }
+    private func profileField(_ title: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            TextField(title, text: text).accessibilityLabel(title)
+        }.padding(.vertical, 4)
     }
     @ViewBuilder private var readinessSection: some View {
         if let readiness = model.readiness {
@@ -216,14 +255,16 @@ struct SchoolProfileStatusSections: View {
                         .frame(minHeight: 44).disabled(model.isBusy || model.isLoading)
                 }
             }
-            if let success = model.successMessage {
+            if let success = model.successMessage, !model.hasEdits {
                 Section { Label(success, systemImage: "checkmark.circle").foregroundStyle(DrivyTheme.success) }
             }
             if let pending = model.pending {
                 Section {
                     Label("Demande à confirmer", systemImage: "clock.arrow.circlepath").font(.headline)
                     Text("Conservez cette référence. Une nouvelle modification sera possible après vérification du résultat.")
-                    Text(pending.id.uuidString).font(.caption.monospaced()).textSelection(.enabled)
+                    DisclosureGroup("Référence de la demande") {
+                        Text(pending.id.uuidString).font(.caption.monospaced()).textSelection(.enabled)
+                    }
                     if !pending.kind.isProfile { Text("Cette demande vient d’un autre écran de l’école.") }
                     if pending.scope != model.scope { Text("Vos accès ont changé depuis l’envoi. Le renvoi reste désactivé.") }
                     Button("Vérifier le résultat") { Task { await model.verifyPending() } }

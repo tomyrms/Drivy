@@ -13,9 +13,9 @@ struct SchoolProfilePolicyView: View {
                 introduction
                 Section {
                     Button { showsEditor = true } label: {
-                        Label("Préparer une politique", systemImage: "plus")
+                        Label("Préparer une nouvelle version", systemImage: "plus")
                     }
-                    .frame(minHeight: 48).disabled(!model.canCreatePolicy)
+                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canCreatePolicy)
                     .accessibilityIdentifier("profile-policy-create")
                 }
                 ForEach(model.policies) { policy in policySection(policy) }
@@ -28,38 +28,38 @@ struct SchoolProfilePolicyView: View {
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
             .navigationTitle("Champs du profil").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
             .task { await model.load() }
             .sheet(isPresented: $showsEditor) { SchoolProfilePolicyEditor(model: model) }
             .sheet(item: $publication) { policy in publicationReview(policy) }
         }
         .tint(DrivyTheme.accent)
+        .interactiveDismissDisabled(model.isBusy)
     }
     private var introduction: some View {
         Section {
-            Text("Demandez chaque information au bon moment.").font(.headline)
-            Text("Les noms sont requis à l’entrée. La photo reste toujours facultative. Expliquez à quoi sert chaque autre information et quand elle devient utile.")
+            Text(model.school?.name ?? "Votre école").font(.headline)
+            Text("Choisissez les champs demandés, leur utilité et le moment où ils deviennent nécessaires.")
                 .foregroundStyle(DrivyTheme.muted)
             if let notice = model.notice, notice.status == "APPROVED", notice.noticeVersionId != nil {
                 Label("Notice de données adoptée · version \(notice.version)", systemImage: "checkmark.document")
                     .foregroundStyle(DrivyTheme.success)
             } else {
-                Text("Adoptez d’abord la notice de données depuis Préparer l’école.").foregroundStyle(DrivyTheme.muted)
+                Text("Adoptez d’abord la notice de données dans Configuration.").foregroundStyle(DrivyTheme.muted)
             }
-            if !model.isLoading && model.policies.isEmpty {
-                Text("Aucune politique publiée pour le moment.")
+            if !model.isLoading && model.policies.isEmpty && model.errorMessage == nil {
+                Text("Aucune version enregistrée.").font(.subheadline).foregroundStyle(DrivyTheme.muted)
             }
         }
     }
     private func policySection(_ policy: SchoolProfilePolicy) -> some View {
         Section {
-            HStack {
-                Text(status(policy.status)).font(.headline)
-                Spacer()
-                Text("Version \(policy.version)").font(.caption).foregroundStyle(DrivyTheme.muted)
-            }
+            Text("Version \(policy.version) · \(model.applicablePolicy?.id == policy.id ? "En vigueur" : status(policy.status))")
+                .font(.headline).fixedSize(horizontal: false, vertical: true)
             Text("Prise d’effet : \(effectiveDate(policy.effectiveFrom))").font(.subheadline)
-            SchoolProfileRulesReview(rules: policy.fields)
+            DisclosureGroup("\(policy.fields.count) champs · consulter les règles") {
+                SchoolProfileRulesReview(rules: policy.fields)
+            }
             if policy.status == "DRAFT" {
                 Button("Relire avant publication") { publication = policy }
                     .frame(minHeight: 48).disabled(!model.canMutate)
@@ -71,8 +71,9 @@ struct SchoolProfilePolicyView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Publier ces règles pour l’école ?").font(.title2.weight(.bold))
-                    Text("Les profils concernés seront vérifiés selon ces champs, leur finalité et leur stade. Les informations existantes ne seront pas complétées à la place des personnes.")
+                    Text(model.school?.name ?? "Votre école").font(.title2.weight(.bold))
+                    Text("Version \(policy.version)").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    Text("Ces règles s’appliqueront aux profils concernés à la date prévue. Les informations existantes ne seront pas complétées automatiquement.")
                     Text("Prise d’effet : \(effectiveDate(policy.effectiveFrom))")
                 }
                 Section { SchoolProfileRulesReview(rules: policy.fields) }
@@ -84,20 +85,55 @@ struct SchoolProfilePolicyView: View {
                         if let email = notice.contactEmail { Text(email).textSelection(.enabled) }
                     }
                 }
-                if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) } }
-                Section {
-                    Button("Publier ces règles") {
-                        Task { if await model.publishAfterConfirmation(policy) { publication = nil } }
+                if model.pending != nil {
+                    SchoolProfileStatusSections(model: model)
+                } else if let error = model.errorMessage {
+                    Section {
+                        SchoolErrorNotice(message: error)
+                        if model.needsReload {
+                            Button("Actualiser et relire") { Task { await reloadPublication(policy) } }
+                                .frame(minHeight: 44).disabled(model.isBusy || model.isLoading)
+                        } else {
+                            Button("Relire la notice liée") { Task { await model.preparePublication(policy) } }
+                                .frame(minHeight: 44).disabled(model.isBusy || model.isLoadingPublication)
+                        }
                     }
-                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canPublish(policy))
-                    .accessibilityIdentifier("profile-policy-publish")
                 }
             }
+            .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    Task { if await model.publishAfterConfirmation(policy) { publication = nil } }
+                } label: {
+                    HStack(spacing: 10) {
+                        if model.isBusy { ProgressView() }
+                        Text(model.isBusy ? "Publication…" : "Publier ces règles")
+                    }
+                }
+                .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canPublish(policy))
+                .accessibilityIdentifier("profile-policy-publish")
+                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity).background(DrivyTheme.surface)
+            }
             .navigationTitle("Publication").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Annuler") { publication = nil } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { publication = nil }.disabled(model.isBusy) } }
             .task(id: policy.id) { await model.preparePublication(policy) }
+            .onChange(of: model.policies) { _, policies in
+                if policies.contains(where: { $0.id == policy.id && $0.status == "PUBLISHED" }) {
+                    publication = nil
+                }
+            }
         }
         .interactiveDismissDisabled(model.isBusy)
+    }
+    private func reloadPublication(_ previous: SchoolProfilePolicy) async {
+        await model.load()
+        guard !model.needsReload else { return }
+        guard let current = model.policies.first(where: { $0.id == previous.id }), current.status == "DRAFT" else {
+            publication = nil
+            return
+        }
+        publication = current
+        await model.preparePublication(current)
     }
     private func effectiveDate(_ timestamp: String) -> String {
         guard let date = SchoolInvitation.date(timestamp) else { return "Date indisponible" }
@@ -116,38 +152,64 @@ private struct SchoolProfilePolicyEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft = SchoolProfilePolicyDraft()
     @State private var confirms = false
+    @State private var didSubmit = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    DatePicker("Prise d’effet", selection: $draft.effectiveFrom)
+                    DatePicker("Date d’effet", selection: $draft.effectiveFrom, displayedComponents: .date)
+                    DatePicker("Heure", selection: $draft.effectiveFrom, displayedComponents: .hourAndMinute)
                     Text("Heure de l’école : \(model.school?.timeZone ?? "Europe/Zurich")")
                         .font(.footnote).foregroundStyle(DrivyTheme.muted)
                 }
                 ForEach(draft.rules.indices, id: \.self) { index in ruleEditor(index) }
-                if let error = model.errorMessage {
-                    Section { SchoolErrorNotice(message: error) }
+                if model.pending != nil {
+                    SchoolProfileStatusSections(model: model)
+                } else if let error = model.errorMessage {
+                    Section {
+                        SchoolErrorNotice(message: error)
+                        Button("Relire les informations de l’école") { Task { await model.load() } }
+                            .frame(minHeight: 44).disabled(model.isBusy || model.isLoading)
+                    }
                 }
-                Section {
-                    Button("Créer ce brouillon") { confirms = true }
-                        .frame(minHeight: 48).disabled(!model.canCreatePolicy || !draft.isValid)
+            }
+            .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
+            .scrollDismissesKeyboard(.interactively)
+            .safeAreaInset(edge: .bottom) {
+                VStack(alignment: .leading, spacing: 10) {
+                    if let invalid = draft.selectedRules.first(where: { !$0.isValid }) {
+                        Text(invalid.explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            ? "\(invalid.field.label) : expliquez l’utilité de ce champ."
+                            : "\(invalid.field.label) : l’explication est limitée à 1 000 caractères.")
+                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                    } else {
+                        Text("Ce brouillon sera à relire avant publication.")
+                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                    }
+                    Button("Créer le brouillon") { confirms = true }
+                        .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canCreatePolicy || !draft.isValid)
                         .accessibilityIdentifier("profile-policy-save-draft")
-                    Text("La création prépare une version. La publication demandera une nouvelle confirmation.")
-                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
                 }
+                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity).background(DrivyTheme.surface)
             }
             .environment(\.timeZone, TimeZone(identifier: model.school?.timeZone ?? "Europe/Zurich") ?? .current)
             .disabled(model.isBusy)
             .navigationTitle("Nouvelle politique").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(model.isBusy) } }
             .confirmationDialog("Créer un brouillon avec ces champs et cette date d’effet ?", isPresented: $confirms, titleVisibility: .visible) {
                 Button("Confirmer la création") {
                     let reviewed = draft
+                    didSubmit = true
                     Task { if await model.createPolicyAfterConfirmation(reviewed) { dismiss() } }
                 }
             } message: {
                 Text("J’ai relu l’utilité des champs et leur effet sur les profils. La politique sera liée à la notice de données adoptée affichée précédemment.")
+            }
+            .onChange(of: model.isLoading) { _, loading in
+                if didSubmit && !loading && !model.needsReload && model.pending == nil && model.successMessage != nil {
+                    dismiss()
+                }
             }
         }
         .tint(DrivyTheme.accent).interactiveDismissDisabled(model.isBusy)
@@ -182,10 +244,17 @@ private struct SchoolProfilePolicyEditor: View {
                 } else if field == .profilePhotoDocumentId {
                     Text("Facultatif · personnalisation").foregroundStyle(DrivyTheme.muted)
                 }
-                TextField("Expliquez à la personne pourquoi ce champ est utile", text: $draft.rules[index].explanation, axis: .vertical)
-                    .lineLimit(3...8)
-                    .accessibilityIdentifier("profile-rule-explanation-\(field.rawValue)")
-                Text("1 000 caractères maximum").font(.caption).foregroundStyle(DrivyTheme.muted)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Utilité pour l’élève").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    TextField("Expliquez pourquoi ce champ est demandé", text: $draft.rules[index].explanation, axis: .vertical)
+                        .lineLimit(3...8)
+                        .accessibilityLabel("Utilité du champ \(field.label)")
+                        .accessibilityIdentifier("profile-rule-explanation-\(field.rawValue)")
+                }
+                if draft.rules[index].explanation.unicodeScalars.count > 800 {
+                    Text("\(draft.rules[index].explanation.unicodeScalars.count)/1 000 caractères").font(.caption)
+                        .foregroundStyle(draft.rules[index].explanation.unicodeScalars.count > 1000 ? DrivyTheme.danger : DrivyTheme.muted)
+                }
             }
         } header: { Text(field.label) }
     }
@@ -204,7 +273,7 @@ private struct SchoolProfileRulesReview: View {
         ForEach(rules) { rule in
             VStack(alignment: .leading, spacing: 6) {
                 Text(rule.field.label).font(.headline)
-                Text("\(rule.requirement.label) · \(rule.stage.label)").font(.subheadline)
+                Text(rule.requirement == .optional ? "Facultatif" : "\(rule.requirement.label) · \(rule.stage.label)").font(.subheadline)
                 Text(rule.purposeCode.label).font(.footnote).foregroundStyle(DrivyTheme.muted)
                 Text(rule.explanation).font(.footnote).fixedSize(horizontal: false, vertical: true)
             }
