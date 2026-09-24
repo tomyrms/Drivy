@@ -35,3 +35,5 @@ Les coordonnées d’offre et références de compétence ont des libellés pers
 Une erreur de sauvegarde et la vérification/relance de la demande conservée restent dans la relecture. Les commandes utilisent toujours le workspace existant et sa réponse durable. Ce prolongement est relu et soumis à la même compilation Apple groupée, sans nouvelle campagne de tests.
 
 Le bouton de relecture indisponible précise ensuite le premier champ ou contenu à corriger : référence, catégorie, durée, prix, contenu lié, compétence, motif ou période. Ces indications accompagnent les prédicats existants sans les remplacer.
+
+La capture iPad réelle `iPad-catalog-light-synthetic.png` du run `36057849015` (`e60e7d9`) a été inspectée : contenus et statuts lisibles, mais la commande de création dominait inutilement toute la colonne. Sur largeur régulière et texte courant, elle devient une commande native à côté du résumé de section. iPhone et tailles d’accessibilité conservent l’empilement et la largeur utile au libellé. Cette retouche est postérieure à la capture.

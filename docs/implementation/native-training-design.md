@@ -20,6 +20,8 @@ La revue métier suivante distingue aussi la liste de leçons effectivement char
 
 `JourneyVisualReview` accepte les entrées `catalog`, `dossier` et `bilan`, qui instancient les vraies vues natives du catalogue, de la formation et d’une révision publiée. `SchoolVisualReview` est compilé uniquement en DEBUG sur simulateur, avec la mention visible « Rendu de contrôle · données fictives ».
 
+Les trois captures iPad claires du run `36057849015`, source `e60e7d9`, ont été ouvertes et inspectées. Rendez-vous/historique, texte du bilan et appréciation sont lisibles dans leur colonne ; le catalogue présente correctement ses deux offres et leurs états. Le bandeau de contrôle recouvre toutefois une partie des barres de navigation : cette limite interdit de qualifier leur rendu à partir de ces images. Le bandeau est déplacé dans l’inset inférieur pour la prochaine revue. Ce correctif n’a pas encore été recapturé. Ni mode sombre ni taille d’accessibilité ne sont prouvés par ces trois images.
+
 Les clients habituels reçoivent un transport en mémoire limité aux GET explicitement définis sur `visual.drivy.invalid`. Aucun transport réseau n’est créé et une route inconnue échoue. La file de commandes de cette fixture refuse l’écriture ; elle n’utilise ni les données scolaires locales ni le service hébergé. Les identités, conditions tarifaires et textes du bilan sont synthétiques.
 
 `DRIVY_VISUAL_LARGE_TEXT=1` permet de rendre ces mêmes vues à la taille d’accessibilité 3. Le workflow et son déclenchement restent sous la responsabilité de l’intégration. La préparation du harness ne vaut pas une preuve de rendu : les images devront être inspectées après l’exécution Apple.

@@ -29,7 +29,7 @@ struct SchoolVisualReview: View {
                 ContentUnavailableView("Rendu indisponible", systemImage: "exclamationmark.triangle", description: Text(error))
             } else { ProgressView("Préparation du rendu…") }
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             Text("Rendu de contrôle · données fictives")
                 .font(.caption2).foregroundStyle(DrivyTheme.muted)
                 .padding(.vertical, 5).frame(maxWidth: .infinity).background(DrivyTheme.surface)

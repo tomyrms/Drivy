@@ -4,6 +4,7 @@ struct SchoolCatalogView: View {
     @Bindable var model: SchoolCatalogWorkspace
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var section: CatalogSection = .offerings
     @State private var editor: CatalogEditorPresentation?
     @State private var showsTeam = false
@@ -113,11 +114,8 @@ struct SchoolCatalogView: View {
 
     private var offerings: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if !model.currentOfferings.isEmpty {
-                Text("\(model.currentOfferings.count) offre\(model.currentOfferings.count == 1 ? "" : "s") · \(model.availableOfferings.count) active\(model.availableOfferings.count == 1 ? "" : "s")")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            }
-            catalogCreateButton("Créer une offre", kind: .offering)
+            catalogActions("Créer une offre", kind: .offering, summary: model.currentOfferings.isEmpty ? nil
+                : "\(model.currentOfferings.count) offre\(model.currentOfferings.count == 1 ? "" : "s") · \(model.availableOfferings.count) active\(model.availableOfferings.count == 1 ? "" : "s")")
             if model.currentOfferings.isEmpty && !model.isLoading {
                 empty("Votre première offre", text: "Commencez par un référentiel et une procédure. Vous pourrez ensuite définir la durée et le prix de l’offre.", symbol: "steeringwheel")
                 if model.curricula.isEmpty {
@@ -161,9 +159,7 @@ struct SchoolCatalogView: View {
     }
     private var curricula: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Compétences travaillées dans chaque catégorie.")
-                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            catalogCreateButton("Créer un référentiel", kind: .curriculum)
+            catalogActions("Créer un référentiel", kind: .curriculum, summary: "Compétences travaillées dans chaque catégorie.")
             if model.curricula.isEmpty && !model.isLoading {
                 empty("Les compétences de votre école", text: "Définissez ce qui sera travaillé dans chaque catégorie. L’approbation vous appartient.", symbol: "list.bullet.rectangle")
             }
@@ -191,9 +187,7 @@ struct SchoolCatalogView: View {
     }
     private var policies: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Déroulement et conditions d’annulation par catégorie.")
-                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            catalogCreateButton("Créer une procédure", kind: .policy)
+            catalogActions("Créer une procédure", kind: .policy, summary: "Déroulement et conditions d’annulation par catégorie.")
             if model.policies.isEmpty && !model.isLoading {
                 empty("Vos procédures de formation", text: "Précisez le déroulement et les conditions d’annulation de chaque catégorie.", symbol: "doc.text")
             }
@@ -224,10 +218,22 @@ struct SchoolCatalogView: View {
         }
     }
 
-    private func catalogCreateButton(_ title: String, kind: SchoolCatalogEditorKind) -> some View {
-        Button { editor = CatalogEditorPresentation(kind: kind) } label: { Label(title, systemImage: "plus") }
-            .buttonStyle(DrivyPrimaryButtonStyle())
-            .disabled(!model.canMutate)
+    @ViewBuilder private func catalogActions(_ title: String, kind: SchoolCatalogEditorKind, summary: String?) -> some View {
+        if horizontalSizeClass == .regular && !dynamicTypeSize.isAccessibilitySize {
+            HStack(alignment: .firstTextBaseline, spacing: 20) {
+                if let summary { Text(summary).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
+                Spacer(minLength: 8)
+                Button { editor = CatalogEditorPresentation(kind: kind) } label: {
+                    Label(title, systemImage: "plus").frame(minHeight: 32)
+                }.buttonStyle(.borderedProminent).fixedSize().disabled(!model.canMutate)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 16) {
+                if let summary { Text(summary).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
+                Button { editor = CatalogEditorPresentation(kind: kind) } label: { Label(title, systemImage: "plus") }
+                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canMutate)
+            }
+        }
     }
 
     private var learnerTrainings: some View {
