@@ -1,6 +1,6 @@
 # Séance scolaire : carte et commandes GPS
 
-`SchoolCaptureLiveView(controller:learnerName:closeSaved:)` présente le `SchoolCaptureSessionController` détenu par l’application. L’écran ne crée ni source, ni autorisation, ni segment. Son ouverture ou sa fermeture ne change pas l’état du GPS ; la racine garde le contrôleur vivant. Le callback facultatif `closeSaved` laisse la racine fermer une capture sauvegardée et revenir à la leçon.
+`SchoolCaptureLiveView(controller:learnerName:closeSaved:returnToLesson:)` présente le `SchoolCaptureSessionController` détenu par l’application. L’écran ne crée ni source, ni autorisation, ni segment. Son ouverture ou sa fermeture ne change pas l’état du GPS ; la racine garde le contrôleur vivant. Le callback facultatif `returnToLesson` permet de quitter la vue lorsqu’elle est directement dans l’onglet Séance ; sinon la vue utilise le retour natif. Le callback facultatif `closeSaved` reste un raccord réservé à la racine, sans effacement implicite du contrôleur. L’intégration courante le laisse vide pour conserver l’accès au trajet et à son envoi après un retour à l’Agenda.
 
 Références : E23, GPS/replay, R111 et AS03–AS07 de la conception 3.17. Le collecteur, le journal, les droits et les commandes réseau appartiennent aux modules déjà documentés ; cette vue ne les remplace pas.
 

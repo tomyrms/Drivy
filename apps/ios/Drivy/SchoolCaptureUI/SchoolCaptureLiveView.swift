@@ -7,6 +7,7 @@ struct SchoolCaptureLiveView: View {
     @Bindable var controller: SchoolCaptureSessionController
     let learnerName: String
     var closeSaved: (() -> Void)? = nil
+    var returnToLesson: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var resetCameraID = UUID()
@@ -37,7 +38,7 @@ struct SchoolCaptureLiveView: View {
                 } description: {
                     Text("Ouvrez une leçon pour préparer son enregistrement GPS.")
                 } actions: {
-                    Button("Fermer") { dismiss() }.buttonStyle(.bordered)
+                    Button("Fermer") { close() }.buttonStyle(.bordered)
                 }
             } else {
                 GeometryReader { geometry in
@@ -363,7 +364,8 @@ struct SchoolCaptureLiveView: View {
 
     private func close() {
         guard !controller.isTransferring else { return }
-        if controller.state == .saved, let closeSaved { closeSaved() }
+        if controller.state == .saved { closeSaved?() }
+        if let returnToLesson { returnToLesson() }
         else { dismiss() }
     }
 
