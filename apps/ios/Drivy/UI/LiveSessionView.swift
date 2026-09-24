@@ -69,7 +69,8 @@ struct LiveSessionView: View {
     private func sessionBackground(_ session: DrivingSession) -> some View {
         if session.usesGPS {
             RouteMapView(session: session, selectedObservationID: $selectedObservationID,
-                showsControls: false, showsEmptyState: false, resetCameraID: resetCameraID)
+                showsControls: false, showsEmptyState: false, resetCameraID: resetCameraID,
+                framingInsets: EdgeInsets(top: 100, leading: 0, bottom: 190, trailing: 0))
                 .ignoresSafeArea()
         } else {
             VStack(spacing: 16) {

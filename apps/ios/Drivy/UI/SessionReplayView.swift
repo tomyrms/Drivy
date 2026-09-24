@@ -77,7 +77,7 @@ struct SessionDetailView: View {
                 case .observations:
                     observationSheet(session)
                 case .summary:
-                    SummaryEditorView(controller: controller, sessionID: session.id, initialText: session.summary)
+                    SummaryEditorView(controller: controller, sessionID: session.id, initialText: session.summary, isExample: session.isExample)
                 case .information:
                     informationSheet(session)
                 }
@@ -86,7 +86,7 @@ struct SessionDetailView: View {
     }
 
     private func compactReplay(_ session: DrivingSession) -> some View {
-        replayBackground(session)
+        replayBackground(session, framingInsets: EdgeInsets(top: 120, leading: 0, bottom: 320, trailing: 0))
             .safeAreaInset(edge: .top, spacing: 0) {
                 replayHeader(session).padding(.horizontal, 16).padding(.top, 8)
             }
@@ -136,7 +136,7 @@ struct SessionDetailView: View {
     }
 
     @ViewBuilder
-    private func replayBackground(_ session: DrivingSession) -> some View {
+    private func replayBackground(_ session: DrivingSession, framingInsets: EdgeInsets = EdgeInsets()) -> some View {
         if session.points.isEmpty {
             VStack(spacing: 14) {
                 Image(systemName: "clock.arrow.circlepath")
@@ -163,7 +163,9 @@ struct SessionDetailView: View {
                 replayDate: replayDate(session),
                 showsControls: false,
                 showsEmptyState: false,
-                resetCameraID: resetCameraID
+                resetCameraID: resetCameraID,
+                framingInsets: framingInsets,
+                showsOriginBadge: false
             )
             .ignoresSafeArea(edges: .bottom)
         }
@@ -184,8 +186,8 @@ struct SessionDetailView: View {
         HStack(spacing: 4) {
             closeButton
             VStack(alignment: .leading, spacing: 5) {
-                Text("Replay").font(.headline)
-                Label("Privé · \(session.startedAt.formatted(.dateTime.day().month(.abbreviated)))", systemImage: "lock")
+                Text(session.title ?? "Replay").font(.headline).fixedSize(horizontal: false, vertical: true)
+                Label(session.isExample ? "Exemple · données fictives" : "Privé · \(session.startedAt.formatted(.dateTime.day().month(.abbreviated).locale(Locale(identifier: "fr_CH"))))", systemImage: session.isExample ? "sparkles" : "lock")
                     .font(.caption)
                     .foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -425,7 +427,12 @@ struct SessionDetailView: View {
                     LabeledContent("Début", value: session.startedAt.formatted(.dateTime.hour().minute()))
                     LabeledContent("Durée", value: session.startedAt.addingTimeInterval(duration(session)).sessionElapsed(since: session.startedAt))
                     LabeledContent("État", value: session.state.label)
-                    LabeledContent("Localisation", value: session.usesGPS ? "Avec GPS" : "Sans GPS")
+                    LabeledContent("Localisation", value: session.isExample ? "Tracé fictif" : session.usesGPS ? "Avec GPS" : "Sans GPS")
+                }
+                if session.isExample {
+                    Section("Données d’exemple") {
+                        Text(session.provenance ?? "Ce parcours et ses observations sont fictifs. Ils servent à découvrir le replay ; aucun déplacement réel n’a été enregistré.")
+                    }
                 }
                 if session.state == .interrupted {
                     Section {

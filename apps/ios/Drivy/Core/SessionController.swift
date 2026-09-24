@@ -11,6 +11,7 @@ final class SessionController {
     private(set) var isBusy = false
     private(set) var isCapturing = false
     private(set) var errorMessage: String?
+    private(set) var examplesNotice: String?
     private(set) var gpsStatus: GPSStatus = .inactive
     private(set) var storageStatus = "Vérification du stockage chiffré…"
 
@@ -26,9 +27,11 @@ final class SessionController {
     @ObservationIgnored private var captureDate: Date?
     @ObservationIgnored private var limitTask: Task<Void, Never>?
     @ObservationIgnored private var pendingPoints = 0
+    @ObservationIgnored private let installsExamples: Bool
 
     init(store: (any SessionStore)? = nil, location: (any LocationSource)? = nil) {
         self.store = store
+        installsExamples = store == nil
         self.location = location ?? NativeLocationSource()
         self.location.onEvent = { [weak self] event in self?.receive(event) }
     }
@@ -47,10 +50,16 @@ final class SessionController {
             }
             guard let store else { throw SessionError.storageUnavailable }
             try await store.recoverInterruptedSessions()
+            var examplesUnavailable = false
+            if installsExamples, let encryptedStore = store as? SQLCipherSessionStore {
+                do { try await encryptedStore.installExamplesIfNeeded() }
+                catch { examplesUnavailable = true }
+            }
             sessions = try await store.sessions()
             activeSession = nil
             persistenceFailed = false
             storageStatus = "Enregistré sur cet appareil · stockage chiffré"
+            examplesNotice = examplesUnavailable ? "Les parcours d’exemple n’ont pas pu être ajoutés. Vos séances restent disponibles ; réessayez plus tard." : nil
             errorMessage = nil
             if let id = selectedSession?.id { selectedSession = sessions.first { $0.id == id } }
         } catch { report(error) }

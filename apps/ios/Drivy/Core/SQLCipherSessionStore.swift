@@ -22,7 +22,7 @@ actor SQLCipherSessionStore: SessionStore {
         if protectFiles { try ProtectedStorage.protectDatabaseFiles(at: url) }
         let database = try CipherConnection(url: url, key: key)
         let version = try database.integer("PRAGMA user_version")
-        guard version <= 1 else { throw SessionError.unsupportedSchema }
+        guard version <= 2 else { throw SessionError.unsupportedSchema }
         if version == 0 {
             try database.transaction {
                 try database.execute("""
@@ -47,6 +47,17 @@ actor SQLCipherSessionStore: SessionStore {
                     """)
             }
         }
+        if version < 2 {
+            try database.transaction {
+                try database.execute("""
+                    CREATE TABLE example_installation (
+                        id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL CHECK(version>0),
+                        installed_at REAL NOT NULL
+                    );
+                    PRAGMA user_version=2;
+                    """)
+            }
+        }
         if protectFiles { try ProtectedStorage.protectDatabaseFiles(at: url) }
         self.database = database
     }
@@ -59,7 +70,7 @@ actor SQLCipherSessionStore: SessionStore {
     func session(id: UUID) throws -> DrivingSession { try hydrated(metadata(id)) }
 
     func create(_ session: DrivingSession) throws {
-        guard session.state == .active, session.points.isEmpty, session.observations.isEmpty else {
+        guard session.origin == .recorded, session.state == .active, session.points.isEmpty, session.observations.isEmpty else {
             throw SessionError.sessionClosed
         }
         try write {
@@ -69,6 +80,48 @@ actor SQLCipherSessionStore: SessionStore {
             try database.execute("INSERT INTO session(id,started_at,state,data) VALUES(?,?,?,?)",
                 [.text(session.id.uuidString), .number(session.startedAt.timeIntervalSince1970),
                  .text(session.state.rawValue), .blob(try JSONEncoder().encode(session))])
+        }
+    }
+
+    // L'installation entière, y compris son reçu, partage un commit chiffré. Le reçu est conservé
+    // lors d'une suppression de séance : une mise à jour ou un redémarrage ne la ressuscite pas.
+    func installExamplesIfNeeded(now: Date = Date()) throws {
+        try write {
+            guard try database.integer("SELECT COUNT(*) FROM example_installation WHERE id=1") == 0 else { return }
+            for example in try ExampleJourneys.make(now: now) {
+                guard example.isExample, !example.usesGPS, example.state == .completed,
+                      let end = example.endedAt, end > example.startedAt, end <= now,
+                      !example.points.isEmpty, example.points.count <= 5_000 else { throw SessionError.invalidPoint }
+                var metadata = example
+                metadata.points = []; metadata.observations = []
+                try database.execute("INSERT INTO session(id,started_at,state,data) VALUES(?,?,?,?)",
+                    [.text(example.id.uuidString), .number(example.startedAt.timeIntervalSince1970),
+                     .text(example.state.rawValue), .blob(try JSONEncoder().encode(metadata))])
+                let pointIDs = Set(example.points.map(\.id))
+                guard pointIDs.count == example.points.count else { throw SessionError.invalidPoint }
+                var previous = example.startedAt.addingTimeInterval(-1)
+                for point in example.points {
+                    guard point.latitude.isFinite, point.longitude.isFinite,
+                          (-90...90).contains(point.latitude), (-180...180).contains(point.longitude),
+                          point.timestamp >= example.startedAt, point.timestamp <= end,
+                          point.timestamp > previous, point.receivedAt == point.timestamp,
+                          point.accuracy == -1 else { throw SessionError.invalidPoint }
+                    try database.execute("INSERT INTO point(id,session_id,timestamp,data) VALUES(?,?,?,?)",
+                        [.text(point.id.uuidString), .text(example.id.uuidString), .number(point.timestamp.timeIntervalSince1970),
+                         .blob(try JSONEncoder().encode(point))])
+                    previous = point.timestamp
+                }
+                for observation in example.observations {
+                    guard observation.note.count <= 1_000, observation.observedAt >= example.startedAt,
+                          observation.observedAt <= end,
+                          observation.anchorPointID.map({ pointIDs.contains($0) }) ?? true else { throw SessionError.invalidObservation }
+                    try database.execute("INSERT INTO observation(id,session_id,observed_at,data) VALUES(?,?,?,?)",
+                        [.text(observation.id.uuidString), .text(example.id.uuidString), .number(observation.observedAt.timeIntervalSince1970),
+                         .blob(try JSONEncoder().encode(observation))])
+                }
+            }
+            try database.execute("INSERT INTO example_installation(id,version,installed_at) VALUES(1,?,?)",
+                [.number(Double(ExampleJourneys.version)), .number(now.timeIntervalSince1970)])
         }
     }
 

@@ -15,7 +15,10 @@ struct RouteMapView: View {
     var showsControls = true
     var showsEmptyState = true
     var resetCameraID: UUID? = nil
+    var framingInsets = EdgeInsets()
+    var showsOriginBadge = true
     @State private var camera: MapCameraPosition = .region(JourneyMapRegion.overview)
+    @State private var viewport = CGSize.zero
 
     private struct Segment: Identifiable {
         let id: UUID
@@ -69,16 +72,30 @@ struct RouteMapView: View {
                 }.annotationTitles(.hidden)
             }
             if let currentPoint {
-                Annotation(replayDate == nil ? "Dernière position enregistrée" : "Position enregistrée", coordinate: currentPoint.coordinate) {
+                Annotation(session.isExample ? "Position d’exemple" : replayDate == nil ? "Dernière position enregistrée" : "Position enregistrée", coordinate: currentPoint.coordinate) {
                     Circle().fill(DrivyTheme.accent).frame(width: 16, height: 16)
                         .overlay(Circle().stroke(.white, lineWidth: 3)).padding(8)
                         .background(DrivyTheme.accent.opacity(0.18), in: Circle())
-                        .accessibilityLabel("Position enregistrée")
+                        .accessibilityLabel(session.isExample ? "Position d’exemple" : "Position enregistrée")
                 }.annotationTitles(.hidden)
             }
         }
         .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .mapControls { }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            let changed = viewport != size
+            viewport = size
+            if changed { fitRoute() }
+        }
+        .overlay(alignment: .topTrailing) {
+            if session.isExample && showsOriginBadge {
+                Text("Exemple · données fictives")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(DrivyTheme.muted)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(DrivyTheme.surface, in: Capsule()).padding(12)
+            }
+        }
         .overlay(alignment: .topLeading) {
             if showsEmptyState && session.points.isEmpty {
                 Label(session.usesGPS ? "En attente de position" : "Sans GPS", systemImage: "location.slash")
@@ -103,11 +120,31 @@ struct RouteMapView: View {
         }
         .onChange(of: session.points.isEmpty) { wasEmpty, isEmpty in if wasEmpty && !isEmpty { fitRoute() } }
         .onChange(of: resetCameraID) { _, _ in fitRoute() }
-        .accessibilityLabel("Carte du trajet")
+        .accessibilityLabel(session.isExample ? "Carte d’un trajet fictif" : "Carte du trajet")
     }
     private func fitRoute() {
         if session.points.isEmpty { camera = .region(JourneyMapRegion.overview) }
-        else { camera = .automatic }
+        else if viewport.width > 0 && viewport.height > 0 {
+            let mapPoints = session.points.map { MKMapPoint($0.coordinate) }
+            let minX = mapPoints.map(\.x).min() ?? 0
+            let maxX = mapPoints.map(\.x).max() ?? minX
+            let minY = mapPoints.map(\.y).min() ?? 0
+            let maxY = mapPoints.map(\.y).max() ?? minY
+            let center = MKMapPoint(x: (minX + maxX) / 2, y: (minY + maxY) / 2)
+            let minimumSpan = MKMapPointsPerMeterAtLatitude(center.coordinate.latitude) * 160
+            let horizontalPadding = 36.0
+            let verticalPadding = 36.0
+            let visibleWidth = max(80, Double(viewport.width - framingInsets.leading - framingInsets.trailing) - 2 * horizontalPadding)
+            let visibleHeight = max(80, Double(viewport.height - framingInsets.top - framingInsets.bottom) - 2 * verticalPadding)
+            let scale = max(max(maxX - minX, minimumSpan) / visibleWidth, max(maxY - minY, minimumSpan) / visibleHeight)
+            let width = scale * Double(viewport.width)
+            let height = scale * Double(viewport.height)
+            // Move the camera south when a bottom dock covers the map so the
+            // complete route is framed in the remaining visible rectangle.
+            let offsetX = Double(framingInsets.trailing - framingInsets.leading) / 2 * scale
+            let offsetY = Double(framingInsets.bottom - framingInsets.top) / 2 * scale
+            camera = .rect(MKMapRect(x: center.x + offsetX - width / 2, y: center.y + offsetY - height / 2, width: width, height: height))
+        } else { camera = .automatic }
     }
 }
 

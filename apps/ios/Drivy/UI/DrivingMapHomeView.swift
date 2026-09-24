@@ -13,6 +13,7 @@ struct DrivingMapHomeView: View {
     var workspace: SchoolWorkspace? = nil
     var openAgenda: (() -> Void)? = nil
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var presentsStart = false
     @State private var presentsLive = false
     @State private var presentsHistory = false
@@ -29,6 +30,9 @@ struct DrivingMapHomeView: View {
         "\(workspace?.person?.id.uuidString ?? ""):\(workspace?.membership?.id.uuidString ?? ""):\(workspace?.membership?.accessEpoch ?? 0)"
     }
     private var schoolZone: TimeZone { TimeZone(identifier: workspace?.school?.timeZone ?? "Europe/Zurich") ?? .current }
+    private var exampleJourneys: [DrivingSession] {
+        controller.sessions.filter { $0.isExample && $0.state != .active }.sorted { $0.startedAt > $1.startedAt }
+    }
 
     var body: some View {
         ScrollView {
@@ -36,11 +40,11 @@ struct DrivingMapHomeView: View {
                 heading
                 if sizeClass == .regular {
                     HStack(alignment: .top, spacing: 32) {
-                        journeyCard.frame(maxWidth: 460)
+                        primaryContent.frame(maxWidth: 460)
                         nextLessons.frame(maxWidth: .infinity, alignment: .leading)
                     }
                 } else {
-                    journeyCard
+                    primaryContent
                     nextLessons
                 }
                 historyLink
@@ -80,6 +84,78 @@ struct DrivingMapHomeView: View {
                     }
             }.tint(DrivyTheme.accent)
         }
+    }
+
+    @ViewBuilder private var primaryContent: some View {
+        if controller.activeSession == nil && !exampleJourneys.isEmpty {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(exampleJourneys.count == 1 ? "Un trajet à découvrir" : "Deux trajets à découvrir").font(.title2.weight(.bold))
+                    Text("Exemples · tracés et observations fictifs")
+                        .font(.caption).foregroundStyle(DrivyTheme.muted)
+                }
+                ForEach(exampleJourneys.prefix(2)) { session in
+                    exampleJourneyCard(session)
+                }
+                HStack(spacing: 12) {
+                    Button(action: primaryAction) {
+                        Label("Commencer un trajet", systemImage: "plus")
+                    }
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .disabled(controller.isBusy || controller.errorMessage != nil)
+                    .accessibilityIdentifier("new-session")
+                    Button { presentsMap = true } label: {
+                        Image(systemName: "map")
+                            .font(.title3)
+                            .frame(width: 52, height: 52)
+                            .foregroundStyle(DrivyTheme.accent)
+                            .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Explorer la carte")
+                }
+                if let error = controller.errorMessage { InlineErrorView(message: error, retry: retryStorage) }
+            }
+        } else { journeyCard }
+    }
+
+    private func exampleJourneyCard(_ session: DrivingSession) -> some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
+        return Button {
+            historyPath = [session.id]
+            presentsHistory = true
+        } label: {
+            layout {
+                RouteMapView(session: session, selectedObservationID: .constant(nil), showsControls: false,
+                    showsEmptyState: false, showsOriginBadge: false)
+                    .allowsHitTesting(false)
+                    .frame(width: 104, height: 120)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(session.title ?? "Trajet d’exemple")
+                        .font(.headline)
+                        .foregroundStyle(DrivyTheme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("\(session.observations.count) observations")
+                        .font(.subheadline)
+                        .foregroundStyle(DrivyTheme.muted)
+                    Label("Voir le replay", systemImage: "play.circle")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.accent)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: 24))
+            .overlay { RoundedRectangle(cornerRadius: 24).stroke(DrivyTheme.border, lineWidth: 0.5) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(session.title ?? "Trajet"), exemple fictif, \(session.observations.count) observations")
+        .accessibilityHint("Ouvrir le replay de cet exemple")
     }
 
     private var heading: some View {

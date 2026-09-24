@@ -21,15 +21,27 @@ struct SessionHistoryView: View {
                 }
             } else {
                 List {
-                    Section {
-                        ForEach(sessions) { session in
-                            NavigationLink(value: session.id) {
-                                SessionHistoryRow(session: session)
+                    if !sessions.filter({ !$0.isExample }).isEmpty {
+                        Section("Sur cet appareil") {
+                            ForEach(sessions.filter { !$0.isExample }) { session in
+                                NavigationLink(value: session.id) {
+                                    SessionHistoryRow(session: session)
+                                }
+                                .accessibilityIdentifier("history-session-\(session.id.uuidString)")
                             }
-                            .accessibilityIdentifier("history-session-\(session.id.uuidString)")
                         }
-                    } header: {
-                        Text("Sur cet appareil")
+                    }
+                    if !sessions.filter(\.isExample).isEmpty {
+                        Section {
+                            ForEach(sessions.filter(\.isExample)) { session in
+                                NavigationLink(value: session.id) { SessionHistoryRow(session: session) }
+                                    .accessibilityIdentifier("history-session-\(session.id.uuidString)")
+                            }
+                        } header: {
+                            Text("Trajets d’exemple")
+                        } footer: {
+                            Text("Tracés, horaires et observations fictifs pour découvrir le replay.")
+                        }
                     }
                     if let error = controller.errorMessage {
                         Section { InlineErrorView(message: error) }
@@ -49,19 +61,19 @@ private struct SessionHistoryRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            Image(systemName: session.usesGPS ? "point.topleft.down.to.point.bottomright.curvepath" : "note.text")
+            Image(systemName: session.usesGPS || !session.points.isEmpty ? "point.topleft.down.to.point.bottomright.curvepath" : "note.text")
                 .font(.title3)
                 .foregroundStyle(DrivyTheme.accent)
                 .frame(width: 44, height: 44)
                 .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 14))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 6) {
-                Text(session.startedAt, format: .dateTime.day().month(.wide).hour().minute())
-                    .font(.headline)
-                Text(session.state.label)
+                if let title = session.title { Text(title).font(.headline) }
+                else { Text(session.startedAt, format: .dateTime.day().month(.wide).hour().minute()).font(.headline) }
+                Text(session.isExample ? "Exemple · données fictives" : session.state.label)
                     .font(.subheadline)
                     .foregroundStyle(session.state == .interrupted ? DrivyTheme.warning : DrivyTheme.muted)
-                Text("\(session.observations.count) observation\(session.observations.count == 1 ? "" : "s") · \(session.usesGPS ? "Avec GPS" : "Sans GPS")")
+                Text("\(session.observations.count) observation\(session.observations.count == 1 ? "" : "s") · \(session.isExample ? "Replay" : session.usesGPS ? "Avec GPS" : "Sans GPS")")
                     .font(.subheadline)
                     .foregroundStyle(DrivyTheme.muted)
             }
@@ -76,15 +88,17 @@ struct SummaryEditorView: View {
     @Bindable var controller: SessionController
     let sessionID: UUID
     let initialText: String
+    let isExample: Bool
     @State private var text: String
     @State private var saving = false
     @State private var confirmsDiscard = false
     @Environment(\.dismiss) private var dismiss
 
-    init(controller: SessionController, sessionID: UUID, initialText: String) {
+    init(controller: SessionController, sessionID: UUID, initialText: String, isExample: Bool = false) {
         self.controller = controller
         self.sessionID = sessionID
         self.initialText = initialText
+        self.isExample = isExample
         _text = State(initialValue: initialText)
     }
 
@@ -92,6 +106,11 @@ struct SummaryEditorView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    if isExample {
+                        Label("Bilan d’exemple · contenu fictif", systemImage: "sparkles")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(DrivyTheme.muted)
+                    }
                     Text("Votre bilan")
                         .font(.headline)
                     Text("Les points travaillés, ce que vous avez observé et la prochaine étape.")
