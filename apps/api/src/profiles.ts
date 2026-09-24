@@ -8,6 +8,7 @@ import { recordSettings } from './school-setup.js';
 import { ApiError,forbidden,notFound } from './errors.js';
 import { Cursors } from './cursor.js';
 import { getLearner,getTraining } from './queries.js';
+import { planningReadiness } from './lessons.js';
 
 const empty=z.object({}).strict();const operation={operationId:z.uuid()};
 const text=(maximum:number)=>z.string().trim().refine(value=>[...value].length>0 && [...value].length<=maximum);
@@ -198,7 +199,8 @@ export function registerProfiles(app:FastifyInstance,options:{pool:Pool;verifyTo
       if(query.action!=='ENTER') {
         const stage=query.action==='PLAN_LESSON'?'BEFORE_LESSON':'BEFORE_COURSE';blockers.push(...missingProfileFields(row,policy,['JOIN',stage]));
         if(policy.fields.some(rule=>rule.requirement==='CONDITIONAL' && rule.stage===stage)) blockers.push(block('PROFILE_CONDITION_NOT_READY','Les exigences conditionnelles doivent être évaluées dans un contexte réglementaire qualifié.'));
-        blockers.push(block(query.action==='PLAN_LESSON'?'LESSON_SETUP_REQUIRED':'COURSE_SETUP_REQUIRED',query.action==='PLAN_LESSON'?'La planification scolaire reste à préparer.':'Les inscriptions aux cours restent à préparer.'));
+        if(query.action==='PLAN_LESSON') blockers.push(...await planningReadiness(db,schoolId,learnerId!,query.resourceId,member.roles));
+        else blockers.push(block('COURSE_SETUP_REQUIRED','Les inscriptions aux cours restent à préparer.'));
       }
       // Les champs administratifs protégés ne deviennent pas des indices révélés par les blockers.
       const visible=level==='CONTACT'?blockers.filter(item=>item.field===null || ['firstName','lastName','contactEmail','contactPhone'].includes(item.field)):blockers;

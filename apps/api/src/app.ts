@@ -11,6 +11,8 @@ import { registerSchoolSetup } from './school-setup.js';
 import { registerInvitations } from './invitations.js';
 import { registerProfiles } from './profiles.js';
 import { registerCatalogue } from './catalogue.js';
+import { registerLessons } from './lessons.js';
+import { registerLessonSetup } from './lesson-setup.js';
 import type { InvitationMailConfig } from './invitation-mail.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
@@ -116,5 +118,7 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerInvitations(app,options);
   registerProfiles(app,options);
   registerCatalogue(app,options);
+  registerLessonSetup(app,options);
+  registerLessons(app,options);
   return app;
 }
