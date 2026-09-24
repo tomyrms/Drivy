@@ -24,6 +24,8 @@ Les mutations et la fermeture pendant leur envoi sont désactivées. `load()` co
 
 Relecture des gardes et `git diff --check` effectués. Compilation Apple groupée confiée à l’intégration ; aucun nouveau résultat de simulateur, VoiceOver ou appareil physique n’est revendiqué pour ce lot.
 
+La compilation Release de `394d4cd` (0.7.0/build21) a ensuite réussi : elle inclut catalogue/configuration `c0f2283`. Le prolongement CatalogEditor `4cf35d8` est postérieur à ce build.
+
 ## Édition du catalogue
 
 Le formulaire conserve ses validations et ses choix d’approbation initialement désactivés. La commande de relecture est accessible en bas. Une feuille présente les valeurs exactes, leurs références et l’effet choisi avant la confirmation manuelle : brouillon, approbation ou activation. Revenir à l’édition réinitialise cette confirmation.

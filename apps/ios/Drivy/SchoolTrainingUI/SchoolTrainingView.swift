@@ -51,6 +51,7 @@ private struct SchoolTrainingContent: View {
     @Bindable var workspace: SchoolWorkspace
     let learner: SchoolLearner
     @State private var section: TrainingSection = .lessons
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ScrollView {
@@ -92,27 +93,24 @@ private struct SchoolTrainingContent: View {
             }
         }
     }
-    private var sectionPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(TrainingSection.allCases, id: \.self) { item in
-                    Button { section = item } label: {
-                        Text(item.rawValue).font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 20).frame(minHeight: 46)
-                            .foregroundStyle(section == item ? DrivyTheme.accent : DrivyTheme.muted)
-                            .background(section == item ? DrivyTheme.accentSoft : DrivyTheme.surface, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(section == item ? .isSelected : [])
-                    .accessibilityIdentifier("training-tab-\(item.rawValue)")
-                }
+    @ViewBuilder private var sectionPicker: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            sections.pickerStyle(.menu).frame(minHeight: 48)
+        } else {
+            sections.pickerStyle(.segmented)
+        }
+    }
+    private var sections: some View {
+        Picker("Afficher", selection: $section) {
+            ForEach(TrainingSection.allCases, id: \.self) { item in
+                Text(item.rawValue).tag(item).accessibilityIdentifier("training-tab-\(item.rawValue)")
             }
         }
     }
     private var lessons: some View {
         VStack(alignment: .leading, spacing: 24) {
             if model.lessons.isEmpty && !model.isLoading {
-                empty("Les prochaines leçons vous attendent", symbol: "calendar", text: "Les rendez-vous enregistrés pour cette formation apparaîtront ici.")
+                empty("Aucune leçon", text: "Aucun rendez-vous n’est enregistré pour cette formation.")
             }
             if !model.upcomingLessons.isEmpty {
                 lessonGroup("Rendez-vous", values: model.upcomingLessons)
@@ -130,20 +128,19 @@ private struct SchoolTrainingContent: View {
                         SchoolTrainingLessonView(lesson: lesson, model: model, workspace: workspace, learnerName: learner.displayName)
                     } label: { SchoolTrainingLessonRow(lesson: lesson) }
                     .buttonStyle(.plain).accessibilityIdentifier("training-lesson-\(lesson.id.uuidString)")
-                    if lesson.id != values.last?.id { Divider().padding(.leading, 20) }
+                    Divider()
                 }
             }
-            .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 22))
         }
     }
     private var reports: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Bilans partagés").font(.title2.bold())
-            if model.progress != nil {
+            if model.canOpenPedagogicalContent {
                 if model.publishedLessons.isEmpty {
-                    empty("Pas encore de bilan partagé", symbol: "doc.text", text: model.nextCursor == nil
+                    empty("Aucun bilan partagé", text: model.nextCursor == nil
                         ? "Les bilans apparaissent après leur publication par le moniteur."
-                        : "Aucun bilan dans les leçons chargées. La suite peut contenir d’autres leçons.")
+                        : "Aucun bilan dans cette liste. Affichez les leçons suivantes pour poursuivre.")
                 }
                 ForEach(model.publishedLessons) { lesson in
                     NavigationLink {
@@ -151,7 +148,7 @@ private struct SchoolTrainingContent: View {
                             trainingID: model.trainingID, lesson: lesson, competencies: model.competencies)
                     } label: { SchoolTrainingLessonRow(lesson: lesson, showsReport: true) }
                     .buttonStyle(.plain)
-                    .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 22))
+                    Divider()
                 }
                 moreLessons
             } else { pedagogyStatus }
@@ -161,8 +158,6 @@ private struct SchoolTrainingContent: View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Parcours pédagogique").font(.title2.bold())
             if let value = model.progress {
-                Text("Chaque appréciation conserve sa date et son contexte.")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 if let error = model.progressError { SchoolErrorNotice(message: error, retry: { Task { await model.loadProgress() } }) }
                 ForEach(value.items) { item in
                     NavigationLink {
@@ -171,21 +166,24 @@ private struct SchoolTrainingContent: View {
                             competencies: model.competencies)
                     } label: { progressRow(item) }
                     .buttonStyle(.plain)
+                    Divider()
                 }
                 ForEach(model.unobservedCompetencies) { competency in
-                    HStack(alignment: .top, spacing: 14) {
-                        Image(systemName: "circle.dashed").foregroundStyle(DrivyTheme.muted).frame(width: 26)
-                        VStack(alignment: .leading, spacing: 7) {
-                            Text(competency.label).font(.headline)
-                            Text("Non observé").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                            if !competency.description.isEmpty { Text(competency.description).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(competency.label).font(.headline)
+                        Text("Non observé").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        if !competency.description.isEmpty {
+                            DisclosureGroup("Description de la compétence") {
+                                Text(competency.description).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                    .padding(.top, 8)
+                            }.font(.subheadline)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(20).background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
+                    Divider()
                 }
                 if value.items.isEmpty && value.unobservedCompetencyIds.isEmpty {
-                    empty("Un parcours à construire", symbol: "point.topleft.down.to.point.bottomright.curvepath", text: "Aucune compétence n’est renseignée dans ce référentiel.")
+                    empty("Aucune compétence", text: "Le référentiel de cette formation ne contient aucune compétence.")
                 } else if model.unobservedCompetencies.count < value.unobservedCompetencyIds.count {
                     Text("Certaines compétences non observées n’ont pas pu être chargées.").font(.footnote).foregroundStyle(DrivyTheme.muted)
                 }
@@ -194,8 +192,6 @@ private struct SchoolTrainingContent: View {
     }
     private func progressRow(_ item: SchoolReportProgressItem) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
-                .font(.title3).foregroundStyle(DrivyTheme.accent).frame(width: 26)
             VStack(alignment: .leading, spacing: 8) {
                 Text(item.label).font(.headline).foregroundStyle(DrivyTheme.text)
                 Text(SchoolTrainingFormatting.level(item.level)).font(.subheadline.weight(.medium)).foregroundStyle(DrivyTheme.accent)
@@ -206,7 +202,7 @@ private struct SchoolTrainingContent: View {
             .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
         }
-        .padding(20).background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+        .padding(.vertical, 8).contentShape(Rectangle())
     }
     @ViewBuilder private var pedagogyStatus: some View {
         if let error = model.progressError { SchoolErrorNotice(message: error, retry: { Task { await model.loadProgress() } }) }
@@ -220,9 +216,11 @@ private struct SchoolTrainingContent: View {
             .buttonStyle(.bordered).frame(minHeight: 48).disabled(model.isLoadingMore)
         }
     }
-    private func empty(_ title: String, symbol: String, text: String) -> some View {
-        ContentUnavailableView(title, systemImage: symbol, description: Text(text))
-            .frame(maxWidth: .infinity).padding(.vertical, 12)
+    private func empty(_ title: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.headline)
+            Text(text).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
     }
 }
 
@@ -232,19 +230,20 @@ private struct SchoolTrainingLessonRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             Image(systemName: showsReport ? "doc.text" : "calendar")
-                .font(.title3).foregroundStyle(DrivyTheme.accent)
-                .frame(width: 44, height: 48).background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 14))
+                .font(.title3).foregroundStyle(DrivyTheme.muted).frame(width: 24)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 7) {
                 Text(SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone)).font(.headline)
                 Text(SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone) + " · \(lesson.durationMinutes) min")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                Text(showsReport ? "Bilan partagé" : lesson.statusLabel)
-                    .font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
+                if !showsReport {
+                    Text(lesson.statusLabel).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted).padding(.top, 6)
         }
-        .foregroundStyle(DrivyTheme.text).padding(20).contentShape(Rectangle())
+        .foregroundStyle(DrivyTheme.text).padding(.vertical, 16).contentShape(Rectangle())
     }
 }
 
@@ -260,17 +259,16 @@ private struct SchoolTrainingLessonView: View {
             VStack(alignment: .leading, spacing: 24) {
                 Text(SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone)).font(.largeTitle.bold())
                 Text(learnerName).font(.title3).foregroundStyle(DrivyTheme.muted)
-                DrivyPanel {
-                    VStack(alignment: .leading, spacing: 18) {
-                        Label(lesson.statusLabel, systemImage: "calendar")
-                        Label(SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone) + " · \(lesson.durationMinutes) min", systemImage: "clock")
-                        Label(lesson.meetingPoint, systemImage: "mappin.and.ellipse")
-                        Label(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot), systemImage: "tag")
-                        Text("Horaires de la leçon · \(lesson.timeZone)").font(.caption).foregroundStyle(DrivyTheme.muted)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 18) {
+                    Label(lesson.statusLabel, systemImage: "calendar")
+                    Label(SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone) + " · \(lesson.durationMinutes) min", systemImage: "clock")
+                    Label(lesson.meetingPoint, systemImage: "mappin.and.ellipse")
+                    Label(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot), systemImage: "tag")
+                    Text("Horaires de la leçon · \(lesson.timeZone)").font(.caption).foregroundStyle(DrivyTheme.muted)
                 }
-                if model.progress != nil, model.hasPedagogicalRole {
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Divider()
+                if model.canOpenPedagogicalContent {
                     Button { opensReport = true } label: {
                         Label(lesson.status == "PLANNED" ? "Préparer cette leçon" : "Ouvrir le suivi de la leçon", systemImage: "text.book.closed")
                             .frame(maxWidth: .infinity, minHeight: 44)

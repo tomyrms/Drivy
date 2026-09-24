@@ -14,13 +14,14 @@ struct SchoolPublishedReportsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Les bilans de cette leçon").font(.largeTitle.bold())
+                Text("Bilans partagés").font(.largeTitle.bold())
                 Text(SchoolTrainingFormatting.instant(lesson.plannedStart, zone: lesson.timeZone))
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 if isLoading { ProgressView("Ouverture des bilans…") }
                 if let errorMessage { SchoolErrorNotice(message: errorMessage, retry: { Task { await load() } }) }
                 if !isLoading && revisions.isEmpty && errorMessage == nil {
-                    ContentUnavailableView("Pas encore de bilan partagé", systemImage: "doc.text", description: Text("Le moniteur doit publier le bilan avant qu’il apparaisse ici."))
+                    Text("Le moniteur n’a pas encore partagé de bilan pour cette leçon.")
+                        .foregroundStyle(DrivyTheme.muted)
                 }
                 ForEach(revisions) { revision in
                     NavigationLink {
@@ -29,8 +30,8 @@ struct SchoolPublishedReportsView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 14) {
                             HStack(alignment: .top) {
-                                Label(revision.id == revisions.first?.id ? "Dernière publication" : "Version \(revision.sequence)", systemImage: "doc.text")
-                                    .font(.headline).foregroundStyle(DrivyTheme.accent)
+                                Text(revision.id == lesson.currentPublishedRevisionId ? "Bilan actuel" : "Version \(revision.sequence)")
+                                    .font(.headline).foregroundStyle(DrivyTheme.text)
                                 Spacer(minLength: 12)
                                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(DrivyTheme.muted)
                             }
@@ -38,10 +39,11 @@ struct SchoolPublishedReportsView: View {
                             Text(SchoolTrainingFormatting.instant(revision.publishedAt, zone: lesson.timeZone))
                                 .font(.caption).foregroundStyle(DrivyTheme.muted)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(20)
-                        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 22))
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    Divider()
                 }
             }
             .padding(24).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
@@ -85,7 +87,6 @@ struct SchoolPublishedRevisionView: View {
                 if let errorMessage { SchoolErrorNotice(message: errorMessage, retry: { Task { await load() } }) }
                 if let revision, let lesson {
                     VStack(alignment: .leading, spacing: 14) {
-                        Label("Bilan partagé", systemImage: "checkmark.seal").font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
                         Text(SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone)).font(.largeTitle.bold())
                         Text("Publié le \(SchoolTrainingFormatting.instant(revision.publishedAt, zone: lesson.timeZone)) · Version \(revision.sequence)")
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)
@@ -94,27 +95,26 @@ struct SchoolPublishedRevisionView: View {
                                 .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         }
                     }
-                    passage("Ce qui a été travaillé", text: revision.workedOn, symbol: "steeringwheel")
-                    passage("Ce qui a été observé", text: revision.observationText, symbol: "eye")
-                    passage("La prochaine étape", text: revision.nextStep, symbol: "arrow.turn.up.right")
+                    Divider()
+                    passage("Travail réalisé", text: revision.workedOn)
+                    passage("À retenir", text: revision.observationText)
+                    passage("Prochaine étape", text: revision.nextStep)
                     if !revision.observations.isEmpty {
                         VStack(alignment: .leading, spacing: 14) {
                             Text("Appréciations").font(.title3.bold())
                             ForEach(revision.observations) { observation in
-                                DrivyPanel {
-                                    VStack(alignment: .leading, spacing: 10) {
-                                        if let competency = competencies.first(where: { $0.id == observation.competencyId }) {
-                                            Text(competency.label).font(.headline)
-                                        }
-                                        Text(observation.levelLabel).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
-                                        Text(observation.context).foregroundStyle(DrivyTheme.muted)
-                                    }.frame(maxWidth: .infinity, alignment: .leading)
-                                }
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text(competencies.first(where: { $0.id == observation.competencyId })?.label ?? "Compétence indisponible")
+                                        .font(.headline)
+                                    Text(observation.levelLabel).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
+                                    Text(observation.context).foregroundStyle(DrivyTheme.muted)
+                                }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+                                Divider()
                             }
                         }
                     }
                     if let reason = revision.correctionReason, !reason.isEmpty {
-                        passage("Motif de la correction", text: reason, symbol: "pencil.line")
+                        passage("Motif de la correction", text: reason)
                     }
                 }
             }
@@ -124,10 +124,10 @@ struct SchoolPublishedRevisionView: View {
         .task { await load() }
         .onDisappear { generation = UUID(); revision = nil; lesson = nil }
     }
-    private func passage(_ title: String, text: String, symbol: String) -> some View {
+    private func passage(_ title: String, text: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: symbol).font(.title3.weight(.semibold))
-            DrivyPanel { Text(text).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) }
+            Text(title).font(.title3.weight(.semibold))
+            Text(text).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
         }
     }
     private func load() async {
