@@ -1,0 +1,37 @@
+{
+  "name": "@drivy/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "tsx watch server/main.ts",
+    "build": "tsc -p tsconfig.server.json && vite build",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.check.json",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "start": "node dist/server/main.js"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.2",
+    "@fastify/static": "10.1.4",
+    "fastify": "5.12.5",
+    "openid-client": "6.8.8",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "tsx": "4.20.0",
+    "typescript": "5.9.2",
+    "vite": "8.3.1",
+    "vitest": "5.0.1"
+  }
+}

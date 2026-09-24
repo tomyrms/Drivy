@@ -20,7 +20,7 @@ function assert(condition: unknown,name: string): asserts condition {
 }
 function authorizationURL(verifier: string,state: string,nonce: string) {
   const url=new URL(`${issuer}/protocol/openid-connect/auth`);
-  url.search=new URLSearchParams({ client_id:clientId,response_type:'code',redirect_uri:redirectUri,scope:'openid profile',
+  url.search=new URLSearchParams({ client_id:clientId,response_type:'code',redirect_uri:redirectUri,scope:'openid profile email',
     state,nonce,code_challenge:createHash('sha256').update(verifier).digest('base64url'),code_challenge_method:'S256',prompt:'login' }).toString();
   return url;
 }

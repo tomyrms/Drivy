@@ -48,8 +48,8 @@ docker compose stop postgres
 | Client public | `drivy-apple`, sans secret client |
 | Callback exact | `ch.drivy.qualification:/oauth/callback` |
 | Flux | Authorization Code, PKCE `S256` obligatoire, `state` et `nonce` |
-| Scopes demandés | `openid profile` |
-| Scopes Keycloak par défaut | `basic`, `profile` ; aucun scope optionnel |
+| Scopes demandés | `openid profile email` |
+| Scopes Keycloak par défaut | `basic`, `profile`, `email` ; aucun scope optionnel |
 | Audience d’accès API | `drivy-api` |
 | API | `http://127.0.0.1:3001`, chemins `/v1/...` |
 | Base | `drivy_dev`, PostgreSQL sur `127.0.0.1:55432` |
@@ -86,6 +86,12 @@ Le navigateur soumet le vrai formulaire Keycloak avec ses cookies. Le contrôle 
 Vérifications supplémentaires : `npx tsc -p infra/dev/tsconfig.json` réussi ; `npm audit --prefix infra/dev --omit=dev` n’a signalé aucune vulnérabilité connue lors de cette exécution. Ces constats ne remplacent pas les tests API, les tests natifs ou la recette physique G0.
 
 Un iPhone physique interprète `127.0.0.1` comme sa propre machine. Cet environnement Windows n’est donc pas accessible depuis l’iPhone. Un simulateur sur un autre Mac ne peut pas non plus utiliser le loopback Windows. Il faudra un environnement HTTPS distinct, son issuer/client et ses comptes propres ; ouvrir les ports Windows au LAN ne fait pas partie de ces scripts. Keycloak fonctionne ici en `start-dev` avec son stockage local H2 : cette composition n’est pas un déploiement de production.
+
+## Extension web et invitations, en cours
+
+Le client web dispose d'un lockfile distinct et d'un BFF qui conserve les jetons au serveur. Après installation initiale, `node --import tsx scripts/dev/setup-web.ts` prépare le client confidentiel local, étend le scope Apple à `email` et configure Mailpit pour les seuls messages synthétiques locaux. Pour un laboratoire déjà créé avec G1A/G1B, exécuter cette extension avant de réexécuter le provisionnement initial qui vérifie désormais ce scope. Voir [le guide web](../../apps/web/README.md).
+
+Le 24 septembre 2026, `check-web.ts` a réussi **10 contrôles** sur Edge : bouton React, code PKCE, identité/e-mail vérifié, session BFF, école PostgreSQL réelle, cookie HttpOnly/SameSite, absence de jetons OAuth dans les réponses et de stockage navigateur, refus de déconnexion forgée et déconnexion effective. Il ne couvre pas encore tout le parcours invitation SMTP → nouvelle identité → acceptation. L'ancien résultat des 29 contrôles G1A ci-dessus reste une preuve datée de sa version initiale, pas une requalification automatique de cette extension.
 
 ## Versions et sources
 

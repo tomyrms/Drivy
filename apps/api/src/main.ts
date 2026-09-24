@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { buildApp } from './app.js';
 import { createTokenVerifier } from './auth.js';
 import { readConfig } from './config.js';
+import { invitationMailConfig } from './invitation-mail.js';
 
 const config = readConfig();
 const pool = new Pool({ connectionString: config.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000, statement_timeout: 5000 });
@@ -14,7 +15,8 @@ try {
   if (config.NODE_ENV === 'production' && (!role.rows[0] || role.rows[0].rolsuper || role.rows[0].rolbypassrls)) {
     throw new Error('La connexion de production doit utiliser un rôle sans superuser/BYPASSRLS.');
   }
-  const app = buildApp({ pool, verifyToken: createTokenVerifier(config), cursorSecret: config.CURSOR_SECRET, logger: true });
+  const invitationMail=invitationMailConfig();
+  const app = buildApp({ pool, verifyToken: createTokenVerifier(config), cursorSecret: config.CURSOR_SECRET, logger: true,...(invitationMail?{invitationMail}:{}) });
   const shutdown = async () => { await app.close(); await pool.end(); };
   process.once('SIGINT', () => { void shutdown(); });
   process.once('SIGTERM', () => { void shutdown(); });

@@ -2,6 +2,8 @@
 
 Mise à jour : 24 septembre 2026. La refonte est en cours ; G0, G1A et G1B ne constituent pas le produit complet.
 
+**Travail en cours sur `codex/refonte-entree` :** invitations API/iOS, outbox d’email chiffrée et acceptation web React/BFF. L’API passe **89 tests** sur PostgreSQL 16.14 et 17.11 (57 précédents + 32 F02), avec SMTP Mailpit réel ; typecheck/build réussis. Le web local passe **19 tests** automatisés et **10 contrôles** Edge → Keycloak → BFF → API → PostgreSQL ; build et typecheck strict réussis. Cinq captures d’accueil/compte clair/sombre et mobile ont été relues. Les 27 nouveaux tests Swift et le test de présentation sont en attente du run Apple [`36031988744`](https://github.com/tomyrms/Drivy/actions/runs/36031988744), source `2dc745f`. La recette complète SMTP → identité vérifiée → acceptation web reste en cours. Le code G1C n’est pas encore déployé ; l’IPA livré et la release hébergée décrits ci-dessous restent G1B. Seule l’adaptation du scope OIDC `email` est appliquée, comme indiqué plus bas. Voir [couverture complète](couverture-produit.md), [tranche F02](g1c-invitations.md) et [web/BFF](../../apps/web/README.md).
+
 | Élément | État | Preuve / suite |
 |---|---|---|
 | Conception V3.17, 556 fichiers | Intégrité vérifiée | Manifeste SHA-256 conservé, contrat OpenAPI 3.11.0 immuable |
@@ -39,6 +41,8 @@ Le [contrôle OIDC HTTPS](controle-oidc-deploye.md) a réussi avec une sonde ind
 Le compte initial `luc` et « Luc auto école » proviennent du provisionnement contrôlé, sans élève ni formation. `luc@example.com` est le contact d'essai autorisé par le porteur ; aucun email n'a été envoyé. Un navigateur éphémère a vérifié la connexion et le formulaire obligatoire de changement de mot de passe, sans soumettre un nouveau mot de passe. Le fichier d'accès initial est privé sur le PC ; il n'est jamais inclus dans Git ou les artefacts CI.
 
 La [preuve du déploiement G1B](proofs/g1b-deployment-2026-09-24.json) confirme une école DRAFT, un ADMIN actif, un setup initial et une politique vide non approuvée. Aucune commande, aucun élève ni formation n'a été créé par ce contrôle. Adoption et activation restent des gestes explicites de l'administrateur.
+
+Le client OIDC public `drivy-apple` a reçu le scope `email` le 24 septembre pour préparer F02 : scopes `basic/email/profile`, callback exact et PKCE S256 relus et inchangés. Une requête d’autorisation HTTPS avec `openid profile email` retourne le formulaire 200 sans soumettre d’identifiants. Cette adaptation seule est déjà appliquée ; elle n’est pas une nouvelle preuve de connexion Apple, ni un déploiement G1C.
 
 ## IPA et preuves Apple
 

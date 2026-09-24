@@ -96,13 +96,16 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
     const identity=await options.verifyToken(request.headers.authorization);empty.parse(request.query);
     const {schoolId,operationId}=z.object({schoolId:z.uuid(),operationId:z.uuid()}).parse(request.params);
     const data=await withActor(options.pool,identity,schoolId,async(db,actor,member)=>{
-      if (!member?.roles.includes('ADMIN')) throw new ApiError(403,'SETUP_ACCESS_REQUIRED','La consultation de cette opération exige les droits de configuration.');
+      if (!member) throw new ApiError(403,'SETUP_ACCESS_REQUIRED','La consultation de cette opération exige un accès actuel.');
       const result=await db.query<{operationId:string;commandType:string;resourceType:string;resourceId:string;committedAt:Date;resourceVersion:number}>(
         `SELECT o.operation_id AS "operationId",o.command_type AS "commandType",a.resource_type AS "resourceType",o.resource_id AS "resourceId",
-          o.committed_at AS "committedAt",(o.response_data->>'version')::integer AS "resourceVersion"
+          o.committed_at AS "committedAt",o.resource_version AS "resourceVersion"
          FROM drivy.operation o JOIN drivy.audit_event a ON a.school_id=o.school_id AND a.actor_person_id=o.actor_person_id AND a.operation_id=o.operation_id
          WHERE o.school_id=$1 AND o.actor_person_id=$2 AND o.operation_id=$3`,[schoolId,actor.personId,operationId]);
       if (!result.rows[0]) throw notFound();
+      const invitationCommand=['CREATE_INVITATION','RESEND_INVITATION','REVOKE_INVITATION'].includes(result.rows[0].commandType);
+      if (!member.roles.includes('ADMIN') && !(invitationCommand && member.roles.includes('INSTRUCTOR')) && result.rows[0].commandType!=='ACCEPT_INVITATION')
+        throw new ApiError(403,'SETUP_ACCESS_REQUIRED','Les droits nécessaires à cette opération ne sont plus disponibles.');
       return {...result.rows[0],committedAt:result.rows[0].committedAt.toISOString()};
     });
     return envelope(data,request);
