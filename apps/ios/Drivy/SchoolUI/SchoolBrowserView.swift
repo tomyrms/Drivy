@@ -268,7 +268,7 @@ private struct SchoolLearnerDetailView: View {
     let openPlanning: ((SchoolLearner) -> Void)?
     let trainingClient: SchoolTrainingClient?
     let openCreateTraining: ((SchoolLearner) -> Void)?
-    @State private var showsTraining = false
+    @State private var presentedTraining: TrainingPresentation?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -325,10 +325,9 @@ private struct SchoolLearnerDetailView: View {
         .navigationTitle("Dossier")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: workspace.selectedLearnerID) { await workspace.loadSelectedLearner() }
-        .sheet(isPresented: $showsTraining, onDismiss: { workspace.selectTraining(nil) }) {
-            if let trainingClient, let learner = workspace.learner, let trainingID = workspace.selectedTrainingID {
-                SchoolTrainingView(client: trainingClient, workspace: workspace, learner: learner, trainingID: trainingID)
-            } else { SchoolTrainingDetailView(workspace: workspace) }
+        .sheet(item: $presentedTraining, onDismiss: { workspace.selectTraining(nil) }) { presentation in
+            SchoolTrainingView(client: presentation.client, workspace: workspace,
+                learner: presentation.learner, trainingID: presentation.trainingID)
         }
     }
 
@@ -394,8 +393,9 @@ private struct SchoolLearnerDetailView: View {
                 }
                 ForEach(workspace.trainings) { training in
                     Button {
+                        guard let trainingClient, let learner = workspace.learner else { return }
                         workspace.selectTraining(training.id)
-                        showsTraining = true
+                        presentedTraining = TrainingPresentation(client: trainingClient, learner: learner, trainingID: training.id)
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "steeringwheel")
@@ -413,6 +413,7 @@ private struct SchoolLearnerDetailView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .disabled(trainingClient == nil || workspace.learner == nil)
                     .accessibilityIdentifier("school-training-\(training.id.uuidString)")
                     if training.id != workspace.trainings.last?.id { Divider() }
                 }
@@ -426,6 +427,13 @@ private struct SchoolLearnerDetailView: View {
                 }
         }
     }
+}
+
+private struct TrainingPresentation: Identifiable {
+    let client: SchoolTrainingClient
+    let learner: SchoolLearner
+    let trainingID: UUID
+    var id: UUID { trainingID }
 }
 
 private struct SchoolTrainingDetailView: View {

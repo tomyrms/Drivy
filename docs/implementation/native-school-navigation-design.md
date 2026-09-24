@@ -9,3 +9,9 @@ Passe de présentation fondée sur les maquettes École/Dossier et la charte `02
 - Dans le dossier, Planifier une leçon est l’action principale. Les formations se lisent en liste ; ouvrir une formation ou affecter un moniteur se trouve dans Gérer les formations. La création reste aussi directement proposée lorsque la liste est vide. Les archives gardent leurs restrictions.
 
 Relecture ciblée et `git diff --check` effectués. Compilation Apple et rendu natif ciblé restent à faire pour cette passe. Aucun test physique ni contrôle VoiceOver n’est déclaré exécuté.
+
+## Feuilles au premier affichage
+
+Après signalement utilisateur, la présentation de formation utilise un item qui transporte ensemble le client, l’élève et l’identifiant de formation. Elle ne lit plus un identifiant optionnel séparé après l’ouverture d’un booléen ; la sélection du workspace n’est libérée qu’à la fermeture.
+
+L’éditeur de catalogue suit le même principe : type d’édition et sources de révision appartiennent au même item. Leur préparation ne dépend plus de plusieurs changements `@State` au même geste. Le correctif Root/Home des autres feuilles et de l’onglet courant est pris en charge séparément par l’intégration. Le rendu physique du bug reste à vérifier après compilation.

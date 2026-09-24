@@ -5,11 +5,8 @@ struct SchoolCatalogView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var section: CatalogSection = .offerings
-    @State private var editor: SchoolCatalogEditorKind?
+    @State private var editor: CatalogEditorPresentation?
     @State private var showsTeam = false
-    @State private var sourceOffering: SchoolOffering?
-    @State private var sourceCurriculum: SchoolCurriculum?
-    @State private var sourcePolicy: SchoolCatalogPolicy?
     private enum CatalogSection: String, CaseIterable { case offerings = "Offres", curricula = "Référentiels", policies = "Procédures" }
 
     var body: some View {
@@ -38,9 +35,9 @@ struct SchoolCatalogView: View {
             }
             .refreshable { await model.load() }
             .task { await model.load() }
-            .sheet(item: $editor) { kind in
-                SchoolCatalogEditor(model: model, kind: kind, sourceOffering: sourceOffering,
-                    sourceCurriculum: sourceCurriculum, sourcePolicy: sourcePolicy)
+            .sheet(item: $editor) { presentation in
+                SchoolCatalogEditor(model: model, kind: presentation.kind, sourceOffering: presentation.sourceOffering,
+                    sourceCurriculum: presentation.sourceCurriculum, sourcePolicy: presentation.sourcePolicy)
             }
             .sheet(isPresented: $showsTeam) { team }
         }
@@ -124,11 +121,11 @@ struct SchoolCatalogView: View {
             if model.currentOfferings.isEmpty && !model.isLoading {
                 empty("Votre première offre", text: "Commencez par un référentiel et une procédure. Vous pourrez ensuite définir la durée et le prix de l’offre.", symbol: "steeringwheel")
                 if model.curricula.isEmpty {
-                    Button("Créer le référentiel") { clearSources(); editor = .curriculum }
+                    Button("Créer le référentiel") { editor = CatalogEditorPresentation(kind: .curriculum) }
                         .frame(minHeight: 44).disabled(!model.canMutate)
                 }
                 if model.policies.isEmpty {
-                    Button("Créer la procédure") { clearSources(); editor = .policy }
+                    Button("Créer la procédure") { editor = CatalogEditorPresentation(kind: .policy) }
                         .frame(minHeight: 44).disabled(!model.canMutate)
                 }
             }
@@ -156,7 +153,7 @@ struct SchoolCatalogView: View {
                         }.font(.subheadline).padding(.top, 8)
                     }
                     Button("Préparer une nouvelle version") {
-                        clearSources(); sourceOffering = offer; editor = .offering
+                        editor = CatalogEditorPresentation(kind: .offering, sourceOffering: offer)
                     }.frame(minHeight: 44).disabled(!model.canMutate)
                 }.padding(.vertical, 4)
             }
@@ -186,7 +183,7 @@ struct SchoolCatalogView: View {
                         }
                     }
                     Button("Préparer une nouvelle révision") {
-                        clearSources(); sourceCurriculum = curriculum; editor = .curriculum
+                        editor = CatalogEditorPresentation(kind: .curriculum, sourceCurriculum: curriculum)
                     }.frame(minHeight: 44).disabled(!model.canMutate)
                 }.padding(.vertical, 4)
             }
@@ -220,7 +217,7 @@ struct SchoolCatalogView: View {
                         }.font(.subheadline).padding(.top, 12)
                     }
                     Button("Préparer une nouvelle version") {
-                        clearSources(); sourcePolicy = policy; editor = .policy
+                        editor = CatalogEditorPresentation(kind: .policy, sourcePolicy: policy)
                     }.frame(minHeight: 44).disabled(!model.canMutate)
                 }.padding(.vertical, 4)
             }
@@ -228,7 +225,7 @@ struct SchoolCatalogView: View {
     }
 
     private func catalogCreateButton(_ title: String, kind: SchoolCatalogEditorKind) -> some View {
-        Button { clearSources(); editor = kind } label: { Label(title, systemImage: "plus") }
+        Button { editor = CatalogEditorPresentation(kind: kind) } label: { Label(title, systemImage: "plus") }
             .buttonStyle(DrivyPrimaryButtonStyle())
             .disabled(!model.canMutate)
     }
@@ -306,11 +303,10 @@ struct SchoolCatalogView: View {
         }
     }
     private func createButton(_ title: String, symbol: String, kind: SchoolCatalogEditorKind) -> some View {
-        Button { clearSources(); editor = kind } label: { Label(title, systemImage: symbol) }
+        Button { editor = CatalogEditorPresentation(kind: kind) } label: { Label(title, systemImage: symbol) }
             .buttonStyle(DrivySecondaryButtonStyle())
             .disabled(!model.canMutate || kind == .training && model.availableOfferings.isEmpty || kind == .assignment && model.instructors.isEmpty)
     }
-    private func clearSources() { sourceOffering = nil; sourceCurriculum = nil; sourcePolicy = nil }
     private func empty(_ title: String, text: String, symbol: String) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Image(systemName: symbol).font(.largeTitle).foregroundStyle(DrivyTheme.muted)
@@ -324,6 +320,22 @@ struct SchoolCatalogView: View {
         formatter.timeZone = TimeZone(identifier: model.school?.timeZone ?? "Europe/Zurich")
         formatter.dateStyle = .medium; formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+}
+
+private struct CatalogEditorPresentation: Identifiable {
+    let id = UUID()
+    let kind: SchoolCatalogEditorKind
+    let sourceOffering: SchoolOffering?
+    let sourceCurriculum: SchoolCurriculum?
+    let sourcePolicy: SchoolCatalogPolicy?
+
+    init(kind: SchoolCatalogEditorKind, sourceOffering: SchoolOffering? = nil,
+         sourceCurriculum: SchoolCurriculum? = nil, sourcePolicy: SchoolCatalogPolicy? = nil) {
+        self.kind = kind
+        self.sourceOffering = sourceOffering
+        self.sourceCurriculum = sourceCurriculum
+        self.sourcePolicy = sourcePolicy
     }
 }
 
