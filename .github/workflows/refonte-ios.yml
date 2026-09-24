@@ -80,6 +80,18 @@ jobs:
             artifacts/ios/swift.txt
           if-no-files-found: error
           retention-days: 14
+      - name: Exporter les résultats et captures des tests
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for result in artifacts/ios/*.xcresult; do
+            [[ -d "$result" ]] || continue
+            name=$(basename "$result" .xcresult)
+            mkdir -p "artifacts/ios/test-reports/$name"
+            xcrun xcresulttool get test-results summary --path "$result" > "artifacts/ios/test-reports/$name/summary.json"
+            xcrun xcresulttool export attachments --path "$result" --output-path "artifacts/ios/test-reports/$name/attachments"
+          done
       - name: Résultats natifs et captures
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -87,6 +99,7 @@ jobs:
           name: Drivy-native-results-${{ github.sha }}
           path: |
             artifacts/ios/*.xcresult
+            artifacts/ios/test-reports/
             artifacts/ios/*.png
             artifacts/ios/*-build.log
             artifacts/ios/*-test.log
