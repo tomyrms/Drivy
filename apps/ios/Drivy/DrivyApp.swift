@@ -20,6 +20,19 @@ struct DrivyApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG && targetEnvironment(simulator)
+            if let screen = ProcessInfo.processInfo.environment["DRIVY_VISUAL_SCREEN"] {
+                JourneyVisualReview(screen: screen)
+            } else {
+                application
+            }
+            #else
+            application
+            #endif
+        }
+    }
+
+    private var application: some View {
             SchoolRootView(configuration: configuration, identity: identity,
                            workspace: workspace, localController: controller)
                 .task { await identity.restore() }
@@ -41,6 +54,5 @@ struct DrivyApp: App {
                             }
                     }
                 }
-        }
     }
 }

@@ -48,9 +48,10 @@ struct SchoolHomeView: View {
     private var sessionTab: some View {
         NavigationStack {
             DrivingMapHomeView(controller: localController, schoolName: workspace.school?.name,
-                openLearners: { selectedTab = .learners })
+                openLearners: { selectedTab = .learners }, agendaClient: agendaClient,
+                workspace: workspace, openAgenda: { selectedTab = .agenda })
                 .navigationTitle("Séance")
-                .navigationBarTitleDisplayMode(.inline)
+                .navigationBarTitleDisplayMode(.large)
                 .toolbar { contextToolbar }
         }
     }

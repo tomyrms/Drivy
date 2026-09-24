@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Render actual SwiftUI views with synthetic data using the existing screenshot host.
-# This is a visual review, not the functional simulator campaign.
+# Capture the actual app compositor, not UIKit drawHierarchy around MapKit.
+# The explicit harness is compiled only in DEBUG simulator builds and uses an
+# isolated encrypted database with synthetic coordinates. No school API/login.
+app=artifacts/ios/DerivedData/Build/Products/Debug-iphonesimulator/Drivy.app
+[[ -d "$app" ]]
 for kind in iPhone iPad; do
   device_id=$(xcrun simctl list devices available -j | python3 -c '
 import json,sys
@@ -14,10 +17,15 @@ print(candidates[0]["udid"])
   xcrun simctl boot "$device_id" || true
   xcrun simctl bootstatus "$device_id" -b
   xcrun simctl status_bar "$device_id" override --time '9:41' --batteryState charged --batteryLevel 100
-  xcodebuild test-without-building -project apps/ios/Drivy.xcodeproj -scheme Drivy \
-    -destination "platform=iOS Simulator,id=$device_id" -parallel-testing-enabled NO \
-    -derivedDataPath artifacts/ios/DerivedData -resultBundlePath "artifacts/ios/${kind}Visual.xcresult" \
-    -only-testing:DrivyTests/SchoolPresentationTests/testNativeSchoolViewsWithSyntheticServerResponses \
-    2>&1 | tee "artifacts/ios/${kind}-visual-test.log"
+  xcrun simctl install "$device_id" "$app"
+  for appearance in light dark; do
+    xcrun simctl ui "$device_id" appearance "$appearance"
+    for screen in home live report without-gps replay; do
+      xcrun simctl terminate "$device_id" ch.drivy.qualification 2>/dev/null || true
+      SIMCTL_CHILD_DRIVY_VISUAL_SCREEN="$screen" xcrun simctl launch "$device_id" ch.drivy.qualification
+      sleep 5
+      xcrun simctl io "$device_id" screenshot "artifacts/ios/${kind}-${screen}-${appearance}-synthetic.png"
+    done
+  done
   xcrun simctl shutdown "$device_id"
 done

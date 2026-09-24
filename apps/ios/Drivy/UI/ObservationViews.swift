@@ -73,195 +73,157 @@ struct ObservationRow: View {
     }
 }
 
+extension ObservationTheme {
+    var journeySymbol: String {
+        switch self {
+        case .priority: "arrow.triangle.branch"
+        case .parking: "parkingsign"
+        case .signs: "signpost.right"
+        case .roundabout: "arrow.trianglehead.2.clockwise.rotate.90"
+        case .observation: "eye"
+        case .anticipation: "arrow.up.forward"
+        }
+    }
+}
+
 struct ObservationComposer: View {
     @Bindable var controller: SessionController
     let context: ObservationContext
     let sessionStartedAt: Date
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedTheme: ObservationTheme?
     @State private var note = ""
     @State private var showsNote = false
     @State private var saving = false
     @State private var confirmsDiscard = false
-    @State private var confirmsStop = false
+    @State private var detent: PresentationDetent = .height(440)
+    @FocusState private var noteFocused: Bool
 
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 10), count: dynamicTypeSize.isAccessibilitySize ? 2 : 3)
+    }
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            sheetHeading
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 6) {
-                            contextTime
-                            Text("· Sur cet appareil")
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            contextTime
-                            Text("Sur cet appareil")
-                        }
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(DrivyTheme.muted)
-
-                    if let theme = selectedTheme {
-                        statusChoices(for: theme)
-                    } else {
-                        categoryChoices
-                    }
-                    if let error = controller.errorMessage {
-                        InlineErrorView(message: error)
-                    }
+                VStack(alignment: .leading, spacing: 18) {
+                    if let theme = selectedTheme { statusChoices(for: theme) }
+                    else { categoryChoices }
+                    if let error = controller.errorMessage { InlineErrorView(message: error) }
                 }
-                .padding(20)
-                .frame(maxWidth: 580)
-                .frame(maxWidth: .infinity)
-            }
-            .background(DrivyTheme.surface)
-            .navigationTitle(selectedTheme?.label ?? "Signaler")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if selectedTheme != nil {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            selectedTheme = nil
-                        } label: {
-                            Label("Catégories", systemImage: "chevron.left")
-                        }
-                        .disabled(saving)
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Fermer", systemImage: "xmark") {
-                        if note.isEmpty { dismiss() } else { confirmsDiscard = true }
-                    }
-                    .labelStyle(.iconOnly)
-                    .disabled(saving)
-                }
-                ToolbarItem(placement: .bottomBar) {
-                    Button("Arrêter la séance", role: .destructive) { confirmsStop = true }
-                        .frame(minHeight: 48)
-                        .disabled(!controller.isCapturing)
-                }
-            }
+                .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 24)
+                .frame(maxWidth: 620).frame(maxWidth: .infinity)
+            }.scrollDismissesKeyboard(.interactively)
         }
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .background(DrivyTheme.surface)
+        .presentationDetents([.height(440), .large], selection: $detent)
         .presentationDragIndicator(.visible)
+        .presentationCornerRadius(30)
         .interactiveDismissDisabled(saving || !note.isEmpty)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: selectedTheme)
-        .confirmationDialog("Abandonner cette note ?", isPresented: $confirmsDiscard) {
+        .onAppear { if dynamicTypeSize.isAccessibilitySize { detent = .large } }
+        .onChange(of: dynamicTypeSize) { _, size in if size.isAccessibilitySize { detent = .large } }
+        .onChange(of: showsNote) { _, value in if value { detent = .large; noteFocused = true } }
+        .confirmationDialog("Abandonner cette note ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
             Button("Abandonner la note", role: .destructive) { dismiss() }
             Button("Continuer la saisie", role: .cancel) { }
-        } message: {
-            Text("Cette observation n’a pas encore été enregistrée.")
-        }
-        .confirmationDialog("Terminer cette séance ?", isPresented: $confirmsStop, titleVisibility: .visible) {
-            Button("Terminer la séance", role: .destructive) {
-                controller.stopSession()
-                dismiss()
-            }
-            Button("Continuer la saisie", role: .cancel) { }
-        } message: {
-            Text("La capture s’arrêtera. L’observation ouverte n’est pas enregistrée et sera abandonnée.")
-        }
+        } message: { Text("Cette observation n’a pas encore été enregistrée.") }
     }
 
-    private var contextTime: some View {
-        Label(context.observedAt.sessionElapsed(since: sessionStartedAt), systemImage: context.anchorPointID == nil ? "clock" : "mappin")
-            .monospacedDigit()
+    private var sheetHeading: some View {
+        HStack(alignment: .center, spacing: 8) {
+            if selectedTheme != nil {
+                Button { selectedTheme = nil; noteFocused = false } label: {
+                    Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 36, height: 44)
+                }.buttonStyle(.plain).disabled(saving).accessibilityLabel("Catégories")
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(selectedTheme?.label ?? "Signaler").font(.title3.weight(.bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Label("\(context.observedAt.sessionElapsed(since: sessionStartedAt)) · Privé",
+                      systemImage: context.anchorPointID == nil ? "clock" : "mappin")
+                    .font(.caption).foregroundStyle(DrivyTheme.muted).monospacedDigit()
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                if note.isEmpty { dismiss() } else { confirmsDiscard = true }
+            } label: {
+                Image(systemName: "xmark").font(.body.weight(.medium))
+                    .frame(width: 44, height: 44).background(DrivyTheme.surfaceMuted, in: Circle())
+            }.buttonStyle(.plain).disabled(saving).accessibilityLabel("Fermer le signalement")
+        }
+        .padding(.horizontal, 24).padding(.top, 28).padding(.bottom, 18)
+        .foregroundStyle(DrivyTheme.text)
     }
 
     private var categoryChoices: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: dynamicTypeSize.isAccessibilitySize ? 240 : 130), spacing: 12)],
-            spacing: 16
-        ) {
-            ForEach(ObservationTheme.allCases) { theme in
-                Button { selectedTheme = theme } label: {
-                    VStack(spacing: 12) {
-                        Image(systemName: theme.symbol)
-                            .font(.title2)
-                            .frame(width: 52, height: 52)
-                            .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 18))
-                        Text(theme.label)
-                            .font(.subheadline.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .foregroundStyle(DrivyTheme.accent)
-                    .frame(maxWidth: .infinity, minHeight: 110)
-                    .contentShape(Rectangle())
+        VStack(alignment: .leading, spacing: 18) {
+            LazyVGrid(columns: columns, alignment: .center, spacing: 14) {
+                ForEach(ObservationTheme.allCases) { theme in
+                    Button { selectedTheme = theme } label: {
+                        VStack(spacing: 11) {
+                            Image(systemName: theme.journeySymbol).font(.title2.weight(.regular))
+                                .foregroundStyle(DrivyTheme.accent).frame(width: 52, height: 52)
+                                .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 17))
+                            Text(theme.label).font(.caption.weight(.semibold))
+                                .foregroundStyle(DrivyTheme.text).multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 100, alignment: .top)
+                        .contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                        .accessibilityIdentifier(theme == .priority ? "category-priorities" : "category-\(theme.rawValue)")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier(theme == .priority ? "category-priorities" : "category-\(theme.rawValue)")
             }
+            Text("Choisissez le moment à retenir.").font(.caption).foregroundStyle(DrivyTheme.muted)
+                .frame(maxWidth: .infinity).padding(.top, 2)
         }
     }
 
     private func statusChoices(for theme: ObservationTheme) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            DisclosureGroup(isExpanded: $showsNote) {
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("Un détail à retrouver au bilan", text: $note, axis: .vertical)
-                        .lineLimit(2...4)
-                        .padding(12)
-                        .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 12))
-                        .accessibilityLabel("Note facultative")
-                        .accessibilityIdentifier("observation-note")
-                        .disabled(saving)
-                    if note.count > 1_000 {
-                        Text("Limitez la note à 1 000 caractères pour l’enregistrer.")
-                            .font(.footnote)
-                            .foregroundStyle(DrivyTheme.danger)
-                    }
-                }
-                .padding(.top, 8)
-            } label: {
-                Label(note.isEmpty ? "Ajouter une note" : "Note saisie", systemImage: "note.text")
-                    .font(.subheadline.weight(.medium))
-                    .frame(minHeight: 44)
-            }
-            .accessibilityIdentifier("observation-note-disclosure")
-
+        VStack(alignment: .leading, spacing: 0) {
             ForEach(ObservationStatus.allCases) { status in
                 Button { save(theme: theme, status: status) } label: {
                     HStack(spacing: 16) {
-                        Image(systemName: status.symbol)
-                            .font(.headline)
-                            .foregroundStyle(status.color)
-                            .frame(width: 36, height: 36)
-                            .background(DrivyTheme.surfaceMuted, in: Circle())
-                        Text(status.label)
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(DrivyTheme.text)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.vertical, 10)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(saving || !controller.isCapturing || note.count > 1_000)
-                .accessibilityHint("Enregistre l’observation sur cet appareil")
-                .accessibilityIdentifier("status-\(status.rawValue)")
-                if status != ObservationStatus.allCases.last { Divider() }
+                        Image(systemName: status.symbol).font(.body.weight(.medium))
+                            .foregroundStyle(status.color).frame(width: 38, height: 38)
+                            .background(status.color.opacity(0.10), in: Circle())
+                        Text(status.label).font(.body.weight(.semibold)).foregroundStyle(DrivyTheme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }.frame(minHeight: 72).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+                    .disabled(saving || !controller.isCapturing || note.count > 1_000)
+                    .accessibilityHint("Enregistre l’observation sur cet appareil")
+                    .accessibilityIdentifier("status-\(status.rawValue)")
+                if status != ObservationStatus.allCases.last { Divider().padding(.leading, 54) }
             }
-            if saving {
-                ProgressView("Enregistrement…")
-            } else if !controller.isCapturing {
+            if saving { ProgressView("Enregistrement…").frame(maxWidth: .infinity).padding(.top, 12) }
+            else if !controller.isCapturing {
                 Text("La séance est arrêtée. Cette note n’est pas enregistrée ; vous pouvez la copier avant de fermer.")
-                    .font(.footnote)
-                    .foregroundStyle(DrivyTheme.warning)
+                    .font(.footnote).foregroundStyle(DrivyTheme.warning).padding(.top, 12)
             } else {
-                Text("Choisir un statut enregistre l’observation.")
-                    .font(.footnote)
-                    .foregroundStyle(DrivyTheme.muted)
+                Text("Le choix enregistre.").font(.caption).foregroundStyle(DrivyTheme.muted)
+                    .frame(maxWidth: .infinity).padding(.top, 12)
             }
+            DisclosureGroup(isExpanded: $showsNote) {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Un détail à retrouver au bilan", text: $note, axis: .vertical)
+                        .lineLimit(3...6).focused($noteFocused).padding(14)
+                        .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14))
+                        .accessibilityLabel("Note facultative").accessibilityIdentifier("observation-note").disabled(saving)
+                    if note.count > 1_000 {
+                        Text("Limitez la note à 1 000 caractères.").font(.footnote).foregroundStyle(DrivyTheme.danger)
+                    }
+                }.padding(.top, 8)
+            } label: {
+                Label(note.isEmpty ? "Ajouter une note" : "Modifier la note", systemImage: "note.text")
+                    .font(.subheadline).frame(minHeight: 44)
+            }.padding(.top, 12).accessibilityIdentifier("observation-note-disclosure")
         }
     }
-
     private func save(theme: ObservationTheme, status: ObservationStatus) {
         guard !saving else { return }
-        saving = true
+        noteFocused = false; saving = true
         Task {
             let saved = await controller.addObservation(theme: theme, status: status, note: note, context: context)
             saving = false
@@ -269,7 +231,6 @@ struct ObservationComposer: View {
         }
     }
 }
-
 struct ObservationListView: View {
     let session: DrivingSession
     @Environment(\.dismiss) private var dismiss

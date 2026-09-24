@@ -165,10 +165,12 @@ struct SchoolCatalogEditor: View {
                         .font(.footnote).foregroundStyle(DrivyTheme.muted)
                 }
             }
-            Section("Conditions proposées") {
+            Section {
                 TextField("Durée en minutes", text: $offering.duration).keyboardType(.numberPad)
                 TextField("Prix en CHF", text: $offering.price).keyboardType(.decimalPad)
                 Toggle("Activer cette offre", isOn: $offering.enabled)
+            } header: {
+                Text("Conditions proposées")
             } footer: {
                 Text("Une offre activée permet d’ouvrir de nouvelles formations. Elle exige un référentiel et une procédure approuvés ; ce choix ne les approuve pas.")
             }
