@@ -261,6 +261,7 @@ private struct SchoolLessonDetailView: View {
     @State private var planningRoute: PlanningRoute?
     @State private var showsReport = false
     @State private var capturePreparation: SchoolCapturePreparationWorkspace?
+    @State private var observationsModel: SchoolObservationWorkspace?
     @State private var mayPrepareCapture = false
 
     private struct PlanningRoute: Identifiable {
@@ -316,14 +317,23 @@ private struct SchoolLessonDetailView: View {
             .sheet(item: $capturePreparation) { model in
                 SchoolCapturePreparationView(model: model, schoolWorkspace: workspace)
             }
+            .sheet(item: $observationsModel) { model in
+                SchoolObservationView(model: model, schoolWorkspace: workspace)
+            }
             .onChange(of: identityScope) { _, _ in
                 capturePreparation?.invalidate(); capturePreparation = nil; mayPrepareCapture = false
+                observationsModel?.invalidate(); observationsModel = nil
                 planningRoute?.model.invalidate(); planningRoute = nil; showsReport = false; lesson = nil; dismiss()
             }
         }.tint(DrivyTheme.accent)
     }
     private func lessonActions(_ lesson: SchoolLesson) -> some View {
         VStack(spacing: 12) {
+            if workspace.membership?.roles.contains("INSTRUCTOR") == true,
+               workspace.membership?.membershipId == lesson.instructorMembershipId {
+                Button { openObservations() } label: { Label("Observations privées", systemImage: "text.bubble") }
+                    .buttonStyle(DrivySecondaryButtonStyle()).accessibilityIdentifier("lesson-private-observations")
+            }
             if mayPrepareCapture {
                 Button { openCapturePreparation() } label: { Label("Préparer le GPS", systemImage: "location.circle") }
                     .buttonStyle(DrivySecondaryButtonStyle()).accessibilityIdentifier("lesson-prepare-gps")
@@ -348,6 +358,13 @@ private struct SchoolLessonDetailView: View {
         guard let person = workspace.person, let membership = workspace.membership, mayManage else { return }
         let model = SchoolPlanningWorkspace(scope: client.scope(person: person, membership: membership), client: client.planningClient, lesson: lesson)
         planningRoute = PlanningRoute(model: model, cancelling: cancelling)
+    }
+    private func openObservations() {
+        guard let person = workspace.person, let membership = workspace.membership,
+              membership.schoolId == schoolID, membership.roles.contains("INSTRUCTOR"),
+              lesson?.instructorMembershipId == membership.membershipId else { return }
+        observationsModel = SchoolObservationWorkspace(scope: client.scope(person: person, membership: membership),
+            lessonID: lessonID, client: client.observationClient)
     }
     private func openCapturePreparation() {
         guard mayPrepareCapture, let person = workspace.person, let membership = workspace.membership,
