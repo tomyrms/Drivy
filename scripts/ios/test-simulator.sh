@@ -16,7 +16,6 @@ xcodebuild test-without-building \
   -parallel-testing-enabled NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/Tests.xcresult \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
   2>&1 | tee artifacts/ios/simulator-test.log
 xcrun simctl launch "$device_id" ch.drivy.qualification
 sleep 2
@@ -40,7 +39,6 @@ xcodebuild test-without-building \
   -only-testing:DrivyUITests -parallel-testing-enabled NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/iPadTests.xcresult \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
   2>&1 | tee artifacts/ios/ipad-test.log
 xcrun simctl launch "$ipad_id" ch.drivy.qualification
 sleep 2

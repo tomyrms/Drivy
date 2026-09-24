@@ -47,7 +47,9 @@ jobs:
           sw_vers > artifacts/ios/macos.txt
           swift --version > artifacts/ios/swift.txt
           xcodegen generate --spec apps/ios/project.yml
-          xcodebuild -resolvePackageDependencies -project apps/ios/Drivy.xcodeproj -scheme Drivy
+          mkdir -p apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp apps/ios/Package.resolved apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          xcodebuild -resolvePackageDependencies -onlyUsePackageVersionsFromResolvedFile -project apps/ios/Drivy.xcodeproj -scheme Drivy
           cp apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved artifacts/ios/Package.resolved
       - name: Compiler l'application et les tests natifs
         shell: bash
@@ -57,8 +59,18 @@ jobs:
             -project apps/ios/Drivy.xcodeproj -scheme Drivy \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath artifacts/ios/DerivedData \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             2>&1 | tee artifacts/ios/simulator-build.log
+          python3 - <<'PY'
+          import pathlib, plistlib, shutil
+          root = pathlib.Path('artifacts/ios/DerivedData/Build/Intermediates.noindex/Drivy.build')
+          matches = list(root.rglob('Drivy.app-Simulated.xcent'))
+          if len(matches) != 1:
+              raise SystemExit('Entitlements du simulateur introuvables ou ambigus.')
+          entitlements = plistlib.loads(matches[0].read_bytes())
+          if entitlements.get('application-identifier') != 'ch.drivy.qualification' or 'ch.drivy.qualification' not in entitlements.get('keychain-access-groups', []):
+              raise SystemExit('Accès au trousseau absent des entitlements du simulateur.')
+          shutil.copyfile(matches[0], 'artifacts/ios/simulator-entitlements.plist')
+          PY
       - name: Tests natifs et parcours iPhone puis iPad
         shell: bash
         run: bash scripts/ios/test-simulator.sh
@@ -108,5 +120,6 @@ jobs:
             artifacts/ios/sdks.txt
             artifacts/ios/macos.txt
             artifacts/ios/swift.txt
+            artifacts/ios/simulator-entitlements.plist
           if-no-files-found: warn
           retention-days: 14

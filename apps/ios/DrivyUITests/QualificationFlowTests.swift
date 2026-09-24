@@ -8,8 +8,12 @@ final class QualificationFlowTests: XCTestCase {
         let newSession = app.buttons["new-session"]
         XCTAssertTrue(newSession.waitForExistence(timeout: 15))
         attach(app, name: "01-accueil")
+        XCTAssertTrue(newSession.isEnabled, app.debugDescription)
+        guard newSession.isEnabled else { return }
         newSession.tap()
-        app.buttons["start-without-gps"].tap()
+        let withoutGPS = app.buttons["start-without-gps"]
+        XCTAssertTrue(withoutGPS.waitForExistence(timeout: 5))
+        withoutGPS.tap()
         let report = app.buttons["report-observation"]
         XCTAssertTrue(report.waitForExistence(timeout: 10))
         report.tap()
@@ -24,7 +28,10 @@ final class QualificationFlowTests: XCTestCase {
         waitForExpectations(timeout: 10)
         attach(app, name: "02-observation-sauvegardee")
         app.buttons["session-stop"].tap()
-        app.buttons["stop-session-confirm"].tap()
+        let confirm = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@",
+            "stop-session-confirm", "Terminer la séance")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
         XCTAssertTrue(app.buttons["new-session"].waitForExistence(timeout: 10))
         app.terminate()
         app.launch()

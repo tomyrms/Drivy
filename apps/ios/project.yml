@@ -17,6 +17,10 @@ settings:
     CODE_SIGNING_ALLOWED: NO
     CODE_SIGNING_REQUIRED: NO
     DEVELOPMENT_TEAM: ''
+    'CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]': YES
+    'CODE_SIGNING_REQUIRED[sdk=iphonesimulator*]': YES
+    'CODE_SIGN_IDENTITY[sdk=iphonesimulator*]': '-'
+    'CODE_SIGN_STYLE[sdk=iphonesimulator*]': Manual
     GCC_PREPROCESSOR_DEFINITIONS: '$(inherited) SQLITE_HAS_CODEC=1'
     OTHER_SWIFT_FLAGS: '$(inherited) -Xcc -DSQLITE_HAS_CODEC'
     MARKETING_VERSION: 0.1.0
@@ -42,6 +46,7 @@ targets:
         ENABLE_PREVIEWS: YES
         SWIFT_EMIT_LOC_STRINGS: YES
         INFOPLIST_FILE: Drivy/Info.plist
+        'CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]': Configuration/Simulator.entitlements
     scheme:
       testTargets:
         - DrivyTests
