@@ -12,16 +12,27 @@ struct SchoolHomeView: View {
     var openProfile: ((SchoolLearner) -> Void)? = nil
     var openProfilePolicy: (() -> Void)? = nil
     var openOnboarding: (() -> Void)? = nil
+    var openCatalog: (() -> Void)? = nil
+    var openTrainingAdministration: ((SchoolLearner) -> Void)? = nil
+    var agendaClient: SchoolAgendaClient? = nil
     @State private var selectedTab: HomeTab = .session
     @State private var choosesSchool = false
 
-    private enum HomeTab: Hashable { case session, learners, school }
+    private enum HomeTab: Hashable { case session, agenda, learners, school }
 
     var body: some View {
         TabView(selection: $selectedTab) {
             sessionTab
                 .tabItem { Label("Séance", systemImage: "map") }
                 .tag(HomeTab.session)
+            if let agendaClient {
+                NavigationStack {
+                    SchoolAgendaView(client: agendaClient, workspace: workspace)
+                        .toolbar { contextToolbar }
+                }
+                    .tabItem { Label("Agenda", systemImage: "calendar") }
+                    .tag(HomeTab.agenda)
+            }
             learnersTab
                 .tabItem { Label(workspace.isLearnerOnly ? "Mon dossier" : "Élèves", systemImage: "person.2") }
                 .tag(HomeTab.learners)
@@ -48,7 +59,7 @@ struct SchoolHomeView: View {
         if workspace.membership != nil {
             SchoolBrowserView(workspace: workspace, openAccount: openAccount,
                 openInvitations: openInvitations, openProfile: openProfile,
-                openSchool: { selectedTab = .school })
+                openSchool: { selectedTab = .school }, openTrainingAdministration: openTrainingAdministration)
         } else {
             NavigationStack {
                 schoolSelection
@@ -136,6 +147,10 @@ struct SchoolHomeView: View {
                 actionRow(workspace.isLearnerOnly ? "Mon dossier scolaire" : "Dossiers élèves",
                     detail: workspace.isLearnerOnly ? "Profil et formations" : "Retrouver les élèves autorisés",
                     symbol: "person.2", action: { selectedTab = .learners })
+                if let openCatalog {
+                    Divider().padding(.leading, 64)
+                    actionRow("Formations", detail: "Offres, référentiels et procédures", symbol: "steeringwheel", action: openCatalog)
+                }
                 if let openInvitations {
                     Divider().padding(.leading, 64)
                     actionRow("Invitations", detail: "Inviter et suivre les accès", symbol: "envelope", action: openInvitations)

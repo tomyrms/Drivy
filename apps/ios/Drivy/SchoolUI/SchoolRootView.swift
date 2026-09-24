@@ -21,9 +21,11 @@ struct SchoolRootView: View {
     @State private var opensProfilePolicyAfterAccount = false
     @State private var opensOnboardingAfterAccount = false
     @State private var opensProfilePolicyAfterConfiguration = false
+    @State private var catalogWorkspace: SchoolCatalogWorkspace?
+    @State private var showsCatalog = false
 
     var body: some View {
-        accountPresentation
+        catalogPresentation
             .sheet(isPresented: $showsInvitations, onDismiss: invitationsDismissed) {
                 invitationsSheet
             }
@@ -58,7 +60,8 @@ struct SchoolRootView: View {
                 openAccount: { showAccount() }, signOut: { signOut() },
                 configureSchool: homeConfigurationAction, openInvitations: invitationsAction,
                 openProfile: profileAction, openProfilePolicy: homeProfilePolicyAction,
-                openOnboarding: homeOnboardingAction)
+                openOnboarding: homeOnboardingAction, openCatalog: homeCatalogAction,
+                openTrainingAdministration: trainingAdministrationAction, agendaClient: homeAgendaClient)
         } else {
             NavigationStack {
                 accountLanding(workspace)
@@ -78,7 +81,7 @@ struct SchoolRootView: View {
             else { workspace?.reset() }
         }
         .onChange(of: identity.isAuthenticated) { _, authenticated in
-            if !authenticated { closeConfiguration(); closeInvitations(); closeProfile(); workspace?.reset() }
+            if !authenticated { closeConfiguration(); closeInvitations(); closeProfile(); closeCatalog(); workspace?.reset() }
         }
         .onChange(of: workspace?.membership?.membershipId) { _, _ in
             if workspace?.isLoadingAccount != true { verifyPresentedScopes() }
@@ -98,6 +101,50 @@ struct SchoolRootView: View {
                 openInvitations: accountInvitationsAction, openProfilePolicy: accountProfilePolicyAction,
                 openOnboarding: accountOnboardingAction, signOut: signOut)
         }
+    }
+
+    private var catalogPresentation: some View {
+        accountPresentation.sheet(isPresented: $showsCatalog, onDismiss: catalogDismissed) {
+            if let catalogWorkspace {
+                SchoolCatalogView(model: catalogWorkspace)
+                    .disabled(isCheckingSchoolAccess)
+                    .overlay { accessCheckOverlay }
+                    .onChange(of: catalogWorkspace.accessFailure) { _, failure in
+                        if failure != nil { closeCatalog(); Task { await workspace?.loadAccount() } }
+                    }
+            }
+        }
+    }
+
+    private var homeAgendaClient: SchoolAgendaClient? {
+        guard let configuration else { return nil }
+        return SchoolAgendaClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
+    }
+
+    private var homeCatalogAction: (() -> Void)? {
+        guard canConfigureSchool else { return nil }
+        return { openCatalog() }
+    }
+
+    private var trainingAdministrationAction: ((SchoolLearner) -> Void)? {
+        guard canConfigureSchool, workspace?.school?.status == "ACTIVE" else { return nil }
+        return { learner in openCatalog(learner: learner) }
+    }
+
+    private func openCatalog(learner: SchoolLearner? = nil) {
+        guard canConfigureSchool, let configuration, let person = workspace?.person, let membership = workspace?.membership else { return }
+        if let learner, learner.schoolId != membership.schoolId { return }
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
+        catalogWorkspace = SchoolCatalogWorkspace(scope: scope, learner: learner,
+            api: SchoolCatalogClient(baseURL: configuration.apiBaseURL, tokenSource: identity))
+        showsCatalog = true
+    }
+
+    private func closeCatalog() { catalogWorkspace?.invalidate(); showsCatalog = false }
+    private func catalogDismissed() {
+        catalogWorkspace?.invalidate(); catalogWorkspace = nil
+        if identity.isAuthenticated, workspace?.selectedLearnerID != nil { Task { await workspace?.loadSelectedLearner() } }
     }
 
     @ViewBuilder
@@ -438,6 +485,7 @@ struct SchoolRootView: View {
     }
 
     private func signOut() {
+        closeCatalog()
         closeProfile()
         closeConfiguration()
         closeInvitations()
@@ -477,6 +525,11 @@ struct SchoolRootView: View {
     }
 
     private func verifyPresentedScopes() {
+        if let model = catalogWorkspace {
+            if !canConfigureSchool || model.scope.personID != workspace?.person?.personId
+                || model.scope.membershipID != workspace?.membership?.membershipId
+                || model.scope.accessEpoch != workspace?.membership?.accessEpoch { closeCatalog() }
+        }
         verifyConfigurationScope()
         verifyProfileScope()
         guard let model = invitations else { return }

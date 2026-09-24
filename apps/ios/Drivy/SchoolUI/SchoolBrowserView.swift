@@ -6,6 +6,7 @@ struct SchoolBrowserView: View {
     var openInvitations: (() -> Void)? = nil
     var openProfile: ((SchoolLearner) -> Void)? = nil
     var openSchool: (() -> Void)? = nil
+    var openTrainingAdministration: ((SchoolLearner) -> Void)? = nil
     @State private var choosesSchool = false
 
     var body: some View {
@@ -34,7 +35,7 @@ struct SchoolBrowserView: View {
             .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 440)
         } detail: {
             if workspace.selectedLearnerID != nil {
-                SchoolLearnerDetailView(workspace: workspace, openProfile: openProfile)
+                SchoolLearnerDetailView(workspace: workspace, openProfile: openProfile, openTrainingAdministration: openTrainingAdministration)
             } else {
                 SchoolOverviewView(workspace: workspace)
             }
@@ -252,6 +253,7 @@ private struct SchoolOverviewView: View {
 private struct SchoolLearnerDetailView: View {
     @Bindable var workspace: SchoolWorkspace
     let openProfile: ((SchoolLearner) -> Void)?
+    let openTrainingAdministration: ((SchoolLearner) -> Void)?
     @State private var showsTraining = false
 
     var body: some View {
@@ -344,6 +346,13 @@ private struct SchoolLearnerDetailView: View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Formations").font(.title3.weight(.semibold))
+                if let learner = workspace.learner, let openTrainingAdministration, learner.archivedAt == nil {
+                    Button { openTrainingAdministration(learner) } label: {
+                        Label("Gérer les formations", systemImage: "person.badge.plus")
+                    }
+                    .frame(minHeight: 48)
+                    .accessibilityIdentifier("manage-learner-trainings")
+                }
                 if workspace.isLoadingTrainings { ProgressView("Chargement des formations…") }
                 if let error = workspace.trainingsError {
                     SchoolErrorNotice(message: error, retry: { Task { await workspace.loadTrainings() } })

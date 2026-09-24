@@ -1,0 +1,296 @@
+import SwiftUI
+
+struct SchoolCatalogView: View {
+    @Bindable var model: SchoolCatalogWorkspace
+    @Environment(\.dismiss) private var dismiss
+    @State private var section: CatalogSection = .offerings
+    @State private var editor: SchoolCatalogEditorKind?
+    @State private var showsTeam = false
+    @State private var sourceOffering: SchoolOffering?
+    @State private var sourceCurriculum: SchoolCurriculum?
+    @State private var sourcePolicy: SchoolCatalogPolicy?
+    private enum CatalogSection: String, CaseIterable { case offerings = "Offres", curricula = "Référentiels", policies = "Procédures" }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    heading
+                    feedback
+                    if model.learner != nil { learnerTrainings }
+                    else { catalog }
+                }
+                .padding(24)
+                .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: .infinity)
+            }
+            .background(DrivyTheme.canvas)
+            .navigationTitle(model.learner == nil ? "Formations" : "Dossier de formation")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } }
+                if model.learner == nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { showsTeam = true } label: { Label("Équipe", systemImage: "person.2") }
+                    }
+                }
+            }
+            .refreshable { await model.load() }
+            .task { await model.load() }
+            .sheet(item: $editor) { kind in
+                SchoolCatalogEditor(model: model, kind: kind, sourceOffering: sourceOffering,
+                    sourceCurriculum: sourceCurriculum, sourcePolicy: sourcePolicy)
+            }
+            .sheet(isPresented: $showsTeam) { team }
+        }
+        .tint(DrivyTheme.accent)
+    }
+
+    private var heading: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(model.school?.name ?? "Votre école").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            Text(model.learner?.displayName ?? "Catalogue des formations").font(.largeTitle.weight(.bold))
+            Text(model.learner == nil
+                ? "Les offres relient une catégorie, un référentiel et les conditions de votre école."
+                : "Choisissez une offre, puis affectez le moniteur qui accompagnera cet élève.")
+                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder private var feedback: some View {
+        if model.isLoading { ProgressView("Actualisation de l’école…").frame(maxWidth: .infinity, minHeight: 44) }
+        if let school = model.school, school.status != "ACTIVE" {
+            Label("Activez l’école dans sa configuration avant de créer son catalogue.", systemImage: "info.circle")
+                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+        }
+        if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
+        if let message = model.successMessage {
+            Label(message, systemImage: "checkmark.circle").font(.subheadline).foregroundStyle(DrivyTheme.success)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if let pending = model.pending {
+            DrivyPanel {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Demande à vérifier", systemImage: "clock.arrow.circlepath").font(.headline)
+                    Text(model.pendingSummary).font(.subheadline)
+                    Text("Sa référence et son contenu sont conservés. Une nouvelle demande ne la remplace pas.")
+                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                    DisclosureGroup("Référence de la demande") {
+                        Text(pending.id.uuidString).font(.caption.monospaced()).textSelection(.enabled)
+                    }.font(.footnote)
+                    Button("Vérifier le résultat") { Task { await model.verifyPending() } }
+                        .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.canVerify)
+                    if model.canRetry {
+                        Button("Renvoyer la même demande") { Task { await model.retryPending() } }
+                            .frame(minHeight: 44)
+                    }
+                }
+            }
+        }
+    }
+
+    private var catalog: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Picker("Catalogue", selection: $section) {
+                ForEach(CatalogSection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            switch section {
+            case .offerings: offerings
+            case .curricula: curricula
+            case .policies: policies
+            }
+        }
+    }
+
+    private var offerings: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if model.currentOfferings.isEmpty && !model.isLoading {
+                empty("Votre première offre", text: "Commencez par un référentiel et une procédure. Vous pourrez ensuite définir la durée et le prix de l’offre.", symbol: "steeringwheel")
+            }
+            ForEach(model.currentOfferings) { offer in
+                DrivyPanel {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Catégorie \(offer.categoryCode)").font(.title2.weight(.semibold))
+                                Text(offer.offeringKey).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            }
+                            Spacer(minLength: 8)
+                            Label(offer.enabled ? "Activée" : "Désactivée", systemImage: offer.enabled ? "checkmark.circle" : "pause.circle")
+                                .font(.caption).foregroundStyle(offer.enabled ? DrivyTheme.success : DrivyTheme.muted)
+                        }
+                        Text("\(offer.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(offer.defaultPriceCents))")
+                            .font(.headline)
+                        Text("Version \(offer.version) · les formations existantes conservent leur offre.")
+                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                        Button("Préparer une nouvelle version") {
+                            clearSources(); sourceOffering = offer; editor = .offering
+                        }.frame(minHeight: 44).disabled(!model.canMutate)
+                    }
+                }
+            }
+            createButton("Créer une offre", symbol: "plus", kind: .offering)
+        }
+    }
+    private var curricula: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if model.curricula.isEmpty && !model.isLoading {
+                empty("Les compétences de votre école", text: "Définissez ce qui sera travaillé dans chaque catégorie. L’approbation vous appartient.", symbol: "list.bullet.rectangle")
+            }
+            ForEach(model.curricula) { curriculum in
+                DrivyPanel {
+                    DisclosureGroup {
+                        ForEach(curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }) { competency in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(competency.label).font(.headline)
+                                Text(competency.description).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            }.padding(.vertical, 8)
+                        }
+                        Button("Préparer une nouvelle révision") {
+                            clearSources(); sourceCurriculum = curriculum; editor = .curriculum
+                        }.frame(minHeight: 44).disabled(!model.canMutate)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Catégorie \(curriculum.categoryCode) · révision \(curriculum.revision)").font(.headline)
+                            Text(curriculum.approved ? "Approuvé par l’école" : "Brouillon")
+                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        }
+                    }
+                }
+            }
+            createButton("Créer un référentiel", symbol: "plus", kind: .curriculum)
+        }
+    }
+    private var policies: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if model.policies.isEmpty && !model.isLoading {
+                empty("Vos procédures de formation", text: "Précisez le déroulement et les conditions d’annulation de chaque catégorie.", symbol: "doc.text")
+            }
+            ForEach(model.policies) { policy in
+                DrivyPanel {
+                    DisclosureGroup {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(policy.procedureText).textSelection(.enabled)
+                            Text("Annulation").font(.headline)
+                            Text(policy.cancellationPolicyText).textSelection(.enabled)
+                            ForEach(Array(policy.sourceUrls.enumerated()), id: \.offset) { _, source in
+                                if let url = URL(string: source), ["https", "http"].contains(url.scheme ?? ""), url.user == nil, url.password == nil {
+                                    Link(url.host ?? "Source", destination: url)
+                                }
+                            }
+                            Button("Préparer une nouvelle version") {
+                                clearSources(); sourcePolicy = policy; editor = .policy
+                            }.frame(minHeight: 44).disabled(!model.canMutate)
+                        }.font(.subheadline).padding(.top, 12)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Catégorie \(policy.categoryCode) · version \(policy.version)").font(.headline)
+                            Text(policy.approved ? "Approuvée par l’école" : "Brouillon").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        }
+                    }
+                }
+            }
+            createButton("Créer une procédure", symbol: "plus", kind: .policy)
+        }
+    }
+
+    private var learnerTrainings: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if model.trainings.isEmpty && !model.isLoading {
+                empty("Ouvrir une formation", text: "Une formation utilise une offre précise de votre école. L’affectation du moniteur se fait ensuite.", symbol: "steeringwheel")
+            }
+            ForEach(model.trainings) { training in
+                Button { Task { await model.selectTraining(training) } } label: {
+                    HStack(spacing: 16) {
+                        Image(systemName: "steeringwheel").font(.title2).foregroundStyle(DrivyTheme.accent)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Catégorie \(training.categoryCode)").font(.headline)
+                            Text(SchoolPresentation.trainingStatus(training.status)).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: model.selectedTraining?.id == training.id ? "checkmark.circle.fill" : "chevron.right")
+                            .foregroundStyle(DrivyTheme.accent)
+                    }
+                    .padding(20).frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
+                    .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+                }.buttonStyle(.plain).disabled(model.isBusy || model.isLoading)
+            }
+            createButton("Créer une formation", symbol: "plus", kind: .training)
+            if model.availableOfferings.isEmpty && !model.isLoading {
+                Text("L’administration doit activer une offre dans École → Formations avant d’ouvrir une formation.")
+                    .font(.footnote).foregroundStyle(DrivyTheme.muted)
+            }
+            if let training = model.selectedTraining {
+                assignments(training)
+            }
+        }
+    }
+    private func assignments(_ training: SchoolTraining) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Moniteurs de cette formation").font(.title3.weight(.semibold))
+            if model.assignments.isEmpty && !model.isLoading {
+                Text("Aucun moniteur affecté. La formation existe déjà ; choisissez la personne qui l’accompagnera.")
+                    .foregroundStyle(DrivyTheme.muted)
+            }
+            ForEach(model.assignments) { assignment in
+                DrivyPanel {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(model.members.first(where: { $0.id == assignment.instructorMembershipId })?.displayName ?? "Moniteur de l’école")
+                            .font(.headline)
+                        Text("Dès le \(assignmentDate(assignment.validFrom))").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        if let end = assignment.validUntil { Text("Jusqu’au \(assignmentDate(end))").font(.subheadline).foregroundStyle(DrivyTheme.muted) }
+                    }
+                }
+            }
+            if training.status == "ACTIVE" {
+                createButton("Affecter un moniteur", symbol: "person.badge.plus", kind: .assignment)
+                if model.instructors.isEmpty && !model.isLoading {
+                    Text("Un membre actif avec le rôle Moniteur est nécessaire pour cette affectation.")
+                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                }
+            }
+            Text("Le contrôle du permis reste une vérification distincte. Une formation ne confirme pas une autorisation de conduire.")
+                .font(.footnote).foregroundStyle(DrivyTheme.muted)
+        }
+    }
+    private var team: some View {
+        NavigationStack {
+            List(model.members) { member in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(member.displayName).font(.headline)
+                    Text(SchoolPresentation.roles(member.roles)).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    if member.status != "ACTIVE" { Text("Accès révoqué").font(.caption).foregroundStyle(DrivyTheme.muted) }
+                }.padding(.vertical, 8)
+            }
+            .navigationTitle("Équipe et membres")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { showsTeam = false } } }
+        }
+    }
+    private func createButton(_ title: String, symbol: String, kind: SchoolCatalogEditorKind) -> some View {
+        Button { clearSources(); editor = kind } label: { Label(title, systemImage: symbol) }
+            .buttonStyle(DrivySecondaryButtonStyle())
+            .disabled(!model.canMutate || kind == .training && model.availableOfferings.isEmpty || kind == .assignment && model.instructors.isEmpty)
+    }
+    private func clearSources() { sourceOffering = nil; sourceCurriculum = nil; sourcePolicy = nil }
+    private func empty(_ title: String, text: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Image(systemName: symbol).font(.largeTitle).foregroundStyle(DrivyTheme.muted)
+            Text(title).font(.title2.weight(.semibold))
+            Text(text).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+        }.padding(.vertical, 16).fixedSize(horizontal: false, vertical: true)
+    }
+    private func assignmentDate(_ text: String) -> String {
+        guard let date = SchoolInvitation.date(text) else { return "Date indisponible" }
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH")
+        formatter.timeZone = TimeZone(identifier: model.school?.timeZone ?? "Europe/Zurich")
+        formatter.dateStyle = .medium; formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+enum SchoolCatalogEditorKind: String, Identifiable {
+    case offering, curriculum, policy, training, assignment
+    var id: String { rawValue }
+}

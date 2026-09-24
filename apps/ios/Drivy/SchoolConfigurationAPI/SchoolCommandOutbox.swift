@@ -18,6 +18,14 @@ enum SchoolCommandKind: String, Codable, Sendable {
     case updateSchool, saveSetup, activate, saveDataPolicy
     case createInvitation, resendInvitation, revokeInvitation
     case createProfilePolicy, publishProfilePolicy, updateProfile, saveOnboarding, completeOnboarding
+    case createOffering, createCurriculum, createCatalogPolicy, createTraining, createAssignment, updateMember
+
+    var isCatalog: Bool {
+        switch self {
+        case .createOffering, .createCurriculum, .createCatalogPolicy, .createTraining, .createAssignment, .updateMember: true
+        default: false
+        }
+    }
 
     var isProfile: Bool {
         switch self {
@@ -26,7 +34,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         }
     }
 
-    var isConfiguration: Bool { !isInvitation && !isProfile }
+    var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog }
 
     var isInvitation: Bool {
         switch self {
@@ -49,6 +57,12 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .updateProfile: "UPDATE_ADMINISTRATIVE_PROFILE"
         case .saveOnboarding: "SAVE_ONBOARDING"
         case .completeOnboarding: "COMPLETE_ONBOARDING"
+        case .createOffering: "CREATE_OFFERING_VERSION"
+        case .createCurriculum: "CREATE_CURRICULUM_VERSION"
+        case .createCatalogPolicy: "CREATE_SCHOOL_POLICY"
+        case .createTraining: "CREATE_TRAINING"
+        case .createAssignment: "CREATE_ASSIGNMENT"
+        case .updateMember: "UPDATE_MEMBER"
         }
     }
 
@@ -61,6 +75,12 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .createProfilePolicy, .publishProfilePolicy: "ProfileFieldPolicy"
         case .updateProfile: "AdministrativeProfile"
         case .saveOnboarding, .completeOnboarding: "OnboardingProgress"
+        case .createOffering: "Offering"
+        case .createCurriculum: "Curriculum"
+        case .createCatalogPolicy: "SchoolPolicy"
+        case .createTraining: "Training"
+        case .createAssignment: "Assignment"
+        case .updateMember: "Member"
         }
     }
 }
@@ -87,8 +107,14 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
     }
 
     var hasValidTarget: Bool {
-        if !kind.isProfile && (routeResourceID != nil || expectedVersion != nil) { return false }
+        if !kind.isProfile && !kind.isCatalog && (routeResourceID != nil || expectedVersion != nil) { return false }
         switch kind {
+        case .createOffering, .createCurriculum, .createCatalogPolicy:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && expectedVersion == nil
+        case .createTraining, .createAssignment:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
+        case .updateMember:
+            return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
         case .createProfilePolicy: return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && ifMatchVersion > 0
         case .updateProfile: return resourceVersion > 0 && resourceID != nil && routeResourceID != nil && expectedVersion == nil
         case .publishProfilePolicy, .saveOnboarding, .completeOnboarding: return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
