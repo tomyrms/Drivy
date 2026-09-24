@@ -1,0 +1,17 @@
+name: drivy-identity-dev
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4@sha256:82a77884f3af238beab1e7afd63b5f530e1b5c0590bd7aa60b40a40463e29b2c
+    command: ["start-dev"]
+    env_file: [".state/keycloak.env"]
+    environment:
+      KC_HOSTNAME: "http://127.0.0.1:8081"
+      KC_HTTP_ENABLED: "true"
+      KC_LOG_LEVEL: "warn"
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+    mem_limit: 1g
+volumes:
+  keycloak-data:
