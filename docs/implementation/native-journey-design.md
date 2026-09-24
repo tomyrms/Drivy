@@ -40,3 +40,11 @@ Le bilan personnel indique qu’il reste sur cet appareil et n’est pas partag�
 - Racine locale `Séance d’essai` → `Trajets personnels`, `Nouvelle séance` → `Nouveau trajet` ; remplacer le panneau générique « Prendre des repères » par l’action et le choix réel avec ou sans GPS. La limite de deux heures reste visible, sans la présenter comme une leçon scolaire.
 
 Ces propositions ne sont pas appliquées aux fichiers Root/Home, réservés à l’intégration. Contrôle de diff effectué ; aucune nouvelle capture ou compilation Apple n’est revendiquée par cette passe. Les effets du texte agrandi, des observations simultanées et de l’interruption restent à confirmer dans le binaire groupé.
+
+## Signalement personnel : choix et interruption
+
+Le retour aux catégories reçoit une cible de 44 × 44 points. L’en-tête conserve l’instant figé et écrit « Sans position » ou « Sur le trajet » ; il ne s’appuie plus sur le seul pictogramme pour cette différence. L’instruction « Choisissez le moment à retenir » est retirée, car le moment a déjà été figé à l’ouverture. Le changement de catégorie/statut cible le titre pour la lecture d’accessibilité, sans choisir de statut ni écrire une observation.
+
+L’arrêt du trajet est expliqué même depuis la grille des catégories. Une note saisie reste disponible après arrêt ou échec ; le panneau se développe et retire le clavier automatique pour permettre sa relecture/copie. Le dépassement de 1 000 caractères est signalé près des statuts désactivés, avec un compteur à l’approche de la limite. La fermeture avec texte non enregistré garde sa confirmation. La liste d’un trajet d’exemple affiche son origine fictive.
+
+Cette passe ne change ni `ObservationContext`, ni validation du contrôleur, ni moment d’écriture ou de fermeture après succès. Contrôle de diff seulement ; le focus VoiceOver est implémenté mais reste à vérifier sur Apple, sans résultat d’usage physique revendiqué.

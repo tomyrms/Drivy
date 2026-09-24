@@ -100,6 +100,9 @@ struct ObservationComposer: View {
     @State private var confirmsDiscard = false
     @State private var detent: PresentationDetent = .height(440)
     @FocusState private var noteFocused: Bool
+    @AccessibilityFocusState private var focusedStep: Step?
+
+    private enum Step: Hashable { case categories, statuses }
 
     private var columns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: 10), count: dynamicTypeSize.isAccessibilitySize ? 2 : 3)
@@ -111,6 +114,13 @@ struct ObservationComposer: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if let theme = selectedTheme { statusChoices(for: theme) }
                     else { categoryChoices }
+                    if !controller.isCapturing && !saving {
+                        Text(note.isEmpty
+                             ? "Le trajet est arrêté. Ce signalement n’est pas enregistré."
+                             : "Le trajet est arrêté. Ce signalement n’est pas enregistré ; vous pouvez copier la note avant de fermer.")
+                            .font(.footnote).foregroundStyle(DrivyTheme.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if let error = controller.errorMessage { InlineErrorView(message: error) }
                 }
                 .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 24)
@@ -125,7 +135,19 @@ struct ObservationComposer: View {
         .interactiveDismissDisabled(saving || !note.isEmpty)
         .onAppear { if dynamicTypeSize.isAccessibilitySize { detent = .large } }
         .onChange(of: dynamicTypeSize) { _, size in if size.isAccessibilitySize { detent = .large } }
-        .onChange(of: showsNote) { _, value in if value { detent = .large; noteFocused = true } }
+        .onChange(of: showsNote) { _, value in
+            if value { detent = .large; noteFocused = controller.isCapturing }
+        }
+        .onChange(of: selectedTheme) { _, theme in
+            focusedStep = theme == nil ? .categories : .statuses
+        }
+        .onChange(of: controller.isCapturing) { _, isCapturing in
+            if !isCapturing {
+                noteFocused = false
+                detent = .large
+                if !note.isEmpty { showsNote = true }
+            }
+        }
         .confirmationDialog("Abandonner cette note ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
             Button("Abandonner la note", role: .destructive) { dismiss() }
             Button("Continuer la saisie", role: .cancel) { }
@@ -136,15 +158,18 @@ struct ObservationComposer: View {
         HStack(alignment: .center, spacing: 8) {
             if selectedTheme != nil {
                 Button { selectedTheme = nil; noteFocused = false } label: {
-                    Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 36, height: 44)
+                    Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 44, height: 44)
                 }.buttonStyle(.plain).disabled(saving).accessibilityLabel("Catégories")
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text(selectedTheme?.label ?? "Signaler").font(.title3.weight(.bold))
                     .fixedSize(horizontal: false, vertical: true)
-                Label("\(context.observedAt.sessionElapsed(since: sessionStartedAt)) · Privé",
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityFocused($focusedStep, equals: selectedTheme == nil ? .categories : .statuses)
+                Label("\(context.observedAt.sessionElapsed(since: sessionStartedAt)) · Privé · \(context.anchorPointID == nil ? "Sans position" : "Sur le trajet")",
                       systemImage: context.anchorPointID == nil ? "clock" : "mappin")
                     .font(.caption).foregroundStyle(DrivyTheme.muted).monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
             }.frame(maxWidth: .infinity, alignment: .leading)
             Button {
                 if note.isEmpty { dismiss() } else { confirmsDiscard = true }
@@ -176,13 +201,15 @@ struct ObservationComposer: View {
                         .accessibilityIdentifier(theme == .priority ? "category-priorities" : "category-\(theme.rawValue)")
                 }
             }
-            Text("Choisissez le moment à retenir.").font(.caption).foregroundStyle(DrivyTheme.muted)
-                .frame(maxWidth: .infinity).padding(.top, 2)
         }
     }
 
     private func statusChoices(for theme: ObservationTheme) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            if note.count > 1_000 {
+                Text("Raccourcissez la note à 1 000 caractères avant de choisir un statut.")
+                    .font(.footnote).foregroundStyle(DrivyTheme.danger).padding(.bottom, 12)
+            }
             ForEach(ObservationStatus.allCases) { status in
                 Button { save(theme: theme, status: status) } label: {
                     HStack(spacing: 16) {
@@ -200,10 +227,7 @@ struct ObservationComposer: View {
                 if status != ObservationStatus.allCases.last { Divider().padding(.leading, 54) }
             }
             if saving { ProgressView("Enregistrement…").frame(maxWidth: .infinity).padding(.top, 12) }
-            else if !controller.isCapturing {
-                Text("La séance est arrêtée. Cette note n’est pas enregistrée ; vous pouvez la copier avant de fermer.")
-                    .font(.footnote).foregroundStyle(DrivyTheme.warning).padding(.top, 12)
-            } else {
+            else if controller.isCapturing {
                 Text("Le choix enregistre.").font(.caption).foregroundStyle(DrivyTheme.muted)
                     .frame(maxWidth: .infinity).padding(.top, 12)
             }
@@ -213,8 +237,11 @@ struct ObservationComposer: View {
                         .lineLimit(3...6).focused($noteFocused).padding(14)
                         .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14))
                         .accessibilityLabel("Note facultative").accessibilityIdentifier("observation-note").disabled(saving)
-                    if note.count > 1_000 {
-                        Text("Limitez la note à 1 000 caractères.").font(.footnote).foregroundStyle(DrivyTheme.danger)
+                    if note.count >= 900 {
+                        Text("\(note.count) / 1 000 caractères")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(note.count > 1_000 ? DrivyTheme.danger : DrivyTheme.muted)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                 }.padding(.top, 8)
             } label: {
@@ -243,6 +270,12 @@ struct ObservationListView: View {
                 if session.observations.isEmpty {
                     ContentUnavailableView("Aucune observation", systemImage: "text.bubble", description: Text("Les observations enregistrées apparaîtront ici, même sans GPS."))
                 } else {
+                    if session.isExample {
+                        Section {
+                            Label("Observations d’exemple · données fictives", systemImage: "info.circle")
+                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        }
+                    }
                     ForEach(session.observations.sorted { $0.observedAt < $1.observedAt }) { observation in
                         ObservationRow(observation: observation, sessionStartedAt: session.startedAt)
                     }
