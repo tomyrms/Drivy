@@ -12,7 +12,7 @@ Les mutations prennent une intention contenant les octets exacts à conserver av
 
 Ce module n’est pas encore relié au collecteur local. Le journal chiffré spécialisé des chunks, la persistance du contexte autorisé et la fermeture durable sont à raccorder avant ouverture de la capture scolaire dans l’interface. Les trajets locaux et les exemples existants ne sont jamais envoyés automatiquement. Le choix « sans GPS » reste indépendant de cette réalisation.
 
-Vérification à ce stade : DTO, lectures et vérification de signature compilés dans l’IPA 0.7.0/build21, run36054482531. L’encodage des lots et l’ajustement du bail à la seconde entière du JWT sont compilés dans le build22, run36055359269. Les mutations attendent le résultat du build lancé sur `e60e7d9`. Les vecteurs de signature et l’interopérabilité des chunks restent à exécuter avant l’activation. Aucun appareil ni profil de capture physique n’est déclaré qualifié.
+Vérification à ce stade : DTO, lectures et vérification de signature compilés dans l’IPA 0.7.0/build21, run36054482531. L’encodage des lots et l’ajustement du bail à la seconde entière du JWT sont compilés dans le build22, run36055359269. Les mutations compilent dans le build25, source `0676b83`, run36058166375. Les vecteurs de signature et l’interopérabilité des chunks restent à exécuter avant l’activation. Aucun appareil ni profil de capture physique n’est déclaré qualifié.
 
 Les clés privées dédiées ont été préparées le 24 septembre sur CT114 par `provision-capture-keys.mjs`, dans `api.env` root0600 avec sauvegarde privée. Aucun service n’a été redémarré par ce provisionnement et aucun profil de qualification n’a été ajouté. Le script conserve les clés existantes lors d’une reprise.
 
