@@ -153,7 +153,7 @@ struct SchoolTrainingCreationView: View {
                     } label: {
                         HStack(spacing: DrivySpacing.xs) {
                             if model.isBusy { ProgressView() }
-                            Text(model.isBusy ? "Création de la formation…" : model.pending != nil ? "Résultat à vérifier" : "Créer la formation")
+                            Text(model.isBusy ? "Création de la formation…" : model.pending != nil ? "Demande à vérifier" : "Créer la formation")
                         }
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canCreate)

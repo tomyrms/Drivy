@@ -13,7 +13,7 @@ struct SchoolCatalogView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     heading
                     feedback
                     if model.learner != nil { learnerTrainings }
@@ -44,12 +44,16 @@ struct SchoolCatalogView: View {
     }
 
     private var heading: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(model.school?.name ?? "Votre école").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            Text(model.learner?.displayName ?? "Formations").font(.drivyScreenTitle)
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            Text(model.school?.name ?? "Votre école")
+                .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+            Text(model.learner?.displayName ?? "Formations")
+                .font(.drivyScreenTitle).foregroundStyle(DrivyTheme.text)
+                .accessibilityAddTraits(.isHeader)
             if model.learner != nil {
-                Text("Choisissez une offre, puis affectez le moniteur qui accompagnera cet élève.")
+                Text("Choisissez une formation, puis affectez le moniteur qui accompagnera cet élève.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    .padding(.top, DrivySpacing.xxs)
             }
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -66,27 +70,17 @@ struct SchoolCatalogView: View {
         }
         if let pending = model.pending {
             DrivyPanel {
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("Demande à vérifier", systemImage: "clock.arrow.circlepath").font(.headline)
-                    Text(model.pendingSummary).font(.subheadline)
-                    Text("Sa référence et son contenu sont conservés. Une nouvelle demande ne la remplace pas.")
-                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                    DisclosureGroup("Référence de la demande") {
-                        Text(pending.id.uuidString).font(.caption.monospaced()).textSelection(.enabled)
-                    }.font(.footnote)
-                    Button("Vérifier le résultat") { Task { await model.verifyPending() } }
-                        .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.canVerify)
-                    if model.canRetry {
-                        Button("Renvoyer la même demande") { Task { await model.retryPending() } }
-                            .frame(minHeight: 44)
-                    }
-                }
+                DrivyPendingRequest(message: model.pendingSummary,
+                    notes: ["Sa référence et son contenu sont conservés. Une nouvelle demande ne la remplace pas."],
+                    reference: pending.id,
+                    verify: { Task { await model.verifyPending() } }, canVerify: model.canVerify,
+                    retry: model.canRetry ? { Task { await model.retryPending() } } : nil)
             }
         }
     }
 
     private var catalog: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if dynamicTypeSize.isAccessibilitySize {
                 sectionPicker.pickerStyle(.menu)
                     .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
@@ -109,184 +103,243 @@ struct SchoolCatalogView: View {
     }
 
     private var offerings: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: DrivySpacing.m) {
             catalogActions("Créer une offre", kind: .offering, summary: model.currentOfferings.isEmpty ? nil
                 : "\(model.currentOfferings.count) offre\(model.currentOfferings.count == 1 ? "" : "s") · \(model.availableOfferings.count) active\(model.availableOfferings.count == 1 ? "" : "s")")
             if model.currentOfferings.isEmpty && !model.isLoading {
-                empty("Votre première offre", text: "Commencez par un référentiel et une procédure. Vous pourrez ensuite définir la durée et le prix de l’offre.", symbol: "steeringwheel")
-                if model.curricula.isEmpty {
-                    Button("Créer le référentiel") { editor = CatalogEditorPresentation(kind: .curriculum) }
-                        .frame(minHeight: 44).disabled(!model.canMutate)
-                }
-                if model.policies.isEmpty {
-                    Button("Créer la procédure") { editor = CatalogEditorPresentation(kind: .policy) }
-                        .frame(minHeight: 44).disabled(!model.canMutate)
+                VStack(alignment: .leading, spacing: 0) {
+                    DrivyEmptyState(title: "Votre première offre",
+                        message: "Commencez par un référentiel et une procédure. Vous pourrez ensuite définir la durée et le prix de l’offre.",
+                        symbol: "steeringwheel")
+                    if model.curricula.isEmpty {
+                        prerequisiteButton("Créer le référentiel", kind: .curriculum)
+                    }
+                    if model.policies.isEmpty {
+                        prerequisiteButton("Créer la procédure", kind: .policy)
+                    }
                 }
             }
-            ForEach(model.currentOfferings) { offer in
-                VStack(alignment: .leading, spacing: 12) {
-                    Divider()
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Permis \(offer.categoryCode)").font(.drivySection)
-                        Spacer(minLength: DrivySpacing.xs)
-                        DrivyStatusBadge(title: offer.enabled ? "Ouverte" : "Fermée",
-                            symbol: offer.enabled ? "checkmark" : "pause.fill", tone: offer.enabled ? .success : .neutral)
-                    }
-                    Text(offer.offeringKey).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    Text("\(offer.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(offer.defaultPriceCents))")
-                        .font(.headline.monospacedDigit())
-                    Text(offer.enabled ? "Ouverte aux nouvelles formations" : "Fermée aux nouvelles formations")
-                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    DisclosureGroup("Contenu de la version \(offer.version)") {
-                        VStack(alignment: .leading, spacing: 10) {
-                            if let curriculum = model.curricula.first(where: { $0.id == offer.curriculumVersionId }) {
-                                Text("Référentiel · révision \(curriculum.revision)")
+            DrivyRowGroup {
+                ForEach(model.currentOfferings) { offer in
+                    catalogEntry(title: "Permis \(offer.categoryCode)", meta: offer.offeringKey,
+                        badge: DrivyStatusBadge(title: offer.enabled ? "Ouverte" : "Fermée",
+                            symbol: offer.enabled ? "checkmark" : "pause.fill", tone: offer.enabled ? .success : .neutral),
+                        symbol: "steeringwheel") {
+                        Text("\(offer.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(offer.defaultPriceCents))")
+                            .font(.headline.monospacedDigit()).foregroundStyle(DrivyTheme.text)
+                        Text(offer.enabled ? "Ouverte aux nouvelles formations" : "Fermée aux nouvelles formations")
+                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                        DisclosureGroup("Contenu de la version \(offer.version)") {
+                            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                                if let curriculum = model.curricula.first(where: { $0.id == offer.curriculumVersionId }) {
+                                    Text("Référentiel · révision \(curriculum.revision)")
+                                }
+                                if let policy = model.policies.first(where: { $0.id == offer.policyVersionId }) {
+                                    Text("Procédure · version \(policy.version)")
+                                }
+                                Text("Une nouvelle version ne modifie pas les formations déjà ouvertes.")
+                                    .foregroundStyle(DrivyTheme.muted)
                             }
-                            if let policy = model.policies.first(where: { $0.id == offer.policyVersionId }) {
-                                Text("Procédure · version \(policy.version)")
-                            }
-                            Text("Une nouvelle version ne modifie pas les formations déjà ouvertes.")
-                                .foregroundStyle(DrivyTheme.muted)
-                        }.font(.subheadline).padding(.top, 8)
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, DrivySpacing.xs)
+                        }
+                        .font(.subheadline)
+                        revisionButton("Préparer une nouvelle version") {
+                            editor = CatalogEditorPresentation(kind: .offering, sourceOffering: offer)
+                        }
                     }
-                    Button("Préparer une nouvelle version") {
-                        editor = CatalogEditorPresentation(kind: .offering, sourceOffering: offer)
-                    }.frame(minHeight: 44).disabled(!model.canMutate)
-                }.padding(.vertical, 4)
+                }
             }
         }
     }
     private var curricula: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: DrivySpacing.m) {
             catalogActions("Créer un référentiel", kind: .curriculum, summary: "Compétences travaillées dans chaque catégorie.")
             if model.curricula.isEmpty && !model.isLoading {
-                empty("Les compétences de votre école", text: "Définissez ce qui sera travaillé dans chaque catégorie. L’approbation vous appartient.", symbol: "list.bullet.rectangle")
+                DrivyEmptyState(title: "Les compétences de votre école",
+                    message: "Définissez ce qui sera travaillé dans chaque catégorie. L’approbation vous appartient.",
+                    symbol: "list.bullet.rectangle")
             }
-            ForEach(model.curricula.sorted { ($0.categoryCode, -$0.revision) < ($1.categoryCode, -$1.revision) }) { curriculum in
-                VStack(alignment: .leading, spacing: 12) {
-                    Divider()
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Permis \(curriculum.categoryCode)").font(.drivySection)
-                        Spacer(minLength: DrivySpacing.xs)
-                        DrivyStatusBadge(title: curriculum.approved ? "Approuvé" : "Brouillon",
-                            symbol: curriculum.approved ? "checkmark.seal" : "pencil", tone: curriculum.approved ? .success : .warning)
-                    }
-                    Text("Révision \(curriculum.revision)").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    DisclosureGroup("\(curriculum.competencies.count) compétence\(curriculum.competencies.count == 1 ? "" : "s")") {
-                        ForEach(curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }) { competency in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(competency.label).font(.headline)
-                                Text(competency.description).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                            }.padding(.vertical, 8)
+            DrivyRowGroup {
+                ForEach(model.curricula.sorted { ($0.categoryCode, -$0.revision) < ($1.categoryCode, -$1.revision) }) { curriculum in
+                    catalogEntry(title: "Permis \(curriculum.categoryCode)", meta: "Révision \(curriculum.revision)",
+                        badge: DrivyStatusBadge(title: curriculum.approved ? "Approuvé" : "Brouillon",
+                            symbol: curriculum.approved ? "checkmark.seal" : "pencil", tone: curriculum.approved ? .success : .warning),
+                        symbol: "list.bullet.rectangle") {
+                        DisclosureGroup("\(curriculum.competencies.count) compétence\(curriculum.competencies.count == 1 ? "" : "s")") {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }) { competency in
+                                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                                        Text(competency.label).font(.headline).foregroundStyle(DrivyTheme.text)
+                                        Text(competency.description).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                    }
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, DrivySpacing.xs)
+                                }
+                            }
+                        }
+                        .font(.subheadline)
+                        revisionButton("Préparer une nouvelle révision") {
+                            editor = CatalogEditorPresentation(kind: .curriculum, sourceCurriculum: curriculum)
                         }
                     }
-                    Button("Préparer une nouvelle révision") {
-                        editor = CatalogEditorPresentation(kind: .curriculum, sourceCurriculum: curriculum)
-                    }.frame(minHeight: 44).disabled(!model.canMutate)
-                }.padding(.vertical, 4)
+                }
             }
         }
     }
     private var policies: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: DrivySpacing.m) {
             catalogActions("Créer une procédure", kind: .policy, summary: "Déroulement et conditions d’annulation par catégorie.")
             if model.policies.isEmpty && !model.isLoading {
-                empty("Vos procédures de formation", text: "Précisez le déroulement et les conditions d’annulation de chaque catégorie.", symbol: "doc.text")
+                DrivyEmptyState(title: "Vos procédures de formation",
+                    message: "Précisez le déroulement et les conditions d’annulation de chaque catégorie.",
+                    symbol: "doc.text")
             }
-            ForEach(model.policies.sorted { ($0.categoryCode, -$0.version) < ($1.categoryCode, -$1.version) }) { policy in
-                VStack(alignment: .leading, spacing: 12) {
-                    Divider()
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Permis \(policy.categoryCode)").font(.drivySection)
-                        Spacer(minLength: DrivySpacing.xs)
-                        DrivyStatusBadge(title: policy.approved ? "Approuvée" : "Brouillon",
-                            symbol: policy.approved ? "checkmark.seal" : "pencil", tone: policy.approved ? .success : .warning)
-                    }
-                    Text("Version \(policy.version)").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    DisclosureGroup("Lire la procédure et ses conditions") {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text(policy.procedureText).textSelection(.enabled)
-                            Text("Annulation").font(.headline)
-                            Text(policy.cancellationPolicyText).textSelection(.enabled)
-                            ForEach(Array(policy.sourceUrls.enumerated()), id: \.offset) { _, source in
-                                if let url = URL(string: source), ["https", "http"].contains(url.scheme ?? ""), url.user == nil, url.password == nil {
-                                    Link(url.host ?? "Source", destination: url)
+            DrivyRowGroup {
+                ForEach(model.policies.sorted { ($0.categoryCode, -$0.version) < ($1.categoryCode, -$1.version) }) { policy in
+                    catalogEntry(title: "Permis \(policy.categoryCode)", meta: "Version \(policy.version)",
+                        badge: DrivyStatusBadge(title: policy.approved ? "Approuvée" : "Brouillon",
+                            symbol: policy.approved ? "checkmark.seal" : "pencil", tone: policy.approved ? .success : .warning),
+                        symbol: "doc.text") {
+                        DisclosureGroup("Lire la procédure et ses conditions") {
+                            VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                                Text(policy.procedureText).textSelection(.enabled)
+                                Text("Annulation").font(.headline)
+                                Text(policy.cancellationPolicyText).textSelection(.enabled)
+                                ForEach(Array(policy.sourceUrls.enumerated()), id: \.offset) { _, source in
+                                    if let url = URL(string: source), ["https", "http"].contains(url.scheme ?? ""), url.user == nil, url.password == nil {
+                                        Link(url.host ?? "Source", destination: url)
+                                    }
                                 }
                             }
-                        }.font(.subheadline).padding(.top, 12)
+                            .font(.subheadline)
+                            .foregroundStyle(DrivyTheme.text)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, DrivySpacing.s)
+                        }
+                        .font(.subheadline)
+                        revisionButton("Préparer une nouvelle version") {
+                            editor = CatalogEditorPresentation(kind: .policy, sourcePolicy: policy)
+                        }
                     }
-                    Button("Préparer une nouvelle version") {
-                        editor = CatalogEditorPresentation(kind: .policy, sourcePolicy: policy)
-                    }.frame(minHeight: 44).disabled(!model.canMutate)
-                }.padding(.vertical, 4)
+                }
             }
         }
     }
 
+    /// One catalogue entry: the entity row anatomy (symbol, title, meta,
+    /// badge), then its details and its revision action.
+    private func catalogEntry<Details: View>(title: String, meta: String, badge: DrivyStatusBadge, symbol: String,
+                                             @ViewBuilder details: () -> Details) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            DrivyEntityRow(title: title, meta: meta, leading: .symbol(symbol), badge: badge)
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) { details() }
+                .padding(.leading, dynamicTypeSize.isAccessibilitySize ? 0 : 44 + DrivySpacing.s)
+        }
+        .padding(.vertical, DrivySpacing.xs)
+    }
+
+    private func revisionButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: "square.and.pencil")
+                .font(.subheadline.weight(.semibold))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(model.canMutate ? DrivyTheme.accent : DrivyTheme.disabledText)
+        .disabled(!model.canMutate)
+    }
+
+    private func prerequisiteButton(_ title: String, kind: SchoolCatalogEditorKind) -> some View {
+        Button { editor = CatalogEditorPresentation(kind: kind) } label: {
+            Label(title, systemImage: "plus")
+                .font(.subheadline.weight(.semibold))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(model.canMutate ? DrivyTheme.accent : DrivyTheme.disabledText)
+        .disabled(!model.canMutate)
+        .padding(.leading, dynamicTypeSize.isAccessibilitySize ? 0 : DrivySpacing.xl + DrivySpacing.m)
+    }
+
+    /// The creation action of the displayed section is the dominant action.
     @ViewBuilder private func catalogActions(_ title: String, kind: SchoolCatalogEditorKind, summary: String?) -> some View {
+        let button = Button { editor = CatalogEditorPresentation(kind: kind) } label: { Label(title, systemImage: "plus") }
+            .buttonStyle(DrivyPrimaryButtonStyle())
+            .disabled(!model.canMutate)
         if horizontalSizeClass == .regular && !dynamicTypeSize.isAccessibilitySize {
-            HStack(alignment: .firstTextBaseline, spacing: 20) {
+            HStack(alignment: .center, spacing: DrivySpacing.l) {
                 if let summary { Text(summary).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
-                Spacer(minLength: 8)
-                Button { editor = CatalogEditorPresentation(kind: kind) } label: {
-                    Label(title, systemImage: "plus").frame(minHeight: 32)
-                }.buttonStyle(.borderedProminent).fixedSize().disabled(!model.canMutate)
+                Spacer(minLength: DrivySpacing.xs)
+                button.fixedSize()
             }
         } else {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: DrivySpacing.s) {
                 if let summary { Text(summary).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
-                Button { editor = CatalogEditorPresentation(kind: kind) } label: { Label(title, systemImage: "plus") }
-                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canMutate)
+                button
             }
         }
     }
 
     private var learnerTrainings: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: DrivySpacing.m) {
             if model.trainings.isEmpty && !model.isLoading {
-                empty("Ouvrir une formation", text: "Une formation utilise une offre précise de votre école. L’affectation du moniteur se fait ensuite.", symbol: "steeringwheel")
+                DrivyEmptyState(title: "Aucune formation ouverte",
+                    message: "Une formation utilise une offre précise de votre école. L’affectation du moniteur se fait ensuite.",
+                    symbol: "steeringwheel")
             }
             ForEach(model.trainings) { training in
+                let isSelected = model.selectedTraining?.id == training.id
                 Button { Task { await model.selectTraining(training) } } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "steeringwheel").font(.title2).foregroundStyle(DrivyTheme.accent)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Permis \(training.categoryCode)").font(.headline)
+                    HStack(spacing: DrivySpacing.m) {
+                        Image(systemName: "steeringwheel").font(.title3)
+                            .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.muted)
+                            .frame(width: 28)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                            Text("Permis \(training.categoryCode)").font(.headline).foregroundStyle(DrivyTheme.text)
                             Text(SchoolPresentation.trainingStatus(training.status)).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         }
-                        Spacer(minLength: 8)
-                        Image(systemName: model.selectedTraining?.id == training.id ? "checkmark.circle.fill" : "chevron.right")
-                            .foregroundStyle(DrivyTheme.accent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        DrivySelectionMark(isSelected: isSelected)
                     }
-                }.buttonStyle(DrivySelectionCardStyle(isSelected: model.selectedTraining?.id == training.id))
+                }
+                .buttonStyle(DrivySelectionCardStyle(isSelected: isSelected))
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
                 .disabled(model.isBusy || model.isLoading)
             }
             createButton("Créer une formation", symbol: "plus", kind: .training)
             if model.availableOfferings.isEmpty && !model.isLoading {
                 Text("L’administration doit activer une offre dans École → Formations avant d’ouvrir une formation.")
                     .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let training = model.selectedTraining {
                 assignments(training)
+                    .padding(.top, DrivySpacing.s)
             }
         }
     }
     private func assignments(_ training: SchoolTraining) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Moniteurs de cette formation").font(.drivySection)
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            DrivySectionHeader(title: "Moniteurs de cette formation")
             if model.assignments.isEmpty && !model.isLoading {
-                Text("Aucun moniteur affecté. La formation existe déjà ; choisissez la personne qui l’accompagnera.")
-                    .foregroundStyle(DrivyTheme.muted)
+                DrivyEmptyState(title: "Aucun moniteur affecté",
+                    message: "La formation existe déjà ; choisissez la personne qui l’accompagnera.",
+                    symbol: "person.badge.plus")
             }
-            ForEach(model.assignments) { assignment in
-                DrivyPanel {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(model.members.first(where: { $0.id == assignment.instructorMembershipId })?.displayName ?? "Moniteur de l’école")
-                            .font(.headline)
-                        Text("Dès le \(assignmentDate(assignment.validFrom))").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                        if let end = assignment.validUntil { Text("Jusqu’au \(assignmentDate(end))").font(.subheadline).foregroundStyle(DrivyTheme.muted) }
-                    }
+            DrivyRowGroup {
+                ForEach(model.assignments) { assignment in
+                    let name = model.members.first(where: { $0.id == assignment.instructorMembershipId })?.displayName ?? "Moniteur de l’école"
+                    DrivyEntityRow(title: name,
+                        meta: assignment.validUntil.map { "Du \(assignmentDate(assignment.validFrom)) au \(assignmentDate($0))" }
+                            ?? "Dès le \(assignmentDate(assignment.validFrom))",
+                        leading: .avatar(name))
                 }
             }
             if training.status == "ACTIVE" {
@@ -294,36 +347,39 @@ struct SchoolCatalogView: View {
                 if model.instructors.isEmpty && !model.isLoading {
                     Text("Un membre actif avec le rôle Moniteur est nécessaire pour cette affectation.")
                         .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Text("Le contrôle du permis reste une vérification distincte. Une formation ne confirme pas une autorisation de conduire.")
                 .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
     private var team: some View {
         NavigationStack {
             List(model.members) { member in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(member.displayName).font(.headline)
-                    Text(SchoolPresentation.roles(member.roles)).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    if member.status != "ACTIVE" { Text("Accès révoqué").font(.caption).foregroundStyle(DrivyTheme.muted) }
-                }.padding(.vertical, 8)
+                DrivyEntityRow(title: member.displayName, meta: SchoolPresentation.roles(member.roles),
+                    leading: .avatar(member.displayName),
+                    badge: member.status != "ACTIVE" ? DrivyStatusBadge(title: "Accès révoqué", symbol: "lock", tone: .warning) : nil)
             }
-            .navigationTitle("Équipe et membres")
+            .scrollContentBackground(.hidden)
+            .background(DrivyTheme.canvas)
+            .overlay {
+                if model.members.isEmpty {
+                    ContentUnavailableView("Aucun membre", systemImage: "person.2",
+                        description: Text("Les membres de l’école apparaîtront ici."))
+                }
+            }
+            .navigationTitle("Équipe")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { showsTeam = false } } }
         }
+        .tint(DrivyTheme.accent)
     }
     private func createButton(_ title: String, symbol: String, kind: SchoolCatalogEditorKind) -> some View {
         Button { editor = CatalogEditorPresentation(kind: kind) } label: { Label(title, systemImage: symbol) }
             .buttonStyle(DrivySecondaryButtonStyle())
             .disabled(!model.canMutate || kind == .training && model.availableOfferings.isEmpty || kind == .assignment && model.instructors.isEmpty)
-    }
-    private func empty(_ title: String, text: String, symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: symbol).font(.largeTitle).foregroundStyle(DrivyTheme.muted)
-            Text(title).font(.drivyTitle)
-            Text(text).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-        }.padding(.vertical, 16).fixedSize(horizontal: false, vertical: true)
     }
     private func assignmentDate(_ text: String) -> String {
         guard let date = SchoolInvitation.date(text) else { return "Date indisponible" }

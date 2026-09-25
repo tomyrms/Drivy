@@ -10,7 +10,6 @@ struct SchoolMemberView: View {
     let openInvitations: () -> Void
     let openLearner: (SchoolLearner) -> Void
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var editor: MemberEditorRoute?
 
     private struct MemberEditorRoute: Identifiable {
@@ -23,23 +22,26 @@ struct SchoolMemberView: View {
         NavigationStack {
             List {
                 Section {
-                    Text(model.school?.name ?? "Votre école").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                }.listRowBackground(Color.clear)
-                if model.isLoading { Section { ProgressView("Ouverture des membres…") } }
+                    DrivyFormIntro(context: model.school?.name ?? "Votre école",
+                        message: mode == .addLearner ? "Choisissez un membre de l’école ou invitez une nouvelle personne."
+                            : "Rôles et autorisations de chaque membre de l’école.")
+                }.listRowBackground(DrivyTheme.canvas)
+                if model.isLoading { Section { ProgressView("Ouverture des membres…").frame(maxWidth: .infinity, minHeight: 44) } }
                 if let error = model.errorMessage {
                     Section {
-                        Text(error).font(.subheadline).foregroundStyle(DrivyTheme.danger)
-                        if !model.accessRevoked { Button("Actualiser les membres") { Task { await model.load() } }.disabled(model.isBusy || model.isLoading) }
+                        SchoolErrorNotice(message: error,
+                            retry: model.accessRevoked || model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
                     }
                 }
-                if let success = model.successMessage { Section { Label(success, systemImage: "checkmark.circle.fill").foregroundStyle(DrivyTheme.success) } }
+                if let success = model.successMessage { Section { DrivyFormMessage(text: success) } }
                 if model.pending != nil { SchoolMemberPendingSection(model: model, identity: identity) }
                 if mode == .addLearner {
                     Section {
                         Button(action: openInvitations) {
                             Label("Inviter un nouvel élève", systemImage: "envelope.badge.person.crop")
-                                .frame(minHeight: 48)
-                        }.disabled(model.isBusy || identity.isWorking)
+                        }
+                        .buttonStyle(DrivySecondaryButtonStyle())
+                        .disabled(model.isBusy || identity.isWorking)
                     } footer: {
                         Text("La personne accepte l’invitation avec son propre compte. Son dossier est ensuite créé, sans formation automatique.")
                     }
@@ -55,15 +57,15 @@ struct SchoolMemberView: View {
                         .accessibilityIdentifier("school-member-\(member.id.uuidString)")
                     }
                     if listedMembers.isEmpty && !model.isLoading && model.errorMessage == nil {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(model.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                 ? (mode == .addLearner ? "Aucun membre à ajouter comme élève. Invitez une nouvelle personne pour l’ajouter." : "Aucun membre accessible.")
-                                 : "Aucun membre ne correspond à votre recherche.")
-                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                            if !model.search.isEmpty {
-                                Button("Effacer la recherche") { model.search = "" }.frame(minHeight: 44)
-                            }
-                        }.padding(.vertical, 8)
+                        if model.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            DrivyEmptyState(title: mode == .addLearner ? "Aucun membre à ajouter" : "Aucun membre accessible",
+                                message: mode == .addLearner ? "Invitez une nouvelle personne pour l’ajouter comme élève." : "Les membres de l’école apparaîtront ici.",
+                                symbol: "person.2")
+                        } else {
+                            DrivyEmptyState(title: "Aucun résultat", message: "Aucun membre ne correspond à votre recherche.",
+                                symbol: "magnifyingglass", actionTitle: "Effacer la recherche", action: { model.search = "" })
+                                .buttonStyle(.borderless)
+                        }
                     }
                 }
             }
@@ -85,20 +87,11 @@ struct SchoolMemberView: View {
         .tint(DrivyTheme.accent)
     }
     private func memberRow(_ member: SchoolMember) -> some View {
-        HStack(spacing: 14) {
-            if !typeSize.isAccessibilitySize {
-                DrivyAvatar(name: member.displayName, size: 40)
-            }
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text(member.displayName).font(.headline).foregroundStyle(DrivyTheme.text)
-                Text(SchoolPresentation.roles(member.roles) + (member.id == model.scope.membershipID && member.status == "ACTIVE" ? " · votre compte" : ""))
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                if member.status != "ACTIVE" { DrivyStatusBadge(title: "Accès révoqué", symbol: "lock", tone: .warning) }
-            }.fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-        }.padding(.vertical, 6).frame(minHeight: 52).contentShape(Rectangle())
-            .accessibilityElement(children: .combine)
+        DrivyEntityRow(title: member.displayName,
+            meta: SchoolPresentation.roles(member.roles) + (member.id == model.scope.membershipID && member.status == "ACTIVE" ? " · votre compte" : ""),
+            leading: .avatar(member.displayName),
+            badge: member.status != "ACTIVE" ? DrivyStatusBadge(title: "Accès révoqué", symbol: "lock", tone: .warning) : nil,
+            showsChevron: true)
     }
 }
 
@@ -112,19 +105,27 @@ private struct SchoolMemberEditor: View {
     @State private var confirmsClose = false
     @State private var confirmsReload = false
     @State private var confirmsOwnAdminRemoval = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         NavigationStack {
             Form {
                 if let member = model.selectedMember, member.id == memberID {
                     Section {
-                        Text(member.displayName).font(.drivyTitle)
-                        Text(SchoolPresentation.roles(member.roles)).foregroundStyle(DrivyTheme.muted)
+                        HStack(spacing: DrivySpacing.m) {
+                            if !typeSize.isAccessibilitySize { DrivyAvatar(name: member.displayName, size: 52) }
+                            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                                Text(member.displayName).font(.drivyTitle).foregroundStyle(DrivyTheme.text)
+                                Text(SchoolPresentation.roles(member.roles)).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .accessibilityElement(children: .combine)
                         if member.status != "ACTIVE" {
-                            Text("Cet accès est révoqué. Une invitation reste nécessaire pour rejoindre à nouveau l’école.")
-                                .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                            DrivyFormMessage(text: "Cet accès est révoqué. Une invitation reste nécessaire pour rejoindre à nouveau l’école.", tone: .warning)
                         }
                     }
+                    .listRowBackground(DrivyTheme.canvas)
                     accessFields
                     if member.roles.contains("LEARNER") {
                         Section {
@@ -135,18 +136,19 @@ private struct SchoolMemberEditor: View {
                     }
                 } else {
                     Section {
-                        Text("Cette personne n’est plus accessible. Fermez cet écran et actualisez les membres.")
-                            .foregroundStyle(DrivyTheme.muted)
+                        DrivyEmptyState(title: "Membre indisponible",
+                            message: "Cette personne n’est plus accessible. Fermez cet écran et actualisez les membres.",
+                            symbol: "person.crop.circle.badge.questionmark")
                     }
                 }
-                if let error = model.errorMessage { Section { Text(error).foregroundStyle(DrivyTheme.danger) } }
-                if let authError { Section { Text(authError).foregroundStyle(DrivyTheme.danger) } }
-                if let success = model.successMessage, !model.hasUnsavedChanges { Section { Label(success, systemImage: "checkmark.circle.fill").foregroundStyle(DrivyTheme.success) } }
+                if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) } }
+                if let authError { Section { SchoolErrorNotice(message: authError) } }
+                if let success = model.successMessage, !model.hasUnsavedChanges { Section { DrivyFormMessage(text: success) } }
                 if model.pending != nil { SchoolMemberPendingSection(model: model, identity: identity) }
                 if model.ownAccessChanged {
-                    Section { Text("Vos accès ont changé. Fermez cet écran pour ouvrir votre école avec les nouveaux droits.").font(.subheadline) }
+                    Section { DrivyFormMessage(text: "Vos accès ont changé. Fermez cet écran pour ouvrir votre école avec les nouveaux droits.", tone: .accent) }
                 } else if model.selectedMember?.id == memberID, model.selectedMember?.status == "ACTIVE" {
-                    Section("Motif du changement") {
+                    Section {
                         TextField("Expliquez pourquoi ces accès changent", text: $model.reason, axis: .vertical).lineLimit(3...6)
                             .accessibilityLabel("Motif du changement d’accès")
                             .disabled(!model.canMutate || identity.isWorking)
@@ -155,7 +157,7 @@ private struct SchoolMemberEditor: View {
                                 .foregroundStyle(model.reason.unicodeScalars.count > 1000 ? DrivyTheme.danger : DrivyTheme.muted)
                         }
                         if model.needsReload { Button("Recharger et relire les accès") { confirmsReload = true }.disabled(model.isBusy || identity.isWorking) }
-                    }
+                    } header: { Text("Motif du changement") }
                 }
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
@@ -190,48 +192,45 @@ private struct SchoolMemberEditor: View {
         .interactiveDismissDisabled(model.hasUnsavedChanges || model.isBusy || identity.isWorking)
         .tint(DrivyTheme.accent)
     }
+    private var confirmationHint: (text: String, tone: DrivyTone) {
+        if let authError { return (authError, .danger) }
+        if let error = model.errorMessage { return (error, .danger) }
+        if model.isChanged && model.roles.isEmpty { return ("Conservez au moins un rôle.", .neutral) }
+        if model.isChanged && model.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return ("Indiquez le motif du changement.", .neutral) }
+        if model.reason.unicodeScalars.count > 1000 { return ("Le motif est limité à 1 000 caractères.", .neutral) }
+        return ("Une nouvelle connexion à votre compte confirmera ce changement.", .neutral)
+    }
+
     private var confirmationBar: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let authError {
-                Text(authError).font(.footnote).foregroundStyle(DrivyTheme.danger)
-            } else if let error = model.errorMessage {
-                Text(error).font(.footnote).foregroundStyle(DrivyTheme.danger)
-            } else if model.isChanged && model.roles.isEmpty {
-                Text("Conservez au moins un rôle.").font(.footnote).foregroundStyle(DrivyTheme.muted)
-            } else if model.isChanged && model.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text("Indiquez le motif du changement.").font(.footnote).foregroundStyle(DrivyTheme.muted)
-            } else if model.reason.unicodeScalars.count > 1000 {
-                Text("Le motif est limité à 1 000 caractères.").font(.footnote).foregroundStyle(DrivyTheme.muted)
-            } else {
-                Text("Une nouvelle connexion à votre compte confirmera ce changement.")
-                    .font(.footnote).foregroundStyle(DrivyTheme.muted)
-            }
+        let hint = confirmationHint
+        return DrivyFormActionBar(hint: hint.text, hintTone: hint.tone) {
             Button {
                 if model.removesOwnAdmin { confirmsOwnAdminRemoval = true }
                 else { authenticateAndSave() }
             } label: {
-                HStack(spacing: 10) {
-                    if identity.isWorking || model.isBusy { ProgressView() }
-                    Text(identity.isWorking ? "Confirmation d’identité…" : model.isBusy ? "Enregistrement…" : "Confirmer les accès")
-                }
+                DrivyBusyLabel(title: "Confirmer les accès",
+                    busyTitle: identity.isWorking ? "Confirmation d’identité…" : "Enregistrement…",
+                    isBusy: identity.isWorking || model.isBusy)
             }.buttonStyle(DrivyPrimaryButtonStyle())
                 .disabled(!model.canSave || model.selectedMember?.id != memberID || identity.isWorking || presenter == nil)
                 .accessibilityIdentifier("member-confirm-access")
-        }.padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity).background(DrivyTheme.surface)
+        }
     }
     private var accessFields: some View {
         Group {
             Section {
                 ForEach(SchoolMemberRole.allCases) { role in
                     Toggle(isOn: roleBinding(role.rawValue)) {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                             Text(role.label).font(.headline)
-                            Text(role.explanation).font(.caption).foregroundStyle(DrivyTheme.muted)
-                        }.padding(.vertical, 5)
+                            Text(role.explanation).font(.footnote).foregroundStyle(DrivyTheme.muted)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, DrivySpacing.xxs)
                     }
                     .disabled(!model.canMutate || identity.isWorking || model.selectedMember?.status != "ACTIVE" || (role == .admin && model.isLastAdministrator))
                 }
-                if model.isLastAdministrator { Text("L’école doit conserver au moins un administrateur actif.").font(.caption).foregroundStyle(DrivyTheme.muted) }
+                if model.isLastAdministrator { DrivyFormMessage(text: "L’école doit conserver au moins un administrateur actif.", tone: .neutral) }
             } header: { Text("Rôles dans cette école") }
             footer: { Text("Le rôle Moniteur ne donne accès qu’aux formations explicitement affectées. Ajouter Élève ouvre un dossier minimal, sans créer de formation.") }
             Section {
@@ -267,31 +266,38 @@ private struct SchoolMemberPendingSection: View {
     @State private var authError: String?
     var body: some View {
         Section {
-            Label("Une confirmation reste attendue", systemImage: "clock.arrow.circlepath").font(.headline)
-            Text("Vérifiez le résultat avant de modifier à nouveau les accès.").font(.subheadline)
-            if let command = model.pending {
-                if command.kind == .updateMember,
-                   let body = try? JSONDecoder().decode(MemberPendingReview.self, from: command.body) {
-                    if let member = model.members.first(where: { $0.id == command.resourceID }) { Text(member.displayName).font(.headline) }
-                    Text("Rôles demandés : \(SchoolPresentation.roles(body.roles))").font(.subheadline)
-                    Text(body.reason).font(.caption).foregroundStyle(DrivyTheme.muted)
-                }
-                DisclosureGroup("Référence") { Text(command.id.uuidString).font(.caption.monospaced()).textSelection(.enabled) }
-            }
-            Button("Vérifier auprès de l’école") { Task { await model.verify() } }.disabled(model.isBusy || identity.isWorking)
-            if model.canRetry {
-                Button("Confirmer mon identité et renvoyer") {
-                    guard let presenter else { return }
-                    Task {
-                        if await identity.reauthenticate(presenting: presenter, expectedPersonID: model.scope.personID) {
-                            _ = await model.retryAfterReauthentication()
-                        } else { authError = identity.errorMessage }
-                    }
-                }.disabled(identity.isWorking || presenter == nil)
-            }
-            if let authError { Text(authError).font(.subheadline).foregroundStyle(DrivyTheme.danger) }
+            DrivyPendingRequest(message: "Vérifiez le résultat avant de modifier à nouveau les accès.",
+                reference: model.pending?.id,
+                verify: { Task { await model.verify() } },
+                canVerify: !model.isBusy && !identity.isWorking,
+                retryTitle: "Confirmer mon identité et renvoyer",
+                retry: model.canRetry ? { retryAfterReauthentication() } : nil,
+                canRetry: !identity.isWorking && presenter != nil,
+                details: { requestedChange })
+            if let authError { SchoolErrorNotice(message: authError) }
         }
         .background(MemberAuthenticationPresenter { presenter = $0 }.frame(width: 0, height: 0))
+    }
+    private func retryAfterReauthentication() {
+        guard let presenter else { return }
+        Task {
+            if await identity.reauthenticate(presenting: presenter, expectedPersonID: model.scope.personID) {
+                _ = await model.retryAfterReauthentication()
+            } else { authError = identity.errorMessage }
+        }
+    }
+    @ViewBuilder private var requestedChange: some View {
+        if let command = model.pending, command.kind == .updateMember,
+           let body = try? JSONDecoder().decode(MemberPendingReview.self, from: command.body) {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                if let member = model.members.first(where: { $0.id == command.resourceID }) {
+                    Text(member.displayName).font(.headline).foregroundStyle(DrivyTheme.text)
+                }
+                Text("Rôles demandés : \(SchoolPresentation.roles(body.roles))").font(.subheadline).foregroundStyle(DrivyTheme.text)
+                Text(body.reason).font(.footnote).foregroundStyle(DrivyTheme.muted)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
     }
     private struct MemberPendingReview: Decodable { let roles: [String]; let reason: String }
 }

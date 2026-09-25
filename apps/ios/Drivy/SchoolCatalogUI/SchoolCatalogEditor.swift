@@ -52,9 +52,9 @@ struct SchoolCatalogEditor: View {
         NavigationStack {
             Form {
                 Section {
-                    Text(model.learner?.displayName ?? model.school?.name ?? "Votre école").font(.headline)
-                    Text(introduction).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    DrivyFormIntro(context: model.learner?.displayName ?? model.school?.name ?? "Votre école", message: introduction)
                 }
+                .listRowBackground(DrivyTheme.canvas)
                 if let error = model.errorMessage {
                     Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
                 }
@@ -66,11 +66,7 @@ struct SchoolCatalogEditor: View {
             .scrollContentBackground(.hidden)
             .background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom) {
-                VStack(alignment: .leading, spacing: 10) {
-                    if !isValid, model.canMutate {
-                        Text(validationHint)
-                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                    }
+                DrivyFormActionBar(hint: !isValid && model.canMutate ? validationHint : nil) {
                     Button("Relire avant d’enregistrer") {
                         reviewed = false
                         hasSubmitted = false
@@ -79,8 +75,6 @@ struct SchoolCatalogEditor: View {
                     .buttonStyle(DrivyPrimaryButtonStyle())
                     .disabled(!isValid || !model.canMutate)
                 }
-                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity)
-                .background(DrivyTheme.surface)
             }
             .disabled(model.isBusy)
             .navigationTitle(title)
@@ -174,9 +168,7 @@ struct SchoolCatalogEditor: View {
                 labeledField("Prix en CHF", text: $offering.price).keyboardType(.decimalPad)
                 Toggle("Activer cette offre", isOn: $offering.enabled)
                 if offering.enabled && !offeringReferencesApproved {
-                    Text("L’activation exige un référentiel et une procédure approuvés. Choisissez leurs versions, ou gardez l’offre désactivée.")
-                        .font(.subheadline).foregroundStyle(DrivyTheme.warning)
-                        .fixedSize(horizontal: false, vertical: true)
+                    DrivyFormMessage(text: "L’activation exige un référentiel et une procédure approuvés. Choisissez leurs versions, ou gardez l’offre désactivée.", tone: .warning)
                 }
             } header: {
                 Text("Conditions proposées")
@@ -188,14 +180,20 @@ struct SchoolCatalogEditor: View {
 
     private var curriculumFields: some View {
         Group {
-            Section("Catégorie") {
-                TextField("Catégorie", text: $curriculum.category).textInputAutocapitalization(.characters).autocorrectionDisabled()
-            }
+            Section {
+                DrivyFormField(label: "Catégorie", text: $curriculum.category, prompt: "Par exemple B")
+                    .textInputAutocapitalization(.characters).autocorrectionDisabled()
+            } header: { Text("Catégorie") }
             ForEach($curriculum.competencies) { $competency in
                 Section {
                     labeledField("Intitulé", text: $competency.label)
                     labeledField("Référence", text: $competency.key).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    TextField("Description", text: $competency.explanation, axis: .vertical).lineLimit(3...8)
+                    VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                        Text("Description").font(.subheadline).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
+                        TextField("Ce que l’élève travaille", text: $competency.explanation, axis: .vertical).lineLimit(3...8)
+                            .accessibilityLabel("Description")
+                    }
+                    .padding(.vertical, DrivySpacing.xxs)
                     if curriculum.competencies.count > 1 {
                         Button("Retirer cette compétence", role: .destructive) { curriculum.competencies.removeAll { $0.id == competency.id } }
                     }
@@ -207,8 +205,8 @@ struct SchoolCatalogEditor: View {
             }
             Section {
                 Toggle("Approuver ce référentiel", isOn: $curriculum.approved)
-                TextField("Motif de cette version", text: $curriculum.reason, axis: .vertical).lineLimit(3...6)
-            } footer: {
+                reasonField($curriculum.reason)
+            } header: { Text("Validation") } footer: {
                 Text("Sans approbation, cette version reste un brouillon. Une version existante n’est jamais réécrite.")
             }
         }
@@ -216,9 +214,10 @@ struct SchoolCatalogEditor: View {
 
     private var policyFields: some View {
         Group {
-            Section("Catégorie") {
-                TextField("Catégorie", text: $policy.category).textInputAutocapitalization(.characters).autocorrectionDisabled()
-            }
+            Section {
+                DrivyFormField(label: "Catégorie", text: $policy.category, prompt: "Par exemple B")
+                    .textInputAutocapitalization(.characters).autocorrectionDisabled()
+            } header: { Text("Catégorie") }
             Section("Déroulement de la formation") {
                 TextField("Procédure de l’école", text: $policy.procedure, axis: .vertical).lineLimit(5...12)
             }
@@ -233,8 +232,8 @@ struct SchoolCatalogEditor: View {
             }
             Section {
                 Toggle("Approuver ces textes", isOn: $policy.approved)
-                TextField("Motif de cette version", text: $policy.reason, axis: .vertical).lineLimit(3...6)
-            } footer: {
+                reasonField($policy.reason)
+            } header: { Text("Validation") } footer: {
                 Text("Vous approuvez les textes affichés pour cette catégorie. Cette procédure est distincte de la notice de données et des informations du profil.")
             }
         }
@@ -332,67 +331,68 @@ struct SchoolCatalogEditor: View {
     }
 
     private func labeledField(_ label: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            TextField(label, text: text).accessibilityLabel(label)
-        }.padding(.vertical, 4)
+        DrivyFormField(label: label, text: text)
+    }
+
+    private func reasonField(_ text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            Text("Motif de cette version").font(.subheadline).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
+            TextField("Ce qui change par rapport à la version précédente", text: text, axis: .vertical).lineLimit(3...6)
+                .accessibilityLabel("Motif de cette version")
+        }
+        .padding(.vertical, DrivySpacing.xxs)
     }
 
     private var pendingNotice: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Résultat à vérifier").font(.headline)
-            Text("Votre demande est conservée. Vérifiez son résultat avant de la remplacer.").font(.subheadline)
-            Button("Vérifier la demande") {
+        DrivyPendingRequest(message: "Votre demande est conservée. Vérifiez son résultat avant de la remplacer.",
+            reference: model.pending?.id,
+            verify: {
                 Task {
                     await model.verifyPending()
                     if model.pending == nil && model.accessFailure == nil && model.successMessage != nil { dismiss() }
                 }
-            }.frame(minHeight: 44).disabled(!model.canVerify)
-            if model.canRetry {
-                Button("Renvoyer la même demande") {
-                    Task {
-                        await model.retryPending()
-                        if model.pending == nil && model.accessFailure == nil && model.successMessage != nil { dismiss() }
-                    }
-                }.frame(minHeight: 44)
-            }
-        }
+            }, canVerify: model.canVerify,
+            retry: model.canRetry ? {
+                Task {
+                    await model.retryPending()
+                    if model.pending == nil && model.accessFailure == nil && model.successMessage != nil { dismiss() }
+                }
+            } : nil)
     }
 
     private var reviewSheet: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     Text(model.learner?.displayName ?? model.school?.name ?? "Votre école")
-                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                     reviewContent
-                    Divider()
+                    Divider().overlay(DrivyTheme.border)
                     if hasSubmitted, let error = model.errorMessage {
                         SchoolErrorNotice(message: error, retry: model.pending == nil ? { Task { await model.load() } } : nil)
                     }
                     if model.pending != nil {
-                        pendingNotice
+                        DrivyPanel { pendingNotice }
                     } else {
-                        Toggle(reviewAcknowledgement, isOn: $reviewed)
-                            .disabled(model.isBusy)
+                        Toggle(isOn: $reviewed) {
+                            Text(reviewAcknowledgement).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                        }
+                        .disabled(model.isBusy)
                     }
                 }
                 .drivyPageContent()
             }
             .safeAreaInset(edge: .bottom) {
-                Button {
-                    hasSubmitted = true
-                    Task { await save() }
-                } label: {
-                    HStack(spacing: 10) {
-                        if model.isBusy { ProgressView() }
-                        Text(model.isBusy ? "Enregistrement…" : model.pending != nil ? "Résultat à vérifier" : actionTitle)
+                DrivyFormActionBar(hint: model.pending == nil && !reviewed && !model.isBusy ? "Confirmez votre relecture pour enregistrer." : nil) {
+                    Button {
+                        hasSubmitted = true
+                        Task { await save() }
+                    } label: {
+                        DrivyBusyLabel(title: model.pending != nil ? "Demande à vérifier" : actionTitle, isBusy: model.isBusy)
                     }
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .disabled(!isValid || !reviewed || !model.canMutate)
                 }
-                .buttonStyle(DrivyPrimaryButtonStyle())
-                .disabled(!isValid || !reviewed || !model.canMutate)
-                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity)
-                .background(DrivyTheme.surface)
             }
             .background(DrivyTheme.surface)
             .navigationTitle("Relire et confirmer")
@@ -426,7 +426,7 @@ struct SchoolCatalogEditor: View {
         case .curriculum:
             Text("Permis \(curriculum.category)").font(.drivyTitle)
             ForEach(curriculum.competencies) { competency in
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     Text(competency.label).font(.headline)
                     Text(competency.explanation)
                     Text(competency.key).font(.caption).foregroundStyle(DrivyTheme.muted)
@@ -459,10 +459,13 @@ struct SchoolCatalogEditor: View {
     }
 
     private func reviewValue(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
-            Text(value).textSelection(.enabled)
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            Text(value).font(.body).foregroundStyle(DrivyTheme.text)
+                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     private var reviewAcknowledgement: String {

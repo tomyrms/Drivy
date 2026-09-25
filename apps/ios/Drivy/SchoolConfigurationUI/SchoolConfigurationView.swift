@@ -25,27 +25,38 @@ struct SchoolConfigurationView: View {
                             retry: model.pending == nil ? { Task { await model.load() } } : nil)
                     }
                 }
-                if model.isLoading { Section { ProgressView("Vérification de l’école…") } }
+                if model.isLoading { Section { ProgressView("Vérification de l’école…").frame(maxWidth: .infinity, minHeight: 44) } }
                 if let success = model.successMessage {
-                    Section { Label(success, systemImage: "checkmark.circle.fill").foregroundStyle(DrivyTheme.success) }
+                    Section { DrivyFormMessage(text: success) }
                 }
                 if let school = model.school {
                     Section {
-                        Text(school.name).font(.drivyTitle)
-                        Label(school.status == "ACTIVE" ? "École active" : school.status == "DRAFT" ? "École en préparation" : "École inactive",
-                              systemImage: school.status == "ACTIVE" ? "checkmark.seal" : "building.2")
-                            .foregroundStyle(school.status == "ACTIVE" ? DrivyTheme.success : DrivyTheme.muted)
-                        if school.status == "DRAFT" {
-                            Text("Coordonnées, textes de l’école, puis activation.")
-                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                            Text(school.name).font(.drivyTitle).foregroundStyle(DrivyTheme.text)
+                                .fixedSize(horizontal: false, vertical: true)
+                            DrivyStatusBadge(title: school.status == "ACTIVE" ? "École active" : school.status == "DRAFT" ? "En préparation" : "École inactive",
+                                symbol: school.status == "ACTIVE" ? "checkmark.seal" : school.status == "DRAFT" ? "hammer" : "building.2",
+                                tone: school.status == "ACTIVE" ? .success : school.status == "DRAFT" ? .warning : .neutral)
+                            if school.status == "DRAFT" {
+                                Text("Trois étapes : coordonnées, textes d’information, puis activation.")
+                                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
+                        .accessibilityElement(children: .combine)
                     }
+                    .listRowBackground(DrivyTheme.canvas)
                     identitySection
                     policySection
                     if let openProfilePolicy, model.policy?.status == "APPROVED" {
                         Section {
-                            Button("Définir les champs du profil", action: openProfilePolicy)
-                                .frame(minHeight: 48).disabled(model.isBusy)
+                            Button(action: openProfilePolicy) {
+                                Label("Définir les champs du profil", systemImage: "list.bullet.rectangle")
+                                    .frame(minHeight: 44)
+                            }
+                            .disabled(model.isBusy)
+                        } footer: {
+                            Text("Informations demandées aux élèves, avec leur utilité.")
                         }
                     }
                     reviewSection
@@ -71,25 +82,13 @@ struct SchoolConfigurationView: View {
 
     private var identitySection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Nom de l’école").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                TextField("Nom", text: $model.name)
-                    .textContentType(.organizationName).accessibilityIdentifier("school-config-name")
-                    .accessibilityLabel("Nom de l’école")
-            }.padding(.vertical, 4)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("E-mail de l’école").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                TextField("Adresse e-mail", text: $model.contactEmail)
-                    .textContentType(.emailAddress).keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .accessibilityIdentifier("school-config-email").accessibilityLabel("E-mail de l’école")
-            }.padding(.vertical, 4)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Téléphone · facultatif").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                TextField("Numéro", text: $model.contactPhone)
-                    .textContentType(.telephoneNumber).keyboardType(.phonePad)
-                    .accessibilityLabel("Téléphone, facultatif")
-            }.padding(.vertical, 4)
+            DrivyFormField(label: "Nom de l’école", text: $model.name, prompt: "Nom", identifier: "school-config-name")
+                .textContentType(.organizationName)
+            DrivyFormField(label: "E-mail de l’école", text: $model.contactEmail, prompt: "Adresse e-mail", identifier: "school-config-email")
+                .textContentType(.emailAddress).keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            DrivyFormField(label: "Téléphone · facultatif", text: $model.contactPhone, prompt: "Numéro")
+                .textContentType(.telephoneNumber).keyboardType(.phonePad)
             if let zone = model.school?.timeZone, let timeZone = TimeZone(identifier: zone) {
                 LabeledContent("Fuseau horaire", value: timeZone.localizedName(for: .standard, locale: Locale(identifier: "fr_CH")) ?? zone)
                     .foregroundStyle(DrivyTheme.muted)
@@ -105,21 +104,21 @@ struct SchoolConfigurationView: View {
     private var policySection: some View {
         Section {
             if let policy = model.policy {
-                Label(policy.status == "APPROVED" ? "Version \(policy.version) adoptée" : "Textes à préparer",
-                      systemImage: policy.status == "APPROVED" ? "checkmark.document" : "doc.text")
-                    .foregroundStyle(policy.status == "APPROVED" ? DrivyTheme.success : DrivyTheme.muted)
+                DrivyStatusBadge(title: policy.status == "APPROVED" ? "Version \(policy.version) adoptée" : "Textes à préparer",
+                    symbol: policy.status == "APPROVED" ? "checkmark.seal" : "doc.text",
+                    tone: policy.status == "APPROVED" ? .success : .neutral)
             }
             if model.policy?.status != "APPROVED" || editingPolicy || model.policyIsEdited {
                 policyFields
             } else if let policy = model.policy {
                 DisclosureGroup("Consulter les textes adoptés") {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.m) {
                         Text("Information des personnes").font(.headline)
                         Text(policy.noticeText).textSelection(.enabled)
                         Text("Conservation des données").font(.headline)
                         Text(policy.retentionText).textSelection(.enabled)
                         if let contact = policy.contactEmail { Text(contact).foregroundStyle(DrivyTheme.muted) }
-                    }.padding(.vertical, 12)
+                    }.padding(.vertical, DrivySpacing.s)
                 }
                 Button("Préparer une nouvelle version") { editingPolicy = true }
                     .frame(minHeight: 44).disabled(!model.mayEdit)
@@ -133,27 +132,25 @@ struct SchoolConfigurationView: View {
 
     @ViewBuilder private var policyFields: some View {
         Group {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Information des personnes").font(.headline)
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                Text("Information des personnes").font(.subheadline).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
                 TextEditor(text: $model.noticeText)
                     .frame(minHeight: 150)
                     .accessibilityLabel("Information des personnes")
                     .accessibilityIdentifier("school-config-notice")
             }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Conservation des données").font(.headline)
+            .padding(.vertical, DrivySpacing.xxs)
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                Text("Conservation des données").font(.subheadline).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
                 TextEditor(text: $model.retentionText)
                     .frame(minHeight: 150)
                     .accessibilityLabel("Conservation des données")
                     .accessibilityIdentifier("school-config-retention")
             }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Contact pour les données").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                TextField("Adresse e-mail", text: $model.policyContactEmail)
-                    .textContentType(.emailAddress).keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .accessibilityLabel("E-mail de contact pour les données")
-            }.padding(.vertical, 4)
+            .padding(.vertical, DrivySpacing.xxs)
+            DrivyFormField(label: "Contact pour les données", text: $model.policyContactEmail, prompt: "Adresse e-mail")
+                .textContentType(.emailAddress).keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
             Button("Relire et adopter les textes") { review(.policy) }
                 .frame(minHeight: 44)
                 .disabled(!model.policyIsValid || (model.policy?.status == "APPROVED" && !model.policyIsEdited))
@@ -166,19 +163,19 @@ struct SchoolConfigurationView: View {
         Section {
             if let readiness = model.readiness {
                 if model.school?.status == "DRAFT", readiness.activationReady {
-                    Label("Préparation vérifiée", systemImage: "checkmark.circle")
-                        .foregroundStyle(DrivyTheme.success)
+                    DrivyFormMessage(text: "Préparation vérifiée")
                 } else if model.school?.status == "DRAFT" {
                     ForEach(Array(readiness.activationBlockers.enumerated()), id: \.offset) { _, blocker in
-                        Label(blocker.message, systemImage: "exclamationmark.circle")
+                        Label(blocker.message, systemImage: "circle")
+                            .font(.subheadline)
                             .fixedSize(horizontal: false, vertical: true)
-                            .foregroundStyle(DrivyTheme.muted)
+                            .foregroundStyle(DrivyTheme.text)
                     }
                 }
                 if !readiness.capabilities.isEmpty {
                     DisclosureGroup("Fonctions de l’école") {
                         ForEach(readiness.capabilities, id: \.capability) { capability in
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                                 Label(capabilityTitle(capability.capability), systemImage: capability.ready ? "checkmark.circle" : "circle")
                                     .font(.headline)
                                 Text(capability.ready ? "Disponible" : "À configurer pour l’utiliser")
@@ -187,14 +184,13 @@ struct SchoolConfigurationView: View {
                                     Text(blocker.message).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
-                            }.padding(.vertical, 8)
+                            }.padding(.vertical, DrivySpacing.xs)
                         }
                     }
                 }
             }
             if model.identityIsEdited || model.policyIsEdited {
-                Text("Des modifications attendent encore votre confirmation.")
-                    .foregroundStyle(DrivyTheme.muted)
+                DrivyFormMessage(text: "Des modifications attendent encore votre confirmation.", tone: .warning)
             }
             if let setup = model.setup, setup.status != "COMPLETED" {
                 Button("Enregistrer l’avancement") { Task { await model.saveProgress() } }
@@ -223,53 +219,54 @@ struct SchoolConfigurationView: View {
 
     private func pendingSection(_ pending: PendingSchoolCommand) -> some View {
         Section {
-            Label("Confirmation en attente", systemImage: "clock.arrow.circlepath")
-                .font(.headline)
-            if pending.kind.isInvitation {
-                Text("Une invitation attend sa confirmation. Vous pouvez vérifier son résultat ici ou retrouver sa demande dans Invitations.")
-            }
-            if pending.kind.isProfile {
-                Text("Cette demande concerne un profil ou ses champs. Ouvrez cet écran pour reprendre la même demande.")
-                    .font(.footnote).foregroundStyle(DrivyTheme.muted)
-            }
-            if pending.scope != model.scope {
-                Text("Vos accès ont changé. Cette demande doit être vérifiée par l’école avant toute nouvelle modification.")
-            } else if model.pendingRequiresReview {
-                Text("Cette demande nécessite une vérification par l’école. Sa référence est conservée pour retrouver son résultat.")
-            } else {
-                Text("La demande est protégée sur cet appareil. Vérifiez son résultat avant une nouvelle modification.")
-            }
-            Button("Vérifier le résultat") { Task { await model.verifyPending() } }
-                .frame(minHeight: 44).disabled(model.isBusy || model.isLoading)
-                .accessibilityIdentifier("school-config-verify-command")
-            if pending.kind.isConfiguration && pending.scope == model.scope && !model.pendingRequiresReview {
-                Button("Renvoyer la même demande") { Task { await model.retryPending() } }
-                    .frame(minHeight: 44).disabled(!model.canRetryPending)
-                    .accessibilityIdentifier("school-config-retry-command")
-            }
-            DisclosureGroup("Référence de la demande") {
-                Text(pending.id.uuidString)
-                    .font(.caption.monospaced()).foregroundStyle(DrivyTheme.muted).textSelection(.enabled)
-            }
+            DrivyPendingRequest(message: pendingMessage(pending), notes: pendingNotes(pending), reference: pending.id,
+                verify: { Task { await model.verifyPending() } }, canVerify: !model.isBusy && !model.isLoading,
+                verifyIdentifier: "school-config-verify-command",
+                retry: pending.kind.isConfiguration && pending.scope == model.scope && !model.pendingRequiresReview
+                    ? { Task { await model.retryPending() } } : nil,
+                canRetry: model.canRetryPending,
+                retryIdentifier: "school-config-retry-command")
         }
+    }
+
+    private func pendingMessage(_ pending: PendingSchoolCommand) -> String {
+        if pending.scope != model.scope {
+            return "Vos accès ont changé. Cette demande doit être vérifiée par l’école avant toute nouvelle modification."
+        }
+        if model.pendingRequiresReview {
+            return "Cette demande nécessite une vérification par l’école. Sa référence est conservée pour retrouver son résultat."
+        }
+        return "La demande est protégée sur cet appareil. Vérifiez son résultat avant une nouvelle modification."
+    }
+
+    private func pendingNotes(_ pending: PendingSchoolCommand) -> [String] {
+        var notes: [String] = []
+        if pending.kind.isInvitation {
+            notes.append("Une invitation attend sa confirmation. Vous pouvez vérifier son résultat ici ou retrouver sa demande dans Invitations.")
+        }
+        if pending.kind.isProfile {
+            notes.append("Cette demande concerne un profil ou ses champs. Ouvrez cet écran pour reprendre la même demande.")
+        }
+        return notes
     }
 
     private func confirmationSheet(_ action: Confirmation) -> some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     switch action {
                     case .identity:
                         Text(model.name).font(.drivyTitle)
-                        Text(model.contactEmail)
-                        if !model.contactPhone.isEmpty { Text(model.contactPhone) }
+                        DrivyRowGroup {
+                            DrivyContactRow(title: "E-mail", value: model.contactEmail, symbol: "envelope")
+                            if !model.contactPhone.isEmpty { DrivyContactRow(title: "Téléphone", value: model.contactPhone, symbol: "phone") }
+                        }
                         Text("Ces coordonnées remplaceront celles affichées par votre école.")
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     case .policy:
-                        Text("Information des personnes").font(.headline)
-                        Text(model.noticeText).textSelection(.enabled)
-                        Text("Conservation des données").font(.headline)
-                        Text(model.retentionText).textSelection(.enabled)
-                        if !model.policyContactEmail.isEmpty { Text(model.policyContactEmail) }
+                        reviewText("Information des personnes", model.noticeText)
+                        reviewText("Conservation des données", model.retentionText)
+                        if !model.policyContactEmail.isEmpty { reviewText("Contact pour les données", model.policyContactEmail) }
                         Text("En confirmant, vous adoptez exactement ces textes pour votre école. Leur version sera conservée.")
                             .font(.headline)
                     case .activation:
@@ -283,52 +280,45 @@ struct SchoolConfigurationView: View {
                             Task { await model.load() }
                         } : nil)
                     }
-                    if confirmationAttempted, model.pending != nil {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Le résultat reste à vérifier. Votre demande est conservée.")
-                                .font(.headline)
-                            Button("Vérifier le résultat") {
-                                Task {
-                                    await model.verifyPending()
-                                    closeConfirmedSheet()
-                                }
-                            }
-                            .frame(minHeight: 44).disabled(model.isBusy || model.isLoading)
-                            if model.canRetryPending {
-                                Button("Renvoyer la même demande") {
-                                    Task { await model.retryPending(); closeConfirmedSheet() }
-                                }.frame(minHeight: 44)
-                            }
+                    if confirmationAttempted, let pending = model.pending {
+                        DrivyPanel {
+                            DrivyPendingRequest(message: "Le résultat reste à vérifier. Votre demande est conservée.",
+                                reference: pending.id,
+                                verify: {
+                                    Task {
+                                        await model.verifyPending()
+                                        closeConfirmedSheet()
+                                    }
+                                }, canVerify: !model.isBusy && !model.isLoading,
+                                retry: model.canRetryPending ? { Task { await model.retryPending(); closeConfirmedSheet() } } : nil)
                         }
                     }
                 }
                 .drivyPageContent()
             }
             .safeAreaInset(edge: .bottom) {
-                Button {
-                    guard canConfirm(action), !submittingConfirmation else { return }
-                    confirmationAttempted = true
-                    submittingConfirmation = true
-                    Task {
-                        switch action {
-                        case .identity: await model.saveIdentityAfterConfirmation()
-                        case .policy: await model.adoptPolicyAfterReview()
-                        case .activation: await model.activateAfterReview()
+                DrivyFormActionBar {
+                    Button {
+                        guard canConfirm(action), !submittingConfirmation else { return }
+                        confirmationAttempted = true
+                        submittingConfirmation = true
+                        Task {
+                            switch action {
+                            case .identity: await model.saveIdentityAfterConfirmation()
+                            case .policy: await model.adoptPolicyAfterReview()
+                            case .activation: await model.activateAfterReview()
+                            }
+                            submittingConfirmation = false
+                            closeConfirmedSheet()
                         }
-                        submittingConfirmation = false
-                        closeConfirmedSheet()
+                    } label: {
+                        DrivyBusyLabel(title: model.pending != nil ? "Demande à vérifier" : confirmationLabel(action),
+                            isBusy: submittingConfirmation || model.isBusy)
                     }
-                } label: {
-                    HStack(spacing: 10) {
-                        if submittingConfirmation || model.isBusy { ProgressView() }
-                        Text(submittingConfirmation || model.isBusy ? "Enregistrement…" : model.pending != nil ? "Résultat à vérifier" : confirmationLabel(action))
-                    }
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .disabled(!canConfirm(action) || submittingConfirmation)
+                    .accessibilityIdentifier("school-config-confirm-\(action.rawValue)")
                 }
-                .buttonStyle(DrivyPrimaryButtonStyle())
-                .disabled(!canConfirm(action) || submittingConfirmation)
-                .accessibilityIdentifier("school-config-confirm-\(action.rawValue)")
-                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity)
-                .background(DrivyTheme.surface)
             }
             .background(DrivyTheme.surface)
             .navigationTitle(confirmationTitle(action))
@@ -341,6 +331,15 @@ struct SchoolConfigurationView: View {
             }
             .interactiveDismissDisabled(submittingConfirmation || model.isBusy)
         }
+    }
+
+    private func reviewText(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            Text(title).font(.headline).foregroundStyle(DrivyTheme.text).accessibilityAddTraits(.isHeader)
+            Text(value).font(.body).foregroundStyle(DrivyTheme.text)
+                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func review(_ action: Confirmation) {
@@ -396,14 +395,19 @@ struct SchoolPreparationLanding: View {
     let configure: () -> Void
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                Image(systemName: "building.2").font(.largeTitle).foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
-                Text(school.name).font(.drivyScreenTitle)
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                Image(systemName: "building.2").font(.largeTitle).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                    Text(school.name).font(.drivyScreenTitle).fixedSize(horizontal: false, vertical: true)
+                    DrivyStatusBadge(title: school.status == "DRAFT" ? "En préparation" : "Inactive",
+                        symbol: school.status == "DRAFT" ? "hammer" : "pause.circle", tone: school.status == "DRAFT" ? .warning : .neutral)
+                }
                 Text(school.status == "DRAFT" ? "Votre école se prépare." : "Cet espace n’est pas actif.")
                     .font(.drivyTitle)
                 Text(mayConfigure ? "Vérifiez ses coordonnées, adoptez les textes d’information et confirmez son activation."
                      : "L’administration de votre école doit terminer sa préparation avant l’ouverture des dossiers.")
                     .foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
                 if mayConfigure {
                     Button("Préparer mon école", action: configure)
                         .buttonStyle(DrivyPrimaryButtonStyle())

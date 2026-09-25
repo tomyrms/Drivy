@@ -23,6 +23,15 @@ Skills installés dans `.claude/skills/` depuis le registre ui-skills.com (dép�
 
 Les tokens CSS du portail (`apps/web/client/styles.css`) reprennent désormais exactement les valeurs claires et sombres de `DrivyTheme`, y compris bordure de contrôle, danger, surfaces succès/alerte et désactivé.
 
+## Harmonisation par écrans (agents parallèles, 25 septembre)
+
+- **Carte** (`UI/DrivyComponents+Seance.swift`) : un seul en-tête, dock, bouton d'arrêt, commandes Liquid Glass, écran sans position et vocabulaire d'état GPS pour le trajet personnel, le GPS scolaire et le replay ; GPS refusé/interrompu en alerte, jamais en rouge.
+- **Leçons et bilans** (`UI/DrivyComponents+Agenda.swift`) : état de leçon et état de bilan uniques, ligne de leçon commune (agenda, dossier, bilans), corps de bilan identique en aperçu et en lecture (« Prochaine étape » en tête), note de compétence, barre d'action basse avec justification de l'état désactivé.
+- **École et administration** (`UI/DrivyComponents+Ecole.swift`) : barre d'outils identique sur les quatre onglets, ligne d'entité unique (élèves, membres, invitations, catalogue), champ de formulaire à libellé permanent, présentation unique d'une demande incertaine (« Demande à vérifier » → « Vérifier auprès de l'école » → « Renvoyer la même demande » → référence).
+- **Fusion des doublons** : une seule ligne libellé/valeur (`DrivyKeyValueRow`), une seule barre d'action basse (`DrivyStickyActionBar`, reprise par `DrivyFormActionBar`), un seul style destructif (`DrivyDangerButtonStyle`).
+- Composants système ajoutés : `DrivyKeyValueRow`, `DrivyLoadingState`, surface groupée commune, galerie DEBUG `design-system`.
+- Choix à valider par le porteur : couleurs des statuts d'observation alignées sur le signalement (Attention orange, À retravailler rouge) ; ordre du bilan avec la prochaine étape en tête, contrairement aux maquettes 08/09.
+
 ## Vérification
 
 Compilation de l’IPA réussie sur GitHub Actions pour les lots poussés jusqu’à `c07b4c6` (run `36131760336`). Typecheck et build Vite du web réussis localement. `DESIGN.md` : `npx @google/design.md lint` sans erreur (avertissements : pas de token `primary`, tokens non référencés par un composant), export `dtcg` avec couleurs, espacements, rayons et typographie ; contrôle documentaire qui ne qualifie pas le produit. Aucune capture n’a encore été relue ; VoiceOver, grand texte, sombre et essais physiques restent à qualifier sur appareil.

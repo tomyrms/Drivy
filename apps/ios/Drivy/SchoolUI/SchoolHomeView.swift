@@ -48,7 +48,9 @@ struct SchoolHomeView: View {
                 .tag(SchoolHomeTab.school)
         }
         .tint(DrivyTheme.accent)
-        .sheet(isPresented: $choosesSchool) { schoolChooser }
+        .sheet(isPresented: $choosesSchool) {
+            SchoolChooserSheet(workspace: workspace, close: { choosesSchool = false })
+        }
         .sheet(item: $dossierPlanningModel) { model in SchoolPlanningView(model: model) }
         .sheet(item: historyPresentation) { model in
             SchoolCaptureHistoryView(model: model, workspace: workspace)
@@ -184,44 +186,56 @@ struct SchoolHomeView: View {
         .background(DrivyTheme.surface)
     }
 
+    /// Mockup 13: the school name under the large title, then the viewer's role
+    /// as the first fact of the page.
     private var schoolHeading: some View {
-        HStack(alignment: .center, spacing: DrivySpacing.m) {
-            Image(systemName: "building.2")
-                .font(.title2)
+        VStack(alignment: .leading, spacing: DrivySpacing.m) {
+            Text(workspace.school?.name ?? workspace.membership?.schoolName ?? "Mon école")
+                .font(.body)
                 .foregroundStyle(DrivyTheme.muted)
-                .frame(width: 56, height: 56)
-                .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text(workspace.school?.name ?? workspace.membership?.schoolName ?? "Mon école")
-                    .font(.drivyTitle)
-                    .foregroundStyle(DrivyTheme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let membership = workspace.membership {
-                    Text(SchoolPresentation.roles(membership.roles))
-                        .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+            if let membership = workspace.membership {
+                HStack(spacing: DrivySpacing.m) {
+                    Image(systemName: "checkmark.shield")
+                        .font(.title3)
                         .foregroundStyle(DrivyTheme.muted)
+                        .frame(width: 28)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        Text("Votre rôle").font(.headline).foregroundStyle(DrivyTheme.text)
+                        Text(SchoolPresentation.roles(membership.roles))
+                            .font(.subheadline)
+                            .foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
                 }
+                .padding(.vertical, DrivySpacing.s)
+                .frame(minHeight: 64)
+                .accessibilityElement(children: .combine)
             }
         }
-        .accessibilityElement(children: .combine)
     }
 
     private func schoolStatus(_ status: String) -> some View {
         let archived = status == "ARCHIVED"
-        return VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            DrivyStatusBadge(title: archived ? "École archivée" : "En préparation",
-                symbol: archived ? "archivebox" : "hammer", tone: archived ? .neutral : .warning)
-            Text(archived
-                ? "Les nouvelles opérations scolaires sont fermées. Vos séances sur cet appareil restent accessibles."
-                : "La carte est disponible. L’administration peut terminer la configuration depuis cet espace.")
-                .font(.subheadline)
-                .foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
+        return DrivyPanel {
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                DrivyStatusBadge(title: archived ? "École archivée" : "En préparation",
+                    symbol: archived ? "archivebox" : "hammer", tone: archived ? .neutral : .warning)
+                Text(archived
+                    ? "Les nouvelles opérations scolaires sont fermées. Vos séances sur cet appareil restent accessibles."
+                    : "La carte est disponible. L’administration peut terminer la configuration depuis cet espace.")
+                    .font(.subheadline)
+                    .foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !archived, let configureSchool {
+                    Button("Préparer mon école", action: configureSchool)
+                        .buttonStyle(DrivyPrimaryButtonStyle())
+                        .padding(.top, DrivySpacing.xs)
+                }
+            }
         }
-        .padding(DrivySpacing.m)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
     }
 
     private var schoolActions: some View {
@@ -232,23 +246,23 @@ struct SchoolHomeView: View {
                         symbol: "point.topleft.down.to.point.bottomright.curvepath", action: openCaptureHistory)
                 }
             }
-            if openCatalog != nil || openInvitations != nil || openMembers != nil {
+            if openMembers != nil || openInvitations != nil {
+                DrivyRowGroup(title: "Équipe") {
+                    if let openMembers {
+                        DrivyNavigationRow(title: "Équipe et accès", detail: "Membres, rôles et autorisations", symbol: "person.2.badge.key", action: openMembers)
+                    }
+                    if let openInvitations {
+                        DrivyNavigationRow(title: "Invitations", detail: "Inviter une personne et suivre les liens", symbol: "envelope", action: openInvitations)
+                    }
+                }
+            }
+            if openCatalog != nil || configureSchool != nil || openProfilePolicy != nil {
                 DrivyRowGroup(title: "Organisation") {
                     if let openCatalog {
                         DrivyNavigationRow(title: "Formations", detail: "Offres, référentiels et procédures", symbol: "steeringwheel", action: openCatalog)
                     }
-                    if let openInvitations {
-                        DrivyNavigationRow(title: "Invitations", detail: "Inviter et suivre les accès", symbol: "envelope", action: openInvitations)
-                    }
-                    if let openMembers {
-                        DrivyNavigationRow(title: "Équipe et accès", detail: "Membres, rôles et autorisations", symbol: "person.2.badge.key", action: openMembers)
-                    }
-                }
-            }
-            if configureSchool != nil || openProfilePolicy != nil {
-                DrivyRowGroup(title: "Paramètres") {
                     if let configureSchool {
-                        DrivyNavigationRow(title: "Configuration", detail: "Coordonnées et textes de l’école", symbol: "slider.horizontal.3", action: configureSchool)
+                        DrivyNavigationRow(title: "Configuration", detail: "Coordonnées, textes et activation de l’école", symbol: "slider.horizontal.3", action: configureSchool)
                     }
                     if let openProfilePolicy {
                         DrivyNavigationRow(title: "Champs du profil", detail: "Informations demandées aux élèves", symbol: "list.bullet.rectangle", action: openProfilePolicy)
@@ -267,49 +281,27 @@ struct SchoolHomeView: View {
 
     private func contactSection(_ school: SchoolDetails) -> some View {
         DrivyRowGroup(title: "Contacter l’école") {
-            contactValue(school.contactEmail, title: "E-mail", symbol: "envelope")
+            DrivyContactRow(title: "E-mail", value: school.contactEmail, symbol: "envelope")
             if let phone = school.contactPhone, !phone.isEmpty {
-                contactValue(phone, title: "Téléphone", symbol: "phone")
+                DrivyContactRow(title: "Téléphone", value: phone, symbol: "phone")
             }
         }
-    }
-
-    private func contactValue(_ value: String, title: String, symbol: String) -> some View {
-        HStack(alignment: .center, spacing: DrivySpacing.m) {
-            Image(systemName: symbol).font(.title3).foregroundStyle(DrivyTheme.muted).frame(width: 28)
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text(title).font(.caption).foregroundStyle(DrivyTheme.muted)
-                Text(value).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.vertical, DrivySpacing.s)
-        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-        .accessibilityElement(children: .combine)
     }
 
     private var accountSection: some View {
         DrivyRowGroup(title: "Votre compte") {
-            HStack(spacing: DrivySpacing.m) {
-                DrivyAvatar(name: workspace.person?.displayName ?? "Compte", size: 40)
-                Text(workspace.person?.displayName ?? "Compte connecté").font(.headline)
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, DrivySpacing.s)
-            .accessibilityElement(children: .combine)
+            DrivyEntityRow(title: workspace.person?.displayName ?? "Compte connecté",
+                meta: workspace.membership.map { SchoolPresentation.roles($0.roles) },
+                leading: .avatar(workspace.person?.displayName ?? "Compte"))
             if let openOnboarding {
-                DrivyNavigationRow(title: "Mon arrivée dans l’école", symbol: "figure.wave", action: openOnboarding)
+                DrivyNavigationRow(title: "Mon arrivée dans l’école", detail: "Profil et étapes d’accueil",
+                    symbol: "figure.wave", action: openOnboarding)
             }
-            DrivyNavigationRow(title: "Changer d’école", symbol: "arrow.left.arrow.right", action: { choosesSchool = true })
+            DrivyNavigationRow(title: "Changer d’école", detail: workspace.person.map { $0.memberships.count > 1 ? "\($0.memberships.count) écoles sur ce compte" : "Une école sur ce compte" },
+                symbol: "arrow.left.arrow.right", action: { choosesSchool = true })
                 .accessibilityIdentifier("school-change-school")
-            Button(role: .destructive, action: signOut) {
-                Label("Se déconnecter", systemImage: "rectangle.portrait.and.arrow.right")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(DrivyTheme.danger)
-            .accessibilityIdentifier("school-sign-out")
+            DrivyDestructiveRow(title: "Se déconnecter", symbol: "rectangle.portrait.and.arrow.right", action: signOut)
+                .accessibilityIdentifier("school-sign-out")
         }
     }
 
@@ -323,23 +315,11 @@ struct SchoolHomeView: View {
         }
     }
 
-    private var schoolChooser: some View {
-        NavigationStack {
-            SchoolChooserView(workspace: workspace, onSelect: { choosesSchool = false })
-                .navigationTitle("Mes écoles")
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { choosesSchool = false } } }
-        }
-    }
-
+    /// Same leading school button and trailing account button on every tab.
     @ToolbarContentBuilder private var contextToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Button { choosesSchool = true } label: { Label("Écoles", systemImage: "building.2") }
-                .accessibilityIdentifier("choose-school")
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button(action: openAccount) { Label("Compte", systemImage: "person.crop.circle") }
-                .accessibilityIdentifier("school-account")
-        }
+        DrivySchoolToolbarItem(schoolName: workspace.school?.name ?? workspace.membership?.schoolName,
+            chooseSchool: { choosesSchool = true })
+        DrivyAccountToolbarItem(openAccount: openAccount)
     }
 
     private func refreshSchool() {

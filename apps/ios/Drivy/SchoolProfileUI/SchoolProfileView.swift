@@ -49,23 +49,24 @@ struct SchoolProfileView: View {
             SchoolProfileStatusSections(model: model)
             if let profile = model.profile {
                 Section {
-                    Text(model.school?.name ?? "Dossier scolaire")
-                        .font(.headline)
-                    Text(model.isOwnProfile ? "Saisissez vos noms administratifs tels qu’ils doivent figurer dans le dossier."
-                         : "Complétez uniquement les informations confirmées avec l’élève.")
-                        .foregroundStyle(DrivyTheme.muted)
+                    DrivyFormIntro(context: model.school?.name ?? "Dossier scolaire",
+                        message: model.isOwnProfile ? "Saisissez vos noms administratifs tels qu’ils doivent figurer dans le dossier."
+                            : "Complétez uniquement les informations confirmées avec l’élève.")
                     if !model.isOwnProfile && !model.roles.contains("ADMIN") {
                         Text("Votre affectation vous permet de mettre à jour les contacts utiles à l’enseignement.")
                             .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                .listRowBackground(DrivyTheme.canvas)
                 identitySection(profile)
                 contactSection
                 if model.editableFields.contains(.birthDate) { birthSection }
                 if model.editableFields.contains(.postalAddress) { addressSection }
                 Section {
                     Label(profile.profilePhotoDocumentId == nil ? "Photo facultative" : "Une photo est associée au dossier", systemImage: "person.crop.circle")
-                }
+                        .foregroundStyle(DrivyTheme.muted)
+                } header: { Text("Photo") }
                 readinessSection
             }
             if let onboarding = model.onboarding { onboardingSection(onboarding) }
@@ -75,41 +76,35 @@ struct SchoolProfileView: View {
         .background(DrivyTheme.canvas)
         .safeAreaInset(edge: .bottom) {
             if model.profile != nil, !model.editableFields.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    if attemptedSave, let error = model.errorMessage {
-                        Text(error).font(.footnote).foregroundStyle(DrivyTheme.danger)
-                    } else if model.hasEdits {
-                        Text(model.draft.isValid(allowed: model.editableFields, timeZone: model.school?.timeZone ?? "Europe/Zurich")
-                            ? "Modifications à enregistrer dans cette école." : "Vérifiez les champs signalés.")
-                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                    }
+                DrivyFormActionBar(hint: saveHint.text, hintTone: saveHint.tone) {
                     Button {
                         confirmsSave = true
                     } label: {
-                        HStack(spacing: 10) {
-                            if model.isBusy { ProgressView() }
-                            Text(model.isBusy ? "Enregistrement…" : "Enregistrer les modifications")
-                        }
+                        DrivyBusyLabel(title: "Enregistrer les modifications", isBusy: model.isBusy)
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canSaveProfile)
                     .accessibilityIdentifier("profile-save")
                 }
-                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity).background(DrivyTheme.surface)
             }
         }
         .scrollDismissesKeyboard(.interactively)
     }
 
+    private var saveHint: (text: String?, tone: DrivyTone) {
+        if attemptedSave, let error = model.errorMessage { return (error, .danger) }
+        guard model.hasEdits else { return (nil, .neutral) }
+        return (model.draft.isValid(allowed: model.editableFields, timeZone: model.school?.timeZone ?? "Europe/Zurich")
+            ? "Modifications à enregistrer dans cette école." : "Vérifiez les champs signalés.", .neutral)
+    }
+
     private func identitySection(_ profile: SchoolAdministrativeProfile) -> some View {
         Section {
             if model.editableFields.contains(.firstName) {
-                profileField("Prénom", text: $model.draft.firstName).textContentType(.givenName)
-                    .accessibilityIdentifier("profile-first-name")
+                profileField("Prénom", text: $model.draft.firstName, identifier: "profile-first-name").textContentType(.givenName)
                 fieldExplanation(.firstName)
             } else { LabeledContent("Prénom", value: profile.firstName ?? "À compléter") }
             if model.editableFields.contains(.lastName) {
-                profileField("Nom", text: $model.draft.lastName).textContentType(.familyName)
-                    .accessibilityIdentifier("profile-last-name")
+                profileField("Nom", text: $model.draft.lastName, identifier: "profile-last-name").textContentType(.familyName)
                 fieldExplanation(.lastName)
             } else { LabeledContent("Nom", value: profile.lastName ?? "À compléter") }
         } header: { Text("Identité scolaire") }
@@ -120,16 +115,14 @@ struct SchoolProfileView: View {
         if model.editableFields.contains(.contactEmail) || model.editableFields.contains(.contactPhone) {
             Section {
                 if model.editableFields.contains(.contactEmail) {
-                    profileField("E-mail", text: $model.draft.contactEmail)
+                    profileField("E-mail", text: $model.draft.contactEmail, identifier: "profile-email")
                         .textContentType(.emailAddress).keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .accessibilityIdentifier("profile-email")
                     fieldExplanation(.contactEmail)
                 }
                 if model.editableFields.contains(.contactPhone) {
-                    profileField("Téléphone", text: $model.draft.contactPhone)
+                    profileField("Téléphone", text: $model.draft.contactPhone, identifier: "profile-phone")
                         .textContentType(.telephoneNumber).keyboardType(.phonePad)
-                        .accessibilityIdentifier("profile-phone")
                     fieldExplanation(.contactPhone)
                 }
             } header: { Text("Contacts") }
@@ -138,9 +131,13 @@ struct SchoolProfileView: View {
     }
     private var birthSection: some View {
         Section {
-            TextField("JJ.MM.AAAA", text: $model.draft.birthDate).keyboardType(.numbersAndPunctuation)
-                .accessibilityLabel("Date de naissance, jour point mois point année")
-                .accessibilityIdentifier("profile-birth-date")
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                Text("Date de naissance").font(.subheadline).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
+                TextField("JJ.MM.AAAA", text: $model.draft.birthDate).keyboardType(.numbersAndPunctuation)
+                    .accessibilityLabel("Date de naissance, jour point mois point année")
+                    .accessibilityIdentifier("profile-birth-date")
+            }
+            .padding(.vertical, DrivySpacing.xxs)
             fieldExplanation(.birthDate)
         } header: { Text("Date de naissance") }
         .disabled(!model.canMutate || confirmsSave)
@@ -163,15 +160,16 @@ struct SchoolProfileView: View {
     }
     @ViewBuilder private func fieldExplanation(_ field: SchoolProfileField) -> some View {
         if let rule = model.applicablePolicy?.fields.first(where: { $0.field == field }) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(rule.requirement == .optional ? "Facultatif" : "\(rule.requirement.label) · \(rule.stage.label)").font(.caption.weight(.medium))
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(rule.requirement == .optional ? "Facultatif" : "\(rule.requirement.label) · \(rule.stage.label)").font(.caption.weight(.semibold))
                 Text(rule.explanation).font(.footnote)
             }
             .foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
         }
         if model.hasEdits, model.editableFields.contains(field),
            !model.draft.isValid(allowed: [field], timeZone: model.school?.timeZone ?? "Europe/Zurich") {
-            Text(fieldError(field)).font(.footnote).foregroundStyle(DrivyTheme.danger)
+            Label(fieldError(field), systemImage: "exclamationmark.triangle.fill")
+                .font(.footnote).foregroundStyle(DrivyTheme.danger)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -186,18 +184,17 @@ struct SchoolProfileView: View {
         case .profilePhotoDocumentId: "Vérifiez la photo du profil."
         }
     }
-    private func profileField(_ title: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            TextField(title, text: text).accessibilityLabel(title)
-        }.padding(.vertical, 4)
+    private func profileField(_ title: String, text: Binding<String>, identifier: String? = nil) -> some View {
+        DrivyFormField(label: title, text: text, identifier: identifier)
     }
     @ViewBuilder private var readinessSection: some View {
         if let readiness = model.readiness {
             Section {
                 Label(readiness.ready ? "Accès à l’espace scolaire possible" : "Accès à l’espace scolaire à préparer",
-                    systemImage: readiness.ready ? "checkmark.circle" : "list.bullet.clipboard")
+                    systemImage: readiness.ready ? "checkmark.circle.fill" : "list.bullet.clipboard")
+                    .font(.headline)
                     .foregroundStyle(readiness.ready ? DrivyTheme.success : DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
                 SchoolProfileBlockers(blockers: readiness.blockers)
             } header: { Text("Prochaine étape") }
         }
@@ -229,6 +226,10 @@ struct SchoolProfileView: View {
                     .frame(minHeight: 48)
                     .disabled(!model.canMutate || !onboarding.pendingActions.isEmpty)
                     .accessibilityIdentifier("onboarding-complete")
+                if !onboarding.pendingActions.isEmpty {
+                    Text("Terminez d’abord les actions indiquées ci-dessus.")
+                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                }
             }
         }
     }
@@ -247,46 +248,53 @@ struct SchoolProfileStatusSections: View {
     @Bindable var model: SchoolProfileWorkspace
     var body: some View {
         Group {
-            if model.isLoading { Section { ProgressView("Vérification du dossier…") } }
+            if model.isLoading { Section { ProgressView("Vérification du dossier…").frame(maxWidth: .infinity, minHeight: 44) } }
             if let error = model.errorMessage {
                 Section {
-                    SchoolErrorNotice(message: error)
-                    Button("Relire les informations de l’école") { Task { await model.load() } }
-                        .frame(minHeight: 44).disabled(model.isBusy || model.isLoading)
+                    SchoolErrorNotice(message: error,
+                        retry: model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
                 }
             }
             if let success = model.successMessage, !model.hasEdits {
-                Section { Label(success, systemImage: "checkmark.circle.fill").foregroundStyle(DrivyTheme.success) }
+                Section { DrivyFormMessage(text: success) }
             }
             if let pending = model.pending {
                 Section {
-                    Label("Demande à confirmer", systemImage: "clock.arrow.circlepath").font(.headline)
-                    Text("Conservez cette référence. Une nouvelle modification sera possible après vérification du résultat.")
-                    DisclosureGroup("Référence de la demande") {
-                        Text(pending.id.uuidString).font(.caption.monospaced()).textSelection(.enabled)
-                    }
-                    if !pending.kind.isProfile { Text("Cette demande vient d’un autre écran de l’école.") }
-                    if pending.scope != model.scope { Text("Vos accès ont changé depuis l’envoi. Le renvoi reste désactivé.") }
-                    Button("Vérifier le résultat") { Task { await model.verifyPending() } }
-                        .disabled(!model.canVerifyPending).frame(minHeight: 44)
-                    if model.canRetryPending {
-                        Button("Renvoyer la même demande") { Task { await model.retryPending() } }
-                            .frame(minHeight: 44)
-                    }
-                } header: { Text("En attente") }
+                    DrivyPendingRequest(
+                        message: "Une nouvelle modification sera possible après vérification du résultat.",
+                        notes: pendingNotes(pending),
+                        reference: pending.id,
+                        verify: { Task { await model.verifyPending() } }, canVerify: model.canVerifyPending,
+                        retry: model.canRetryPending ? { Task { await model.retryPending() } } : nil)
+                }
             }
         }
     }
 }
+extension SchoolProfileStatusSections {
+    fileprivate func pendingNotes(_ pending: PendingSchoolCommand) -> [String] {
+        var notes: [String] = []
+        if !pending.kind.isProfile { notes.append("Cette demande vient d’un autre écran de l’école.") }
+        if pending.scope != model.scope { notes.append("Vos accès ont changé depuis l’envoi. Le renvoi reste désactivé.") }
+        return notes
+    }
+}
+
 struct SchoolProfileBlockers: View {
     let blockers: [SchoolActionBlocker]
     var body: some View {
         ForEach(Array(blockers.enumerated()), id: \.offset) { _, blocker in
-            VStack(alignment: .leading, spacing: 4) {
-                if let code = blocker.field, let field = SchoolProfileField(rawValue: code) {
-                    Text("\(field.label) — \(blocker.message)")
-                } else { Text(blocker.message) }
-                if let purpose = blocker.purpose { Text(purpose).font(.footnote).foregroundStyle(DrivyTheme.muted) }
+            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+                Image(systemName: "circle")
+                    .font(.caption)
+                    .foregroundStyle(DrivyTheme.controlBorder)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                    if let code = blocker.field, let field = SchoolProfileField(rawValue: code) {
+                        Text("\(field.label) — \(blocker.message)").font(.subheadline)
+                    } else { Text(blocker.message).font(.subheadline) }
+                    if let purpose = blocker.purpose { Text(purpose).font(.footnote).foregroundStyle(DrivyTheme.muted) }
+                }
             }
             .fixedSize(horizontal: false, vertical: true)
         }

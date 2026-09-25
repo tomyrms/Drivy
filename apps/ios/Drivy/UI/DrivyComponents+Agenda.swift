@@ -159,35 +159,10 @@ struct DrivyLessonFactRow: View {
     let title: String
     let value: String
     var monospaced = false
-    @Environment(\.dynamicTypeSize) private var typeSize
 
+    // One label/value anatomy for the whole app.
     var body: some View {
-        Group {
-            if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    valueText
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.m) {
-                    Text(title).foregroundStyle(DrivyTheme.muted)
-                    Spacer(minLength: DrivySpacing.m)
-                    valueText.multilineTextAlignment(.trailing)
-                }
-            }
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.vertical, DrivySpacing.s)
-        .frame(minHeight: 48)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var valueText: some View {
-        Text(value)
-            .font(monospaced ? .body.monospacedDigit() : .body)
-            .foregroundStyle(DrivyTheme.text)
-            .textSelection(.enabled)
+        DrivyKeyValueRow(title: title, value: value, numeric: monospaced)
     }
 }
 

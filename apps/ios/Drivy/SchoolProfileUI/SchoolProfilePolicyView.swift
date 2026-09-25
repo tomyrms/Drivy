@@ -9,15 +9,8 @@ struct SchoolProfilePolicyView: View {
     var body: some View {
         NavigationStack {
             Form {
-                SchoolProfileStatusSections(model: model)
                 introduction
-                Section {
-                    Button { showsEditor = true } label: {
-                        Label("Préparer une nouvelle version", systemImage: "plus")
-                    }
-                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canCreatePolicy)
-                    .accessibilityIdentifier("profile-policy-create")
-                }
+                SchoolProfileStatusSections(model: model)
                 ForEach(model.policies) { policy in policySection(policy) }
                 if model.nextCursor != nil {
                     Section {
@@ -27,6 +20,15 @@ struct SchoolProfilePolicyView: View {
                 }
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
+            .safeAreaInset(edge: .bottom) {
+                DrivyFormActionBar(hint: createHint) {
+                    Button { showsEditor = true } label: {
+                        Label("Préparer une nouvelle version", systemImage: "plus")
+                    }
+                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canCreatePolicy)
+                    .accessibilityIdentifier("profile-policy-create")
+                }
+            }
             .navigationTitle("Champs du profil").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
             .task { await model.load() }
@@ -36,30 +38,52 @@ struct SchoolProfilePolicyView: View {
         .tint(DrivyTheme.accent)
         .interactiveDismissDisabled(model.isBusy)
     }
+    private var noticeAdopted: Bool {
+        if let notice = model.notice, notice.status == "APPROVED", notice.noticeVersionId != nil { return true }
+        return false
+    }
+    private var createHint: String? {
+        guard !model.canCreatePolicy, !model.isLoading, !model.isBusy else { return nil }
+        return noticeAdopted ? nil : "Adoptez d’abord la notice de données dans Configuration."
+    }
     private var introduction: some View {
-        Section {
-            Text(model.school?.name ?? "Votre école").font(.headline)
-            Text("Choisissez les champs demandés, leur utilité et le moment où ils deviennent nécessaires.")
-                .foregroundStyle(DrivyTheme.muted)
-            if let notice = model.notice, notice.status == "APPROVED", notice.noticeVersionId != nil {
-                Label("Notice de données adoptée · version \(notice.version)", systemImage: "checkmark.document")
-                    .foregroundStyle(DrivyTheme.success)
-            } else {
-                Text("Adoptez d’abord la notice de données dans Configuration.").foregroundStyle(DrivyTheme.muted)
+        Group {
+            Section {
+                DrivyFormIntro(context: model.school?.name ?? "Votre école",
+                    message: "Choisissez les champs demandés, leur utilité et le moment où ils deviennent nécessaires.")
             }
-            if !model.isLoading && model.policies.isEmpty && model.errorMessage == nil {
-                Text("Aucune version enregistrée.").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            }
+            .listRowBackground(DrivyTheme.canvas)
+            Section {
+                if let notice = model.notice, noticeAdopted {
+                    DrivyFormMessage(text: "Notice de données adoptée · version \(notice.version)")
+                } else {
+                    DrivyFormMessage(text: "Adoptez d’abord la notice de données dans Configuration.", tone: .neutral)
+                }
+                if !model.isLoading && model.policies.isEmpty && model.errorMessage == nil {
+                    DrivyEmptyState(title: "Aucune version enregistrée",
+                        message: "Préparez une première version pour indiquer les informations demandées aux élèves.",
+                        symbol: "list.bullet.rectangle")
+                }
+            } header: { Text("Notice de données") }
         }
     }
     private func policySection(_ policy: SchoolProfilePolicy) -> some View {
-        Section {
-            Text("Version \(policy.version) · \(model.applicablePolicy?.id == policy.id ? "En vigueur" : status(policy.status))")
-                .font(.headline).fixedSize(horizontal: false, vertical: true)
-            Text("Prise d’effet : \(effectiveDate(policy.effectiveFrom))").font(.subheadline)
+        let isCurrent = model.applicablePolicy?.id == policy.id
+        return Section {
+            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+                Text("Version \(policy.version)").font(.headline).foregroundStyle(DrivyTheme.text)
+                Spacer(minLength: DrivySpacing.xs)
+                DrivyStatusBadge(title: isCurrent ? "En vigueur" : status(policy.status),
+                    symbol: isCurrent ? "checkmark.seal" : policy.status == "DRAFT" ? "pencil" : "clock",
+                    tone: isCurrent ? .success : policy.status == "DRAFT" ? .warning : .neutral)
+            }
+            .accessibilityElement(children: .combine)
+            LabeledContent("Prise d’effet", value: effectiveDate(policy.effectiveFrom))
+                .font(.subheadline)
             DisclosureGroup("\(policy.fields.count) champs · consulter les règles") {
                 SchoolProfileRulesReview(rules: policy.fields)
             }
+            .font(.subheadline)
             if policy.status == "DRAFT" {
                 Button("Relire avant publication") { publication = policy }
                     .frame(minHeight: 48).disabled(!model.canMutate)
@@ -71,13 +95,15 @@ struct SchoolProfilePolicyView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text(model.school?.name ?? "Votre école").font(.drivyTitle)
-                    Text("Version \(policy.version)").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    Text("Ces règles s’appliqueront aux profils concernés à la date prévue. Les informations existantes ne seront pas complétées automatiquement.")
-                    Text("Prise d’effet : \(effectiveDate(policy.effectiveFrom))")
+                    DrivyFormIntro(context: "\(model.school?.name ?? "Votre école") · version \(policy.version)",
+                        message: "Ces règles s’appliqueront aux profils concernés à la date prévue. Les informations existantes ne seront pas complétées automatiquement.")
+                }
+                .listRowBackground(DrivyTheme.canvas)
+                Section {
+                    LabeledContent("Prise d’effet", value: effectiveDate(policy.effectiveFrom))
                 }
                 Section { SchoolProfileRulesReview(rules: policy.fields) }
-                if model.isLoadingPublication { Section { ProgressView("Lecture de la notice liée à ce brouillon…") } }
+                if model.isLoadingPublication { Section { ProgressView("Lecture de la notice liée à ce brouillon…").frame(maxWidth: .infinity, minHeight: 44) } }
                 if let notice = model.publicationNotice, notice.noticeVersionId == policy.noticeVersionId {
                     Section("Notice liée à cette politique · version \(notice.version)") {
                         Text(notice.noticeText).textSelection(.enabled)
@@ -90,6 +116,8 @@ struct SchoolProfilePolicyView: View {
                 } else if let error = model.errorMessage {
                     Section {
                         SchoolErrorNotice(message: error)
+                    }
+                    Section {
                         if model.needsReload {
                             Button("Actualiser et relire") { Task { await reloadPublication(policy) } }
                                 .frame(minHeight: 44).disabled(model.isBusy || model.isLoading)
@@ -102,17 +130,15 @@ struct SchoolProfilePolicyView: View {
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom) {
-                Button {
-                    Task { if await model.publishAfterConfirmation(policy) { publication = nil } }
-                } label: {
-                    HStack(spacing: 10) {
-                        if model.isBusy { ProgressView() }
-                        Text(model.isBusy ? "Publication…" : "Publier ces règles")
+                DrivyFormActionBar {
+                    Button {
+                        Task { if await model.publishAfterConfirmation(policy) { publication = nil } }
+                    } label: {
+                        DrivyBusyLabel(title: "Publier ces règles", busyTitle: "Publication…", isBusy: model.isBusy)
                     }
+                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canPublish(policy))
+                    .accessibilityIdentifier("profile-policy-publish")
                 }
-                .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canPublish(policy))
-                .accessibilityIdentifier("profile-policy-publish")
-                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity).background(DrivyTheme.surface)
             }
             .navigationTitle("Publication").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { publication = nil }.disabled(model.isBusy) } }
@@ -160,38 +186,29 @@ private struct SchoolProfilePolicyEditor: View {
                 Section {
                     DatePicker("Date d’effet", selection: $draft.effectiveFrom, displayedComponents: .date)
                     DatePicker("Heure", selection: $draft.effectiveFrom, displayedComponents: .hourAndMinute)
+                } header: { Text("Prise d’effet") } footer: {
                     Text("Heure de l’école : \(model.school?.timeZone ?? "Europe/Zurich")")
-                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
                 }
                 ForEach(draft.rules.indices, id: \.self) { index in ruleEditor(index) }
                 if model.pending != nil {
                     SchoolProfileStatusSections(model: model)
                 } else if let error = model.errorMessage {
                     Section {
-                        SchoolErrorNotice(message: error)
-                        Button("Relire les informations de l’école") { Task { await model.load() } }
-                            .frame(minHeight: 44).disabled(model.isBusy || model.isLoading)
+                        SchoolErrorNotice(message: error,
+                            retry: model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
                     }
                 }
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
-                VStack(alignment: .leading, spacing: 10) {
-                    if let invalid = draft.selectedRules.first(where: { !$0.isValid }) {
-                        Text(invalid.explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            ? "\(invalid.field.label) : expliquez l’utilité de ce champ."
-                            : "\(invalid.field.label) : l’explication est limitée à 1 000 caractères.")
-                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                    } else {
-                        Text("Ce brouillon sera à relire avant publication.")
-                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                DrivyFormActionBar(hint: draftHint) {
+                    Button { confirms = true } label: {
+                        DrivyBusyLabel(title: "Créer le brouillon", isBusy: model.isBusy)
                     }
-                    Button("Créer le brouillon") { confirms = true }
-                        .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canCreatePolicy || !draft.isValid)
-                        .accessibilityIdentifier("profile-policy-save-draft")
+                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canCreatePolicy || !draft.isValid)
+                    .accessibilityIdentifier("profile-policy-save-draft")
                 }
-                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity).background(DrivyTheme.surface)
             }
             .environment(\.timeZone, TimeZone(identifier: model.school?.timeZone ?? "Europe/Zurich") ?? .current)
             .disabled(model.isBusy)
@@ -213,6 +230,14 @@ private struct SchoolProfilePolicyEditor: View {
             }
         }
         .tint(DrivyTheme.accent).interactiveDismissDisabled(model.isBusy)
+    }
+    private var draftHint: String {
+        if let invalid = draft.selectedRules.first(where: { !$0.isValid }) {
+            return invalid.explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "\(invalid.field.label) : expliquez l’utilité de ce champ."
+                : "\(invalid.field.label) : l’explication est limitée à 1 000 caractères."
+        }
+        return "Ce brouillon sera à relire avant publication."
     }
     private func ruleEditor(_ index: Int) -> some View {
         let field = draft.rules[index].field
@@ -244,8 +269,8 @@ private struct SchoolProfilePolicyEditor: View {
                 } else if field == .profilePhotoDocumentId {
                     Text("Facultatif · personnalisation").foregroundStyle(DrivyTheme.muted)
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Utilité pour l’élève").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                    Text("Utilité pour l’élève").font(.subheadline).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
                     TextField("Expliquez pourquoi ce champ est demandé", text: $draft.rules[index].explanation, axis: .vertical)
                         .lineLimit(3...8)
                         .accessibilityLabel("Utilité du champ \(field.label)")
@@ -271,13 +296,14 @@ private struct SchoolProfileRulesReview: View {
     let rules: [SchoolProfileRule]
     var body: some View {
         ForEach(rules) { rule in
-            VStack(alignment: .leading, spacing: 6) {
-                Text(rule.field.label).font(.headline)
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(rule.field.label).font(.headline).foregroundStyle(DrivyTheme.text)
                 Text(rule.requirement == .optional ? "Facultatif" : "\(rule.requirement.label) · \(rule.stage.label)").font(.subheadline)
                 Text(rule.purposeCode.label).font(.footnote).foregroundStyle(DrivyTheme.muted)
                 Text(rule.explanation).font(.footnote).fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, DrivySpacing.xs)
         }
     }
 }
