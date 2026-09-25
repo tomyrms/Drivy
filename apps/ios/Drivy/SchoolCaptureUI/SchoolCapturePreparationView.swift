@@ -24,7 +24,7 @@ struct SchoolCapturePreparationView: View {
         NavigationStack {
             ScrollView {
                 if currentScope == model.scope {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     heading
                     feedback
                     if model.contextIsCurrent {
@@ -33,23 +33,26 @@ struct SchoolCapturePreparationView: View {
                         else {
                             Label("Le diagnostic GPS est réalisé sur l’appareil du moniteur.", systemImage: "iphone")
                                 .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     if !model.pendingAssessments.isEmpty { pendingPanel }
                     if !model.pendingStarts.isEmpty { pendingStartsPanel }
                     if model.contextIsCurrent && model.isInstructor && model.collectionIsIntegrated { startPanel }
                     if model.hasOldScope {
-                        Label("Une demande conservée dépend de vos anciens accès. Elle ne sera pas renvoyée avec ces nouveaux droits.", systemImage: "lock")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                        DrivyInlineMessage(text: "Une demande conservée dépend de vos anciens accès. Elle ne sera pas renvoyée avec ces nouveaux droits.",
+                            tone: .warning)
                     }
                     if !model.accessRevoked {
                         Button("Actualiser la préparation", systemImage: "arrow.clockwise") { Task { await model.load() } }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(DrivyTheme.accent)
                             .frame(minHeight: 44).disabled(model.isLoading || model.isBusy)
                     }
                 }
                 .drivyPageContent()
                 } else {
-                    ContentUnavailableView("Accès à actualiser", systemImage: "lock", description: Text("Rouvrez la préparation depuis votre leçon."))
+                    ContentUnavailableView("Accès à actualiser", systemImage: "lock", description: Text("Vos droits ont changé. Rouvrez la préparation depuis votre leçon."))
                 }
             }
             .background(DrivyTheme.surface)
@@ -78,41 +81,49 @@ struct SchoolCapturePreparationView: View {
     }
 
     private var heading: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             DrivyStatusBadge(title: "GPS facultatif", symbol: "location", tone: .accent)
             Text(model.learner?.displayName ?? "Votre leçon").font(.drivyScreenTitle)
                 .fixedSize(horizontal: false, vertical: true)
             if let lesson = model.lesson { Text(lessonDate(lesson)).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
             Text("La leçon peut se dérouler sans enregistrer de trajet.").font(.body).foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     @ViewBuilder private var feedback: some View {
-        if model.isLoading || model.isBusy { ProgressView(model.isBusy ? "Vérification en cours…" : "Ouverture de la préparation…") }
-        if let message = model.errorMessage { Text(message).foregroundStyle(DrivyTheme.warning).font(.subheadline) }
+        if model.isLoading || model.isBusy {
+            ProgressView(model.isBusy ? "Vérification auprès de l’école…" : "Ouverture de la préparation…")
+                .frame(maxWidth: .infinity)
+        }
+        if let message = model.errorMessage {
+            SchoolErrorNotice(message: message,
+                retry: model.accessRevoked || model.isLoading || model.isBusy ? nil : { Task { await model.load() } })
+        }
         if let message = model.storageError { DrivyInlineMessage(text: message, tone: .warning) }
     }
 
     private var choicePanel: some View {
         DrivyPanel {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: DrivySpacing.m) {
                 Label("Le choix de l’élève", systemImage: "person.crop.circle.badge.checkmark").font(.drivySection)
-                Text(choiceLabel).font(.headline).accessibilityIdentifier("preparation-choice-state")
+                DrivyMapStatusLabel(status: choiceStatus, font: .headline)
+                    .accessibilityIdentifier("preparation-choice-state")
                 if let notice = model.notice {
                     if let choice = model.choice, choice.noticeVersionId != notice.noticeVersionId {
-                        Text("L’information de l’école a changé. Relisez-la avant de confirmer un nouvel accord.")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                        DrivyInlineMessage(text: "L’information de l’école a changé. Relisez-la avant de confirmer un nouvel accord.",
+                            tone: .warning)
                     }
                     DisclosureGroup("Information et conservation des données") {
-                        VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: DrivySpacing.m) {
                             Text(notice.noticeText)
                             Text("Conservation").font(.headline)
                             Text(notice.retentionText)
                             Label(notice.contactEmail, systemImage: "envelope").font(.subheadline)
-                        }.textSelection(.enabled).fixedSize(horizontal: false, vertical: true).padding(.top, 12)
+                        }.textSelection(.enabled).fixedSize(horizontal: false, vertical: true).padding(.top, DrivySpacing.s)
                     }
                 }
-                if let error = model.noticeError { Text(error).font(.subheadline).foregroundStyle(DrivyTheme.warning) }
+                if let error = model.noticeError { DrivyInlineMessage(text: error, tone: .warning) }
                 Button {
                     model.closeDiagnostic()
                     choiceRoute = ChoiceRoute(lessonID: model.lessonID, store: model.store)
@@ -125,14 +136,16 @@ struct SchoolCapturePreparationView: View {
 
     private var diagnosticPanel: some View {
         DrivyPanel {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: DrivySpacing.m) {
                 Label("L’appareil du moniteur", systemImage: "iphone").font(.drivySection)
                 if !model.diagnosticIsAvailable {
-                    Text("Arrêtez et sauvegardez le trajet en cours avant de vérifier un autre départ.")
-                        .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                    DrivyInlineMessage(text: "Arrêtez et sauvegardez le trajet en cours avant de vérifier un autre départ.", tone: .warning)
                 }
                 if let snapshot = model.snapshot {
-                    Label(permissionLabel(snapshot.permission), systemImage: snapshot.permission.permitsLocation ? "location" : "location.slash")
+                    DrivyMapStatusLabel(status: DrivyMapStatus(title: permissionLabel(snapshot.permission),
+                        symbol: snapshot.permission.permitsLocation ? "location.fill" : "location.slash",
+                        tone: snapshot.permission.permitsLocation ? .success : (snapshot.permission == .notDetermined ? .neutral : .warning)),
+                        font: .subheadline.weight(.semibold))
                     if let age = snapshot.sampleAgeSeconds, let accuracy = snapshot.horizontalAccuracyMeters {
                         Text("À la dernière vérification : mesure âgée de \(age) s · précision annoncée ±\(Int(ceil(accuracy))) m")
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)
@@ -157,7 +170,7 @@ struct SchoolCapturePreparationView: View {
     }
 
     private var diagnosticActions: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: DrivySpacing.s) {
             if model.snapshot?.permission == .denied || model.snapshot?.permission == .restricted {
                 Button("Ouvrir les réglages de localisation", systemImage: "gearshape") {
                     if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
@@ -177,7 +190,7 @@ struct SchoolCapturePreparationView: View {
         if let value = model.assessment {
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 let expired = SchoolLesson.date(value.expiresAt).map { $0 <= timeline.date } ?? true
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     Label(expired ? "Diagnostic à renouveler" : assessmentLabel(value.status),
                           systemImage: !expired && value.status == .qualified ? "checkmark.shield.fill" : "exclamationmark.shield")
                         .font(.headline).foregroundStyle(!expired && value.status == .qualified ? DrivyTheme.success : DrivyTheme.warning)
@@ -187,23 +200,29 @@ struct SchoolCapturePreparationView: View {
                     }
                 }.accessibilityIdentifier("preparation-diagnostic-result")
             }
-        } else if let message = model.assessmentMessage { Text(message).font(.subheadline).foregroundStyle(DrivyTheme.warning) }
-        else if model.pendingAssessments.isEmpty { Text("Diagnostic de l’école non effectué.").font(.headline) }
+        } else if let message = model.assessmentMessage { DrivyInlineMessage(text: message, tone: .warning) }
+        else if model.pendingAssessments.isEmpty {
+            DrivyMapStatusLabel(status: DrivyMapStatus(title: "Diagnostic de l’école non effectué", symbol: "shield"),
+                font: .subheadline.weight(.semibold))
+        }
     }
 
     private var pendingPanel: some View {
         DrivyPanel {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: DrivySpacing.m) {
                 Label("Diagnostic en attente", systemImage: "clock.arrow.circlepath").font(.drivySection)
                 ForEach(model.pendingAssessments) { queued in
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(queued.state == .queued ? "Demande sauvegardée, envoi à reprendre" : "Réponse à confirmer")
-                            .font(.headline)
+                    VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                        DrivyMapStatusLabel(status: DrivyMapStatus(
+                            title: queued.state == .queued ? "Demande sauvegardée, envoi à reprendre" : "Réponse à confirmer",
+                            symbol: "arrow.up.circle", tone: .accent), font: .headline)
                         Text("La même demande sera conservée, même si la connexion est interrompue.")
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                         Button("Vérifier auprès de l’école") { Task { await model.resume(queued, verifyFirst: true) } }
-                            .frame(minHeight: 44).disabled(!model.mayResume(queued))
+                            .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.mayResume(queued))
                         Button("Reprendre cet envoi") { confirmsResend = false; resendRoute = queued }
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
                             .frame(minHeight: 44).disabled(!model.mayResume(queued))
                         DisclosureGroup("Référence de la demande") { Text(queued.id.uuidString).font(.caption.monospaced()).textSelection(.enabled) }
                     }
@@ -214,32 +233,40 @@ struct SchoolCapturePreparationView: View {
 
     private var startPanel: some View {
         DrivyPanel {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: DrivySpacing.m) {
                 Label("Le départ du trajet", systemImage: "location.fill").font(.drivySection)
                 Text("Après confirmation, seules les positions de cette leçon seront enregistrées. Vous pourrez arrêter le GPS à tout moment.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                if let message = model.startMessage { Text(message).font(.subheadline) }
+                    .fixedSize(horizontal: false, vertical: true)
+                if let message = model.startMessage { DrivyInlineMessage(text: message, tone: .neutral) }
                 Button { Task { startReview = await model.reviewStart() } } label: { Label("Relire et démarrer", systemImage: "arrow.right.circle") }
                     .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.mayReviewStart)
                     .accessibilityIdentifier("preparation-review-start")
-                if model.choice?.status != .allowed { Text("Le choix GPS de l’élève doit être confirmé avant le départ.").font(.footnote).foregroundStyle(DrivyTheme.muted) }
+                if model.choice?.status != .allowed {
+                    Label("Le choix GPS de l’élève doit être confirmé avant le départ.", systemImage: "info.circle")
+                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
 
     private var pendingStartsPanel: some View {
         DrivyPanel {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: DrivySpacing.m) {
                 Label("Départ à vérifier", systemImage: "clock.arrow.circlepath").font(.drivySection)
                 ForEach(model.pendingStarts) { queued in
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.s) {
                         Text(queued.mutation.targetID == model.lessonID ? "Une demande de départ est conservée pour cette leçon." : "Une demande de départ concerne une autre leçon de cette école.")
                             .font(.subheadline)
                         if model.mayVerifyPendingStart(queued) {
-                            Button("Vérifier auprès de l’école") { Task { await model.verifyStart(queued) } }.frame(minHeight: 44)
+                            Button("Vérifier auprès de l’école") { Task { await model.verifyStart(queued) } }
+                                .buttonStyle(DrivySecondaryButtonStyle())
                         }
                         if model.mayReviewPendingStart(queued) {
-                            Button("Relire ce départ") { Task { startReview = await model.reviewStart(resuming: queued) } }.frame(minHeight: 44)
+                            Button("Relire ce départ") { Task { startReview = await model.reviewStart(resuming: queued) } }
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
+                                .frame(minHeight: 44)
                         }
                         Text("Aucune collecte ne reprend automatiquement.").font(.footnote).foregroundStyle(DrivyTheme.muted)
                         DisclosureGroup("Référence") { Text(queued.id.uuidString).font(.caption.monospaced()).textSelection(.enabled) }
@@ -264,9 +291,18 @@ struct SchoolCapturePreparationView: View {
         }
     }
 
-    private var choiceLabel: String {
-        guard let choice = model.choice else { return model.noticeError == nil ? "Choix non renseigné" : "Choix à vérifier" }
-        switch choice.status { case .allowed: return "GPS accepté"; case .refused: return "Sans GPS"; case .unknown: return "Choix non renseigné" }
+    /// A refusal is a normal choice, stated calmly; only an unreadable state asks for attention.
+    private var choiceStatus: DrivyMapStatus {
+        guard let choice = model.choice else {
+            return model.noticeError == nil
+                ? DrivyMapStatus(title: "Choix non renseigné", symbol: "questionmark.circle")
+                : DrivyMapStatus(title: "Choix à vérifier", symbol: "exclamationmark.triangle", tone: .warning)
+        }
+        switch choice.status {
+        case .allowed: return DrivyMapStatus(title: "GPS accepté", symbol: "location.fill", tone: .success)
+        case .refused: return DrivyMapStatus(title: "Sans GPS", symbol: "location.slash")
+        case .unknown: return DrivyMapStatus(title: "Choix non renseigné", symbol: "questionmark.circle")
+        }
     }
     private func permissionLabel(_ value: SchoolCaptureLocationPermission) -> String {
         switch value {
@@ -303,17 +339,26 @@ private struct SchoolCaptureStartReviewView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    Text("Démarrer le GPS").font(.drivyScreenTitle)
-                    Text(review.learnerName).font(.drivyTitle)
-                    Text(lessonDate).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                        Text(review.learnerName).font(.drivyScreenTitle)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(lessonDate).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        Label(review.lesson.meetingPoint, systemImage: "mappin")
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     DrivyPanel {
-                        VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: DrivySpacing.s) {
                             Label("Accord GPS de l’élève confirmé", systemImage: "person.crop.circle.badge.checkmark")
+                                .foregroundStyle(DrivyTheme.success)
                             Label("Diagnostic de l’appareil qualifié", systemImage: "checkmark.shield")
-                            Text(review.lesson.meetingPoint).foregroundStyle(DrivyTheme.muted)
-                            Text("Le trajet reste privé. Cette action ne publie ni carte ni bilan.").font(.subheadline)
+                                .foregroundStyle(DrivyTheme.success)
+                            Label("Le trajet reste privé. Cette action ne publie ni carte ni bilan.", systemImage: "lock")
+                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
+                        .font(.subheadline.weight(.semibold))
                     }
                     DisclosureGroup("Relire l’information GPS de l’école") {
                         VStack(alignment: .leading, spacing: 16) {
@@ -321,7 +366,7 @@ private struct SchoolCaptureStartReviewView: View {
                             Text("Conservation des données").font(.headline)
                             Text(review.notice.retentionText)
                             Text(review.notice.contactEmail).font(.subheadline)
-                        }.padding(.top, 12).textSelection(.enabled)
+                        }.padding(.top, DrivySpacing.s).textSelection(.enabled)
                     }
                     if review.pendingMutation != nil {
                         Text("Cette confirmation reprend exactement la demande de départ conservée. La leçon, l’accord et le diagnostic seront vérifiés à nouveau.")
@@ -329,9 +374,9 @@ private struct SchoolCaptureStartReviewView: View {
                     }
                     Toggle("Je confirme le départ GPS maintenant pour cette leçon", isOn: $acknowledged)
                         .disabled(model.isBusy).accessibilityIdentifier("capture-confirm-start")
-                    if let error = model.errorMessage { Text(error).foregroundStyle(DrivyTheme.warning).font(.subheadline) }
-                    if let message = model.startMessage { Text(message).font(.subheadline) }
-                    if model.isBusy { ProgressView("Vérification et ouverture du trajet…") }
+                    if let error = model.errorMessage { SchoolErrorNotice(message: error) }
+                    if let message = model.startMessage { DrivyInlineMessage(text: message, tone: .neutral) }
+                    if model.isBusy { ProgressView("Vérification et ouverture du trajet…").frame(maxWidth: .infinity) }
                     Button {
                         Task { if await model.confirmStart(review, acknowledged: acknowledged) { dismiss() } }
                     } label: { Label("Démarrer le GPS", systemImage: "location.fill") }
@@ -339,7 +384,7 @@ private struct SchoolCaptureStartReviewView: View {
                         .accessibilityIdentifier("capture-start")
                 }.drivyPageContent()
             }.background(DrivyTheme.surface)
-                .navigationTitle("Avant le départ").navigationBarTitleDisplayMode(.inline)
+                .navigationTitle("Démarrer le GPS").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { dismiss() }.disabled(model.isBusy) } }
                 .interactiveDismissDisabled(model.isBusy)
         }.tint(DrivyTheme.accent)

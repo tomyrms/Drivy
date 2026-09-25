@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct LiveSessionView: View {
     @Bindable var controller: SessionController
@@ -19,7 +20,7 @@ struct LiveSessionView: View {
     var body: some View {
         Group {
             if let session = controller.activeSession { liveContent(session) }
-            else { ProgressView("Ouverture du bilan…").frame(maxWidth: .infinity, maxHeight: .infinity) }
+            else { ProgressView("Fermeture du trajet…").frame(maxWidth: .infinity, maxHeight: .infinity) }
         }
         .background(DrivyTheme.canvas)
         .toolbar(.hidden, for: .navigationBar)
@@ -41,17 +42,20 @@ struct LiveSessionView: View {
         GeometryReader { geometry in
             if dynamicTypeSize.isAccessibilitySize {
                 accessibleSession(session)
-            } else if geometry.size.width >= 760 {
+            } else if geometry.size.width >= DrivyMapLayout.sidebarBreakpoint {
                 HStack(spacing: 0) {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            sessionHeader(session)
-                            sessionDock(session)
-                        }.padding(20)
-                    }.frame(width: 360)
+                        VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                            sessionHeader(session, floating: false)
+                            sessionDock(session, floating: false)
+                        }
+                        .padding(DrivySpacing.m)
+                    }
+                    .frame(width: DrivyMapLayout.sidebarWidth)
+                    .background(DrivyTheme.canvas)
                     sessionBackground(session)
-                        .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
-                            if !session.points.isEmpty { mapControls.padding(24) }
+                        .overlay(alignment: .bottomTrailing) {
+                            if !session.points.isEmpty { mapControls.padding(DrivySpacing.l) }
                         }
                 }
             } else {
@@ -64,13 +68,14 @@ struct LiveSessionView: View {
         sessionBackground(session)
             .safeAreaInset(edge: .top, spacing: 0) {
                 sessionHeader(session)
-                    .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 12)
+                    .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.s)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(alignment: .trailing, spacing: 12) {
+                VStack(alignment: .trailing, spacing: DrivySpacing.s) {
                     if !session.points.isEmpty { mapControls }
                     sessionDock(session)
-                }.padding(.horizontal, 16).padding(.bottom, 10).padding(.top, 8)
+                }
+                .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.s)
             }
     }
 
@@ -81,161 +86,142 @@ struct LiveSessionView: View {
                 showsControls: false, showsEmptyState: false, resetCameraID: resetCameraID,
                 followsPosition: $followsPosition)
         } else {
-            VStack(spacing: DrivySpacing.s) {
-                Image(systemName: "location.slash")
-                    .font(.title)
-                    .foregroundStyle(DrivyTheme.muted)
-                    .frame(width: 72, height: 72)
-                    .background(DrivyTheme.surfaceMuted, in: Circle())
-                    .accessibilityHidden(true)
-                Text("Sans GPS")
-                    .font(.drivyTitle)
-                Text("Les observations conservent leur heure, sans position.")
-                    .font(.body)
-                    .foregroundStyle(DrivyTheme.muted)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(DrivyTheme.canvas)
+            DrivyMapPlaceholder(title: "Sans GPS", message: "Les observations gardent leur heure, sans position.")
         }
     }
 
     private func accessibleSession(_ session: DrivingSession) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                sessionHeader(session)
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                sessionHeader(session, floating: false)
                 if let error = controller.errorMessage { InlineErrorView(message: error, retry: storageRetry) }
+                gpsNotice(session)
                 if session.usesGPS {
                     RouteMapView(session: session, selectedObservationID: $selectedObservationID,
                         showsControls: false, showsEmptyState: false, resetCameraID: resetCameraID,
                         followsPosition: $followsPosition)
-                        .frame(height: 230)
+                        .frame(height: DrivyMapLayout.accessibleMapHeight)
                         .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                     if !session.points.isEmpty { mapControls.frame(maxWidth: .infinity, alignment: .trailing) }
                 }
                 observationsButton(session)
                 if controller.isBusy && !controller.isCapturing {
                     ProgressView("Sauvegarde du trajet…")
-                } else if controller.isCapturing && session.usesGPS && [.denied, .interrupted].contains(controller.gpsStatus) {
-                    Text("GPS indisponible. Vous pouvez continuer à signaler sans position.")
-                        .font(.body).foregroundStyle(DrivyTheme.muted)
                 }
             }
-            .padding(16)
-            .frame(maxWidth: 680)
+            .padding(DrivySpacing.m)
+            .frame(maxWidth: DrivyMapLayout.accessibleMaxWidth)
             .frame(maxWidth: .infinity)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             reportButton(session)
-                .padding(16)
-                .frame(maxWidth: 680)
+                .padding(DrivySpacing.m)
+                .frame(maxWidth: DrivyMapLayout.accessibleMaxWidth)
                 .frame(maxWidth: .infinity)
                 .background(DrivyTheme.surface)
         }
     }
 
-    /// Chrome floating over the map: Liquid Glass, grouped so the two buttons blend.
+    /// Chrome floating over the map: Liquid Glass, shared with the replay and the school GPS.
     private var mapControls: some View {
-        GlassEffectContainer(spacing: DrivySpacing.xs) {
-            HStack(spacing: DrivySpacing.xs) {
-                Button { followsPosition.toggle() } label: {
-                    Image(systemName: followsPosition ? "location.fill" : "location")
-                        .font(.title3).foregroundStyle(followsPosition ? DrivyTheme.accent : DrivyTheme.text)
-                        .frame(width: 48, height: 48)
-                        .drivyMapControl(in: Circle())
-                }
-                .accessibilityLabel(followsPosition ? "Arrêter le suivi de position" : "Suivre la dernière position enregistrée")
-                .accessibilityAddTraits(followsPosition ? [.isSelected] : [])
-                Button { followsPosition = false; resetCameraID = UUID() } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.title3).foregroundStyle(DrivyTheme.text)
-                        .frame(width: 48, height: 48)
-                        .drivyMapControl(in: Circle())
-                }.accessibilityLabel("Voir tout le trajet")
-            }
+        DrivyMapControls(followsPosition: $followsPosition) {
+            followsPosition = false
+            resetCameraID = UUID()
         }
-        .buttonStyle(.plain)
     }
 
-    private func sessionHeader(_ session: DrivingSession) -> some View {
-        HStack(alignment: .center, spacing: 8) {
-            Button { dismiss() } label: {
-                Image(systemName: "xmark").font(.body.weight(.medium)).frame(width: 44, height: 44)
-            }.buttonStyle(.plain).accessibilityLabel("Revenir à Séance")
-                .accessibilityHint(controller.isCapturing ? "Le trajet continue" : "Revenir à l’accueil")
-            let contentLayout = dynamicTypeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
-                : AnyLayout(HStackLayout(spacing: 8))
-            contentLayout {
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    Text(controller.isCapturing ? "Trajet en cours" : controller.isBusy ? "Sauvegarde du trajet" : "Trajet arrêté")
-                        .font(.headline)
-                    DrivyStatusDot(title: status(session), tone: controller.isCapturing ? .accent : .warning)
-                }.fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
-                if controller.isCapturing {
-                    TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                        Text(timeline.date.sessionElapsed(since: session.startedAt))
-                            .font(.title3.weight(.semibold).monospacedDigit())
-                            .accessibilityLabel("Durée du trajet")
-                            .accessibilityValue(timeline.date.sessionElapsed(since: session.startedAt))
-                    }
+    private func sessionHeader(_ session: DrivingSession, floating: Bool = true) -> some View {
+        DrivyMapHeader(
+            title: controller.isCapturing ? "Trajet en cours" : controller.isBusy ? "Sauvegarde du trajet" : "Trajet arrêté",
+            status: status(session),
+            leading: .close(label: "Revenir à Séance",
+                hint: controller.isCapturing ? "Le trajet continue" : "Revenir à l’accueil") { dismiss() },
+            floating: floating
+        ) {
+            if controller.isCapturing {
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    DrivyElapsedTime(text: timeline.date.sessionElapsed(since: session.startedAt),
+                        accessibilityTitle: "Durée du trajet")
                 }
             }
-            Button { confirmsStop = true } label: {
-                Image(systemName: "stop.fill").font(.body.weight(.semibold))
-                    .foregroundStyle(controller.isCapturing ? DrivyTheme.danger : DrivyTheme.disabledText)
-                    .frame(width: 44, height: 44)
-                    .background(controller.isCapturing ? DrivyTheme.dangerSurface : DrivyTheme.disabledSurface, in: Circle())
-            }.buttonStyle(.plain).accessibilityLabel("Terminer le trajet")
-                .disabled(!controller.isCapturing).accessibilityIdentifier("session-stop")
+            DrivyMapStopButton(label: "Terminer le trajet", isEnabled: controller.isCapturing) { confirmsStop = true }
+                .accessibilityIdentifier("session-stop")
         }
-        .padding(.horizontal, DrivySpacing.xs).padding(.vertical, DrivySpacing.s)
-        .foregroundStyle(DrivyTheme.text)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
-        .shadow(color: .black.opacity(0.10), radius: 16, y: 4)
     }
 
-    private func sessionDock(_ session: DrivingSession) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func sessionDock(_ session: DrivingSession, floating: Bool = true) -> some View {
+        DrivyMapDock(floating: floating) {
             if let error = controller.errorMessage { InlineErrorView(message: error, retry: storageRetry) }
+            gpsNotice(session)
             if let selected = session.observations.first(where: { $0.id == selectedObservationID }) {
-                HStack(alignment: .top) {
+                HStack(alignment: .top, spacing: DrivySpacing.xs) {
                     ObservationRow(observation: selected, sessionStartedAt: session.startedAt, showsNote: false)
-                    Button { selectedObservationID = nil } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }
-                        .buttonStyle(.plain).accessibilityLabel("Fermer l’observation")
+                    Button { selectedObservationID = nil } label: {
+                        Image(systemName: "xmark")
+                            .font(.body.weight(.medium))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Fermer l’observation")
                 }
-                Divider()
+                Divider().overlay(DrivyTheme.border)
             }
             observationsButton(session)
             reportButton(session)
             if controller.isBusy && !controller.isCapturing {
                 ProgressView("Sauvegarde du trajet…").font(.footnote).frame(maxWidth: .infinity)
-            } else if controller.isCapturing && session.usesGPS && [.denied, .interrupted].contains(controller.gpsStatus) {
-                Text("GPS indisponible. Vous pouvez continuer à signaler sans position.")
-                    .font(.caption).foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.m)
-        .foregroundStyle(DrivyTheme.text)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
-        .shadow(color: .black.opacity(0.10), radius: 16, y: 4)
+    }
+
+    /// GPS refused or interrupted: the journey continues without position, said once, calmly.
+    @ViewBuilder
+    private func gpsNotice(_ session: DrivingSession) -> some View {
+        if controller.isCapturing && session.usesGPS && [.denied, .interrupted].contains(controller.gpsStatus) {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                DrivyInlineMessage(
+                    text: controller.gpsStatus == .denied
+                        ? "Localisation non autorisée. Vous pouvez continuer à signaler, sans position."
+                        : "GPS interrompu. Vous pouvez continuer à signaler, sans position.",
+                    tone: .warning)
+                if controller.gpsStatus == .denied, let url = URL(string: UIApplication.openSettingsURLString) {
+                    Link("Ouvrir les réglages", destination: url)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.accent)
+                        .frame(minHeight: 44)
+                }
+            }
+        }
     }
 
     private func observationsButton(_ session: DrivingSession) -> some View {
         Button { listedSession = session } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "list.bullet").foregroundStyle(DrivyTheme.muted)
-                Text("\(session.observations.count) observation\(session.observations.count == 1 ? "" : "s")")
+            HStack(spacing: DrivySpacing.xs) {
+                Image(systemName: "list.bullet").foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
+                Text(DrivySeanceText.observations(session.observations.count))
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
-                Image(systemName: "lock").font(.caption).foregroundStyle(DrivyTheme.muted)
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-            }.frame(minHeight: 44).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityIdentifier("observation-list")
+                Label("Privées", systemImage: "lock")
+                    .labelStyle(.iconOnly)
+                    .font(.caption)
+                    .foregroundStyle(DrivyTheme.muted)
+                Spacer(minLength: DrivySpacing.xxs)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(DrivyTheme.muted)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DrivyRowButtonStyle())
+        .accessibilityHint("Afficher les observations privées de ce trajet")
+        .accessibilityIdentifier("observation-list")
     }
 
+    /// The dominant action while driving: a large target at the bottom of the dock.
     private func reportButton(_ session: DrivingSession) -> some View {
         Button {
             if let context = controller.beginObservation() {
@@ -249,11 +235,19 @@ struct LiveSessionView: View {
         }
         .buttonStyle(DrivyPrimaryButtonStyle())
         .disabled(controller.isBusy || !controller.isCapturing)
+        .accessibilityHint("Retient cet instant, puis propose les catégories")
         .accessibilityIdentifier("report-observation")
     }
-    private func status(_ session: DrivingSession) -> String {
-        if !controller.isCapturing { return "Enregistrement arrêté" }
-        return session.usesGPS ? controller.gpsStatus.label : "Sans GPS · privé"
+
+    private func status(_ session: DrivingSession) -> DrivyMapStatus {
+        if !controller.isCapturing {
+            return controller.isBusy
+                ? DrivyMapStatus(title: "Sauvegarde en cours", symbol: "clock")
+                : DrivyMapStatus(title: "Enregistrement arrêté", symbol: "stop.circle", tone: .warning)
+        }
+        return session.usesGPS
+            ? controller.gpsStatus.mapStatus
+            : DrivyMapStatus(title: "Sans GPS · privé", symbol: "location.slash")
     }
     private var storageRetry: (() -> Void)? {
         guard !controller.isCapturing else { return nil }

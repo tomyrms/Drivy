@@ -39,7 +39,7 @@ struct DrivingMapHomeView: View {
             VStack(alignment: .leading, spacing: DrivySpacing.xl) {
                 heading
                 if sizeClass == .regular {
-                    HStack(alignment: .top, spacing: 32) {
+                    HStack(alignment: .top, spacing: DrivySpacing.xl) {
                         primaryContent.frame(maxWidth: 460)
                         nextLessons.frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -50,8 +50,8 @@ struct DrivingMapHomeView: View {
                 historyLink
             }
             .padding(.horizontal, DrivySpacing.page(sizeClass))
-            .padding(.top, 8)
-            .padding(.bottom, 28)
+            .padding(.top, DrivySpacing.xs)
+            .padding(.bottom, DrivySpacing.xl)
             .frame(maxWidth: 1050, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
@@ -88,16 +88,20 @@ struct DrivingMapHomeView: View {
 
     @ViewBuilder private var primaryContent: some View {
         if controller.activeSession == nil && !exampleJourneys.isEmpty {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(exampleJourneys.count == 1 ? "Un trajet à découvrir" : "Deux trajets à découvrir").font(.drivyTitle)
-                    Text("Exemples · tracés et observations fictifs")
-                        .font(.caption).foregroundStyle(DrivyTheme.muted)
+            VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                    Text(exampleJourneys.count == 1 ? "Un trajet à découvrir" : "Deux trajets à découvrir")
+                        .font(.drivyTitle)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Label("Exemples · tracés et observations fictifs", systemImage: "info.circle")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach(exampleJourneys.prefix(2)) { session in
                     exampleJourneyCard(session)
                 }
-                HStack(spacing: 12) {
+                HStack(spacing: DrivySpacing.s) {
                     Button(action: primaryAction) {
                         Label("Commencer un trajet", systemImage: "plus")
                     }
@@ -121,8 +125,8 @@ struct DrivingMapHomeView: View {
 
     private func exampleJourneyCard(_ session: DrivingSession) -> some View {
         let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.s))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.s))
         return Button {
             historyPath = [session.id]
             presentsHistory = true
@@ -134,27 +138,28 @@ struct DrivingMapHomeView: View {
                     .frame(width: 104, height: 120)
                     .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     Text(session.title ?? "Trajet d’exemple")
                         .font(.headline)
                         .foregroundStyle(DrivyTheme.text)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("\(session.observations.count) observations")
+                    Text(DrivySeanceText.observations(session.observations.count))
                         .font(.subheadline)
                         .foregroundStyle(DrivyTheme.muted)
-                    Label("Voir le replay", systemImage: "play.circle")
-                        .font(.caption.weight(.semibold))
+                    Label("Voir le replay", systemImage: "play.circle.fill")
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(DrivyTheme.accent)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(12)
+            .padding(DrivySpacing.s)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
-            .overlay { RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous).strokeBorder(DrivyTheme.border, lineWidth: 0.5) }
+            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.s, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.s, style: .continuous).strokeBorder(DrivyTheme.border, lineWidth: 0.5) }
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.s, style: .continuous))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(session.title ?? "Trajet"), exemple fictif, \(session.observations.count) observations")
+        .buttonStyle(DrivyTileButtonStyle())
+        .accessibilityLabel("\(session.title ?? "Trajet"), exemple fictif, \(DrivySeanceText.observations(session.observations.count))")
         .accessibilityHint("Ouvrir le replay de cet exemple")
     }
 
@@ -165,9 +170,9 @@ struct DrivingMapHomeView: View {
 
     private var journeyCard: some View {
         DrivyCard {
-            VStack(alignment: .leading, spacing: DrivySpacing.l - 4) {
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                    DrivyStatusDot(title: journeyStatus, tone: controller.isCapturing ? .accent : .neutral)
+                    DrivyMapStatusLabel(status: journeyStatus)
                     Text(controller.activeSession == nil ? "Votre prochain trajet" : "Trajet en cours")
                         .font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
                     if let session = controller.activeSession {
@@ -178,11 +183,12 @@ struct DrivingMapHomeView: View {
                                 }
                                 Text("·").accessibilityHidden(true)
                             }
-                            Text("\(session.observations.count) observation\(session.observations.count == 1 ? "" : "s")")
+                            Text(DrivySeanceText.observations(session.observations.count))
                         }.font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     } else {
-                        Text("Le parcours et les moments à retenir.")
+                        Text("Avec ou sans GPS : le trajet, les observations et le bilan restent sur cet appareil.")
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 mapPreview
@@ -222,7 +228,7 @@ struct DrivingMapHomeView: View {
                 Label(controller.isCapturing ? "Ouvrir" : "Explorer", systemImage: "arrow.up.left.and.arrow.down.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(DrivyTheme.text)
-                    .padding(.horizontal, DrivySpacing.s).padding(.vertical, 9)
+                    .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
                     .drivyMapControl(in: Capsule())
                     .padding(DrivySpacing.s)
             }
@@ -276,10 +282,12 @@ struct DrivingMapHomeView: View {
             symbol: "clock.arrow.circlepath", action: { historyPath = []; presentsHistory = true })
             .accessibilityIdentifier("map-history")
     }
-    private var journeyStatus: String {
-        guard let session = controller.activeSession else { return "GPS au choix" }
-        guard controller.isCapturing else { return "Sauvegarde à vérifier" }
-        return session.usesGPS ? controller.gpsStatus.label : "Sans GPS"
+    private var journeyStatus: DrivyMapStatus {
+        guard let session = controller.activeSession else { return DrivyMapStatus(title: "GPS au choix", symbol: "location") }
+        guard controller.isCapturing else {
+            return DrivyMapStatus(title: "Sauvegarde à vérifier", symbol: "exclamationmark.triangle", tone: .warning)
+        }
+        return session.usesGPS ? controller.gpsStatus.mapStatus : DrivyMapStatus(title: "Sans GPS", symbol: "location.slash")
     }
     private var retryStorage: (() -> Void)? {
         guard !controller.isCapturing else { return nil }
@@ -348,12 +356,22 @@ struct JourneyExploreMapView: View {
                 .safeAreaInset(edge: .bottom) {
                     HStack {
                         if location.isDenied {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Position non autorisée").font(.subheadline.weight(.medium))
+                            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                                Label("Position non autorisée", systemImage: "location.slash")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(DrivyTheme.warning)
+                                Text("La carte reste consultable sans votre position.")
+                                    .font(.caption).foregroundStyle(DrivyTheme.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 if let url = URL(string: UIApplication.openSettingsURLString) {
-                                    Link("Ouvrir les réglages", destination: url).font(.subheadline)
+                                    Link("Ouvrir les réglages", destination: url)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(DrivyTheme.accent)
+                                        .frame(minHeight: 44)
                                 }
-                            }.padding(14).background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                            }
+                            .padding(.horizontal, DrivySpacing.m).padding(.vertical, DrivySpacing.s)
+                            .drivyMapPanel()
                         }
                         Spacer()
                         Button {
@@ -366,7 +384,7 @@ struct JourneyExploreMapView: View {
                         }.buttonStyle(.plain).accessibilityLabel("Afficher ma position")
                             .accessibilityHint("Centre la carte sans enregistrer de trajet")
                             .accessibilityIdentifier("map-locate")
-                    }.padding(16)
+                    }.padding(DrivySpacing.m)
                 }
                 .onChange(of: location.isAuthorized) { _, allowed in if allowed && location.wasRequested { centerOnUser() } }
                 .navigationTitle("Explorer la carte").navigationBarTitleDisplayMode(.inline)

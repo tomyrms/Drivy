@@ -13,6 +13,7 @@ struct SessionHistoryView: View {
         Group {
             if controller.isLoading {
                 ProgressView("Ouverture des trajets…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if sessions.isEmpty, let error = controller.errorMessage {
                 ContentUnavailableView {
                     Label("Historique indisponible", systemImage: "exclamationmark.triangle")
@@ -20,15 +21,14 @@ struct SessionHistoryView: View {
                     Text(error)
                 } actions: {
                     if !controller.isCapturing && !controller.isBusy {
-                        Button("Réessayer") { Task { await controller.load() } }
-                            .buttonStyle(.bordered)
+                        DrivyRetryButton { Task { await controller.load() } }
                     }
                 }
             } else if sessions.isEmpty {
                 ContentUnavailableView {
                     Label("Aucun trajet terminé", systemImage: "clock.arrow.circlepath")
                 } description: {
-                    Text("Les trajets terminés et leurs bilans personnels apparaîtront ici.")
+                    Text("Terminez un trajet depuis Séance : il apparaîtra ici avec ses observations et votre bilan personnel.")
                 }
             } else {
                 List {
@@ -59,6 +59,7 @@ struct SessionHistoryView: View {
                     }
                 }
                 .scrollContentBackground(.hidden)
+                .background(DrivyTheme.canvas)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -85,13 +86,17 @@ private struct SessionHistoryRow: View {
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                if let title = session.title { Text(title).font(.headline) }
-                else { Text(session.startedAt, format: .dateTime.day().month(.wide).hour().minute()).font(.headline) }
-                Text("\(session.observations.count) observation\(session.observations.count == 1 ? "" : "s") · \(session.isExample ? "Replay" : session.usesGPS ? "Avec GPS" : "Sans GPS")")
+                if let title = session.title {
+                    Text(title).font(.headline).foregroundStyle(DrivyTheme.text)
+                } else {
+                    Text(session.startedAt, format: .dateTime.weekday(.abbreviated).day().month(.wide).hour().minute())
+                        .font(.headline).foregroundStyle(DrivyTheme.text)
+                }
+                Text("\(DrivySeanceText.observations(session.observations.count)) · \(session.isExample ? "Replay" : session.usesGPS ? "Avec GPS" : "Sans GPS")")
                     .font(.subheadline)
                     .foregroundStyle(DrivyTheme.muted)
                 if session.isExample {
-                    DrivyStatusBadge(title: "Exemple fictif")
+                    DrivyStatusBadge(title: "Exemple fictif", symbol: "info.circle")
                 } else if session.state == .interrupted {
                     DrivyStatusBadge(title: session.state.label, symbol: "exclamationmark.triangle", tone: .warning)
                 }
@@ -124,19 +129,18 @@ struct SummaryEditorView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     if isExample {
-                        Label("Bilan d’exemple · contenu fictif", systemImage: "info.circle")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(DrivyTheme.muted)
+                        DrivyStatusBadge(title: "Bilan d’exemple · contenu fictif", symbol: "info.circle")
                     }
                     Text("Notes du trajet")
                         .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
                     TextEditor(text: $text)
                         .frame(minHeight: 260)
                         .scrollContentBackground(.hidden)
-                        .padding(12)
-                        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                        .padding(DrivySpacing.s)
+                        .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
                         .accessibilityLabel("Texte du bilan personnel")
                         .accessibilityIdentifier("summary-text")
                         .disabled(saving)
@@ -149,17 +153,16 @@ struct SummaryEditorView: View {
                         InlineErrorView(message: error)
                     }
                     if saving {
-                        ProgressView("Enregistrement…")
+                        ProgressView("Enregistrement du bilan…")
                     }
-                    Text("Ce bilan reste sur cet appareil. Il n’est pas partagé avec l’école.")
+                    Label("Ce bilan reste sur cet appareil. Il n’est pas partagé avec l’école.", systemImage: "lock")
                         .font(.footnote)
                         .foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(20)
-                .frame(maxWidth: 680)
-                .frame(maxWidth: .infinity)
+                .drivyPageContent(maxWidth: 680)
             }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
             .navigationTitle("Bilan personnel")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

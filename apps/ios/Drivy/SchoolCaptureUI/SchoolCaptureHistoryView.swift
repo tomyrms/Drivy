@@ -17,39 +17,43 @@ struct SchoolCaptureHistoryView: View {
             List {
                 if let error = model.errorMessage {
                     Section {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(DrivyTheme.warning)
-                        if !model.accessRevoked { Button("Réessayer") { Task { await model.load() } }.disabled(model.isBusy) }
+                        SchoolErrorNotice(message: error,
+                            retry: model.accessRevoked || model.isBusy ? nil : { Task { await model.load() } })
                     }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                 }
                 if let feedback = model.feedback {
-                    Section { Text(feedback).foregroundStyle(DrivyTheme.muted) }
+                    Section { DrivyInlineMessage(text: feedback, tone: .neutral) }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                 }
                 if model.isLoading && model.captures.isEmpty {
-                    ProgressView("Ouverture des trajets…")
+                    ProgressView("Ouverture des trajets…").frame(maxWidth: .infinity)
                 } else if model.captures.isEmpty && model.errorMessage == nil {
                     ContentUnavailableView("Aucun trajet terminé", systemImage: "point.topleft.down.to.point.bottomright.curvepath",
                         description: Text("Les trajets GPS de cette école conservés sur cet appareil apparaîtront ici après leur arrêt."))
                 }
                 ForEach(model.captures) { capture in
                     Section {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(learnerName(capture)).font(.headline)
+                        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                            Text(learnerName(capture)).font(.headline).foregroundStyle(DrivyTheme.text)
                             if let date = SchoolLesson.date(capture.serverCapture.authorizedAt) {
-                                Text(date, format: .dateTime.day().month(.wide).hour().minute())
+                                Text(date, format: .dateTime.weekday(.abbreviated).day().month(.wide).hour().minute())
                                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                             }
-                            Label(status(capture), systemImage: symbol(capture))
-                                .font(.subheadline)
+                            DrivyMapStatusLabel(status: DrivyMapStatus(title: status(capture), symbol: symbol(capture), tone: tone(capture)),
+                                font: .subheadline.weight(.semibold))
                             let count = capture.manifest?.reduce(0) { $0 + $1.expectedPointCount } ?? 0
                             Text("\(count) position\(count == 1 ? "" : "s") conservée\(count == 1 ? "" : "s") sur cet appareil")
-                                .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                                .font(.footnote.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
                             if capture.state == .interrupted {
-                                Text("L’enregistrement a été interrompu. Le GPS n’a pas été relancé.")
-                                    .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                                Label("L’enregistrement a été interrompu. Le GPS n’a pas été relancé.", systemImage: "exclamationmark.triangle")
+                                    .font(.footnote).foregroundStyle(DrivyTheme.warning)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             if model.busyCaptureID == capture.id { ProgressView("Échange avec l’école…") }
-                        }.padding(.vertical, 6)
+                        }.padding(.vertical, DrivySpacing.xxs)
                         if model.maySend(capture) || model.busyCaptureID == capture.id {
                             if let allowPartial = model.pendingFinalization[capture.id] {
                                 Button("Reprendre la confirmation", systemImage: "arrow.clockwise") {
@@ -75,6 +79,8 @@ struct SchoolCaptureHistoryView: View {
                         .font(.footnote).foregroundStyle(DrivyTheme.muted)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(DrivyTheme.canvas)
             .navigationTitle("Trajets de l’école").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
             .refreshable { await model.load() }
@@ -111,10 +117,26 @@ struct SchoolCaptureHistoryView: View {
         }
     }
     private func symbol(_ capture: SchoolCaptureStoredSession) -> String {
+        switch capture.serverCapture.publicationState {
+        case .withdrawn, .deleted: return "minus.circle"
+        default: break
+        }
         switch capture.serverCapture.syncState {
-        case .synced: "checkmark.circle"
-        case .partial, .rejected: "exclamationmark.circle"
-        case .localOnly, .uploading: "iphone.and.arrow.forward"
+        case .synced: return "checkmark.circle"
+        case .partial, .rejected: return "exclamationmark.circle"
+        case .localOnly, .uploading: return "iphone.and.arrow.forward"
+        }
+    }
+    /// Transfer pending is information, not an alert; only a gap or a refusal asks for attention.
+    private func tone(_ capture: SchoolCaptureStoredSession) -> DrivyTone {
+        switch capture.serverCapture.publicationState {
+        case .withdrawn, .deleted: return .neutral
+        default: break
+        }
+        switch capture.serverCapture.syncState {
+        case .synced: return .success
+        case .partial, .rejected: return .warning
+        case .localOnly, .uploading: return (model.pendingCount[capture.id] ?? 0) > 0 ? .accent : .neutral
         }
     }
 }

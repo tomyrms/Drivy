@@ -49,8 +49,8 @@ struct RouteMapView: View {
         Map(position: $camera) {
             ForEach(segments) { segment in
                 if segment.coordinates.count > 1 {
-                    MapPolyline(coordinates: segment.coordinates).stroke(DrivyTheme.surface, lineWidth: 9)
-                    MapPolyline(coordinates: segment.coordinates).stroke(DrivyTheme.accent, lineWidth: 5)
+                    MapPolyline(coordinates: segment.coordinates).stroke(DrivyTheme.routeHalo, lineWidth: 9)
+                    MapPolyline(coordinates: segment.coordinates).stroke(DrivyTheme.route, lineWidth: 5)
                 }
             }
             ForEach(locatedObservations) { item in
@@ -65,9 +65,9 @@ struct RouteMapView: View {
             }
             if let currentPoint {
                 Annotation(session.isExample ? "Position d’exemple" : replayDate == nil ? "Dernière position enregistrée" : "Position enregistrée", coordinate: currentPoint.coordinate) {
-                    Circle().fill(DrivyTheme.accent).frame(width: 16, height: 16)
-                        .overlay(Circle().stroke(.white, lineWidth: 3)).padding(8)
-                        .background(DrivyTheme.accent.opacity(0.18), in: Circle())
+                    Circle().fill(DrivyTheme.route).frame(width: 16, height: 16)
+                        .overlay(Circle().stroke(DrivyTheme.routeHalo, lineWidth: 3)).padding(DrivySpacing.xs)
+                        .background(DrivyTheme.route.opacity(0.18), in: Circle())
                         .accessibilityLabel(session.isExample ? "Position d’exemple" : "Position enregistrée")
                 }.annotationTitles(.hidden)
             }
@@ -86,7 +86,9 @@ struct RouteMapView: View {
         .overlay(alignment: .topLeading) {
             if showsEmptyState && session.points.isEmpty {
                 Label(session.usesGPS ? "En attente de position" : "Sans GPS", systemImage: "location.slash")
-                    .font(.caption.weight(.medium)).padding(DrivySpacing.s)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(DrivyTheme.text)
+                    .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
                     .glassEffect(.regular, in: Capsule()).padding(DrivySpacing.m)
             }
         }
@@ -132,7 +134,9 @@ struct RouteMapView: View {
             .overlay(alignment: .bottomTrailing) {
                 if selected {
                     Image(systemName: observation.status.symbol)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.caption2.weight(.bold))
+                        .imageScale(.small)
+                        .dynamicTypeSize(...DynamicTypeSize.large)
                         .foregroundStyle(observation.status.color)
                         .frame(width: 16, height: 16)
                         .background(DrivyTheme.surface, in: Circle())
@@ -140,6 +144,8 @@ struct RouteMapView: View {
                         .offset(x: 3, y: 3)
                 }
             }
+            // Map markers keep a fixed geometry; their text alternative is the VoiceOver label.
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
             .frame(width: 44, height: 44)
             .contentShape(Circle())
     }

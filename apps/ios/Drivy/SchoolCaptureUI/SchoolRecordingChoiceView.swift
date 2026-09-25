@@ -67,7 +67,7 @@ struct SchoolRecordingChoiceView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     heading
                     feedback
                     if let notice = model.notice {
@@ -77,11 +77,13 @@ struct SchoolRecordingChoiceView: View {
                     }
                     if !model.relatedPending.isEmpty { pendingRequests }
                     if model.hasOldScope {
-                        Label("Une demande conservée relève de vos anciens accès. Elle ne sera pas renvoyée avec ces nouveaux droits.", systemImage: "lock")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                        DrivyInlineMessage(text: "Une demande conservée relève de vos anciens accès. Elle ne sera pas renvoyée avec ces nouveaux droits.",
+                            tone: .warning)
                     }
                     if !model.isLoading && !model.accessRevoked {
-                        Button("Actualiser la notice et le choix") { Task { await model.load() } }
+                        Button("Actualiser la notice et le choix", systemImage: "arrow.clockwise") { Task { await model.load() } }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(DrivyTheme.accent)
                             .frame(minHeight: 44).disabled(model.isBusy)
                     }
                 }
@@ -106,10 +108,11 @@ struct SchoolRecordingChoiceView: View {
     }
 
     private var heading: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: "location.circle").font(.largeTitle).foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            DrivyStatusBadge(title: "GPS facultatif", symbol: "location", tone: .accent)
             Text(model.source == .verbal ? "Le choix de l’élève" : "Votre choix pour cette leçon")
                 .font(.drivyScreenTitle)
+                .fixedSize(horizontal: false, vertical: true)
             if let learner = model.learner { Text(learner.displayName).font(.drivySection) }
             if let lessonDateLabel { Text(lessonDateLabel).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
             Text("La leçon peut se dérouler sans enregistrement GPS. Enregistrer ce choix ne démarre aucun trajet.")
@@ -117,7 +120,7 @@ struct SchoolRecordingChoiceView: View {
         }
     }
     @ViewBuilder private var feedback: some View {
-        if model.isLoading { ProgressView("Lecture des informations de l’école…") }
+        if model.isLoading { ProgressView("Lecture des informations de l’école…").frame(maxWidth: .infinity) }
         if let error = model.errorMessage { SchoolErrorNotice(message: error) }
         if let error = model.storageError { SchoolErrorNotice(message: error) }
         if let confirmation = model.confirmation {
@@ -126,26 +129,29 @@ struct SchoolRecordingChoiceView: View {
     }
     private var currentChoice: some View {
         DrivyPanel {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(model.needsReload ? "Dernier choix reçu" : "Choix communiqué à l’école").font(.caption).foregroundStyle(DrivyTheme.muted)
-                Label(model.currentChoiceLabel, systemImage: model.choice?.status == .allowed ? "location" : "location.slash")
-                    .font(.headline).accessibilityIdentifier("recording-current-choice")
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                Text(model.needsReload ? "Dernier choix reçu" : "Choix communiqué à l’école").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                DrivyMapStatusLabel(status: DrivyMapStatus(title: model.currentChoiceLabel,
+                    symbol: model.choice?.status == .allowed ? "location.fill" : model.choice?.status == .refused ? "location.slash" : "questionmark.circle",
+                    tone: model.choice?.status == .allowed ? .success : .neutral), font: .headline)
+                    .accessibilityIdentifier("recording-current-choice")
                 if let choice = model.choice {
                     Text(choice.source == .own ? "Exprimé par l’élève depuis son compte" : "Choix verbal consigné par un moniteur")
                         .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     if choice.lessonId == nil { Text("Ce choix s’applique actuellement à cette leçon.").font(.caption).foregroundStyle(DrivyTheme.muted) }
                     if choice.noticeVersionId != model.notice?.noticeVersionId {
-                        Text("La notice a changé depuis ce choix. Un accord lié à l’ancienne notice n’autorise pas un nouveau départ GPS.")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                        DrivyInlineMessage(text: "La notice a changé depuis ce choix. Un accord lié à l’ancienne notice n’autorise pas un nouveau départ GPS.",
+                            tone: .warning)
                     }
                 }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
     private var choiceControls: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
             Text(model.source == .verbal ? "Quel choix l’élève a-t-il exprimé ?" : "Pour cette leçon")
                 .font(.drivySection)
+                .accessibilityAddTraits(.isHeader)
             choiceButton(.refused, title: "Sans enregistrement GPS", detail: model.source == .verbal ? "L’élève a exprimé son refus." : "Je ne souhaite pas enregistrer le trajet.", symbol: "location.slash")
             choiceButton(.allowed, title: "Avec enregistrement GPS", detail: model.source == .verbal ? "L’élève a exprimé son accord après avoir reçu l’information." : "J’accepte l’enregistrement décrit dans la notice.", symbol: "location")
             if model.verbalAgreementIsProtected {
@@ -154,16 +160,16 @@ struct SchoolRecordingChoiceView: View {
             }
             Button {
                 if let selectedStatus, let value = model.review(selectedStatus) { review = .new(value) }
-            } label: { Label("Relire mon choix", systemImage: "checklist").frame(maxWidth: .infinity, minHeight: 14) }
+            } label: { Label("Relire mon choix", systemImage: "checklist") }
                 .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.mayChoose || selectedStatus == nil)
                 .accessibilityIdentifier("recording-review-choice")
         }
     }
     private func choiceButton(_ status: SchoolRecordingChoice.Status, title: String, detail: String, symbol: String) -> some View {
         Button { selectedStatus = status } label: {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: symbol).font(.title3).frame(width: 28).foregroundStyle(DrivyTheme.accent)
-                VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: DrivySpacing.s) {
+                Image(systemName: symbol).font(.title3).frame(width: 28).foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                     Text(title).font(.headline)
                     Text(detail).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 }.frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
@@ -176,18 +182,19 @@ struct SchoolRecordingChoiceView: View {
         .accessibilityIdentifier(status == .allowed ? "recording-allow" : "recording-refuse")
     }
     private var pendingRequests: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Confirmation à retrouver").font(.drivySection)
+        VStack(alignment: .leading, spacing: DrivySpacing.m) {
+            Text("Confirmation à retrouver").font(.drivySection).accessibilityAddTraits(.isHeader)
             Text("Une demande est conservée sur cet appareil. Vérifiez son résultat avant d’en créer une autre pour cet élève.")
                 .font(.subheadline).foregroundStyle(DrivyTheme.muted)
             ForEach(model.relatedPending) { queued in
                 DrivyPanel {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.s) {
                         RecordingPendingDescription(command: queued.mutation)
                         if queued.mutation.scope == model.scope {
                             Button("Vérifier auprès de l’école") { Task { await model.verify(queued) } }
-                                .frame(minHeight: 44).disabled(!model.mayResume(queued))
+                                .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.mayResume(queued))
                             Button("Relire et renvoyer la même demande") { review = .resume(queued) }
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
                                 .frame(minHeight: 44).disabled(!model.mayResume(queued))
                         }
                     }.frame(maxWidth: .infinity, alignment: .leading)
@@ -201,10 +208,10 @@ private struct RecordingNoticePanel: View {
     let notice: SchoolRecordingNotice
     var body: some View {
         DrivyPanel {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("L’information de votre école").font(.drivySection)
+            VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                Text("L’information de votre école").font(.drivySection).accessibilityAddTraits(.isHeader)
                 Text(notice.noticeText).font(.body).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                Divider()
+                Divider().overlay(DrivyTheme.border)
                 Text("Conservation des données").font(.headline)
                 Text(notice.retentionText).font(.body).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 Label(notice.contactEmail, systemImage: "envelope").font(.subheadline).textSelection(.enabled)
@@ -222,9 +229,12 @@ private struct RecordingChoiceConfirmation: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    Text(review.status == .allowed ? "Confirmer l’accord GPS" : "Confirmer le choix sans GPS").font(.drivyTitle)
-                    Text(review.learnerName).font(.drivySection)
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                        Text(review.status == .allowed ? "Confirmer l’accord GPS" : "Confirmer le choix sans GPS").font(.drivyTitle)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(review.learnerName).font(.drivySection)
+                    }
                     RecordingNoticePanel(notice: review.notice)
                     Toggle(isOn: $acknowledged) {
                         Text(review.source == .own
@@ -232,12 +242,17 @@ private struct RecordingChoiceConfirmation: View {
                              : "J’ai présenté cette notice à l’élève et je retranscris le choix qu’il a exprimé.")
                             .fixedSize(horizontal: false, vertical: true)
                     }.disabled(model.isBusy)
-                    Text("Aucun trajet ne démarre avec cette confirmation.").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    Label("Aucun trajet ne démarre avec cette confirmation.", systemImage: "info.circle")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                     if let error = model.errorMessage { SchoolErrorNotice(message: error) }
                     Button {
                         Task { if await model.confirm(review, acknowledged: acknowledged) { dismiss() } }
                     } label: {
-                        HStack { if model.isBusy { ProgressView() }; Text("Enregistrer ce choix") }.frame(maxWidth: .infinity, minHeight: 14)
+                        HStack(spacing: DrivySpacing.xs) {
+                            if model.isBusy { ProgressView() }
+                            Text(model.isBusy ? "Enregistrement du choix…" : "Enregistrer ce choix")
+                        }
                     }.buttonStyle(DrivyPrimaryButtonStyle()).disabled(!acknowledged || !model.mayChoose)
                         .accessibilityIdentifier("recording-confirm-choice")
                 }.drivyPageContent()
@@ -252,7 +267,7 @@ private struct RecordingPendingDescription: View {
     let command: SchoolCapturePendingMutation
     private var bodyValue: SchoolRecordingChoiceBody? { try? JSONDecoder().decode(SchoolRecordingChoiceBody.self, from: command.body) }
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             if let value = bodyValue {
                 Text(value.status == .allowed ? "Demande d’accord GPS" : value.status == .refused ? "Demande de choix sans GPS" : "Choix non renseigné à confirmer").font(.headline)
                 Text(value.source == .own ? "Choix personnel de l’élève" : "Choix verbal consigné par un moniteur").font(.subheadline)
@@ -273,7 +288,7 @@ private struct RecordingChoiceRetry: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     Text("Retrouver la confirmation").font(.drivyTitle)
                     RecordingPendingDescription(command: queued.mutation)
                     Text("Le contenu et la notice liés à cette demande restent ceux de votre confirmation initiale. Le renvoi utilise la même référence ; il ne crée pas un nouveau choix.")
@@ -282,7 +297,7 @@ private struct RecordingChoiceRetry: View {
                     if let error = model.errorMessage { SchoolErrorNotice(message: error) }
                     Button {
                         Task { if await model.resend(queued, acknowledged: acknowledged) { dismiss() } }
-                    } label: { Text("Renvoyer la même demande").frame(maxWidth: .infinity, minHeight: 14) }
+                    } label: { Text("Renvoyer la même demande") }
                         .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!acknowledged || !model.mayResume(queued))
                 }.drivyPageContent()
             }.background(DrivyTheme.surface)

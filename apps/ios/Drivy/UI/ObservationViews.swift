@@ -44,19 +44,19 @@ struct ObservationRow: View {
     var showsNote = true
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: observation.status.symbol)
+        HStack(alignment: .top, spacing: DrivySpacing.s) {
+            Image(systemName: observation.theme.journeySymbol)
                 .font(.headline)
                 .frame(width: 36, height: 36)
                 .foregroundStyle(observation.status.color)
-                .background(DrivyTheme.surfaceMuted, in: Circle())
+                .background(observation.status.surface, in: Circle())
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(observation.theme.label)
                     .font(.headline)
                     .foregroundStyle(DrivyTheme.text)
-                Text(observation.status.label)
-                    .font(.subheadline)
+                Label(observation.status.label, systemImage: observation.status.symbol)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(observation.status.color)
                 if showsNote && !observation.note.isEmpty {
                     Text(observation.note)
@@ -64,12 +64,12 @@ struct ObservationRow: View {
                         .foregroundStyle(DrivyTheme.text)
                 }
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: DrivySpacing.xxs) {
                         elapsedLabel
-                        Text("·")
+                        Text("·").accessibilityHidden(true)
                         positionLabel
                     }
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                         elapsedLabel
                         positionLabel
                     }
@@ -79,7 +79,7 @@ struct ObservationRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, DrivySpacing.xs)
         .accessibilityElement(children: .combine)
     }
 
@@ -125,34 +125,33 @@ struct ObservationComposer: View {
     private enum Step: Hashable { case categories, statuses }
 
     private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 10), count: dynamicTypeSize.isAccessibilitySize ? 2 : 3)
+        Array(repeating: GridItem(.flexible(), spacing: DrivySpacing.s), count: dynamicTypeSize.isAccessibilitySize ? 2 : 3)
     }
     var body: some View {
         VStack(spacing: 0) {
             sheetHeading
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     if let theme = selectedTheme { statusChoices(for: theme) }
                     else { categoryChoices }
                     if !controller.isCapturing && !saving {
-                        Text(note.isEmpty
-                             ? "Le trajet est arrêté. Ce signalement n’est pas enregistré."
-                             : "Le trajet est arrêté. Ce signalement n’est pas enregistré ; vous pouvez copier la note avant de fermer.")
-                            .font(.footnote).foregroundStyle(DrivyTheme.warning)
-                            .fixedSize(horizontal: false, vertical: true)
+                        DrivyInlineMessage(
+                            text: note.isEmpty
+                                ? "Le trajet est arrêté. Ce signalement n’est pas enregistré."
+                                : "Le trajet est arrêté. Ce signalement n’est pas enregistré ; vous pouvez copier la note avant de fermer.",
+                            tone: .warning)
                     }
                     if let error = controller.errorMessage { InlineErrorView(message: error) }
                 }
-                .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 24)
+                .padding(.horizontal, DrivySpacing.l).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.l)
                 .frame(maxWidth: 620).frame(maxWidth: .infinity)
             }.scrollDismissesKeyboard(.interactively)
         }
         .background(DrivyTheme.surface)
-        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: selectedTheme)
+        .animation(DrivyMotion.context(reduceMotion), value: selectedTheme)
         .sensoryFeedback(.selection, trigger: selectedTheme)
         .presentationDetents([.height(440), .large], selection: $detent)
         .presentationDragIndicator(.visible)
-        .presentationCornerRadius(30)
         .interactiveDismissDisabled(saving || !note.isEmpty)
         .onAppear { if dynamicTypeSize.isAccessibilitySize { detent = .large } }
         .onChange(of: dynamicTypeSize) { _, size in if size.isAccessibilitySize { detent = .large } }
@@ -176,13 +175,15 @@ struct ObservationComposer: View {
     }
 
     private var sheetHeading: some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .center, spacing: DrivySpacing.xs) {
             if selectedTheme != nil {
                 Button { selectedTheme = nil; noteFocused = false } label: {
-                    Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 44, height: 44)
-                }.buttonStyle(.plain).disabled(saving).accessibilityLabel("Catégories")
+                    Image(systemName: "chevron.left").font(.body.weight(.semibold))
+                        .frame(width: 44, height: 44).background(DrivyTheme.surfaceMuted, in: Circle())
+                        .contentShape(Circle())
+                }.buttonStyle(.plain).disabled(saving).accessibilityLabel("Revenir aux catégories")
             }
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(selectedTheme?.label ?? "Signaler").font(.drivySection)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
@@ -195,17 +196,18 @@ struct ObservationComposer: View {
             Button {
                 if note.isEmpty { dismiss() } else { confirmsDiscard = true }
             } label: {
-                Image(systemName: "xmark").font(.body.weight(.medium))
+                Image(systemName: "xmark").font(.body.weight(.semibold))
                     .frame(width: 44, height: 44).background(DrivyTheme.surfaceMuted, in: Circle())
-            }.buttonStyle(.plain).disabled(saving).accessibilityLabel("Fermer le signalement")
+                    .contentShape(Circle())
+            }.buttonStyle(.plain).disabled(saving).accessibilityLabel("Fermer sans ajouter d’observation")
         }
-        .padding(.horizontal, 24).padding(.top, 28).padding(.bottom, 18)
+        .padding(.horizontal, DrivySpacing.l).padding(.top, DrivySpacing.l).padding(.bottom, DrivySpacing.m)
         .foregroundStyle(DrivyTheme.text)
     }
 
     private var categoryChoices: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            LazyVGrid(columns: columns, alignment: .center, spacing: 14) {
+        VStack(alignment: .leading, spacing: DrivySpacing.m) {
+            LazyVGrid(columns: columns, alignment: .center, spacing: DrivySpacing.s) {
                 ForEach(ObservationTheme.allCases) { theme in
                     Button { selectedTheme = theme } label: {
                         VStack(spacing: DrivySpacing.xs) {
@@ -229,7 +231,7 @@ struct ObservationComposer: View {
         VStack(alignment: .leading, spacing: 0) {
             if note.count > 1_000 {
                 Text("Raccourcissez la note à 1 000 caractères avant de choisir un statut.")
-                    .font(.footnote).foregroundStyle(DrivyTheme.danger).padding(.bottom, 12)
+                    .font(.footnote).foregroundStyle(DrivyTheme.danger).padding(.bottom, DrivySpacing.s)
             }
             let statusLayout = dynamicTypeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(spacing: DrivySpacing.s))
@@ -255,13 +257,14 @@ struct ObservationComposer: View {
                         .accessibilityIdentifier("status-\(status.rawValue)")
                 }
             }
-            if saving { ProgressView("Enregistrement…").frame(maxWidth: .infinity).padding(.top, 12) }
+            if saving { ProgressView("Enregistrement de l’observation…").frame(maxWidth: .infinity).padding(.top, DrivySpacing.s) }
             else if controller.isCapturing {
                 Text("Un appui sur le statut enregistre l’observation.").font(.caption).foregroundStyle(DrivyTheme.muted)
-                    .frame(maxWidth: .infinity).padding(.top, 12)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity).padding(.top, DrivySpacing.s)
             }
             DisclosureGroup(isExpanded: $showsNote) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     TextField("Un détail à retrouver au bilan", text: $note, axis: .vertical)
                         .lineLimit(3...6).focused($noteFocused).padding(DrivySpacing.s)
                         .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
@@ -272,11 +275,11 @@ struct ObservationComposer: View {
                             .foregroundStyle(note.count > 1_000 ? DrivyTheme.danger : DrivyTheme.muted)
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
-                }.padding(.top, 8)
+                }.padding(.top, DrivySpacing.xs)
             } label: {
                 Label(note.isEmpty ? "Ajouter une note" : "Modifier la note", systemImage: "note.text")
-                    .font(.subheadline).frame(minHeight: 44)
-            }.padding(.top, 12).accessibilityIdentifier("observation-note-disclosure")
+                    .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+            }.padding(.top, DrivySpacing.s).accessibilityIdentifier("observation-note-disclosure")
         }
     }
     private func save(theme: ObservationTheme, status: ObservationStatus) {
@@ -301,8 +304,7 @@ struct ObservationListView: View {
                 } else {
                     if session.isExample {
                         Section {
-                            Label("Observations d’exemple · données fictives", systemImage: "info.circle")
-                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            DrivyStatusBadge(title: "Exemple · données fictives", symbol: "info.circle")
                         }
                     }
                     ForEach(session.observations.sorted { $0.observedAt < $1.observedAt }) { observation in
@@ -310,6 +312,8 @@ struct ObservationListView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(DrivyTheme.canvas)
             .navigationTitle("Observations")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
