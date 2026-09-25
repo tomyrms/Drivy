@@ -74,9 +74,6 @@ struct SchoolAgendaView: View {
         .navigationTitle("Agenda")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Aujourd’hui") { selectedDate = Date() }.font(.subheadline.weight(.medium))
-            }
             if mayPlan {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { setupModel = newPlanningModel() } label: { Label("Réglages du planning", systemImage: "slider.horizontal.3") }
@@ -103,6 +100,11 @@ struct SchoolAgendaView: View {
                 .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: DrivySpacing.xs)
+            if !calendar.isDateInToday(selectedDate) {
+                Button("Aujourd’hui") { selectedDate = Date() }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight: 44)
+            }
             Button { moveWeek(-1) } label: {
                 Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
             }

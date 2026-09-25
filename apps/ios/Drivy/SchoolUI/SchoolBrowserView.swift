@@ -105,6 +105,7 @@ struct SchoolBrowserView: View {
                 .accessibilityIdentifier("school-learner-\(learner.id.uuidString)")
                 .listRowInsets(EdgeInsets(top: DrivySpacing.xxs, leading: DrivySpacing.l, bottom: DrivySpacing.xxs, trailing: DrivySpacing.m))
                 .listRowSeparatorTint(DrivyTheme.border)
+                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
                 .listRowBackground(workspace.selectedLearnerID == learner.id ? DrivyTheme.accentSoft : DrivyTheme.surface)
             }
             if workspace.nextLearnersCursor != nil {

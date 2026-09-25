@@ -43,9 +43,12 @@ struct SchoolVisualReview: View {
             } else { ProgressView("Préparation du rendu…") }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            Text("Rendu de contrôle · données fictives")
-                .font(.caption2).foregroundStyle(DrivyTheme.muted)
-                .padding(.vertical, 5).frame(maxWidth: .infinity).background(DrivyTheme.surface)
+            // The tab shell shows its real tab bar: no banner over it.
+            if !Self.shellScreens.contains(screen) {
+                Text("Rendu de contrôle · données fictives")
+                    .font(.caption2).foregroundStyle(DrivyTheme.muted)
+                    .padding(.vertical, 5).frame(maxWidth: .infinity).background(DrivyTheme.surface)
+            }
         }
         .environment(\.dynamicTypeSize, ProcessInfo.processInfo.environment["DRIVY_VISUAL_LARGE_TEXT"] == "1" ? .accessibility3 : systemTextSize)
         .environment(\.locale, Locale(identifier: "fr_CH"))

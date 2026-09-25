@@ -186,14 +186,9 @@ struct SchoolHomeView: View {
         .background(DrivyTheme.surface)
     }
 
-    /// Mockup 13: the school name under the large title, then the viewer's role
-    /// as the first fact of the page.
+    /// The school name is the toolbar title; the viewer's role is the first fact.
     private var schoolHeading: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.m) {
-            Text(workspace.school?.name ?? workspace.membership?.schoolName ?? "Mon école")
-                .font(.body)
-                .foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
             if let membership = workspace.membership {
                 HStack(spacing: DrivySpacing.m) {
                     Image(systemName: "checkmark.shield")
