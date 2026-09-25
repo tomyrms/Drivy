@@ -11,6 +11,8 @@ Tranche du 25 septembre 2026 (plan P0-1 a/b). Elle couvre par des tests d’int�
 - prépare un contexte scolaire synthétique (procédure et référentiel approuvés, politique de champs publiée, notice adoptée), puis crée conditions commerciales, prestation et ouverture **par les routes réelles** ; les leçons sont créées par AP40, jamais en SQL. Seul `moveToPast` décale une leçon déjà créée dans le passé, pour éprouver AP44/AP50 sans horloge simulée ;
 - `expectContract` valide la réponse complète (enveloppe comprise) contre le schéma canonique d’OpenAPI 3.11.0, sans le modifier.
 
+Le harnais et les deux tests capture renseignent aussi `public.drivy_migrations` avec l’empreinte de chaque fichier : sans cela, selon l’ordre choisi par vitest, une suite utilisant `scripts/migrations.ts` (G1C) trouvait un schéma sans registre et échouait en bloc (« schema drivy already exists »), défaut observé puis corrigé pendant cette tranche.
+
 Les tests capture existants appliquent désormais aussi `010`/`011` (sinon la projection de leçon, qui relit le contrôle de permis, n’existerait pas) ; leur contrôle RLS attend 44 tables protégées.
 
 ## Couverture
