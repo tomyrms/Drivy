@@ -2,6 +2,8 @@
 
 Passe du 25 septembre 2026, demandée par le porteur : harmoniser l’apparence de toute l’application selon la direction A « Cartographie native » (`DESIGN/01-direction-artistique.md`) et les tokens 3.8 (`annexes/tokens-proposition.json`). Aucune règle métier, donnée, droit ou contrat n’est modifié par cette passe.
 
+**Référence d’application : [`DESIGN.md`](../../DESIGN.md)** à la racine (principes, tokens clair/sombre, règles de page, catalogue iOS ↔ web, états, matériaux, mouvement, accessibilité, glossaire, interdits, vérification). Ce fichier-ci ne garde que les décisions de la passe et leurs preuves. Statut : la direction A est validée par le porteur ; les valeurs 3.8, durées de mouvement et largeurs de panneau restent des propositions en attente d’acceptation visuelle ; le signe de trajet n’est pas un logo approuvé.
+
 ## Sources de méthode
 
 Skills installés dans `.claude/skills/` depuis le registre ui-skills.com (dépôts sources MIT, voir `.claude/skills/README.md`) : `swiftui-ui-patterns`, `swiftui-liquid-glass`, `apple-design`, `write-swift`, `baseline-ui`, `fixing-accessibility`, `improve-ui`. Le registre complet (306 entrées) a été relu ; les principes retenus proviennent aussi de `make-interfaces-feel-better`, `mobile-native`, `to-spring-or-not-to-spring`, `polish`, `clarify`, `harden`, `layout`, `typeset`, `balise-ux-writing` et de la référence iOS d’`impeccable`. Ils restent subordonnés au dossier de conception.
@@ -19,6 +21,8 @@ Skills installés dans `.claude/skills/` depuis le registre ui-skills.com (dép�
 
 `apps/web` : survol limité aux pointeurs capables de survol, retour d’appui sur `:active`, `text-wrap: pretty`, contrôles non sélectionnables, `theme-color` par apparence, rayons partagés avec le client Apple, `aria-busy` pendant le chargement initial, action désactivée expliquée.
 
+Les tokens CSS du portail (`apps/web/client/styles.css`) reprennent désormais exactement les valeurs claires et sombres de `DrivyTheme`, y compris bordure de contrôle, danger, surfaces succès/alerte et désactivé.
+
 ## Vérification
 
-Compilation de l’IPA réussie sur GitHub Actions pour les lots poussés jusqu’à `c07b4c6` (run `36131760336`). Typecheck et build Vite du web réussis localement. Aucune capture n’a encore été relue ; VoiceOver, grand texte, sombre et essais physiques restent à qualifier sur appareil.
+Compilation de l’IPA réussie sur GitHub Actions pour les lots poussés jusqu’à `c07b4c6` (run `36131760336`). Typecheck et build Vite du web réussis localement. `DESIGN.md` : `npx @google/design.md lint` sans erreur (avertissements : pas de token `primary`, tokens non référencés par un composant), export `dtcg` avec couleurs, espacements, rayons et typographie ; contrôle documentaire qui ne qualifie pas le produit. Aucune capture n’a encore été relue ; VoiceOver, grand texte, sombre et essais physiques restent à qualifier sur appareil.
