@@ -22,7 +22,15 @@ struct DrivyApp: App {
         WindowGroup {
             #if DEBUG && targetEnvironment(simulator)
             if let screen = ProcessInfo.processInfo.environment["DRIVY_VISUAL_SCREEN"] {
-                JourneyVisualReview(screen: screen)
+                if screen == "design-system" {
+                    DrivyDesignSystemGallery()
+                        .environment(\.locale, Locale(identifier: "fr_CH"))
+                        .tint(DrivyTheme.accent)
+                } else if SchoolVisualReview.shellScreens.contains(screen) {
+                    SchoolVisualReview(screen: screen)
+                } else {
+                    JourneyVisualReview(screen: screen)
+                }
             } else {
                 application
             }

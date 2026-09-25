@@ -11,7 +11,7 @@ on:
       visual_screens:
         description: Écrans à capturer, séparés par des espaces
         type: string
-        default: 'home live report without-gps replay'
+        default: 'home-tabs agenda learners learner school design-system home live report without-gps replay'
       visual_devices:
         description: Appareils à capturer, séparés par des espaces
         type: string
@@ -91,7 +91,7 @@ jobs:
         run: bash scripts/ios/test-simulator.sh
       - name: Capturer les écrans pour la revue visuelle
         if: inputs.visual_only == true
-        timeout-minutes: 12
+        timeout-minutes: 20
         shell: bash
         env:
           DRIVY_VISUAL_SCREENS: ${{ inputs.visual_screens }}
@@ -149,3 +149,51 @@ jobs:
             artifacts/ios/simulator-entitlements.plist
           if-no-files-found: warn
           retention-days: 14
+      # Dernière étape : les captures (fixtures fictives uniquement, voir
+      # SchoolVisualReview.swift et JourneyVisualReview.swift) sont réduites en
+      # JPEG et imprimées en base64 à la fin du journal, lisible par l'API des
+      # journaux quand le téléchargement des artefacts est impossible.
+      - name: Captures en base64 pour la revue
+        if: always() && inputs.visual_only == true
+        shell: bash
+        env:
+          DRIVY_VISUAL_SCREENS: ${{ inputs.visual_screens }}
+          DRIVY_VISUAL_DEVICES: ${{ inputs.visual_devices }}
+          DRIVY_VISUAL_APPEARANCES: ${{ inputs.visual_appearances }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/drivy-review"
+          mkdir -p "$out"
+          read -r -a screens <<< "${DRIVY_VISUAL_SCREENS:-home live report without-gps replay}"
+          read -r -a devices <<< "${DRIVY_VISUAL_DEVICES:-iPhone iPad}"
+          read -r -a appearances <<< "${DRIVY_VISUAL_APPEARANCES:-light dark}"
+          for value in "${screens[@]}" "${devices[@]}" "${appearances[@]}"; do
+            [[ "$value" =~ ^[A-Za-z-]+$ ]] || { echo 'Nom de capture invalide.' >&2; exit 1; }
+          done
+          count=0
+          for kind in "${devices[@]}"; do
+            for appearance in "${appearances[@]}"; do
+              for screen in "${screens[@]}"; do
+                png="artifacts/ios/${kind}-${screen}-${appearance}-synthetic.png"
+                if [[ ! -f "$png" ]]; then
+                  echo "Capture absente : $(basename "$png")"
+                  continue
+                fi
+                name="$(basename "$png" .png)"
+                jpg="$out/${name}.jpg"
+                width=$(sips -g pixelWidth "$png" | awk '/pixelWidth/ { print $2 }')
+                if [[ "$width" -gt 600 ]]; then
+                  sips -s format jpeg -s formatOptions 45 --resampleWidth 600 "$png" --out "$jpg" > /dev/null
+                else
+                  sips -s format jpeg -s formatOptions 45 "$png" --out "$jpg" > /dev/null
+                fi
+                echo "Capture ${name}.jpg : $(wc -c < "$jpg" | tr -d ' ') octets, sha256 $(shasum -a 256 "$jpg" | cut -d ' ' -f 1)"
+                echo "===DRIVY-CAPTURE-BEGIN ${name}.jpg==="
+                base64 < "$jpg" | tr -d '\n' | fold -w 3000
+                echo
+                echo "===DRIVY-CAPTURE-END ${name}.jpg==="
+                count=$((count + 1))
+              done
+            done
+          done
+          echo "Captures imprimées : $count"

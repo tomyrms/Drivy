@@ -2,14 +2,16 @@
 set -euo pipefail
 # Capture the actual app compositor, not UIKit drawHierarchy around MapKit.
 # The explicit harness is compiled only in DEBUG simulator builds and uses an
-# isolated encrypted database with synthetic coordinates. No school API/login.
+# isolated encrypted database with synthetic coordinates. No school API/login:
+# school screens (agenda, learners, learner, school, home-tabs…) read fictional
+# fixtures through an in-memory transport restricted to visual.drivy.invalid.
 app=artifacts/ios/DerivedData/Build/Products/Debug-iphonesimulator/Drivy.app
 [[ -d "$app" ]]
 read -r -a screens <<< "${DRIVY_VISUAL_SCREENS:-home live report without-gps replay}"
 read -r -a devices <<< "${DRIVY_VISUAL_DEVICES:-iPhone iPad}"
 read -r -a appearances <<< "${DRIVY_VISUAL_APPEARANCES:-light dark}"
 for screen in "${screens[@]}"; do
-  [[ "$screen" =~ ^(home|live|report|without-gps|replay|catalog|configuration|training|members|lesson-report|dossier|bilan)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
+  [[ "$screen" =~ ^(home|live|report|without-gps|replay|catalog|configuration|training|members|lesson-report|dossier|bilan|home-tabs|agenda|learners|learner|school|design-system)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
 done
 for kind in "${devices[@]}"; do
   [[ "$kind" == iPhone || "$kind" == iPad ]] || { echo 'Appareil de capture inconnu.' >&2; exit 1; }
