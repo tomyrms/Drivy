@@ -18,6 +18,9 @@ import { registerLessonReports } from './lesson-reports.js';
 import type { InvitationMailConfig } from './invitation-mail.js';
 import { registerCaptures } from './captures.js';
 import type { CaptureConfig } from './capture-crypto.js';
+import { registerHealth } from './health.js';
+import { registerPermits } from './permits.js';
+import { registerLessonOutcomes } from './lesson-outcomes.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
 const schoolParams = z.object({ schoolId: z.uuid() });
@@ -118,6 +121,9 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
     });
     versionHeader(data, reply); return envelope(data, request);
   });
+  registerHealth(app,options);
+  registerPermits(app,options);
+  registerLessonOutcomes(app,options);
   registerSchoolSetup(app,options);
   registerInvitations(app,options);
   registerProfiles(app,options);

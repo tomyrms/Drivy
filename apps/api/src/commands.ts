@@ -27,7 +27,7 @@ export function checkIdempotency(header: string|string[]|undefined, operationId:
     throw new ApiError(400,'INVALID_REQUEST','Idempotency-Key doit correspondre à operationId.');
   }
 }
-function canonical(value: unknown): string {
+export function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (value !== null && typeof value === 'object') return `{${Object.entries(value).sort(([a],[b])=>a.localeCompare(b))
     .map(([key,item])=>`${JSON.stringify(key)}:${canonical(item)}`).join(',')}}`;

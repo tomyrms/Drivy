@@ -19,15 +19,17 @@ const cancelCommand=z.object({operationId:id,reasonCode:z.enum(['LEARNER_REQUEST
 type Selection=z.infer<typeof selection>;
 export interface LessonRow {id:string;school_id:string;version:number;training_id:string;learner_id:string;learner_person_id:string;instructor_membership_id:string;
  planned_start:Date;planned_end:Date;time_zone:string;meeting_point:string;status:'PLANNED'|'COMPLETED'|'CANCELLED'|'NO_SHOW';price_cents_snapshot:string;buffer_minutes_snapshot:number;
- policy_version_id:string;commercial_selection:Selection;commercial_revision_version:number;actual_start:Date|null;actual_end:Date|null;publication_version:number;current_published_revision_id:string|null;_createdAt:string}
+ policy_version_id:string;commercial_selection:Selection;commercial_revision_version:number;actual_start:Date|null;actual_end:Date|null;publication_version:number;current_published_revision_id:string|null;permit_warning?:boolean;cancel_reason_code?:string|null;_createdAt:string}
 export function lessonProjection(row:LessonRow){return {id:row.id,schoolId:row.school_id,version:row.version,trainingId:row.training_id,learnerId:row.learner_id,instructorMembershipId:row.instructor_membership_id,
  plannedStart:row.planned_start.toISOString(),plannedEnd:row.planned_end.toISOString(),timeZone:row.time_zone,meetingPoint:row.meeting_point,status:row.status,
  priceCentsSnapshot:Number(row.price_cents_snapshot),bufferMinutesSnapshot:row.buffer_minutes_snapshot,actualStart:row.actual_start?.toISOString()??null,actualEnd:row.actual_end?.toISOString()??null,
- permitWarning:true,publicationVersion:row.publication_version,currentPublishedRevisionId:row.current_published_revision_id,commercialSelection:row.commercial_selection,commercialRevisionVersion:row.commercial_revision_version,
+ permitWarning:row.permit_warning??true,publicationVersion:row.publication_version,currentPublishedRevisionId:row.current_published_revision_id,commercialSelection:row.commercial_selection,commercialRevisionVersion:row.commercial_revision_version,
  captureSummary:{hasCapture:false,syncState:null,publicationState:'NONE'}};}
 type Lesson=ReturnType<typeof lessonProjection>;
+/** R07 : l'avertissement de permis est relu à chaque projection (décision courante, catégorie, date locale de la leçon). */
+export const lessonColumns=`*,drivy.lesson_permit_warning(training_id,(planned_start AT TIME ZONE time_zone)::date) AS permit_warning`;
 export async function getLesson(db:PoolClient,schoolId:string,lessonId:string,lock=false):Promise<LessonRow>{
- const row=(await db.query<LessonRow>(`SELECT * FROM drivy.lesson WHERE school_id=$1 AND id=$2 ${lock?'FOR UPDATE':''}`,[schoolId,lessonId])).rows[0];if(!row)throw notFound();return row;
+ const row=(await db.query<LessonRow>(`SELECT ${lessonColumns} FROM drivy.lesson WHERE school_id=$1 AND id=$2 ${lock?'FOR UPDATE':''}`,[schoolId,lessonId])).rows[0];if(!row)throw notFound();return row;
 }
 async function access(db:PoolClient,trainingId:string,instructorId:string){
  if(!(await db.query<{ok:boolean}>('SELECT drivy.lesson_access($1,$2,true) AS ok',[trainingId,instructorId])).rows[0]?.ok)throw notFound();
@@ -91,7 +93,19 @@ async function occupations(db:PoolClient,row:LessonRow,instructorPersonId:string
  ($1,$2,$4,'INSTRUCTOR',tstzrange($5::timestamptz,$6::timestamptz+make_interval(mins=>$7),'[)'))`,
  [row.school_id,row.id,row.learner_person_id,instructorPersonId,row.planned_start,row.planned_end,row.buffer_minutes_snapshot]);
 }
-async function event(db:PoolClient,row:LessonRow,operationId:string,type:string){await db.query(`INSERT INTO drivy.lesson_event_outbox(school_id,lesson_id,lesson_version,event_type,operation_id) VALUES($1,$2,$3,$4,$5)`,[row.school_id,row.id,row.version,type,operationId]);}
+/** Release only the future; preserve any elapsed part as an immutable occupation. */
+export async function releaseFutureOccupations(db:PoolClient,schoolId:string,lessonId:string){
+ await db.query(`WITH released AS (
+  UPDATE drivy.reservation SET active=false WHERE school_id=$1 AND lesson_id=$2 AND active AND upper(during)>statement_timestamp()
+  RETURNING school_id,lesson_id,resource_id,resource_role,during)
+  INSERT INTO drivy.reservation(school_id,lesson_id,resource_id,resource_role,during)
+  SELECT school_id,lesson_id,resource_id,resource_role,tstzrange(lower(during),statement_timestamp(),'[)') FROM released WHERE lower(during)<statement_timestamp()`,[schoolId,lessonId]);
+}
+/** Une issue sans réalisation possède un compte de leçon sans charge : aucune pénalité n'est déduite (R14/R23). */
+export async function openClosedAccount(db:PoolClient,row:LessonRow){
+ await db.query('INSERT INTO drivy.lesson_account(school_id,lesson_id,planned_price_cents) VALUES($1,$2,$3) ON CONFLICT (lesson_id) DO NOTHING',[row.school_id,row.id,row.price_cents_snapshot]);
+}
+export async function event(db:PoolClient,row:LessonRow,operationId:string,type:string){await db.query(`INSERT INTO drivy.lesson_event_outbox(school_id,lesson_id,lesson_version,event_type,operation_id) VALUES($1,$2,$3,$4,$5)`,[row.school_id,row.id,row.version,type,operationId]);}
 async function revision(db:PoolClient,row:LessonRow,actor:CommandActor,operationId:string,reason:string){await db.query(`INSERT INTO drivy.lesson_commercial_revision(school_id,lesson_id,revision,operation_id,commercial_selection,price_cents,duration_minutes,actor_membership_id,reason)
  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[row.school_id,row.id,row.commercial_revision_version,operationId,JSON.stringify(row.commercial_selection),row.price_cents_snapshot,(row.planned_end.getTime()-row.planned_start.getTime())/60000,actor.membershipId,reason]);}
 
@@ -134,7 +148,7 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
    if(query.from)where.push(`planned_end>${bind(query.from)}::timestamptz`);if(query.to)where.push(`planned_start<${bind(query.to)}::timestamptz`);
    if(query.trainingId)where.push(`training_id=${bind(query.trainingId)}`);if(query.instructorMembershipId)where.push(`instructor_membership_id=${bind(query.instructorMembershipId)}`);
    if(position)where.push(`(planned_start,id)>(${bind(position.createdAt)}::timestamptz,${bind(position.id)}::uuid)`);
-   const rows=(await db.query<LessonRow>(`SELECT *,to_char(planned_start AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "_createdAt" FROM drivy.lesson WHERE ${where.join(' AND ')} ORDER BY planned_start,id LIMIT ${bind(query.limit+1)}`,values)).rows;
+   const rows=(await db.query<LessonRow>(`SELECT ${lessonColumns},to_char(planned_start AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "_createdAt" FROM drivy.lesson WHERE ${where.join(' AND ')} ORDER BY planned_start,id LIMIT ${bind(query.limit+1)}`,values)).rows;
    const last=rows.length>query.limit?rows[query.limit-1]:undefined;return {items:rows.slice(0,query.limit).map(lessonProjection),nextCursor:last?cursors.encode(scope,{id:last.id,createdAt:last._createdAt}):null};
   });return envelope(data,r);
  });
@@ -155,7 +169,7 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
    await validateCommercial(db,school.id,body.commercialSelection,body.agreedPriceCents,context.category_code,minutes,body.plannedStart,body.timeZone,false);
    await ensureOpen(db,school.id,body.instructorMembershipId,body.plannedStart,body.plannedEnd,body.timeZone,body.bufferMinutes);
    const row=(await db.query<LessonRow>(`INSERT INTO drivy.lesson(id,school_id,training_id,learner_id,learner_person_id,instructor_membership_id,planned_start,planned_end,time_zone,meeting_point,price_cents_snapshot,buffer_minutes_snapshot,policy_version_id,commercial_selection)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,[randomUUID(),school.id,body.trainingId,context.learner_id,context.person_id,body.instructorMembershipId,body.plannedStart,body.plannedEnd,body.timeZone,body.meetingPoint,body.agreedPriceCents,body.bufferMinutes,body.policyVersionId,JSON.stringify(body.commercialSelection)])).rows[0]!;
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING ${lessonColumns}`,[randomUUID(),school.id,body.trainingId,context.learner_id,context.person_id,body.instructorMembershipId,body.plannedStart,body.plannedEnd,body.timeZone,body.meetingPoint,body.agreedPriceCents,body.bufferMinutes,body.policyVersionId,JSON.stringify(body.commercialSelection)])).rows[0]!;
    await occupations(db,row,context.instructor_person_id);await revision(db,row,actor,body.operationId,'Initial booking');await event(db,row,body.operationId,'LessonCreated');
    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonCreated',changedFields:['plannedStart','plannedEnd','instructorMembershipId','meetingPoint','commercialSelection']};
   });reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,r);
@@ -177,7 +191,7 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
    await ensureOpen(db,school.id,body.instructorMembershipId,body.plannedStart,body.plannedEnd,body.timeZone,old.buffer_minutes_snapshot);
    await db.query('UPDATE drivy.reservation SET active=false WHERE school_id=$1 AND lesson_id=$2 AND active',[school.id,lessonId]);
    const row=(await db.query<LessonRow>(`UPDATE drivy.lesson SET version=version+1,planned_start=$3,planned_end=$4,time_zone=$5,meeting_point=$6,instructor_membership_id=$7,
-    commercial_selection=$8,price_cents_snapshot=$9,commercial_revision_version=commercial_revision_version+$10 WHERE school_id=$1 AND id=$2 RETURNING *`,
+    commercial_selection=$8,price_cents_snapshot=$9,commercial_revision_version=commercial_revision_version+$10 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,
     [school.id,lessonId,body.plannedStart,body.plannedEnd,body.timeZone,body.meetingPoint,body.instructorMembershipId,JSON.stringify(body.commercialChange?.commercialSelection??old.commercial_selection),body.commercialChange?.agreedPriceCents??Number(old.price_cents_snapshot),body.commercialChange?1:0])).rows[0]!;
    await occupations(db,row,context.instructor_person_id);if(body.commercialChange)await revision(db,row,actor,body.operationId,body.commercialChange.reason);await event(db,row,body.operationId,'LessonMoved');
    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonMoved',changedFields:['plannedStart','plannedEnd','instructorMembershipId','meetingPoint',...(body.commercialChange?['commercialSelection','priceCentsSnapshot']:[])]};
@@ -188,13 +202,8 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
   const boundCommand={...body,lessonId};
   const data=await command(r,'CANCEL_LESSON',boundCommand,expected,{lessonId},async(db,_actor,school)=>{
    const old=await getLesson(db,school.id,lessonId,true);checkVersion(old.version,expected);if(old.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Cette leçon possède déjà un résultat.');
-   const row=(await db.query<LessonRow>(`UPDATE drivy.lesson SET status='CANCELLED',version=version+1,cancel_reason_code=$3,cancel_comment=$4 WHERE school_id=$1 AND id=$2 RETURNING *`,[school.id,lessonId,body.reasonCode,body.comment??null])).rows[0]!;
-   // Release only the future; preserve any elapsed part as an immutable occupation.
-   await db.query(`WITH released AS (
-    UPDATE drivy.reservation SET active=false WHERE school_id=$1 AND lesson_id=$2 AND active AND upper(during)>statement_timestamp()
-    RETURNING school_id,lesson_id,resource_id,resource_role,during)
-    INSERT INTO drivy.reservation(school_id,lesson_id,resource_id,resource_role,during)
-    SELECT school_id,lesson_id,resource_id,resource_role,tstzrange(lower(during),statement_timestamp(),'[)') FROM released WHERE lower(during)<statement_timestamp()`,[school.id,lessonId]);await event(db,row,body.operationId,'LessonCancelled');
+   const row=(await db.query<LessonRow>(`UPDATE drivy.lesson SET status='CANCELLED',version=version+1,cancel_reason_code=$3,cancel_comment=$4 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lessonId,body.reasonCode,body.comment??null])).rows[0]!;
+   await releaseFutureOccupations(db,school.id,lessonId);await openClosedAccount(db,row);await event(db,row,body.operationId,'LessonCancelled');
    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonCancelled',changedFields:['status']};
   });reply.header('ETag',`"${data.version}"`);return envelope(data,r);
  });

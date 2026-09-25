@@ -7,7 +7,7 @@ import {withActor} from './database.js';
 import {schoolCommand,checkIdempotency,checkVersion,requireVersion,type CommandGuards,type CommandEffect,type CommandActor,type SchoolRow} from './commands.js';
 import {ApiError,notFound} from './errors.js';
 import {Cursors} from './cursor.js';
-import {getLesson,lessonProjection,type LessonRow} from './lessons.js';
+import {getLesson,lessonColumns,lessonProjection,type LessonRow} from './lessons.js';
 import {attachLiveObservations,draftObservationIDs} from './capture-observations.js';
 
 const id=z.uuid(),empty=z.object({}).strict(),date=z.iso.datetime({offset:true});
@@ -95,7 +95,8 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
   const body=wishCommand.parse(r.body),trainingId=targetID(r,'trainingId'),expected=requireVersion(r.headers['if-match']),bound={...body,trainingId};
   const value=await command(r,'SAVE_WISH',bound,expected,{trainingId},async(db,_actor,school)=>{
    const old=await wish(db,school.id,trainingId,true);checkVersion(old.version,expected);
-   if(body.lessonId){const lesson=await getLesson(db,school.id,body.lessonId,true);if(lesson.training_id!==trainingId||lesson.status!=='PLANNED')throw new ApiError(422,'WISH_LESSON_INVALID','Choisissez une leçon planifiée de cette formation.');}
+   // Lecture sans FOR UPDATE : l'élève n'a pas de droit d'écriture sur la leçon ; le verrou d'école sérialise déjà les résultats.
+   if(body.lessonId){const lesson=await getLesson(db,school.id,body.lessonId);if(lesson.training_id!==trainingId||lesson.status!=='PLANNED')throw new ApiError(422,'WISH_LESSON_INVALID','Choisissez une leçon planifiée de cette formation.');}
    const row=(await db.query<WishRow>('UPDATE drivy.training_wish SET version=version+1,text=$3,lesson_id=$4 WHERE school_id=$1 AND training_id=$2 RETURNING *',[school.id,trainingId,body.text,body.lessonId===undefined?old.lesson_id:body.lessonId])).rows[0]!;
    return {data:wishProjection(row),action:'WishSaved',resourceType:'Wish',resourceId:row.id,changedFields:['text','lessonId']};
   });reply.header('ETag',`"${value.version}"`);return envelope(value,r);
@@ -106,16 +107,16 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
    const old=await getLesson(db,school.id,lessonId,true);checkVersion(old.version,expected);
    if(old.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Cette leçon possède déjà un résultat.');
    if(Date.parse(body.actualEnd)<=Date.parse(body.actualStart)||Date.parse(body.actualEnd)>Date.now()+300_000)throw new ApiError(422,'INVALID_ACTUAL_INTERVAL','La fin réelle doit suivre le début et ne pas être future.');
-   // Le contrôle de permis n'est pas encore livré : une réalisation reste déclarable avec anomalie motivée.
-   if(!body.anomalyReason?.trim())throw new ApiError(422,'ANOMALY_REASON_REQUIRED','Indiquez le motif du constat avec contrôle de permis non confirmé et, le cas échéant, des écarts horaires.');
+   // R07 : sans contrôle de permis approuvé et valide à la date de la leçon, la réalisation reste déclarable avec anomalie motivée.
+   if(old.permit_warning!==false&&!body.anomalyReason?.trim())throw new ApiError(422,'ANOMALY_REASON_REQUIRED','Indiquez le motif du constat avec contrôle de permis non confirmé et, le cas échéant, des écarts horaires.');
    if(old.commercial_selection.mode!=='UNIT_PRICE')throw new ApiError(409,'ENTITLEMENT_NOT_READY','Le constat couvert par un pack exige le registre de consommation des droits.');
-   const lesson=(await db.query<LessonRow>(`UPDATE drivy.lesson SET status='COMPLETED',version=version+1,actual_start=$3,actual_end=$4,completion_anomaly_reason=$5 WHERE school_id=$1 AND id=$2 RETURNING *`,[school.id,lessonId,body.actualStart,body.actualEnd,body.anomalyReason])).rows[0]!;
+   const lesson=(await db.query<LessonRow>(`UPDATE drivy.lesson SET status='COMPLETED',version=version+1,actual_start=$3,actual_end=$4,completion_anomaly_reason=$5 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lessonId,body.actualStart,body.actualEnd,body.anomalyReason?.trim()?body.anomalyReason:null])).rows[0]!;
    const created=(await db.query<DraftRow>(`INSERT INTO drivy.report_draft(school_id,lesson_id,author_membership_id,worked_on,observation_text,next_step) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[school.id,lessonId,actor.membershipId,body.workedOn??'',body.observationText??'',body.nextStep??''])).rows[0]!;
    await attachLiveObservations(db,lesson,created.id,actor.membershipId);
    const accountId=randomUUID();await db.query('INSERT INTO drivy.lesson_account(id,school_id,lesson_id,planned_price_cents) VALUES($1,$2,$3,$4)',[accountId,school.id,lessonId,old.price_cents_snapshot]);
    await db.query(`INSERT INTO drivy.charge_entry(school_id,account_id,kind,amount_signed_cents,reason,operation_id) VALUES($1,$2,'INITIAL',$3,$4,$5)`,[school.id,accountId,old.price_cents_snapshot,'Prix unitaire convenu à la réservation ; leçon réalisée.',body.operationId]);
    await db.query('UPDATE drivy.reservation SET active=false WHERE school_id=$1 AND lesson_id=$2 AND active',[school.id,lessonId]);await event(db,lesson,body.operationId,'LessonCompleted');
-   return {data:{lesson:lessonProjection(lesson),draft:await draftProjection(db,created),account:await account(db,school.id,lessonId)},action:'LessonCompleted',resourceType:'Lesson',resourceId:lessonId,resourceVersion:lesson.version,changedFields:['status','actualStart','actualEnd','draft','account'],reason:body.anomalyReason};
+   return {data:{lesson:lessonProjection(lesson),draft:await draftProjection(db,created),account:await account(db,school.id,lessonId)},action:'LessonCompleted',resourceType:'Lesson',resourceId:lessonId,resourceVersion:lesson.version,changedFields:['status','actualStart','actualEnd','draft','account'],...(body.anomalyReason?.trim()?{reason:body.anomalyReason.slice(0,1000)}:{})};
   });reply.header('ETag',`"${value.lesson.version}"`);return envelope(value,r);
  });
  app.get(`${base}/report-drafts/:draftId`,async(r,reply)=>{empty.parse(r.query);const value=await read(r,async db=>draftProjection(db,await draft(db,schoolID(r),targetID(r,'draftId'))));reply.header('ETag',`"${value.version}"`);return envelope(value,r);});
@@ -153,11 +154,12 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
    if(body.captureSelection!==null||body.textObservationSelection.length)throw new ApiError(409,'OBSERVATION_PUBLICATION_NOT_READY','Les annotations et captures doivent être qualifiées par leur protocole avant publication. Publiez le bilan textuel sans sélection.');
    if(body.excludePendingAttachmentIds?.length)throw new ApiError(422,'ATTACHMENT_SELECTION_INVALID','Aucune pièce ne fait partie de ce brouillon.');
    const snapshot=await validateCompetencies(db,school.id,lesson.training_id,old.observations.map(o=>o.competencyId));
-   const sequence=lesson.publication_version+1;
+   // La séquence numérote les révisions ; la version de publication compte aussi les retraits (AP57).
+   const sequence=(await db.query<{next:number}>('SELECT coalesce(max(sequence),0)+1 AS next FROM drivy.report_revision WHERE school_id=$1 AND lesson_id=$2',[school.id,lesson.id])).rows[0]!.next,publicationVersion=lesson.publication_version+1;
    const row=(await db.query<RevisionRow>(`INSERT INTO drivy.report_revision(school_id,lesson_id,author_membership_id,sequence,worked_on,observation_text,next_step,observations,competency_snapshot,correction_reason,operation_id)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,[school.id,lesson.id,actor.membershipId,sequence,old.worked_on,old.observation_text,old.next_step,JSON.stringify(old.observations),JSON.stringify(snapshot),body.correctionReason??null,body.operationId])).rows[0]!;
-   const updated=(await db.query<LessonRow>('UPDATE drivy.lesson SET version=version+1,publication_version=$3,current_published_revision_id=$4 WHERE school_id=$1 AND id=$2 RETURNING *',[school.id,lesson.id,sequence,row.id])).rows[0]!;
-   await db.query('UPDATE drivy.report_draft SET version=version+1,base_publication_version=$3 WHERE school_id=$1 AND id=$2',[school.id,draftId,sequence]);await event(db,updated,body.operationId,'ReportPublished');
+   const updated=(await db.query<LessonRow>(`UPDATE drivy.lesson SET version=version+1,publication_version=$3,current_published_revision_id=$4 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lesson.id,publicationVersion,row.id])).rows[0]!;
+   await db.query('UPDATE drivy.report_draft SET version=version+1,base_publication_version=$3 WHERE school_id=$1 AND id=$2',[school.id,draftId,publicationVersion]);await event(db,updated,body.operationId,'ReportPublished');
    return {data:revisionProjection(row),action:'ReportPublished',resourceType:'ReportRevision',resourceId:row.id,changedFields:['publicationVersion','currentPublishedRevisionId'],...(body.correctionReason?{reason:body.correctionReason}:{})};
   });reply.header('ETag',`"${value.version}"`);return envelope(value,r);
  });

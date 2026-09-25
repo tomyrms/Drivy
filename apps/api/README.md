@@ -50,6 +50,13 @@ AP175/176 exposent le profil administratif, et AP16 partage sa version pour les 
 
 AP172–174 enregistrent l'accueil propre selon le rôle, sans consentement global ni qualification d'appareil. AP177 laisse l'entrée possible avec l'identité minimale et garde les actions de planification/cours explicitement non prêtes tant que leurs modules ne sont pas livrés. Voir [le contrat et les preuves G1D1](../../docs/implementation/g1d-profils.md).
 
+## Santé, permis et issues de leçon (25 septembre 2026)
+
+- `GET /health/live` et `GET /health/ready` : sondes internes hors contrat, sans donnée ; 404 si la requête porte un en-tête de proxy (`Forwarded`, `X-Forwarded-*`). Voir [exploitation-sante.md](../../docs/implementation/exploitation-sante.md).
+- AP29/AP30 `…/trainings/:trainingId/permit-checks` (migration 010) : contrôle physique attesté par un membre `permit_review` ; `permitWarning` des leçons est calculé. Voir [g2-permis.md](../../docs/implementation/g2-permis.md).
+- AP44 `no-show`, AP88 `outcome-approvals`, AP50 `correct-outcome`, AP57 `report-publication/withdraw` (migration 011). Voir [g2-issues-lecon.md](../../docs/implementation/g2-issues-lecon.md).
+- Tests PostgreSQL du planning et du bilan : `test/lessons.integration.test.ts`, `test/lesson-reports.integration.test.ts`, `test/lesson-outcomes.integration.test.ts`, avec la mise en place commune `test/support/harness.ts`. Voir [tests-planning-bilan.md](../../docs/implementation/tests-planning-bilan.md).
+
 ## Hébergement effectif
 
 L’API G1A et Keycloak 26.7.4 sont accessibles en HTTPS sur l’hébergement choisi : base API `https://drivy.shulker.ch/refonte`, issuer exact `https://drivy.shulker.ch/identity/realms/drivy`. La refonte utilise Node 24.21.0 et des bases PostgreSQL 16.14 neuves, UTF8, avec vérification TLS du certificat PostgreSQL. L’ancienne API reste distincte. L’accès administrateur Keycloak n’est pas publié.

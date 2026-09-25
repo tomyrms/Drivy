@@ -14,7 +14,7 @@ assert.deepEqual((await operator.query('SELECT rolsuper,rolbypassrls,rolcreatero
 await operator.query(`GRANT CREATE ON DATABASE ${database} TO ${owner}`);await operator.query(`GRANT drivy_app,drivy_invitation_mailer TO ${owner} WITH ADMIN OPTION`);await operator.end();
 const pool=new Pool({connectionString:url}),migration=new Pool({connectionString:url,options:`-c role=${owner}`});
 await pool.query('DROP SCHEMA IF EXISTS drivy CASCADE');await pool.query('DROP TABLE IF EXISTS public.drivy_migrations');await pool.query(`GRANT USAGE,CREATE ON SCHEMA public TO ${owner}`);
-for(const name of(await readdir(new URL('../migrations/',import.meta.url))).filter(n=>/^00[1-9]_.*\.sql$/.test(n)).sort()){
+for(const name of(await readdir(new URL('../migrations/',import.meta.url))).filter(n=>/^[0-9]{3}_.*\.sql$/.test(n)).sort()){
  const db=await migration.connect();try{await db.query('BEGIN');await db.query(await readFile(new URL(`../migrations/${name}`,import.meta.url),'utf8'));await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}if(name.startsWith('001_'))await seedFixtures(pool,issuer);
 }
 const rls=await pool.query("SELECT count(*)::int AS n,count(*) FILTER(WHERE relrowsecurity AND relforcerowsecurity)::int AS forced FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r'");assert.equal(rls.rows[0].n,rls.rows[0].forced);
@@ -78,6 +78,6 @@ try{
  assert.equal((await call('POST',route,{...body,operationId:randomUUID()})).json().code,'OBSERVATION_REVIEW_REQUIRED');
  assert.equal((await call('GET',route,undefined,undefined,'demo-alice')).statusCode,404);
  const learnerReport=await call('GET',`/report-revisions/${published.json().data.id}`,undefined,undefined,'demo-alice');assert.equal(learnerReport.statusCode,200);assert.deepEqual(learnerReport.json().data.textObservations,[]);
- assert.equal(rls.rows[0].forced,40);
+ assert.equal(rls.rows[0].forced,44);
 }finally{await app.close();await migration.end();await pool.end();}
 });
