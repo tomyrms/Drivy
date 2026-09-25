@@ -209,6 +209,8 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
 
   const isBusy = busy !== null;
   const personName = me?.displayName || session?.user?.displayName || 'Votre compte';
+  const emailVerified = session?.user?.emailVerified === true;
+  const acceptanceHint = !reviewed && emailVerified;
 
   return (
     <div className="app-shell">
@@ -218,60 +220,89 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
           <span className="brand-symbol" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="m11 24 5-16 5 16-5-4Z" /></svg></span>
           <span>Drivy</span>
         </a>
-        {session?.authenticated && <div className="account-actions">
-          <span className="signed-in-label">{personName}</span>
-          <button className="button quiet" type="button" onClick={() => void logout()} disabled={isBusy}>Déconnecter ce navigateur</button>
-        </div>}
+        {session?.authenticated && <button className="button quiet" type="button" onClick={() => void logout()} disabled={isBusy}>Se déconnecter</button>}
       </header>
 
-      <main id="main" className={page === 'invitation' ? 'main invitation-main' : 'main'} aria-busy={!loaded}>
+      <main id="main" className="main" aria-busy={!loaded}>
         <div className="page-heading">
-          <p className="eyebrow">{page === 'invitation' ? 'Une invitation de votre école' : 'Votre espace scolaire'}</p>
+          <p className="context">{page === 'invitation' ? 'Invitation de votre école' : 'Votre espace'}</p>
           <h1 ref={heading} tabIndex={-1}>{page === 'invitation' ? 'Rejoindre votre école' : session?.authenticated ? 'Bienvenue dans Drivy' : 'Votre école, à portée de main'}</h1>
           <p className="lead">{page === 'invitation'
             ? 'Vérifiez l’école et le compte utilisé avant de confirmer votre rattachement.'
-            : 'Un même compte pour retrouver vos écoles et les accès qu’elles vous confient.'}</p>
+            : session?.authenticated ? personName : 'Un seul compte pour retrouver vos écoles et les accès qu’elles vous donnent.'}</p>
         </div>
 
         <div className="feedback" aria-live="polite" aria-atomic="true">
           {busy && <p className="loading"><span className="spinner" aria-hidden="true" />{busy}</p>}
         </div>
+
         {error && <div className="notice error" role="alert">
-          <strong>Une vérification est nécessaire</strong>
-          <p>{error}</p>
-          {uncertain && <p>La réponse d’acceptation reste incertaine. Réessayer conserve la même demande ; ne créez pas une nouvelle invitation pour la remplacer.</p>}
-          {(!uncertain || !preview) && <button className="button secondary" type="button" disabled={isBusy} onClick={() => void perform('Vérification de vos accès…', refresh)}>{uncertain ? 'Retrouver la demande' : 'Actualiser la page'}</button>}
+          <Symbol kind="alert" />
+          <div className="notice-body">
+            <strong>Une vérification est nécessaire</strong>
+            <p>{error}</p>
+            {uncertain && <p>La réponse à votre acceptation n’est pas encore connue. Réessayer conserve la même demande : ne demandez pas de nouvelle invitation pour la remplacer.</p>}
+            {(!uncertain || !preview) && <button className="button retry" type="button" disabled={isBusy} onClick={() => void perform('Vérification de vos accès…', refresh)}>
+              <Symbol kind="refresh" bare />{uncertain ? 'Retrouver la demande' : 'Réessayer'}
+            </button>}
+          </div>
         </div>}
 
-        {linkMustReopen && <div className="notice warning"><strong>Reprendre votre invitation</strong><p>Connectez-vous avec le compte invité, puis rouvrez le lien envoyé par votre école. Une déconnexion ferme aussi l’invitation préparée dans ce navigateur.</p></div>}
+        {linkMustReopen && <div className="notice warning">
+          <Symbol kind="alert" />
+          <div className="notice-body">
+            <strong>Reprendre votre invitation</strong>
+            <p>Connectez-vous avec le compte invité, puis rouvrez le lien envoyé par votre école. La déconnexion ferme aussi l’invitation préparée dans ce navigateur.</p>
+          </div>
+        </div>}
 
-        {!loaded && <div className="card skeleton-card" aria-hidden="true"><span /><span /><span /></div>}
+        {!loaded && <div className="panel skeleton" aria-hidden="true"><span /><span /><span /></div>}
 
-        {loaded && !session?.authenticated && <section className="card sign-in-card" aria-labelledby="sign-in-title">
-          <Symbol kind="account" />
+        {loaded && !session?.authenticated && <section className="panel sign-in" aria-labelledby="sign-in-title">
+          <Symbol kind="account" tile />
           <h2 id="sign-in-title">{page === 'invitation' ? 'Connectez-vous avec le compte invité' : 'Connectez-vous à votre compte'}</h2>
-          <p>{page === 'invitation'
-            ? 'Utilisez l’adresse à laquelle votre école vous a envoyé ce lien. Vous pourrez relire les informations avant d’accepter.'
-            : 'Votre connexion vous permet de retrouver les écoles auxquelles vous êtes rattaché.'}</p>
+          <p className="secondary-text">{page === 'invitation'
+            ? 'Utilisez l’adresse à laquelle votre école a envoyé ce lien. Vous pourrez relire les informations avant d’accepter.'
+            : 'Retrouvez les écoles auxquelles vous êtes rattaché.'}</p>
           <button className="button primary" type="button" disabled={isBusy || invitationLink.token !== null || invitationLink.error} onClick={() => void login()}>Se connecter</button>
-          <p className="caption">La connexion s’ouvre dans le service sécurisé de Drivy.</p>
-          {page === 'invitation' && <p className="caption">Si vous fermez cette page avant la préparation du lien, rouvrez l’invitation envoyée par votre école.</p>}
+          <p className="caption with-symbol"><Symbol kind="lock" bare />La connexion s’ouvre sur le service sécurisé de Drivy.</p>
+          {page === 'invitation' && <p className="caption">Si vous fermez cette page avant la fin de la préparation, rouvrez le lien envoyé par votre école.</p>}
         </section>}
 
         {loaded && session?.authenticated && page === 'invitation' && <>
-          <section className="identity-strip" aria-label="Compte utilisé">
-            <Symbol kind="account" />
-            <div><span className="small-label">Vous utilisez ce compte</span><strong>{personName}</strong>{session.user?.email && <span>{session.user.email}</span>}</div>
-            <button type="button" className="button quiet" onClick={() => void logout()} disabled={isBusy}>Changer de compte</button>
+          <section className="section" aria-labelledby="identity-title">
+            <h2 id="identity-title" className="section-title">Compte utilisé</h2>
+            <div className="identity-row">
+              <Symbol kind="account" />
+              <div className="row-text">
+                <strong className="row-title">{personName}</strong>
+                {session.user?.email && <span className="row-meta">{session.user.email}</span>}
+                <StatusBadge tone={emailVerified ? 'success' : 'warning'} symbol={emailVerified ? 'check' : 'alert'}>{emailVerified ? 'Adresse vérifiée' : 'Adresse à vérifier'}</StatusBadge>
+              </div>
+              <button type="button" className="button quiet" onClick={() => void logout()} disabled={isBusy}>Changer de compte</button>
+            </div>
+            <p className="caption">Pour changer de compte, déconnectez-vous puis rouvrez votre lien d’invitation une fois connecté.</p>
+            {!emailVerified && <div className="notice warning">
+              <Symbol kind="alert" />
+              <div className="notice-body">
+                <strong>Adresse à vérifier</strong>
+                <p>Vérifiez votre adresse auprès du service de connexion, puis reconnectez-vous avant d’accepter l’invitation.</p>
+              </div>
+            </div>}
           </section>
-          <p className="caption">Pour changer de compte, déconnectez ce navigateur puis rouvrez votre lien d’invitation après la connexion.</p>
-          {session.user?.emailVerified !== true && <div className="notice warning"><strong>Adresse à vérifier</strong><p>Vérifiez votre adresse auprès du service de connexion, puis reconnectez-vous avant d’accepter l’invitation.</p></div>}
-          {preview && <section className="card invitation-card" aria-labelledby="invitation-school-name">
-            <div className="school-heading"><Symbol kind="school" /><div><span className="small-label">L’école qui vous invite</span><h2 id="invitation-school-name">{preview.data.schoolName}</h2></div></div>
+
+          {preview && <section className="panel invitation" aria-labelledby="invitation-school-name">
+            <div className="school-heading">
+              <Symbol kind="school" tile />
+              <div className="row-text">
+                <span className="row-meta">L’école qui vous invite</span>
+                <h2 id="invitation-school-name">{preview.data.schoolName}</h2>
+              </div>
+            </div>
             <dl className="invitation-facts">
-              <div><dt>Votre rôle</dt><dd>{preview.data.roles.map(roleLabel).join(' · ')}</dd></div>
-              <div><dt>Invitation adressée à</dt><dd>{preview.data.maskedEmail}</dd></div>
-              <div><dt>Lien valable jusqu’au</dt><dd><time dateTime={preview.data.expiresAt}>{formatDate(preview.data.expiresAt)}</time></dd></div>
+              <div><Symbol kind="shield" /><dt>Votre rôle</dt><dd>{preview.data.roles.map(roleLabel).join(' · ')}</dd></div>
+              <div><Symbol kind="mail" /><dt>Invitation envoyée à</dt><dd>{preview.data.maskedEmail}</dd></div>
+              <div><Symbol kind="clock" /><dt>Lien valable jusqu’au</dt><dd><time dateTime={preview.data.expiresAt}>{formatDate(preview.data.expiresAt)}</time></dd></div>
             </dl>
             <div className="policy">
               <h3>Vos données dans cette école</h3>
@@ -281,27 +312,72 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
               <p className="caption">Pour toute question : <a href={`mailto:${preview.data.notice.contactEmail}`}>{preview.data.notice.contactEmail}</a></p>
             </div>
             <div className="acceptance">
-              <label className="checkbox-row"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} disabled={isBusy} /><span>Je confirme rejoindre <strong>{preview.data.schoolName}</strong> avec le compte indiqué ci-dessus.</span></label>
-              <p className="caption">Ce rattachement ne réserve aucun cours et n’autorise aucun enregistrement GPS.</p>
-              {!reviewed && session.user?.emailVerified === true && <p className="caption" id="acceptance-hint">Cochez la confirmation pour rejoindre l’école.</p>}
+              <label className="confirm-card">
+                <input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} disabled={isBusy} />
+                <span>Je confirme rejoindre <strong>{preview.data.schoolName}</strong> avec le compte indiqué ci-dessus.</span>
+              </label>
+              <p className="caption">Ce rattachement ne réserve aucune leçon et n’autorise aucun enregistrement GPS.</p>
+              {acceptanceHint && <p className="caption" id="acceptance-hint">Cochez la confirmation pour rejoindre l’école.</p>}
+              {!emailVerified && <p className="caption">Vérifiez d’abord votre adresse pour rejoindre l’école.</p>}
               <div className="button-row">
-                <button type="button" className="button primary" aria-describedby={!reviewed && session.user?.emailVerified === true ? 'acceptance-hint' : undefined} disabled={isBusy || !reviewed || session.user?.emailVerified !== true} onClick={() => void acceptInvitation()}>{uncertain ? 'Vérifier et réessayer' : 'Rejoindre cette école'}</button>
+                <button type="button" className="button primary" aria-describedby={acceptanceHint ? 'acceptance-hint' : undefined} disabled={isBusy || !reviewed || !emailVerified} onClick={() => void acceptInvitation()}>{uncertain ? 'Vérifier et réessayer' : 'Rejoindre cette école'}</button>
                 <button type="button" className="button secondary" disabled={isBusy || uncertain} onClick={() => void clearInvitation()}>Pas maintenant</button>
               </div>
               <p className="caption">{uncertain ? 'Vérifiez d’abord le résultat de la demande déjà envoyée avant de fermer cette invitation.' : '« Pas maintenant » laisse le lien utilisable jusqu’à son expiration.'}</p>
             </div>
           </section>}
-          {!preview && !isBusy && !error && <section className="card empty-state"><Symbol kind="school" /><h2>Aucune invitation à afficher</h2><p>Ouvrez le lien le plus récent envoyé par votre école. Vous pouvez aussi retrouver les écoles déjà liées à votre compte.</p><a className="button secondary" href="/app/">Voir mes écoles</a></section>}
+
+          {!preview && !isBusy && !error && <section className="panel empty-state" aria-labelledby="no-invitation-title">
+            <Symbol kind="school" />
+            <div className="row-text">
+              <h2 id="no-invitation-title" className="row-title">Aucune invitation à afficher</h2>
+              <p className="row-meta">Ouvrez le lien le plus récent envoyé par votre école, ou retrouvez les écoles déjà liées à votre compte.</p>
+              <a className="button secondary" href="/app/">Voir mes écoles</a>
+            </div>
+          </section>}
         </>}
 
         {loaded && session?.authenticated && page === 'account' && <>
-          {accepted && acceptedSession.current === session.csrfToken && <div className="notice success" role="status"><strong>Vous avez rejoint {accepted.schoolName}</strong><p>Votre rattachement à l’école a été confirmé.</p></div>}
-          {session.invitationPending && <div className="invitation-banner"><div><strong>Une invitation vous attend</strong><p>Relisez les informations de l’école avant de l’accepter.</p></div><a className="button secondary" href="/app/invitation">Voir l’invitation</a></div>}
-          <section className="card schools-card" aria-labelledby="schools-title">
-            <div className="section-heading"><div><span className="small-label">{personName}</span><h2 id="schools-title">Vos écoles</h2></div><button className="button quiet" disabled={isBusy} type="button" onClick={() => void perform('Actualisation de vos écoles…', refresh)}>Actualiser</button></div>
-            {me && me.memberships.length > 0 ? <ul className="school-list">{me.memberships.map(member => <li key={member.membershipId}><Symbol kind="school" /><div><h3>{member.schoolName}</h3><p>{member.roles.map(roleLabel).join(' · ')}</p></div></li>)}</ul>
-              : !isBusy && !error ? <div className="empty-state"><Symbol kind="school" /><h3>Votre école n’apparaît pas encore</h3><p>Rejoignez-la avec le lien qu’elle vous a envoyé. Si vous n’avez pas d’invitation, contactez votre école.</p></div>
-                : isBusy ? <p className="muted">Vos accès sont en cours de vérification.</p> : <p className="muted">Vos écoles ne peuvent pas être affichées pour le moment.</p>}
+          {accepted && acceptedSession.current === session.csrfToken && <div className="notice success" role="status">
+            <Symbol kind="check" />
+            <div className="notice-body">
+              <strong>Vous avez rejoint {accepted.schoolName}</strong>
+              <p>Votre école a confirmé votre rattachement.</p>
+            </div>
+          </div>}
+
+          {session.invitationPending && <section className="panel invitation-banner" aria-labelledby="pending-title">
+            <div className="row-text">
+              <StatusBadge tone="accent" symbol="mail">Invitation en attente</StatusBadge>
+              <h2 id="pending-title" className="row-title">Une école vous invite</h2>
+              <p className="row-meta">Relisez les informations de l’école avant d’accepter.</p>
+            </div>
+            <a className="button primary" href="/app/invitation">Voir l’invitation</a>
+          </section>}
+
+          <section className="section" aria-labelledby="schools-title">
+            <div className="section-heading">
+              <h2 id="schools-title" className="section-title">Vos écoles</h2>
+              <button className="button quiet" disabled={isBusy} type="button" onClick={() => void perform('Actualisation de vos écoles…', refresh)}>
+                <Symbol kind="refresh" bare />Actualiser
+              </button>
+            </div>
+            {me && me.memberships.length > 0
+              ? <ul className="row-list">{me.memberships.map(member => <li key={member.membershipId}>
+                  <Symbol kind="school" />
+                  <div className="row-text"><h3 className="row-title">{member.schoolName}</h3><p className="row-meta">{member.roles.map(roleLabel).join(' · ')}</p></div>
+                </li>)}</ul>
+              : !isBusy && !error
+                ? <div className="empty-state">
+                    <Symbol kind="school" />
+                    <div className="row-text">
+                      <h3 className="row-title">Votre école n’apparaît pas encore</h3>
+                      <p className="row-meta">Ouvrez le lien d’invitation envoyé par votre école. Sans invitation, contactez directement votre école.</p>
+                    </div>
+                  </div>
+                : isBusy
+                  ? <div className="row-skeleton" aria-hidden="true"><span /><span /></div>
+                  : <p className="row-meta">Vos écoles ne peuvent pas être affichées pour le moment.</p>}
           </section>
         </>}
       </main>
@@ -310,11 +386,29 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
   );
 }
 
-function Symbol({ kind }: { kind: 'account' | 'school' }) {
-  const content: ReactNode = kind === 'account'
-    ? <><circle cx="12" cy="8" r="3.5" /><path d="M5 21v-3a7 7 0 0 1 14 0v3" /></>
-    : <><path d="M4 21V5l8-3 8 3v16M2 21h20M9 21v-5h6v5M8 7h1m6 0h1M8 11h1m6 0h1" /></>;
-  return <span className="symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{content}</svg></span>;
+type SymbolKind = 'account' | 'school' | 'alert' | 'check' | 'refresh' | 'lock' | 'mail' | 'shield' | 'clock';
+
+const symbolPaths: Record<SymbolKind, ReactNode> = {
+  account: <><circle cx="12" cy="8" r="3.5" /><path d="M5 21v-3a7 7 0 0 1 14 0v3" /></>,
+  school: <path d="M4 21V5l8-3 8 3v16M2 21h20M9 21v-5h6v5M8 7h1m6 0h1M8 11h1m6 0h1" />,
+  alert: <><path d="M10.3 4 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4a2 2 0 0 0-3.4 0Z" /><path d="M12 9.5v4M12 17h.01" /></>,
+  check: <><circle cx="12" cy="12" r="9" /><path d="m8 12.4 2.7 2.7L16 9.8" /></>,
+  refresh: <><path d="M20 12a8 8 0 1 1-2.34-5.66" /><path d="M20 4v5h-5" /></>,
+  lock: <><rect x="5" y="10.5" width="14" height="10" rx="2" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" /></>,
+  mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 6.5 8.5 6.5 8.5-6.5" /></>,
+  shield: <><path d="M12 3 5 6v5.5c0 4.4 3 8.1 7 9.5 4-1.4 7-5.1 7-9.5V6Z" /><path d="m9 12 2.2 2.2L15 10.4" /></>,
+  clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 2" /></>,
+};
+
+/** Decorative outline symbol; every meaning it carries is also written in text. */
+function Symbol({ kind, tile = false, bare = false }: { kind: SymbolKind; tile?: boolean; bare?: boolean }) {
+  const className = bare ? 'symbol bare' : tile ? 'symbol tile' : 'symbol';
+  return <span className={className} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{symbolPaths[kind]}</svg></span>;
+}
+
+/** Status pill shared with the Apple client: symbol + text + tone, never color alone. */
+function StatusBadge({ tone, symbol, children }: { tone: 'accent' | 'success' | 'warning'; symbol: SymbolKind; children: ReactNode }) {
+  return <span className={`badge ${tone}`}><Symbol kind={symbol} bare />{children}</span>;
 }
 
 function formatDate(value: string): string {
