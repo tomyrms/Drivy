@@ -12,12 +12,15 @@ struct SchoolPlanningView: View {
         NavigationStack {
             Form {
                 Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(model.school?.name ?? "Votre école").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                        Text(cancelling ? "Libérer ce rendez-vous" : model.originalLesson == nil ? "Le prochain rendez-vous" : "Un nouveau créneau")
-                            .font(.drivyTitle)
-                        Text("Heures de l’école · \(model.timeZone)").font(.caption).foregroundStyle(DrivyTheme.muted)
-                    }.padding(.vertical, 8)
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        Text(model.school?.name ?? "Votre école").font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                        Text(cancelling ? "Libérer ce rendez-vous" : model.originalLesson == nil ? "Choisir, puis confirmer" : "Choisir un nouveau créneau")
+                            .font(.drivyTitle).foregroundStyle(DrivyTheme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("Horaires à l’heure de l’école · \(model.timeZone)").font(.footnote).foregroundStyle(DrivyTheme.muted)
+                    }
+                    .padding(.vertical, DrivySpacing.xs)
+                    .accessibilityElement(children: .combine)
                 }.listRowBackground(Color.clear)
                 SchoolPlanningFeedback(model: model)
                 if !model.isLoading && model.school != nil {
@@ -62,7 +65,7 @@ struct SchoolPlanningView: View {
                     Text("Choisir un élève").tag(nil as UUID?)
                     ForEach(model.learners) { learner in Text(learner.displayName).tag(Optional(learner.id)) }
                 }.disabled(!model.canMutate)
-                if model.learners.isEmpty { Text("Aucun dossier actif n’est accessible avec votre rôle.").foregroundStyle(DrivyTheme.muted) }
+                if model.learners.isEmpty { formNote("Aucun dossier d’élève actif n’est accessible avec votre rôle.") }
                 if model.learnerID != nil {
                     Picker("Formation", selection: Binding(get: { model.trainingID }, set: { id in
                         if let id { Task { await model.selectTraining(id) } }
@@ -70,11 +73,11 @@ struct SchoolPlanningView: View {
                         Text("Choisir une formation").tag(nil as UUID?)
                         ForEach(model.trainings) { training in Text("\(training.categoryCode) · formation active").tag(Optional(training.id)) }
                     }.disabled(!model.canMutate)
-                    if model.trainings.isEmpty { Text("L’administration doit ouvrir une formation depuis le dossier de cet élève.").foregroundStyle(DrivyTheme.muted) }
+                    if model.trainings.isEmpty { formNote("Aucune formation active. L’administration peut en ouvrir une depuis le dossier de cet élève.") }
                 }
             } else {
-                Text(model.learners.first(where: { $0.id == model.learnerID })?.displayName ?? "Dossier de la leçon").font(.headline)
-                if let training = model.selectedTraining { Text("Formation \(training.categoryCode)").foregroundStyle(DrivyTheme.muted) }
+                LabeledContent("Élève", value: model.learners.first(where: { $0.id == model.learnerID })?.displayName ?? "Dossier de la leçon")
+                if let training = model.selectedTraining { LabeledContent("Formation", value: "Permis \(training.categoryCode)") }
             }
         }
         if model.trainingID != nil {
@@ -84,10 +87,11 @@ struct SchoolPlanningView: View {
                     Toggle("Changer la durée ou la prestation", isOn: $model.changesCommercialTerms)
                         .disabled(!model.canMutate)
                     if !model.changesCommercialTerms, let lesson = model.originalLesson {
-                        LabeledContent("Durée conservée", value: "\(lesson.durationMinutes) min")
-                        LabeledContent("Prix conservé", value: SchoolCatalogFormatting.price(lesson.priceCentsSnapshot))
+                        LabeledContent("Durée conservée") { Text("\(lesson.durationMinutes) min").monospacedDigit() }
+                        LabeledContent("Prix conservé") { Text(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot)).monospacedDigit() }
                     }
-                } footer: { Text("Un changement de prestation demande une nouvelle lecture des conditions et un motif.") }
+                } header: { Text("Durée et prix") }
+                footer: { Text("Un changement de prestation demande une nouvelle lecture des conditions et un motif.") }
             }
             if model.originalLesson == nil || model.changesCommercialTerms { commercialFields }
             reviewFields
@@ -101,8 +105,7 @@ struct SchoolPlanningView: View {
             }
             .onChange(of: model.instructorID) { _, _ in model.agreementConfirmed = false; Task { await model.loadAvailability() } }
             if model.assignedInstructors.isEmpty {
-                Text("Aucun moniteur affecté ne couvre ce créneau. Vérifiez les affectations depuis le dossier de l’élève.")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                formNote("Aucun moniteur affecté ne couvre ce créneau. Vérifiez les affectations depuis le dossier de l’élève.")
             }
             DatePicker("Date", selection: $model.startsAt, in: Date()..., displayedComponents: .date)
                 .onChange(of: model.startsAt) { _, _ in model.termsAccepted = false; model.agreementConfirmed = false }
@@ -117,13 +120,13 @@ struct SchoolPlanningView: View {
             }
             if model.instructorID != nil {
                 DisclosureGroup("Disponibilités du moniteur") {
-                    if model.availability.isEmpty { Text("Aucune ouverture enregistrée. Ajoutez les disponibilités dans les réglages du planning.").font(.subheadline).foregroundStyle(DrivyTheme.muted) }
+                    if model.availability.isEmpty { formNote("Aucune disponibilité enregistrée. Ajoutez-la dans les réglages du planning.") }
                     ForEach(model.availability) { rule in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(SchoolPlanningFormat.weekdays(rule.weekdays)).font(.subheadline.weight(.medium))
-                            Text("\(rule.localStart) – \(rule.localEnd)").font(.subheadline)
+                        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                            Text(SchoolPlanningFormat.weekdays(rule.weekdays)).font(.subheadline.weight(.semibold))
+                            Text("\(rule.localStart) – \(rule.localEnd)").font(.subheadline.monospacedDigit())
                             Text(SchoolPlanningFormat.validity(rule.validFrom, until: rule.validUntil)).font(.caption).foregroundStyle(DrivyTheme.muted)
-                        }.padding(.vertical, 5)
+                        }.padding(.vertical, DrivySpacing.xxs)
                     }
                     ForEach(model.closures) { closure in
                         Label(SchoolPlanningFormat.interval(closure.startsAt, closure.endsAt, zone: model.timeZone), systemImage: "calendar.badge.minus")
@@ -144,15 +147,14 @@ struct SchoolPlanningView: View {
                 }
             }.onChange(of: model.productID) { _, _ in model.termsAccepted = false }
             if model.availableProducts.isEmpty {
-                Text("Aucune prestation de cette catégorie n’est valable à cette date. L’administration peut la configurer dans les réglages du planning.")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                formNote("Aucune prestation de cette catégorie n’est valable à cette date. L’administration peut la configurer dans les réglages du planning.")
             }
             if let product = model.selectedProduct {
                 Stepper("Quantité : \(model.quantity)", value: $model.quantity, in: 1...100)
                     .onChange(of: model.quantity) { _, _ in model.termsAccepted = false }
-                LabeledContent("Durée", value: "\(model.duration) min")
-                if let price = model.selectedPrice { LabeledContent("Prix convenu", value: SchoolCatalogFormatting.price(price)) }
-                Text("\(product.unitLabel) · \(SchoolCatalogFormatting.price(product.unitPriceCents)) l’unité").font(.caption).foregroundStyle(DrivyTheme.muted)
+                LabeledContent("Durée") { Text("\(model.duration) min").monospacedDigit() }
+                if let price = model.selectedPrice { LabeledContent("Prix convenu") { Text(SchoolCatalogFormatting.price(price)).monospacedDigit() } }
+                Text("\(product.unitLabel) · \(SchoolCatalogFormatting.price(product.unitPriceCents)) l’unité").font(.footnote.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
                 if let terms = model.selectedTerms {
                     DisclosureGroup("Conditions · \(terms.label)") {
                         Text(terms.termsText).font(.subheadline).textSelection(.enabled)
@@ -175,49 +177,49 @@ struct SchoolPlanningView: View {
     private var reviewFields: some View {
         Section {
             if model.duration > 0 {
-                LabeledContent("Fin prévue", value: SchoolPlanningFormat.instant(model.endsAt, zone: model.timeZone))
+                LabeledContent("Fin prévue") { Text(SchoolPlanningFormat.instant(model.endsAt, zone: model.timeZone)).monospacedDigit() }
             }
             if model.originalLesson != nil {
                 TextField(model.changesCommercialTerms ? "Motif du changement" : "Motif facultatif", text: $model.reason, axis: .vertical).lineLimit(2...4)
                 Toggle("Le nouvel horaire est convenu", isOn: $model.agreementConfirmed)
             }
-        } footer: { Text("Le permis d’élève reste à vérifier avant la conduite.") }
+        } header: { Text("Vérification") }
+        footer: { Text("Le permis d’élève reste à vérifier avant la conduite.") }
     }
 
     private var bookingActionBar: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        DrivyStickyActionBar {
             if model.duration > 0 {
                 ViewThatFits(in: .horizontal) {
                     HStack {
                         Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))")
-                        Spacer(minLength: 12)
-                        if let price = bookingPrice { Text(SchoolCatalogFormatting.price(price)).fontWeight(.semibold) }
+                        Spacer(minLength: DrivySpacing.s)
+                        if let price = bookingPrice { Text(SchoolCatalogFormatting.price(price)).fontWeight(.semibold).foregroundStyle(DrivyTheme.text) }
                     }
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                         Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))")
-                        if let price = bookingPrice { Text(SchoolCatalogFormatting.price(price)).fontWeight(.semibold) }
+                        if let price = bookingPrice { Text(SchoolCatalogFormatting.price(price)).fontWeight(.semibold).foregroundStyle(DrivyTheme.text) }
                     }
                 }
-                .font(.caption)
+                .font(.subheadline.monospacedDigit())
                 .foregroundStyle(DrivyTheme.muted)
+                .accessibilityElement(children: .combine)
             }
             if !model.validBooking {
-                Text(bookingHint).font(.caption).foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                DrivyActionNote(text: bookingHint)
             }
             Button {
                 Task { if await model.saveBooking() { dismiss() } }
             } label: {
-                Label(model.originalLesson == nil ? "Confirmer la leçon" : "Confirmer le déplacement", systemImage: "calendar.badge.checkmark")
+                HStack(spacing: DrivySpacing.xs) {
+                    if model.isBusy { ProgressView().tint(DrivyTheme.disabledText) }
+                    Label(model.originalLesson == nil ? "Confirmer la leçon" : "Confirmer le déplacement", systemImage: "calendar.badge.checkmark")
+                }
             }
             .buttonStyle(DrivyPrimaryButtonStyle())
             .disabled(!model.validBooking)
             .accessibilityIdentifier("planning-confirm")
         }
-        .padding(.horizontal, 20).padding(.vertical, 12)
-        .frame(maxWidth: 680).frame(maxWidth: .infinity)
-        .background(DrivyTheme.surface)
-        .overlay(alignment: .top) { Divider() }
     }
 
     private var bookingPrice: Int64? {
@@ -240,12 +242,20 @@ struct SchoolPlanningView: View {
         if (model.originalLesson == nil || model.changesCommercialTerms) && !model.termsAccepted { return "Relisez puis acceptez le prix et les conditions." }
         return "Vérifiez les informations du rendez-vous avant de confirmer."
     }
-    private var cancellationFields: some View {
-        Section {
-            if let lesson = model.originalLesson {
-                Text(SchoolPlanningFormat.interval(lesson.plannedStart, lesson.plannedEnd, zone: lesson.timeZone)).font(.headline)
-                Text(lesson.meetingPoint).foregroundStyle(DrivyTheme.muted)
+    @ViewBuilder private var cancellationFields: some View {
+        if let lesson = model.originalLesson {
+            Section("Leçon concernée") {
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                    Text(SchoolPlanningFormat.interval(lesson.plannedStart, lesson.plannedEnd, zone: lesson.timeZone))
+                        .font(.headline.monospacedDigit())
+                    Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                }
+                .padding(.vertical, DrivySpacing.xxs)
+                .accessibilityElement(children: .combine)
+                lesson.drivyState.badge
             }
+        }
+        Section {
             Picker("Motif", selection: $model.cancellationReason) {
                 Text("Choisir un motif").tag("")
                 Text("Demande de l’élève").tag("LEARNER_REQUEST")
@@ -254,27 +264,50 @@ struct SchoolPlanningView: View {
                 Text("Autre motif").tag("OTHER")
             }
             TextField("Précision facultative", text: $model.reason, axis: .vertical).lineLimit(3...6)
-            Button("Annuler cette leçon", role: .destructive) { confirmsCancellation = true }
-                .frame(minHeight: 48).disabled(!model.canMutate || model.cancellationReason.isEmpty || model.reason.count > 1000 || model.originalLesson?.status != "PLANNED")
+        } header: { Text("Motif d’annulation") }
+        footer: { Text("Précision limitée à 1 000 caractères.") }
+        Section {
+            Button(role: .destructive) { confirmsCancellation = true } label: {
+                Label("Annuler cette leçon", systemImage: "calendar.badge.minus")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 48)
+            }
+            .disabled(!model.canMutate || model.cancellationReason.isEmpty || model.reason.count > 1000 || model.originalLesson?.status != "PLANNED")
+        } footer: {
+            Text(model.cancellationReason.isEmpty ? "Choisissez un motif pour pouvoir annuler." : "Une confirmation vous est demandée avant l’annulation.")
         }
+    }
+    private func formNote(_ text: String) -> some View {
+        Text(text).font(.subheadline).foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
     }
 }
 
 struct SchoolPlanningFeedback: View {
     @Bindable var model: SchoolPlanningWorkspace
     var body: some View {
-        if model.isLoading { Section { ProgressView("Ouverture du planning…") } }
+        if model.isLoading { Section { ProgressView("Ouverture du planning…").frame(maxWidth: .infinity, alignment: .leading) } }
         if let error = model.errorMessage {
             Section {
-                Text(error).font(.subheadline).foregroundStyle(DrivyTheme.danger)
-                if !model.accessRevoked { Button("Actualiser les informations") { Task { await model.load() } }.disabled(model.isBusy || model.isLoading) }
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.subheadline).foregroundStyle(DrivyTheme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !model.accessRevoked {
+                    Button { Task { await model.load() } } label: { Label("Actualiser les informations", systemImage: "arrow.clockwise") }
+                        .disabled(model.isBusy || model.isLoading)
+                }
             }
         }
-        if let success = model.successMessage { Section { Label(success, systemImage: "checkmark.circle.fill").foregroundStyle(DrivyTheme.success) } }
+        if let success = model.successMessage {
+            Section {
+                Label(success, systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(DrivyTheme.success)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
         if let command = model.pending {
             Section {
-                Label("Confirmation en attente", systemImage: "clock.arrow.circlepath").font(.headline)
+                Label("Confirmation en attente", systemImage: "clock.arrow.circlepath").font(.headline).foregroundStyle(DrivyTheme.warning)
                 Text("La demande est conservée. Vérifiez son résultat avant d’en envoyer une nouvelle.").font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
                 DisclosureGroup("Référence de la demande") {
                     Text(command.id.uuidString).font(.caption.monospaced()).textSelection(.enabled)
                 }

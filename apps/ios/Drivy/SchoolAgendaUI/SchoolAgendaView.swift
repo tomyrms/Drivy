@@ -37,40 +37,38 @@ struct SchoolAgendaView: View {
         if calendar.isDateInToday(selectedDate) { return "Aujourd’hui" }
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "EEEE d MMMM"
-        return formatter.string(from: selectedDate).capitalized
+        return formatter.string(from: selectedDate).capitalizedFirst
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
                 weekHeader
                 dayPicker
                 dayHeading
                 if workspace.membership == nil {
-                    ContentUnavailableView("Choisissez votre école", systemImage: "building.2", description: Text("Votre agenda apparaît après la sélection d’une école."))
+                    ContentUnavailableView("Choisissez votre école", systemImage: "building.2", description: Text("Votre agenda s’affiche une fois l’école choisie."))
                 } else if isLoading || (loadedScope != scopeKey && error == nil) {
                     ProgressView("Chargement de l’agenda…").frame(maxWidth: .infinity, minHeight: 160)
                 } else if let error {
                     SchoolErrorNotice(message: error, retry: { Task { await loadWeek() } })
                 } else if dailyLessons.isEmpty {
                     DrivyEmptyState(title: "Aucune leçon ce jour",
-                        message: mayPlan ? "Planifiez une leçon ou passez au jour suivant." : "Vos prochaines leçons apparaîtront ici.",
-                        symbol: "calendar", actionTitle: "Jour suivant") {
+                        message: mayPlan ? "Planifiez une leçon ou consultez le jour suivant." : "Vos leçons planifiées ce jour-là s’afficheront ici.",
+                        symbol: "calendar", actionTitle: "Voir le jour suivant") {
                         if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
                     }
                 } else {
                     LazyVStack(spacing: 0) {
                         ForEach(dailyLessons) { lesson in
-                            Button { selectedLesson = lesson } label: { lessonRow(lesson) }.buttonStyle(.plain)
+                            Button { selectedLesson = lesson } label: { lessonRow(lesson) }
+                                .buttonStyle(DrivyRowButtonStyle())
                             Divider().overlay(DrivyTheme.border)
                         }
                     }
                 }
             }
-            .padding(.horizontal, DrivySpacing.l)
-            .padding(.vertical, DrivySpacing.xs)
-            .frame(maxWidth: 800, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .drivyPageContent(maxWidth: 800)
         }
         .background(DrivyTheme.surface)
         .navigationTitle("Agenda")
@@ -98,35 +96,42 @@ struct SchoolAgendaView: View {
         }
     }
 
+    /// Month context and week navigation, as in the mockup: quiet month, 44 pt arrows.
     private var weekHeader: some View {
-        HStack {
-            Text(formattedDay(selectedDate, template: "MMMM yyyy"))
-                .font(.drivySection).fixedSize(horizontal: false, vertical: true)
-            Spacer()
-            Button { moveWeek(-1) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
-                .accessibilityLabel("Semaine précédente")
-            Button { moveWeek(1) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }
-                .accessibilityLabel("Semaine suivante")
+        HStack(spacing: DrivySpacing.xxs) {
+            Text(formattedDay(selectedDate, template: "MMMM yyyy").capitalizedFirst)
+                .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: DrivySpacing.xs)
+            Button { moveWeek(-1) } label: {
+                Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .accessibilityLabel("Semaine précédente")
+            Button { moveWeek(1) } label: {
+                Image(systemName: "chevron.right").font(.body.weight(.semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .accessibilityLabel("Semaine suivante")
         }
     }
 
     private var dayHeading: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: 16) {
-                Text(dateTitle).font(.drivySection).fixedSize()
+            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.m) {
+                Text(dateTitle).font(.drivySection).foregroundStyle(DrivyTheme.text).fixedSize()
                     .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 12)
+                Spacer(minLength: DrivySpacing.s)
                 if mayPlan { planButton }
             }
-            VStack(alignment: .leading, spacing: 8) {
-                Text(dateTitle).font(.drivySection).accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                Text(dateTitle).font(.drivySection).foregroundStyle(DrivyTheme.text).accessibilityAddTraits(.isHeader)
                 if mayPlan { planButton }
             }
         }
     }
     private var planButton: some View {
         Button { planningModel = newPlanningModel() } label: {
-            Label("Planifier", systemImage: "plus").font(.body.weight(.semibold)).frame(minHeight: 44).fixedSize()
+            Label("Planifier", systemImage: "plus").font(.body.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
+                .frame(minHeight: 44).fixedSize().contentShape(Rectangle())
         }
         .accessibilityLabel("Planifier une leçon")
         .accessibilityIdentifier("agenda-plan-lesson")
@@ -147,20 +152,22 @@ struct SchoolAgendaView: View {
             .environment(\.locale, Locale(identifier: "fr_CH"))
     }
     private var weekStrip: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: DrivySpacing.xxs) {
             ForEach(weekDays, id: \.self) { day in
                 let selected = calendar.isDate(day, inSameDayAs: selectedDate)
                 Button { selectedDate = day } label: {
-                    VStack(spacing: 9) {
-                        Text(formattedDay(day, template: "EEEEE"))
+                    VStack(spacing: DrivySpacing.xs) {
+                        Text(formattedDay(day, template: "EEEEE").uppercased())
                             .font(.caption.weight(.medium))
-                        Text(String(calendar.component(.day, from: day))).font(.headline)
+                            .foregroundStyle(selected ? DrivyTheme.onAccent : DrivyTheme.muted)
+                        Text(String(calendar.component(.day, from: day))).font(.headline.monospacedDigit())
                         Circle().fill(hasLessons(on: day) ? (selected ? DrivyTheme.onAccent : DrivyTheme.accent) : .clear)
                             .frame(width: 5, height: 5)
                     }
                     .frame(minWidth: 44, maxWidth: .infinity, minHeight: 76)
                     .foregroundStyle(selected ? DrivyTheme.onAccent : DrivyTheme.text)
                     .background(selected ? DrivyTheme.accent : .clear, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(formattedDay(day, template: "EEEE d MMMM"))
@@ -170,54 +177,11 @@ struct SchoolAgendaView: View {
         }
     }
 
+    /// Same row anatomy as the training dossier and the report lists.
     private func lessonRow(_ lesson: SchoolLesson) -> some View {
-        Group {
-            if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("\(time(lesson.startsAt)) – \(time(lesson.endsAt))")
-                        .font(.headline.monospacedDigit()).foregroundStyle(DrivyTheme.accent)
-                    lessonSummary(lesson)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                HStack(alignment: .top, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text(time(lesson.startsAt)).font(.headline.monospacedDigit()).foregroundStyle(DrivyTheme.accent)
-                        Text(time(lesson.endsAt)).font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-                    }.fixedSize(horizontal: true, vertical: false)
-                    lessonSummary(lesson)
-                    if let badge = statusBadge(lesson) { badge }
-                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                        .padding(.top, 4).accessibilityHidden(true)
-                }
-            }
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.vertical, DrivySpacing.m).contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
-    private func lessonSummary(_ lesson: SchoolLesson) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(learnerName(lesson)).font(.headline).foregroundStyle(DrivyTheme.text)
-            Text(typeSize.isAccessibilitySize || lesson.status == "PLANNED" ? "\(lesson.durationMinutes) min · \(lesson.statusLabel)" : "\(lesson.durationMinutes) min")
-                .font(.subheadline)
-                .foregroundStyle(lesson.status == "CANCELLED" ? DrivyTheme.warning : DrivyTheme.muted)
-            Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
-        }.frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Only states that differ from the normal planned lesson earn a badge.
-    private func statusBadge(_ lesson: SchoolLesson) -> DrivyStatusBadge? {
-        switch lesson.status {
-        case "PLANNED":
-            let now = Date()
-            guard let start = lesson.startsAt, let end = lesson.endsAt, start <= now, now < end else { return nil }
-            return DrivyStatusBadge(title: "En cours", tone: .accent)
-        case "COMPLETED": return DrivyStatusBadge(title: lesson.statusLabel, symbol: "checkmark", tone: .success)
-        case "CANCELLED": return DrivyStatusBadge(title: lesson.statusLabel, tone: .warning)
-        case "NO_SHOW": return DrivyStatusBadge(title: lesson.statusLabel, tone: .warning)
-        default: return DrivyStatusBadge(title: lesson.statusLabel)
-        }
+        DrivyLessonRow(start: time(lesson.startsAt), end: time(lesson.endsAt), title: learnerName(lesson),
+            details: ["\(lesson.durationMinutes) min", lesson.meetingPoint],
+            badge: lesson.drivyState.rowBadge)
     }
 
     private func learnerName(_ lesson: SchoolLesson) -> String { workspace.learners.first { $0.id == lesson.learnerId }?.displayName ?? "Leçon de conduite" }
@@ -293,25 +257,23 @@ private struct SchoolLessonDetailView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     if let lesson {
-                        Text(learnerName).font(.drivyTitle)
-                        Label(lesson.statusLabel, systemImage: lesson.status == "COMPLETED" ? "checkmark.circle" : "calendar")
-                            .foregroundStyle(lesson.status == "CANCELLED" ? DrivyTheme.warning : lesson.status == "COMPLETED" ? DrivyTheme.success : DrivyTheme.muted)
-                        VStack(spacing: 0) {
-                            LessonInfoRow(title: "Date", value: lessonDate(lesson))
-                            Divider()
-                            LessonInfoRow(title: "Horaire", value: interval(lesson))
-                            Divider()
-                            LessonInfoRow(title: "Durée", value: "\(lesson.durationMinutes) minutes")
-                            Divider()
-                            LessonInfoRow(title: "Rendez-vous", value: lesson.meetingPoint)
-                            Divider()
-                            LessonInfoRow(title: "Prix convenu", value: (Decimal(lesson.priceCentsSnapshot) / 100).formatted(.currency(code: "CHF")))
+                        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                            Text(learnerName).font(.drivyTitle).foregroundStyle(DrivyTheme.text)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityAddTraits(.isHeader)
+                            lesson.drivyState.badge
+                        }
+                        DrivyRowGroup {
+                            DrivyLessonFactRow(title: "Date", value: lessonDate(lesson))
+                            DrivyLessonFactRow(title: "Horaire", value: interval(lesson), monospaced: true)
+                            DrivyLessonFactRow(title: "Durée", value: "\(lesson.durationMinutes) min", monospaced: true)
+                            DrivyLessonFactRow(title: "Rendez-vous", value: lesson.meetingPoint)
+                            DrivyLessonFactRow(title: "Prix convenu", value: (Decimal(lesson.priceCentsSnapshot) / 100).formatted(.currency(code: "CHF")), monospaced: true)
                         }
                         if lesson.permitWarning {
-                            Label("Le permis d’élève reste à vérifier avant la conduite.", systemImage: "exclamationmark.shield")
-                                .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                            DrivyInlineMessage(text: "Le permis d’élève reste à vérifier avant la conduite.", tone: .warning)
                         }
                         lessonActions(lesson)
                     } else if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
@@ -344,8 +306,15 @@ private struct SchoolLessonDetailView: View {
             }
         }.tint(DrivyTheme.accent)
     }
+    /// The report entry is the dominant action and leads; companions follow,
+    /// then the destructive action, set apart at the end.
     private func lessonActions(_ lesson: SchoolLesson) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: DrivySpacing.s) {
+            if workspace.membership?.roles.contains(where: { ["INSTRUCTOR", "LEARNER"].contains($0) }) == true {
+                Button { showsReport = true } label: {
+                    Label(reportActionTitle(lesson), systemImage: "text.book.closed")
+                }.buttonStyle(DrivyPrimaryButtonStyle())
+            }
             if workspace.membership?.roles.contains("INSTRUCTOR") == true,
                workspace.membership?.membershipId == lesson.instructorMembershipId {
                 Button { openObservations() } label: { Label("Observations privées", systemImage: "text.bubble") }
@@ -355,20 +324,29 @@ private struct SchoolLessonDetailView: View {
                 Button { openCapturePreparation() } label: { Label("Préparer le GPS", systemImage: "location.circle") }
                     .buttonStyle(DrivySecondaryButtonStyle()).accessibilityIdentifier("lesson-prepare-gps")
             }
-            if workspace.membership?.roles.contains(where: { ["INSTRUCTOR", "LEARNER"].contains($0) }) == true {
-                Button { showsReport = true } label: {
-                    Label(workspace.membership?.roles.contains("INSTRUCTOR") == true
-                          ? (lesson.status == "COMPLETED" ? "Bilans et suivi" : "Préparer et suivre la leçon")
-                          : (lesson.status == "COMPLETED" ? "Lire le bilan" : "Voir le suivi de ma leçon"), systemImage: "text.book.closed")
-                }.buttonStyle(DrivyPrimaryButtonStyle())
-            }
             if mayManage && lesson.status == "PLANNED" {
                 if let start = lesson.startsAt, start > Date() {
                     Button { openPlanning(lesson, cancelling: false) } label: { Label("Déplacer la leçon", systemImage: "calendar.badge.clock") }
                         .buttonStyle(DrivySecondaryButtonStyle())
                 }
-                Button("Annuler la leçon", role: .destructive) { openPlanning(lesson, cancelling: true) }.frame(minHeight: 48)
+                Button(role: .destructive) { openPlanning(lesson, cancelling: true) } label: {
+                    Label("Annuler la leçon", systemImage: "calendar.badge.minus")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.danger)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .contentShape(Rectangle())
+                }
+                .padding(.top, DrivySpacing.xs)
             }
+        }
+    }
+    /// Same wording as the training dossier: prepare before, report after.
+    private func reportActionTitle(_ lesson: SchoolLesson) -> String {
+        let instructs = workspace.membership?.roles.contains("INSTRUCTOR") == true
+        switch lesson.status {
+        case "PLANNED": return instructs ? "Préparer la leçon" : "Voir ma leçon"
+        case "COMPLETED": return instructs ? "Ouvrir le bilan" : "Lire le bilan"
+        default: return "Voir le suivi de la leçon"
         }
     }
     private func openPlanning(_ lesson: SchoolLesson, cancelling: Bool) {
@@ -429,28 +407,5 @@ private struct SchoolLessonDetailView: View {
             }
         }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? "La leçon n’a pas pu être chargée." }
-    }
-}
-
-private struct LessonInfoRow: View {
-    let title: String
-    let value: String
-    @Environment(\.dynamicTypeSize) private var typeSize
-    var body: some View {
-        Group {
-            if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    Text(value).textSelection(.enabled)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: 20) {
-                    Text(title).foregroundStyle(DrivyTheme.muted)
-                    Spacer(minLength: 0)
-                    Text(value).multilineTextAlignment(.trailing).textSelection(.enabled)
-                }
-            }
-        }.fixedSize(horizontal: false, vertical: true).padding(.vertical, 14)
-            .accessibilityElement(children: .combine)
     }
 }

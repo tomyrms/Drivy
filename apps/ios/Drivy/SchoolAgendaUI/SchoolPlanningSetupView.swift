@@ -10,9 +10,14 @@ struct SchoolPlanningSetupView: View {
         NavigationStack {
             List {
                 Section {
-                    Text(model.school?.name ?? "Votre école").font(.headline)
-                    Text("Horaires de l’école · \(model.timeZone)")
-                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        Text(model.school?.name ?? "Votre école").font(.drivyTitle).foregroundStyle(DrivyTheme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("Horaires à l’heure de l’école · \(model.timeZone)")
+                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                    }
+                    .padding(.vertical, DrivySpacing.xs)
+                    .accessibilityElement(children: .combine)
                 }.listRowBackground(Color.clear)
                 SchoolPlanningFeedback(model: model)
                 if !model.isLoading && model.school != nil {
@@ -46,11 +51,15 @@ struct SchoolPlanningSetupView: View {
                     Button("Préparer une nouvelle version") { editor = .init(kind: .terms, terms: terms) }
                         .disabled(!model.canMutate)
                 } label: {
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                         Text(terms.label).font(.headline)
-                        Text("Version \(terms.version) · \(terms.approved ? "Approuvées" : "Brouillon")")
-                            .font(.caption).foregroundStyle(DrivyTheme.muted)
+                        HStack(spacing: DrivySpacing.xs) {
+                            Text("Version \(terms.version)").font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+                            DrivyStatusBadge(title: terms.approved ? "Approuvées" : "Brouillon",
+                                symbol: terms.approved ? "checkmark" : "pencil", tone: terms.approved ? .success : .neutral)
+                        }
                     }
+                    .padding(.vertical, DrivySpacing.xxs)
                 }
             }
           } header: { Text("Conditions commerciales") }
@@ -58,7 +67,7 @@ struct SchoolPlanningSetupView: View {
           Section {
             Button { editor = .init(kind: .product) } label: { Label("Créer une prestation", systemImage: "plus") }
                 .disabled(!model.canMutate || model.terms.isEmpty).frame(minHeight: 44)
-            if model.terms.isEmpty { Text("Créez les conditions avant la première prestation.").font(.caption).foregroundStyle(DrivyTheme.muted) }
+            if model.terms.isEmpty { formNote("Créez d’abord des conditions commerciales : chaque prestation s’y rattache.") }
             ForEach(model.products.sorted { ($0.label, $0.version) < ($1.label, $1.version) }) { product in
                 DisclosureGroup {
                     LabeledContent("Référence", value: product.productKey)
@@ -68,11 +77,16 @@ struct SchoolPlanningSetupView: View {
                     Text(SchoolPlanningFormat.validity(product.validFrom, until: product.validUntil)).font(.caption).foregroundStyle(DrivyTheme.muted)
                     Button("Préparer une nouvelle version") { editor = .init(kind: .product, product: product) }.disabled(!model.canMutate)
                 } label: {
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                         Text(product.label).font(.headline)
-                        Text("\(SchoolCatalogFormatting.price(product.unitPriceCents)) · \(product.enabled ? "Active" : "Inactive") · v\(product.version)")
-                            .font(.caption).foregroundStyle(DrivyTheme.muted)
+                        HStack(spacing: DrivySpacing.xs) {
+                            Text("\(SchoolCatalogFormatting.price(product.unitPriceCents)) · version \(product.version)")
+                                .font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+                            DrivyStatusBadge(title: product.enabled ? "Active" : "Inactive",
+                                symbol: product.enabled ? "checkmark" : "pause", tone: product.enabled ? .success : .neutral)
+                        }
                     }
+                    .padding(.vertical, DrivySpacing.xxs)
                 }
             }
           } header: { Text("Prestations de conduite") }
@@ -91,17 +105,17 @@ struct SchoolPlanningSetupView: View {
                     SchoolErrorNotice(message: error, retry: { Task { await model.loadAvailability() } })
                 }
                 ForEach(model.availability) { rule in
-                    VStack(alignment: .leading, spacing: 9) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                         Text(SchoolPlanningFormat.weekdays(rule.weekdays)).font(.headline)
-                        Text("\(rule.localStart) – \(rule.localEnd)")
+                        Text("\(rule.localStart) – \(rule.localEnd)").monospacedDigit()
                         Text(SchoolPlanningFormat.validity(rule.validFrom, until: rule.validUntil)).font(.caption).foregroundStyle(DrivyTheme.muted)
-                        HStack(spacing: 24) {
-                            Button("Modifier") { editor = .init(kind: .availability, rule: rule) }
-                            Button("Retirer", role: .destructive) { editor = .init(kind: .removeAvailability, rule: rule) }
-                        }.buttonStyle(.borderless).disabled(!model.canMutate)
-                    }.padding(.vertical, 5)
+                        HStack(spacing: DrivySpacing.l) {
+                            Button("Modifier") { editor = .init(kind: .availability, rule: rule) }.frame(minHeight: 44)
+                            Button("Retirer", role: .destructive) { editor = .init(kind: .removeAvailability, rule: rule) }.frame(minHeight: 44)
+                        }.font(.subheadline.weight(.semibold)).buttonStyle(.borderless).disabled(!model.canMutate)
+                    }.padding(.vertical, DrivySpacing.xxs)
                 }
-                if model.availabilityLoaded && model.availability.isEmpty { Text("Aucune plage d’ouverture pour ce moniteur.").foregroundStyle(DrivyTheme.muted) }
+                if model.availabilityLoaded && model.availability.isEmpty { formNote("Aucune disponibilité pour ce moniteur. Ajoutez sa première plage horaire.") }
                 if !model.availabilityLoaded && !model.isLoadingAvailability && model.availabilityError == nil {
                     Button("Charger les disponibilités") { Task { await model.loadAvailability() } }.frame(minHeight: 44)
                 }
@@ -115,20 +129,24 @@ struct SchoolPlanningSetupView: View {
         Section {
             if model.instructorID != nil {
                 if model.isLoadingAvailability { ProgressView("Lecture des fermetures…") }
-                else if model.availabilityError != nil { Text("La liste des fermetures n’a pas pu être lue.").foregroundStyle(DrivyTheme.muted) }
+                else if model.availabilityError != nil { formNote("Les fermetures n’ont pas pu être lues. Réessayez depuis la section Disponibilités.") }
                 ForEach(model.closures) { closure in
-                    VStack(alignment: .leading, spacing: 9) {
-                        Text(SchoolPlanningFormat.interval(closure.startsAt, closure.endsAt, zone: model.timeZone)).font(.headline)
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        Text(SchoolPlanningFormat.interval(closure.startsAt, closure.endsAt, zone: model.timeZone)).font(.headline.monospacedDigit())
                         if let reason = closure.reason, !reason.isEmpty { Text(reason).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
                         Button("Retirer cette fermeture", role: .destructive) { editor = .init(kind: .removeClosure, closure: closure) }
-                            .disabled(!model.canMutate)
-                    }.padding(.vertical, 5)
+                            .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+                            .buttonStyle(.borderless).disabled(!model.canMutate)
+                    }.padding(.vertical, DrivySpacing.xxs)
                 }
-                if model.availabilityLoaded && model.closures.isEmpty { Text("Aucune fermeture enregistrée.").foregroundStyle(DrivyTheme.muted) }
+                if model.availabilityLoaded && model.closures.isEmpty { formNote("Aucune fermeture enregistrée.") }
                 Button { editor = .init(kind: .closure) } label: { Label("Ajouter une fermeture", systemImage: "calendar.badge.minus") }
                     .frame(minHeight: 44).disabled(!model.canMutate || !model.availabilityLoaded)
-            } else { Text("Choisissez un moniteur pour consulter les fermetures.").foregroundStyle(DrivyTheme.muted) }
+            } else { formNote("Choisissez un moniteur pour consulter ses fermetures.") }
         } header: { Text("Fermetures et absences") }
+    }
+    private func formNote(_ text: String) -> some View {
+        Text(text).font(.subheadline).foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -265,7 +283,10 @@ private struct SchoolPlanningSetupEditor: View {
                 }
                 if let selected = model.terms.first(where: { $0.id == termsID }) {
                     DisclosureGroup("Relire les conditions") { Text(selected.termsText).font(.subheadline).textSelection(.enabled) }
-                    if !selected.approved { Text("Ces conditions ne sont pas approuvées. La prestation doit rester inactive.").font(.caption).foregroundStyle(DrivyTheme.warning) }
+                    if !selected.approved {
+                        Label("Ces conditions ne sont pas approuvées. La prestation doit rester inactive.", systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote).foregroundStyle(DrivyTheme.warning).fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Toggle("Activer cette prestation", isOn: $enabled)
             } footer: { Text("Cette version concerne une leçon individuelle. Le tarif doit être explicitement convenu à chaque réservation.") }
@@ -292,38 +313,46 @@ private struct SchoolPlanningSetupEditor: View {
         LabeledContent("Moniteur", value: model.instructors.first(where: { $0.id == (request.rule?.instructorMembershipId ?? model.instructorID) })?.displayName ?? "Moniteur choisi")
     }
     private func field(_ title: String, text: Binding<String>, placeholder: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
             TextField(placeholder ?? title, text: text).accessibilityLabel(title)
-        }.padding(.vertical, 4)
+        }.padding(.vertical, DrivySpacing.xxs)
     }
     private func multilineField(_ title: String, text: Binding<String>, lines: ClosedRange<Int> = 2...6) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
             TextField(title, text: text, axis: .vertical).lineLimit(lines).accessibilityLabel(title)
-        }.padding(.vertical, 4)
+        }.padding(.vertical, DrivySpacing.xxs)
     }
     private var saveBar: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        DrivyStickyActionBar {
             if let error = model.errorMessage {
-                Text(error).font(.footnote).foregroundStyle(DrivyTheme.danger)
+                DrivyActionNote(text: error, isError: true)
             } else if let hint = validationHint {
-                Text(hint).font(.footnote).foregroundStyle(DrivyTheme.muted)
+                DrivyActionNote(text: hint)
             } else if !confirmed {
-                Text("Confirmez la relecture des informations avant d’enregistrer.").font(.footnote).foregroundStyle(DrivyTheme.muted)
+                DrivyActionNote(text: "Confirmez la relecture des informations avant d’enregistrer.")
             }
             if request.kind == .removeAvailability || request.kind == .removeClosure {
-                Button(actionTitle, role: .destructive, action: save).frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.bordered)
-                    .disabled(!valid || !confirmed || !model.canMutate)
+                Button(role: .destructive, action: save) {
+                    HStack(spacing: DrivySpacing.xs) {
+                        if model.isBusy { ProgressView() }
+                        Text(model.isBusy ? "Retrait en cours…" : actionTitle)
+                    }
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered).controlSize(.large)
+                .disabled(!valid || !confirmed || !model.canMutate)
             } else {
                 Button(action: save) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: DrivySpacing.xs) {
                         if model.isBusy { ProgressView() }
                         Text(model.isBusy ? "Enregistrement…" : actionTitle)
                     }
                 }.buttonStyle(DrivyPrimaryButtonStyle()).disabled(!valid || !confirmed || !model.canMutate)
             }
-        }.padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity).background(DrivyTheme.surface)
+        }
     }
     private var formValues: [String] {
         [label, reference, category, termsText, reason, price, duration, unit, termsID?.uuidString ?? "",

@@ -13,40 +13,36 @@ struct SchoolPublishedReportsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                Text("Bilans partagés").font(.drivyScreenTitle)
-                Text(SchoolTrainingFormatting.instant(lesson.plannedStart, zone: lesson.timeZone))
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                if isLoading { ProgressView("Ouverture des bilans…") }
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                    Text(SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone)).font(.drivyScreenTitle)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                    Text("Leçon de \(SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone)) · \(lesson.durationMinutes) min")
+                        .font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+                }
+                if isLoading { ProgressView("Ouverture des bilans…").frame(maxWidth: .infinity, alignment: .leading) }
                 if let errorMessage { SchoolErrorNotice(message: errorMessage, retry: { Task { await load() } }) }
                 if !isLoading && revisions.isEmpty && errorMessage == nil {
-                    DrivyEmptyState(title: "Pas encore de bilan",
-                        message: "Le moniteur n’a pas encore partagé de bilan pour cette leçon.", symbol: "doc.text")
+                    DrivyEmptyState(title: "Pas encore de bilan partagé",
+                        message: "Le bilan s’affichera ici quand le moniteur l’aura publié.", symbol: "doc.text")
                 }
-                ForEach(revisions) { revision in
-                    NavigationLink {
-                        SchoolPublishedRevisionView(client: client, schoolID: schoolID, trainingID: trainingID,
-                            lessonID: lesson.id, revisionID: revision.id, competencies: competencies)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack(alignment: .center) {
-                                if revision.id == lesson.currentPublishedRevisionId {
-                                    DrivyStatusBadge(title: "Bilan actuel", symbol: "checkmark", tone: .success)
-                                } else {
-                                    DrivyStatusBadge(title: "Version \(revision.sequence)")
-                                }
-                                Spacer(minLength: 12)
-                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(DrivyTheme.muted)
+                if !revisions.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(revisions) { revision in
+                            NavigationLink {
+                                SchoolPublishedRevisionView(client: client, schoolID: schoolID, trainingID: trainingID,
+                                    lessonID: lesson.id, revisionID: revision.id, competencies: competencies)
+                            } label: {
+                                DrivyLessonRow(start: SchoolTrainingFormatting.time(revision.publishedAt, zone: lesson.timeZone),
+                                    title: "Version \(revision.sequence) · \(SchoolTrainingFormatting.day(revision.publishedAt, zone: lesson.timeZone))",
+                                    details: ["Prochaine étape : \(revision.nextStep)"],
+                                    badge: (revision.id == lesson.currentPublishedRevisionId ? DrivyReportState.shared : DrivyReportState.historical).badge)
                             }
-                            Text(revision.nextStep).font(.body).foregroundStyle(DrivyTheme.text).lineLimit(3)
-                            Text(SchoolTrainingFormatting.instant(revision.publishedAt, zone: lesson.timeZone))
-                                .font(.caption).foregroundStyle(DrivyTheme.muted)
+                            .buttonStyle(DrivyRowButtonStyle())
+                            Divider().overlay(DrivyTheme.border)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, DrivySpacing.m)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(DrivyRowButtonStyle())
-                    Divider()
                 }
             }
             .drivyPageContent()
@@ -85,39 +81,40 @@ struct SchoolPublishedRevisionView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
                 if isLoading { ProgressView("Ouverture du bilan…").frame(maxWidth: .infinity, minHeight: 100) }
                 if let errorMessage { SchoolErrorNotice(message: errorMessage, retry: { Task { await load() } }) }
                 if let revision, let lesson {
                     VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                        if lesson.currentPublishedRevisionId != revision.id {
-                            DrivyStatusBadge(title: "Version conservée dans l’historique", symbol: "clock.arrow.circlepath")
-                        } else {
-                            DrivyStatusBadge(title: "Bilan partagé", symbol: "checkmark", tone: .success)
-                        }
                         Text(SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone)).font(.drivyScreenTitle)
-                        Text("Publié le \(SchoolTrainingFormatting.instant(revision.publishedAt, zone: lesson.timeZone)) · Version \(revision.sequence)")
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                        Text("Version \(revision.sequence) · publiée le \(SchoolTrainingFormatting.instant(revision.publishedAt, zone: lesson.timeZone))")
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        (lesson.currentPublishedRevisionId == revision.id ? DrivyReportState.shared : DrivyReportState.historical).badge
+                        if lesson.currentPublishedRevisionId != revision.id {
+                            Text("Une version plus récente de ce bilan a été publiée.")
+                                .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                        }
                     }
-                    nextStepCard(revision.nextStep)
-                    passage("Travail réalisé", text: revision.workedOn)
-                    passage("À retenir", text: revision.observationText)
+                    DrivyReportBody(nextStep: revision.nextStep, workedOn: revision.workedOn, observationText: revision.observationText)
                     if !revision.observations.isEmpty {
-                        VStack(alignment: .leading, spacing: 14) {
-                            DrivySectionHeader(title: "Appréciations")
-                            ForEach(revision.observations) { observation in
-                                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                                    Text(competencies.first(where: { $0.id == observation.competencyId })?.label ?? "Compétence indisponible")
-                                        .font(.headline)
-                                    DrivyStatusBadge(title: observation.levelLabel, tone: .accent)
-                                    Text(observation.context).foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
-                                }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, DrivySpacing.s)
-                                Divider()
+                        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                            DrivySectionHeader(title: "Compétences observées")
+                            DrivyRowGroup {
+                                ForEach(revision.observations) { observation in
+                                    DrivyCompetencyNote(label: competencies.first(where: { $0.id == observation.competencyId })?.label ?? "Compétence indisponible",
+                                        level: observation.levelLabel, context: observation.context)
+                                        .padding(.vertical, DrivySpacing.s)
+                                }
                             }
                         }
                     }
                     if let reason = revision.correctionReason, !reason.isEmpty {
-                        passage("Motif de la correction", text: reason)
+                        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                            Text("Motif de la correction").font(.drivySection).accessibilityAddTraits(.isHeader)
+                            Text(reason).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
             }
@@ -126,25 +123,6 @@ struct SchoolPublishedRevisionView: View {
         .background(DrivyTheme.surface).navigationTitle("Bilan de leçon").navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .onDisappear { generation = UUID(); revision = nil; lesson = nil }
-    }
-    /// The next step is what the learner acts on: it leads the report.
-    private func nextStepCard(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            Label("Prochaine étape", systemImage: "arrow.forward.circle.fill")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
-            Text(text).font(.body).foregroundStyle(DrivyTheme.text)
-                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(DrivySpacing.m)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-        .accessibilityElement(children: .combine)
-    }
-    private func passage(_ title: String, text: String) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            Text(title).font(.drivySection).accessibilityAddTraits(.isHeader)
-            Text(text).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-        }
     }
     private func load() async {
         generation = UUID(); let request = generation

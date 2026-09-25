@@ -8,14 +8,14 @@ struct SchoolTrainingCreationView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     heading
-                    if model.isLoading || model.isBusy { ProgressView(model.isBusy ? "Enregistrement…" : "Ouverture des offres…") }
-                    if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
-                    if let success = model.successMessage {
-                        Text(success).font(.body).foregroundStyle(DrivyTheme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
+                    if model.isLoading || model.isBusy {
+                        ProgressView(model.isBusy ? "Création de la formation…" : "Ouverture des offres…")
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
+                    if let success = model.successMessage { DrivyInlineMessage(text: success) }
                     if let pending = model.pending { pendingCard(pending) }
                     if model.createdTrainingID == nil {
                         offerings
@@ -25,9 +25,12 @@ struct SchoolTrainingCreationView: View {
                 .drivyPageContent()
             }
             .background(DrivyTheme.surface).navigationTitle("Nouvelle formation").navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom) {
-                Group {
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                DrivyStickyActionBar {
                     if model.createdTrainingID == nil {
+                        if !model.canCreate && !model.isBusy && !model.isLoading && model.pending == nil && model.selectedOfferingID == nil && !model.offerings.isEmpty {
+                            DrivyActionNote(text: "Choisissez une offre pour continuer.")
+                        }
                         Button("Vérifier la formation") { reviewsCreation = true }
                             .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canCreate)
                             .accessibilityIdentifier("review-training-creation")
@@ -35,7 +38,6 @@ struct SchoolTrainingCreationView: View {
                         Button("Revenir au dossier") { dismiss() }.buttonStyle(DrivyPrimaryButtonStyle())
                     }
                 }
-                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity).background(DrivyTheme.surface)
             }
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
             .sheet(isPresented: $reviewsCreation) { review }
@@ -45,26 +47,32 @@ struct SchoolTrainingCreationView: View {
         .task { await model.load() }
     }
     private var heading: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            HStack(spacing: DrivySpacing.s) {
+                DrivyAvatar(name: model.learner.displayName, size: 36)
+                Text(model.learner.displayName).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+            }
+            .accessibilityElement(children: .combine)
             Text(model.createdTrainingID == nil ? "Nouvelle formation" : "Formation créée").font(.drivyScreenTitle)
-            Text(model.learner.displayName).font(.title3).foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
         }
     }
     private var offerings: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Offre de formation").font(.drivySection)
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            DrivySectionHeader(title: "Offre de formation")
             if model.offerings.isEmpty && !model.isLoading && model.errorMessage == nil {
-                Text("Aucune offre disponible. L’administration doit activer une offre avant d’ouvrir cette formation.")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                DrivyEmptyState(title: "Aucune offre disponible",
+                    message: "L’administration doit activer une offre avant d’ouvrir cette formation.", symbol: "list.bullet.rectangle")
             }
             ForEach(model.offerings) { offering in
                 Button { model.selectedOfferingID = offering.id } label: {
-                    HStack(alignment: .top, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .top, spacing: DrivySpacing.m) {
+                        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                             Text("Permis \(offering.categoryCode)").font(.headline).foregroundStyle(DrivyTheme.text)
                             Text(offering.offeringKey).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                             Text("\(offering.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(offering.defaultPriceCents))")
-                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                .font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         DrivySelectionMark(isSelected: model.selectedOfferingID == offering.id)
@@ -77,7 +85,8 @@ struct SchoolTrainingCreationView: View {
         }
     }
     private var startDate: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: DrivySpacing.m) {
+            DrivySectionHeader(title: "Début")
             Toggle("Indiquer une date de début", isOn: $model.usesStartDate)
             if model.usesStartDate {
                 DatePicker("Début", selection: $model.startDate, displayedComponents: .date)
@@ -90,8 +99,8 @@ struct SchoolTrainingCreationView: View {
     }
     private func pendingCard(_ pending: PendingSchoolCommand) -> some View {
         DrivyPanel {
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Demande à vérifier", systemImage: "clock.arrow.circlepath").font(.headline)
+            VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                Label("Demande à vérifier", systemImage: "clock.arrow.circlepath").font(.headline).foregroundStyle(DrivyTheme.warning)
                 Text(pending.kind == .createTraining && pending.routeResourceID == model.learner.id
                     ? "La confirmation de création n’est pas encore connue. Vérifiez cette demande avant d’en créer une autre."
                     : "Une autre modification de cette école attend sa confirmation. Vous pouvez consulter les offres.")
@@ -111,20 +120,23 @@ struct SchoolTrainingCreationView: View {
     private var review: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     Text(model.learner.displayName).font(.drivyTitle)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
                     if let offering = model.selectedOffering {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Permis \(offering.categoryCode)").font(.headline)
-                            Text(offering.offeringKey).foregroundStyle(DrivyTheme.muted)
-                            Text("\(offering.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(offering.defaultPriceCents))")
-                            Text("Version \(offering.version) de l’offre").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                            Text(model.usesStartDate
-                                ? "Début : \(SchoolPresentation.civilDate(SchoolCatalogFormatting.civilDate(model.startDate, timeZone: model.school?.timeZone ?? "Europe/Zurich")))"
-                                : "Date de début non renseignée").font(.subheadline)
-                        }.frame(maxWidth: .infinity, alignment: .leading)
+                        DrivyRowGroup {
+                            DrivyLessonFactRow(title: "Formation", value: "Permis \(offering.categoryCode)")
+                            DrivyLessonFactRow(title: "Offre", value: offering.offeringKey)
+                            DrivyLessonFactRow(title: "Durée et prix par défaut", value: "\(offering.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(offering.defaultPriceCents))", monospaced: true)
+                            DrivyLessonFactRow(title: "Version de l’offre", value: "\(offering.version)", monospaced: true)
+                            DrivyLessonFactRow(title: "Début", value: model.usesStartDate
+                                ? SchoolPresentation.civilDate(SchoolCatalogFormatting.civilDate(model.startDate, timeZone: model.school?.timeZone ?? "Europe/Zurich"))
+                                : "Non renseigné")
+                        }
                         Text("L’affectation du moniteur et les rendez-vous seront organisés ensuite.")
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     if let error = model.errorMessage {
                         SchoolErrorNotice(message: error, retry: model.pending == nil ? { Task { await model.load() } } : nil)
@@ -134,18 +146,19 @@ struct SchoolTrainingCreationView: View {
                 .drivyPageContent()
             }
             .background(DrivyTheme.surface).navigationTitle("Confirmation").navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom) {
-                Button {
-                    Task { if await model.create() { reviewsCreation = false } }
-                } label: {
-                    HStack(spacing: 10) {
-                        if model.isBusy { ProgressView() }
-                        Text(model.isBusy ? "Enregistrement…" : model.pending != nil ? "Résultat à vérifier" : "Créer la formation")
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                DrivyStickyActionBar {
+                    Button {
+                        Task { if await model.create() { reviewsCreation = false } }
+                    } label: {
+                        HStack(spacing: DrivySpacing.xs) {
+                            if model.isBusy { ProgressView() }
+                            Text(model.isBusy ? "Création de la formation…" : model.pending != nil ? "Résultat à vérifier" : "Créer la formation")
+                        }
                     }
+                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canCreate)
+                    .accessibilityIdentifier("confirm-training-creation")
                 }
-                .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canCreate)
-                .accessibilityIdentifier("confirm-training-creation")
-                .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity).background(DrivyTheme.surface)
             }
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Revenir") { reviewsCreation = false }.disabled(model.isBusy) } }
         }

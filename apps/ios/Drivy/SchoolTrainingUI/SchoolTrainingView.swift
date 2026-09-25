@@ -16,7 +16,11 @@ struct SchoolTrainingView: View {
             Group {
                 if let model, matches(model) {
                     SchoolTrainingContent(model: model, workspace: workspace, learner: learner)
-                } else { ProgressView("Ouverture de la formation…") }
+                } else {
+                    ProgressView("Ouverture de la formation…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(DrivyTheme.surface)
+                }
             }
             .navigationTitle("Formation")
             .navigationBarTitleDisplayMode(.inline)
@@ -83,14 +87,16 @@ private struct SchoolTrainingContent: View {
             .accessibilityElement(children: .combine)
             Text(model.training.map { "Permis \($0.categoryCode)" } ?? "Votre formation")
                 .font(.drivyScreenTitle).fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
             if let training = model.training {
-                DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status), symbol: "steeringwheel",
-                    tone: training.status == "ACTIVE" ? .accent : training.status == "COMPLETED" ? .success : .neutral)
-                if let date = training.startedOn {
-                    Text("Depuis le \(SchoolPresentation.civilDate(date))").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                }
-                if let date = training.closedOn {
-                    Text("Clôturée le \(SchoolPresentation.civilDate(date))").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                HStack(spacing: DrivySpacing.xs) {
+                    DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status), symbol: "steeringwheel",
+                        tone: training.status == "ACTIVE" ? .accent : training.status == "COMPLETED" ? .success : .neutral)
+                    if let date = training.closedOn {
+                        Text("Clôturée le \(SchoolPresentation.civilDate(date))").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    } else if let date = training.startedOn {
+                        Text("Depuis le \(SchoolPresentation.civilDate(date))").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    }
                 }
             }
         }
@@ -110,101 +116,115 @@ private struct SchoolTrainingContent: View {
         }
     }
     private var lessons: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if model.lessonsLoaded && model.lessons.isEmpty && !model.isLoading {
-                empty("Aucune leçon", text: "Aucun rendez-vous n’est enregistré pour cette formation.")
+                empty("Aucune leçon", text: "Aucun rendez-vous n’est enregistré pour cette formation.", symbol: "calendar")
             }
             if !model.upcomingLessons.isEmpty {
-                lessonGroup("Rendez-vous", values: model.upcomingLessons)
+                lessonGroup("À venir", values: model.upcomingLessons)
             }
             if !model.pastLessons.isEmpty { lessonGroup("Historique", values: model.pastLessons) }
             moreLessons
         }
     }
     private func lessonGroup(_ title: String, values: [SchoolLesson]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             DrivySectionHeader(title: title)
             VStack(spacing: 0) {
                 ForEach(values) { lesson in
                     NavigationLink {
                         SchoolTrainingLessonView(lesson: lesson, model: model, workspace: workspace, learnerName: learner.displayName)
                     } label: { SchoolTrainingLessonRow(lesson: lesson) }
-                    .buttonStyle(.plain).accessibilityIdentifier("training-lesson-\(lesson.id.uuidString)")
-                    Divider()
+                    .buttonStyle(DrivyRowButtonStyle()).accessibilityIdentifier("training-lesson-\(lesson.id.uuidString)")
+                    Divider().overlay(DrivyTheme.border)
                 }
             }
         }
     }
     private var reports: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             DrivySectionHeader(title: "Bilans partagés")
             if model.canOpenPedagogicalContent {
                 if model.lessonsLoaded && model.publishedLessons.isEmpty {
                     empty("Aucun bilan partagé", text: model.nextCursor == nil
-                        ? "Les bilans apparaissent après leur publication par le moniteur."
-                        : "Aucun bilan dans cette liste. Affichez les leçons suivantes pour poursuivre.")
+                        ? "Les bilans apparaissent ici après leur publication par le moniteur."
+                        : "Aucun bilan dans cette liste. Affichez les leçons suivantes pour poursuivre.", symbol: "doc.text")
                 }
-                ForEach(model.publishedLessons) { lesson in
-                    NavigationLink {
-                        SchoolPublishedReportsView(client: model.client, schoolID: model.scope.schoolID,
-                            trainingID: model.trainingID, lesson: lesson, competencies: model.competencies)
-                    } label: { SchoolTrainingLessonRow(lesson: lesson, showsReport: true) }
-                    .buttonStyle(.plain)
-                    Divider()
+                VStack(spacing: 0) {
+                    ForEach(model.publishedLessons) { lesson in
+                        NavigationLink {
+                            SchoolPublishedReportsView(client: model.client, schoolID: model.scope.schoolID,
+                                trainingID: model.trainingID, lesson: lesson, competencies: model.competencies)
+                        } label: { SchoolTrainingLessonRow(lesson: lesson, showsReport: true) }
+                        .buttonStyle(DrivyRowButtonStyle())
+                        Divider().overlay(DrivyTheme.border)
+                    }
                 }
-                moreLessons
+                if model.nextCursor != nil { moreLessons.padding(.top, DrivySpacing.m) }
             } else { pedagogyStatus }
         }
     }
     private var progress: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             DrivySectionHeader(title: "Parcours pédagogique")
             if let value = model.progress {
                 if let error = model.progressError { SchoolErrorNotice(message: error, retry: { Task { await model.loadProgress() } }) }
-                ForEach(value.items) { item in
-                    NavigationLink {
-                        SchoolPublishedRevisionView(client: model.client, schoolID: model.scope.schoolID,
-                            trainingID: model.trainingID, lessonID: item.sourceLessonId, revisionID: item.sourceRevisionId,
-                            competencies: model.competencies)
-                    } label: { progressRow(item) }
-                    .buttonStyle(.plain)
-                    Divider()
-                }
-                ForEach(model.unobservedCompetencies) { competency in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(competency.label).font(.headline)
-                        DrivyStatusBadge(title: "Non observé")
-                        if !competency.description.isEmpty {
-                            DisclosureGroup("Description de la compétence") {
-                                Text(competency.description).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                                    .padding(.top, 8)
-                            }.font(.subheadline)
-                        }
+                VStack(spacing: 0) {
+                    ForEach(value.items) { item in
+                        NavigationLink {
+                            SchoolPublishedRevisionView(client: model.client, schoolID: model.scope.schoolID,
+                                trainingID: model.trainingID, lessonID: item.sourceLessonId, revisionID: item.sourceRevisionId,
+                                competencies: model.competencies)
+                        } label: { progressRow(item) }
+                        .buttonStyle(DrivyRowButtonStyle())
+                        .accessibilityHint("Ouvre le bilan d’origine")
+                        Divider().overlay(DrivyTheme.border)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
-                    Divider()
+                    ForEach(model.unobservedCompetencies) { competency in
+                        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                            DrivyCompetencyNote(label: competency.label, level: "Non observé", tone: .neutral)
+                            if !competency.description.isEmpty {
+                                DisclosureGroup("Description de la compétence") {
+                                    Text(competency.description).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.top, DrivySpacing.xs)
+                                }
+                                .font(.subheadline)
+                                .frame(minHeight: 44)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, DrivySpacing.m)
+                        Divider().overlay(DrivyTheme.border)
+                    }
                 }
                 if value.items.isEmpty && value.unobservedCompetencyIds.isEmpty {
-                    empty("Aucune compétence", text: "Le référentiel de cette formation ne contient aucune compétence.")
-                } else if model.unobservedCompetencies.count < value.unobservedCompetencyIds.count {
-                    Text("Certaines compétences non observées n’ont pas pu être chargées.").font(.footnote).foregroundStyle(DrivyTheme.muted)
+                    empty("Aucune compétence", text: "Le référentiel de cette formation ne contient aucune compétence.", symbol: "list.bullet")
+                } else {
+                    if model.unobservedCompetencies.count < value.unobservedCompetencyIds.count {
+                        Text("Certaines compétences non observées n’ont pas pu être chargées.").font(.footnote).foregroundStyle(DrivyTheme.muted)
+                            .padding(.top, DrivySpacing.s)
+                    }
+                    Text("Chaque appréciation garde sa date et son contexte. Aucun score global.")
+                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, DrivySpacing.s)
                 }
             } else { pedagogyStatus }
         }
     }
     private func progressRow(_ item: SchoolReportProgressItem) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(item.label).font(.headline).foregroundStyle(DrivyTheme.text)
-                DrivyStatusBadge(title: SchoolTrainingFormatting.level(item.level), tone: .accent)
-                Text(item.context).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                Text(SchoolTrainingFormatting.instant(item.observedAt, zone: workspace.school?.timeZone ?? "Europe/Zurich"))
-                    .font(.caption).foregroundStyle(DrivyTheme.muted)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .top, spacing: DrivySpacing.m) {
+            DrivyCompetencyNote(label: item.label, level: SchoolTrainingFormatting.level(item.level), context: item.context,
+                date: SchoolTrainingFormatting.instant(item.observedAt, zone: workspace.school?.timeZone ?? "Europe/Zurich"))
             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                .padding(.top, DrivySpacing.xxs)
+                .accessibilityHidden(true)
         }
-        .padding(.vertical, 8).contentShape(Rectangle())
+        .padding(.vertical, DrivySpacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
     @ViewBuilder private var pedagogyStatus: some View {
         if let error = model.progressError { SchoolErrorNotice(message: error, retry: { Task { await model.loadProgress() } }) }
@@ -213,39 +233,29 @@ private struct SchoolTrainingContent: View {
     @ViewBuilder private var moreLessons: some View {
         if model.nextCursor != nil {
             Button { Task { await model.loadMore() } } label: {
-                if model.isLoadingMore { ProgressView("Chargement…") } else { Text("Afficher les leçons suivantes") }
+                HStack(spacing: DrivySpacing.xs) {
+                    if model.isLoadingMore { ProgressView() }
+                    Text(model.isLoadingMore ? "Chargement des leçons suivantes…" : "Afficher les leçons suivantes")
+                }
             }
-            .buttonStyle(.bordered).frame(minHeight: 48).disabled(model.isLoadingMore)
+            .buttonStyle(DrivySecondaryButtonStyle()).disabled(model.isLoadingMore)
         }
     }
-    private func empty(_ title: String, text: String) -> some View {
-        DrivyEmptyState(title: title, message: text, symbol: "tray")
+    private func empty(_ title: String, text: String, symbol: String = "tray") -> some View {
+        DrivyEmptyState(title: title, message: text, symbol: symbol)
     }
 }
 
+/// Same anatomy as the agenda row: time column, date, meta, state badge.
 private struct SchoolTrainingLessonRow: View {
     let lesson: SchoolLesson
     var showsReport = false
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            Image(systemName: showsReport ? "doc.text" : "calendar")
-                .font(.title3).foregroundStyle(DrivyTheme.muted).frame(width: 24)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 7) {
-                Text(SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone)).font(.headline)
-                Text(SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone) + " · \(lesson.durationMinutes) min")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
-            if showsReport {
-                DrivyStatusBadge(title: "Partagé", symbol: "checkmark", tone: .success)
-            } else if lesson.status != "PLANNED" {
-                DrivyStatusBadge(title: lesson.statusLabel, tone: lesson.status == "COMPLETED" ? .success : .warning)
-            }
-            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted).padding(.top, 6)
-        }
-        .foregroundStyle(DrivyTheme.text).padding(.vertical, DrivySpacing.m).contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        DrivyLessonRow(start: SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone),
+            end: SchoolTrainingFormatting.time(lesson.plannedEnd, zone: lesson.timeZone),
+            title: SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone),
+            details: showsReport ? ["\(lesson.durationMinutes) min · bilan publié"] : ["\(lesson.durationMinutes) min", lesson.meetingPoint],
+            badge: showsReport ? DrivyReportState.shared.badge : lesson.drivyState.rowBadge)
     }
 }
 
@@ -258,28 +268,36 @@ private struct SchoolTrainingLessonView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     Text(SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone)).font(.drivyScreenTitle)
-                    Text(learnerName).font(.title3).foregroundStyle(DrivyTheme.muted)
-                    DrivyStatusBadge(title: lesson.statusLabel, symbol: "calendar",
-                        tone: lesson.status == "PLANNED" ? .accent : lesson.status == "COMPLETED" ? .success : .warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(learnerName).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                    lesson.drivyState.badge
                 }
-                DrivyRowGroup {
-                    lessonFact(SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone) + " · \(lesson.durationMinutes) min", symbol: "clock")
-                    lessonFact(lesson.meetingPoint, symbol: "mappin.and.ellipse")
-                    lessonFact(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot), symbol: "tag")
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                    DrivyRowGroup {
+                        DrivyLessonFactRow(title: "Horaire", value: SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone)
+                            + " – " + SchoolTrainingFormatting.time(lesson.plannedEnd, zone: lesson.timeZone), monospaced: true)
+                        DrivyLessonFactRow(title: "Durée", value: "\(lesson.durationMinutes) min", monospaced: true)
+                        DrivyLessonFactRow(title: "Rendez-vous", value: lesson.meetingPoint)
+                        DrivyLessonFactRow(title: "Prix convenu", value: SchoolCatalogFormatting.price(lesson.priceCentsSnapshot), monospaced: true)
+                    }
+                    Text("Horaires de la leçon · \(lesson.timeZone)").font(.footnote).foregroundStyle(DrivyTheme.muted)
                 }
-                Text("Horaires de la leçon · \(lesson.timeZone)").font(.caption).foregroundStyle(DrivyTheme.muted)
                 if model.canOpenPedagogicalContent {
-                    Button { opensReport = true } label: {
-                        Label(lesson.status == "PLANNED" ? "Préparer cette leçon" : "Ouvrir le suivi de la leçon", systemImage: "text.book.closed")
-                    }.buttonStyle(DrivyPrimaryButtonStyle())
-                    if lesson.currentPublishedRevisionId != nil {
-                        NavigationLink {
-                            SchoolPublishedReportsView(client: model.client, schoolID: model.scope.schoolID, trainingID: model.trainingID,
-                                lesson: lesson, competencies: model.competencies)
-                        } label: { Label("Consulter les bilans partagés", systemImage: "doc.text").frame(minHeight: 48) }
+                    VStack(spacing: DrivySpacing.s) {
+                        Button { opensReport = true } label: {
+                            Label(reportActionTitle, systemImage: "text.book.closed")
+                        }.buttonStyle(DrivyPrimaryButtonStyle())
+                        if lesson.currentPublishedRevisionId != nil {
+                            NavigationLink {
+                                SchoolPublishedReportsView(client: model.client, schoolID: model.scope.schoolID, trainingID: model.trainingID,
+                                    lesson: lesson, competencies: model.competencies)
+                            } label: { Label("Consulter les bilans partagés", systemImage: "doc.text") }
+                            .buttonStyle(DrivySecondaryButtonStyle())
+                        }
                     }
                 }
             }
@@ -289,19 +307,17 @@ private struct SchoolTrainingLessonView: View {
         .sheet(isPresented: $opensReport, onDismiss: { Task { await model.load() } }) {
             NavigationStack {
                 SchoolLessonReportView(client: model.client.reports, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: learnerName)
-            }
+            }.tint(DrivyTheme.accent)
         }
     }
-}
-
-private func lessonFact(_ text: String, symbol: String) -> some View {
-    HStack(spacing: DrivySpacing.m) {
-        Image(systemName: symbol).font(.body).foregroundStyle(DrivyTheme.muted).frame(width: 28).accessibilityHidden(true)
-        Text(text).font(.body).foregroundStyle(DrivyTheme.text).fixedSize(horizontal: false, vertical: true)
-        Spacer(minLength: 0)
+    /// Same wording as the agenda lesson sheet: prepare before, report after.
+    private var reportActionTitle: String {
+        switch lesson.status {
+        case "PLANNED": "Préparer la leçon"
+        case "COMPLETED": "Ouvrir le bilan"
+        default: "Voir le suivi de la leçon"
+        }
     }
-    .padding(.vertical, DrivySpacing.s)
-    .frame(minHeight: 48)
 }
 
 enum SchoolTrainingFormatting {
