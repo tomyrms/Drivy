@@ -73,7 +73,7 @@ struct DrivySectionHeader: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(.title3.weight(.semibold))
+                .font(.drivySection)
                 .foregroundStyle(DrivyTheme.text)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: DrivySpacing.xs)
@@ -337,5 +337,71 @@ struct DrivyInlineMessage: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(tone.background, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
             .accessibilityElement(children: .combine)
+    }
+}
+
+/// The single selection pattern of the app: a card that fills with the soft
+/// accent and gains an accent border when selected, with press feedback.
+/// Pair it with a trailing checkmark so selection never relies on color alone.
+struct DrivySelectionCardStyle: ButtonStyle {
+    let isSelected: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(DrivySpacing.m)
+            .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+            .background(isSelected ? DrivyTheme.accentSoft : DrivyTheme.canvas,
+                in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
+                    .strokeBorder(isSelected ? DrivyTheme.accent : DrivyTheme.border, lineWidth: isSelected ? 1.5 : 0.5)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
+            .animation(DrivyMotion.feedback(reduceMotion), value: isSelected)
+    }
+}
+
+/// Trailing selection mark shared by every selection card.
+struct DrivySelectionMark: View {
+    let isSelected: Bool
+    var body: some View {
+        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+            .font(.title3)
+            .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.controlBorder)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Retry action inside error notices: outlined in the danger tone, 44 pt.
+struct DrivyRetryButton: View {
+    var title = "Réessayer"
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: "arrow.clockwise")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, DrivySpacing.s)
+                .frame(minHeight: 44)
+                .overlay {
+                    RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
+                        .strokeBorder(DrivyTheme.danger, lineWidth: 1)
+                }
+                .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(DrivyTheme.danger)
+    }
+}
+
+extension View {
+    /// Content column of every reading page: page margins, readable width, centered on iPad.
+    func drivyPageContent(maxWidth: CGFloat = 720) -> some View {
+        padding(.horizontal, DrivySpacing.l)
+            .padding(.vertical, DrivySpacing.m)
+            .frame(maxWidth: maxWidth, alignment: .leading)
+            .frame(maxWidth: .infinity)
     }
 }

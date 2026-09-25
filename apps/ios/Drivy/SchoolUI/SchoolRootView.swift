@@ -590,7 +590,7 @@ struct SchoolRootView: View {
                     }
                 VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     Text("Vos leçons, vos trajets, votre école.")
-                        .font(.largeTitle.weight(.bold))
+                        .font(.drivyScreenTitle)
                         .fixedSize(horizontal: false, vertical: true)
                     Text("Connectez-vous pour retrouver votre école, vos dossiers et vos formations autorisés.")
                         .font(.body)
@@ -608,10 +608,7 @@ struct SchoolRootView: View {
                 Divider()
                 localTrialsEntry
             }
-            .padding(.horizontal, DrivySpacing.l)
-            .padding(.vertical, DrivySpacing.m)
-            .frame(maxWidth: 600, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .drivyPageContent()
         }
         .background(DrivyTheme.surface)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -664,11 +661,9 @@ struct SchoolRootView: View {
                     }
                     localTrialsEntry
                 }
-                .padding(24)
-                .frame(maxWidth: 600)
-                .frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
         } else if let person = workspace.person, person.memberships.isEmpty {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -677,11 +672,9 @@ struct SchoolRootView: View {
                         .buttonStyle(DrivySecondaryButtonStyle())
                     localTrialsEntry
                 }
-                .padding(24)
-                .frame(maxWidth: 640)
-                .frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
         } else {
             SchoolChooserView(workspace: workspace)
         }

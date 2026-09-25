@@ -39,6 +39,15 @@ enum DrivyTheme {
     }
 }
 
+/// Typographic roles. Every screen uses these roles instead of picking a size:
+/// screen title (in-content name or date), title (sheet or card lead),
+/// section, then the system headline / subheadline / caption for rows.
+extension Font {
+    static let drivyScreenTitle = Font.largeTitle.weight(.bold)
+    static let drivyTitle = Font.title2.weight(.bold)
+    static let drivySection = Font.title3.weight(.semibold)
+}
+
 /// Spacing scale from tokens 3.8: 4, 8, 12, 16, 24, 32, 48 points.
 enum DrivySpacing {
     static let xxs: CGFloat = 4
@@ -114,7 +123,8 @@ struct DrivySecondaryButtonStyle: ButtonStyle {
     }
 }
 
-/// Opaque reading surface for forms, contacts and amounts.
+/// Grouped block on a reading page (white surface): light fill and hairline,
+/// same anatomy as DrivyCard so blocks read identically on every screen.
 struct DrivyPanel<Content: View>: View {
     private let content: Content
 
@@ -124,9 +134,13 @@ struct DrivyPanel<Content: View>: View {
 
     var body: some View {
         content
-            .padding(20)
+            .padding(DrivySpacing.m)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.m, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.m, style: .continuous)
+                    .strokeBorder(DrivyTheme.border, lineWidth: 0.5)
+            }
     }
 }
 
@@ -147,24 +161,16 @@ struct InlineErrorView: View {
     var retry: (() -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Enregistrement à vérifier", systemImage: "exclamationmark.triangle")
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            Label("Enregistrement à vérifier", systemImage: "exclamationmark.triangle.fill")
                 .font(.headline)
             Text(message)
                 .font(.subheadline)
-            if let retry {
-                Button("Réessayer", action: retry)
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 44)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
-                            .stroke(DrivyTheme.danger, lineWidth: 1)
-                    }
-            }
+                .fixedSize(horizontal: false, vertical: true)
+            if let retry { DrivyRetryButton(action: retry) }
         }
         .foregroundStyle(DrivyTheme.danger)
-        .padding(16)
+        .padding(DrivySpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(DrivyTheme.dangerSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
         .accessibilityElement(children: .contain)

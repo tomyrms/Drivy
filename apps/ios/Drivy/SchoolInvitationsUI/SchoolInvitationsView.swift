@@ -145,7 +145,7 @@ private struct InvitationDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text(invitation.maskedEmail).font(.title2.weight(.bold)).textSelection(.enabled)
+                Text(invitation.maskedEmail).font(.drivyTitle).textSelection(.enabled)
                 VStack(alignment: .leading, spacing: 18) {
                     LabeledContent("État", value: invitation.status.label)
                     Divider()
@@ -174,8 +174,7 @@ private struct InvitationDetailView: View {
                      : "Le renvoi remplace le lien précédent. La révocation empêche de rejoindre l’école avec ce lien.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
             }
-            .padding(.horizontal, DrivySpacing.l).padding(.vertical, DrivySpacing.m)
-            .frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
+            .drivyPageContent()
         }
         .background(DrivyTheme.surface)
         .navigationTitle("Invitation")

@@ -71,7 +71,7 @@ struct SchoolProfilePolicyView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text(model.school?.name ?? "Votre école").font(.title2.weight(.bold))
+                    Text(model.school?.name ?? "Votre école").font(.drivyTitle)
                     Text("Version \(policy.version)").font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     Text("Ces règles s’appliqueront aux profils concernés à la date prévue. Les informations existantes ne seront pas complétées automatiquement.")
                     Text("Prise d’effet : \(effectiveDate(policy.effectiveFrom))")

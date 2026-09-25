@@ -85,9 +85,9 @@ struct SchoolRecordingChoiceView: View {
                             .frame(minHeight: 44).disabled(model.isBusy)
                     }
                 }
-                .padding(24).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
             .navigationTitle("Choix GPS").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
             .task { await model.load() }
@@ -109,8 +109,8 @@ struct SchoolRecordingChoiceView: View {
         VStack(alignment: .leading, spacing: 12) {
             Image(systemName: "location.circle").font(.largeTitle).foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
             Text(model.source == .verbal ? "Le choix de l’élève" : "Votre choix pour cette leçon")
-                .font(.largeTitle.weight(.bold))
-            if let learner = model.learner { Text(learner.displayName).font(.title3.weight(.semibold)) }
+                .font(.drivyScreenTitle)
+            if let learner = model.learner { Text(learner.displayName).font(.drivySection) }
             if let lessonDateLabel { Text(lessonDateLabel).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
             Text("La leçon peut se dérouler sans enregistrement GPS. Enregistrer ce choix ne démarre aucun trajet.")
                 .font(.body).foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
@@ -145,7 +145,7 @@ struct SchoolRecordingChoiceView: View {
     private var choiceControls: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(model.source == .verbal ? "Quel choix l’élève a-t-il exprimé ?" : "Pour cette leçon")
-                .font(.title3.weight(.semibold))
+                .font(.drivySection)
             choiceButton(.refused, title: "Sans enregistrement GPS", detail: model.source == .verbal ? "L’élève a exprimé son refus." : "Je ne souhaite pas enregistrer le trajet.", symbol: "location.slash")
             choiceButton(.allowed, title: "Avec enregistrement GPS", detail: model.source == .verbal ? "L’élève a exprimé son accord après avoir reçu l’information." : "J’accepte l’enregistrement décrit dans la notice.", symbol: "location")
             if model.verbalAgreementIsProtected {
@@ -167,26 +167,17 @@ struct SchoolRecordingChoiceView: View {
                     Text(title).font(.headline)
                     Text(detail).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 }.frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
-                Image(systemName: selectedStatus == status ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(selectedStatus == status ? DrivyTheme.accent : DrivyTheme.muted)
+                DrivySelectionMark(isSelected: selectedStatus == status)
             }
-            .padding(DrivySpacing.m).frame(maxWidth: .infinity, minHeight: 80)
-            .background(selectedStatus == status ? DrivyTheme.accentSoft : DrivyTheme.surface,
-                in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
-                    .strokeBorder(selectedStatus == status ? DrivyTheme.accent : DrivyTheme.border, lineWidth: selectedStatus == status ? 1.5 : 0.5)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
         }
-        .buttonStyle(DrivyTileButtonStyle())
+        .buttonStyle(DrivySelectionCardStyle(isSelected: selectedStatus == status))
         .disabled(!model.mayChoose || (status == .allowed && model.verbalAgreementIsProtected))
         .accessibilityAddTraits(selectedStatus == status ? .isSelected : [])
         .accessibilityIdentifier(status == .allowed ? "recording-allow" : "recording-refuse")
     }
     private var pendingRequests: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Confirmation à retrouver").font(.title3.weight(.semibold))
+            Text("Confirmation à retrouver").font(.drivySection)
             Text("Une demande est conservée sur cet appareil. Vérifiez son résultat avant d’en créer une autre pour cet élève.")
                 .font(.subheadline).foregroundStyle(DrivyTheme.muted)
             ForEach(model.relatedPending) { queued in
@@ -211,7 +202,7 @@ private struct RecordingNoticePanel: View {
     var body: some View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: 20) {
-                Text("L’information de votre école").font(.title3.weight(.semibold))
+                Text("L’information de votre école").font(.drivySection)
                 Text(notice.noticeText).font(.body).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 Divider()
                 Text("Conservation des données").font(.headline)
@@ -232,8 +223,8 @@ private struct RecordingChoiceConfirmation: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    Text(review.status == .allowed ? "Confirmer l’accord GPS" : "Confirmer le choix sans GPS").font(.title.weight(.bold))
-                    Text(review.learnerName).font(.title3.weight(.semibold))
+                    Text(review.status == .allowed ? "Confirmer l’accord GPS" : "Confirmer le choix sans GPS").font(.drivyTitle)
+                    Text(review.learnerName).font(.drivySection)
                     RecordingNoticePanel(notice: review.notice)
                     Toggle(isOn: $acknowledged) {
                         Text(review.source == .own
@@ -249,9 +240,9 @@ private struct RecordingChoiceConfirmation: View {
                         HStack { if model.isBusy { ProgressView() }; Text("Enregistrer ce choix") }.frame(maxWidth: .infinity, minHeight: 14)
                     }.buttonStyle(DrivyPrimaryButtonStyle()).disabled(!acknowledged || !model.mayChoose)
                         .accessibilityIdentifier("recording-confirm-choice")
-                }.padding(24).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                }.drivyPageContent()
             }
-            .background(DrivyTheme.canvas).navigationTitle("Votre confirmation").navigationBarTitleDisplayMode(.inline)
+            .background(DrivyTheme.surface).navigationTitle("Votre confirmation").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { dismiss() }.disabled(model.isBusy) } }
         }.tint(DrivyTheme.accent).interactiveDismissDisabled(model.isBusy)
     }
@@ -283,7 +274,7 @@ private struct RecordingChoiceRetry: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    Text("Retrouver la confirmation").font(.title.weight(.bold))
+                    Text("Retrouver la confirmation").font(.drivyTitle)
                     RecordingPendingDescription(command: queued.mutation)
                     Text("Le contenu et la notice liés à cette demande restent ceux de votre confirmation initiale. Le renvoi utilise la même référence ; il ne crée pas un nouveau choix.")
                         .foregroundStyle(DrivyTheme.muted)
@@ -293,8 +284,8 @@ private struct RecordingChoiceRetry: View {
                         Task { if await model.resend(queued, acknowledged: acknowledged) { dismiss() } }
                     } label: { Text("Renvoyer la même demande").frame(maxWidth: .infinity, minHeight: 14) }
                         .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!acknowledged || !model.mayResume(queued))
-                }.padding(24).frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity)
-            }.background(DrivyTheme.canvas)
+                }.drivyPageContent()
+            }.background(DrivyTheme.surface)
             .navigationTitle("Demande conservée").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
         }.tint(DrivyTheme.accent).interactiveDismissDisabled(model.isBusy)

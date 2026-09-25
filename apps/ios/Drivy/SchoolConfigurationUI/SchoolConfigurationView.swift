@@ -31,7 +31,7 @@ struct SchoolConfigurationView: View {
                 }
                 if let school = model.school {
                     Section {
-                        Text(school.name).font(.title2.weight(.bold))
+                        Text(school.name).font(.drivyTitle)
                         Label(school.status == "ACTIVE" ? "École active" : school.status == "DRAFT" ? "École en préparation" : "École inactive",
                               systemImage: school.status == "ACTIVE" ? "checkmark.seal" : "building.2")
                             .foregroundStyle(school.status == "ACTIVE" ? DrivyTheme.success : DrivyTheme.muted)
@@ -260,7 +260,7 @@ struct SchoolConfigurationView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     switch action {
                     case .identity:
-                        Text(model.name).font(.title2.weight(.bold))
+                        Text(model.name).font(.drivyTitle)
                         Text(model.contactEmail)
                         if !model.contactPhone.isEmpty { Text(model.contactPhone) }
                         Text("Ces coordonnées remplaceront celles affichées par votre école.")
@@ -273,7 +273,7 @@ struct SchoolConfigurationView: View {
                         Text("En confirmant, vous adoptez exactement ces textes pour votre école. Leur version sera conservée.")
                             .font(.headline)
                     case .activation:
-                        Text(model.school?.name ?? "Votre école").font(.title2.weight(.bold))
+                        Text(model.school?.name ?? "Votre école").font(.drivyTitle)
                         Text("Les coordonnées et les textes d’information ont été vérifiés. L’activation ouvre l’espace de l’école à ses membres.")
                         Text("Les formations, réservations et cours se créent séparément.")
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)
@@ -302,7 +302,7 @@ struct SchoolConfigurationView: View {
                         }
                     }
                 }
-                .padding(24).frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
             .safeAreaInset(edge: .bottom) {
                 Button {
@@ -330,7 +330,7 @@ struct SchoolConfigurationView: View {
                 .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity)
                 .background(DrivyTheme.surface)
             }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
             .navigationTitle(confirmationTitle(action))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -398,9 +398,9 @@ struct SchoolPreparationLanding: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 Image(systemName: "building.2").font(.largeTitle).foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
-                Text(school.name).font(.largeTitle.weight(.bold))
+                Text(school.name).font(.drivyScreenTitle)
                 Text(school.status == "DRAFT" ? "Votre école se prépare." : "Cet espace n’est pas actif.")
-                    .font(.title2.weight(.semibold))
+                    .font(.drivyTitle)
                 Text(mayConfigure ? "Vérifiez ses coordonnées, adoptez les textes d’information et confirmez son activation."
                      : "L’administration de votre école doit terminer sa préparation avant l’ouverture des dossiers.")
                     .foregroundStyle(DrivyTheme.muted)
@@ -410,8 +410,8 @@ struct SchoolPreparationLanding: View {
                         .accessibilityIdentifier("open-school-configuration")
                 }
             }
-            .padding(24).frame(maxWidth: 640, alignment: .leading).frame(maxWidth: .infinity)
+            .drivyPageContent()
         }
-        .background(DrivyTheme.canvas)
+        .background(DrivyTheme.surface)
     }
 }

@@ -22,9 +22,9 @@ struct SchoolTrainingCreationView: View {
                         startDate
                     }
                 }
-                .padding(24).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
-            .background(DrivyTheme.canvas).navigationTitle("Nouvelle formation").navigationBarTitleDisplayMode(.inline)
+            .background(DrivyTheme.surface).navigationTitle("Nouvelle formation").navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {
                 Group {
                     if model.createdTrainingID == nil {
@@ -46,13 +46,13 @@ struct SchoolTrainingCreationView: View {
     }
     private var heading: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(model.createdTrainingID == nil ? "Nouvelle formation" : "Formation créée").font(.largeTitle.bold())
+            Text(model.createdTrainingID == nil ? "Nouvelle formation" : "Formation créée").font(.drivyScreenTitle)
             Text(model.learner.displayName).font(.title3).foregroundStyle(DrivyTheme.muted)
         }
     }
     private var offerings: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Offre de formation").font(.title3.bold())
+            Text("Offre de formation").font(.drivySection)
             if model.offerings.isEmpty && !model.isLoading && model.errorMessage == nil {
                 Text("Aucune offre disponible. L’administration doit activer une offre avant d’ouvrir cette formation.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
@@ -61,20 +61,18 @@ struct SchoolTrainingCreationView: View {
                 Button { model.selectedOfferingID = offering.id } label: {
                     HStack(alignment: .top, spacing: 14) {
                         VStack(alignment: .leading, spacing: 7) {
-                            Text("Catégorie \(offering.categoryCode)").font(.headline).foregroundStyle(DrivyTheme.text)
+                            Text("Permis \(offering.categoryCode)").font(.headline).foregroundStyle(DrivyTheme.text)
                             Text(offering.offeringKey).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                             Text("\(offering.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(offering.defaultPriceCents))")
                                 .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        Image(systemName: model.selectedOfferingID == offering.id ? "checkmark.circle.fill" : "circle")
-                            .font(.title2).foregroundStyle(model.selectedOfferingID == offering.id ? DrivyTheme.accent : DrivyTheme.muted)
+                        DrivySelectionMark(isSelected: model.selectedOfferingID == offering.id)
                     }
-                    .padding(.vertical, 16).frame(minHeight: 80).contentShape(Rectangle())
                 }
-                .buttonStyle(.plain).disabled(model.isBusy || model.pending != nil)
+                .buttonStyle(DrivySelectionCardStyle(isSelected: model.selectedOfferingID == offering.id))
+                .disabled(model.isBusy || model.pending != nil)
                 .accessibilityAddTraits(model.selectedOfferingID == offering.id ? .isSelected : [])
-                Divider()
             }
         }
     }
@@ -114,10 +112,10 @@ struct SchoolTrainingCreationView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    Text(model.learner.displayName).font(.title2.bold())
+                    Text(model.learner.displayName).font(.drivyTitle)
                     if let offering = model.selectedOffering {
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("Catégorie \(offering.categoryCode)").font(.headline)
+                            Text("Permis \(offering.categoryCode)").font(.headline)
                             Text(offering.offeringKey).foregroundStyle(DrivyTheme.muted)
                             Text("\(offering.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(offering.defaultPriceCents))")
                             Text("Version \(offering.version) de l’offre").font(.subheadline).foregroundStyle(DrivyTheme.muted)
@@ -133,9 +131,9 @@ struct SchoolTrainingCreationView: View {
                     }
                     if let pending = model.pending { pendingCard(pending) }
                 }
-                .padding(24).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
-            .background(DrivyTheme.canvas).navigationTitle("Confirmation").navigationBarTitleDisplayMode(.inline)
+            .background(DrivyTheme.surface).navigationTitle("Confirmation").navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {
                 Button {
                     Task { if await model.create() { reviewsCreation = false } }

@@ -377,7 +377,7 @@ struct SchoolCatalogEditor: View {
                             .disabled(model.isBusy)
                     }
                 }
-                .padding(24).frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
             .safeAreaInset(edge: .bottom) {
                 Button {
@@ -394,7 +394,7 @@ struct SchoolCatalogEditor: View {
                 .padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity)
                 .background(DrivyTheme.surface)
             }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
             .navigationTitle("Relire et confirmer")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -409,7 +409,7 @@ struct SchoolCatalogEditor: View {
     @ViewBuilder private var reviewContent: some View {
         switch kind {
         case .offering:
-            Text("Catégorie \(offering.category)").font(.title2.weight(.bold))
+            Text("Permis \(offering.category)").font(.drivyTitle)
             reviewValue("Référence", offering.key)
             reviewValue("Durée", "\(offering.duration) min")
             if let cents = SchoolCatalogFormatting.cents(offering.price) {
@@ -424,7 +424,7 @@ struct SchoolCatalogEditor: View {
             Text(offering.enabled ? "Cette offre sera ouverte aux nouvelles formations." : "Cette offre restera désactivée.")
                 .font(.headline)
         case .curriculum:
-            Text("Catégorie \(curriculum.category)").font(.title2.weight(.bold))
+            Text("Permis \(curriculum.category)").font(.drivyTitle)
             ForEach(curriculum.competencies) { competency in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(competency.label).font(.headline)
@@ -436,7 +436,7 @@ struct SchoolCatalogEditor: View {
             Text(curriculum.approved ? "Le référentiel sera approuvé pour cette catégorie." : "Le référentiel restera un brouillon.")
                 .font(.headline)
         case .policy:
-            Text("Catégorie \(policy.category)").font(.title2.weight(.bold))
+            Text("Permis \(policy.category)").font(.drivyTitle)
             reviewValue("Déroulement de la formation", policy.procedure)
             reviewValue("Conditions d’annulation", policy.cancellation)
             if !policy.urls.isEmpty { reviewValue("Sources", policy.urls.joined(separator: "\n")) }
@@ -445,14 +445,14 @@ struct SchoolCatalogEditor: View {
                 .font(.headline)
         case .training:
             if let selected = model.availableOfferings.first(where: { $0.id == offeringID }) {
-                Text("Catégorie \(selected.categoryCode)").font(.title2.weight(.bold))
+                Text("Permis \(selected.categoryCode)").font(.drivyTitle)
                 reviewValue("Offre", "\(selected.offeringKey) · version \(selected.version)")
                 reviewValue("Conditions proposées", "\(selected.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(selected.defaultPriceCents))")
             }
             reviewValue("Date de début", includesStart ? reviewDate(startDate, includesTime: false) : "Non précisée")
         case .assignment:
             Text(model.instructors.first(where: { $0.id == memberID })?.displayName ?? "Moniteur")
-                .font(.title2.weight(.bold))
+                .font(.drivyTitle)
             reviewValue("Début de l’affectation", reviewDate(startDate))
             reviewValue("Fin", includesEnd ? reviewDate(endDate) : "Aucune date prévue")
         }

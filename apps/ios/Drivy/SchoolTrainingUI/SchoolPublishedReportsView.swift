@@ -14,7 +14,7 @@ struct SchoolPublishedReportsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Bilans partagés").font(.largeTitle.bold())
+                Text("Bilans partagés").font(.drivyScreenTitle)
                 Text(SchoolTrainingFormatting.instant(lesson.plannedStart, zone: lesson.timeZone))
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 if isLoading { ProgressView("Ouverture des bilans…") }
@@ -49,8 +49,7 @@ struct SchoolPublishedReportsView: View {
                     Divider()
                 }
             }
-            .padding(.horizontal, DrivySpacing.l).padding(.vertical, DrivySpacing.m)
-            .frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+            .drivyPageContent()
         }
         .background(DrivyTheme.surface).navigationTitle("Bilans partagés").navigationBarTitleDisplayMode(.inline)
         .task { await load() }
@@ -96,7 +95,7 @@ struct SchoolPublishedRevisionView: View {
                         } else {
                             DrivyStatusBadge(title: "Bilan partagé", symbol: "checkmark", tone: .success)
                         }
-                        Text(SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone)).font(.largeTitle.bold())
+                        Text(SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone)).font(.drivyScreenTitle)
                         Text("Publié le \(SchoolTrainingFormatting.instant(revision.publishedAt, zone: lesson.timeZone)) · Version \(revision.sequence)")
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     }
@@ -122,8 +121,7 @@ struct SchoolPublishedRevisionView: View {
                     }
                 }
             }
-            .padding(.horizontal, DrivySpacing.l).padding(.vertical, DrivySpacing.m)
-            .frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+            .drivyPageContent()
         }
         .background(DrivyTheme.surface).navigationTitle("Bilan de leçon").navigationBarTitleDisplayMode(.inline)
         .task { await load() }
@@ -144,7 +142,7 @@ struct SchoolPublishedRevisionView: View {
     }
     private func passage(_ title: String, text: String) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            Text(title).font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
+            Text(title).font(.drivySection).accessibilityAddTraits(.isHeader)
             Text(text).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
         }
     }

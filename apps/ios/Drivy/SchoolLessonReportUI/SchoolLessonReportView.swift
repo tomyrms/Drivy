@@ -84,7 +84,7 @@ private struct SchoolLessonReportContent: View {
                 HStack(alignment: .center, spacing: DrivySpacing.m) {
                     DrivyAvatar(name: learnerName, size: 52)
                     VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Text(learnerName).font(.title2.bold()).fixedSize(horizontal: false, vertical: true)
+                        Text(learnerName).font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
                         if let date = model.lesson?.startsAt, let lesson = model.lesson {
                             Text(SchoolPlanningFormat.instant(date, zone: lesson.timeZone)).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         }
@@ -392,7 +392,7 @@ private struct SchoolReportPreviewSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 30) {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text(learnerName).font(.title2.bold())
+                        Text(learnerName).font(.drivyTitle)
                         if let lesson = model.lesson, let date = lesson.startsAt {
                             Text(SchoolPlanningFormat.instant(date, zone: lesson.timeZone))
                                 .font(.subheadline).foregroundStyle(DrivyTheme.muted)
@@ -404,7 +404,7 @@ private struct SchoolReportPreviewSheet: View {
                     SchoolReportTexts(workedOn: model.workedOn, observationText: model.observationText, nextStep: model.nextStep)
                     if !model.observations.isEmpty {
                         Divider()
-                        Text("Compétences observées").font(.title3.weight(.semibold))
+                        Text("Compétences observées").font(.drivySection)
                         ForEach(model.observations) { observation in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(model.competencies.first(where: { $0.id == observation.id })?.label ?? "Observation de compétence").font(.headline)
@@ -422,9 +422,7 @@ private struct SchoolReportPreviewSheet: View {
                     Text("La publication partage ce bilan avec l’élève. Les notes de préparation restent privées.")
                         .font(.footnote).foregroundStyle(DrivyTheme.muted)
                 }
-                .padding(24)
-                .frame(maxWidth: 680, alignment: .leading)
-                .frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
             .background(DrivyTheme.surface)
             .safeAreaInset(edge: .bottom, spacing: 0) { publicationBar }

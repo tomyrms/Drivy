@@ -179,12 +179,9 @@ struct SchoolHomeView: View {
                 }
                 accountSection
             }
-            .padding(.horizontal, DrivySpacing.l)
-            .padding(.vertical, DrivySpacing.m)
-            .frame(maxWidth: 720, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .drivyPageContent()
         }
-        .background(DrivyTheme.canvas)
+        .background(DrivyTheme.surface)
     }
 
     private var schoolHeading: some View {
@@ -197,7 +194,7 @@ struct SchoolHomeView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(workspace.school?.name ?? workspace.membership?.schoolName ?? "Mon école")
-                    .font(.title2.weight(.bold))
+                    .font(.drivyTitle)
                     .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
                 if let membership = workspace.membership {
@@ -224,7 +221,7 @@ struct SchoolHomeView: View {
         }
         .padding(DrivySpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+        .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
     }
 
     private var schoolActions: some View {

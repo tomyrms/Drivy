@@ -19,10 +19,7 @@ struct SchoolCatalogView: View {
                     if model.learner != nil { learnerTrainings }
                     else { catalog }
                 }
-                .padding(.horizontal, DrivySpacing.l)
-                .padding(.vertical, DrivySpacing.m)
-                .frame(maxWidth: 760, alignment: .leading)
-                .frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
             .background(DrivyTheme.surface)
             .navigationTitle(model.learner == nil ? "Formations" : "Dossier de formation")
@@ -49,7 +46,7 @@ struct SchoolCatalogView: View {
     private var heading: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(model.school?.name ?? "Votre école").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            Text(model.learner?.displayName ?? "Formations").font(.largeTitle.weight(.bold))
+            Text(model.learner?.displayName ?? "Formations").font(.drivyScreenTitle)
             if model.learner != nil {
                 Text("Choisissez une offre, puis affectez le moniteur qui accompagnera cet élève.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
@@ -130,7 +127,7 @@ struct SchoolCatalogView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Divider()
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Permis \(offer.categoryCode)").font(.title3.weight(.semibold))
+                        Text("Permis \(offer.categoryCode)").font(.drivySection)
                         Spacer(minLength: DrivySpacing.xs)
                         DrivyStatusBadge(title: offer.enabled ? "Ouverte" : "Fermée",
                             symbol: offer.enabled ? "checkmark" : "pause.fill", tone: offer.enabled ? .success : .neutral)
@@ -170,7 +167,7 @@ struct SchoolCatalogView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Divider()
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Permis \(curriculum.categoryCode)").font(.title3.weight(.semibold))
+                        Text("Permis \(curriculum.categoryCode)").font(.drivySection)
                         Spacer(minLength: DrivySpacing.xs)
                         DrivyStatusBadge(title: curriculum.approved ? "Approuvé" : "Brouillon",
                             symbol: curriculum.approved ? "checkmark.seal" : "pencil", tone: curriculum.approved ? .success : .warning)
@@ -201,7 +198,7 @@ struct SchoolCatalogView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Divider()
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Permis \(policy.categoryCode)").font(.title3.weight(.semibold))
+                        Text("Permis \(policy.categoryCode)").font(.drivySection)
                         Spacer(minLength: DrivySpacing.xs)
                         DrivyStatusBadge(title: policy.approved ? "Approuvée" : "Brouillon",
                             symbol: policy.approved ? "checkmark.seal" : "pencil", tone: policy.approved ? .success : .warning)
@@ -255,16 +252,15 @@ struct SchoolCatalogView: View {
                     HStack(spacing: 16) {
                         Image(systemName: "steeringwheel").font(.title2).foregroundStyle(DrivyTheme.accent)
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Catégorie \(training.categoryCode)").font(.headline)
+                            Text("Permis \(training.categoryCode)").font(.headline)
                             Text(SchoolPresentation.trainingStatus(training.status)).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         }
                         Spacer(minLength: 8)
                         Image(systemName: model.selectedTraining?.id == training.id ? "checkmark.circle.fill" : "chevron.right")
                             .foregroundStyle(DrivyTheme.accent)
                     }
-                    .padding(20).frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
-                    .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
-                }.buttonStyle(.plain).disabled(model.isBusy || model.isLoading)
+                }.buttonStyle(DrivySelectionCardStyle(isSelected: model.selectedTraining?.id == training.id))
+                .disabled(model.isBusy || model.isLoading)
             }
             createButton("Créer une formation", symbol: "plus", kind: .training)
             if model.availableOfferings.isEmpty && !model.isLoading {
@@ -278,7 +274,7 @@ struct SchoolCatalogView: View {
     }
     private func assignments(_ training: SchoolTraining) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Moniteurs de cette formation").font(.title3.weight(.semibold))
+            Text("Moniteurs de cette formation").font(.drivySection)
             if model.assignments.isEmpty && !model.isLoading {
                 Text("Aucun moniteur affecté. La formation existe déjà ; choisissez la personne qui l’accompagnera.")
                     .foregroundStyle(DrivyTheme.muted)
@@ -325,7 +321,7 @@ struct SchoolCatalogView: View {
     private func empty(_ title: String, text: String, symbol: String) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Image(systemName: symbol).font(.largeTitle).foregroundStyle(DrivyTheme.muted)
-            Text(title).font(.title2.weight(.semibold))
+            Text(title).font(.drivyTitle)
             Text(text).font(.subheadline).foregroundStyle(DrivyTheme.muted)
         }.padding(.vertical, 16).fixedSize(horizontal: false, vertical: true)
     }

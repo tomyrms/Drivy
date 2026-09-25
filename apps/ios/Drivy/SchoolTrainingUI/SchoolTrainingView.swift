@@ -68,10 +68,7 @@ private struct SchoolTrainingContent: View {
                     }
                 }
             }
-            .padding(.horizontal, DrivySpacing.l)
-            .padding(.vertical, DrivySpacing.m)
-            .frame(maxWidth: 820, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .drivyPageContent()
         }
         .background(DrivyTheme.surface)
         .refreshable { await model.load() }
@@ -85,7 +82,7 @@ private struct SchoolTrainingContent: View {
             }
             .accessibilityElement(children: .combine)
             Text(model.training.map { "Permis \($0.categoryCode)" } ?? "Votre formation")
-                .font(.largeTitle.bold()).fixedSize(horizontal: false, vertical: true)
+                .font(.drivyScreenTitle).fixedSize(horizontal: false, vertical: true)
             if let training = model.training {
                 DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status), symbol: "steeringwheel",
                     tone: training.status == "ACTIVE" ? .accent : training.status == "COMPLETED" ? .success : .neutral)
@@ -263,7 +260,7 @@ private struct SchoolTrainingLessonView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                    Text(SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone)).font(.largeTitle.bold())
+                    Text(SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone)).font(.drivyScreenTitle)
                     Text(learnerName).font(.title3).foregroundStyle(DrivyTheme.muted)
                     DrivyStatusBadge(title: lesson.statusLabel, symbol: "calendar",
                         tone: lesson.status == "PLANNED" ? .accent : lesson.status == "COMPLETED" ? .success : .warning)
@@ -286,8 +283,7 @@ private struct SchoolTrainingLessonView: View {
                     }
                 }
             }
-            .padding(.horizontal, DrivySpacing.l).padding(.vertical, DrivySpacing.m)
-            .frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+            .drivyPageContent()
         }
         .background(DrivyTheme.surface).navigationTitle("Leçon").navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $opensReport, onDismiss: { Task { await model.load() } }) {

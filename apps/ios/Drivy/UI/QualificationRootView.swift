@@ -73,7 +73,7 @@ struct QualificationRootView: View {
                                 .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Prendre des repères")
-                                    .font(.title2.weight(.semibold))
+                                    .font(.drivyTitle)
                                 Text("Démarrez une séance locale, avec ou sans trajet GPS.")
                                     .foregroundStyle(DrivyTheme.muted)
                             }
@@ -110,7 +110,7 @@ struct QualificationRootView: View {
             .frame(maxWidth: 680)
             .frame(maxWidth: .infinity)
         }
-        .background(DrivyTheme.canvas)
+        .background(DrivyTheme.surface)
     }
 
     private func activeSessionCard(_ session: DrivingSession) -> some View {
@@ -158,7 +158,7 @@ struct StartSessionView: View {
                             .frame(width: 68, height: 68)
                             .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                             .accessibilityHidden(true)
-                        Text("Un trajet à retenir").font(.largeTitle.weight(.bold))
+                        Text("Un trajet à retenir").font(.drivyScreenTitle)
                             .fixedSize(horizontal: false, vertical: true)
                         Text("Choisissez comment garder les moments de votre séance.")
                             .font(.body).foregroundStyle(DrivyTheme.muted)

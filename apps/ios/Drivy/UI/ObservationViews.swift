@@ -183,7 +183,7 @@ struct ObservationComposer: View {
                 }.buttonStyle(.plain).disabled(saving).accessibilityLabel("Catégories")
             }
             VStack(alignment: .leading, spacing: 6) {
-                Text(selectedTheme?.label ?? "Signaler").font(.title3.weight(.bold))
+                Text(selectedTheme?.label ?? "Signaler").font(.drivySection)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($focusedStep, equals: selectedTheme == nil ? .categories : .statuses)
@@ -238,7 +238,7 @@ struct ObservationComposer: View {
                 ForEach(ObservationStatus.allCases) { status in
                     Button { save(theme: theme, status: status) } label: {
                         VStack(spacing: DrivySpacing.xs) {
-                            Image(systemName: status.symbol).font(.title2.weight(.bold))
+                            Image(systemName: status.symbol).font(.drivyTitle)
                                 .foregroundStyle(status.color).frame(width: 52, height: 52)
                                 .background(DrivyTheme.surface, in: Circle())
                             Text(status.label).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)

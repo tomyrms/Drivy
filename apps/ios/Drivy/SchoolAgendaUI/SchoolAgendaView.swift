@@ -101,7 +101,7 @@ struct SchoolAgendaView: View {
     private var weekHeader: some View {
         HStack {
             Text(formattedDay(selectedDate, template: "MMMM yyyy"))
-                .font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                .font(.drivySection).fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button { moveWeek(-1) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
                 .accessibilityLabel("Semaine précédente")
@@ -113,13 +113,13 @@ struct SchoolAgendaView: View {
     private var dayHeading: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .firstTextBaseline, spacing: 16) {
-                Text(dateTitle).font(.title3.weight(.semibold)).fixedSize()
+                Text(dateTitle).font(.drivySection).fixedSize()
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 12)
                 if mayPlan { planButton }
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text(dateTitle).font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
+                Text(dateTitle).font(.drivySection).accessibilityAddTraits(.isHeader)
                 if mayPlan { planButton }
             }
         }
@@ -295,7 +295,7 @@ private struct SchoolLessonDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     if let lesson {
-                        Text(learnerName).font(.title.weight(.bold))
+                        Text(learnerName).font(.drivyTitle)
                         Label(lesson.statusLabel, systemImage: lesson.status == "COMPLETED" ? "checkmark.circle" : "calendar")
                             .foregroundStyle(lesson.status == "CANCELLED" ? DrivyTheme.warning : lesson.status == "COMPLETED" ? DrivyTheme.success : DrivyTheme.muted)
                         VStack(spacing: 0) {
@@ -317,9 +317,9 @@ private struct SchoolLessonDetailView: View {
                     } else if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
                     else { ProgressView("Ouverture de la leçon…").frame(maxWidth: .infinity, minHeight: 180) }
                 }
-                .padding(24).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
             .navigationTitle("Leçon").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
             .task { await load() }

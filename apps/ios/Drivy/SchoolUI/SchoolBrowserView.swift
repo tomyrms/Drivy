@@ -231,7 +231,7 @@ private struct SchoolOverviewView: View {
             VStack(alignment: .leading, spacing: 24) {
                 if let school = workspace.school {
                     Text(workspace.isLearnerOnly ? "Ouvrir mon dossier" : "Sélectionnez un élève")
-                        .font(.title2.weight(.bold))
+                        .font(.drivyTitle)
                     Text(school.name).font(.headline).foregroundStyle(DrivyTheme.muted)
                     Text(workspace.isLearnerOnly
                         ? "Ouvrez votre dossier pour retrouver votre profil et vos formations."
@@ -245,11 +245,9 @@ private struct SchoolOverviewView: View {
                     })
                 }
             }
-            .padding(24)
-            .frame(maxWidth: 680, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .drivyPageContent()
         }
-        .background(DrivyTheme.canvas)
+        .background(DrivyTheme.surface)
         .navigationTitle("Dossiers")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -290,7 +288,7 @@ private struct SchoolLearnerDetailView: View {
                     trainings
                     if learner.contactEmail != nil || learner.contactPhone != nil {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Coordonnées").font(.title3.weight(.semibold))
+                            Text("Coordonnées").font(.drivySection)
                             if let email = learner.contactEmail { SchoolInfoRow(title: "E-mail", value: email) }
                             if learner.contactEmail != nil && learner.contactPhone != nil { Divider() }
                             if let phone = learner.contactPhone { SchoolInfoRow(title: "Téléphone", value: phone) }
@@ -298,10 +296,7 @@ private struct SchoolLearnerDetailView: View {
                     }
                 }
             }
-            .padding(.horizontal, DrivySpacing.l)
-            .padding(.vertical, DrivySpacing.m)
-            .frame(maxWidth: 760)
-            .frame(maxWidth: .infinity)
+            .drivyPageContent()
         }
         .background(DrivyTheme.surface)
         .navigationTitle("Dossier")
@@ -320,7 +315,7 @@ private struct SchoolLearnerDetailView: View {
                     DrivyAvatar(name: learner.displayName, size: 60)
                 }
                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    Text(learner.displayName).font(.title.weight(.bold))
+                    Text(learner.displayName).font(.drivyTitle)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(workspace.school.map { "Élève · \($0.name)" } ?? "Dossier scolaire")
                         .font(.subheadline).foregroundStyle(DrivyTheme.muted)
@@ -337,7 +332,7 @@ private struct SchoolLearnerDetailView: View {
     private var trainings: some View {
         VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Text("Formations").font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
+                    Text("Formations").font(.drivySection).accessibilityAddTraits(.isHeader)
                     Spacer(minLength: 8)
                     if let learner = workspace.learner, learner.archivedAt == nil,
                        openCreateTraining != nil || openTrainingAdministration != nil {
@@ -424,7 +419,7 @@ private struct SchoolTrainingDetailView: View {
                     } else if let error = workspace.trainingError {
                         SchoolErrorNotice(message: error, retry: { Task { await workspace.loadSelectedTraining() } })
                     } else if let training = workspace.training {
-                        Text("Catégorie \(training.categoryCode)").font(.largeTitle.weight(.bold))
+                        Text("Permis \(training.categoryCode)").font(.drivyScreenTitle)
                         if let learner = workspace.learner { Text(learner.displayName).font(.title3) }
                         DrivyPanel {
                             VStack(alignment: .leading, spacing: 16) {
@@ -437,11 +432,9 @@ private struct SchoolTrainingDetailView: View {
                         ContentUnavailableView("Formation indisponible", systemImage: "doc.questionmark")
                     }
                 }
-                .padding(24)
-                .frame(maxWidth: 680, alignment: .leading)
-                .frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
             .navigationTitle("Formation")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -457,20 +450,17 @@ struct SchoolErrorNotice: View {
     let message: String
     var retry: (() -> Void)? = nil
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(message, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(DrivyTheme.danger)
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline)
                 .fixedSize(horizontal: false, vertical: true)
-            if let retry {
-                Button("Réessayer", action: retry)
-                    .buttonStyle(.bordered)
-                    .tint(DrivyTheme.danger)
-                    .frame(minHeight: 48)
-            }
+            if let retry { DrivyRetryButton(action: retry) }
         }
-        .padding(16)
+        .foregroundStyle(DrivyTheme.danger)
+        .padding(DrivySpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(DrivyTheme.dangerSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+        .accessibilityElement(children: .contain)
     }
 }
 

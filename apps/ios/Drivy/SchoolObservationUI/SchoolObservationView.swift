@@ -67,9 +67,9 @@ struct SchoolObservationView: View {
                     }
                     if let pending = model.pending { pendingCard(pending) }
                 }
-                .padding(24).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
             .navigationTitle("Observations").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
@@ -99,7 +99,7 @@ struct SchoolObservationView: View {
             Label("Votre carnet privé", systemImage: "lock.fill")
                 .font(.subheadline.weight(.medium)).foregroundStyle(DrivyTheme.accent)
             Text(model.learnerName.isEmpty ? "Pendant la leçon" : model.learnerName)
-                .font(.largeTitle.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+                .font(.drivyScreenTitle).fixedSize(horizontal: false, vertical: true)
             Text("Gardez un repère, puis précisez ce qui mérite d’être repris. Ces observations ne sont pas partagées avec l’élève.")
                 .foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
         }
@@ -139,7 +139,7 @@ struct SchoolObservationView: View {
     private var observationList: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Repères et observations").font(.title3.weight(.semibold))
+                Text("Repères et observations").font(.drivySection)
                 Spacer()
                 Text(model.observations.count.formatted()).font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
             }

@@ -20,9 +20,9 @@ struct SchoolJoinView: View {
                     else if let preview = model.preview { invitation(preview) }
                     else { linkEntry }
                 }
-                .padding(24).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) { primaryAction }
             .navigationTitle("Rejoindre une école")
@@ -40,13 +40,13 @@ struct SchoolJoinView: View {
     }
     private var linkEntry: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Lien d’invitation").font(.title2.bold())
+            Text("Lien d’invitation").font(.drivyTitle)
             Text("Utilisez le compte correspondant à l’adresse destinataire de l’invitation.")
                 .font(.subheadline).foregroundStyle(DrivyTheme.muted)
             SecureField("Coller le lien reçu", text: $model.link)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .submitLabel(.go).onSubmit { Task { await model.inspect() } }
-                .padding(16).background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+                .padding(16).background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
                 .disabled(model.isBusy || !model.isReady)
                 .accessibilityIdentifier("join-invitation-link")
             PasteButton(payloadType: String.self) { values in
@@ -62,7 +62,7 @@ struct SchoolJoinView: View {
             schoolSummary(preview)
             Divider()
             VStack(alignment: .leading, spacing: 14) {
-                Text("Vos données dans l’école").font(.title2.bold())
+                Text("Vos données dans l’école").font(.drivyTitle)
                 Text("Notice · version \(preview.notice.version)").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                 Text(preview.notice.noticeText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 DisclosureGroup("Conservation des données", isExpanded: $expandsRetention) {
@@ -86,7 +86,7 @@ struct SchoolJoinView: View {
     }
     private func schoolSummary(_ preview: SchoolJoinPreview) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(preview.schoolName).font(.title.bold())
+            Text(preview.schoolName).font(.drivyTitle)
             Label(SchoolPresentation.roles(preview.roles), systemImage: "person.crop.circle")
                 .font(.subheadline.weight(.medium)).foregroundStyle(DrivyTheme.accent)
             Label(preview.maskedEmail, systemImage: "envelope").font(.subheadline).foregroundStyle(DrivyTheme.muted)

@@ -90,7 +90,7 @@ struct DrivingMapHomeView: View {
         if controller.activeSession == nil && !exampleJourneys.isEmpty {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(exampleJourneys.count == 1 ? "Un trajet à découvrir" : "Deux trajets à découvrir").font(.title2.weight(.bold))
+                    Text(exampleJourneys.count == 1 ? "Un trajet à découvrir" : "Deux trajets à découvrir").font(.drivyTitle)
                     Text("Exemples · tracés et observations fictifs")
                         .font(.caption).foregroundStyle(DrivyTheme.muted)
                 }
@@ -169,7 +169,7 @@ struct DrivingMapHomeView: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     DrivyStatusDot(title: journeyStatus, tone: controller.isCapturing ? .accent : .neutral)
                     Text(controller.activeSession == nil ? "Votre prochain trajet" : "Trajet en cours")
-                        .font(.title.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+                        .font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
                     if let session = controller.activeSession {
                         HStack(spacing: DrivySpacing.xs) {
                             if controller.isCapturing {

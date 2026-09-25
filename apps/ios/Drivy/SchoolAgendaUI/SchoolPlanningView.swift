@@ -15,7 +15,7 @@ struct SchoolPlanningView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(model.school?.name ?? "Votre école").font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         Text(cancelling ? "Libérer ce rendez-vous" : model.originalLesson == nil ? "Le prochain rendez-vous" : "Un nouveau créneau")
-                            .font(.title2.weight(.bold))
+                            .font(.drivyTitle)
                         Text("Heures de l’école · \(model.timeZone)").font(.caption).foregroundStyle(DrivyTheme.muted)
                     }.padding(.vertical, 8)
                 }.listRowBackground(Color.clear)

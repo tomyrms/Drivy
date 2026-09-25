@@ -118,7 +118,7 @@ private struct SchoolMemberEditor: View {
             Form {
                 if let member = model.selectedMember, member.id == memberID {
                     Section {
-                        Text(member.displayName).font(.title2.weight(.bold))
+                        Text(member.displayName).font(.drivyTitle)
                         Text(SchoolPresentation.roles(member.roles)).foregroundStyle(DrivyTheme.muted)
                         if member.status != "ACTIVE" {
                             Text("Cet accès est révoqué. Une invitation reste nécessaire pour rejoindre à nouveau l’école.")

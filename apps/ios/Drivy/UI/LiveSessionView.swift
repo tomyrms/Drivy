@@ -89,7 +89,7 @@ struct LiveSessionView: View {
                     .background(DrivyTheme.surfaceMuted, in: Circle())
                     .accessibilityHidden(true)
                 Text("Sans GPS")
-                    .font(.title2.weight(.semibold))
+                    .font(.drivyTitle)
                 Text("Les observations conservent leur heure, sans position.")
                     .font(.body)
                     .foregroundStyle(DrivyTheme.muted)
@@ -243,7 +243,7 @@ struct LiveSessionView: View {
             }
         } label: {
             Label("Signaler", systemImage: "plus.bubble.fill")
-                .font(.title3.weight(.semibold))
+                .font(.drivySection)
                 .padding(.vertical, DrivySpacing.xs)
                 .fixedSize(horizontal: false, vertical: true)
         }

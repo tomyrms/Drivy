@@ -148,7 +148,7 @@ struct SessionDetailView: View {
                     .background(DrivyTheme.surfaceMuted, in: Circle())
                     .accessibilityHidden(true)
                 Text(session.usesGPS ? "Aucune position enregistrée" : "Trajet sans GPS")
-                    .font(.title3.weight(.semibold))
+                    .font(.drivySection)
                     .multilineTextAlignment(.center)
                 Text(session.observations.isEmpty ? "Aucune observation n’a été ajoutée." : "Retrouvez les observations dans la chronologie.")
                     .font(.subheadline)

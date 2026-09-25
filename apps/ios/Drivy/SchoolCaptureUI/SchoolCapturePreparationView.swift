@@ -47,12 +47,12 @@ struct SchoolCapturePreparationView: View {
                             .frame(minHeight: 44).disabled(model.isLoading || model.isBusy)
                     }
                 }
-                .padding(24).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                .drivyPageContent()
                 } else {
                     ContentUnavailableView("Accès à actualiser", systemImage: "lock", description: Text("Rouvrez la préparation depuis votre leçon."))
                 }
             }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
             .navigationTitle("Préparation GPS").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -80,7 +80,7 @@ struct SchoolCapturePreparationView: View {
     private var heading: some View {
         VStack(alignment: .leading, spacing: 10) {
             DrivyStatusBadge(title: "GPS facultatif", symbol: "location", tone: .accent)
-            Text(model.learner?.displayName ?? "Votre leçon").font(.largeTitle.weight(.bold))
+            Text(model.learner?.displayName ?? "Votre leçon").font(.drivyScreenTitle)
                 .fixedSize(horizontal: false, vertical: true)
             if let lesson = model.lesson { Text(lessonDate(lesson)).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
             Text("La leçon peut se dérouler sans enregistrer de trajet.").font(.body).foregroundStyle(DrivyTheme.muted)
@@ -96,7 +96,7 @@ struct SchoolCapturePreparationView: View {
     private var choicePanel: some View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: 16) {
-                Label("Le choix de l’élève", systemImage: "person.crop.circle.badge.checkmark").font(.title3.weight(.semibold))
+                Label("Le choix de l’élève", systemImage: "person.crop.circle.badge.checkmark").font(.drivySection)
                 Text(choiceLabel).font(.headline).accessibilityIdentifier("preparation-choice-state")
                 if let notice = model.notice {
                     if let choice = model.choice, choice.noticeVersionId != notice.noticeVersionId {
@@ -126,7 +126,7 @@ struct SchoolCapturePreparationView: View {
     private var diagnosticPanel: some View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: 18) {
-                Label("L’appareil du moniteur", systemImage: "iphone").font(.title3.weight(.semibold))
+                Label("L’appareil du moniteur", systemImage: "iphone").font(.drivySection)
                 if !model.diagnosticIsAvailable {
                     Text("Arrêtez et sauvegardez le trajet en cours avant de vérifier un autre départ.")
                         .font(.subheadline).foregroundStyle(DrivyTheme.warning)
@@ -194,7 +194,7 @@ struct SchoolCapturePreparationView: View {
     private var pendingPanel: some View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: 16) {
-                Label("Diagnostic en attente", systemImage: "clock.arrow.circlepath").font(.title3.weight(.semibold))
+                Label("Diagnostic en attente", systemImage: "clock.arrow.circlepath").font(.drivySection)
                 ForEach(model.pendingAssessments) { queued in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(queued.state == .queued ? "Demande sauvegardée, envoi à reprendre" : "Réponse à confirmer")
@@ -215,7 +215,7 @@ struct SchoolCapturePreparationView: View {
     private var startPanel: some View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: 16) {
-                Label("Le départ du trajet", systemImage: "location.fill").font(.title3.weight(.semibold))
+                Label("Le départ du trajet", systemImage: "location.fill").font(.drivySection)
                 Text("Après confirmation, seules les positions de cette leçon seront enregistrées. Vous pourrez arrêter le GPS à tout moment.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 if let message = model.startMessage { Text(message).font(.subheadline) }
@@ -230,7 +230,7 @@ struct SchoolCapturePreparationView: View {
     private var pendingStartsPanel: some View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: 14) {
-                Label("Départ à vérifier", systemImage: "clock.arrow.circlepath").font(.title3.weight(.semibold))
+                Label("Départ à vérifier", systemImage: "clock.arrow.circlepath").font(.drivySection)
                 ForEach(model.pendingStarts) { queued in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(queued.mutation.targetID == model.lessonID ? "Une demande de départ est conservée pour cette leçon." : "Une demande de départ concerne une autre leçon de cette école.")
@@ -304,8 +304,8 @@ private struct SchoolCaptureStartReviewView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    Text("Démarrer le GPS").font(.largeTitle.weight(.bold))
-                    Text(review.learnerName).font(.title2.weight(.semibold))
+                    Text("Démarrer le GPS").font(.drivyScreenTitle)
+                    Text(review.learnerName).font(.drivyTitle)
                     Text(lessonDate).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     DrivyPanel {
                         VStack(alignment: .leading, spacing: 14) {
@@ -337,8 +337,8 @@ private struct SchoolCaptureStartReviewView: View {
                     } label: { Label("Démarrer le GPS", systemImage: "location.fill") }
                         .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!acknowledged || !model.mayConfirmStart)
                         .accessibilityIdentifier("capture-start")
-                }.padding(24).frame(maxWidth: 700, alignment: .leading).frame(maxWidth: .infinity)
-            }.background(DrivyTheme.canvas)
+                }.drivyPageContent()
+            }.background(DrivyTheme.surface)
                 .navigationTitle("Avant le départ").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { dismiss() }.disabled(model.isBusy) } }
                 .interactiveDismissDisabled(model.isBusy)
