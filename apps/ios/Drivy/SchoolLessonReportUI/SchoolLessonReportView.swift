@@ -81,16 +81,38 @@ private struct SchoolLessonReportContent: View {
     var body: some View {
         Form {
             Section {
-                Text(learnerName).font(.title2.bold()).fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .center, spacing: DrivySpacing.m) {
+                    DrivyAvatar(name: learnerName, size: 52)
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        Text(learnerName).font(.title2.bold()).fixedSize(horizontal: false, vertical: true)
+                        if let date = model.lesson?.startsAt, let lesson = model.lesson {
+                            Text(SchoolPlanningFormat.instant(date, zone: lesson.timeZone)).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        }
+                    }
+                }
+                .accessibilityElement(children: .combine)
                 if let lesson = model.lesson {
-                    Label(model.isAuthor && model.draft != nil ? "Brouillon privé" : lesson.statusLabel,
-                          systemImage: model.isAuthor && model.draft != nil ? "lock" : "steeringwheel")
-                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    if let date = lesson.startsAt { Text(SchoolPlanningFormat.instant(date, zone: lesson.timeZone)).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
+                    if model.isAuthor && model.draft != nil {
+                        DrivyStatusBadge(title: "Brouillon privé", symbol: "lock", tone: .neutral)
+                    } else {
+                        DrivyStatusBadge(title: lesson.statusLabel, symbol: "steeringwheel",
+                            tone: lesson.status == "COMPLETED" ? .success : lesson.status == "PLANNED" ? .accent : .warning)
+                    }
                 }
                 if model.isLoading || model.isBusy { ProgressView(model.isBusy ? "Enregistrement…" : "Chargement…") }
-                if let error = model.errorMessage { Text(error).foregroundStyle(DrivyTheme.danger).accessibilityLabel("Erreur : \(error)") }
-                if let message = model.confirmation { Label(message, systemImage: "checkmark.circle").foregroundStyle(DrivyTheme.accent) }
+                if let error = model.errorMessage {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.danger)
+                        .padding(DrivySpacing.s).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(DrivyTheme.dangerSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+                        .accessibilityLabel("Erreur : \(error)")
+                }
+                if let message = model.confirmation {
+                    Label(message, systemImage: "checkmark.circle.fill")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.success)
+                        .padding(DrivySpacing.s).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(DrivyTheme.successSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+                }
                 if let message = model.information { Text(message).font(.footnote).foregroundStyle(.secondary) }
             }.listRowBackground(Color.clear)
             if model.pending != nil { pendingSection }

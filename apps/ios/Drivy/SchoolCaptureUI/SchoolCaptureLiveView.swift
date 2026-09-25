@@ -121,7 +121,7 @@ struct SchoolCaptureLiveView: View {
             VStack(alignment: .leading, spacing: 20) {
                 heading
                 routeMap.frame(height: 230)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                 if controller.pointCount > 0 { mapControls.frame(maxWidth: .infinity, alignment: .trailing) }
                 sessionInformation
             }
@@ -168,7 +168,7 @@ struct SchoolCaptureLiveView: View {
             }
         }
         .padding(.leading, 6).padding(.trailing, 16).padding(.vertical, 12)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 24))
+        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
     }
 
     private var commandPanel: some View {
@@ -177,7 +177,7 @@ struct SchoolCaptureLiveView: View {
             actions
         }
         .padding(20)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 24))
+        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
     }
 
     private var sessionInformation: some View {
@@ -321,20 +321,20 @@ struct SchoolCaptureLiveView: View {
     }
 
     private var mapControls: some View {
-        HStack(spacing: 8) {
+        GlassEffectContainer(spacing: DrivySpacing.xs) { HStack(spacing: DrivySpacing.xs) {
             Button { followsPosition.toggle() } label: {
                 Image(systemName: followsPosition ? "location.fill" : "location")
                     .font(.title3).foregroundStyle(followsPosition ? DrivyTheme.accent : DrivyTheme.text)
-                    .frame(width: 48, height: 48).background(DrivyTheme.surface, in: Circle())
+                    .frame(width: 48, height: 48).drivyMapControl(in: Circle())
             }
             .accessibilityLabel(followsPosition ? "Arrêter le suivi de position" : "Suivre la dernière position enregistrée")
             .accessibilityAddTraits(followsPosition ? [.isSelected] : [])
             Button { followsPosition = false; resetCameraID = UUID() } label: {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    .font(.title3).frame(width: 48, height: 48)
-                    .background(DrivyTheme.surface, in: Circle())
+                    .font(.title3).foregroundStyle(DrivyTheme.text).frame(width: 48, height: 48)
+                    .drivyMapControl(in: Circle())
             }.accessibilityLabel("Voir tout le trajet")
-        }.buttonStyle(.plain)
+        } }.buttonStyle(.plain)
     }
 
     private var confirmsAction: Binding<Bool> {

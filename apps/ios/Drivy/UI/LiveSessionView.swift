@@ -79,10 +79,12 @@ struct LiveSessionView: View {
                 showsControls: false, showsEmptyState: false, resetCameraID: resetCameraID,
                 followsPosition: $followsPosition)
         } else {
-            VStack(spacing: 12) {
+            VStack(spacing: DrivySpacing.s) {
                 Image(systemName: "location.slash")
-                    .font(.title2)
+                    .font(.title)
                     .foregroundStyle(DrivyTheme.muted)
+                    .frame(width: 72, height: 72)
+                    .background(DrivyTheme.surfaceMuted, in: Circle())
                     .accessibilityHidden(true)
                 Text("Sans GPS")
                     .font(.title2.weight(.semibold))
@@ -107,7 +109,7 @@ struct LiveSessionView: View {
                         showsControls: false, showsEmptyState: false, resetCameraID: resetCameraID,
                         followsPosition: $followsPosition)
                         .frame(height: 230)
-                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                        .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                     if !session.points.isEmpty { mapControls.frame(maxWidth: .infinity, alignment: .trailing) }
                 }
                 observationsButton(session)
@@ -131,21 +133,27 @@ struct LiveSessionView: View {
         }
     }
 
+    /// Chrome floating over the map: Liquid Glass, grouped so the two buttons blend.
     private var mapControls: some View {
-        HStack(spacing: 8) {
-            Button { followsPosition.toggle() } label: {
-                Image(systemName: followsPosition ? "location.fill" : "location")
-                    .font(.title3).foregroundStyle(followsPosition ? DrivyTheme.accent : DrivyTheme.text)
-                    .frame(width: 48, height: 48).background(DrivyTheme.surface, in: Circle())
+        GlassEffectContainer(spacing: DrivySpacing.xs) {
+            HStack(spacing: DrivySpacing.xs) {
+                Button { followsPosition.toggle() } label: {
+                    Image(systemName: followsPosition ? "location.fill" : "location")
+                        .font(.title3).foregroundStyle(followsPosition ? DrivyTheme.accent : DrivyTheme.text)
+                        .frame(width: 48, height: 48)
+                        .drivyMapControl(in: Circle())
+                }
+                .accessibilityLabel(followsPosition ? "Arrêter le suivi de position" : "Suivre la dernière position enregistrée")
+                .accessibilityAddTraits(followsPosition ? [.isSelected] : [])
+                Button { followsPosition = false; resetCameraID = UUID() } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.title3).foregroundStyle(DrivyTheme.text)
+                        .frame(width: 48, height: 48)
+                        .drivyMapControl(in: Circle())
+                }.accessibilityLabel("Voir tout le trajet")
             }
-            .accessibilityLabel(followsPosition ? "Arrêter le suivi de position" : "Suivre la dernière position enregistrée")
-            .accessibilityAddTraits(followsPosition ? [.isSelected] : [])
-            Button { followsPosition = false; resetCameraID = UUID() } label: {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    .font(.title3).frame(width: 48, height: 48)
-                    .background(DrivyTheme.surface, in: Circle())
-            }.accessibilityLabel("Voir tout le trajet")
-        }.buttonStyle(.plain)
+        }
+        .buttonStyle(.plain)
     }
 
     private func sessionHeader(_ session: DrivingSession) -> some View {
@@ -158,13 +166,10 @@ struct LiveSessionView: View {
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
                 : AnyLayout(HStackLayout(spacing: 8))
             contentLayout {
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                     Text(controller.isCapturing ? "Trajet en cours" : controller.isBusy ? "Sauvegarde du trajet" : "Trajet arrêté")
-                        .font(.subheadline.weight(.semibold))
-                    HStack(alignment: .center, spacing: 5) {
-                        Circle().fill(controller.isCapturing ? DrivyTheme.accent : DrivyTheme.warning).frame(width: 5, height: 5)
-                        Text(status(session)).font(.caption).foregroundStyle(DrivyTheme.muted)
-                    }
+                        .font(.headline)
+                    DrivyStatusDot(title: status(session), tone: controller.isCapturing ? .accent : .warning)
                 }.fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
                 if controller.isCapturing {
                     TimelineView(.periodic(from: .now, by: 1)) { timeline in
@@ -176,15 +181,17 @@ struct LiveSessionView: View {
                 }
             }
             Button { confirmsStop = true } label: {
-                Image(systemName: "stop.fill").font(.body.weight(.medium))
-                    .foregroundStyle(DrivyTheme.danger).frame(width: 44, height: 44)
+                Image(systemName: "stop.fill").font(.body.weight(.semibold))
+                    .foregroundStyle(controller.isCapturing ? DrivyTheme.danger : DrivyTheme.disabledText)
+                    .frame(width: 44, height: 44)
+                    .background(controller.isCapturing ? DrivyTheme.dangerSurface : DrivyTheme.disabledSurface, in: Circle())
             }.buttonStyle(.plain).accessibilityLabel("Terminer le trajet")
                 .disabled(!controller.isCapturing).accessibilityIdentifier("session-stop")
         }
-        .padding(.horizontal, 8).padding(.vertical, 12)
+        .padding(.horizontal, DrivySpacing.xs).padding(.vertical, DrivySpacing.s)
         .foregroundStyle(DrivyTheme.text)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.08), radius: 18, y: 5)
+        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+        .shadow(color: .black.opacity(0.10), radius: 16, y: 4)
     }
 
     private func sessionDock(_ session: DrivingSession) -> some View {
@@ -207,10 +214,10 @@ struct LiveSessionView: View {
                     .font(.caption).foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16)
+        .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.m)
         .foregroundStyle(DrivyTheme.text)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 26))
-        .shadow(color: .black.opacity(0.08), radius: 20, y: 5)
+        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+        .shadow(color: .black.opacity(0.10), radius: 16, y: 4)
     }
 
     private func observationsButton(_ session: DrivingSession) -> some View {
@@ -233,8 +240,9 @@ struct LiveSessionView: View {
                 observationRequest = ObservationRequest(context: context, startedAt: session.startedAt)
             }
         } label: {
-            Label("Signaler", systemImage: "plus")
-                .padding(.vertical, 4)
+            Label("Signaler", systemImage: "plus.bubble.fill")
+                .font(.title3.weight(.semibold))
+                .padding(.vertical, DrivySpacing.xs)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .buttonStyle(DrivyPrimaryButtonStyle())

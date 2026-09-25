@@ -78,25 +78,25 @@ struct RouteMapView: View {
             if session.isExample && showsOriginBadge {
                 Text("Exemple · données fictives")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.muted)
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(DrivyTheme.surface, in: Capsule()).padding(12)
+                    .foregroundStyle(DrivyTheme.text)
+                    .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
+                    .glassEffect(.regular, in: Capsule()).padding(DrivySpacing.s)
             }
         }
         .overlay(alignment: .topLeading) {
             if showsEmptyState && session.points.isEmpty {
                 Label(session.usesGPS ? "En attente de position" : "Sans GPS", systemImage: "location.slash")
-                    .font(.caption.weight(.medium)).padding(12)
-                    .background(DrivyTheme.surface, in: Capsule()).padding(16)
+                    .font(.caption.weight(.medium)).padding(DrivySpacing.s)
+                    .glassEffect(.regular, in: Capsule()).padding(DrivySpacing.m)
             }
         }
         .overlay(alignment: .bottomTrailing) {
             if showsControls && !session.points.isEmpty {
                 Button { followsPosition.wrappedValue = false; fitRoute() } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.title3).frame(width: 48, height: 48)
-                        .background(DrivyTheme.surface, in: Circle())
-                }.buttonStyle(.plain).accessibilityLabel("Voir tout le trajet").padding(16)
+                        .font(.title3).foregroundStyle(DrivyTheme.text).frame(width: 48, height: 48)
+                        .drivyMapControl(in: Circle())
+                }.buttonStyle(.plain).accessibilityLabel("Voir tout le trajet").padding(DrivySpacing.m)
             }
         }
         .onAppear { if followsPosition.wrappedValue { followPoint() } else { fitRoute() } }

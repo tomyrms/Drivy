@@ -126,7 +126,7 @@ struct SessionDetailView: View {
                 replayHeader(session)
                 replayBackground(session)
                     .frame(height: 230)
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
+                    .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                 if !session.points.isEmpty { mapControls(session).frame(maxWidth: .infinity, alignment: .trailing) }
                 replayDock(session)
                 if !session.observations.isEmpty { observationsPreview(session) }
@@ -219,18 +219,18 @@ struct SessionDetailView: View {
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 6)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.07), radius: 16, y: 4)
+        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+        .shadow(color: .black.opacity(0.10), radius: 16, y: 4)
     }
 
     private func mapControls(_ session: DrivingSession) -> some View {
-        HStack(spacing: 8) {
+        GlassEffectContainer(spacing: DrivySpacing.xs) { HStack(spacing: DrivySpacing.xs) {
             Button { followsPosition.toggle() } label: {
                 Image(systemName: followsPosition ? "location.fill" : "location")
                     .font(.title3)
                     .foregroundStyle(followsPosition ? DrivyTheme.accent : DrivyTheme.text)
                     .frame(width: 48, height: 48)
-                    .background(DrivyTheme.surface, in: Circle())
+                    .drivyMapControl(in: Circle())
             }
             .disabled(currentPoint(session) == nil && !followsPosition)
             .accessibilityLabel(followsPosition ? "Arrêter le suivi de position" : "Suivre la position du replay")
@@ -240,10 +240,10 @@ struct SessionDetailView: View {
                     .font(.title3)
                     .foregroundStyle(DrivyTheme.text)
                     .frame(width: 48, height: 48)
-                    .background(DrivyTheme.surface, in: Circle())
+                    .drivyMapControl(in: Circle())
             }
             .accessibilityLabel("Voir tout le trajet")
-        }
+        } }
         .buttonStyle(.plain)
     }
 
@@ -261,8 +261,9 @@ struct SessionDetailView: View {
             }
             if let error = controller.errorMessage { InlineErrorView(message: error) }
         }
-        .padding(16)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 24))
+        .padding(DrivySpacing.m)
+        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+        .shadow(color: .black.opacity(0.10), radius: 16, y: 4)
     }
 
     @ViewBuilder
