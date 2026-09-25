@@ -48,6 +48,10 @@ struct SchoolRootView: View {
     @State private var pendingJoinLink: String?
     @State private var selectedHomeTab: SchoolHomeTab = .session
     @State private var captureController = SchoolCaptureSessionController()
+    /// The profile sheet shows the guided welcome only when it was opened for it.
+    @State private var onboardingWorkspaceID: UUID?
+    /// Memberships already offered the welcome during this launch: « Plus tard » never loops.
+    @State private var offeredOnboarding: Set<UUID> = []
 
     // Les workspaces restent disponibles jusqu’à onDismiss pour la réconciliation.
     // La présentation, elle, est exclusivement pilotée par un item complet.
@@ -90,6 +94,30 @@ struct SchoolRootView: View {
             .sheet(item: $profileRoute, onDismiss: profileDismissed) { route in
                 profileSheet(route.model)
             }
+            .task(id: onboardingOfferKey) { await offerOnboardingIfNeeded() }
+    }
+
+    private var onboardingOfferKey: String {
+        "\(workspace?.membership?.membershipId.uuidString ?? ""):\(workspace?.learners.isEmpty == false)"
+    }
+
+    /// First access: open the guided welcome once when the school says it is not finished.
+    /// Staff with the ADMIN role only are not forced into it; it stays reachable from the account.
+    private func offerOnboardingIfNeeded() async {
+        guard identity.isAuthenticated, let configuration, let person = workspace?.person,
+              let membership = workspace?.membership, !offeredOnboarding.contains(membership.membershipId),
+              membership.roles.contains("LEARNER") || membership.roles.contains("INSTRUCTOR"),
+              profileRoute == nil, joinRoute == nil, configurationRoute == nil else { return }
+        let isLearner = membership.roles.contains("LEARNER")
+        if isLearner && workspace?.learners.isEmpty != false { return }
+        offeredOnboarding.insert(membership.membershipId)
+        let kind: SchoolOnboardingKind = isLearner ? .student : .staff
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
+        let api = SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
+        guard await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: kind),
+              workspace?.membership?.membershipId == membership.membershipId, profileRoute == nil else { return }
+        openOnboarding()
     }
 
     @ViewBuilder
@@ -375,6 +403,7 @@ struct SchoolRootView: View {
     }
     @ViewBuilder private func profileContent(_ model: SchoolProfileWorkspace) -> some View {
         if model.isPolicyManagement { SchoolProfilePolicyView(model: model) }
+        else if model.id == onboardingWorkspaceID { SchoolOnboardingView(model: model, trainings: workspace?.trainings ?? []) }
         else { SchoolProfileView(model: model) }
     }
     private var profileAction: ((SchoolLearner) -> Void)? {
@@ -413,19 +442,22 @@ struct SchoolRootView: View {
     }
     private func openProfile(_ learner: SchoolLearner) {
         guard let model = makeProfileWorkspace(learner: learner) else { return }
+        onboardingWorkspaceID = nil
         profileWorkspace = model; showsProfile = true
     }
     private func openProfilePolicy() {
         guard canConfigureSchool, let model = makeProfileWorkspace() else { return }
+        onboardingWorkspaceID = nil
         profileWorkspace = model; showsProfile = true
     }
     private func openOnboarding() {
         guard let model = makeProfileWorkspace(onboardingOnly: true) else { return }
+        onboardingWorkspaceID = model.id
         profileWorkspace = model; showsProfile = true
     }
     private func closeProfile() { profileWorkspace?.invalidate(); showsProfile = false }
     private func profileDismissed() {
-        profileWorkspace?.invalidate(); profileWorkspace = nil
+        profileWorkspace?.invalidate(); profileWorkspace = nil; onboardingWorkspaceID = nil
         if identity.isAuthenticated, workspace?.selectedLearnerID != nil {
             Task { await workspace?.loadSelectedLearner() }
         }
@@ -919,7 +951,7 @@ private struct SchoolAccountView: View {
                     .accessibilityIdentifier("open-join-school")
             }
             if let openOnboarding {
-                DrivyNavigationRow(title: "Mon arrivée dans l’école", detail: "Profil et étapes d’accueil",
+                DrivyNavigationRow(title: "Accueil dans l’école", detail: "Vos informations, votre formation, le GPS",
                     symbol: "figure.wave", action: openOnboarding)
                     .accessibilityIdentifier("open-my-onboarding")
             }

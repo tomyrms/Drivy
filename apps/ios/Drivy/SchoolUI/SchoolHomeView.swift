@@ -289,7 +289,7 @@ struct SchoolHomeView: View {
                 meta: workspace.membership.map { SchoolPresentation.roles($0.roles) },
                 leading: .avatar(workspace.person?.displayName ?? "Compte"))
             if let openOnboarding {
-                DrivyNavigationRow(title: "Mon arrivée dans l’école", detail: "Profil et étapes d’accueil",
+                DrivyNavigationRow(title: "Accueil dans l’école", detail: "Vos informations, votre formation, le GPS",
                     symbol: "figure.wave", action: openOnboarding)
             }
             DrivyNavigationRow(title: "Changer d’école", detail: workspace.person.map { $0.memberships.count > 1 ? "\($0.memberships.count) écoles sur ce compte" : "Une école sur ce compte" },

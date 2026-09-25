@@ -205,6 +205,20 @@ final class SchoolProfileWorkspace: Identifiable {
             skippedOptionalSteps: skipped, policyVersionId: onboarding.policyVersionId)
         return await prepare(payload, id: id, kind: .saveOnboarding, resourceID: onboarding.id, version: onboarding.version)
     }
+    /// Guided welcome: saves the step reached and adds only the optional steps the
+    /// person explicitly passed. Steps already skipped stay skipped; nothing else is
+    /// marked on their behalf. Same command, outbox and confirmation as above.
+    @discardableResult
+    func saveOnboarding(step: SchoolOnboardingStep, skipping passed: Set<String>) async -> Bool {
+        guard canMutate, let onboarding, onboarding.status != "COMPLETED" else { return false }
+        let id = UUID()
+        let skipped = ["PHOTO", "NOTIFICATIONS", "DEVICE"].filter {
+            onboarding.skippedOptionalSteps.contains($0) || passed.contains($0)
+        }
+        let payload = SchoolOnboardingCommand(operationId: id, kind: onboarding.kind, currentStep: step,
+            skippedOptionalSteps: skipped, policyVersionId: onboarding.policyVersionId)
+        return await prepare(payload, id: id, kind: .saveOnboarding, resourceID: onboarding.id, version: onboarding.version)
+    }
     @discardableResult
     func completeOnboardingAfterConfirmation() async -> Bool {
         guard canMutate, let onboarding, onboarding.status != "COMPLETED", onboarding.pendingActions.isEmpty else { return false }

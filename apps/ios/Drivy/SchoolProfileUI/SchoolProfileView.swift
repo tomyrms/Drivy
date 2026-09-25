@@ -4,14 +4,14 @@ struct SchoolProfileView: View {
     @Bindable var model: SchoolProfileWorkspace
     @Environment(\.dismiss) private var dismiss
     @State private var confirmsSave = false
-    @State private var confirmsComplete = false
+    @State private var showsGuidedWelcome = false
     @State private var confirmsDiscard = false
     @State private var attemptedSave = false
 
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle(model.learnerID == nil ? "Mon arrivée" : "Profil de l’élève")
+                .navigationTitle(model.learnerID == nil ? "Mon accueil" : (model.isOwnProfile ? "Mes informations" : "Profil de l’élève"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -29,11 +29,7 @@ struct SchoolProfileView: View {
                 } message: {
                     Text("L’auteur de la saisie sera conservé. Le nom du compte de connexion ne sera pas modifié.")
                 }
-                .confirmationDialog("Terminer votre arrivée ?", isPresented: $confirmsComplete, titleVisibility: .visible) {
-                    Button("Terminer mon arrivée") { Task { _ = await model.completeOnboardingAfterConfirmation() } }
-                } message: {
-                    Text("Les conditions propres à chaque future leçon ou cours seront vérifiées au moment utile.")
-                }
+                .sheet(isPresented: $showsGuidedWelcome) { SchoolOnboardingView(model: model) }
                 .confirmationDialog("Quitter sans enregistrer les changements du formulaire ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
                     Button("Quitter le formulaire", role: .destructive) { dismiss() }
                 } message: {
@@ -199,43 +195,35 @@ struct SchoolProfileView: View {
             } header: { Text("Prochaine étape") }
         }
     }
+    /// The welcome itself is the guided flow (SchoolOnboardingView); this screen
+    /// only says where it stands and reopens it. No step is chosen from a list here.
     private func onboardingSection(_ onboarding: SchoolOnboarding) -> some View {
-        Section {
-            Text(onboarding.status == "COMPLETED" ? "Votre arrivée est terminée" : "Votre arrivée dans l’école")
+        let completed = onboarding.status == "COMPLETED"
+        return Section {
+            Label(completed ? "Accueil terminé" : "Accueil à terminer",
+                systemImage: completed ? "checkmark.circle.fill" : "figure.wave")
                 .font(.headline)
-            SchoolProfileBlockers(blockers: onboarding.pendingActions)
-            if model.profile == nil && onboarding.kind == .student && !onboarding.pendingActions.isEmpty {
-                Text("Vous pouvez compléter les informations demandées depuis votre dossier scolaire.")
+                .foregroundStyle(completed ? DrivyTheme.success : DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            if !completed {
+                Text("Quelques étapes courtes : vos informations, votre formation, puis le GPS pendant les leçons.")
                     .font(.footnote).foregroundStyle(DrivyTheme.muted)
-            }
-            if onboarding.status != "COMPLETED" {
-                Menu {
-                    ForEach(SchoolOnboardingStep.allCases, id: \.self) { step in
-                        Button(step.label) { Task { _ = await model.saveOnboarding(step: step, skipOptional: false) } }
-                    }
-                } label: { Label("Reprendre à l’étape : \(onboarding.currentStep.label)", systemImage: "list.number") }
-                .frame(minHeight: 44).disabled(!model.canMutate)
-                if !Set(["PHOTO", "NOTIFICATIONS", "DEVICE"]).isSubset(of: Set(onboarding.skippedOptionalSteps)) {
-                    Button("Continuer sans photo ni réglages de l’appareil") {
-                        Task { _ = await model.saveOnboarding(step: .review, skipOptional: true) }
-                    }
-                    .frame(minHeight: 44).disabled(!model.canMutate)
-                    .accessibilityIdentifier("onboarding-skip-optional")
-                }
-                Button("Terminer mon arrivée") { confirmsComplete = true }
-                    .frame(minHeight: 48)
-                    .disabled(!model.canMutate || !onboarding.pendingActions.isEmpty)
-                    .accessibilityIdentifier("onboarding-complete")
-                if !onboarding.pendingActions.isEmpty {
-                    Text("Terminez d’abord les actions indiquées ci-dessus.")
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Reprendre l’accueil") { showsGuidedWelcome = true }
+                    .frame(minHeight: 44)
+                    .disabled(model.isBusy || model.hasEdits)
+                    .accessibilityIdentifier("onboarding-resume")
+                if model.hasEdits {
+                    Text("Enregistrez d’abord les modifications du formulaire.")
                         .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-        }
+        } header: { Text("Accueil dans l’école") }
     }
     private func noticeSection(_ notice: SchoolDataPolicy) -> some View {
         Section {
-            DisclosureGroup("Information sur vos données · version \(notice.version)") {
+            DisclosureGroup("Comment l’école utilise vos données · version \(notice.version)") {
                 Text(notice.noticeText).textSelection(.enabled)
                 Text(notice.retentionText).textSelection(.enabled)
                 if let email = notice.contactEmail { Text(email).textSelection(.enabled) }
