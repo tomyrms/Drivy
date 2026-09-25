@@ -19,11 +19,12 @@ struct SchoolCatalogView: View {
                     if model.learner != nil { learnerTrainings }
                     else { catalog }
                 }
-                .padding(24)
+                .padding(.horizontal, DrivySpacing.l)
+                .padding(.vertical, DrivySpacing.m)
                 .frame(maxWidth: 760, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
             .navigationTitle(model.learner == nil ? "Formations" : "Dossier de formation")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -61,12 +62,16 @@ struct SchoolCatalogView: View {
         if model.isLoading { ProgressView("Actualisation de l’école…").frame(maxWidth: .infinity, minHeight: 44) }
         if let school = model.school, school.status != "ACTIVE" {
             Label("Activez l’école dans sa configuration avant de créer son catalogue.", systemImage: "info.circle")
-                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                .padding(DrivySpacing.s).frame(maxWidth: .infinity, alignment: .leading)
+                .background(DrivyTheme.warningSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
         }
         if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
         if let message = model.successMessage {
-            Label(message, systemImage: "checkmark.circle").font(.subheadline).foregroundStyle(DrivyTheme.success)
+            Label(message, systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(DrivyTheme.success)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(DrivySpacing.s).frame(maxWidth: .infinity, alignment: .leading)
+                .background(DrivyTheme.successSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
         }
         if let pending = model.pending {
             DrivyPanel {
@@ -130,13 +135,17 @@ struct SchoolCatalogView: View {
             ForEach(model.currentOfferings) { offer in
                 VStack(alignment: .leading, spacing: 12) {
                     Divider()
-                    Text("Catégorie \(offer.categoryCode)").font(.title3.weight(.semibold))
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Permis \(offer.categoryCode)").font(.title3.weight(.semibold))
+                        Spacer(minLength: DrivySpacing.xs)
+                        DrivyStatusBadge(title: offer.enabled ? "Ouverte" : "Fermée",
+                            symbol: offer.enabled ? "checkmark" : "pause.fill", tone: offer.enabled ? .success : .neutral)
+                    }
                     Text(offer.offeringKey).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     Text("\(offer.defaultDurationMinutes) min · \(SchoolCatalogFormatting.price(offer.defaultPriceCents))")
-                        .font(.headline)
-                    Label(offer.enabled ? "Ouverte aux nouvelles formations" : "Fermée aux nouvelles formations",
-                          systemImage: offer.enabled ? "checkmark.circle" : "pause.circle")
-                        .font(.subheadline).foregroundStyle(offer.enabled ? DrivyTheme.success : DrivyTheme.muted)
+                        .font(.headline.monospacedDigit())
+                    Text(offer.enabled ? "Ouverte aux nouvelles formations" : "Fermée aux nouvelles formations")
+                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                     DisclosureGroup("Contenu de la version \(offer.version)") {
                         VStack(alignment: .leading, spacing: 10) {
@@ -166,10 +175,13 @@ struct SchoolCatalogView: View {
             ForEach(model.curricula.sorted { ($0.categoryCode, -$0.revision) < ($1.categoryCode, -$1.revision) }) { curriculum in
                 VStack(alignment: .leading, spacing: 12) {
                     Divider()
-                    Text("Catégorie \(curriculum.categoryCode)").font(.title3.weight(.semibold))
-                    Text("Révision \(curriculum.revision) · \(curriculum.approved ? "Approuvée par l’école" : "Brouillon")")
-                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Permis \(curriculum.categoryCode)").font(.title3.weight(.semibold))
+                        Spacer(minLength: DrivySpacing.xs)
+                        DrivyStatusBadge(title: curriculum.approved ? "Approuvé" : "Brouillon",
+                            symbol: curriculum.approved ? "checkmark.seal" : "pencil", tone: curriculum.approved ? .success : .warning)
+                    }
+                    Text("Révision \(curriculum.revision)").font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     DisclosureGroup("\(curriculum.competencies.count) compétence\(curriculum.competencies.count == 1 ? "" : "s")") {
                         ForEach(curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }) { competency in
                             VStack(alignment: .leading, spacing: 6) {
@@ -194,10 +206,13 @@ struct SchoolCatalogView: View {
             ForEach(model.policies.sorted { ($0.categoryCode, -$0.version) < ($1.categoryCode, -$1.version) }) { policy in
                 VStack(alignment: .leading, spacing: 12) {
                     Divider()
-                    Text("Catégorie \(policy.categoryCode)").font(.title3.weight(.semibold))
-                    Text("Version \(policy.version) · \(policy.approved ? "Approuvée par l’école" : "Brouillon")")
-                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Permis \(policy.categoryCode)").font(.title3.weight(.semibold))
+                        Spacer(minLength: DrivySpacing.xs)
+                        DrivyStatusBadge(title: policy.approved ? "Approuvée" : "Brouillon",
+                            symbol: policy.approved ? "checkmark.seal" : "pencil", tone: policy.approved ? .success : .warning)
+                    }
+                    Text("Version \(policy.version)").font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     DisclosureGroup("Lire la procédure et ses conditions") {
                         VStack(alignment: .leading, spacing: 16) {
                             Text(policy.procedureText).textSelection(.enabled)

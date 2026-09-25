@@ -169,6 +169,7 @@ struct SchoolCaptureLiveView: View {
         }
         .padding(.leading, 6).padding(.trailing, 16).padding(.vertical, 12)
         .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+        .shadow(color: .black.opacity(0.10), radius: 16, y: 4)
     }
 
     private var commandPanel: some View {
@@ -178,6 +179,7 @@ struct SchoolCaptureLiveView: View {
         }
         .padding(20)
         .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+        .shadow(color: .black.opacity(0.10), radius: 16, y: 4)
     }
 
     private var sessionInformation: some View {

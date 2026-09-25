@@ -170,9 +170,14 @@ struct SchoolRecordingChoiceView: View {
                 Image(systemName: selectedStatus == status ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(selectedStatus == status ? DrivyTheme.accent : DrivyTheme.muted)
             }
-            .padding(18).frame(maxWidth: .infinity, minHeight: 80)
-            .background(selectedStatus == status ? DrivyTheme.accentSoft : DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 20))
-            .contentShape(RoundedRectangle(cornerRadius: 20))
+            .padding(DrivySpacing.m).frame(maxWidth: .infinity, minHeight: 80)
+            .background(selectedStatus == status ? DrivyTheme.accentSoft : DrivyTheme.surface,
+                in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
+                    .strokeBorder(selectedStatus == status ? DrivyTheme.accent : DrivyTheme.border, lineWidth: selectedStatus == status ? 1.5 : 0.5)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(!model.mayChoose || (status == .allowed && model.verbalAgreementIsProtected))

@@ -87,14 +87,13 @@ struct SchoolMemberView: View {
     private func memberRow(_ member: SchoolMember) -> some View {
         HStack(spacing: 14) {
             if !typeSize.isAccessibilitySize {
-                Image(systemName: "person").font(.body).foregroundStyle(DrivyTheme.muted)
-                    .frame(width: 24).accessibilityHidden(true)
+                DrivyAvatar(name: member.displayName, size: 40)
             }
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(member.displayName).font(.headline).foregroundStyle(DrivyTheme.text)
                 Text(SchoolPresentation.roles(member.roles) + (member.id == model.scope.membershipID && member.status == "ACTIVE" ? " · votre compte" : ""))
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                if member.status != "ACTIVE" { Text("Accès révoqué").font(.caption).foregroundStyle(DrivyTheme.warning) }
+                if member.status != "ACTIVE" { DrivyStatusBadge(title: "Accès révoqué", symbol: "lock", tone: .warning) }
             }.fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)

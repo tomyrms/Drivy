@@ -33,6 +33,8 @@ struct LiveSessionView: View {
         }
         .sheet(item: $listedSession, onDismiss: dismissWhenFinished) { session in ObservationListView(session: session) }
         .onChange(of: controller.activeSession?.id) { _, id in if id == nil { dismissWhenFinished() } }
+        // Confirmed only once the observation is durably stored on the device.
+        .sensoryFeedback(.success, trigger: controller.activeSession?.observations.count ?? 0) { old, new in new > old }
     }
 
     private func liveContent(_ session: DrivingSession) -> some View {

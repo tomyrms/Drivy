@@ -113,14 +113,25 @@ private struct InvitationPendingSection: View {
 
 private struct InvitationRow: View {
     let invitation: SchoolInvitation
+    private var statusTone: DrivyTone {
+        switch invitation.status { case .pending: .accent; case .accepted: .success; case .revoked, .expired: .neutral }
+    }
+    private var statusSymbol: String {
+        switch invitation.status { case .pending: "clock"; case .accepted: "checkmark"; case .revoked: "xmark"; case .expired: "hourglass" }
+    }
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(invitation.maskedEmail).font(.headline)
-            Text(invitation.roleLabel).font(.subheadline)
-            Label(invitation.status.label, systemImage: invitation.status == .accepted ? "checkmark.circle" : "envelope")
-                .font(.caption.weight(.medium))
+        HStack(alignment: .center, spacing: DrivySpacing.s) {
+            Image(systemName: "envelope").font(.body).foregroundStyle(DrivyTheme.muted)
+                .frame(width: 40, height: 40).background(DrivyTheme.surfaceMuted, in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(invitation.maskedEmail).font(.headline)
+                Text(invitation.roleLabel).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            DrivyStatusBadge(title: invitation.status.label, symbol: statusSymbol, tone: statusTone)
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, DrivySpacing.xxs)
         .accessibilityElement(children: .combine)
     }
 }
@@ -163,9 +174,10 @@ private struct InvitationDetailView: View {
                      : "Le renvoi remplace le lien précédent. La révocation empêche de rejoindre l’école avec ce lien.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
             }
-            .padding(24).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
+            .padding(.horizontal, DrivySpacing.l).padding(.vertical, DrivySpacing.m)
+            .frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
         }
-        .background(DrivyTheme.canvas)
+        .background(DrivyTheme.surface)
         .navigationTitle("Invitation")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Renvoyer cette invitation ?", isPresented: $confirmsResend) {

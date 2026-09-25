@@ -71,28 +71,34 @@ private struct SessionHistoryRow: View {
     let session: DrivingSession
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    private var hasRoute: Bool { session.usesGPS || !session.points.isEmpty }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: DrivySpacing.s) {
             if !dynamicTypeSize.isAccessibilitySize {
-                Image(systemName: session.usesGPS || !session.points.isEmpty ? "point.topleft.down.to.point.bottomright.curvepath" : "note.text")
-                    .font(.body)
-                    .foregroundStyle(DrivyTheme.muted)
-                    .frame(width: 24, height: 24)
+                Image(systemName: hasRoute ? "point.topleft.down.to.point.bottomright.curvepath" : "note.text")
+                    .font(.title3)
+                    .foregroundStyle(hasRoute ? DrivyTheme.accent : DrivyTheme.muted)
+                    .frame(width: 44, height: 44)
+                    .background(hasRoute ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted,
+                        in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
                     .accessibilityHidden(true)
             }
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 if let title = session.title { Text(title).font(.headline) }
                 else { Text(session.startedAt, format: .dateTime.day().month(.wide).hour().minute()).font(.headline) }
-                Text(session.isExample ? "Exemple · données fictives" : session.state.label)
-                    .font(.subheadline)
-                    .foregroundStyle(session.state == .interrupted ? DrivyTheme.warning : DrivyTheme.muted)
                 Text("\(session.observations.count) observation\(session.observations.count == 1 ? "" : "s") · \(session.isExample ? "Replay" : session.usesGPS ? "Avec GPS" : "Sans GPS")")
                     .font(.subheadline)
                     .foregroundStyle(DrivyTheme.muted)
+                if session.isExample {
+                    DrivyStatusBadge(title: "Exemple fictif")
+                } else if session.state == .interrupted {
+                    DrivyStatusBadge(title: session.state.label, symbol: "exclamationmark.triangle", tone: .warning)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, DrivySpacing.xxs)
         .accessibilityElement(children: .combine)
     }
 }
@@ -130,7 +136,7 @@ struct SummaryEditorView: View {
                         .frame(minHeight: 260)
                         .scrollContentBackground(.hidden)
                         .padding(12)
-                        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+                        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                         .accessibilityLabel("Texte du bilan personnel")
                         .accessibilityIdentifier("summary-text")
                         .disabled(saving)

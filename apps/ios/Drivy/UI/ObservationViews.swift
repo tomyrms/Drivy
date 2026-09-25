@@ -16,6 +16,26 @@ extension ObservationStatus {
         case .positive: DrivyTheme.success
         }
     }
+
+    var surface: Color {
+        switch self {
+        case .attention: DrivyTheme.warningSurface
+        case .toWorkOn: DrivyTheme.dangerSurface
+        case .positive: DrivyTheme.successSurface
+        }
+    }
+}
+
+/// Large tactile tile for the reporting bubble: immediate spring feedback,
+/// removed under Reduce Motion. Selection itself is announced by haptics.
+struct DrivyTileButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.94 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(reduceMotion ? nil : .spring(duration: 0.2, bounce: 0.35), value: configuration.isPressed)
+    }
 }
 
 struct ObservationRow: View {
@@ -128,7 +148,8 @@ struct ObservationComposer: View {
             }.scrollDismissesKeyboard(.interactively)
         }
         .background(DrivyTheme.surface)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: selectedTheme)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: selectedTheme)
+        .sensoryFeedback(.selection, trigger: selectedTheme)
         .presentationDetents([.height(440), .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(30)
@@ -187,17 +208,17 @@ struct ObservationComposer: View {
             LazyVGrid(columns: columns, alignment: .center, spacing: 14) {
                 ForEach(ObservationTheme.allCases) { theme in
                     Button { selectedTheme = theme } label: {
-                        VStack(spacing: 11) {
-                            Image(systemName: theme.journeySymbol).font(.title2.weight(.regular))
-                                .foregroundStyle(DrivyTheme.accent).frame(width: 52, height: 52)
-                                .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 17))
-                            Text(theme.label).font(.caption.weight(.semibold))
+                        VStack(spacing: DrivySpacing.xs) {
+                            Image(systemName: theme.journeySymbol).font(.title.weight(.medium))
+                                .foregroundStyle(DrivyTheme.accent).frame(width: 64, height: 64)
+                                .background(DrivyTheme.accentSoft, in: Circle())
+                            Text(theme.label).font(.subheadline.weight(.semibold))
                                 .foregroundStyle(DrivyTheme.text).multilineTextAlignment(.center)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 100, alignment: .top)
+                        .frame(maxWidth: .infinity, minHeight: 108, alignment: .top)
                         .contentShape(Rectangle())
-                    }.buttonStyle(.plain)
+                    }.buttonStyle(DrivyTileButtonStyle())
                         .accessibilityIdentifier(theme == .priority ? "category-priorities" : "category-\(theme.rawValue)")
                 }
             }
@@ -210,21 +231,29 @@ struct ObservationComposer: View {
                 Text("Raccourcissez la note à 1 000 caractères avant de choisir un statut.")
                     .font(.footnote).foregroundStyle(DrivyTheme.danger).padding(.bottom, 12)
             }
-            ForEach(ObservationStatus.allCases) { status in
-                Button { save(theme: theme, status: status) } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: status.symbol).font(.body.weight(.medium))
-                            .foregroundStyle(status.color).frame(width: 38, height: 38)
-                            .background(status.color.opacity(0.10), in: Circle())
-                        Text(status.label).font(.body.weight(.semibold)).foregroundStyle(DrivyTheme.text)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
-                    }.frame(minHeight: 72).contentShape(Rectangle())
-                }.buttonStyle(.plain)
-                    .disabled(saving || !controller.isCapturing || note.count > 1_000)
-                    .accessibilityHint("Enregistre l’observation sur cet appareil")
-                    .accessibilityIdentifier("status-\(status.rawValue)")
-                if status != ObservationStatus.allCases.last { Divider().padding(.leading, 54) }
+            let statusLayout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: DrivySpacing.s))
+                : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.s))
+            statusLayout {
+                ForEach(ObservationStatus.allCases) { status in
+                    Button { save(theme: theme, status: status) } label: {
+                        VStack(spacing: DrivySpacing.xs) {
+                            Image(systemName: status.symbol).font(.title2.weight(.bold))
+                                .foregroundStyle(status.color).frame(width: 52, height: 52)
+                                .background(DrivyTheme.surface, in: Circle())
+                            Text(status.label).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, DrivySpacing.m).padding(.horizontal, DrivySpacing.xs)
+                        .frame(maxWidth: .infinity, minHeight: 128)
+                        .background(status.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                    }.buttonStyle(DrivyTileButtonStyle())
+                        .disabled(saving || !controller.isCapturing || note.count > 1_000)
+                        .accessibilityHint("Enregistre l’observation sur cet appareil")
+                        .accessibilityIdentifier("status-\(status.rawValue)")
+                }
             }
             if saving { ProgressView("Enregistrement…").frame(maxWidth: .infinity).padding(.top, 12) }
             else if controller.isCapturing {
@@ -234,8 +263,8 @@ struct ObservationComposer: View {
             DisclosureGroup(isExpanded: $showsNote) {
                 VStack(alignment: .leading, spacing: 8) {
                     TextField("Un détail à retrouver au bilan", text: $note, axis: .vertical)
-                        .lineLimit(3...6).focused($noteFocused).padding(14)
-                        .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14))
+                        .lineLimit(3...6).focused($noteFocused).padding(DrivySpacing.s)
+                        .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
                         .accessibilityLabel("Note facultative").accessibilityIdentifier("observation-note").disabled(saving)
                     if note.count >= 900 {
                         Text("\(note.count) / 1 000 caractères")

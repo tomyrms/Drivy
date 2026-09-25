@@ -79,7 +79,7 @@ struct SchoolCapturePreparationView: View {
 
     private var heading: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("GPS facultatif", systemImage: "location.circle").font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
+            DrivyStatusBadge(title: "GPS facultatif", symbol: "location", tone: .accent)
             Text(model.learner?.displayName ?? "Votre leçon").font(.largeTitle.weight(.bold))
                 .fixedSize(horizontal: false, vertical: true)
             if let lesson = model.lesson { Text(lessonDate(lesson)).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
