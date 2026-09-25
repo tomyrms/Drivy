@@ -36,7 +36,7 @@ struct DrivingMapHomeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 30) {
+            VStack(alignment: .leading, spacing: DrivySpacing.xl) {
                 heading
                 if sizeClass == .regular {
                     HStack(alignment: .top, spacing: 32) {
@@ -49,7 +49,7 @@ struct DrivingMapHomeView: View {
                 }
                 historyLink
             }
-            .padding(.horizontal, sizeClass == .regular ? 32 : 24)
+            .padding(.horizontal, DrivySpacing.page(sizeClass))
             .padding(.top, 8)
             .padding(.bottom, 28)
             .frame(maxWidth: 1050, alignment: .leading)
@@ -109,7 +109,7 @@ struct DrivingMapHomeView: View {
                             .font(.title3)
                             .frame(width: 52, height: 52)
                             .foregroundStyle(DrivyTheme.accent)
-                            .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 16))
+                            .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Explorer la carte")
@@ -132,7 +132,7 @@ struct DrivingMapHomeView: View {
                     showsEmptyState: false, showsOriginBadge: false)
                     .allowsHitTesting(false)
                     .frame(width: 104, height: 120)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(session.title ?? "Trajet d’exemple")
@@ -150,8 +150,8 @@ struct DrivingMapHomeView: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: 24))
-            .overlay { RoundedRectangle(cornerRadius: 24).stroke(DrivyTheme.border, lineWidth: 0.5) }
+            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous).strokeBorder(DrivyTheme.border, lineWidth: 0.5) }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(session.title ?? "Trajet"), exemple fictif, \(session.observations.count) observations")
@@ -159,57 +159,49 @@ struct DrivingMapHomeView: View {
     }
 
     private var heading: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let schoolName, !schoolName.isEmpty {
-                Text(schoolName).font(.subheadline.weight(.medium)).foregroundStyle(DrivyTheme.muted)
-            }
-            Text(Date.now, format: .dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "fr_CH")))
-                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-        }
+        DrivyContextHeader(context: schoolName,
+            detail: Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "fr_CH"))).capitalizedFirst)
     }
 
     private var journeyCard: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 7) {
-                    Circle().fill(controller.isCapturing ? DrivyTheme.accent : DrivyTheme.muted).frame(width: 6, height: 6)
-                    Text(journeyStatus).font(.caption.weight(.semibold))
-                }.foregroundStyle(controller.isCapturing ? DrivyTheme.accent : DrivyTheme.muted)
-                Text(controller.activeSession == nil ? "Votre prochain trajet" : "Trajet en cours")
-                    .font(.title2.weight(.bold)).fixedSize(horizontal: false, vertical: true)
-                if let session = controller.activeSession {
-                    HStack(spacing: 8) {
-                        if controller.isCapturing {
-                            TimelineView(.periodic(from: .now, by: 1)) { context in
-                                Text(context.date.sessionElapsed(since: session.startedAt)).monospacedDigit()
+        DrivyCard {
+            VStack(alignment: .leading, spacing: DrivySpacing.l - 4) {
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                    DrivyStatusDot(title: journeyStatus, tone: controller.isCapturing ? .accent : .neutral)
+                    Text(controller.activeSession == nil ? "Votre prochain trajet" : "Trajet en cours")
+                        .font(.title.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+                    if let session = controller.activeSession {
+                        HStack(spacing: DrivySpacing.xs) {
+                            if controller.isCapturing {
+                                TimelineView(.periodic(from: .now, by: 1)) { context in
+                                    Text(context.date.sessionElapsed(since: session.startedAt)).monospacedDigit()
+                                }
+                                Text("·").accessibilityHidden(true)
                             }
-                        }
-                        Text("\(session.observations.count) observation\(session.observations.count == 1 ? "" : "s")")
-                    }.font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            Text("\(session.observations.count) observation\(session.observations.count == 1 ? "" : "s")")
+                        }.font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    } else {
+                        Text("Le parcours et les moments à retenir.")
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    }
+                }
+                mapPreview
+                if controller.isLoading {
+                    ProgressView("Ouverture des trajets…").frame(maxWidth: .infinity, minHeight: 52)
                 } else {
-                    Text("Le parcours et les moments à retenir.")
-                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    Button(action: primaryAction) {
+                        Label(controller.activeSession == nil ? "Commencer un trajet" : controller.isCapturing ? "Revenir à la carte" : "Vérifier la sauvegarde",
+                              systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                    }
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .disabled(controller.isBusy || (controller.activeSession == nil && controller.errorMessage != nil))
+                    .accessibilityIdentifier(controller.activeSession == nil ? "new-session" : "resume-session")
                 }
-            }
-            mapPreview
-            if controller.isLoading {
-                ProgressView("Ouverture des trajets…").frame(maxWidth: .infinity, minHeight: 52)
-            } else {
-                Button(action: primaryAction) {
-                    Label(controller.activeSession == nil ? "Commencer un trajet" : controller.isCapturing ? "Revenir à la carte" : "Vérifier la sauvegarde",
-                          systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                if let error = controller.errorMessage {
+                    InlineErrorView(message: error, retry: retryStorage)
                 }
-                .buttonStyle(DrivyPrimaryButtonStyle())
-                .disabled(controller.isBusy || (controller.activeSession == nil && controller.errorMessage != nil))
-                .accessibilityIdentifier(controller.activeSession == nil ? "new-session" : "resume-session")
-            }
-            if let error = controller.errorMessage {
-                InlineErrorView(message: error, retry: retryStorage)
             }
         }
-        .padding(20)
-        .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: 26))
-        .overlay { RoundedRectangle(cornerRadius: 26).stroke(DrivyTheme.border.opacity(0.75), lineWidth: 0.5) }
     }
 
     private var mapPreview: some View {
@@ -229,78 +221,60 @@ struct DrivingMapHomeView: View {
                 }
                 Label(controller.isCapturing ? "Ouvrir" : "Explorer", systemImage: "arrow.up.left.and.arrow.down.right")
                     .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(DrivyTheme.surface, in: Capsule()).padding(12)
+                    .foregroundStyle(DrivyTheme.text)
+                    .padding(.horizontal, DrivySpacing.s).padding(.vertical, 9)
+                    .drivyMapControl(in: Capsule())
+                    .padding(DrivySpacing.s)
             }
-            .frame(height: 160)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
-            .contentShape(RoundedRectangle(cornerRadius: 18))
+            .frame(height: 168)
+            .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(controller.isCapturing ? "Revenir au trajet en cours" : "Explorer la carte")
     }
 
     private var nextLessons: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text("À venir").font(.title3.weight(.bold))
-                Spacer()
-                if let openAgenda { Button("Tout voir", action: openAgenda).font(.subheadline.weight(.semibold)).frame(minHeight: 44) }
-            }
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            DrivySectionHeader(title: controller.activeSession == nil ? "À venir" : "Ensuite",
+                actionTitle: openAgenda == nil ? nil : "Tout voir", action: openAgenda)
             if isLoadingAgenda {
                 ProgressView("Ouverture de l’agenda…").frame(maxWidth: .infinity, minHeight: 90)
             } else if let agendaError {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(agendaError).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    Button("Réessayer") { Task { await loadUpcoming() } }.frame(minHeight: 44)
-                }
+                DrivyEmptyState(title: "Agenda indisponible", message: agendaError, symbol: "exclamationmark.triangle",
+                    actionTitle: "Réessayer", action: { Task { await loadUpcoming() } })
             } else if upcoming.isEmpty {
-                HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: "calendar").font(.title2).foregroundStyle(DrivyTheme.muted)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Votre agenda est libre").font(.headline)
-                        Text(agendaClient == nil ? "Vos leçons apparaîtront ici lorsque votre école sera connectée." : "Aucune leçon prévue dans les sept prochains jours.")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
-                    }
-                }.padding(.vertical, 12)
+                DrivyEmptyState(title: "Votre agenda est libre",
+                    message: agendaClient == nil ? "Vos leçons apparaîtront ici lorsque votre école sera connectée." : "Aucune leçon prévue dans les sept prochains jours.",
+                    symbol: "calendar",
+                    actionTitle: openAgenda == nil ? nil : "Ouvrir l’agenda", action: openAgenda)
             } else {
-                ForEach(upcoming.prefix(3)) { lesson in
-                    upcomingRow(lesson)
-                    if lesson.id != upcoming.prefix(3).last?.id { Divider() }
+                DrivyRowGroup {
+                    ForEach(upcoming.prefix(3)) { lesson in upcomingRow(lesson) }
                 }
             }
         }
     }
 
     private func upcomingRow(_ lesson: SchoolLesson) -> some View {
-        HStack(alignment: .top, spacing: 18) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(lessonTime(lesson.startsAt)).font(.headline.monospacedDigit())
-                Text(lessonTime(lesson.endsAt)).font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-            }.frame(width: 52, alignment: .leading)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(workspace?.learners.first(where: { $0.id == lesson.learnerId })?.displayName ?? "Leçon de conduite").font(.headline)
+        HStack(alignment: .top, spacing: DrivySpacing.m) {
+            DrivyTimeColumn(start: lessonTime(lesson.startsAt), end: lessonTime(lesson.endsAt))
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(workspace?.learners.first(where: { $0.id == lesson.learnerId })?.displayName ?? "Leçon de conduite")
+                    .font(.headline).foregroundStyle(DrivyTheme.text)
                 Text("\(lesson.durationMinutes) min · \(lessonDay(lesson.startsAt))").font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
             }.fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-        }.padding(.vertical, 8).accessibilityElement(children: .combine)
+        }
+        .padding(.vertical, DrivySpacing.s)
+        .accessibilityElement(children: .combine)
     }
 
     private var historyLink: some View {
-        Button {
-            historyPath = []; presentsHistory = true
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "clock.arrow.circlepath").font(.title3).frame(width: 28)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Trajets et bilans").font(.headline).foregroundStyle(DrivyTheme.text)
-                    Text("Retrouver les moments enregistrés").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-            }.padding(.vertical, 16).contentShape(Rectangle())
-        }.buttonStyle(.plain).foregroundStyle(DrivyTheme.muted).accessibilityIdentifier("map-history")
+        DrivyNavigationRow(title: "Trajets et bilans", detail: "Retrouver les moments enregistrés",
+            symbol: "clock.arrow.circlepath", action: { historyPath = []; presentsHistory = true })
+            .accessibilityIdentifier("map-history")
     }
     private var journeyStatus: String {
         guard let session = controller.activeSession else { return "GPS au choix" }
@@ -387,7 +361,8 @@ struct JourneyExploreMapView: View {
                             if location.isAuthorized { centerOnUser() }
                         } label: {
                             Image(systemName: "location").font(.title3).frame(width: 48, height: 48)
-                                .background(DrivyTheme.surface, in: Circle())
+                                .foregroundStyle(DrivyTheme.accent)
+                                .drivyMapControl(in: Circle())
                         }.buttonStyle(.plain).accessibilityLabel("Afficher ma position")
                             .accessibilityHint("Centre la carte sans enregistrer de trajet")
                             .accessibilityIdentifier("map-locate")

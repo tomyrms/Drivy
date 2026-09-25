@@ -53,12 +53,11 @@ struct SchoolAgendaView: View {
                 } else if let error {
                     SchoolErrorNotice(message: error, retry: { Task { await loadWeek() } })
                 } else if dailyLessons.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Aucune leçon ce jour.").foregroundStyle(DrivyTheme.muted)
-                        Button("Jour suivant", systemImage: "arrow.right") {
-                            if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
-                        }.frame(minHeight: 44)
-                    }.padding(.vertical, 16)
+                    DrivyEmptyState(title: "Aucune leçon ce jour",
+                        message: mayPlan ? "Planifiez une leçon ou passez au jour suivant." : "Vos prochaines leçons apparaîtront ici.",
+                        symbol: "calendar", actionTitle: "Jour suivant") {
+                        if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
+                    }
                 } else {
                     LazyVStack(spacing: 0) {
                         ForEach(dailyLessons) { lesson in
@@ -68,11 +67,12 @@ struct SchoolAgendaView: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(.horizontal, DrivySpacing.l)
+            .padding(.vertical, DrivySpacing.xs)
             .frame(maxWidth: 800, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .background(DrivyTheme.canvas)
+        .background(DrivyTheme.surface)
         .navigationTitle("Agenda")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -113,12 +113,13 @@ struct SchoolAgendaView: View {
     private var dayHeading: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .firstTextBaseline, spacing: 16) {
-                Text(dateTitle).font(.title2.weight(.bold)).fixedSize()
+                Text(dateTitle).font(.title3.weight(.semibold)).fixedSize()
+                    .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 12)
                 if mayPlan { planButton }
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text(dateTitle).font(.title2.weight(.bold))
+                Text(dateTitle).font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
                 if mayPlan { planButton }
             }
         }
@@ -159,7 +160,7 @@ struct SchoolAgendaView: View {
                     }
                     .frame(minWidth: 44, maxWidth: .infinity, minHeight: 76)
                     .foregroundStyle(selected ? DrivyTheme.onAccent : DrivyTheme.text)
-                    .background(selected ? DrivyTheme.accent : .clear, in: RoundedRectangle(cornerRadius: 16))
+                    .background(selected ? DrivyTheme.accent : .clear, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(formattedDay(day, template: "EEEE d MMMM"))
@@ -184,23 +185,39 @@ struct SchoolAgendaView: View {
                         Text(time(lesson.endsAt)).font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
                     }.fixedSize(horizontal: true, vertical: false)
                     lessonSummary(lesson)
+                    if let badge = statusBadge(lesson) { badge }
                     Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                         .padding(.top, 4).accessibilityHidden(true)
                 }
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.vertical, 20).contentShape(Rectangle())
+        .padding(.vertical, DrivySpacing.m).contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
     private func lessonSummary(_ lesson: SchoolLesson) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(learnerName(lesson)).font(.headline).foregroundStyle(DrivyTheme.text)
-            Text("\(lesson.durationMinutes) min · \(lesson.statusLabel)").font(.subheadline)
+            Text(typeSize.isAccessibilitySize || lesson.status == "PLANNED" ? "\(lesson.durationMinutes) min · \(lesson.statusLabel)" : "\(lesson.durationMinutes) min")
+                .font(.subheadline)
                 .foregroundStyle(lesson.status == "CANCELLED" ? DrivyTheme.warning : DrivyTheme.muted)
             Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
         }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Only states that differ from the normal planned lesson earn a badge.
+    private func statusBadge(_ lesson: SchoolLesson) -> DrivyStatusBadge? {
+        switch lesson.status {
+        case "PLANNED":
+            let now = Date()
+            guard let start = lesson.startsAt, let end = lesson.endsAt, start <= now, now < end else { return nil }
+            return DrivyStatusBadge(title: "En cours", tone: .accent)
+        case "COMPLETED": return DrivyStatusBadge(title: lesson.statusLabel, symbol: "checkmark", tone: .success)
+        case "CANCELLED": return DrivyStatusBadge(title: lesson.statusLabel, tone: .warning)
+        case "NO_SHOW": return DrivyStatusBadge(title: lesson.statusLabel, tone: .warning)
+        default: return DrivyStatusBadge(title: lesson.statusLabel)
+        }
     }
 
     private func learnerName(_ lesson: SchoolLesson) -> String { workspace.learners.first { $0.id == lesson.learnerId }?.displayName ?? "Leçon de conduite" }

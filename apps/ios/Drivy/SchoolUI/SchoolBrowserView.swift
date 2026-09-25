@@ -199,14 +199,9 @@ private struct SchoolLearnerRow: View {
     let isSelected: Bool
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(SchoolPresentation.initials(learner.displayName))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.text)
-                .frame(width: 44, height: 44)
-                .background(DrivyTheme.surfaceMuted, in: Circle())
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 5) {
+        HStack(alignment: .center, spacing: DrivySpacing.s) {
+            DrivyAvatar(name: learner.displayName, isSelected: isSelected)
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(learner.displayName).font(.headline)
                     .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.text)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
@@ -215,17 +210,16 @@ private struct SchoolLearnerRow: View {
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 }
                 if learner.archivedAt != nil {
-                    Label("Dossier archivé", systemImage: "archivebox")
-                        .font(.caption).foregroundStyle(DrivyTheme.muted)
+                    DrivyStatusBadge(title: "Dossier archivé", symbol: "archivebox")
                 } else if learner.profileReadiness == "MINIMAL" || learner.profileReadiness == "ACTION_REQUIRED" {
-                    Text(learner.profileReadiness == "MINIMAL" ? "Profil à compléter" : "Informations à vérifier")
-                        .font(.caption).foregroundStyle(DrivyTheme.muted)
+                    DrivyStatusBadge(title: learner.profileReadiness == "MINIMAL" ? "Profil à compléter" : "Informations à vérifier",
+                        tone: learner.profileReadiness == "MINIMAL" ? .neutral : .warning)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, DrivySpacing.xs)
         .accessibilityElement(children: .combine)
     }
 }
@@ -285,25 +279,12 @@ private struct SchoolLearnerDetailView: View {
                             .buttonStyle(DrivyPrimaryButtonStyle()).accessibilityIdentifier("learner-plan-lesson")
                     }
                     if let openProfile {
-                        Button { openProfile(learner) } label: {
-                            HStack(spacing: 16) {
-                                Image(systemName: "person.text.rectangle")
-                                    .font(.title2).foregroundStyle(DrivyTheme.accent).frame(width: 32)
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text("Profil scolaire").font(.headline).foregroundStyle(DrivyTheme.text)
-                                    Text(learner.profileReadiness == "MINIMAL" ? "Compléter les informations utiles" : "Consulter et mettre à jour")
-                                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                                }
-                                .fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 8)
-                                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                            }
-                            .padding(.vertical, 16)
-                            .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("open-learner-profile")
+                        DrivyNavigationRow(title: "Profil scolaire",
+                            detail: learner.profileReadiness == "MINIMAL" ? "Compléter les informations utiles" : "Consulter et mettre à jour",
+                            symbol: "person.text.rectangle",
+                            badge: learner.profileReadiness == "MINIMAL" ? DrivyStatusBadge(title: "À compléter", tone: .warning) : nil,
+                            action: { openProfile(learner) })
+                            .accessibilityIdentifier("open-learner-profile")
                         Divider()
                     }
                     trainings
@@ -317,11 +298,12 @@ private struct SchoolLearnerDetailView: View {
                     }
                 }
             }
-            .padding(24)
+            .padding(.horizontal, DrivySpacing.l)
+            .padding(.vertical, DrivySpacing.m)
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
         }
-        .background(DrivyTheme.canvas)
+        .background(DrivyTheme.surface)
         .navigationTitle("Dossier")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: workspace.selectedLearnerID) { await workspace.loadSelectedLearner() }
@@ -332,38 +314,30 @@ private struct SchoolLearnerDetailView: View {
     }
 
     private func learnerHeading(_ learner: SchoolLearner) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 16) {
+        VStack(alignment: .leading, spacing: DrivySpacing.m) {
+            HStack(alignment: .center, spacing: DrivySpacing.m) {
                 if !dynamicTypeSize.isAccessibilitySize {
-                    Text(SchoolPresentation.initials(learner.displayName))
-                        .font(.title3.weight(.semibold))
-                        .frame(width: 60, height: 60)
-                        .background(DrivyTheme.surfaceMuted, in: Circle())
-                        .accessibilityHidden(true)
+                    DrivyAvatar(name: learner.displayName, size: 60)
                 }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(learner.displayName).font(.largeTitle.weight(.bold))
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                    Text(learner.displayName).font(.title.weight(.bold))
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(workspace.school?.name ?? "Dossier scolaire")
+                    Text(workspace.school.map { "Élève · \($0.name)" } ?? "Dossier scolaire")
                         .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 }
             }
             if learner.archivedAt != nil {
-                Label("Dossier archivé", systemImage: "archivebox")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            } else if learner.profileReadiness == "MINIMAL" {
-                Label("Profil à compléter", systemImage: "person.crop.circle.badge.exclamationmark")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                DrivyStatusBadge(title: "Dossier archivé", symbol: "archivebox")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 4)
+        .accessibilityElement(children: .combine)
     }
 
     private var trainings: some View {
         VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Text("Formations").font(.title3.weight(.semibold))
+                    Text("Formations").font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
                     Spacer(minLength: 8)
                     if let learner = workspace.learner, learner.archivedAt == nil,
                        openCreateTraining != nil || openTrainingAdministration != nil {
@@ -397,22 +371,24 @@ private struct SchoolLearnerDetailView: View {
                         workspace.selectTraining(training.id)
                         presentedTraining = TrainingPresentation(client: trainingClient, learner: learner, trainingID: training.id)
                     } label: {
-                        HStack(spacing: 12) {
+                        HStack(spacing: DrivySpacing.m) {
                             Image(systemName: "steeringwheel")
-                                .font(.title2).foregroundStyle(DrivyTheme.muted)
-                                .frame(width: 40, height: 44)
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Catégorie \(training.categoryCode)").font(.headline)
-                                Text(SchoolPresentation.trainingStatus(training.status))
-                                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                            }
-                            Spacer(minLength: 8)
-                            Image(systemName: "chevron.right").foregroundStyle(DrivyTheme.muted)
+                                .font(.title3).foregroundStyle(DrivyTheme.muted)
+                                .frame(width: 28)
+                                .accessibilityHidden(true)
+                            Text("Permis \(training.categoryCode)").font(.headline).foregroundStyle(DrivyTheme.text)
+                            Spacer(minLength: DrivySpacing.xs)
+                            DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status),
+                                tone: training.status == "ACTIVE" ? .accent : .neutral)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                                .accessibilityHidden(true)
                         }
-                        .padding(.vertical, 12)
+                        .padding(.vertical, DrivySpacing.m)
+                        .frame(minHeight: 64)
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(DrivyRowButtonStyle())
                     .disabled(trainingClient == nil || workspace.learner == nil)
                     .accessibilityIdentifier("school-training-\(training.id.uuidString)")
                     if training.id != workspace.trainings.last?.id { Divider() }
