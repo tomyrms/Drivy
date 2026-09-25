@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
 import { readInvitationLink } from './invitation-link';
 import type { InvitationLink } from './invitation-link';
 import {
@@ -7,6 +6,7 @@ import {
   request, RequestFailure, roleLabel, sessionSchema,
 } from './protocol';
 import type { InvitationPreview, Me, Member, Session } from './protocol';
+import { StatusBadge, Symbol } from './ui';
 
 type Preview = { data: InvitationPreview; confirmation: string };
 type Page = 'account' | 'invitation';
@@ -366,6 +366,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
               ? <ul className="row-list">{me.memberships.map(member => <li key={member.membershipId}>
                   <Symbol kind="school" />
                   <div className="row-text"><h3 className="row-title">{member.schoolName}</h3><p className="row-meta">{member.roles.map(roleLabel).join(' · ')}</p></div>
+                  {member.roles.includes('ADMIN') && <a className="button secondary compact" href={`/app/gestion/${member.schoolId}`}>Gérer l’école</a>}
                 </li>)}</ul>
               : !isBusy && !error
                 ? <div className="empty-state">
@@ -384,31 +385,6 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
       <footer className="site-footer"><span>Drivy</span><p>Vos accès sont propres à chaque école.</p></footer>
     </div>
   );
-}
-
-type SymbolKind = 'account' | 'school' | 'alert' | 'check' | 'refresh' | 'lock' | 'mail' | 'shield' | 'clock';
-
-const symbolPaths: Record<SymbolKind, ReactNode> = {
-  account: <><circle cx="12" cy="8" r="3.5" /><path d="M5 21v-3a7 7 0 0 1 14 0v3" /></>,
-  school: <path d="M4 21V5l8-3 8 3v16M2 21h20M9 21v-5h6v5M8 7h1m6 0h1M8 11h1m6 0h1" />,
-  alert: <><path d="M10.3 4 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4a2 2 0 0 0-3.4 0Z" /><path d="M12 9.5v4M12 17h.01" /></>,
-  check: <><circle cx="12" cy="12" r="9" /><path d="m8 12.4 2.7 2.7L16 9.8" /></>,
-  refresh: <><path d="M20 12a8 8 0 1 1-2.34-5.66" /><path d="M20 4v5h-5" /></>,
-  lock: <><rect x="5" y="10.5" width="14" height="10" rx="2" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" /></>,
-  mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 6.5 8.5 6.5 8.5-6.5" /></>,
-  shield: <><path d="M12 3 5 6v5.5c0 4.4 3 8.1 7 9.5 4-1.4 7-5.1 7-9.5V6Z" /><path d="m9 12 2.2 2.2L15 10.4" /></>,
-  clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 2" /></>,
-};
-
-/** Decorative outline symbol; every meaning it carries is also written in text. */
-function Symbol({ kind, tile = false, bare = false }: { kind: SymbolKind; tile?: boolean; bare?: boolean }) {
-  const className = bare ? 'symbol bare' : tile ? 'symbol tile' : 'symbol';
-  return <span className={className} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{symbolPaths[kind]}</svg></span>;
-}
-
-/** Status pill shared with the Apple client: symbol + text + tone, never color alone. */
-function StatusBadge({ tone, symbol, children }: { tone: 'accent' | 'success' | 'warning'; symbol: SymbolKind; children: ReactNode }) {
-  return <span className={`badge ${tone}`}><Symbol kind={symbol} bare />{children}</span>;
 }
 
 function formatDate(value: string): string {
