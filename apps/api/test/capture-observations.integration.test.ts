@@ -1,5 +1,5 @@
 import {it} from 'vitest';
-import {Pool} from 'pg';import{readFile,readdir}from'node:fs/promises';import{randomUUID}from'node:crypto';import{generateKeyPair,exportJWK,createLocalJWKSet,SignJWT}from'jose';import assert from'node:assert/strict';
+import {Pool} from 'pg';import{readFile,readdir}from'node:fs/promises';import{createHash,randomUUID}from'node:crypto';import{generateKeyPair,exportJWK,createLocalJWKSet,SignJWT}from'jose';import assert from'node:assert/strict';
 import {buildApp}from'../src/app.js';import{createTokenVerifier}from'../src/auth.js';import{fixtureIds as id,seedFixtures}from'../scripts/fixtures.js';import{trackContentHash,type CaptureConfig}from'../src/capture-crypto.js';
 it('observations privées : sans GPS, ancre acquittée, constat et retrait atomiques',async()=>{
 const input=process.env.TEST_DATABASE_URL;if(!input||!['/drivy_test','/drivy_observation_test'].includes(new URL(input).pathname))throw new Error('Base de recette explicite requise.');
@@ -14,8 +14,9 @@ assert.deepEqual((await operator.query('SELECT rolsuper,rolbypassrls,rolcreatero
 await operator.query(`GRANT CREATE ON DATABASE ${database} TO ${owner}`);await operator.query(`GRANT drivy_app,drivy_invitation_mailer TO ${owner} WITH ADMIN OPTION`);await operator.end();
 const pool=new Pool({connectionString:url}),migration=new Pool({connectionString:url,options:`-c role=${owner}`});
 await pool.query('DROP SCHEMA IF EXISTS drivy CASCADE');await pool.query('DROP TABLE IF EXISTS public.drivy_migrations');await pool.query(`GRANT USAGE,CREATE ON SCHEMA public TO ${owner}`);
+await migration.query('CREATE TABLE public.drivy_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())');
 for(const name of(await readdir(new URL('../migrations/',import.meta.url))).filter(n=>/^[0-9]{3}_.*\.sql$/.test(n)).sort()){
- const db=await migration.connect();try{await db.query('BEGIN');await db.query(await readFile(new URL(`../migrations/${name}`,import.meta.url),'utf8'));await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}if(name.startsWith('001_'))await seedFixtures(pool,issuer);
+ const db=await migration.connect(),sql=await readFile(new URL(`../migrations/${name}`,import.meta.url),'utf8');try{await db.query('BEGIN');await db.query(sql);await db.query('INSERT INTO public.drivy_migrations(name,sha256) VALUES($1,$2)',[name,createHash('sha256').update(sql).digest('hex')]);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}if(name.startsWith('001_'))await seedFixtures(pool,issuer);
 }
 const rls=await pool.query("SELECT count(*)::int AS n,count(*) FILTER(WHERE relrowsecurity AND relforcerowsecurity)::int AS forced FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r'");assert.equal(rls.rows[0].n,rls.rows[0].forced);
 const policy=randomUUID(),notice=randomUUID(),lesson=randomUUID();
