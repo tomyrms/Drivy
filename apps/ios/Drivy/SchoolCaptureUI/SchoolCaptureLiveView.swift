@@ -91,30 +91,33 @@ struct SchoolCaptureLiveView: View {
         routeMap
             .safeAreaInset(edge: .top, spacing: 0) {
                 heading()
-                    .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.s)
+                    .frame(maxWidth: 640)
+                    .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.xs)
+                    .frame(maxWidth: .infinity)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(alignment: .trailing, spacing: DrivySpacing.s) {
-                    if controller.pointCount > 0 { mapControls }
+                    if controller.pointCount > 0 { mapControls(axis: .horizontal) }
                     commandPanel()
                 }
+                .frame(maxWidth: 640)
                 .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.s)
+                .frame(maxWidth: .infinity)
             }
     }
 
     private var wideContent: some View {
         HStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                    heading(floating: false)
-                    commandPanel(floating: false)
-                }
-                .padding(DrivySpacing.m)
+            VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                heading(floating: false)
+                ScrollView { commandPanel(floating: false) }
+                    .scrollBounceBehavior(.basedOnSize)
             }
+            .padding(DrivySpacing.m)
             .frame(width: DrivyMapLayout.sidebarWidth)
             .background(DrivyTheme.canvas)
             routeMap.overlay(alignment: .bottomTrailing) {
-                if controller.pointCount > 0 { mapControls.padding(DrivySpacing.l) }
+                if controller.pointCount > 0 { mapControls(axis: .vertical).padding(DrivySpacing.l) }
             }
         }
     }
@@ -123,9 +126,11 @@ struct SchoolCaptureLiveView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.l) {
                 heading(floating: false)
-                routeMap.frame(height: DrivyMapLayout.accessibleMapHeight)
-                    .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
-                if controller.pointCount > 0 { mapControls.frame(maxWidth: .infinity, alignment: .trailing) }
+                if controller.pointCount > 0 {
+                    routeMap.frame(height: DrivyMapLayout.accessibleMapHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+                    mapControls(axis: .horizontal).frame(maxWidth: .infinity, alignment: .trailing)
+                }
                 sessionInformation
             }
             .padding(DrivySpacing.m)
@@ -144,24 +149,58 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    private var routeMap: some View {
-        SchoolCaptureLiveMap(segments: controller.segments, resetCameraID: resetCameraID, followsPosition: $followsPosition)
+    /// No position yet: an honest wait instead of a country overview.
+    @ViewBuilder private var routeMap: some View {
+        if controller.pointCount > 0 {
+            SchoolCaptureLiveMap(segments: controller.segments, resetCameraID: resetCameraID, followsPosition: $followsPosition)
+        } else {
+            DrivyMapPlaceholder(title: placeholderTitle, message: placeholderMessage, symbol: "location")
+        }
     }
 
-    /// Same header as the personal journey: close, learner, GPS state, elapsed time.
+    private var placeholderTitle: String {
+        switch controller.state {
+        case .preparing: "Préparation du GPS"
+        case .recording: "En attente de position"
+        case .paused: "GPS en pause"
+        default: "Aucune position enregistrée"
+        }
+    }
+
+    private var placeholderMessage: String {
+        switch controller.state {
+        case .preparing, .recording: "Le tracé apparaît dès la première position sauvegardée. La leçon continue normalement."
+        case .paused: "Aucune position n’est enregistrée pendant la pause."
+        default: "La leçon continue sans trajet GPS."
+        }
+    }
+
+    /// Same top bar as the personal journey: leave, learner, elapsed time at a glance,
+    /// real GPS state, then the protected stop command far from the other commands.
     private func heading(floating: Bool = true) -> some View {
-        DrivyMapHeader(
-            title: learnerName,
-            status: status,
-            leading: .close(label: "Revenir à la leçon",
-                hint: controller.canStop ? "Le GPS conserve son état actuel" : "Fermer le trajet",
-                isDisabled: controller.isTransferring) { close() },
-            floating: floating
-        ) {
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
-                DrivyElapsedTime(text: elapsedLabel, accessibilityTitle: "Temps écoulé depuis le départ GPS")
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            DrivyLiveTopBar(
+                context: learnerName,
+                elapsed: showsElapsed ? elapsedLabel : nil,
+                elapsedLabel: "Temps écoulé depuis le départ GPS",
+                status: status,
+                leading: .close(label: "Revenir à la leçon",
+                    hint: controller.canStop ? "Le GPS conserve son état actuel" : "Fermer le trajet",
+                    isDisabled: controller.isTransferring) { close() },
+                floating: floating
+            ) {
+                if [SchoolCaptureSessionController.State.recording, .paused, .preparing].contains(controller.state) {
+                    DrivyMapStopButton(label: "Arrêter le GPS", isEnabled: controller.canStop) {
+                        if let id = controller.captureID { confirmation = .stop(id) }
+                    }
+                    .accessibilityIdentifier("school-capture-stop")
+                }
             }
         }
+    }
+
+    private var showsElapsed: Bool {
+        [SchoolCaptureSessionController.State.recording, .paused, .preparing, .stopping].contains(controller.state)
     }
 
     private func commandPanel(floating: Bool = true) -> some View {
@@ -173,20 +212,19 @@ struct SchoolCaptureLiveView: View {
 
     private var sessionInformation: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            Label(controller.pointCount == 0 ? "Aucune position enregistrée" : "\(controller.pointCount) position\(controller.pointCount == 1 ? "" : "s") enregistrée\(controller.pointCount == 1 ? "" : "s")",
-                  systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-                .font(.subheadline.weight(.semibold).monospacedDigit())
-                .foregroundStyle(DrivyTheme.text)
-                .fixedSize(horizontal: false, vertical: true)
+            // Before the first point the map placeholder already says it; no duplicate line here.
+            if controller.pointCount > 0 || [SchoolCaptureSessionController.State.saved, .failed].contains(controller.state) {
+                Label(controller.pointCount == 0 ? "Aucune position enregistrée" : "\(controller.pointCount) position\(controller.pointCount == 1 ? "" : "s") enregistrée\(controller.pointCount == 1 ? "" : "s")",
+                      systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if controller.state == .saved && controller.finalizedSyncState == nil {
                 Text("Envoyez les positions, puis vérifiez le trajet complet. Il reste privé jusqu’à sa publication dans un bilan.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
-            } else if controller.state == .recording && controller.pointCount == 0 {
-                Text("En attente d’une première position sauvegardée.")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else if controller.state == .paused {
+            } else if controller.state == .paused && controller.pointCount > 0 {
                 Text("Aucune position n’est enregistrée pendant la pause.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -215,10 +253,9 @@ struct SchoolCaptureLiveView: View {
                 }
             }
         case .preparing:
-            ProgressView("Préparation du GPS…").frame(maxWidth: .infinity)
-            stopButton
+            DrivyLoadingState(title: "Préparation du GPS…")
         case .stopping:
-            ProgressView("Sauvegarde des positions…").frame(maxWidth: .infinity, minHeight: 52)
+            DrivyLoadingState(title: "Sauvegarde des positions…")
         case .saved:
             savedActions
         case .failed:
@@ -234,15 +271,10 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    /// Pause and stop side by side, each 52 pt tall; stacked in large text sizes.
+    /// Pause or resume is the only command of the dock while collecting; the stop
+    /// stays in the top bar, away from it, and is always confirmed.
     private var collectingActions: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: DrivySpacing.s))
-            : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
-        return layout {
-            pauseResumeButton
-            stopButton
-        }
+        pauseResumeButton
     }
 
     @ViewBuilder private var pauseResumeButton: some View {
@@ -265,18 +297,6 @@ struct SchoolCaptureLiveView: View {
                 .accessibilityLabel("Mettre le GPS en pause")
                 .accessibilityIdentifier("school-capture-pause-resume")
         }
-    }
-
-    private var stopButton: some View {
-        Button {
-            if let id = controller.captureID { confirmation = .stop(id) }
-        } label: {
-            Label("Arrêter le GPS", systemImage: "stop.fill")
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .buttonStyle(DrivyDangerButtonStyle())
-        .disabled(!controller.canStop)
-        .accessibilityIdentifier("school-capture-stop")
     }
 
     private var savedActions: some View {
@@ -342,8 +362,8 @@ struct SchoolCaptureLiveView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var mapControls: some View {
-        DrivyMapControls(followsPosition: $followsPosition) {
+    private func mapControls(axis: Axis) -> some View {
+        DrivyMapControls(followsPosition: $followsPosition, axis: axis) {
             followsPosition = false
             resetCameraID = UUID()
         }

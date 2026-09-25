@@ -139,6 +139,38 @@ final class SessionController {
         return await task.value
     }
 
+    /// Whether an observation saved during the open journey can be withdrawn at once.
+    var canUndoObservations: Bool { store?.supportsObservationRemoval ?? false }
+
+    /// Immediate undo of a report: only on the open journey, only for an observation
+    /// already durably saved, serialized behind the pending writes. The row leaves the
+    /// interface only after the store confirmed the deletion.
+    @discardableResult
+    func removeObservation(_ observationID: UUID, from sessionID: UUID) async -> Bool {
+        guard isCapturing, !persistenceFailed, let store, store.supportsObservationRemoval,
+              let session = activeSession, session.id == sessionID,
+              session.observations.contains(where: { $0.id == observationID }) else { return false }
+        let previous = writeTail
+        let task = Task { @MainActor [weak self] () -> Bool in
+            await previous?.value
+            guard let self, !self.persistenceFailed, self.isCapturing, self.activeSession?.id == sessionID else { return false }
+            do {
+                try await store.removeObservation(observationID, from: sessionID)
+                self.updateSession(sessionID) { session in session.observations.removeAll { $0.id == observationID } }
+                self.observationTasks[observationID] = nil
+                return true
+            } catch let error as SessionError where error == .observationRemovalUnavailable || error == .sessionClosed {
+                self.errorMessage = error.localizedDescription
+                return false
+            } catch {
+                self.storageFailed(error)
+                return false
+            }
+        }
+        writeTail = Task { _ = await task.value }
+        return await task.value
+    }
+
     @discardableResult
     func updateSummary(_ text: String, for sessionID: UUID) async -> Bool {
         guard let store, !persistenceFailed else { return false }

@@ -32,20 +32,13 @@ struct SessionHistoryView: View {
                 }
             } else {
                 List {
-                    if !sessions.filter({ !$0.isExample }).isEmpty {
-                        Section("Sur cet appareil") {
-                            ForEach(sessions.filter { !$0.isExample }) { session in
-                                NavigationLink(value: session.id) {
-                                    SessionHistoryRow(session: session)
-                                }
-                                .accessibilityIdentifier("history-session-\(session.id.uuidString)")
-                            }
-                        }
-                    }
+                    // Journeys whose bilan is still to write come first: the next useful gesture.
+                    ownSection(title: "Bilan à écrire", sessions: ownSessions.filter { !JourneyStats(session: $0).hasSummary })
+                    ownSection(title: "Bilan écrit", sessions: ownSessions.filter { JourneyStats(session: $0).hasSummary })
                     if !sessions.filter(\.isExample).isEmpty {
                         Section {
                             ForEach(sessions.filter(\.isExample)) { session in
-                                NavigationLink(value: session.id) { SessionHistoryRow(session: session) }
+                                NavigationLink(value: session.id) { JourneySummaryRow(session: session) }
                                     .accessibilityIdentifier("history-session-\(session.id.uuidString)")
                             }
                         } header: {
@@ -66,18 +59,38 @@ struct SessionHistoryView: View {
         .background(DrivyTheme.canvas)
         .navigationTitle("Historique")
     }
+
+    private var ownSessions: [DrivingSession] { sessions.filter { !$0.isExample } }
+
+    @ViewBuilder
+    private func ownSection(title: String, sessions: [DrivingSession]) -> some View {
+        if !sessions.isEmpty {
+            Section(title) {
+                ForEach(sessions) { session in
+                    NavigationLink(value: session.id) {
+                        JourneySummaryRow(session: session)
+                    }
+                    .accessibilityIdentifier("history-session-\(session.id.uuidString)")
+                }
+            }
+        }
+    }
 }
 
-private struct SessionHistoryRow: View {
+/// One journey in a list (history, home): date or title, duration, observations by
+/// status, GPS mode, interruption and bilan state. Counts only, never a score.
+struct JourneySummaryRow: View {
     let session: DrivingSession
+    var showsChevron = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private var hasRoute: Bool { session.usesGPS || !session.points.isEmpty }
+    private var hasRoute: Bool { !session.points.isEmpty }
+    private var stats: JourneyStats { JourneyStats(session: session) }
 
     var body: some View {
-        HStack(alignment: .center, spacing: DrivySpacing.s) {
+        HStack(alignment: .top, spacing: DrivySpacing.s) {
             if !dynamicTypeSize.isAccessibilitySize {
-                Image(systemName: hasRoute ? "point.topleft.down.to.point.bottomright.curvepath" : "note.text")
+                Image(systemName: hasRoute ? "point.topleft.down.to.point.bottomright.curvepath" : session.usesGPS ? "location.slash" : "clock")
                     .font(.title3)
                     .foregroundStyle(hasRoute ? DrivyTheme.accent : DrivyTheme.muted)
                     .frame(width: 44, height: 44)
@@ -92,19 +105,55 @@ private struct SessionHistoryRow: View {
                     Text(session.startedAt, format: .dateTime.weekday(.abbreviated).day().month(.wide).hour().minute())
                         .font(.headline).foregroundStyle(DrivyTheme.text)
                 }
-                Text("\(DrivySeanceText.observations(session.observations.count)) · \(session.isExample ? "Replay" : session.usesGPS ? "Avec GPS" : "Sans GPS")")
+                Text("\(DrivySeanceText.duration(stats.duration)) · \(DrivySeanceText.observations(stats.observationCount)) · \(session.isExample ? "Tracé fictif" : hasRoute ? "Avec GPS" : session.usesGPS ? "Aucune position" : "Sans GPS")")
                     .font(.subheadline)
                     .foregroundStyle(DrivyTheme.muted)
-                if session.isExample {
-                    DrivyStatusBadge(title: "Exemple fictif", symbol: "info.circle")
-                } else if session.state == .interrupted {
-                    DrivyStatusBadge(title: session.state.label, symbol: "exclamationmark.triangle", tone: .warning)
+                if stats.observationCount > 0 {
+                    statusCounts
                 }
+                badges
             }
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(DrivyTheme.muted)
+                    .frame(minHeight: 44)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.vertical, DrivySpacing.xxs)
         .accessibilityElement(children: .combine)
+    }
+
+    /// Symbol + count per status, only for the statuses present: a reminder, not a score.
+    private var statusCounts: some View {
+        HStack(spacing: DrivySpacing.s) {
+            ForEach(ObservationStatus.allCases.filter { stats.count($0) > 0 }) { status in
+                Label("\(stats.count(status)) \(status.label)", systemImage: status.symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(status.color)
+                    .fixedSize()
+            }
+        }
+    }
+
+    @ViewBuilder private var badges: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xxs))
+            : AnyLayout(HStackLayout(spacing: DrivySpacing.xs))
+        layout {
+            if session.isExample {
+                DrivyStatusBadge(title: "Exemple fictif", symbol: "info.circle")
+            } else if session.state == .interrupted {
+                DrivyStatusBadge(title: "Interrompu · données conservées", symbol: "exclamationmark.triangle", tone: .warning)
+            }
+            DrivyStatusBadge(title: stats.hasSummary ? "Bilan écrit" : "Bilan à écrire",
+                symbol: stats.hasSummary ? "checkmark.circle" : "square.and.pencil",
+                tone: stats.hasSummary ? .success : .neutral)
+        }
+        .padding(.top, DrivySpacing.xxs)
     }
 }
 
@@ -113,17 +162,31 @@ struct SummaryEditorView: View {
     let sessionID: UUID
     let initialText: String
     let isExample: Bool
+    let observations: [LessonObservation]
+    let sessionStartedAt: Date?
     @State private var text: String
     @State private var saving = false
     @State private var confirmsDiscard = false
     @Environment(\.dismiss) private var dismiss
 
-    init(controller: SessionController, sessionID: UUID, initialText: String, isExample: Bool = false) {
+    init(controller: SessionController, sessionID: UUID, initialText: String, isExample: Bool = false,
+         observations: [LessonObservation] = [], sessionStartedAt: Date? = nil) {
         self.controller = controller
         self.sessionID = sessionID
         self.initialText = initialText
         self.isExample = isExample
+        self.observations = observations
+        self.sessionStartedAt = sessionStartedAt
         _text = State(initialValue: initialText)
+    }
+
+    /// Plain lines the instructor may insert explicitly; nothing is added automatically.
+    private var observationLines: String {
+        observations.map { observation in
+            let time = sessionStartedAt.map { observation.observedAt.sessionElapsed(since: $0) + " · " } ?? ""
+            let note = observation.note.isEmpty ? "" : " — \(observation.note)"
+            return "• \(time)\(observation.theme.label) : \(observation.status.label)\(note)"
+        }.joined(separator: "\n")
     }
 
     var body: some View {
@@ -133,6 +196,7 @@ struct SummaryEditorView: View {
                     if isExample {
                         DrivyStatusBadge(title: "Bilan d’exemple · contenu fictif", symbol: "info.circle")
                     }
+                    if !observations.isEmpty { observationReference }
                     Text("Notes du trajet")
                         .font(.headline)
                         .accessibilityAddTraits(.isHeader)
@@ -186,6 +250,49 @@ struct SummaryEditorView: View {
             Button("Continuer la rédaction", role: .cancel) { }
         } message: {
             Text("Les modifications depuis l’ouverture de ce bilan ne sont pas enregistrées.")
+        }
+    }
+
+    /// Observations of the journey as a reference while writing, with one explicit
+    /// command to copy them into the text. The instructor keeps full control.
+    private var observationReference: some View {
+        DrivyPanel {
+            VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                Text("Observations du trajet")
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(observations) { observation in
+                    HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
+                        Image(systemName: observation.status.symbol)
+                            .font(.caption.weight(.heavy))
+                            .foregroundStyle(observation.status.color)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("\(observation.theme.label) · \(observation.status.label)")
+                                .font(.subheadline.weight(.semibold))
+                            if let sessionStartedAt {
+                                Text(observation.observedAt.sessionElapsed(since: sessionStartedAt))
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(DrivyTheme.muted)
+                            }
+                            if !observation.note.isEmpty {
+                                Text(observation.note).font(.subheadline)
+                            }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+                Button {
+                    let lines = observationLines
+                    text = text.isEmpty ? lines : text + "\n\n" + lines
+                } label: {
+                    Label("Ajouter ces observations au texte", systemImage: "text.badge.plus")
+                }
+                .buttonStyle(DrivySecondaryButtonStyle())
+                .disabled(saving)
+                .accessibilityIdentifier("summary-insert-observations")
+            }
         }
     }
 

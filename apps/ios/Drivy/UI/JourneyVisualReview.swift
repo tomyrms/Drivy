@@ -28,6 +28,12 @@ struct JourneyVisualReview: View {
                         LiveSessionView(controller: controller)
                     case "replay":
                         if let replayID { SessionDetailView(controller: controller, sessionID: replayID) }
+                    case "finish":
+                        if let replayID, let session = controller.sessions.first(where: { $0.id == replayID }) {
+                            JourneyFinishView(controller: controller, session: session, openReplay: {}, close: {})
+                        }
+                    case "journey-history":
+                        SessionHistoryView(controller: controller)
                     default:
                         DrivingMapHomeView(controller: controller, schoolName: "École · exemple visuel", openLearners: {})
                     }
@@ -53,7 +59,7 @@ struct JourneyVisualReview: View {
             let store = try SQLCipherSessionStore(url: directory.appendingPathComponent("visual.sqlite"), key: Data(repeating: 0xAC, count: 32), protectFiles: false)
             let source = VisualLocationSource()
             let model = SessionController(store: store, location: source)
-            if screen == "replay" {
+            if ["replay", "finish", "journey-history"].contains(screen) {
                 let session = DrivingSession(startedAt: Date().addingTimeInterval(-900), usesGPS: true)
                 try await store.create(session)
                 let segmentID = UUID()

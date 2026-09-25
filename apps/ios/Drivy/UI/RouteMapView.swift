@@ -17,6 +17,11 @@ struct RouteMapView: View {
     var resetCameraID: UUID? = nil
     var followsPosition: Binding<Bool> = .constant(false)
     var showsOriginBadge = true
+    /// Margin around the fitted route (1 = edge to edge). Small previews use a wider
+    /// margin so markers never sit under the map attribution.
+    var fitMargin: Double = 1.16
+    /// Replay filter: only these observations get a marker (nil = all).
+    var visibleObservationIDs: Set<UUID>? = nil
     @State private var camera: MapCameraPosition = .region(JourneyMapRegion.overview)
 
     private struct Segment: Identifiable {
@@ -36,6 +41,7 @@ struct RouteMapView: View {
     private var locatedObservations: [LocatedObservation] {
         let points = Dictionary(session.points.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return session.observations.compactMap { observation in
+            if let visibleObservationIDs, !visibleObservationIDs.contains(observation.id) { return nil }
             guard let anchor = observation.anchorPointID, let point = points[anchor] else { return nil }
             return LocatedObservation(observation: observation, point: point)
         }
@@ -60,6 +66,7 @@ struct RouteMapView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(item.observation.theme.label), \(item.observation.status.label)")
+                    .accessibilityAddTraits(selectedObservationID == item.id ? [.isSelected] : [])
                     .accessibilityHint("Afficher cette observation")
                 }.annotationTitles(.hidden)
             }
@@ -76,11 +83,13 @@ struct RouteMapView: View {
         .mapControls { }
         .overlay(alignment: .topTrailing) {
             if session.isExample && showsOriginBadge {
-                Text("Exemple · données fictives")
+                Label("Exemple · données fictives", systemImage: "info.circle")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(DrivyTheme.text)
                     .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
-                    .glassEffect(.regular, in: Capsule()).padding(DrivySpacing.s)
+                    .background(DrivyTheme.surface, in: Capsule())
+                    .shadow(color: .black.opacity(0.10), radius: 6, y: 2)
+                    .padding(DrivySpacing.s)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -89,7 +98,9 @@ struct RouteMapView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(DrivyTheme.text)
                     .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
-                    .glassEffect(.regular, in: Capsule()).padding(DrivySpacing.m)
+                    .background(DrivyTheme.surface, in: Capsule())
+                    .shadow(color: .black.opacity(0.10), radius: 6, y: 2)
+                    .padding(DrivySpacing.m)
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -97,7 +108,7 @@ struct RouteMapView: View {
                 Button { followsPosition.wrappedValue = false; fitRoute() } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.title3).foregroundStyle(DrivyTheme.text).frame(width: 48, height: 48)
-                        .drivyMapControl(in: Circle())
+                        .drivyLegibleMapControl(in: Circle())
                 }.buttonStyle(.plain).accessibilityLabel("Voir tout le trajet").padding(DrivySpacing.m)
             }
         }
@@ -126,24 +137,24 @@ struct RouteMapView: View {
     private func observationMarker(_ observation: LessonObservation) -> some View {
         let selected = selectedObservationID == observation.id
         return Image(systemName: selected ? observation.theme.journeySymbol : observation.status.symbol)
-            .font(selected ? .body.weight(.semibold) : .caption2.weight(.bold))
-            .foregroundStyle(selected ? DrivyTheme.text : observation.status.color)
-            .frame(width: selected ? 36 : 22, height: selected ? 36 : 22)
-            .background(DrivyTheme.surface, in: Circle())
-            .overlay(Circle().stroke(observation.status.color, lineWidth: selected ? 2 : 1.5))
+            .font(selected ? .body.weight(.semibold) : .caption.weight(.heavy))
+            .foregroundStyle(selected ? DrivyTheme.onAccent : observation.status.color)
+            .frame(width: selected ? 40 : 26, height: selected ? 40 : 26)
+            .background(selected ? DrivyTheme.accent : DrivyTheme.surface, in: Circle())
+            .overlay(Circle().strokeBorder(selected ? DrivyTheme.routeHalo : observation.status.color, lineWidth: selected ? 3 : 2))
             .overlay(alignment: .bottomTrailing) {
                 if selected {
                     Image(systemName: observation.status.symbol)
-                        .font(.caption2.weight(.bold))
+                        .font(.caption2.weight(.heavy))
                         .imageScale(.small)
-                        .dynamicTypeSize(...DynamicTypeSize.large)
-                        .foregroundStyle(observation.status.color)
-                        .frame(width: 16, height: 16)
-                        .background(DrivyTheme.surface, in: Circle())
-                        .overlay(Circle().stroke(observation.status.color, lineWidth: 1))
-                        .offset(x: 3, y: 3)
+                        .foregroundStyle(DrivyTheme.surface)
+                        .frame(width: 18, height: 18)
+                        .background(observation.status.color, in: Circle())
+                        .overlay(Circle().strokeBorder(DrivyTheme.routeHalo, lineWidth: 1.5))
+                        .offset(x: 4, y: 4)
                 }
             }
+            .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
             // Map markers keep a fixed geometry; their text alternative is the VoiceOver label.
             .dynamicTypeSize(...DynamicTypeSize.xLarge)
             .frame(width: 44, height: 44)
@@ -166,8 +177,9 @@ struct RouteMapView: View {
             let maxY = mapPoints.map(\.y).max() ?? minY
             let center = MKMapPoint(x: (minX + maxX) / 2, y: (minY + maxY) / 2)
             let minimumSpan = MKMapPointsPerMeterAtLatitude(center.coordinate.latitude) * 160
-            let width = max(maxX - minX, minimumSpan) * 1.16
-            let height = max(maxY - minY, minimumSpan) * 1.16
+            let margin = max(1, fitMargin)
+            let width = max(maxX - minX, minimumSpan) * margin
+            let height = max(maxY - minY, minimumSpan) * margin
             // MapKit frames this rectangle inside the actual safe area supplied
             // by the native top and bottom controls, including enlarged text.
             camera = .rect(MKMapRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height))

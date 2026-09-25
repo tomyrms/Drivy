@@ -21,6 +21,27 @@ struct SessionStoreTests {
         await #expect(throws: SessionError.missingSession) { _ = try await reopened.session(id: session.id) }
     }
 
+    @Test func undoneObservationIsErasedDurablyOnlyWhileTheSessionIsOpen() async throws {
+        let fixture = try StoreFixture()
+        let store = try fixture.open()
+        #expect(store.supportsObservationRemoval)
+        let session = DrivingSession(usesGPS: false)
+        try await store.create(session)
+        let kept = LessonObservation(id: UUID(), observedAt: session.startedAt, theme: .observation,
+            status: .positive, note: "", anchorPointID: nil)
+        let undone = LessonObservation(id: UUID(), observedAt: session.startedAt.addingTimeInterval(1), theme: .priority,
+            status: .attention, note: "Annulée", anchorPointID: nil)
+        try await store.append(kept, to: session.id)
+        try await store.append(undone, to: session.id)
+        try await store.removeObservation(undone.id, from: session.id)
+        await #expect(throws: SessionError.invalidObservation) { try await store.removeObservation(undone.id, from: session.id) }
+        let reopened = try fixture.open()
+        #expect(try await reopened.session(id: session.id).observations == [kept])
+        try await reopened.finish(session.id, at: session.startedAt.addingTimeInterval(2), state: .completed)
+        await #expect(throws: SessionError.sessionClosed) { try await reopened.removeObservation(kept.id, from: session.id) }
+        #expect(try await fixture.open().session(id: session.id).observations == [kept])
+    }
+
     @Test func encryptedPersistenceRejectsWrongKeyAndRetainsContent() async throws {
         let fixture = try StoreFixture()
         let store = try fixture.open()

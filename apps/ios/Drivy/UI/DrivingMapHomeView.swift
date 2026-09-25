@@ -18,13 +18,12 @@ struct DrivingMapHomeView: View {
     @State private var presentsLive = false
     @State private var presentsHistory = false
     @State private var presentsMap = false
-    @State private var liveSessionID: UUID?
+    @State private var pendingReplayID: UUID?
     @State private var historyPath: [UUID] = []
     @State private var upcoming: [SchoolLesson] = []
     @State private var agendaError: String?
     @State private var isLoadingAgenda = false
     @State private var agendaGeneration = UUID()
-    @State private var previewSelection: UUID?
 
     private var scopeKey: String {
         "\(workspace?.person?.id.uuidString ?? ""):\(workspace?.membership?.id.uuidString ?? ""):\(workspace?.membership?.accessEpoch ?? 0)"
@@ -33,19 +32,33 @@ struct DrivingMapHomeView: View {
     private var exampleJourneys: [DrivingSession] {
         controller.sessions.filter { $0.isExample && $0.state != .active }.sorted { $0.startedAt > $1.startedAt }
     }
+    /// Most recent journey recorded on this device, to resume its review or its bilan.
+    private var lastJourney: DrivingSession? {
+        controller.sessions.filter { !$0.isExample && $0.state != .active }.max { $0.startedAt < $1.startedAt }
+    }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: DrivySpacing.xl) {
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
                 heading
                 if sizeClass == .regular {
                     HStack(alignment: .top, spacing: DrivySpacing.xl) {
-                        primaryContent.frame(maxWidth: 460)
-                        nextLessons.frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                            journeyCard
+                            lastJourneySection
+                        }
+                        .frame(maxWidth: 480)
+                        VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                            nextLessons
+                            examplesSection
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 } else {
-                    primaryContent
+                    journeyCard
+                    lastJourneySection
                     nextLessons
+                    examplesSection
                 }
                 historyLink
             }
@@ -62,13 +75,13 @@ struct DrivingMapHomeView: View {
         .task(id: scopeKey) { await loadUpcoming() }
         .refreshable { await loadUpcoming() }
         .sheet(isPresented: $presentsStart, onDismiss: {
-            if let session = controller.activeSession {
-                liveSessionID = session.id
-                presentsLive = true
-            }
+            if controller.activeSession != nil { presentsLive = true }
         }) { StartSessionView(controller: controller) }
-        .fullScreenCover(isPresented: $presentsLive, onDismiss: openSavedJourney) {
-            NavigationStack { LiveSessionView(controller: controller) }.tint(DrivyTheme.accent)
+        .fullScreenCover(isPresented: $presentsLive, onDismiss: openPendingReplay) {
+            NavigationStack {
+                LiveSessionView(controller: controller, openReplay: { id in pendingReplayID = id })
+            }
+            .tint(DrivyTheme.accent)
         }
         .sheet(isPresented: $presentsMap) { JourneyExploreMapView() }
         .sheet(isPresented: $presentsHistory) {
@@ -86,122 +99,20 @@ struct DrivingMapHomeView: View {
         }
     }
 
-    @ViewBuilder private var primaryContent: some View {
-        if controller.activeSession == nil && !exampleJourneys.isEmpty {
-            VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                    Text(exampleJourneys.count == 1 ? "Un trajet à découvrir" : "Deux trajets à découvrir")
-                        .font(.drivyTitle)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Label("Exemples · tracés et observations fictifs", systemImage: "info.circle")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                ForEach(exampleJourneys.prefix(2)) { session in
-                    exampleJourneyCard(session)
-                }
-                HStack(spacing: DrivySpacing.s) {
-                    Button(action: primaryAction) {
-                        Label("Commencer un trajet", systemImage: "plus")
-                    }
-                    .buttonStyle(DrivyPrimaryButtonStyle())
-                    .disabled(controller.isBusy || controller.errorMessage != nil)
-                    .accessibilityIdentifier("new-session")
-                    Button { presentsMap = true } label: {
-                        Image(systemName: "map")
-                            .font(.title3)
-                            .frame(width: 52, height: 52)
-                            .foregroundStyle(DrivyTheme.accent)
-                            .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Explorer la carte")
-                }
-                if let error = controller.errorMessage { InlineErrorView(message: error, retry: retryStorage) }
-            }
-        } else { journeyCard }
-    }
-
-    private func exampleJourneyCard(_ session: DrivingSession) -> some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.s))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.s))
-        return Button {
-            historyPath = [session.id]
-            presentsHistory = true
-        } label: {
-            layout {
-                RouteMapView(session: session, selectedObservationID: .constant(nil), showsControls: false,
-                    showsEmptyState: false, showsOriginBadge: false)
-                    .allowsHitTesting(false)
-                    .frame(width: 104, height: 120)
-                    .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                    Text(session.title ?? "Trajet d’exemple")
-                        .font(.headline)
-                        .foregroundStyle(DrivyTheme.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(DrivySeanceText.observations(session.observations.count))
-                        .font(.subheadline)
-                        .foregroundStyle(DrivyTheme.muted)
-                    Label("Voir le replay", systemImage: "play.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(DrivyTheme.accent)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(DrivySpacing.s)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.s, style: .continuous))
-            .overlay { RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.s, style: .continuous).strokeBorder(DrivyTheme.border, lineWidth: 0.5) }
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.s, style: .continuous))
-        }
-        .buttonStyle(DrivyTileButtonStyle())
-        .accessibilityLabel("\(session.title ?? "Trajet"), exemple fictif, \(DrivySeanceText.observations(session.observations.count))")
-        .accessibilityHint("Ouvrir le replay de cet exemple")
-    }
-
+    /// The school is already named in the toolbar: the header only dates the day.
     private var heading: some View {
-        DrivyContextHeader(context: schoolName,
+        DrivyContextHeader(context: nil,
             detail: Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "fr_CH"))).capitalizedFirst)
     }
 
+    /// The one dominant decision of the screen: start a journey, or go back to the one running.
     private var journeyCard: some View {
         DrivyCard {
-            VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                    DrivyMapStatusLabel(status: journeyStatus)
-                    Text(controller.activeSession == nil ? "Votre prochain trajet" : "Trajet en cours")
-                        .font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
-                    if let session = controller.activeSession {
-                        HStack(spacing: DrivySpacing.xs) {
-                            if controller.isCapturing {
-                                TimelineView(.periodic(from: .now, by: 1)) { context in
-                                    Text(context.date.sessionElapsed(since: session.startedAt)).monospacedDigit()
-                                }
-                                Text("·").accessibilityHidden(true)
-                            }
-                            Text(DrivySeanceText.observations(session.observations.count))
-                        }.font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    } else {
-                        Text("Avec ou sans GPS : le trajet, les observations et le bilan restent sur cet appareil.")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                mapPreview
-                if controller.isLoading {
-                    ProgressView("Ouverture des trajets…").frame(maxWidth: .infinity, minHeight: 52)
+            VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                if let session = controller.activeSession {
+                    activeJourney(session)
                 } else {
-                    Button(action: primaryAction) {
-                        Label(controller.activeSession == nil ? "Commencer un trajet" : controller.isCapturing ? "Revenir à la carte" : "Vérifier la sauvegarde",
-                              systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-                    }
-                    .buttonStyle(DrivyPrimaryButtonStyle())
-                    .disabled(controller.isBusy || (controller.activeSession == nil && controller.errorMessage != nil))
-                    .accessibilityIdentifier(controller.activeSession == nil ? "new-session" : "resume-session")
+                    idleJourney
                 }
                 if let error = controller.errorMessage {
                     InlineErrorView(message: error, retry: retryStorage)
@@ -210,34 +121,124 @@ struct DrivingMapHomeView: View {
         }
     }
 
-    private var mapPreview: some View {
-        Button {
-            if controller.activeSession != nil && controller.isCapturing { primaryAction() }
-            else { presentsMap = true }
-        } label: {
-            ZStack(alignment: .bottomTrailing) {
-                if let session = controller.activeSession, !session.points.isEmpty {
-                    RouteMapView(session: session, selectedObservationID: $previewSelection, showsControls: false, showsEmptyState: false)
-                        .allowsHitTesting(false)
-                } else {
-                    Map(initialPosition: .region(JourneyMapRegion.overview), interactionModes: [])
-                        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
-                        .mapControls { }
-                        .allowsHitTesting(false)
+    @ViewBuilder
+    private func activeJourney(_ session: DrivingSession) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            DrivyMapStatusLabel(status: journeyStatus, font: .subheadline.weight(.semibold))
+            Text(controller.isCapturing ? "Trajet en cours" : "Sauvegarde à vérifier")
+                .font(.drivyTitle)
+                .fixedSize(horizontal: false, vertical: true)
+            if controller.isCapturing {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let elapsed = context.date.sessionElapsed(since: session.startedAt)
+                    Text(elapsed)
+                        .font(.drivyScreenTitle.monospacedDigit())
+                        .accessibilityLabel("Durée du trajet")
+                        .accessibilityValue(elapsed)
                 }
-                Label(controller.isCapturing ? "Ouvrir" : "Explorer", systemImage: "arrow.up.left.and.arrow.down.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.text)
-                    .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
-                    .drivyMapControl(in: Capsule())
-                    .padding(DrivySpacing.s)
+            } else {
+                Text("L’enregistrement s’est arrêté. Vérifiez la sauvegarde : les données déjà écrites sont conservées.")
+                    .font(.subheadline)
+                    .foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: 168)
-            .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+            Label(DrivySeanceText.observations(session.observations.count) + " · privées", systemImage: "lock")
+                .font(.subheadline)
+                .foregroundStyle(DrivyTheme.muted)
+        }
+        if controller.isCapturing && !session.points.isEmpty {
+            Button(action: primaryAction) {
+                RouteMapView(session: session, selectedObservationID: .constant(nil), showsControls: false,
+                    showsEmptyState: false, showsOriginBadge: false, fitMargin: 1.6)
+                    .allowsHitTesting(false)
+                    .frame(height: DrivyMapLayout.previewHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+            }
+            .buttonStyle(DrivyTileButtonStyle())
+            .accessibilityLabel("Revenir au trajet en cours")
+        }
+        Button(action: primaryAction) {
+            Label(controller.isCapturing ? "Revenir au trajet" : "Vérifier la sauvegarde",
+                  systemImage: controller.isCapturing ? "arrow.up.forward.app" : "arrow.clockwise")
+        }
+        .buttonStyle(DrivyPrimaryButtonStyle())
+        .disabled(controller.isBusy)
+        .accessibilityIdentifier("resume-session")
+    }
+
+    @ViewBuilder
+    private var idleJourney: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            Text("Prêt pour un trajet")
+                .font(.drivyTitle)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Avec ou sans GPS. Signalez les moments à revoir, retrouvez-les dans le replay et le bilan. Tout reste privé sur cet appareil.")
+                .font(.subheadline)
+                .foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if controller.isLoading {
+            DrivyLoadingState(title: "Ouverture des trajets…")
+        } else {
+            Button { presentsStart = true } label: {
+                Label("Commencer un trajet", systemImage: "plus")
+            }
+            .buttonStyle(DrivyPrimaryButtonStyle())
+            .disabled(controller.isBusy || controller.errorMessage != nil)
+            .accessibilityIdentifier("new-session")
+        }
+        Button { presentsMap = true } label: {
+            Label("Explorer la carte", systemImage: "map")
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(controller.isCapturing ? "Revenir au trajet en cours" : "Explorer la carte")
+        .foregroundStyle(DrivyTheme.accent)
+        .accessibilityHint("Affiche la carte sans enregistrer de trajet")
+    }
+
+    /// Last journey recorded here: one tap back to its replay, its bilan state visible.
+    @ViewBuilder
+    private var lastJourneySection: some View {
+        if controller.activeSession == nil, let session = lastJourney {
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                DrivySectionHeader(title: "Dernier trajet")
+                Button { openReplay(session.id) } label: {
+                    JourneySummaryRow(session: session, showsChevron: true)
+                        .padding(.vertical, DrivySpacing.s)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(DrivyRowButtonStyle())
+                .accessibilityHint("Ouvrir le replay et le bilan de ce trajet")
+                .accessibilityIdentifier("last-journey")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var examplesSection: some View {
+        if !exampleJourneys.isEmpty {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                DrivySectionHeader(title: "Découvrir le replay")
+                Label("Exemples · tracés et observations fictifs", systemImage: "info.circle")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                DrivyRowGroup {
+                    ForEach(exampleJourneys.prefix(2)) { session in
+                        Button { openReplay(session.id) } label: {
+                            JourneySummaryRow(session: session, showsChevron: true)
+                                .padding(.vertical, DrivySpacing.s)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(DrivyRowButtonStyle())
+                        .accessibilityHint("Ouvrir le replay de cet exemple")
+                    }
+                }
+            }
+        }
     }
 
     private var nextLessons: some View {
@@ -278,7 +279,7 @@ struct DrivingMapHomeView: View {
     }
 
     private var historyLink: some View {
-        DrivyNavigationRow(title: "Trajets et bilans", detail: "Retrouver les moments enregistrés",
+        DrivyNavigationRow(title: "Trajets et bilans", detail: "Revoir les trajets, les observations et les bilans",
             symbol: "clock.arrow.circlepath", action: { historyPath = []; presentsHistory = true })
             .accessibilityIdentifier("map-history")
     }
@@ -294,16 +295,18 @@ struct DrivingMapHomeView: View {
         return { Task { await controller.load() } }
     }
     private func primaryAction() {
-        if let session = controller.activeSession {
-            if controller.isCapturing { liveSessionID = session.id; presentsLive = true }
+        if controller.activeSession != nil {
+            if controller.isCapturing { presentsLive = true }
             else { Task { await controller.load() } }
         } else { presentsStart = true }
     }
-    private func openSavedJourney() {
-        if controller.activeSession == nil, let id = liveSessionID, controller.selectedSession?.id == id {
-            historyPath = [id]; presentsHistory = true
-        }
-        liveSessionID = nil
+    private func openReplay(_ id: UUID) {
+        historyPath = [id]
+        presentsHistory = true
+    }
+    private func openPendingReplay() {
+        if let id = pendingReplayID { openReplay(id) }
+        pendingReplayID = nil
     }
     private func lessonTime(_ date: Date?) -> String {
         guard let date else { return "—" }
@@ -380,7 +383,7 @@ struct JourneyExploreMapView: View {
                         } label: {
                             Image(systemName: "location").font(.title3).frame(width: 48, height: 48)
                                 .foregroundStyle(DrivyTheme.accent)
-                                .drivyMapControl(in: Circle())
+                                .drivyLegibleMapControl(in: Circle())
                         }.buttonStyle(.plain).accessibilityLabel("Afficher ma position")
                             .accessibilityHint("Centre la carte sans enregistrer de trajet")
                             .accessibilityIdentifier("map-locate")

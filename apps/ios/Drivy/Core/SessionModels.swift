@@ -142,6 +142,7 @@ struct DrivingSession: Identifiable, Codable, Equatable, Sendable {
 enum SessionError: Error, LocalizedError, Equatable, Sendable {
     case storageUnavailable, encryptionUnavailable, keyUnavailable, unsupportedSchema
     case sessionClosed, sessionAlreadyActive, sessionStillActive, invalidObservation, invalidPoint, missingSession
+    case observationRemovalUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -155,6 +156,7 @@ enum SessionError: Error, LocalizedError, Equatable, Sendable {
         case .invalidObservation: "L’observation est invalide ou dépasse 1 000 caractères."
         case .invalidPoint: "Cette mesure GPS ne peut pas être conservée."
         case .missingSession: "Cette séance n’est plus disponible."
+        case .observationRemovalUnavailable: "Cette observation ne peut pas être retirée sur cet appareil. Elle reste enregistrée."
         }
     }
 }
@@ -169,4 +171,19 @@ protocol SessionStore: Sendable {
     func updateSummary(_ text: String, for id: UUID) async throws
     func recoverInterruptedSessions() async throws
     func deleteSession(_ id: UUID) async throws
+    /// Erases one observation of a session that is still open (immediate « Annuler »
+    /// after a report). Must delete durably or throw; never hide the row.
+    func removeObservation(_ observationID: UUID, from sessionID: UUID) async throws
+    /// True only when `removeObservation` really erases the stored observation.
+    var supportsObservationRemoval: Bool { get }
+}
+
+extension SessionStore {
+    // Stores that cannot erase an observation refuse explicitly; the interface
+    // then shows the confirmation without an « Annuler » command.
+    func removeObservation(_ observationID: UUID, from sessionID: UUID) async throws {
+        throw SessionError.observationRemovalUnavailable
+    }
+
+    var supportsObservationRemoval: Bool { false }
 }

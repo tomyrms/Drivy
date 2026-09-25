@@ -216,6 +216,22 @@ actor SQLCipherSessionStore: SessionStore {
         guard try database.integer("PRAGMA wal_checkpoint(TRUNCATE)") == 0 else { throw SessionError.storageUnavailable }
     }
 
+    nonisolated var supportsObservationRemoval: Bool { true }
+
+    /// Immediate « Annuler » after a report: only while the session is still open,
+    /// erased durably (secure_delete plus WAL checkpoint, as for a deleted session).
+    func removeObservation(_ observationID: UUID, from sessionID: UUID) throws {
+        try write {
+            guard try metadata(sessionID).state == .active else { throw SessionError.sessionClosed }
+            let existing = try database.records("SELECT data FROM observation WHERE id=? AND session_id=?",
+                [.text(observationID.uuidString), .text(sessionID.uuidString)], as: LessonObservation.self)
+            guard !existing.isEmpty else { throw SessionError.invalidObservation }
+            try database.execute("DELETE FROM observation WHERE id=? AND session_id=?",
+                [.text(observationID.uuidString), .text(sessionID.uuidString)])
+        }
+        guard try database.integer("PRAGMA wal_checkpoint(TRUNCATE)") == 0 else { throw SessionError.storageUnavailable }
+    }
+
     private func metadata(_ id: UUID) throws -> DrivingSession {
         guard let session = try database.records("SELECT data FROM session WHERE id=?",
             [.text(id.uuidString)], as: DrivingSession.self).first else { throw SessionError.missingSession }

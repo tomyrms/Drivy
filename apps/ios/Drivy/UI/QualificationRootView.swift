@@ -44,7 +44,10 @@ struct QualificationRootView: View {
         }
         .fullScreenCover(isPresented: $presentsLive) {
             NavigationStack {
-                LiveSessionView(controller: controller)
+                LiveSessionView(controller: controller, openReplay: { id in
+                    historyPath = [id]
+                    selectedTab = .history
+                })
             }
             .tint(DrivyTheme.accent)
         }
@@ -54,7 +57,7 @@ struct QualificationRootView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.l) {
                 Text("Votre trajet, vos observations, votre bilan.")
-                    .font(.title3)
+                    .font(.subheadline)
                     .foregroundStyle(DrivyTheme.muted)
 
                 if controller.isLoading {
@@ -64,15 +67,12 @@ struct QualificationRootView: View {
                     activeSessionCard(active)
                 } else {
                     DrivyPanel {
-                        VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                            DrivyRouteGlyph()
-                                .frame(height: 72)
-                                .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: DrivySpacing.m) {
                             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                                Text("Prendre des repères")
+                                Text("Prêt pour une séance d’essai")
                                     .font(.drivyTitle)
                                     .fixedSize(horizontal: false, vertical: true)
-                                Text("Démarrez une séance locale, avec ou sans trajet GPS.")
+                                Text("Avec ou sans GPS. Signalez les moments à revoir, puis retrouvez-les dans le replay et le bilan.")
                                     .foregroundStyle(DrivyTheme.muted)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -82,6 +82,21 @@ struct QualificationRootView: View {
                             .buttonStyle(DrivyPrimaryButtonStyle())
                             .accessibilityIdentifier("new-session")
                             .disabled(controller.isBusy || controller.errorMessage != nil)
+                        }
+                    }
+                    if let last = controller.sessions.filter({ !$0.isExample && $0.state != .active }).max(by: { $0.startedAt < $1.startedAt }) {
+                        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                            DrivySectionHeader(title: "Dernière séance")
+                            Button {
+                                historyPath = [last.id]
+                                selectedTab = .history
+                            } label: {
+                                JourneySummaryRow(session: last, showsChevron: true)
+                                    .padding(.vertical, DrivySpacing.s)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(DrivyRowButtonStyle())
+                            .accessibilityHint("Ouvrir le replay et le bilan de cette séance")
                         }
                     }
                 }
@@ -117,6 +132,12 @@ struct QualificationRootView: View {
                 Text(controller.isCapturing ? "Séance en cours" : "Enregistrement arrêté")
                     .font(.drivyTitle)
                     .fixedSize(horizontal: false, vertical: true)
+                if !controller.isCapturing {
+                    Text("Vérifiez la sauvegarde : les données déjà écrites sont conservées.")
+                        .font(.subheadline)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if controller.isCapturing {
                     TimelineView(.periodic(from: .now, by: 1)) { timeline in
                         Text(timeline.date.sessionElapsed(since: session.startedAt))
@@ -126,14 +147,15 @@ struct QualificationRootView: View {
                             .accessibilityValue(timeline.date.sessionElapsed(since: session.startedAt))
                     }
                 }
-                Text(DrivySeanceText.observations(session.observations.count))
+                Label(DrivySeanceText.observations(session.observations.count) + " · privées", systemImage: "lock")
                     .font(.subheadline)
                     .foregroundStyle(DrivyTheme.muted)
                 Button {
                     if controller.isCapturing { presentsLive = true }
                     else { Task { await controller.load() } }
                 } label: {
-                    Label(controller.isCapturing ? "Revenir à la séance" : "Vérifier la sauvegarde", systemImage: "arrow.up.right")
+                    Label(controller.isCapturing ? "Revenir à la séance" : "Vérifier la sauvegarde",
+                          systemImage: controller.isCapturing ? "arrow.up.forward.app" : "arrow.clockwise")
                 }
                 .buttonStyle(DrivyPrimaryButtonStyle())
                 .disabled(controller.isBusy)
@@ -158,28 +180,27 @@ struct StartSessionView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: DrivySpacing.xl) {
-                    VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                        Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
-                            .font(.largeTitle.weight(.medium)).foregroundStyle(DrivyTheme.accent)
-                            .frame(width: 68, height: 68)
-                            .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
-                            .accessibilityHidden(true)
-                        Text("Un trajet à retenir").font(.drivyScreenTitle)
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                        Text("Comment enregistrer ce trajet ?").font(.drivyTitle)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text("Choisissez comment garder les moments de votre séance.")
+                        Text("Dans les deux cas, « Signaler » retient le moment et vous retrouvez les observations dans le replay et le bilan.")
                             .font(.body).foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    // Both choices have the same weight: the GPS is optional (F15).
                     VStack(spacing: DrivySpacing.s) {
-                        startOption(title: "Avec le GPS", detail: "Parcours, observations et bilan", symbol: "location.fill", useGPS: true)
-                        startOption(title: "Sans GPS", detail: "Observations et bilan", symbol: "text.bubble", useGPS: false)
+                        startOption(title: "Avec le GPS", detail: "Le tracé est enregistré ; les observations sont placées sur la carte.",
+                            symbol: "location.fill", useGPS: true)
+                        startOption(title: "Sans GPS", detail: "Aucune position. Les observations gardent leur heure.",
+                            symbol: "clock", useGPS: false)
                     }
                     .disabled(controller.isBusy)
-                    if controller.isBusy { ProgressView("Préparation du trajet…").frame(maxWidth: .infinity) }
+                    if controller.isBusy { DrivyLoadingState(title: "Préparation du trajet…") }
                     if let error = controller.errorMessage { InlineErrorView(message: error) }
                     VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                         Label("Privé sur cet appareil", systemImage: "lock").font(.subheadline.weight(.semibold))
-                        Text("Aucun partage automatique. Jusqu’à 2 h par trajet.")
+                        Text("Aucun partage automatique. Jusqu’à 2 h par trajet. Si la localisation est refusée, le trajet continue sans position.")
                             .font(.footnote).foregroundStyle(DrivyTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -188,11 +209,12 @@ struct StartSessionView: View {
                 .drivyPageContent(maxWidth: 560)
             }
             .background(DrivyTheme.surface)
-            .navigationTitle("Préparer le trajet").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Nouveau trajet").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(controller.isBusy) }
             }
         }
+        .presentationDetents([.large])
         .interactiveDismissDisabled(controller.isBusy)
         .tint(DrivyTheme.accent)
         .foregroundStyle(DrivyTheme.text)
@@ -200,20 +222,28 @@ struct StartSessionView: View {
     private func startOption(title: String, detail: String, symbol: String, useGPS: Bool) -> some View {
         Button { start(useGPS: useGPS) } label: {
             HStack(spacing: DrivySpacing.m) {
-                Image(systemName: symbol).font(.title2).frame(width: 32).accessibilityHidden(true)
+                Image(systemName: symbol).font(.title2.weight(.semibold))
+                    .foregroundStyle(DrivyTheme.accent)
+                    .frame(width: 52, height: 52)
+                    .background(DrivyTheme.accentSoft, in: Circle())
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    Text(title).font(.headline)
-                    Text(detail).font(.subheadline).opacity(0.85)
+                    Text(title).font(.headline).foregroundStyle(DrivyTheme.text)
+                    Text(detail).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 }.fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "arrow.right").font(.body.weight(.semibold)).accessibilityHidden(true)
+                Image(systemName: "arrow.right.circle.fill").font(.title2).foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
             }
-            .padding(DrivySpacing.l).frame(maxWidth: .infinity, minHeight: 96)
-            .foregroundStyle(useGPS ? DrivyTheme.onAccent : DrivyTheme.text)
-            .background(useGPS ? DrivyTheme.accent : DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+            .padding(DrivySpacing.m).frame(maxWidth: .infinity, minHeight: 96)
+            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous)
+                    .strokeBorder(DrivyTheme.border, lineWidth: 0.5)
+            }
             .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
         }
         .buttonStyle(DrivyTileButtonStyle())
-        .accessibilityLabel(useGPS ? "Démarrer avec le GPS" : "Continuer sans GPS")
+        .accessibilityLabel(useGPS ? "Démarrer avec le GPS" : "Démarrer sans GPS")
+        .accessibilityHint(detail)
         .accessibilityIdentifier(useGPS ? "start-with-gps" : "start-without-gps")
     }
     private func start(useGPS: Bool) {
