@@ -121,7 +121,7 @@ struct SchoolRecordingChoiceView: View {
         if let error = model.errorMessage { SchoolErrorNotice(message: error) }
         if let error = model.storageError { SchoolErrorNotice(message: error) }
         if let confirmation = model.confirmation {
-            Label(confirmation, systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(DrivyTheme.success)
+            DrivyInlineMessage(text: confirmation)
         }
     }
     private var currentChoice: some View {
@@ -179,7 +179,7 @@ struct SchoolRecordingChoiceView: View {
             }
             .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DrivyTileButtonStyle())
         .disabled(!model.mayChoose || (status == .allowed && model.verbalAgreementIsProtected))
         .accessibilityAddTraits(selectedStatus == status ? .isSelected : [])
         .accessibilityIdentifier(status == .allowed ? "recording-allow" : "recording-refuse")

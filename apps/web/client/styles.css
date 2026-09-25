@@ -24,6 +24,11 @@
   --warning: #7a4d00;
   --warning-surface: #fff3d9;
   --shadow: 0 8px 32px rgb(24 33 43 / 4%);
+  /* Radii shared with the Apple client (tokens 3.8): field, content, map panel. */
+  --radius-field: .75rem;
+  --radius-content: 1rem;
+  --radius-panel: 1.5rem;
+  --ease-out: cubic-bezier(.2, 0, 0, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -58,10 +63,13 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 button:disabled { cursor: default; }
 button, a { touch-action: manipulation; }
+/* Controls are not content: no text selection or callout on long-press. */
+button, .button, .brand { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
 h1:focus { outline: none; }
 h1, h2, h3, p, dl { margin: 0; }
 h1, h2, h3 { text-wrap: balance; }
+p, dd, .lead, .caption { text-wrap: pretty; }
 p, h1, h2, h3, dd, a, span { overflow-wrap: anywhere; }
 ::selection { color: var(--on-accent); background: var(--accent); }
 .app-shell { min-height: 100dvh; display: flex; flex-direction: column; }
@@ -82,7 +90,7 @@ h1 { font-size: clamp(2rem, 5vw, 2.875rem); letter-spacing: -.045em; line-height
 h2 { font-size: 1.5rem; letter-spacing: -.025em; line-height: 1.3; font-weight: 650; }
 h3 { font-size: 1.0625rem; line-height: 1.4; font-weight: 650; }
 p { line-height: 1.6; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 1.5rem; padding: 2rem; box-shadow: var(--shadow); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 2rem; box-shadow: var(--shadow); }
 .card + .card { margin-top: 1.5rem; }
 .symbol { color: var(--accent); background: var(--accent-soft); display: grid; place-items: center; flex: 0 0 auto; width: 3rem; height: 3rem; border-radius: .9rem; }
 .symbol svg { width: 1.5rem; height: 1.5rem; }
@@ -91,13 +99,21 @@ p { line-height: 1.6; }
 .sign-in-card > p { margin-top: .875rem; color: var(--muted); }
 .sign-in-card > .button { margin-top: 1.5rem; }
 /* Theme changes update text and background together, preserving contrast. */
-.button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border: 1px solid transparent; border-radius: .8rem; min-height: 3rem; padding: .75rem 1.125rem; font-size: .9375rem; font-weight: 620; line-height: 1.4; text-decoration: none; text-align: center; transition: border-color 140ms; max-width: 100%; }
+.button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border: 1px solid transparent; border-radius: var(--radius-content); min-height: 3rem; padding: .75rem 1.125rem; font-size: .9375rem; font-weight: 620; line-height: 1.4; text-decoration: none; text-align: center; transition-property: border-color, background-color, transform; transition-duration: 140ms, 140ms, 120ms; transition-timing-function: var(--ease-out); max-width: 100%; }
+/* Press feedback on touch and mouse alike; responds when the finger lands. */
+.button:active:not(:disabled) { transform: scale(.96); }
 .button.primary { color: var(--on-accent); background: var(--accent); }
-.button.primary:hover:not(:disabled) { background: var(--accent-pressed); }
+.button.primary:active:not(:disabled) { background: var(--accent-pressed); }
 .button.secondary { color: var(--text); background: var(--surface-muted); border-color: var(--border); }
-.button.secondary:hover:not(:disabled) { border-color: var(--control-border); }
+
 .button.quiet { color: var(--accent); background: transparent; padding-inline: .5rem; }
-.button.quiet:hover:not(:disabled) { background: var(--accent-soft); }
+.button.quiet:active:not(:disabled) { background: var(--accent-soft); }
+/* Hover exists only where the pointer can hover; touch never keeps a stuck state. */
+@media (hover: hover) and (pointer: fine) {
+  .button.primary:hover:not(:disabled) { background: var(--accent-pressed); }
+  .button.secondary:hover:not(:disabled) { border-color: var(--control-border); }
+  .button.quiet:hover:not(:disabled) { background: var(--accent-soft); }
+}
 .button:disabled { color: var(--muted); background: var(--surface-muted); border-color: transparent; }
 .button-row { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1.25rem 0 .75rem; }
 .button-row > .primary { flex-grow: 1; }
@@ -108,7 +124,7 @@ p { line-height: 1.6; }
 .loading { display: flex; align-items: center; gap: .7rem; color: var(--muted); padding: .5rem 0 1rem; font-size: .9375rem; }
 .spinner { display: inline-block; width: 1rem; height: 1rem; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .85s linear infinite; flex-shrink: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.notice { border: 1px solid currentColor; border-radius: 1rem; padding: 1.125rem 1.25rem; margin-bottom: 1.25rem; line-height: 1.55; }
+.notice { border: 1px solid currentColor; border-radius: var(--radius-content); padding: 1.125rem 1.25rem; margin-bottom: 1.25rem; line-height: 1.55; }
 .notice strong { display: block; }
 .notice p { margin-top: .35rem; }
 .notice .button { margin-top: .875rem; }
@@ -124,7 +140,7 @@ p { line-height: 1.6; }
 .invitation-facts { margin-top: 1.75rem; display: grid; gap: 1rem; padding-bottom: 1.75rem; border-bottom: 1px solid var(--border); }
 .invitation-facts > div { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: .5rem 1rem; line-height: 1.5; }
 .invitation-facts dt { color: var(--muted); font-size: .875rem; }
-.invitation-facts dd { margin: 0; font-size: .9375rem; }
+.invitation-facts dd { margin: 0; font-size: .9375rem; font-variant-numeric: tabular-nums; }
 .policy { padding-top: 1.75rem; }
 .policy h3:not(:first-child) { margin-top: 1.5rem; }
 .policy-copy { white-space: pre-wrap; margin-top: .75rem; line-height: 1.7; }
@@ -141,13 +157,17 @@ p { line-height: 1.6; }
 .empty-state { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; padding-block: 2rem 1rem; }
 .empty-state p { color: var(--muted); max-width: 34rem; }
 .card.empty-state { padding: 2rem; }
-.invitation-banner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.25rem; margin-bottom: 1.5rem; background: var(--accent-soft); border-radius: 1rem; border: 1px solid var(--border); }
+.invitation-banner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.25rem; margin-bottom: 1.5rem; background: var(--accent-soft); border-radius: var(--radius-content); border: 1px solid var(--border); }
 .invitation-banner p { color: var(--muted); font-size: .875rem; margin-top: .3rem; }
 .invitation-banner .button { flex-shrink: 0; }
 .site-footer { width: min(1120px, 100%); margin: 0 auto; border-top: 1px solid var(--border); padding: 1.5rem 2rem 2rem; display: flex; justify-content: space-between; gap: 1rem; color: var(--muted); font-size: .8125rem; }
 .site-footer > span { font-weight: 650; }
 .skeleton-card { display: grid; gap: 1rem; min-height: 14rem; align-content: center; }
 .skeleton-card span { display: block; background: var(--surface-muted); border-radius: .5rem; height: 1rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-card span { animation: pulse 1.6s ease-in-out infinite; }
+}
+@keyframes pulse { 50% { opacity: .55; } }
 .skeleton-card span:first-child { width: 60%; height: 1.75rem; }
 .skeleton-card span:last-child { width: 75%; }
 
@@ -157,7 +177,7 @@ p { line-height: 1.6; }
   .signed-in-label { display: none; }
   .site-header .button { font-size: .8125rem; padding-inline: .35rem; }
   .main { padding: 1.75rem 1.25rem 3rem; }
-  .card { padding: 1.375rem; border-radius: 1.25rem; }
+  .card { padding: 1.375rem; border-radius: var(--radius-panel); }
   .identity-strip { flex-wrap: wrap; }
   .identity-strip > .button { margin-left: 4rem; }
   .invitation-facts > div { grid-template-columns: 1fr; gap: .2rem; }

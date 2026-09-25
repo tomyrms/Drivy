@@ -236,17 +236,18 @@ struct DrivyEmptyState: View {
 
 /// Elevated card used for the one dominant decision of a screen
 /// (next session, current lesson). Hairline border, no decorative shadow.
+/// Corners are concentric: card radius = inner content radius + padding.
 struct DrivyCard<Content: View>: View {
-    var padding: CGFloat = 20
+    var padding: CGFloat = DrivySpacing.m
     @ViewBuilder let content: Content
 
     var body: some View {
         content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.content + padding, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous)
+                RoundedRectangle(cornerRadius: DrivyRadius.content + padding, style: .continuous)
                     .strokeBorder(DrivyTheme.border, lineWidth: 0.5)
             }
     }
@@ -281,4 +282,60 @@ extension View {
 extension String {
     /// « lundi 21 septembre » → « Lundi 21 septembre », without title-casing every word.
     var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
+}
+
+/// Schematic route line from the mockups: a stepped path with start and end
+/// dots. Illustrative only, never a recorded position.
+struct DrivyRouteGlyph: View {
+    var lineWidth: CGFloat = 4
+
+    var body: some View {
+        Canvas { context, size in
+            let w = size.width, h = size.height
+            let points = [
+                CGPoint(x: w * 0.06, y: h * 0.86),
+                CGPoint(x: w * 0.06, y: h * 0.62),
+                CGPoint(x: w * 0.46, y: h * 0.62),
+                CGPoint(x: w * 0.46, y: h * 0.18),
+                CGPoint(x: w * 0.94, y: h * 0.18),
+            ]
+            var path = Path()
+            path.addLines(points)
+            context.stroke(path, with: .color(DrivyTheme.routeHalo), style: StrokeStyle(lineWidth: lineWidth + 4, lineCap: .round, lineJoin: .round))
+            context.stroke(path, with: .color(DrivyTheme.route), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+            for point in [points.first!, points.last!] {
+                let dot = Path(ellipseIn: CGRect(x: point.x - 6, y: point.y - 6, width: 12, height: 12))
+                context.fill(dot, with: .color(DrivyTheme.routeHalo))
+                context.stroke(dot, with: .color(DrivyTheme.route), lineWidth: 3)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// Inline feedback next to where the action happened (success, warning, error).
+/// Symbol + text + tone, never color alone.
+struct DrivyInlineMessage: View {
+    let text: String
+    var tone: DrivyTone = .success
+
+    private var symbol: String {
+        switch tone {
+        case .success: "checkmark.circle.fill"
+        case .warning: "exclamationmark.triangle.fill"
+        case .danger: "xmark.octagon.fill"
+        case .accent, .neutral: "info.circle.fill"
+        }
+    }
+
+    var body: some View {
+        Label(text, systemImage: symbol)
+            .font(.subheadline)
+            .foregroundStyle(tone.foreground)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(DrivySpacing.s)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tone.background, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+            .accessibilityElement(children: .combine)
+    }
 }

@@ -353,7 +353,7 @@ struct JourneyExploreMapView: View {
                                 if let url = URL(string: UIApplication.openSettingsURLString) {
                                     Link("Ouvrir les réglages", destination: url).font(.subheadline)
                                 }
-                            }.padding(14).background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+                            }.padding(14).background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                         }
                         Spacer()
                         Button {

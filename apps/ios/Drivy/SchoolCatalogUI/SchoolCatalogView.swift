@@ -61,17 +61,11 @@ struct SchoolCatalogView: View {
     @ViewBuilder private var feedback: some View {
         if model.isLoading { ProgressView("Actualisation de l’école…").frame(maxWidth: .infinity, minHeight: 44) }
         if let school = model.school, school.status != "ACTIVE" {
-            Label("Activez l’école dans sa configuration avant de créer son catalogue.", systemImage: "info.circle")
-                .font(.subheadline).foregroundStyle(DrivyTheme.warning)
-                .padding(DrivySpacing.s).frame(maxWidth: .infinity, alignment: .leading)
-                .background(DrivyTheme.warningSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+            DrivyInlineMessage(text: "Activez l’école dans sa configuration avant de créer son catalogue.", tone: .warning)
         }
         if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
         if let message = model.successMessage {
-            Label(message, systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(DrivyTheme.success)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(DrivySpacing.s).frame(maxWidth: .infinity, alignment: .leading)
-                .background(DrivyTheme.successSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+            DrivyInlineMessage(text: message)
         }
         if let pending = model.pending {
             DrivyPanel {
@@ -269,7 +263,7 @@ struct SchoolCatalogView: View {
                             .foregroundStyle(DrivyTheme.accent)
                     }
                     .padding(20).frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
-                    .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+                    .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                 }.buttonStyle(.plain).disabled(model.isBusy || model.isLoading)
             }
             createButton("Créer une formation", symbol: "plus", kind: .training)

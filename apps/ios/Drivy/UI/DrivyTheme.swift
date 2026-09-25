@@ -61,6 +61,9 @@ enum DrivyRadius {
 
 /// Custom motion only; system transitions are never overridden.
 enum DrivyMotion {
+    /// Press feedback reacts to the finger: a spring without bounce, interruptible.
+    static func press(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : .spring(duration: 0.18, bounce: 0) }
+    /// System-initiated feedback (state change): short ease-out.
     static func feedback(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : .easeOut(duration: 0.12) }
     static func context(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : .snappy(duration: 0.18) }
 }
@@ -85,8 +88,8 @@ struct DrivyPrimaryButtonStyle: ButtonStyle {
                 in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
             )
             .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
-            .animation(DrivyMotion.feedback(reduceMotion), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }
 }
 
@@ -106,8 +109,8 @@ struct DrivySecondaryButtonStyle: ButtonStyle {
                 in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
             )
             .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
-            .animation(DrivyMotion.feedback(reduceMotion), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }
 }
 

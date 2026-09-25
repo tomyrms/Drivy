@@ -101,17 +101,11 @@ private struct SchoolLessonReportContent: View {
                 }
                 if model.isLoading || model.isBusy { ProgressView(model.isBusy ? "Enregistrement…" : "Chargement…") }
                 if let error = model.errorMessage {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .font(.subheadline).foregroundStyle(DrivyTheme.danger)
-                        .padding(DrivySpacing.s).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(DrivyTheme.dangerSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+                    DrivyInlineMessage(text: error, tone: .danger)
                         .accessibilityLabel("Erreur : \(error)")
                 }
                 if let message = model.confirmation {
-                    Label(message, systemImage: "checkmark.circle.fill")
-                        .font(.subheadline).foregroundStyle(DrivyTheme.success)
-                        .padding(DrivySpacing.s).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(DrivyTheme.successSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+                    DrivyInlineMessage(text: message)
                 }
                 if let message = model.information { Text(message).font(.footnote).foregroundStyle(.secondary) }
             }.listRowBackground(Color.clear)

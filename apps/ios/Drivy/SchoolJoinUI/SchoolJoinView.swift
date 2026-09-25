@@ -46,7 +46,7 @@ struct SchoolJoinView: View {
             SecureField("Coller le lien reçu", text: $model.link)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .submitLabel(.go).onSubmit { Task { await model.inspect() } }
-                .padding(16).background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                .padding(16).background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
                 .disabled(model.isBusy || !model.isReady)
                 .accessibilityIdentifier("join-invitation-link")
             PasteButton(payloadType: String.self) { values in

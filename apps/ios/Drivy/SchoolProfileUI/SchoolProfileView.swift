@@ -256,7 +256,7 @@ struct SchoolProfileStatusSections: View {
                 }
             }
             if let success = model.successMessage, !model.hasEdits {
-                Section { Label(success, systemImage: "checkmark.circle").foregroundStyle(DrivyTheme.success) }
+                Section { Label(success, systemImage: "checkmark.circle.fill").foregroundStyle(DrivyTheme.success) }
             }
             if let pending = model.pending {
                 Section {

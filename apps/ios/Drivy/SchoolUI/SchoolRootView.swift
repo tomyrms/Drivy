@@ -579,44 +579,60 @@ struct SchoolRootView: View {
 
     private var signInLanding: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                Image(systemName: "steeringwheel")
-                    .font(.largeTitle)
-                    .foregroundStyle(DrivyTheme.accent)
-                    .padding(20)
-                    .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 24))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Retrouvez votre école.")
+            VStack(alignment: .leading, spacing: DrivySpacing.xl) {
+                DrivyRouteGlyph()
+                    .frame(height: 120)
+                    .padding(DrivySpacing.l)
+                    .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous)
+                            .strokeBorder(DrivyTheme.border, lineWidth: 0.5)
+                    }
+                VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                    Text("Vos leçons, vos trajets, votre école.")
                         .font(.largeTitle.weight(.bold))
-                    Text("Connectez-vous pour accéder aux dossiers et aux formations qui vous sont autorisés.")
-                        .font(.title3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Connectez-vous pour retrouver votre école, vos dossiers et vos formations autorisés.")
+                        .font(.body)
                         .foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if configuration == nil {
                     Label("La connexion scolaire n’est pas encore activée dans cette version.", systemImage: "info.circle")
                         .font(.subheadline)
                         .foregroundStyle(DrivyTheme.muted)
                         .accessibilityIdentifier("school-not-configured")
-                } else {
-                    Button(action: signIn) {
-                        Label(identity.isWorking ? "Connexion en cours…" : "Se connecter", systemImage: "person.crop.circle")
-                    }
-                    .buttonStyle(DrivyPrimaryButtonStyle())
-                    .disabled(identity.isWorking || presenter == nil)
-                    .accessibilityIdentifier("school-sign-in")
-                    if let error = identity.errorMessage {
-                        SchoolErrorNotice(message: error)
-                    }
+                } else if let error = identity.errorMessage {
+                    SchoolErrorNotice(message: error)
                 }
                 Divider()
                 localTrialsEntry
             }
-            .padding(24)
+            .padding(.horizontal, DrivySpacing.l)
+            .padding(.vertical, DrivySpacing.m)
             .frame(maxWidth: 600, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .background(DrivyTheme.canvas)
+        .background(DrivyTheme.surface)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if configuration != nil {
+                Button(action: signIn) {
+                    if identity.isWorking {
+                        HStack(spacing: DrivySpacing.xs) { ProgressView(); Text("Connexion en cours…") }
+                    } else {
+                        Label("Se connecter", systemImage: "person.crop.circle")
+                    }
+                }
+                .buttonStyle(DrivyPrimaryButtonStyle())
+                .disabled(identity.isWorking || presenter == nil)
+                .accessibilityIdentifier("school-sign-in")
+                .padding(.horizontal, DrivySpacing.l)
+                .padding(.vertical, DrivySpacing.s)
+                .frame(maxWidth: 600)
+                .frame(maxWidth: .infinity)
+                .background(DrivyTheme.surface)
+            }
+        }
     }
 
     @ViewBuilder
@@ -672,16 +688,10 @@ struct SchoolRootView: View {
     }
 
     private var localTrialsEntry: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button { showsLocalTrials = true } label: {
-                Label(localController.isCapturing ? "Revenir à l’essai en cours" : "Essais locaux", systemImage: "map")
-                    .frame(minHeight: 48)
-            }
+        DrivyNavigationRow(title: localController.isCapturing ? "Revenir à l’essai en cours" : "Essais locaux",
+            detail: "Essayer la carte et les observations, séparément des dossiers de l’école.",
+            symbol: "map", action: { showsLocalTrials = true })
             .accessibilityIdentifier("open-local-trials")
-            Text("Un espace personnel pour essayer la carte et les observations, séparé des dossiers de l’école.")
-                .font(.footnote)
-                .foregroundStyle(DrivyTheme.muted)
-        }
     }
 
     private func signIn() {
@@ -824,23 +834,29 @@ private struct SchoolAccountView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Votre compte") {
-                    if let person = workspace?.person {
-                        Text(person.displayName).font(.headline)
-                    } else {
-                        Text(identity.isAuthenticated ? "Compte connecté" : "Aucun compte connecté")
-                    }
-                    if let membership = workspace?.membership {
-                        LabeledContent("École", value: membership.schoolName)
-                        Text(SchoolPresentation.roles(membership.roles))
-                            .foregroundStyle(DrivyTheme.muted)
-                        if let workspace, (workspace.person?.memberships.count ?? 0) > 1 {
-                            Button("Changer d’école") {
-                                workspace.leaveSchool()
-                                dismiss()
+                Section {
+                    HStack(spacing: DrivySpacing.m) {
+                        DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: 52)
+                        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                            if let person = workspace?.person {
+                                Text(person.displayName).font(.headline)
+                            } else {
+                                Text(identity.isAuthenticated ? "Compte connecté" : "Aucun compte connecté").font(.headline)
                             }
-                            .accessibilityIdentifier("school-change-school")
+                            if let membership = workspace?.membership {
+                                Text("\(membership.schoolName) · \(SchoolPresentation.roles(membership.roles))")
+                                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            }
                         }
+                    }
+                    .padding(.vertical, DrivySpacing.xxs)
+                    .accessibilityElement(children: .combine)
+                    if let workspace, workspace.membership != nil, (workspace.person?.memberships.count ?? 0) > 1 {
+                        Button {
+                            workspace.leaveSchool()
+                            dismiss()
+                        } label: { Label("Changer d’école", systemImage: "arrow.left.arrow.right") }
+                        .accessibilityIdentifier("school-change-school")
                     }
                     if identity.isAuthenticated {
                         if let openJoinSchool {
@@ -848,27 +864,29 @@ private struct SchoolAccountView: View {
                                 .accessibilityIdentifier("open-join-school")
                         }
                         if let openOnboarding {
-                            Button("Mon arrivée dans l’école", action: openOnboarding)
+                            Button(action: openOnboarding) { Label("Mon arrivée dans l’école", systemImage: "figure.wave") }
                                 .accessibilityIdentifier("open-my-onboarding")
                         }
-                        if let openProfilePolicy {
-                            Button("Champs du profil", action: openProfilePolicy)
-                                .accessibilityIdentifier("open-profile-policies")
+                        Button {
+                            dismiss()
+                            Task { await workspace?.loadAccount() }
+                        } label: { Label("Actualiser mes accès", systemImage: "arrow.clockwise") }
+                    }
+                }
+                if identity.isAuthenticated, openProfilePolicy != nil || openInvitations != nil || configureSchool != nil {
+                    Section("Administration de l’école") {
+                        if let configureSchool {
+                            Button(action: configureSchool) { Label("Préparer mon école", systemImage: "slider.horizontal.3") }
+                                .accessibilityIdentifier("open-school-configuration")
                         }
                         if let openInvitations {
                             Button(action: openInvitations) { Label("Invitations", systemImage: "envelope") }
                                 .accessibilityIdentifier("open-school-invitations")
                         }
-                        if let configureSchool {
-                            Button("Préparer mon école", action: configureSchool)
-                                .accessibilityIdentifier("open-school-configuration")
+                        if let openProfilePolicy {
+                            Button(action: openProfilePolicy) { Label("Champs du profil", systemImage: "list.bullet.rectangle") }
+                                .accessibilityIdentifier("open-profile-policies")
                         }
-                        Button("Actualiser mes accès") {
-                            dismiss()
-                            Task { await workspace?.loadAccount() }
-                        }
-                        Button("Se déconnecter", role: .destructive, action: signOut)
-                            .accessibilityIdentifier("school-sign-out")
                     }
                 }
                 Section {
@@ -884,9 +902,18 @@ private struct SchoolAccountView: View {
                 } footer: {
                     Text("Les essais locaux restent sur cet appareil. Ils ne sont pas des leçons de votre école.")
                 }
-                Section("Confidentialité") {
-                    Text("Cet espace affiche les données autorisées par votre école. Les données scolaires affichées sont retirées à la déconnexion ou au changement d’école.")
-                        .font(.subheadline)
+                Section {
+                    Label("Cet espace affiche les données autorisées par votre école. Elles sont retirées de l’appareil à la déconnexion ou au changement d’école.",
+                          systemImage: "lock.shield")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                } header: { Text("Confidentialité") }
+                if identity.isAuthenticated {
+                    Section {
+                        Button(role: .destructive, action: signOut) {
+                            Label("Se déconnecter", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
+                        .accessibilityIdentifier("school-sign-out")
+                    }
                 }
             }
             .navigationTitle("Compte")

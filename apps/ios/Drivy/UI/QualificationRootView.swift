@@ -69,7 +69,7 @@ struct QualificationRootView: View {
                                 .font(.largeTitle)
                                 .foregroundStyle(DrivyTheme.accent)
                                 .padding(18)
-                                .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 20))
+                                .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                                 .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Prendre des repères")
@@ -154,9 +154,9 @@ struct StartSessionView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     VStack(alignment: .leading, spacing: 12) {
                         Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
-                            .font(.system(size: 30, weight: .medium)).foregroundStyle(DrivyTheme.accent)
+                            .font(.largeTitle.weight(.medium)).foregroundStyle(DrivyTheme.accent)
                             .frame(width: 68, height: 68)
-                            .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 22))
+                            .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                             .accessibilityHidden(true)
                         Text("Un trajet à retenir").font(.largeTitle.weight(.bold))
                             .fixedSize(horizontal: false, vertical: true)
@@ -200,9 +200,10 @@ struct StartSessionView: View {
             }
             .padding(20).frame(maxWidth: .infinity, minHeight: 96)
             .foregroundStyle(useGPS ? DrivyTheme.onAccent : DrivyTheme.text)
-            .background(useGPS ? DrivyTheme.accent : DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 22))
+            .background(useGPS ? DrivyTheme.accent : DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DrivyTileButtonStyle())
         .accessibilityLabel(useGPS ? "Démarrer avec le GPS" : "Continuer sans GPS")
         .accessibilityIdentifier(useGPS ? "start-with-gps" : "start-without-gps")
     }

@@ -470,7 +470,7 @@ struct SchoolErrorNotice: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DrivyTheme.dangerSurface, in: RoundedRectangle(cornerRadius: 16))
+        .background(DrivyTheme.dangerSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
     }
 }
 

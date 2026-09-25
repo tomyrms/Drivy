@@ -142,8 +142,10 @@ struct SessionDetailView: View {
         if session.points.isEmpty {
             VStack(spacing: 12) {
                 Image(systemName: "location.slash")
-                    .font(.title2)
+                    .font(.title)
                     .foregroundStyle(DrivyTheme.muted)
+                    .frame(width: 72, height: 72)
+                    .background(DrivyTheme.surfaceMuted, in: Circle())
                     .accessibilityHidden(true)
                 Text(session.usesGPS ? "Aucune position enregistrée" : "Trajet sans GPS")
                     .font(.title3.weight(.semibold))
@@ -153,7 +155,7 @@ struct SessionDetailView: View {
                     .foregroundStyle(DrivyTheme.muted)
                     .multilineTextAlignment(.center)
             }
-            .padding(24)
+            .padding(DrivySpacing.l)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(DrivyTheme.canvas)
         } else {
@@ -282,7 +284,8 @@ struct SessionDetailView: View {
                     Image(systemName: selected?.theme.journeySymbol ?? "list.bullet")
                         .font(.title3)
                         .foregroundStyle(selected?.status.color ?? DrivyTheme.accent)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 44, height: 44)
+                        .background(selected?.status.surface ?? DrivyTheme.accentSoft, in: Circle())
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 5) {
                         Text(selected?.theme.label ?? "\(session.observations.count) observation\(session.observations.count == 1 ? "" : "s")")
@@ -308,9 +311,9 @@ struct SessionDetailView: View {
                     Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                 }
                 .contentShape(Rectangle())
-                .frame(minHeight: 44)
+                .frame(minHeight: 48)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DrivyRowButtonStyle())
             .accessibilityLabel(selected.map { "\($0.theme.label), \($0.status.label), \($0.observedAt.sessionElapsed(since: session.startedAt))" } ?? "\(session.observations.count) observations")
             .accessibilityValue(selected?.note ?? "")
             .accessibilityHint("Ouvrir les observations du trajet")

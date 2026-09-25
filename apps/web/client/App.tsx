@@ -224,7 +224,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
         </div>}
       </header>
 
-      <main id="main" className={page === 'invitation' ? 'main invitation-main' : 'main'}>
+      <main id="main" className={page === 'invitation' ? 'main invitation-main' : 'main'} aria-busy={!loaded}>
         <div className="page-heading">
           <p className="eyebrow">{page === 'invitation' ? 'Une invitation de votre école' : 'Votre espace scolaire'}</p>
           <h1 ref={heading} tabIndex={-1}>{page === 'invitation' ? 'Rejoindre votre école' : session?.authenticated ? 'Bienvenue dans Drivy' : 'Votre école, à portée de main'}</h1>
@@ -283,8 +283,9 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
             <div className="acceptance">
               <label className="checkbox-row"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} disabled={isBusy} /><span>Je confirme rejoindre <strong>{preview.data.schoolName}</strong> avec le compte indiqué ci-dessus.</span></label>
               <p className="caption">Ce rattachement ne réserve aucun cours et n’autorise aucun enregistrement GPS.</p>
+              {!reviewed && session.user?.emailVerified === true && <p className="caption" id="acceptance-hint">Cochez la confirmation pour rejoindre l’école.</p>}
               <div className="button-row">
-                <button type="button" className="button primary" disabled={isBusy || !reviewed || session.user?.emailVerified !== true} onClick={() => void acceptInvitation()}>{uncertain ? 'Vérifier et réessayer' : 'Rejoindre cette école'}</button>
+                <button type="button" className="button primary" aria-describedby={!reviewed && session.user?.emailVerified === true ? 'acceptance-hint' : undefined} disabled={isBusy || !reviewed || session.user?.emailVerified !== true} onClick={() => void acceptInvitation()}>{uncertain ? 'Vérifier et réessayer' : 'Rejoindre cette école'}</button>
                 <button type="button" className="button secondary" disabled={isBusy || uncertain} onClick={() => void clearInvitation()}>Pas maintenant</button>
               </div>
               <p className="caption">{uncertain ? 'Vérifiez d’abord le résultat de la demande déjà envoyée avant de fermer cette invitation.' : '« Pas maintenant » laisse le lien utilisable jusqu’à son expiration.'}</p>

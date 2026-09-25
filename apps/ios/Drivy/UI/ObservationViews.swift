@@ -32,9 +32,9 @@ struct DrivyTileButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.94 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
-            .animation(reduceMotion ? nil : .spring(duration: 0.2, bounce: 0.35), value: configuration.isPressed)
+            .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }
 }
 
@@ -257,7 +257,7 @@ struct ObservationComposer: View {
             }
             if saving { ProgressView("Enregistrement…").frame(maxWidth: .infinity).padding(.top, 12) }
             else if controller.isCapturing {
-                Text("Le choix enregistre.").font(.caption).foregroundStyle(DrivyTheme.muted)
+                Text("Un appui sur le statut enregistre l’observation.").font(.caption).foregroundStyle(DrivyTheme.muted)
                     .frame(maxWidth: .infinity).padding(.top, 12)
             }
             DisclosureGroup(isExpanded: $showsNote) {

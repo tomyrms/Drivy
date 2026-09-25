@@ -90,7 +90,7 @@ struct SchoolCapturePreparationView: View {
     @ViewBuilder private var feedback: some View {
         if model.isLoading || model.isBusy { ProgressView(model.isBusy ? "Vérification en cours…" : "Ouverture de la préparation…") }
         if let message = model.errorMessage { Text(message).foregroundStyle(DrivyTheme.warning).font(.subheadline) }
-        if let message = model.storageError { Label(message, systemImage: "lock.trianglebadge.exclamationmark").foregroundStyle(DrivyTheme.warning).font(.subheadline) }
+        if let message = model.storageError { DrivyInlineMessage(text: message, tone: .warning) }
     }
 
     private var choicePanel: some View {

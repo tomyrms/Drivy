@@ -16,7 +16,7 @@ struct SchoolInvitationsView: View {
                 }
                 if let pending = model.pending { InvitationPendingSection(model: model, pending: pending) }
                 if let success = model.successMessage {
-                    Section { Label(success, systemImage: "checkmark.circle").foregroundStyle(DrivyTheme.success) }
+                    Section { Label(success, systemImage: "checkmark.circle.fill").foregroundStyle(DrivyTheme.success) }
                 }
                 if let error = model.errorMessage {
                     Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
@@ -156,7 +156,7 @@ private struct InvitationDetailView: View {
                 if let error = model.errorMessage { SchoolErrorNotice(message: error) }
                 if let pending = model.pending { InvitationPendingSection(model: model, pending: pending) }
                 if let success = model.successMessage {
-                    Label(success, systemImage: "checkmark.circle").foregroundStyle(DrivyTheme.success)
+                    DrivyInlineMessage(text: success)
                 }
                 if invitation.status.canBeManaged {
                     Button { confirmsResend = true } label: { Label("Renvoyer l’invitation", systemImage: "paperplane") }

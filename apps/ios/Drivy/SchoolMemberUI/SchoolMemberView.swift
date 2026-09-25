@@ -32,7 +32,7 @@ struct SchoolMemberView: View {
                         if !model.accessRevoked { Button("Actualiser les membres") { Task { await model.load() } }.disabled(model.isBusy || model.isLoading) }
                     }
                 }
-                if let success = model.successMessage { Section { Label(success, systemImage: "checkmark.circle").foregroundStyle(DrivyTheme.success) } }
+                if let success = model.successMessage { Section { Label(success, systemImage: "checkmark.circle.fill").foregroundStyle(DrivyTheme.success) } }
                 if model.pending != nil { SchoolMemberPendingSection(model: model, identity: identity) }
                 if mode == .addLearner {
                     Section {
@@ -141,7 +141,7 @@ private struct SchoolMemberEditor: View {
                 }
                 if let error = model.errorMessage { Section { Text(error).foregroundStyle(DrivyTheme.danger) } }
                 if let authError { Section { Text(authError).foregroundStyle(DrivyTheme.danger) } }
-                if let success = model.successMessage, !model.hasUnsavedChanges { Section { Label(success, systemImage: "checkmark.circle").foregroundStyle(DrivyTheme.success) } }
+                if let success = model.successMessage, !model.hasUnsavedChanges { Section { Label(success, systemImage: "checkmark.circle.fill").foregroundStyle(DrivyTheme.success) } }
                 if model.pending != nil { SchoolMemberPendingSection(model: model, identity: identity) }
                 if model.ownAccessChanged {
                     Section { Text("Vos accès ont changé. Fermez cet écran pour ouvrir votre école avec les nouveaux droits.").font(.subheadline) }

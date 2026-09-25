@@ -270,7 +270,7 @@ struct SchoolPlanningFeedback: View {
                 if !model.accessRevoked { Button("Actualiser les informations") { Task { await model.load() } }.disabled(model.isBusy || model.isLoading) }
             }
         }
-        if let success = model.successMessage { Section { Label(success, systemImage: "checkmark.circle").foregroundStyle(DrivyTheme.success) } }
+        if let success = model.successMessage { Section { Label(success, systemImage: "checkmark.circle.fill").foregroundStyle(DrivyTheme.success) } }
         if let command = model.pending {
             Section {
                 Label("Confirmation en attente", systemImage: "clock.arrow.circlepath").font(.headline)

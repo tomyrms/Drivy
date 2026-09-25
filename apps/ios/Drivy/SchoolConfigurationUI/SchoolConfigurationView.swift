@@ -27,7 +27,7 @@ struct SchoolConfigurationView: View {
                 }
                 if model.isLoading { Section { ProgressView("Vérification de l’école…") } }
                 if let success = model.successMessage {
-                    Section { Label(success, systemImage: "checkmark.circle").foregroundStyle(DrivyTheme.success) }
+                    Section { Label(success, systemImage: "checkmark.circle.fill").foregroundStyle(DrivyTheme.success) }
                 }
                 if let school = model.school {
                     Section {
