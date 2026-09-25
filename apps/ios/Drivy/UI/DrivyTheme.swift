@@ -102,22 +102,34 @@ struct DrivyPrimaryButtonStyle: ButtonStyle {
     }
 }
 
+/// Companion action next to a primary button. Disabled uses the disabled
+/// surface so it never looks tappable; Increase Contrast adds a control border
+/// because the muted fill alone barely separates from a white page.
 struct DrivySecondaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let shape = RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
+        return configuration.label
             .font(.body.weight(.semibold))
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, minHeight: 52)
             .padding(.horizontal, DrivySpacing.m)
             .foregroundStyle(isEnabled ? DrivyTheme.accent : DrivyTheme.disabledText)
             .background(
-                configuration.isPressed ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted,
-                in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
+                isEnabled
+                    ? (configuration.isPressed ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted)
+                    : DrivyTheme.disabledSurface,
+                in: shape
             )
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+            .overlay {
+                if contrast == .increased {
+                    shape.strokeBorder(isEnabled ? DrivyTheme.accent : DrivyTheme.controlBorder, lineWidth: 1)
+                }
+            }
+            .contentShape(shape)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }
@@ -136,11 +148,7 @@ struct DrivyPanel<Content: View>: View {
         content
             .padding(DrivySpacing.m)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.m, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.m, style: .continuous)
-                    .strokeBorder(DrivyTheme.border, lineWidth: 0.5)
-            }
+            .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.m))
     }
 }
 

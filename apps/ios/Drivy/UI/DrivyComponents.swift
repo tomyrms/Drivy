@@ -29,35 +29,53 @@ enum DrivyTone {
 }
 
 /// Compact status pill: « En cours », « Partagé », « Profil à compléter ».
+/// On one line it keeps its natural width so neighbours compress first; at
+/// accessibility text sizes it wraps instead of overflowing, and its capsule
+/// becomes a field-radius rectangle so a two-line pill keeps a readable shape.
 struct DrivyStatusBadge: View {
     let title: String
     var symbol: String? = nil
     var tone: DrivyTone = .neutral
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: DrivySpacing.xxs) {
+        let wraps = typeSize.isAccessibilitySize
+        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xxs) {
             if let symbol { Image(systemName: symbol).imageScale(.small).accessibilityHidden(true) }
-            Text(title).lineLimit(1)
+            Text(title)
+                .lineLimit(wraps ? nil : 1)
+                .multilineTextAlignment(.leading)
         }
         .font(.caption.weight(.semibold))
         .foregroundStyle(tone.foreground)
         .padding(.horizontal, DrivySpacing.xs)
         .padding(.vertical, DrivySpacing.xxs)
-        .background(tone.background, in: Capsule())
-        .fixedSize()
+        .background(tone.background, in: wraps
+            ? AnyShape(RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+            : AnyShape(Capsule()))
+        .fixedSize(horizontal: !wraps, vertical: true)
         .accessibilityElement(children: .combine)
     }
 }
 
 /// Small live-state line with a dot, as on the session card (« GPS actif »).
+/// The dot scales with the caption text so it stays proportionate.
 struct DrivyStatusDot: View {
     let title: String
     var tone: DrivyTone = .neutral
+    @ScaledMetric(relativeTo: .caption) private var dotSize: CGFloat = 6
+
+    init(title: String, tone: DrivyTone = .neutral) {
+        self.title = title
+        self.tone = tone
+    }
 
     var body: some View {
-        HStack(spacing: 7) {
-            Circle().fill(tone.foreground).frame(width: 6, height: 6).accessibilityHidden(true)
-            Text(title).font(.caption.weight(.semibold))
+        HStack(spacing: DrivySpacing.xs) {
+            Circle().fill(tone.foreground).frame(width: dotSize, height: dotSize).accessibilityHidden(true)
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(tone.foreground)
         .accessibilityElement(children: .combine)
@@ -65,29 +83,43 @@ struct DrivyStatusDot: View {
 }
 
 /// Section title with an optional trailing text action (« Ensuite · Tout voir »).
+/// At accessibility text sizes the action moves under the title. The action's
+/// whole 44 pt frame is tappable, not only its glyphs.
 struct DrivySectionHeader: View {
     let title: String
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.xs))
+        layout {
             Text(title)
                 .font(.drivySection)
                 .foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: DrivySpacing.xs)
+            if !stacked { Spacer(minLength: 0) }
             if let actionTitle, let action {
-                Button(actionTitle, action: action)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.accent)
-                    .frame(minHeight: 44)
+                Button(action: action) {
+                    Text(actionTitle)
+                        .font(.subheadline.weight(.semibold))
+                        .multilineTextAlignment(.leading)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(DrivyTheme.accent)
             }
         }
     }
 }
 
 /// Initials in a neutral circle. Never a photo placeholder or a fake logo.
+/// The circle keeps its size; very large text sizes shrink the initials to fit.
 struct DrivyAvatar: View {
     let name: String
     var size: CGFloat = 44
@@ -96,6 +128,9 @@ struct DrivyAvatar: View {
     var body: some View {
         Text(DrivyAvatar.initials(name))
             .font(size > 52 ? .title3.weight(.semibold) : .subheadline.weight(.semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .padding(DrivySpacing.xxs)
             .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.text)
             .frame(width: size, height: size)
             .background(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted, in: Circle())
@@ -111,21 +146,41 @@ struct DrivyAvatar: View {
 
 /// Navigation row used for settings, school actions and dossier sections:
 /// leading symbol, title, optional detail, chevron. Full-width hit area.
+/// At accessibility text sizes the badge moves under the text and the symbol
+/// aligns to the first line, so nothing is truncated or pushed off screen.
+/// VoiceOver reads one element: title, detail, badge, as a button.
 struct DrivyNavigationRow: View {
     let title: String
     var detail: String? = nil
     var symbol: String? = nil
     var badge: DrivyStatusBadge? = nil
     let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .title3) private var symbolWidth: CGFloat = 28
+
+    init(
+        title: String,
+        detail: String? = nil,
+        symbol: String? = nil,
+        badge: DrivyStatusBadge? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.detail = detail
+        self.symbol = symbol
+        self.badge = badge
+        self.action = action
+    }
 
     var body: some View {
+        let stacked = typeSize.isAccessibilitySize
         Button(action: action) {
-            HStack(spacing: DrivySpacing.m) {
+            HStack(alignment: stacked ? .firstTextBaseline : .center, spacing: DrivySpacing.m) {
                 if let symbol {
                     Image(systemName: symbol)
                         .font(.title3)
                         .foregroundStyle(DrivyTheme.muted)
-                        .frame(width: 28)
+                        .frame(width: symbolWidth)
                         .accessibilityHidden(true)
                 }
                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
@@ -133,10 +188,12 @@ struct DrivyNavigationRow: View {
                     if let detail {
                         Text(detail).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     }
+                    if stacked, let badge { badge.padding(.top, DrivySpacing.xxs) }
                 }
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: DrivySpacing.xs)
-                if let badge { badge }
+                if !stacked, let badge { badge }
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(DrivyTheme.muted)
@@ -174,9 +231,10 @@ struct DrivyRowGroup<Content: View>: View {
                 DrivySectionHeader(title: title).padding(.bottom, DrivySpacing.xxs)
             }
             Group(subviews: content) { rows in
-                ForEach(rows.indices, id: \.self) { index in
-                    rows[index]
-                    if index < rows.count - 1 { Divider().overlay(DrivyTheme.border) }
+                let lastID = rows.last?.id
+                ForEach(rows) { row in
+                    row
+                    if row.id != lastID { Divider().overlay(DrivyTheme.border) }
                 }
             }
         }
@@ -200,34 +258,49 @@ struct DrivyTimeColumn: View {
 }
 
 /// Empty state that always proposes one clear next action when one exists.
+/// Use inside a section; a whole empty screen keeps ContentUnavailableView.
+/// At accessibility text sizes the symbol sits above the text.
 struct DrivyEmptyState: View {
     let title: String
     let message: String
     var symbol: String = "tray"
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(alignment: .top, spacing: DrivySpacing.m) {
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.m))
+        layout {
             Image(systemName: symbol)
                 .font(.title2)
                 .foregroundStyle(DrivyTheme.muted)
-                .frame(width: 32)
+                .frame(minWidth: 32, alignment: stacked ? .leading : .center)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                Text(title).font(.headline).foregroundStyle(DrivyTheme.text)
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(message)
                     .font(.subheadline)
                     .foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 if let actionTitle, let action {
-                    Button(actionTitle, action: action)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(DrivyTheme.accent)
-                        .frame(minHeight: 44)
+                    Button(action: action) {
+                        Text(actionTitle)
+                            .font(.subheadline.weight(.semibold))
+                            .multilineTextAlignment(.leading)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(DrivyTheme.accent)
                 }
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, DrivySpacing.s)
         .accessibilityElement(children: .contain)
@@ -245,10 +318,25 @@ struct DrivyCard<Content: View>: View {
         content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.content + padding, style: .continuous))
+            .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + padding))
+    }
+}
+
+/// Shared surface of DrivyCard and DrivyPanel: canvas fill and hairline.
+/// Increase Contrast swaps the faint hairline for the control border so the
+/// block edge stays visible on a white page.
+struct DrivyGroupedSurface: ViewModifier {
+    let cornerRadius: CGFloat
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        let increased = contrast == .increased
+        return content
+            .background(DrivyTheme.canvas, in: shape)
             .overlay {
-                RoundedRectangle(cornerRadius: DrivyRadius.content + padding, style: .continuous)
-                    .strokeBorder(DrivyTheme.border, lineWidth: 0.5)
+                shape.strokeBorder(increased ? DrivyTheme.controlBorder : DrivyTheme.border,
+                                   lineWidth: increased ? 1 : 0.5)
             }
     }
 }
@@ -285,7 +373,7 @@ extension String {
 }
 
 /// Schematic route line from the mockups: a stepped path with start and end
-/// dots. Illustrative only, never a recorded position.
+/// dots. Illustrative only, never a recorded position. Hidden from VoiceOver.
 struct DrivyRouteGlyph: View {
     var lineWidth: CGFloat = 4
 
@@ -301,10 +389,11 @@ struct DrivyRouteGlyph: View {
             ]
             var path = Path()
             path.addLines(points)
+            let dotRadius = lineWidth + 2
             context.stroke(path, with: .color(DrivyTheme.routeHalo), style: StrokeStyle(lineWidth: lineWidth + 4, lineCap: .round, lineJoin: .round))
             context.stroke(path, with: .color(DrivyTheme.route), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
-            for point in [points.first!, points.last!] {
-                let dot = Path(ellipseIn: CGRect(x: point.x - 6, y: point.y - 6, width: 12, height: 12))
+            for point in [points[0], points[points.count - 1]] {
+                let dot = Path(ellipseIn: CGRect(x: point.x - dotRadius, y: point.y - dotRadius, width: dotRadius * 2, height: dotRadius * 2))
                 context.fill(dot, with: .color(DrivyTheme.routeHalo))
                 context.stroke(dot, with: .color(DrivyTheme.route), lineWidth: 3)
             }
@@ -342,25 +431,29 @@ struct DrivyInlineMessage: View {
 
 /// The single selection pattern of the app: a card that fills with the soft
 /// accent and gains an accent border when selected, with press feedback.
-/// Pair it with a trailing checkmark so selection never relies on color alone.
+/// Pair it with a trailing DrivySelectionMark so selection never relies on
+/// color alone; VoiceOver hears the Selected trait from the style itself.
 struct DrivySelectionCardStyle: ButtonStyle {
     let isSelected: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let shape = RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
+        let idleBorder = contrast == .increased ? DrivyTheme.controlBorder : DrivyTheme.border
+        return configuration.label
             .padding(DrivySpacing.m)
             .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
-            .background(isSelected ? DrivyTheme.accentSoft : DrivyTheme.canvas,
-                in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+            .background(isSelected ? DrivyTheme.accentSoft : DrivyTheme.canvas, in: shape)
             .overlay {
-                RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
-                    .strokeBorder(isSelected ? DrivyTheme.accent : DrivyTheme.border, lineWidth: isSelected ? 1.5 : 0.5)
+                shape.strokeBorder(isSelected ? DrivyTheme.accent : idleBorder,
+                                   lineWidth: isSelected ? 1.5 : (contrast == .increased ? 1 : 0.5))
             }
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .contentShape(shape)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
             .animation(DrivyMotion.feedback(reduceMotion), value: isSelected)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -396,10 +489,85 @@ struct DrivyRetryButton: View {
     }
 }
 
+/// Label and value read together: « Permis · B », « Durée · 1 h 30 ».
+/// Side by side at regular text sizes, stacked at accessibility sizes; the
+/// value wraps and is never truncated. Set `numeric` for times, prices and
+/// counts (tabular digits). VoiceOver reads « label, value » as one element.
+struct DrivyKeyValueRow: View {
+    let title: String
+    let value: String
+    var symbol: String? = nil
+    var numeric = false
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xxs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.m))
+        layout {
+            Group {
+                if let symbol {
+                    Label(title, systemImage: symbol)
+                } else {
+                    Text(title)
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(DrivyTheme.muted)
+            .fixedSize(horizontal: false, vertical: true)
+            if !stacked { Spacer(minLength: DrivySpacing.xs) }
+            Text(value)
+                .font(numeric ? Font.body.monospacedDigit() : Font.body)
+                .foregroundStyle(DrivyTheme.text)
+                .multilineTextAlignment(stacked ? .leading : .trailing)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, DrivySpacing.xs)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
+    }
+}
+
+/// Named loading state: a spinner never stands alone, the text says which
+/// operation is running (« Chargement de l’agenda… »). Inline in a section;
+/// a full-screen wait keeps a centered ProgressView with the same text.
+struct DrivyLoadingState: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: DrivySpacing.s) {
+            ProgressView()
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, DrivySpacing.s)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+    }
+}
+
 extension View {
-    /// Content column of every reading page: page margins, readable width, centered on iPad.
+    /// Content column of every reading page: page margins (wider on regular
+    /// width), readable width, centered on iPad.
     func drivyPageContent(maxWidth: CGFloat = 720) -> some View {
-        padding(.horizontal, DrivySpacing.l)
+        modifier(DrivyPageContent(maxWidth: maxWidth))
+    }
+}
+
+private struct DrivyPageContent: ViewModifier {
+    let maxWidth: CGFloat
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, DrivySpacing.page(sizeClass))
             .padding(.vertical, DrivySpacing.m)
             .frame(maxWidth: maxWidth, alignment: .leading)
             .frame(maxWidth: .infinity)
