@@ -164,7 +164,9 @@ export function registerLessonOutcomes(app:FastifyInstance,options:{pool:Pool;ve
    const publicationVersion=old.publication_version+1;
    await db.query(`INSERT INTO drivy.report_publication_withdrawal(school_id,lesson_id,revision_id,revision_sequence,publication_version,reason,actor_membership_id,operation_id)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[school.id,lessonId,old.current_published_revision_id,revision.sequence,publicationVersion,body.reason,actor.membershipId,body.operationId]);
-   const row=(await db.query<LessonRow>(`UPDATE drivy.lesson SET version=version+1,publication_version=$3,current_published_revision_id=NULL WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lessonId,publicationVersion])).rows[0]!;
+   // Le partage automatique ne republie pas un bilan retiré : il reste privé jusqu'à un nouveau partage explicite.
+   const row=(await db.query<LessonRow>(`UPDATE drivy.lesson SET version=version+1,publication_version=$3,current_published_revision_id=NULL,
+    sharing_version=sharing_version+CASE WHEN report_private THEN 0 ELSE 1 END,report_private=true WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lessonId,publicationVersion])).rows[0]!;
    // Le brouillon de l'auteur suit la nouvelle version : une republication exige un motif de correction.
    await db.query('UPDATE drivy.report_draft SET version=version+1,base_publication_version=$3 WHERE school_id=$1 AND lesson_id=$2 AND author_membership_id=$4 AND base_publication_version=$5',[school.id,lessonId,publicationVersion,actor.membershipId,old.publication_version]);
    await event(db,row,body.operationId,'ReportPublicationWithdrawn');

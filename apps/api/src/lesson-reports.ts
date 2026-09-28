@@ -4,7 +4,7 @@ import type {Pool,PoolClient} from 'pg';
 import {z} from 'zod';
 import type {TokenVerifier} from './auth.js';
 import {withActor} from './database.js';
-import {schoolCommand,checkIdempotency,checkVersion,requireVersion,type CommandGuards,type CommandEffect,type CommandActor,type SchoolRow} from './commands.js';
+import {schoolCommand,checkIdempotency,checkVersion,requireVersion,canonical,type CommandGuards,type CommandEffect,type CommandActor,type SchoolRow} from './commands.js';
 import {ApiError,notFound} from './errors.js';
 import {Cursors} from './cursor.js';
 import {getLesson,lessonColumns,lessonProjection,type LessonRow} from './lessons.js';
@@ -68,6 +68,41 @@ async function account(db:PoolClient,schoolId:string,lessonId:string){
 }
 async function event(db:PoolClient,row:LessonRow,operationId:string,eventType:string){await db.query('INSERT INTO drivy.lesson_event_outbox(school_id,lesson_id,lesson_version,event_type,operation_id) VALUES($1,$2,$3,$4,$5)',[row.school_id,row.id,row.version,eventType,operationId]);}
 
+/** Partage automatique (décision du porteur du 28 septembre 2026) : le bilan de l'auteur devient la révision lue par l'élève
+ * à chaque constat ou enregistrement, sauf bilan privé. Une révision identique n'est pas recréée ; un bilan vidé est retiré. */
+export async function syncSharedReport(db:PoolClient,schoolId:string,lessonId:string,operationId:string):Promise<void>{
+ const lesson=(await db.query<LessonRow&{report_private:boolean}>(`SELECT ${lessonColumns} FROM drivy.lesson WHERE school_id=$1 AND id=$2 FOR UPDATE`,[schoolId,lessonId])).rows[0];
+ if(!lesson||lesson.status!=='COMPLETED'||lesson.report_private)return;
+ const source=(await db.query<DraftRow>('SELECT * FROM drivy.report_draft WHERE school_id=$1 AND lesson_id=$2 AND author_membership_id=$3 FOR UPDATE',[schoolId,lessonId,lesson.instructor_membership_id])).rows[0];
+ if(!source)return;
+ const current=lesson.current_published_revision_id?(await db.query<RevisionRow>('SELECT * FROM drivy.report_revision WHERE school_id=$1 AND id=$2',[schoolId,lesson.current_published_revision_id])).rows[0]:undefined;
+ if(!(source.worked_on+source.observation_text+source.next_step).trim()&&source.observations.length===0){
+  if(current)await withdrawPublication(db,lesson,source.author_membership_id,operationId,'Bilan vidé par le moniteur.');
+  return;
+ }
+ if(current&&current.worked_on===source.worked_on&&current.observation_text===source.observation_text&&current.next_step===source.next_step
+  &&canonical(current.observations)===canonical(source.observations))return;
+ const snapshot=await validateCompetencies(db,schoolId,lesson.training_id,source.observations.map(o=>o.competencyId));
+ const sequence=(await db.query<{next:number}>('SELECT coalesce(max(sequence),0)+1 AS next FROM drivy.report_revision WHERE school_id=$1 AND lesson_id=$2',[schoolId,lessonId])).rows[0]!.next,publicationVersion=lesson.publication_version+1;
+ const row=(await db.query<RevisionRow>(`INSERT INTO drivy.report_revision(school_id,lesson_id,author_membership_id,sequence,worked_on,observation_text,next_step,observations,competency_snapshot,correction_reason,operation_id)
+  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,[schoolId,lessonId,source.author_membership_id,sequence,source.worked_on,source.observation_text,source.next_step,JSON.stringify(source.observations),JSON.stringify(snapshot),sequence>1?'Bilan mis à jour par le moniteur.':null,operationId])).rows[0]!;
+ const updated=(await db.query<LessonRow>(`UPDATE drivy.lesson SET version=version+1,publication_version=$3,current_published_revision_id=$4 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[schoolId,lessonId,publicationVersion,row.id])).rows[0]!;
+ await db.query('UPDATE drivy.report_draft SET version=version+1,base_publication_version=$3 WHERE school_id=$1 AND id=$2',[schoolId,source.id,publicationVersion]);
+ await event(db,updated,operationId,'ReportPublished');
+}
+/** Retrait du bilan courant (AP57, bilan passé en privé ou vidé) : la révision reste conservée, l'élève ne la lit plus. */
+export async function withdrawPublication(db:PoolClient,lesson:LessonRow,actorMembershipId:string,operationId:string,reason:string):Promise<LessonRow>{
+ const current=(await db.query<{sequence:number}>('SELECT sequence FROM drivy.report_revision WHERE school_id=$1 AND id=$2',[lesson.school_id,lesson.current_published_revision_id])).rows[0];
+ if(!current)throw notFound();
+ const publicationVersion=lesson.publication_version+1;
+ await db.query(`INSERT INTO drivy.report_publication_withdrawal(school_id,lesson_id,revision_id,revision_sequence,publication_version,reason,actor_membership_id,operation_id)
+  VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[lesson.school_id,lesson.id,lesson.current_published_revision_id,current.sequence,publicationVersion,reason,actorMembershipId,operationId]);
+ const row=(await db.query<LessonRow>(`UPDATE drivy.lesson SET version=version+1,publication_version=$3,current_published_revision_id=NULL WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[lesson.school_id,lesson.id,publicationVersion])).rows[0]!;
+ await db.query('UPDATE drivy.report_draft SET version=version+1,base_publication_version=$3 WHERE school_id=$1 AND lesson_id=$2 AND author_membership_id=$4',[lesson.school_id,lesson.id,publicationVersion,lesson.instructor_membership_id]);
+ await event(db,row,operationId,'ReportPublicationWithdrawn');
+ return row;
+}
+
 export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string}){
  const base='/v1/schools/:schoolId',cursors=new Cursors(options.cursorSecret);
  const schoolID=(r:FastifyRequest)=>z.object({schoolId:id}).parse(r.params).schoolId;
@@ -79,7 +114,11 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
   empty.parse(r.query);checkIdempotency(r.headers['idempotency-key'],body.operationId);
   return schoolCommand(options.pool,await options.verifyToken(r.headers.authorization),schoolID(r),type,body,expected,work,['INSTRUCTOR','LEARNER'],guards<T>(schoolID(r),target));
  }
- app.get(`${base}/lessons/:lessonId/preparation`,async(r,reply)=>{empty.parse(r.query);const value=await read(r,async db=>preparationProjection(await preparation(db,schoolID(r),targetID(r,'lessonId'))));reply.header('ETag',`"${value.version}"`);return envelope(value,r);});
+ app.get(`${base}/lessons/:lessonId/preparation`,async(r,reply)=>{empty.parse(r.query);const value=await read(r,async db=>{
+  const lessonId=targetID(r,'lessonId'),row=preparationProjection(await preparation(db,schoolID(r),lessonId));
+  const isAuthor=(await db.query<{ok:boolean}>('SELECT drivy.report_lesson_author($1) AS ok',[lessonId])).rows[0]?.ok;
+  return isAuthor?row:{...row,administrativeCheckNote:null};
+ });reply.header('ETag',`"${value.version}"`);return envelope(value,r);});
  app.put(`${base}/lessons/:lessonId/preparation`,{bodyLimit:100_000},async(r,reply)=>{
   const body=preparationCommand.parse(r.body),lessonId=targetID(r,'lessonId'),expected=requireVersion(r.headers['if-match']),bound={...body,lessonId};
   const value=await command(r,'SAVE_PREPARATION',bound,expected,{lessonId},async(db,_actor,school)=>{
@@ -116,7 +155,9 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
    const accountId=randomUUID();await db.query('INSERT INTO drivy.lesson_account(id,school_id,lesson_id,planned_price_cents) VALUES($1,$2,$3,$4)',[accountId,school.id,lessonId,old.price_cents_snapshot]);
    await db.query(`INSERT INTO drivy.charge_entry(school_id,account_id,kind,amount_signed_cents,reason,operation_id) VALUES($1,$2,'INITIAL',$3,$4,$5)`,[school.id,accountId,old.price_cents_snapshot,'Prix unitaire convenu à la réservation ; leçon réalisée.',body.operationId]);
    await db.query('UPDATE drivy.reservation SET active=false WHERE school_id=$1 AND lesson_id=$2 AND active',[school.id,lessonId]);await event(db,lesson,body.operationId,'LessonCompleted');
-   return {data:{lesson:lessonProjection(lesson),draft:await draftProjection(db,created),account:await account(db,school.id,lessonId)},action:'LessonCompleted',resourceType:'Lesson',resourceId:lessonId,resourceVersion:lesson.version,changedFields:['status','actualStart','actualEnd','draft','account'],...(body.anomalyReason?.trim()?{reason:body.anomalyReason.slice(0,1000)}:{})};
+   await syncSharedReport(db,school.id,lessonId,body.operationId);
+   const shared=await getLesson(db,school.id,lessonId),sharedDraft=await draft(db,school.id,created.id);
+   return {data:{lesson:lessonProjection(shared),draft:await draftProjection(db,sharedDraft),account:await account(db,school.id,lessonId)},action:'LessonCompleted',resourceType:'Lesson',resourceId:lessonId,resourceVersion:shared.version,changedFields:['status','actualStart','actualEnd','draft','account'],...(body.anomalyReason?.trim()?{reason:body.anomalyReason.slice(0,1000)}:{})};
   });reply.header('ETag',`"${value.lesson.version}"`);return envelope(value,r);
  });
  app.get(`${base}/report-drafts/:draftId`,async(r,reply)=>{empty.parse(r.query);const value=await read(r,async db=>draftProjection(db,await draft(db,schoolID(r),targetID(r,'draftId'))));reply.header('ETag',`"${value.version}"`);return envelope(value,r);});
@@ -139,7 +180,9 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
    if(lesson.status!=='COMPLETED')throw new ApiError(409,'LESSON_NOT_COMPLETED','Le bilan exige une leçon réalisée.');
    if(body.attachmentIds.length)throw new ApiError(409,'ATTACHMENT_NOT_READY','Le contrôle des pièces doit être disponible avant de les rattacher. Le texte peut être conservé sans pièce.');
    await validateCompetencies(db,school.id,lesson.training_id,body.observations.map(o=>o.competencyId));
-   const row=(await db.query<DraftRow>('UPDATE drivy.report_draft SET version=version+1,worked_on=$3,observation_text=$4,next_step=$5,observations=$6 WHERE school_id=$1 AND id=$2 RETURNING *',[school.id,draftId,body.workedOn,body.observationText,body.nextStep,JSON.stringify(body.observations)])).rows[0]!;
+   await db.query('UPDATE drivy.report_draft SET version=version+1,worked_on=$3,observation_text=$4,next_step=$5,observations=$6 WHERE school_id=$1 AND id=$2',[school.id,draftId,body.workedOn,body.observationText,body.nextStep,JSON.stringify(body.observations)]);
+   await syncSharedReport(db,school.id,lesson.id,body.operationId);
+   const row=await draft(db,school.id,draftId);
    return {data:await draftProjection(db,row),action:'ReportDraftSaved',resourceType:'ReportDraft',resourceId:draftId,changedFields:['workedOn','observationText','nextStep','observations']};
   });reply.header('ETag',`"${value.version}"`);return envelope(value,r);
  });
@@ -158,7 +201,8 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
    const sequence=(await db.query<{next:number}>('SELECT coalesce(max(sequence),0)+1 AS next FROM drivy.report_revision WHERE school_id=$1 AND lesson_id=$2',[school.id,lesson.id])).rows[0]!.next,publicationVersion=lesson.publication_version+1;
    const row=(await db.query<RevisionRow>(`INSERT INTO drivy.report_revision(school_id,lesson_id,author_membership_id,sequence,worked_on,observation_text,next_step,observations,competency_snapshot,correction_reason,operation_id)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,[school.id,lesson.id,actor.membershipId,sequence,old.worked_on,old.observation_text,old.next_step,JSON.stringify(old.observations),JSON.stringify(snapshot),body.correctionReason??null,body.operationId])).rows[0]!;
-   const updated=(await db.query<LessonRow>(`UPDATE drivy.lesson SET version=version+1,publication_version=$3,current_published_revision_id=$4 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lesson.id,publicationVersion,row.id])).rows[0]!;
+   const updated=(await db.query<LessonRow>(`UPDATE drivy.lesson SET version=version+1,publication_version=$3,current_published_revision_id=$4,
+    sharing_version=sharing_version+CASE WHEN report_private THEN 1 ELSE 0 END,report_private=false WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lesson.id,publicationVersion,row.id])).rows[0]!;
    await db.query('UPDATE drivy.report_draft SET version=version+1,base_publication_version=$3 WHERE school_id=$1 AND id=$2',[school.id,draftId,publicationVersion]);await event(db,updated,body.operationId,'ReportPublished');
    return {data:revisionProjection(row),action:'ReportPublished',resourceType:'ReportRevision',resourceId:row.id,changedFields:['publicationVersion','currentPublishedRevisionId'],...(body.correctionReason?{reason:body.correctionReason}:{})};
   });reply.header('ETag',`"${value.version}"`);return envelope(value,r);

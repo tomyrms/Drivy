@@ -15,7 +15,7 @@ describe('préparation et souhait (AP45–AP48)',()=>{
  it('préparation privée du moniteur désigné, souhait de l’élève, versions et droits',async()=>{
   const lesson=await plan();const route=`/lessons/${lesson.id}/preparation`;
   const prep=await call('GET',route);await expectContract('PreparationEnvelope',prep.json());expect(prep.statusCode,prep.body).toBe(200);expect(prep.json().data).toMatchObject({lessonId:lesson.id,version:1,goals:[],administrativeCheckNote:null,plannedWaypoints:[]});
-  for(const subject of ['demo-admin','demo-alice','demo-other-instructor'])expect((await call('GET',route,undefined,null,subject)).statusCode).toBe(404);
+  for(const subject of ['demo-admin','demo-other-instructor'])expect((await call('GET',route,undefined,null,subject)).statusCode).toBe(404);
   expect((await call('GET',route,undefined,null,'demo-foreign')).statusCode).toBe(403);// non-membre de l'école
   const body={operationId:randomUUID(),goals:[{label:'Insertion',competencyId:school.competency,context:'Autoroute'}],administrativeCheckNote:'Vérifier le permis',plannedWaypoints:[{id:randomUUID(),label:'Départ',latitude:46.99,longitude:6.93,note:null}]};
   expect((await call('PUT',route,body)).statusCode).toBe(428);
@@ -25,6 +25,10 @@ describe('préparation et souhait (AP45–AP48)',()=>{
   expect((await call('PUT',route,body,1,'demo-admin')).statusCode).toBe(404);
   const saved=await call('PUT',route,body,1);expect(saved.statusCode,saved.body).toBe(200);expect(saved.json().data).toMatchObject({version:2,goals:body.goals,administrativeCheckNote:'Vérifier le permis'});
   expect((await call('PUT',route,body,1)).json().data).toEqual(saved.json().data);expect(await audits(body.operationId)).toBe(1);
+  // Objectifs partagés avec l'élève ; la note administrative reste au moniteur.
+  const learnerPreparation=await call('GET',route,undefined,null,'demo-alice');expect(learnerPreparation.statusCode).toBe(200);await expectContract('PreparationEnvelope',learnerPreparation.json());
+  expect(learnerPreparation.json().data).toMatchObject({goals:body.goals,administrativeCheckNote:null});
+  expect((await call('GET',route,undefined,null,'demo-bob')).statusCode).toBe(404);
   // Omettre les repères les conserve ; [] les vide.
   const kept=await call('PUT',route,{operationId:randomUUID(),goals:[]},2);expect(kept.json().data.plannedWaypoints).toHaveLength(1);
   expect((await call('PUT',route,{operationId:randomUUID(),goals:[],plannedWaypoints:[]},3)).json().data.plannedWaypoints).toEqual([]);
@@ -48,7 +52,7 @@ describe('préparation et souhait (AP45–AP48)',()=>{
 });
 
 describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)',()=>{
- it('constat atomique avec charge unique, brouillon privé, publication, lecture élève, correction et progression',async()=>{
+ it('constat atomique avec charge unique, bilan partagé automatiquement, lecture élève, bilan privé et progression',async()=>{
   const lesson=await plan();const route=`/lessons/${lesson.id}/complete`;
   expect((await call('POST',route,completeBody({anomalyReason:null}),lesson.version)).json().code).toBe('ANOMALY_REASON_REQUIRED');
   expect((await call('POST',route,completeBody({actualEnd:new Date(Date.now()-7_200_000).toISOString()}),lesson.version)).json().code).toBe('INVALID_ACTUAL_INTERVAL');
@@ -59,21 +63,23 @@ describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)'
   const [a,b]=await Promise.all([call('POST',route,body,lesson.version),call('POST',route,body,lesson.version)]);
   expect(a.statusCode,a.body).toBe(200);expect(b.json().data).toEqual(a.json().data);expect(await audits(body.operationId)).toBe(1);
   await expectContract('CompletionResultEnvelope',a.json());const result=a.json().data;expect(Object.keys(result).sort()).toEqual(['account','draft','lesson']);
-  expect(result.lesson).toMatchObject({status:'COMPLETED',version:2,actualStart:body.actualStart,actualEnd:body.actualEnd});
-  expect(result.draft).toMatchObject({lessonId:lesson.id,authorMembershipId:id.instructorMember,basePublicationVersion:0,workedOn:'Travail',attachmentIds:[],geoObservationIds:[]});
+  // Constat avec texte : le bilan est aussitôt lisible par l'élève (partage automatique du 28 septembre 2026).
+  expect(result.lesson).toMatchObject({status:'COMPLETED',version:3,publicationVersion:1,actualStart:body.actualStart,actualEnd:body.actualEnd});expect(a.headers.etag).toBe('"3"');
+  expect(result.draft).toMatchObject({lessonId:lesson.id,authorMembershipId:id.instructorMember,basePublicationVersion:1,workedOn:'Travail',attachmentIds:[],geoObservationIds:[]});
   expect(result.account).toMatchObject({plannedPriceCents:9000,chargeCents:9000,netReceivedCents:0,balanceCents:9000,payments:[]});
   expect((await pool.query("SELECT count(*)::int AS n FROM drivy.charge_entry WHERE operation_id=$1",[body.operationId])).rows[0].n).toBe(1);
-  expect((await call('POST',route,completeBody(),2)).json().code).toBe('LESSON_CLOSED');
-  expect((await call('POST',`/lessons/${lesson.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},2)).json().code).toBe('LESSON_CLOSED');
+  expect((await call('POST',route,completeBody(),3)).json().code).toBe('LESSON_CLOSED');
+  expect((await call('POST',`/lessons/${lesson.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},3)).json().code).toBe('LESSON_CLOSED');
   // AP65 : lecture du compte selon le périmètre (ADMIN, élève, moniteur de la leçon).
   await expectContract('AccountEnvelope',(await call('GET',`/lessons/${lesson.id}/account`,undefined,null,'demo-alice')).json());
-  await expectContract('ReportRevisionPageEnvelope',(await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json());
   for(const subject of ['demo-admin','demo-alice','demo-instructor'])expect((await call('GET',`/lessons/${lesson.id}/account`,undefined,null,subject)).json().data.chargeCents).toBe(9000);
   for(const subject of ['demo-bob','demo-other-instructor'])expect((await call('GET',`/lessons/${lesson.id}/account`,undefined,null,subject)).statusCode).toBe(404);
+  const firstPage=await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice');await expectContract('ReportRevisionPageEnvelope',firstPage.json());
+  expect(firstPage.json().data.items).toEqual([expect.objectContaining({sequence:1,workedOn:'Travail',correctionReason:null})]);
   // Reprise du brouillon (extension) : auteur seulement.
   const drafts=await call('GET',`/lessons/${lesson.id}/report-drafts`);expect(drafts.json().data.items.map((d:{id:string})=>d.id)).toEqual([result.draft.id]);
   for(const subject of ['demo-admin','demo-alice'])expect((await call('GET',`/lessons/${lesson.id}/report-drafts`,undefined,null,subject)).statusCode).toBe(404);
-  // AP52/AP53 : brouillon privé.
+  // AP52 : le brouillon reste celui de l'auteur ; chaque enregistrement devient la révision lue par l'élève.
   const draftRoute=`/report-drafts/${result.draft.id}`;
   for(const subject of ['demo-admin','demo-alice','demo-other-instructor'])expect((await call('GET',draftRoute,undefined,null,subject)).statusCode).toBe(404);
   const save={operationId:randomUUID(),workedOn:'Insertion',observationText:'Bonne observation',nextStep:'Autoroute',observations:[{competencyId:school.competency,level:'GUIDED',context:'Carrefour'}],attachmentIds:[]};
@@ -82,17 +88,14 @@ describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)'
   expect((await call('PUT',draftRoute,{...save,operationId:randomUUID(),observations:[save.observations[0],save.observations[0]]},result.draft.version)).statusCode).toBe(400);
   expect((await call('PUT',draftRoute,save,result.draft.version+1)).json().code).toBe('VERSION_CONFLICT');
   const saved=await call('PUT',draftRoute,save,result.draft.version);expect(saved.statusCode,saved.body).toBe(200);await expectContract('ReportDraftEnvelope',saved.json());const draft=saved.json().data;
-  expect((await call('PUT',draftRoute,save,result.draft.version)).json().data).toEqual(draft);
-  // AP54 : publication explicite ; sélections non livrées refusées.
-  const publish={operationId:randomUUID(),expectedPublicationVersion:0,captureSelection:null,textObservationSelection:[]};
-  expect((await call('POST',`${draftRoute}/publish`,{...publish,textObservationSelection:[{observationId:randomUUID(),version:1}]},draft.version)).json().code).toBe('OBSERVATION_PUBLICATION_NOT_READY');
-  expect((await call('POST',`${draftRoute}/publish`,{...publish,operationId:randomUUID(),expectedPublicationVersion:1},draft.version)).json().code).toBe('PUBLICATION_VERSION_CONFLICT');
-  expect((await call('POST',`${draftRoute}/publish`,{...publish,operationId:randomUUID(),excludePendingAttachmentIds:[randomUUID()]},draft.version)).json().code).toBe('ATTACHMENT_SELECTION_INVALID');
-  expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items).toEqual([]);
-  const published=await call('POST',`${draftRoute}/publish`,publish,draft.version);expect(published.statusCode,published.body).toBe(200);
-  await expectContract('ReportRevisionEnvelope',published.json());const revision=published.json().data;expect(revision).toMatchObject({lessonId:lesson.id,sequence:1,version:1,correctionReason:null,capturePublication:null,textObservations:[],attachmentIds:[]});
-  expect((await call('POST',`${draftRoute}/publish`,publish,draft.version)).json().data).toEqual(revision);
-  expect((await call('GET',`/operations/${publish.operationId}`)).json().data).toMatchObject({resourceType:'ReportRevision',resourceId:revision.id});
+  expect(draft.basePublicationVersion).toBe(2);expect((await call('PUT',draftRoute,save,result.draft.version)).json().data).toEqual(draft);
+  // Même contenu : aucune révision supplémentaire.
+  const same=await call('PUT',draftRoute,{...save,operationId:randomUUID()},draft.version);expect(same.statusCode,same.body).toBe(200);expect(same.json().data.basePublicationVersion).toBe(2);
+  const learnerItems=(await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items;
+  expect(learnerItems.map((r:{sequence:number})=>r.sequence)).toEqual([1,2]);const revision=learnerItems[1];
+  expect(revision).toMatchObject({workedOn:'Insertion',correctionReason:'Bilan mis à jour par le moniteur.',capturePublication:null,textObservations:[],attachmentIds:[]});
+  // AP54 : les sélections d'observations ou de trajet restent refusées sur la publication explicite.
+  expect((await call('POST',`${draftRoute}/publish`,{operationId:randomUUID(),expectedPublicationVersion:2,captureSelection:null,textObservationSelection:[{observationId:randomUUID(),version:1}],correctionReason:'x'},same.json().data.version)).json().code).toBe('OBSERVATION_PUBLICATION_NOT_READY');
   // AP55/AP56 : lecture élève et moniteurs affectés ; ADMIN seul et autre élève exclus.
   expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-alice')).json().data.workedOn).toBe('Insertion');
   for(const subject of ['demo-admin','demo-bob','demo-other-instructor'])expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,subject)).statusCode).toBe(404);
@@ -100,30 +103,46 @@ describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)'
   await pool.query("INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES(gen_random_uuid(),$1,$2,$3,'2026-01-01T00:00:00Z')",[id.schoolA,id.aliceTraining,id.otherInstructorMember]);
   expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-other-instructor')).statusCode).toBe(200);
   expect((await call('GET',draftRoute,undefined,null,'demo-other-instructor')).statusCode).toBe(404);
-  // AP58 : progression publiée seulement.
+  // AP58 : progression issue du bilan partagé.
   const progressResponse=await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-alice');await expectContract('ProgressEnvelope',progressResponse.json());const progress=progressResponse.json().data;
   expect(progress.items).toEqual([expect.objectContaining({competencyId:school.competency,level:'GUIDED',sourceLessonId:lesson.id,sourceRevisionId:revision.id})]);
   expect(progress.unobservedCompetencyIds).toEqual([school.competency2]);
   expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-admin')).statusCode).toBe(404);
   expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-bob')).statusCode).toBe(404);
-  // Correction : nouvelle révision motivée ; la précédente reste immuable ; la projection suit la révision courante.
-  const current=(await call('GET',draftRoute)).json().data;expect(current.basePublicationVersion).toBe(1);
-  await call('PUT',draftRoute,{...save,operationId:randomUUID(),observations:[{competencyId:school.competency,level:'INDEPENDENT',context:'Carrefour'}]},current.version);
-  const corrected=(await call('GET',draftRoute)).json().data;
-  expect((await call('POST',`${draftRoute}/publish`,{...publish,operationId:randomUUID(),expectedPublicationVersion:1},corrected.version)).json().code).toBe('CORRECTION_REASON_REQUIRED');
-  const second=await call('POST',`${draftRoute}/publish`,{...publish,operationId:randomUUID(),expectedPublicationVersion:1,correctionReason:'Niveau réévalué'},corrected.version);
-  expect(second.statusCode,second.body).toBe(200);expect(second.json().data).toMatchObject({sequence:2,correctionReason:'Niveau réévalué'});
-  expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-alice')).json().data.observations[0].level).toBe('GUIDED');
-  expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-alice')).json().data.items[0]).toMatchObject({level:'INDEPENDENT',sourceRevisionId:second.json().data.id});
-  expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items).toHaveLength(2);
-  // Affectation retirée : le moniteur ne reprend plus ni brouillon ni publication.
+  // Bilan privé (extension de partage) : l'élève ne le lit plus, ni la progression qui en découle ; tout est conservé.
+  const sharingRoute=`/lessons/${lesson.id}/sharing`;
+  expect((await call('GET',sharingRoute)).json().data).toEqual({lessonId:lesson.id,schoolId:id.schoolA,version:1,reportPrivate:false,captureHidden:false,privateObservationIds:[]});
+  for(const subject of ['demo-alice','demo-admin','demo-other-instructor'])expect((await call('GET',sharingRoute,undefined,null,subject)).statusCode).toBe(404);
+  const privateBody={operationId:randomUUID(),reportPrivate:true,captureHidden:false,privateObservationIds:[] as string[]};
+  expect((await call('PUT',sharingRoute,privateBody)).statusCode).toBe(428);
+  expect((await call('PUT',sharingRoute,privateBody,1,'demo-alice')).statusCode).toBe(403);
+  expect((await call('PUT',sharingRoute,{...privateBody,operationId:randomUUID()},1,'demo-other-instructor')).statusCode).toBe(404);
+  expect((await call('PUT',sharingRoute,{...privateBody,operationId:randomUUID(),privateObservationIds:[randomUUID()]},1)).json().code).toBe('OBSERVATION_NOT_IN_LESSON');
+  const hidden=await call('PUT',sharingRoute,privateBody,1);expect(hidden.statusCode,hidden.body).toBe(200);expect(hidden.json().data).toMatchObject({version:2,reportPrivate:true});expect(hidden.headers.etag).toBe('"2"');
+  expect((await call('PUT',sharingRoute,privateBody,1)).json().data).toEqual(hidden.json().data);expect(await audits(privateBody.operationId)).toBe(1);
+  expect((await call('PUT',sharingRoute,{...privateBody,operationId:randomUUID()},1)).json().code).toBe('VERSION_CONFLICT');
+  expect((await call('GET',`/operations/${privateBody.operationId}`)).json().data).toMatchObject({resourceType:'LessonSharing',resourceId:lesson.id,resourceVersion:2});
+  expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items).toEqual([]);
+  expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-alice')).statusCode).toBe(404);
+  expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-alice')).json().data.items).toEqual([]);
+  // Enregistrer pendant que le bilan est privé ne le partage pas.
+  const privateDraft=(await call('GET',draftRoute)).json().data;
+  expect((await call('PUT',draftRoute,{...save,operationId:randomUUID(),observations:[{competencyId:school.competency,level:'INDEPENDENT',context:'Carrefour'}]},privateDraft.version)).statusCode).toBe(200);
+  expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items).toEqual([]);
+  // Repartager : la version courante du brouillon devient une nouvelle révision ; les anciennes restent masquées pour l'élève.
+  const shared=await call('PUT',sharingRoute,{...privateBody,operationId:randomUUID(),reportPrivate:false},2);expect(shared.statusCode,shared.body).toBe(200);expect(shared.json().data.reportPrivate).toBe(false);
+  const again=(await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items;expect(again.map((r:{sequence:number})=>r.sequence)).toEqual([3]);
+  expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-alice')).json().data.items[0]).toMatchObject({level:'INDEPENDENT',sourceRevisionId:again[0].id});
+  expect((await call('GET',`/lessons/${lesson.id}/reports`)).json().data.items).toHaveLength(3);
+  // Affectation retirée : le moniteur ne reprend plus ni brouillon ni partage.
   await pool.query(`UPDATE drivy.instructor_assignment SET valid_until=now()-interval '1 second' WHERE id=$1`,[id.assignment]);
   try{
    expect((await call('GET',draftRoute)).statusCode).toBe(404);
    expect((await call('GET',`/lessons/${lesson.id}/report-drafts`)).statusCode).toBe(404);
-   expect((await call('GET',`/operations/${publish.operationId}`)).statusCode).toBe(404);
+   expect((await call('GET',sharingRoute)).statusCode).toBe(404);
+   expect((await call('GET',`/operations/${privateBody.operationId}`)).statusCode).toBe(404);
   }finally{await pool.query('UPDATE drivy.instructor_assignment SET valid_until=NULL WHERE id=$1',[id.assignment]);}
-  const rows=(await pool.query('SELECT sequence,worked_on FROM drivy.report_revision WHERE lesson_id=$1 ORDER BY sequence',[lesson.id])).rows;expect(rows.map(r=>r.sequence)).toEqual([1,2]);
+  const rows=(await pool.query('SELECT sequence FROM drivy.report_revision WHERE lesson_id=$1 ORDER BY sequence',[lesson.id])).rows;expect(rows.map(r=>r.sequence)).toEqual([1,2,3]);
   // Le runtime ne peut pas réécrire une révision ni une charge.
   const db=await pool.connect();
   try{

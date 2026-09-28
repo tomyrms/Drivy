@@ -74,11 +74,19 @@ try{
  assert.equal((await call('POST',`/geo-observations/${late.json().data.id}/remove`,remove,1)).json().data.accepted,true);
  const tombstone=(await pool.query('SELECT text,capture_id,removed_at FROM drivy.geo_observation WHERE id=$1',[late.json().data.id])).rows[0];assert.equal(tombstone.text,null);assert.equal(tombstone.capture_id,null);assert(tombstone.removed_at);
  assert.equal((await call('GET',`/operations/${remove.operationId}`)).json().data.resourceType,'GeoObservation');
- const current=(await call('GET',`/report-drafts/${draft.id}`)).json().data;
- const published=await call('POST',`/report-drafts/${draft.id}/publish`,{operationId:randomUUID(),expectedPublicationVersion:0,captureSelection:null,textObservationSelection:[]},current.version);assert.equal(published.statusCode,200,JSON.stringify(published.json()));
- assert.equal((await call('POST',route,{...body,operationId:randomUUID()})).json().code,'OBSERVATION_REVIEW_REQUIRED');
- assert.equal((await call('GET',route,undefined,undefined,'demo-alice')).statusCode,404);
- const learnerReport=await call('GET',`/report-revisions/${published.json().data.id}`,undefined,undefined,'demo-alice');assert.equal(learnerReport.statusCode,200);assert.deepEqual(learnerReport.json().data.textObservations,[]);
+ // Partage automatique : le constat a partagé le bilan ; une observation tardive rejoint le brouillon et l'élève la voit.
+ const shared=(await call('GET',`/lessons/${lesson}`)).json().data;assert.equal(shared.publicationVersion,1);assert.ok(shared.currentPublishedRevisionId);
+ const tardy=await call('POST',route,{...body,operationId:randomUUID()});assert.equal(tardy.statusCode,201,JSON.stringify(tardy.json()));assert.equal(tardy.json().data.draftId,draft.id);
+ const learnerPage=await call('GET',route,undefined,undefined,'demo-alice');assert.equal(learnerPage.statusCode,200,JSON.stringify(learnerPage.json()));
+ const learnerIds=new Set(learnerPage.json().data.items.map((o:any)=>o.id));assert(learnerIds.has(marker.id));assert(learnerIds.has(tardy.json().data.id));assert(!learnerIds.has(late.json().data.id));
+ for(const subject of ['demo-bob','demo-admin','demo-other-instructor'])assert.equal((await call('GET',route,undefined,undefined,subject)).statusCode,404);
+ // « Pour moi » : l'observation gardée privée disparaît chez l'élève, jamais chez l'auteur.
+ const sharing=(await call('GET',`/lessons/${lesson}/sharing`)).json().data;assert.deepEqual(sharing.privateObservationIds,[]);
+ const kept=await call('PUT',`/lessons/${lesson}/sharing`,{operationId:randomUUID(),reportPrivate:false,captureHidden:false,privateObservationIds:[marker.id]},sharing.version);assert.equal(kept.statusCode,200,JSON.stringify(kept.json()));
+ assert.deepEqual(kept.json().data.privateObservationIds,[marker.id]);
+ assert(!(await call('GET',route,undefined,undefined,'demo-alice')).json().data.items.some((o:any)=>o.id===marker.id));
+ assert((await call('GET',route)).json().data.items.some((o:any)=>o.id===marker.id));
+ const learnerReport=await call('GET',`/report-revisions/${shared.currentPublishedRevisionId}`,undefined,undefined,'demo-alice');assert.equal(learnerReport.statusCode,200);assert.deepEqual(learnerReport.json().data.textObservations,[]);
  assert.equal(rls.rows[0].forced,44);
 }finally{await app.close();await migration.end();await pool.end();}
 });

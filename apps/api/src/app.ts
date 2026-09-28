@@ -21,6 +21,7 @@ import type { CaptureConfig } from './capture-crypto.js';
 import { registerHealth } from './health.js';
 import { registerPermits } from './permits.js';
 import { registerLessonOutcomes } from './lesson-outcomes.js';
+import { registerSharing } from './sharing.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
 const schoolParams = z.object({ schoolId: z.uuid() });
@@ -133,5 +134,6 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerLessonReports(app,options);
   registerCaptures(app,options);
   registerCaptureObservations(app,options);
+  registerSharing(app,options);
   return app;
 }

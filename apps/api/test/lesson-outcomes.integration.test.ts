@@ -13,6 +13,11 @@ async function complete(lesson:{id:string;version:number},extra:Record<string,un
  const r=await call('POST',`/lessons/${lesson.id}/complete`,{operationId:randomUUID(),actualStart:new Date(Date.now()-3_600_000).toISOString(),actualEnd:new Date(Date.now()-600_000).toISOString(),workedOn:'Travail',observationText:'Constat',nextStep:'Suite',anomalyReason:'Permis non contrôlé (recette)',...extra},lesson.version);
  expect(r.statusCode,r.body).toBe(200);return r.json().data;
 }
+/** Partage automatique : la révision courante est celle que l'élève lit, sans publication explicite. */
+async function currentRevision(lessonId:string){
+ const lesson=(await call('GET',`/lessons/${lessonId}`)).json().data;expect(lesson.currentPublishedRevisionId).not.toBeNull();
+ return (await call('GET',`/report-revisions/${lesson.currentPublishedRevisionId}`)).json().data;
+}
 async function publish(draftId:string,expectedPublicationVersion:number,extra:Record<string,unknown>={}){
  const draft=(await call('GET',`/report-drafts/${draftId}`)).json().data;
  const r=await call('POST',`/report-drafts/${draftId}/publish`,{operationId:randomUUID(),expectedPublicationVersion,captureSelection:null,textObservationSelection:[],...extra},draft.version);
@@ -125,12 +130,13 @@ describe('AP44 absence constatée',()=>{
 });
 
 describe('AP57 retrait d’un bilan publié',()=>{
- it('pointeur retiré, révisions conservées pour le moniteur, élève et progression recalculés, republication motivée',async()=>{
+ it('pointeur retiré, bilan gardé privé, révisions conservées pour le moniteur, élève et progression recalculés, republication motivée',async()=>{
   const lesson=await plan();const done=await complete(lesson);
   const draft=done.draft;
   const saved=await call('PUT',`/report-drafts/${draft.id}`,{operationId:randomUUID(),workedOn:'Travail',observationText:'Constat',nextStep:'Suite',observations:[{competencyId:school.competency,level:'GUIDED',context:'Carrefour'}],attachmentIds:[]},draft.version);
   expect(saved.statusCode,saved.body).toBe(200);
-  const revision=await publish(draft.id,0);
+  // Constat puis enregistrement : deux révisions partagées automatiquement.
+  const revision=await currentRevision(lesson.id);expect(revision).toMatchObject({sequence:2,correctionReason:'Bilan mis à jour par le moniteur.'});
   expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-alice')).statusCode).toBe(200);
   expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-alice')).json().data.items.some((i:{sourceRevisionId:string})=>i.sourceRevisionId===revision.id)).toBe(true);
   const current=await lessonNow(lesson.id);const body={operationId:randomUUID(),reason:'Bilan publié sur la mauvaise leçon'};
@@ -143,7 +149,12 @@ describe('AP57 retrait d’un bilan publié',()=>{
   expect((await call('POST',route,body)).statusCode).toBe(428);
   const withdrawn=await call('POST',route,body,current.version);expect(withdrawn.statusCode,withdrawn.body).toBe(200);expect(withdrawn.json().data).toEqual({operationId:body.operationId,accepted:true});await expectContract('AckEnvelope',withdrawn.json());
   expect((await call('POST',route,body,current.version)).json().data).toEqual({operationId:body.operationId,accepted:true});expect(await audits(body.operationId)).toBe(1);
-  const after=await lessonNow(lesson.id);expect(after).toMatchObject({currentPublishedRevisionId:null,publicationVersion:2,version:current.version+1,status:'COMPLETED'});
+  const after=await lessonNow(lesson.id);expect(after).toMatchObject({currentPublishedRevisionId:null,publicationVersion:3,version:current.version+1,status:'COMPLETED'});
+  // Le bilan retiré reste privé : un nouvel enregistrement ne le republie pas.
+  expect((await call('GET',`/lessons/${lesson.id}/sharing`)).json().data).toMatchObject({reportPrivate:true});
+  const kept=(await call('GET',`/report-drafts/${draft.id}`)).json().data;
+  expect((await call('PUT',`/report-drafts/${draft.id}`,{operationId:randomUUID(),workedOn:'Travail relu',observationText:'Constat',nextStep:'Suite',observations:[],attachmentIds:[]},kept.version)).statusCode).toBe(200);
+  expect((await lessonNow(lesson.id)).currentPublishedRevisionId).toBeNull();
   expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-alice')).statusCode).toBe(404);
   expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items).toEqual([]);
   expect((await call('GET',`/report-revisions/${revision.id}`)).statusCode).toBe(200);
@@ -151,13 +162,14 @@ describe('AP57 retrait d’un bilan publié',()=>{
   expect((await call('POST',route,{...body,operationId:randomUUID()},after.version)).json().code).toBe('NO_PUBLISHED_REPORT');
   expect((await call('GET',`/operations/${body.operationId}`)).json().data).toMatchObject({resourceType:'Lesson',resourceId:lesson.id,resourceVersion:after.version});
   // Republication : nouveau motif exigé, séquence suivante ; l'ancienne révision reste masquée pour l'élève.
-  const rebased=(await call('GET',`/report-drafts/${draft.id}`)).json().data;expect(rebased.basePublicationVersion).toBe(2);
-  expect((await call('POST',`/report-drafts/${draft.id}/publish`,{operationId:randomUUID(),expectedPublicationVersion:2,captureSelection:null,textObservationSelection:[]},rebased.version)).json().code).toBe('CORRECTION_REASON_REQUIRED');
-  expect((await call('POST',`/report-drafts/${draft.id}/publish`,{operationId:randomUUID(),expectedPublicationVersion:1,captureSelection:null,textObservationSelection:[],correctionReason:'Republication'},rebased.version)).json().code).toBe('PUBLICATION_VERSION_CONFLICT');
-  const republished=await publish(draft.id,2,{correctionReason:'Bilan relu et republié'});expect(republished.sequence).toBe(2);
+  const rebased=(await call('GET',`/report-drafts/${draft.id}`)).json().data;expect(rebased.basePublicationVersion).toBe(3);
+  expect((await call('POST',`/report-drafts/${draft.id}/publish`,{operationId:randomUUID(),expectedPublicationVersion:3,captureSelection:null,textObservationSelection:[]},rebased.version)).json().code).toBe('CORRECTION_REASON_REQUIRED');
+  expect((await call('POST',`/report-drafts/${draft.id}/publish`,{operationId:randomUUID(),expectedPublicationVersion:2,captureSelection:null,textObservationSelection:[],correctionReason:'Republication'},rebased.version)).json().code).toBe('PUBLICATION_VERSION_CONFLICT');
+  const republished=await publish(draft.id,3,{correctionReason:'Bilan relu et republié'});expect(republished.sequence).toBe(3);
+  expect((await call('GET',`/lessons/${lesson.id}/sharing`)).json().data).toMatchObject({reportPrivate:false});
   const learnerList=(await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items;expect(learnerList.map((r:{id:string})=>r.id)).toEqual([republished.id]);
-  expect((await call('GET',`/lessons/${lesson.id}/reports`)).json().data.items).toHaveLength(2);
-  expect((await lessonNow(lesson.id)).publicationVersion).toBe(3);
+  expect((await call('GET',`/lessons/${lesson.id}/reports`)).json().data.items).toHaveLength(3);
+  expect((await lessonNow(lesson.id)).publicationVersion).toBe(4);
  });
 });
 
@@ -165,7 +177,7 @@ describe('AP88/AP50 correction encadrée d’un résultat',()=>{
  it('approbation exacte et unique, contre-écriture, retrait du bilan, refus explicites',async()=>{
   const lesson=await plan();await moveToPast(pool,lesson.id);const done=await complete(lesson);
   await call('PUT',`/report-drafts/${done.draft.id}`,{operationId:randomUUID(),workedOn:'Travail',observationText:'Constat',nextStep:'Suite',observations:[],attachmentIds:[]},done.draft.version);
-  const revision=await publish(done.draft.id,0);const current=await lessonNow(lesson.id);
+  const revision=await currentRevision(lesson.id);expect(revision.sequence).toBe(1);const current=await lessonNow(lesson.id);
   const account=(await call('GET',`/lessons/${lesson.id}/account`,undefined,null,'demo-admin')).json().data;expect(account).toMatchObject({version:1,chargeCents:9000});
   const proposal={targetStatus:'NO_SHOW',reason:'Constat saisi par erreur : élève absent',expectedAccountVersion:account.version,actualStart:null,actualEnd:null,futureBooking:null};
   const correct=(extra:Record<string,unknown>={})=>({operationId:randomUUID(),...proposal,pedagogicalApprovalId:null,...extra});
@@ -222,8 +234,7 @@ describe('AP88/AP50 correction encadrée d’un résultat',()=>{
    let lesson=created.json().data;await moveToPast(pool,lesson.id);
    const done=await own.call('POST',`/lessons/${lesson.id}/complete`,{operationId:randomUUID(),actualStart:new Date(Date.now()-3_600_000).toISOString(),actualEnd:new Date().toISOString(),workedOn:'T',observationText:'C',nextStep:'S'},lesson.version,'demo-admin');
    expect(done.statusCode,done.body).toBe(200);
-   const draft=(await own.call('GET',`/report-drafts/${done.json().data.draft.id}`,undefined,null,'demo-admin')).json().data;
-   expect((await own.call('POST',`/report-drafts/${draft.id}/publish`,{operationId:randomUUID(),expectedPublicationVersion:0,captureSelection:null,textObservationSelection:[]},draft.version,'demo-admin')).statusCode).toBe(200);
+   expect(done.json().data.lesson.publicationVersion).toBe(1);
    lesson=(await own.call('GET',`/lessons/${lesson.id}`,undefined,null,'demo-admin')).json().data;
    const proposal={targetStatus:'CANCELLED',reason:'Leçon annulée en réalité',expectedAccountVersion:1};
    const approval=await own.call('POST',`/lessons/${lesson.id}/outcome-approvals`,{operationId:randomUUID(),proposal,expectedPublicationVersion:lesson.publicationVersion},lesson.version,'demo-admin');

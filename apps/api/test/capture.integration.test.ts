@@ -21,7 +21,8 @@ await pool.query(`INSERT INTO drivy.school_data_policy(school_id,version,notice_
 await pool.query(`UPDATE drivy.school SET modules=jsonb_set(modules,'{gpsEnabled}','true') WHERE id=$1`,[id.schoolA]);
 await pool.query(`INSERT INTO drivy.lesson(id,school_id,training_id,learner_id,learner_person_id,instructor_membership_id,planned_start,planned_end,time_zone,meeting_point,price_cents_snapshot,buffer_minutes_snapshot,policy_version_id,commercial_selection) VALUES($1,$2,$3,$4,$5,$6,now()-interval '1 minute',now()+interval '45 minutes','Europe/Zurich','Recette synthétique',1000,0,$7,'{"mode":"UNIT_PRICE"}')`,[lesson,id.schoolA,id.aliceTraining,id.aliceLearner,id.alice,id.instructorMember,policy]);
 const oidc=await generateKeyPair('RS256'),key=await exportJWK(oidc.publicKey),signing=await generateKeyPair('EdDSA',{extractable:true});
-const config:CaptureConfig={encryptionKey:Buffer.alloc(32,42),encryptionKeyId:'synthetic-only',signingKey:{...await exportJWK(signing.privateKey),kid:'synthetic-only'},issuer:'https://capture-api.example.invalid',profiles:[{version:'SYNTHETIC-TEST-ONLY',platform:'IOS',deviceClass:'PHONE',modelCode:'TEST',osVersion:'TEST',appBuild:'TEST',expiresAt:new Date(Date.now()+86400000).toISOString(),maxSampleAgeSeconds:5,maxHorizontalAccuracyMeters:50,minimumFreeBytes:1,requireBackground:true,requirePreciseLocation:true}],uploadHours:72};
+const config:CaptureConfig={encryptionKey:Buffer.alloc(32,42),encryptionKeyId:'synthetic-only',signingKey:{...await exportJWK(signing.privateKey),kid:'synthetic-only'},issuer:'https://capture-api.example.invalid',profiles:[{version:'SYNTHETIC-TEST-ONLY',platform:'IOS',deviceClass:'PHONE',modelCode:'TEST',osVersion:'TEST',appBuild:'TEST',expiresAt:new Date(Date.now()+86400000).toISOString(),maxSampleAgeSeconds:5,maxHorizontalAccuracyMeters:50,minimumFreeBytes:1,requireBackground:true,requirePreciseLocation:true},
+ {version:'TRIAL-WILDCARD',platform:'IOS',deviceClass:'PHONE',modelCode:'iPhone15,3',osVersion:'26.*',appBuild:'*',expiresAt:new Date(Date.now()+86400000).toISOString(),maxSampleAgeSeconds:5,maxHorizontalAccuracyMeters:50,minimumFreeBytes:1,requireBackground:true,requirePreciseLocation:true}],uploadHours:72};
 const app=buildApp({pool,cursorSecret:'capture-test-secret-32-characters',capture:config,verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/jwks`},createLocalJWKSet({keys:[{...key,kid:'capture',alg:'RS256'}]}))});
 const base=`/v1/schools/${id.schoolA}`;
 async function call(method:'GET'|'POST'|'PUT',route:string,body?:any,version?:number,subject='demo-instructor'){
@@ -35,6 +36,12 @@ try{
  let a=await call('POST',`/devices/${device}/assessments`,aBody);assert.equal(a.statusCode,201,JSON.stringify(a.json()));assert.equal(a.json().data.status,'QUALIFIED');
  const unknown=await call('POST',`/devices/${device}/assessments`,{...aBody,operationId:randomUUID(),modelCode:'UNKNOWN'});assert.equal(unknown.json().data.status,'NEEDS_CHECK');
  assert.equal((await call('GET',`/devices/${device}/assessments/${a.json().data.id}`)).json().code,'DEVICE_ASSESSMENT_SUPERSEDED');
+ // Profil d'essai : toutes les versions 26.x du système et tous les builds de l'app, pour ce seul modèle.
+ const trialDevice=randomUUID(),trial={...aBody,modelCode:'iPhone15,3',osVersion:'26.0.1',appBuild:'57'};
+ const trialOk=await call('POST',`/devices/${trialDevice}/assessments`,{...trial,operationId:randomUUID()});assert.equal(trialOk.json().data.status,'QUALIFIED');assert.equal(trialOk.json().data.qualificationProfileVersion,'TRIAL-WILDCARD');
+ assert.equal((await call('POST',`/devices/${trialDevice}/assessments`,{...trial,operationId:randomUUID(),osVersion:'25.4'})).json().data.status,'NEEDS_CHECK');
+ assert.equal((await call('POST',`/devices/${trialDevice}/assessments`,{...trial,operationId:randomUUID(),osVersion:'260.1'})).json().data.status,'NEEDS_CHECK');
+ assert.equal((await call('POST',`/devices/${trialDevice}/assessments`,{...trial,operationId:randomUUID(),modelCode:'iPhone16,1'})).json().data.status,'NEEDS_CHECK');
  a=await call('POST',`/devices/${device}/assessments`,{...aBody,operationId:randomUUID()});assert.equal(a.json().data.status,'QUALIFIED');
  const choice=await call('POST',`/learners/${id.aliceLearner}/recording-choice`,{operationId:randomUUID(),lessonId:lesson,status:'ALLOWED',noticeVersionId:notice,source:'SELF'},undefined,'demo-alice');assert.equal(choice.statusCode,200,JSON.stringify(choice.json()));
  const startBody={operationId:randomUUID(),deviceId:device,choiceId:choice.json().data.id,choiceVersion:choice.json().data.version,noticeVersionId:notice,explicitStartConfirmed:true,deviceAssessmentId:a.json().data.id};
@@ -57,6 +64,23 @@ try{
  const finalized=await call('POST',`/captures/${capture.id}/finalize`,{operationId:randomUUID(),segments:manifest,allowPartial:false},stop.json().data.version);assert.equal(finalized.statusCode,200,JSON.stringify(finalized.json()));assert.equal(finalized.json().data.syncState,'SYNCED');
  const page=await call('GET',`/captures/${capture.id}/replay?limit=2`);assert.equal(page.statusCode,200);assert.equal(page.json().data.segments[0].points.length,2);assert.equal(page.json().data.segments[0].continuesOnNextPage,true);
  const next=await call('GET',`/captures/${capture.id}/replay?limit=2&cursor=${encodeURIComponent(page.json().data.nextCursor)}`);assert.equal(next.json().data.segments[0].points.length,1);assert.equal(next.json().data.segments[0].continuesFromPreviousPage,true);
+ // Partage automatique : l'élève lit le trajet d'une leçon réalisée, sauf si le moniteur le masque.
+ assert.deepEqual((await call('GET',`/lessons/${lesson}/captures`,undefined,undefined,'demo-alice')).json().data.items,[]);
+ assert.equal((await call('GET',`/captures/${capture.id}/replay`,undefined,undefined,'demo-alice')).statusCode,404);
+ assert.deepEqual((await call('GET',`/lessons/${lesson}/captures`)).json().data.items.map((c:any)=>c.id),[capture.id]);
+ await pool.query("UPDATE drivy.lesson SET status='COMPLETED',actual_start=now()-interval '2 minutes',actual_end=now()-interval '1 minute' WHERE id=$1",[lesson]);
+ try{
+  assert.deepEqual((await call('GET',`/lessons/${lesson}/captures`,undefined,undefined,'demo-alice')).json().data.items.map((c:any)=>c.id),[capture.id]);
+  const learnerReplay=await call('GET',`/captures/${capture.id}/replay?limit=10`,undefined,undefined,'demo-alice');assert.equal(learnerReplay.statusCode,200,JSON.stringify(learnerReplay.json()));
+  assert.equal(learnerReplay.json().data.segments[0].points.length,3);
+  for(const subject of ['demo-bob','demo-admin'])assert.equal((await call('GET',`/captures/${capture.id}/replay`,undefined,undefined,subject)).statusCode,404);
+  const sharing=(await call('GET',`/lessons/${lesson}/sharing`)).json().data;assert.equal(sharing.captureHidden,false);
+  const hide=await call('PUT',`/lessons/${lesson}/sharing`,{operationId:randomUUID(),reportPrivate:false,captureHidden:true,privateObservationIds:[]},sharing.version);assert.equal(hide.statusCode,200,JSON.stringify(hide.json()));
+  assert.deepEqual((await call('GET',`/lessons/${lesson}/captures`,undefined,undefined,'demo-alice')).json().data.items,[]);
+  assert.equal((await call('GET',`/captures/${capture.id}/replay`,undefined,undefined,'demo-alice')).statusCode,404);
+  assert.equal((await call('GET',`/captures/${capture.id}/replay`)).statusCode,200);
+  const show=await call('PUT',`/lessons/${lesson}/sharing`,{operationId:randomUUID(),reportPrivate:false,captureHidden:false,privateObservationIds:[]},hide.json().data.version);assert.equal(show.statusCode,200);
+ }finally{await pool.query("UPDATE drivy.lesson SET status='PLANNED',actual_start=NULL,actual_end=NULL WHERE id=$1",[lesson]);}
  const proof=await call('GET',`/operations/${startBody.operationId}`);assert.equal(proof.statusCode,200,JSON.stringify(proof.json()));assert.equal(proof.json().data.resourceType,'CaptureSession');
  const stored=(await pool.query('SELECT response_data FROM drivy.operation WHERE operation_id=$1',[startBody.operationId])).rows[0];assert(!JSON.stringify(stored).includes('signedCaptureAuthorization'));
  // Une borne resserrée purge le lot entier touché, sans réactiver ni dupliquer son identité.

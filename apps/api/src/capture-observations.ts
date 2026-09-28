@@ -18,7 +18,8 @@ async function observation(db:PoolClient,schoolId:string,id:string,lock=false){
  const row=(await db.query<GeoObservationRow>(`SELECT * FROM drivy.geo_observation WHERE school_id=$1 AND id=$2 ${lock?'FOR UPDATE':''}`,[schoolId,id])).rows[0];
  if(!row)throw notFound();return row;
 }
-async function author(db:PoolClient,lessonId:string){if(!(await db.query<{ok:boolean}>('SELECT drivy.report_lesson_author($1) AS ok',[lessonId])).rows[0]?.ok)throw notFound();}
+async function isAuthor(db:PoolClient,lessonId:string){return (await db.query<{ok:boolean}>('SELECT drivy.report_lesson_author($1) AS ok',[lessonId])).rows[0]?.ok===true;}
+async function author(db:PoolClient,lessonId:string){if(!(await isAuthor(db,lessonId)))throw notFound();}
 async function targetLesson(db:PoolClient,schoolId:string,target:Target){return getLesson(db,schoolId,'lessonId'in target?target.lessonId:(await observation(db,schoolId,target.observationId)).lesson_id);}
 function guards<T>(schoolId:string,target:Target):CommandGuards<T>{return {
  additionalPersons:async db=>{const lesson=await targetLesson(db,schoolId,target);await author(db,lesson.id);
@@ -31,13 +32,11 @@ function guards<T>(schoolId:string,target:Target):CommandGuards<T>{return {
 interface DraftContext {id:string;lesson_id:string;author_membership_id:string;base_publication_version:number}
 async function resolveDraft(db:PoolClient,lesson:LessonRow,memberId:string,body:GeoObservationInput):Promise<string|null>{
  if(lesson.status!=='PLANNED'&&lesson.status!=='COMPLETED')throw conflict('LESSON_STATE_CONFLICT','Une leçon annulée ou non réalisée ne peut recevoir cette observation.');
- if(body.draftId===null){
-  if(lesson.status==='PLANNED')return null;
-  if(lesson.publication_version>0)throw conflict('OBSERVATION_REVIEW_REQUIRED','Un bilan a déjà été publié. Relisez cette intention dans le brouillon avant de la renvoyer.');
- }
+ if(body.draftId===null&&lesson.status==='PLANNED')return null;
+ // Partage automatique : une observation qui arrive après le constat rejoint le brouillon ; l'élève la voit directement.
  const row=(await db.query<DraftContext>(`SELECT id,lesson_id,author_membership_id,base_publication_version FROM drivy.report_draft
   WHERE school_id=$1 AND lesson_id=$2 AND author_membership_id=$3 AND ($4::uuid IS NULL OR id=$4) FOR UPDATE`,[lesson.school_id,lesson.id,memberId,body.draftId])).rows[0];
- if(lesson.status!=='COMPLETED'||!row||row.base_publication_version!==lesson.publication_version)throw conflict('OBSERVATION_REVIEW_REQUIRED','Le brouillon doit être relu avant de recevoir cette observation.');
+ if(lesson.status!=='COMPLETED'||!row)throw conflict('OBSERVATION_REVIEW_REQUIRED','Le brouillon doit être relu avant de recevoir cette observation.');
  return row.id;
 }
 async function validateTheme(db:PoolClient,lesson:LessonRow,id:string|null){
@@ -85,7 +84,9 @@ export function registerCaptureObservations(app:FastifyInstance,options:{pool:Po
  app.get(`${base}/lessons/:lessonId/geo-observations`,async r=>{
   const schoolId=param(r,'schoolId'),lessonId=param(r,'lessonId'),query=z.object({limit:z.coerce.number().int().min(1).max(100).default(50),cursor:z.string().max(2000).optional()}).strict().parse(r.query);
   const data=await withActor(options.pool,await options.verifyToken(r.headers.authorization),schoolId,async(db,actor,member)=>{
-   await author(db,lessonId);const scope=JSON.stringify(['geo-observations',schoolId,actor.personId,member!.accessEpoch,lessonId,query.limit]),position=cursors.decode(query.cursor,scope);
+   // L'auteur lit toutes ses observations ; l'élève de la leçon lit celles qui ne sont pas privées (RLS), après la leçon.
+   if(!(await isAuthor(db,lessonId))&&!(await db.query<{ok:boolean}>("SELECT drivy.learner_shared_lesson($1,'observation') AS ok",[lessonId])).rows[0]?.ok)throw notFound();
+   const scope=JSON.stringify(['geo-observations',schoolId,actor.personId,member!.accessEpoch,lessonId,query.limit]),position=cursors.decode(query.cursor,scope);
    const rows=(await db.query<GeoObservationRow&{_createdAt:string}>(`SELECT *,to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "_createdAt" FROM drivy.geo_observation
     WHERE school_id=$1 AND lesson_id=$2 AND removed_at IS NULL AND ($3::timestamptz IS NULL OR (created_at,id)>($3::timestamptz,$4::uuid)) ORDER BY created_at,id LIMIT $5`,[schoolId,lessonId,position?.createdAt??null,position?.id??null,query.limit+1])).rows;
    const items=rows.slice(0,query.limit),last=items.at(-1);return {items:items.map(geoObservationProjection),nextCursor:rows.length>query.limit&&last?cursors.encode(scope,{createdAt:last._createdAt,id:last.id}):null};
