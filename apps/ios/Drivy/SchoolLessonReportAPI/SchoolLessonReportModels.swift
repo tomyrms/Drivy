@@ -151,3 +151,17 @@ struct SchoolUpdateSharing: Encodable, Sendable {
     let captureHidden: Bool
     let privateObservationIds: [UUID]
 }
+
+/// AP30 : le moniteur atteste avoir vu l’original du permis d’élève. Aucune date de validité n’est
+/// inventée : sans date lue sur la pièce, `validUntil` est omis (le serveur l’enregistre à `null`).
+/// Le contrôleur et l’heure sont imposés par le serveur.
+struct SchoolRecordPermitCheck: Encodable, Sendable {
+    let operationId: UUID
+    let physicalSeen: Bool
+    let categoryCode: String
+    let decision: String
+
+    static func seen(operationId: UUID, categoryCode: String) -> SchoolRecordPermitCheck {
+        SchoolRecordPermitCheck(operationId: operationId, physicalSeen: true, categoryCode: categoryCode, decision: "APPROVED")
+    }
+}

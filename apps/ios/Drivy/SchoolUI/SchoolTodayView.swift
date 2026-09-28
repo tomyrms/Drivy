@@ -47,6 +47,7 @@ struct SchoolTodayView: View {
                         SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: name(lesson))
                     }
                     .tint(DrivyTheme.accent)
+                    .environment(captureController)
                 }
             }
     }
@@ -65,7 +66,7 @@ struct SchoolTodayView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("Ouvrir la leçon")
-                if instructs, next.instructorMembershipId == workspace.membership?.membershipId {
+                if mayStart(next) {
                     Button { start(next) } label: { Label("Démarrer", systemImage: "location.fill") }
                         .buttonStyle(DrivyPrimaryButtonStyle())
                 }
@@ -96,9 +97,17 @@ struct SchoolTodayView: View {
         return "\(start.formatted(format)) – \(end.formatted(format))"
     }
 
+    /// Même règle que l’écran de la leçon : moniteur de la leçon, GPS de l’école actif, aucun autre trajet ouvert.
+    private func mayStart(_ lesson: SchoolLesson, now: Date = Date()) -> Bool {
+        guard instructs, let captureController else { return false }
+        let isAuthor = lesson.instructorMembershipId == workspace.membership?.membershipId
+        return SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: isAuthor, school: workspace.school,
+            capture: SchoolLessonCaptureStatus(controller: captureController, lessonID: lesson.id),
+            controllerCanPrepare: captureController.canPrepareCapture, now: now)
+    }
     private func start(_ lesson: SchoolLesson) {
         guard let agendaClient, let person = workspace.person, let membership = workspace.membership,
-              lesson.instructorMembershipId == membership.membershipId else { return }
+              lesson.instructorMembershipId == membership.membershipId, mayStart(lesson) else { return }
         preparation = agendaClient.capturePreparation(scope: agendaClient.scope(person: person, membership: membership),
             lessonID: lesson.id, controller: captureController)
     }

@@ -2,6 +2,9 @@ import Foundation
 
 enum SchoolReportFailure: Error, LocalizedError, Equatable {
     case unauthorized, forbidden, unavailable, invalidResponse, notFound, conflict, rejected(String), uncertain
+    /// Contrôle du permis refusé à ce compte (grant `permit_review` ou affectation absents) :
+    /// ce n’est pas une perte d’accès à la leçon.
+    case permitReviewRequired
     var errorDescription: String? {
         switch self {
         case .unauthorized: "Reconnectez-vous pour retrouver cette leçon."
@@ -12,9 +15,10 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         case .conflict: "Cette version a changé. Rechargez les informations avant de confirmer."
         case .rejected(let message): message
         case .uncertain: "La confirmation reste à vérifier. Conservez cette demande et vérifiez son résultat avant toute nouvelle modification."
+        case .permitReviewRequired: "Vous n’êtes pas habilité à contrôler ce permis. Précisez la situation du permis."
         }
     }
-    var permitsFreshCorrection: Bool { switch self { case .conflict, .rejected: true; default: false } }
+    var permitsFreshCorrection: Bool { switch self { case .conflict, .rejected, .permitReviewRequired: true; default: false } }
 }
 
 @MainActor final class SchoolLessonReportClient {
@@ -103,6 +107,9 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         case .updateLessonSharing:
             guard let target = command.resourceID else { throw SchoolReportFailure.invalidResponse }
             path = ["lessons", target.uuidString, "sharing"]; method = "PUT"
+        case .recordPermitCheck:
+            guard let target = command.routeResourceID else { throw SchoolReportFailure.invalidResponse }
+            path = ["trainings", target.uuidString, "permit-checks"]; method = "POST"
         default: throw SchoolReportFailure.invalidResponse
         }
         let _: Acknowledgement = try await request(command.scope.schoolID, path, method: method, command: command)
@@ -156,7 +163,7 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         let type = response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased()
         guard response.status == 200 else {
             let code = type == "application/problem+json" ? (try? JSONDecoder().decode(Problem.self, from: response.data).code) : nil
-            throw Self.failure(response.status, code)
+            throw Self.failure(response.status, code, kind: command?.kind)
         }
         guard type == "application/json" else { throw SchoolReportFailure.invalidResponse }
         do {
@@ -165,7 +172,10 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
             return value.data
         } catch { throw SchoolReportFailure.invalidResponse }
     }
-    private static func failure(_ status: Int, _ code: String?) -> SchoolReportFailure {
+    static func failure(_ status: Int, _ code: String?, kind: SchoolCommandKind? = nil) -> SchoolReportFailure {
+        // AP30 : sans grant `permit_review` (403) ou sans affectation à la formation (404), seul le contrôle
+        // du permis est refusé ; la leçon reste lisible et le motif écrit reste possible.
+        if kind == .recordPermitCheck && ((status == 403 && code == "PERMIT_REVIEW_REQUIRED") || status == 404) { return .permitReviewRequired }
         if status == 401 { return .unauthorized }; if status == 403 { return .forbidden }; if status == 404 { return .notFound }
         if (status == 412 && code == "VERSION_CONFLICT") || (status == 409 && code == "PUBLICATION_VERSION_CONFLICT") { return .conflict }
         let messages = [
@@ -181,6 +191,9 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
             "ATTACHMENT_NOT_READY": "Cette pièce n’est pas encore disponible pour le bilan.",
             "OBSERVATION_PUBLICATION_NOT_READY": "Cette sélection d’annotations nécessite encore une qualification avant partage.",
             "OBSERVATION_NOT_IN_LESSON": "Cette observation n’appartient plus à la leçon. Actualisez.",
+            "CATEGORY_MISMATCH": "La catégorie de cette formation a changé. Actualisez la leçon.",
+            "TRAINING_NOT_ACTIVE": "La formation n’est plus en cours. Précisez la situation du permis.",
+            "PERMIT_EXPIRED": "Ce permis est échu. Précisez la situation du permis.",
             "INVALID_REQUEST": "Vérifiez les informations saisies et leurs longueurs."
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }

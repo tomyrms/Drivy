@@ -97,13 +97,12 @@ struct SchoolObservationView: View {
         .interactiveDismissDisabled(model.isBusy)
     }
     private var heading: some View {
+        // Partage automatique (28 septembre 2026) : l’élève voit les observations d’une leçon terminée,
+        // sauf celles que le moniteur garde pour lui depuis l’écran de la leçon.
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            DrivyStatusBadge(title: "Carnet privé", symbol: "lock.fill")
             Text(model.learnerName.isEmpty ? "Pendant la leçon" : model.learnerName)
                 .font(.drivyScreenTitle).fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
-            Text("Gardez un repère, puis précisez ce qui mérite d’être repris. Ces observations ne sont pas partagées avec l’élève.")
-                .font(.subheadline).foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
         }
     }
     @ViewBuilder private var feedback: some View {
@@ -247,8 +246,8 @@ private struct SchoolObservationComposer: View {
             Form {
                 Section {
                     if let label = model.timeLabel(editor.observedAt) { Label(label, systemImage: "clock").font(.subheadline.monospacedDigit()) }
-                    Label(editor.original?.hasPosition == true ? "La position enregistrée et l’instant sont conservés." : "Observation privée, sans position GPS ajoutée.",
-                          systemImage: "lock.fill")
+                    Label(editor.original?.hasPosition == true ? "La position enregistrée et l’instant sont conservés." : "Sans position GPS ajoutée.",
+                          systemImage: editor.original?.hasPosition == true ? "mappin" : "location.slash")
                         .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -354,7 +353,7 @@ private struct SchoolObservationRemoval: View {
                 Section("Observation concernée") { Text(observation.text).fixedSize(horizontal: false, vertical: true) }
                 Section {
                     TextField("Pourquoi retirer cette observation ?", text: $reason, axis: .vertical).lineLimit(3...6)
-                    Toggle("Je confirme son retrait du carnet privé", isOn: $acknowledged)
+                    Toggle("Je confirme son retrait", isOn: $acknowledged)
                 } header: { Text("Motif du retrait") }
                 footer: { Text("Ce retrait ne modifie pas un bilan déjà partagé.") }
                 if model.pending != nil {

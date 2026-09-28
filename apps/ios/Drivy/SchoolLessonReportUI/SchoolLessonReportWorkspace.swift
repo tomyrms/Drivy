@@ -19,6 +19,13 @@ import Observation
     /// Trajet reconstruit (segments) et position de chaque mesure, pour ancrer les observations sur la carte.
     private(set) var track: [[SchoolCapturePoint]] = []
     private(set) var trackAnchors: [String: SchoolCapturePoint] = [:]
+    /// Formation de la leçon : catégorie et version exigées par le contrôle du permis (AP30).
+    private(set) var training: SchoolTraining?
+    /// Trajets de cette leçon connus de l’école (auteur, leçon planifiée) : horaires réels proposés au constat.
+    private(set) var captures: [SchoolCaptureSession] = []
+    /// Contrôle du permis enregistré depuis cet écran, ou refusé à ce compte par l’école.
+    private(set) var permitRecorded = false
+    private(set) var permitReviewDenied = false
     private(set) var pending: PendingSchoolCommand?
     private(set) var isLoading = false
     private(set) var isBusy = false
@@ -59,6 +66,31 @@ import Observation
         guard let draft else { return false }
         return workedOn != draft.workedOn || observationText != draft.observationText || nextStep != draft.nextStep || observations != draft.observations
     }
+    var preparationChanged: Bool {
+        guard isAuthor, let preparation else { return false }
+        return goals != preparation.goals || administrativeNote != (preparation.administrativeCheckNote ?? "")
+    }
+    var wishChanged: Bool {
+        guard isOwnLearner, let wish else { return false }
+        return wishText != wish.text
+    }
+    /// Saisie non enregistrée : bilan, objectifs ou souhait.
+    var hasLocalEdits: Bool { draftChanged || preparationChanged || wishChanged }
+    /// Situation proposée quand une compétence reçoit un niveau.
+    var defaultObservationContext: String { lesson.map(SchoolLessonHubRules.observationContext(for:)) ?? "Leçon" }
+    func setObservationLevel(_ level: String, for competencyID: UUID) {
+        observations = SchoolLessonHubRules.observations(observations, setting: level, for: competencyID, context: defaultObservationContext)
+    }
+    /// Horaires proposés au constat : ceux du trajet s’il existe, sinon l’horaire prévu, jamais dans le futur.
+    func completionTimes(now: Date = Date()) -> (start: Date, end: Date) {
+        guard let lesson else { return (now.addingTimeInterval(-3_000), now) }
+        return SchoolLessonHubRules.completionTimes(lesson: lesson, captures: captures, now: now)
+    }
+    /// « J’ai vu le permis d’élève » : grant `permit_review` du moniteur de la leçon ; l’affectation est relue par le serveur.
+    var mayRecordPermit: Bool {
+        isAuthor && membership.grants.contains("permit_review") && !permitReviewDenied && !permitRecorded
+            && lesson?.status == "PLANNED" && training != nil && training?.id == lesson?.trainingId
+    }
     var reportShared: Bool { !(sharing?.reportPrivate ?? false) }
     var captureShared: Bool { !(sharing?.captureHidden ?? false) }
     func isPrivate(_ observation: SchoolObservation) -> Bool { sharing?.privateObservationIds.contains(observation.id) ?? false }
@@ -76,6 +108,7 @@ import Observation
         case .saveReportDraft: return isAuthor && pending.resourceID == draft?.id
         case .publishReportDraft: return isAuthor && pending.routeResourceID == draft?.id
         case .updateLessonSharing: return isAuthor && pending.resourceID == lessonID
+        case .recordPermitCheck: return isAuthor && pending.routeResourceID == lesson?.trainingId
         default: return false
         }
     }
@@ -85,10 +118,11 @@ import Observation
         switch pending.kind {
         case .savePreparation: title = "Enregistrement de la préparation"
         case .saveWish: title = "Enregistrement du souhait"
-        case .completeLesson: title = "Constat de réalisation"
-        case .saveReportDraft: title = "Enregistrement du brouillon privé"
+        case .completeLesson: title = "Fin de la leçon"
+        case .saveReportDraft: title = "Enregistrement du bilan"
         case .publishReportDraft: title = "Publication du bilan à l’élève"
         case .updateLessonSharing: title = "Partage avec l’élève"
+        case .recordPermitCheck: title = "Permis d’élève vu"
         default: return "Une demande provenant d’un autre écran est en attente dans cette école."
         }
         guard let body = try? JSONSerialization.jsonObject(with: pending.body) as? [String: Any] else { return title }
@@ -101,9 +135,12 @@ import Observation
         competencies = []; account = nil; pending = nil; goals = []; administrativeNote = ""; wishText = ""
         workedOn = ""; observationText = ""; nextStep = ""; observations = []
         sharing = nil; lessonObservations = []; track = []; trackAnchors = [:]
+        training = nil; captures = []; permitRecorded = false; permitReviewDenied = false
         isLoading = false; isBusy = false; storageAccessible = false; revisionsError = nil
     }
-    func load() async {
+    /// Relit la leçon. Une saisie non enregistrée est conservée tant que sa ressource n’a pas changé
+    /// sur le serveur (retour d’une feuille, partage, contrôle du permis) ; « Recharger » l’abandonne.
+    func load(discardingEdits: Bool = false) async {
         guard !invalidated, !isBusy else { return }
         generation = UUID(); let request = generation
         isLoading = true; needsReload = true; errorMessage = nil; revisionsError = nil; information = nil; pendingReviewed = false
@@ -165,28 +202,57 @@ import Observation
                     }
                 }
             }
-            let curriculumRead = try await readSupplement(request: request, unavailable: "Le référentiel est momentanément indisponible. Le bilan textuel peut être enregistré sans ajouter de compétence.") {
+            let trainingRead = try await readSupplement(request: request, unavailable: "Le référentiel est momentanément indisponible. Le bilan textuel peut être enregistré sans ajouter de compétence.") {
                 let training = try await self.client.reader.training(schoolID: self.scope.schoolID, id: lesson.trainingId)
-                let offerings = try await self.collect { try await self.client.catalog.offerings(schoolID: self.scope.schoolID, cursor: $0) }
-                guard let offering = offerings.first(where: { $0.id == training.offeringId }) else { throw SchoolReportFailure.notFound }
-                let curricula = try await self.collect { try await self.client.catalog.curricula(schoolID: self.scope.schoolID, cursor: $0) }
-                guard let curriculum = curricula.first(where: { $0.id == offering.curriculumVersionId }) else { throw SchoolReportFailure.notFound }
-                return curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }
+                guard training.id == lesson.trainingId, training.learnerId == lesson.learnerId else { throw SchoolReportFailure.invalidResponse }
+                return training
+            }
+            var curriculumRead: (value: [SchoolCatalogCompetency]?, message: String?) = (nil, trainingRead.message)
+            if let training = trainingRead.value {
+                curriculumRead = try await readSupplement(request: request, unavailable: "Le référentiel est momentanément indisponible. Le bilan textuel peut être enregistré sans ajouter de compétence.") {
+                    let offerings = try await self.collect { try await self.client.catalog.offerings(schoolID: self.scope.schoolID, cursor: $0) }
+                    guard let offering = offerings.first(where: { $0.id == training.offeringId }) else { throw SchoolReportFailure.notFound }
+                    let curricula = try await self.collect { try await self.client.catalog.curricula(schoolID: self.scope.schoolID, cursor: $0) }
+                    guard let curriculum = curricula.first(where: { $0.id == offering.curriculumVersionId }) else { throw SchoolReportFailure.notFound }
+                    return curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }
+                }
             }
             guard request == generation, !invalidated else { return }
+            // Une saisie en cours survit à la relecture tant que sa ressource garde la même version.
+            let keepsDraft = !discardingEdits && draftChanged
+                && draftsRead.value?.first.map { $0.id == draft?.id && $0.version == draft?.version } == true
+            let keepsPreparation = !discardingEdits && preparationChanged
+                && preparationRead.value.map { $0.id == preparation?.id && $0.version == preparation?.version } == true
+            let keepsWish = !discardingEdits && wishChanged
+                && wishRead.value.map { $0.id == wish?.id && $0.version == wish?.version } == true
             self.lesson = lesson; preparation = preparationRead.value; wish = wishRead.value
             revisions = revisionsRead.value ?? []; revisionsError = revisionsRead.message
             draft = draftsRead.value?.first; account = accountRead.value; isOwnLearner = isOwn
-            goals = preparation?.goals ?? []; administrativeNote = preparation?.administrativeCheckNote ?? ""; wishText = wish?.text ?? ""
-            workedOn = draft?.workedOn ?? ""; observationText = draft?.observationText ?? ""; nextStep = draft?.nextStep ?? ""
-            observations = draft?.observations ?? []; competencies = curriculumRead.value ?? []
+            training = trainingRead.value
+            if !keepsPreparation { goals = preparation?.goals ?? []; administrativeNote = preparation?.administrativeCheckNote ?? "" }
+            if !keepsWish { wishText = wish?.text ?? "" }
+            if !keepsDraft {
+                workedOn = draft?.workedOn ?? ""; observationText = draft?.observationText ?? ""; nextStep = draft?.nextStep ?? ""
+                observations = draft?.observations ?? []
+            }
+            competencies = curriculumRead.value ?? []
             lessonObservations = observationsRead.value ?? []; sharing = sharingRead.value
             track = trackRead.value?.segments ?? []; trackAnchors = trackRead.value?.pointsByAnchor ?? [:]
+            if lesson.status != "PLANNED" || !author { captures = [] }
             let notes = [wishRead.message, preparationRead.message, draftsRead.message, accountRead.message,
                          observationsRead.message, trackRead.message, sharingRead.message, curriculumRead.message].compactMap { $0 }
             information = notes.isEmpty ? nil : notes.joined(separator: "\n\n")
             isLoading = false; needsReload = false
+            if author && lesson.status == "PLANNED" { await refreshCaptures() }
         } catch { guard request == generation, !invalidated else { return }; isLoading = false; fail(error) }
+    }
+    /// Lecture discrète des trajets de la leçon : une panne laisse simplement l’horaire prévu au constat.
+    func refreshCaptures() async {
+        guard let lesson, isAuthor, lesson.status == "PLANNED", !invalidated else { return }
+        let request = generation
+        guard let values = try? await client.agenda.captureClient.lessonCaptures(schoolID: scope.schoolID, lessonID: lessonID),
+              request == generation, !invalidated, self.lesson?.id == lesson.id else { return }
+        captures = values
     }
     // A failed secondary read must not hide independently authorized content. Only
     // authentication/access changes invalidate the whole projection; missing resources
@@ -221,6 +287,16 @@ import Observation
               end <= Date().addingTimeInterval(300), !completionNeedsReason || !trimmed.isEmpty, reason.unicodeScalars.count <= 1_000 else { return false }
         let operation = UUID(), iso = ISO8601DateFormatter()
         return await prepare(SchoolCompleteLesson(operationId: operation, actualStart: iso.string(from: start), actualEnd: iso.string(from: end), workedOn: "", observationText: "", nextStep: "", anomalyReason: trimmed.isEmpty ? nil : reason), id: operation, kind: .completeLesson, version: lesson.version, resourceID: lessonID)
+    }
+    /// « J’ai vu le permis d’élève » (AP30) : décision APPROVED sur examen physique, sans date de validité inventée.
+    /// La demande est chiffrée dans la file avant l’envoi ; la leçon est relue après la preuve de l’école.
+    func recordPermitSeen() async -> Bool {
+        guard let lesson, let training, mayRecordPermit, canMutate, completionNeedsReason else { return false }
+        let operation = UUID()
+        let recorded = await prepare(SchoolRecordPermitCheck.seen(operationId: operation, categoryCode: training.categoryCode),
+            id: operation, kind: .recordPermitCheck, version: 0, routeID: lesson.trainingId, expectedVersion: training.version)
+        if recorded { permitRecorded = true }
+        return recorded
     }
     func saveDraft() async {
         guard let draft, canMutate, isAuthor, validTexts, observationsValid else { return }
@@ -272,7 +348,7 @@ import Observation
             try outbox.remove(command)
             guard request == generation, !invalidated else { return true }
             pending = nil; isBusy = false
-            confirmation = command.kind == .updateLessonSharing ? nil : "Enregistré."
+            confirmation = command.kind == .updateLessonSharing || command.kind == .recordPermitCheck ? nil : "Enregistré."
             await load(); return true
         } catch {
             if firstAttempt, let failure = error as? SchoolReportFailure, failure.permitsFreshCorrection {
@@ -296,6 +372,7 @@ import Observation
         return values
     }
     private func fail(_ error: any Error) {
+        if error as? SchoolReportFailure == .permitReviewRequired { permitReviewDenied = true }
         let denied = isAccessRevoked(error) || error as? SchoolReportFailure == .notFound || error as? SchoolAPIError == .notFound
         if denied { invalidate() }
         errorMessage = (error as? SchoolReportFailure)?.localizedDescription

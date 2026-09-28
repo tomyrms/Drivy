@@ -23,6 +23,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
     case createAvailabilityRule, updateAvailabilityRule, createClosure, removeAvailabilityRule, removeClosure
     case savePreparation, saveWish, completeLesson, saveReportDraft, publishReportDraft, updateLessonSharing
     case createObservation, updateObservation, removeObservation
+    case recordPermitCheck
 
     var isObservation: Bool {
         switch self {
@@ -40,7 +41,8 @@ enum SchoolCommandKind: String, Codable, Sendable {
     }
     var isReport: Bool {
         switch self {
-        case .savePreparation, .saveWish, .completeLesson, .saveReportDraft, .publishReportDraft, .updateLessonSharing: true
+        case .savePreparation, .saveWish, .completeLesson, .saveReportDraft, .publishReportDraft, .updateLessonSharing,
+             .recordPermitCheck: true
         default: false
         }
     }
@@ -107,6 +109,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .createObservation: "CREATE_GEO_OBSERVATION"
         case .updateObservation: "UPDATE_GEO_OBSERVATION"
         case .removeObservation: "REMOVE_GEO_OBSERVATION"
+        case .recordPermitCheck: "RECORD_PERMIT_CHECK"
         }
     }
 
@@ -136,6 +139,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .publishReportDraft: "ReportRevision"
         case .updateLessonSharing: "LessonSharing"
         case .createObservation, .updateObservation, .removeObservation: "GeoObservation"
+        case .recordPermitCheck: "PermitCheck"
         }
     }
 }
@@ -176,7 +180,8 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
             return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
         case .savePreparation, .saveWish:
             return resourceVersion > 0 && resourceID != nil && routeResourceID != nil && expectedVersion == nil
-        case .publishReportDraft:
+        case .publishReportDraft, .recordPermitCheck:
+            // AP30 : If-Match vise la version de la formation ; le contrôle créé n'a pas encore d'identifiant.
             return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && (expectedVersion ?? 0) > 0
         case .createOffering, .createCurriculum, .createCatalogPolicy:
             return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && expectedVersion == nil
