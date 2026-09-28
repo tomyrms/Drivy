@@ -26,28 +26,24 @@ struct SchoolCapturePreparationView: View {
                 if currentScope == model.scope {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     heading
-                    feedback
-                    if model.contextIsCurrent {
-                        choicePanel
-                        if model.isInstructor { diagnosticPanel }
-                        else {
-                            Label("Le diagnostic GPS est réalisé sur l’appareil du moniteur.", systemImage: "iphone")
-                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
+                    quickStart
                     if !model.pendingAssessments.isEmpty { pendingPanel }
                     if !model.pendingStarts.isEmpty { pendingStartsPanel }
-                    if model.contextIsCurrent && model.isInstructor && model.collectionIsIntegrated { startPanel }
                     if model.hasOldScope {
                         DrivyInlineMessage(text: "Une demande conservée dépend de vos anciens accès. Elle ne sera pas renvoyée avec ces nouveaux droits.",
                             tone: .warning)
                     }
-                    if !model.accessRevoked {
-                        Button("Actualiser la préparation", systemImage: "arrow.clockwise") { Task { await model.load() } }
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(DrivyTheme.accent)
-                            .frame(minHeight: 44).disabled(model.isLoading || model.isBusy)
+                    if model.contextIsCurrent && model.isInstructor && model.quickStep == nil && model.quickBlock != nil {
+                        DisclosureGroup("Détails") {
+                            VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                                feedback
+                                choicePanel
+                                diagnosticPanel
+                                if model.collectionIsIntegrated { startPanel }
+                            }
+                            .padding(.top, DrivySpacing.s)
+                        }
+                        .font(.subheadline.weight(.semibold))
                     }
                 }
                 .drivyPageContent()
@@ -56,20 +52,20 @@ struct SchoolCapturePreparationView: View {
                 }
             }
             .background(DrivyTheme.surface)
-            .navigationTitle("Préparation GPS").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Démarrer le trajet").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Fermer") { model.invalidate(); dismiss() }
                 }
             }
-            .task { await model.load() }
+            .task { await model.load(); await start() }
             .onDisappear { model.suspend() }
             .onChange(of: model.diagnosticIsAvailable) { _, available in if !available { model.closeDiagnostic() } }
             .onChange(of: currentScope) { _, scope in
                 guard scope != model.scope else { return }
                 model.invalidate(); choiceRoute = nil; resendRoute = nil; startReview = nil; dismiss()
             }
-            .sheet(item: $choiceRoute, onDismiss: { Task { await model.load() } }) { route in
+            .sheet(item: $choiceRoute, onDismiss: { Task { await model.load(); if model.choice?.status == .allowed { await start() } } }) { route in
                 SchoolRecordingChoiceEntryView(client: model.client, reader: model.reader, agenda: model.agenda,
                     schoolWorkspace: schoolWorkspace, lessonID: route.lessonID,
                     onRefusalConfirmed: { learnerID, lessonID in model.learnerRefused(learnerID, lessonID: lessonID) }, store: route.store)
@@ -82,13 +78,76 @@ struct SchoolCapturePreparationView: View {
 
     private var heading: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            DrivyStatusBadge(title: "GPS facultatif", symbol: "location", tone: .accent)
             Text(model.learner?.displayName ?? "Votre leçon").font(.drivyScreenTitle)
                 .fixedSize(horizontal: false, vertical: true)
             if let lesson = model.lesson { Text(lessonDate(lesson)).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
-            Text("La leçon peut se dérouler sans enregistrer de trajet.").font(.body).foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func start() async {
+        guard currentScope == model.scope, model.pendingAssessments.isEmpty, model.pendingStarts.isEmpty else { return }
+        _ = await model.startInOneStep()
+    }
+
+    /// Un seul état visible : le départ en cours, ou ce qui l’empêche et comment le lever.
+    @ViewBuilder private var quickStart: some View {
+        if let step = model.quickStep {
+            DrivyPanel {
+                HStack(spacing: DrivySpacing.m) {
+                    ProgressView()
+                    Text(step).font(.headline)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .accessibilityIdentifier("capture-quick-start-progress")
+        } else if let block = model.quickBlock {
+            DrivyPanel {
+                VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                    switch block {
+                    case .choice:
+                        Label("Accord de l’élève pour le GPS", systemImage: "person.crop.circle.badge.questionmark").font(.headline)
+                        Text("Demandé une seule fois.").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        Button {
+                            model.closeDiagnostic()
+                            choiceRoute = ChoiceRoute(lessonID: model.lessonID, store: model.store)
+                        } label: { Label("Demander l’accord", systemImage: "hand.raised") }
+                            .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.mayOpenChoice)
+                            .accessibilityIdentifier("preparation-open-choice")
+                    case .refused:
+                        Label("L’élève a refusé l’enregistrement du trajet", systemImage: "location.slash").font(.headline)
+                        Text("La leçon se fait sans GPS.").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        Button("Modifier l’accord") {
+                            model.closeDiagnostic()
+                            choiceRoute = ChoiceRoute(lessonID: model.lessonID, store: model.store)
+                        }
+                        .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.mayOpenChoice)
+                    case .permission(let denied):
+                        Label("Autorisez la localisation", systemImage: "location.slash").font(.headline)
+                        if denied {
+                            Button("Ouvrir les réglages", systemImage: "gearshape") {
+                                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                            }.buttonStyle(DrivyPrimaryButtonStyle())
+                        }
+                        retryButton
+                    case .failed(let message):
+                        Label(message, systemImage: "exclamationmark.triangle.fill")
+                            .font(.subheadline).foregroundStyle(DrivyTheme.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                        retryButton
+                    }
+                }
+            }
+            .accessibilityIdentifier("capture-quick-start-block")
+        } else if model.captureStarted == false && !model.accessRevoked && model.pendingAssessments.isEmpty && model.pendingStarts.isEmpty {
+            Button { Task { await start() } } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
+                .buttonStyle(DrivyPrimaryButtonStyle()).disabled(model.isLoading || model.isBusy)
+                .accessibilityIdentifier("capture-quick-start")
+        }
+    }
+
+    private var retryButton: some View {
+        Button { Task { await start() } } label: { Label("Réessayer", systemImage: "arrow.clockwise") }
+            .buttonStyle(DrivySecondaryButtonStyle()).disabled(model.isLoading || model.isBusy)
     }
 
     @ViewBuilder private var feedback: some View {

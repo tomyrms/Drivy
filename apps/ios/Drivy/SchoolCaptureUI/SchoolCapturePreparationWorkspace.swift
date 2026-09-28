@@ -5,6 +5,11 @@ typealias SchoolCaptureStartHandler = @MainActor (SchoolCaptureTransferCoordinat
     any SchoolCaptureLocationProviding, SchoolCaptureStoredSession, SchoolCaptureLease,
     SchoolCaptureAuthorization, ContinuousClock.Instant) async throws -> Void
 
+/// Ce qui empêche le départ en un geste ; seul ce point est montré au moniteur.
+enum SchoolCaptureQuickStartBlock: Equatable {
+    case choice, refused, permission(denied: Bool), failed(String)
+}
+
 struct SchoolCaptureStartReview: Identifiable {
     let id = UUID()
     let lesson: SchoolLesson
@@ -43,6 +48,8 @@ struct SchoolCaptureStartReview: Identifiable {
     private(set) var store: SQLCipherSchoolCaptureStore?
     private(set) var captureStarted = false
     private(set) var startMessage: String?
+    private(set) var quickStep: String?
+    private(set) var quickBlock: SchoolCaptureQuickStartBlock?
     @ObservationIgnored private let journalProvider: @MainActor () async throws -> SQLCipherSchoolCaptureStore
     @ObservationIgnored private let onCaptureAuthorized: SchoolCaptureStartHandler?
     @ObservationIgnored private let onRefusalConfirmed: (@MainActor (UUID, UUID?) -> Void)?
@@ -347,6 +354,92 @@ struct SchoolCaptureStartReview: Identifiable {
             await failedMutation(error, request: request)
             return false
         }
+    }
+
+    /// « Démarrer le trajet » en un geste. L’accord de l’élève est demandé une fois et reste valable
+    /// tant que l’information de l’école ne change pas ; l’autorisation de localisation, une mesure,
+    /// le diagnostic (valable cinq minutes côté serveur) puis le départ s’enchaînent sans écran.
+    /// Chaque étape garde ses contrôles : un blocage s’arrête là et dit quoi faire.
+    func startInOneStep() async -> Bool {
+        guard !invalidated, quickStep == nil else { return false }
+        quickBlock = nil; startMessage = nil
+        defer { quickStep = nil }
+        quickStep = "Vérification de la leçon…"
+        if !contextIsCurrent || notice == nil { await load() }
+        guard !invalidated else { return false }
+        guard contextIsCurrent, isInstructor, lesson?.status == "PLANNED" else {
+            return quickFailure(errorMessage ?? "Seul le moniteur de cette leçon planifiée peut démarrer son trajet.")
+        }
+        guard collectionIsIntegrated, diagnosticIsAvailable else {
+            return quickFailure("Arrêtez le trajet en cours avant d’en démarrer un autre.")
+        }
+        guard storageError == nil, pendingAssessments.isEmpty, pendingStarts.isEmpty, !hasOldScope else {
+            return quickFailure("Une demande précédente est à vérifier avant un nouveau départ.")
+        }
+        guard let notice else { return quickFailure(noticeError ?? "L’information GPS de l’école n’a pas pu être lue.") }
+        guard let choice, choice.noticeVersionId == notice.noticeVersionId, choice.status != .unknown else {
+            quickBlock = .choice; return false
+        }
+        guard choice.status == .allowed else { quickBlock = .refused; return false }
+
+        quickStep = "Localisation…"
+        refreshSnapshot()
+        if snapshot?.permission.permitsLocation != true {
+            guard snapshot?.permission != .denied, snapshot?.permission != .restricted else {
+                quickBlock = .permission(denied: true); return false
+            }
+            await requestPermission()
+            // La réponse arrive quand la personne répond à la demande du système.
+            var waited = 0
+            while !invalidated && snapshot?.permission == .notDetermined && waited < 240 {
+                try? await Task.sleep(for: .milliseconds(250)); waited += 1; refreshSnapshot()
+            }
+            guard snapshot?.permission.permitsLocation == true else {
+                quickBlock = .permission(denied: snapshot?.permission != .notDetermined); return false
+            }
+        }
+
+        let assessmentIsValid = assessment.map { value in
+            value.status == .qualified && (SchoolLesson.date(value.expiresAt).map { $0.timeIntervalSinceNow > 30 } ?? false)
+        } ?? false
+        if !assessmentIsValid {
+            quickStep = "Mesure GPS…"
+            await requestSample()
+            var waited = 0
+            while !invalidated && isSampling && waited < 80 {
+                try? await Task.sleep(for: .milliseconds(250)); waited += 1
+            }
+            guard !invalidated else { return false }
+            if isSampling {
+                closeDiagnostic()
+                return quickFailure("Aucune position GPS reçue. Placez-vous à découvert puis réessayez.")
+            }
+            quickStep = "Vérification de l’appareil…"
+            await assess()
+            guard let value = assessment, value.status == .qualified else {
+                let reasons = assessment?.blockers.map(\.message).joined(separator: "\n")
+                return quickFailure(reasons.flatMap { $0.isEmpty ? nil : $0 } ?? errorMessage ?? "Cet appareil n’a pas pu être vérifié.")
+            }
+        }
+
+        quickStep = "Démarrage du trajet…"
+        guard let review = await reviewStart() else {
+            return quickFailure(errorMessage ?? "Le départ n’a pas pu être préparé.")
+        }
+        guard await confirmStart(review, acknowledged: true) else {
+            return quickFailure(errorMessage ?? startMessage ?? "Le trajet n’a pas démarré.")
+        }
+        return true
+    }
+
+    private func quickFailure(_ message: String) -> Bool {
+        quickBlock = .failed(message)
+        return false
+    }
+
+    private func refreshSnapshot() {
+        guard !sourceTransferred, diagnosticIsAvailable else { return }
+        snapshot = try? diagnosticSource().diagnosticSnapshot()
     }
 
     func verifyStart(_ queued: SchoolCaptureQueuedMutation) async {
