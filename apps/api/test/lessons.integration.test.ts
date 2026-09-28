@@ -140,3 +140,16 @@ describe('leçons (AP39–AP43)',()=>{
   expect((await call('GET',`/learners/${id.aliceLearner}/action-readiness?action=PLAN_LESSON&resourceId=${id.aliceTraining}`,undefined,null,'demo-alice')).json().data.blockers.map((b:{code:string})=>b.code)).toContain('PLANNING_ACCESS_REQUIRED');
  });
 });
+
+describe('identifiants en majuscules (client iOS)',()=>{
+ it('une leçon planifiée avec des UUID en majuscules est acceptée comme en minuscules',async()=>{
+  const commercial=await prepareCommercial(call);
+  const body=lessonBody(commercial,school.policy,9);
+  const upper=JSON.parse(JSON.stringify(body).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,value=>value.toUpperCase()));
+  const created=await call('POST','/lessons',upper);expect(created.statusCode,created.body).toBe(201);
+  expect(created.json().data.trainingId).toBe(id.aliceTraining);
+  // Le rejeu en minuscules est la même opération.
+  expect((await call('POST','/lessons',body)).json().data).toEqual(created.json().data);
+  expect((await call('GET',`/lessons/${created.json().data.id.toUpperCase()}`)).statusCode).toBe(200);
+ });
+});

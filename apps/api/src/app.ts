@@ -33,10 +33,25 @@ const learnerQuery = z.object({ ...pagination, q: z.string().max(200).optional()
 const trainingQuery = z.object({ ...pagination, learnerId: z.uuid().optional() }).strict();
 const emptyQuery = z.object({}).strict();
 
+const uuidText = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function lowercaseIds(value: unknown): unknown {
+  if (typeof value === 'string') return uuidText.test(value) ? value.toLowerCase() : value;
+  if (Array.isArray(value)) return value.map(lowercaseIds);
+  if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, lowercaseIds(item)]));
+  return value;
+}
+
 export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig;reauthMaxAgeSeconds?:number;capture?:CaptureConfig }) {
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384 });
   const cursors = new Cursors(options.cursorSecret);
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options','nosniff'); });
+  // Un UUID se lit sans tenir compte de la casse (RFC 9562) : l'app iOS écrit en majuscules, PostgreSQL rend des minuscules.
+  // Normaliser à l'entrée évite qu'une comparaison JavaScript refuse un identifiant pourtant identique.
+  app.addHook('preValidation', async request => {
+    request.params = lowercaseIds(request.params) as typeof request.params;
+    request.query = lowercaseIds(request.query) as typeof request.query;
+    if (request.body !== undefined) request.body = lowercaseIds(request.body);
+  });
   app.setErrorHandler((error, request, reply) => {
     const known = error instanceof ApiError ? error : error instanceof ZodError
       ? new ApiError(400, 'INVALID_REQUEST', 'Paramètres invalides.')
