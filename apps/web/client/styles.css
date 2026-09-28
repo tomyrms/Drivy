@@ -496,6 +496,9 @@ select, textarea { font: inherit; color: inherit; }
 .detail-placeholder { display: flex; gap: var(--space-s); align-items: flex-start; padding: var(--space-l); border: 1px dashed var(--border); border-radius: var(--radius-content); }
 .competency-list { margin: 0; padding-left: 1.25rem; display: grid; gap: var(--space-s); }
 .competency-list.compact { gap: var(--space-xxs); }
+/* Single-use code: shown large once, with its copy actions (the code is never stored by the page). */
+.code-panel { display: grid; gap: var(--space-s); padding: var(--space-m); border: 1px solid var(--border); border-radius: var(--radius-content); background: var(--surface); min-width: 0; }
+.code-display { font: 700 clamp(1.75rem, 1.4rem + 1.5vw, 2.25rem) / 1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; user-select: all; overflow-wrap: anywhere; }
 
 /* Review dialog: opaque, one primary action, never a glass effect over a form. */
 .confirm-dialog {

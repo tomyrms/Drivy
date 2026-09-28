@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { createCommand, isCivilDate } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
+import { activeInstructors, openOfferings } from '../invitation-model';
 import { assignmentSchema, learnerSchema, memberSchema, offeringSchema, readAll, trainingSchema, type Training } from '../school-api';
-import { EmptyState, SelectField, StatusBadge, TextField, formatCivilDate } from '../ui';
+import { EmptyState, SelectField, StatusBadge, Symbol, TextField, formatCivilDate } from '../ui';
 import { useCommandRunner, useConsole, useLoad } from './context';
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
 
@@ -17,7 +18,8 @@ export function LearnersSection() {
   const [offeringId, setOfferingId] = useState('');
   const [startedOn, setStartedOn] = useState(today());
   const [instructorFor, setInstructorFor] = useState<Record<string, string>>({});
-  const runner = useCommandRunner();
+  // Une fois l'école a confirmé, les choix saisis ne doivent pas rester : sinon le moniteur affecté disparaît de la liste tout en restant « choisi ».
+  const runner = useCommandRunner(() => { setOfferingId(''); setStartedOn(today()); setInstructorFor({}); });
   const loaded = useLoad(async () => {
     const [learners, trainings, offerings, members] = await Promise.all([
       readAll(schoolId, 'learners', learnerSchema), readAll(schoolId, 'trainings', trainingSchema),
@@ -33,14 +35,9 @@ export function LearnersSection() {
   const data = loaded.data;
   const learners = useMemo(() => [...(data?.learners ?? [])].filter(learner => !learner.archivedAt)
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr')), [data]);
-  // Seule la dernière version active de chaque offre ouvre une formation.
-  const offerings = useMemo(() => {
-    const latest = new Map<string, NonNullable<typeof data>['offerings'][number]>();
-    for (const item of data?.offerings ?? []) if ((latest.get(item.offeringKey)?.version ?? 0) < item.version) latest.set(item.offeringKey, item);
-    return [...latest.values()].filter(item => item.enabled);
-  }, [data]);
-  const instructors = useMemo(() => (data?.members ?? []).filter(member => member.status === 'ACTIVE' && member.roles.includes('INSTRUCTOR'))
-    .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr')), [data]);
+  // Seule la dernière version active de chaque offre ouvre une formation (règle partagée avec les invitations par code).
+  const offerings = useMemo(() => openOfferings(data?.offerings ?? []), [data]);
+  const instructors = useMemo(() => activeInstructors(data?.members ?? []), [data]);
   const name = (membershipId: string) => data?.members.find(member => member.id === membershipId)?.displayName ?? 'Moniteur';
   const trainingsOf = (learnerId: string) => (data?.trainings ?? []).filter(training => training.learnerId === learnerId);
   const category = (training: Training) => training.categoryCode ?? offerings.find(item => item.id === training.offeringId)?.categoryCode ?? '';
@@ -63,13 +60,14 @@ export function LearnersSection() {
     <div className="section-stack">
       <SectionHeading context="Personnes" title="Élèves" />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
+      {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des élèves…">{() => <SplitView
         list={learners.length === 0 ? <EmptyState symbol="users" title="Aucun élève" message="Invitez un élève pour ouvrir son dossier." />
           : <table className="data-table">
             <caption className="visually-hidden">Élèves</caption>
             <thead><tr><th scope="col">Élève</th><th scope="col">Formation</th></tr></thead>
             <tbody>{learners.map(learner => <tr key={learner.id} className={learner.id === selected ? 'selected' : undefined}>
-              <th scope="row"><RowButton selected={learner.id === selected} onSelect={() => { runner.clearOutcome(); setSelected(learner.id); }}>{learner.displayName}</RowButton></th>
+              <th scope="row"><RowButton selected={learner.id === selected} onSelect={() => { runner.clearOutcome(); setOfferingId(''); setSelected(learner.id); }}>{learner.displayName}</RowButton></th>
               <td>{trainingsOf(learner.id).filter(training => training.status === 'ACTIVE').map(category).join(', ') || '—'}</td>
             </tr>)}</tbody>
           </table>}

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
-  classifyFailure, commandHeaders, createCommand, instantToSchoolTime, isEmail, parseCents, parseMetadata,
+  classifyFailure, commandHeaders, commandMessage, commandSpecs, createCommand, instantToSchoolTime, isEmail, parseCents, parseMetadata,
   profilePolicyProblem, receiptMatches, schoolTimeToInstant, toMetadata, type ProfileRule,
 } from '../client/command-core.js';
 
@@ -69,6 +69,53 @@ describe('Commande de gestion : même demande jusqu’à confirmation', () => {
     expect(parseMetadata({ ...JSON.parse(stored), kind: 'deleteSchool' })).toBeNull();
     expect(parseMetadata({ ...JSON.parse(stored), operationId: 'x' })).toBeNull();
     expect(parseMetadata({ ...JSON.parse(stored), kind: 'revokeInvitation' })).toBeNull();
+  });
+});
+
+describe('Invitation par code élève', () => {
+  const offeringId = randomUUID(), instructorMembershipId = randomUUID();
+  const create = () => createCommand({ schoolId, kind: 'createInvitation', path: 'invitations', resourceVersion: 0,
+    body: { delivery: 'CODE', roles: ['LEARNER'], training: { offeringId, instructorMembershipId } } });
+
+  test('la création part de zéro, sans If-Match, avec l’operationId dans le corps et en Idempotency-Key', () => {
+    const command = create();
+    expect(command.body).toEqual({ delivery: 'CODE', roles: ['LEARNER'], training: { offeringId, instructorMembershipId }, operationId: command.operationId });
+    const headers = commandHeaders(command, 'csrf');
+    expect(headers['Idempotency-Key']).toBe(command.operationId);
+    expect(headers['If-Match']).toBeUndefined();
+    expect(commandSpecs.createInvitation).toMatchObject({ method: 'POST', expectedStatus: 201, target: 'created' });
+  });
+
+  test('un nouveau code exige la version de l’invitation (If-Match) et répond 200', () => {
+    const invitation = randomUUID();
+    const renew = createCommand({ schoolId, kind: 'resendInvitation', path: `invitations/${invitation}/resend`, ifMatch: 3, resourceId: invitation, resourceVersion: 3, body: {} });
+    expect(commandHeaders(renew, 'csrf')['If-Match']).toBe('"3"');
+    expect(commandSpecs.resendInvitation).toMatchObject({ method: 'POST', expectedStatus: 200, target: 'resource' });
+    const receipt = { operationId: renew.operationId, commandType: 'RESEND_INVITATION', resourceType: 'Invitation', resourceId: invitation,
+      committedAt: '2026-09-29T08:00:00Z', resourceVersion: 4 };
+    expect(receiptMatches(renew, receipt)).toBe(true);
+    expect(receiptMatches(renew, { ...receipt, resourceVersion: 3 })).toBe(false);
+    expect(() => createCommand({ schoolId, kind: 'resendInvitation', path: 'invitations/x/resend', body: {}, resourceVersion: 3 })).toThrow();
+  });
+
+  test('offre ou moniteur refusés : un premier envoi est libéré pour correction, un renvoi doit être vérifié', () => {
+    for (const code of ['INVITATION_TRAINING_INVALID', 'INVITATION_CODE_INVALID'] as const) {
+      expect(classifyFailure(422, code, true)).toEqual({ type: 'rejected', code });
+      expect(classifyFailure(422, code, false)).toEqual({ type: 'review', code });
+      expect(commandMessage(code)).not.toBe(commandMessage('CODE_INCONNU'));
+    }
+    expect(commandMessage('INVITATION_TRAINING_INVALID')).toBe('Choisissez une offre ouverte et un moniteur actif.');
+    expect(classifyFailure(503, 'INVITATION_DELIVERY_UNAVAILABLE', true).type).toBe('uncertain');
+  });
+
+  test('le journal d’une demande ne garde ni l’offre, ni le moniteur, ni aucun code', () => {
+    const stored = JSON.stringify(toMetadata(create()));
+    expect(stored).not.toContain(offeringId);
+    expect(stored).not.toContain(instructorMembershipId);
+    expect(stored).not.toContain('CODE');
+    expect(stored).not.toContain('training');
+    expect(parseMetadata({ ...JSON.parse(stored), code: 'K7Q4-MX2P' })).toBeNull();
+    expect(parseMetadata({ ...JSON.parse(stored), training: { offeringId } })).toBeNull();
   });
 });
 

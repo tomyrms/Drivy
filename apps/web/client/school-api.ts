@@ -33,10 +33,6 @@ export const memberSchema = z.object({
   id, schoolId: id, version, personId: id, displayName: z.string(), status: z.string(),
   roles: z.array(z.enum(['ADMIN', 'INSTRUCTOR', 'LEARNER'])).max(3), grants: z.array(z.string()).max(20), accessEpoch: z.number().int(),
 });
-export const invitationSchema = z.object({
-  id, schoolId: id, version, maskedEmail: z.string(), roles: z.array(z.enum(['ADMIN', 'INSTRUCTOR', 'LEARNER'])).min(1).max(3),
-  status: z.enum(['PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED']), expiresAt: timestamp,
-});
 export const offeringSchema = z.object({
   id, schoolId: id, version, offeringKey: z.string(), categoryCode: z.string(), curriculumVersionId: id, policyVersionId: id,
   enabled: z.boolean(), defaultDurationMinutes: z.number().int().min(1).max(480), defaultPriceCents: z.number().int().min(0),
@@ -102,7 +98,6 @@ export type Setup = z.infer<typeof setupSchema>;
 export type DataPolicy = z.infer<typeof dataPolicySchema>;
 export type Receipt = z.infer<typeof receiptSchema>;
 export type SchoolMember = z.infer<typeof memberSchema>;
-export type Invitation = z.infer<typeof invitationSchema>;
 export type Offering = z.infer<typeof offeringSchema>;
 export type Curriculum = z.infer<typeof curriculumSchema>;
 export type CatalogPolicy = z.infer<typeof catalogPolicySchema>;
