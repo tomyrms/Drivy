@@ -8,8 +8,9 @@ import { invitationSchema, issuedCodeOf, parseInvitationResponse } from '../clie
  * localStorage is recorded, to prove a single-use code never reaches browser storage.
  */
 type Store = {
-  submit(command: unknown, csrf: string): Promise<{ status: string; body?: unknown }>;
-  get(schoolId: string): unknown;
+  submit(command: unknown, csrf: string): Promise<{ status: string; body?: unknown; code?: string; needsLogin?: boolean }>;
+  verify(schoolId: string): Promise<{ status: string; message?: string }>;
+  get(schoolId: string): { phase: string; notRecorded: boolean; message: string } | undefined;
   clear(): void;
 };
 const storeModule = '../client/command-store.ts';
@@ -88,6 +89,51 @@ describe('Journal des demandes : le code à usage unique n’est jamais conserv�
     expect(result.status).toBe('pending');
     expect(invitationSchema.safeParse(created()).success).toBe(true);
     for (const value of [...writes, ...session.snapshot()]) expect(value).not.toContain(secret);
+    store.clear();
+  });
+});
+
+describe('Refus de l’école : rien ne reste en attente', () => {
+  const create = () => createCommand({ schoolId, kind: 'createInvitation', path: 'invitations', resourceVersion: 0,
+    body: { delivery: 'CODE', roles: ['LEARNER'], training: { offeringId: randomUUID(), instructorMembershipId: randomUUID() } } });
+
+  test('409 INVITATION_DELIVERY_UNAVAILABLE : refus définitif, la saisie est conservée et une autre écriture reste possible', async () => {
+    const store = await loadStore();
+    const fetchMock = answer(409, { code: 'INVITATION_DELIVERY_UNAVAILABLE' });
+    vi.stubGlobal('fetch', fetchMock);
+    const first = await store.submit(create(), 'csrf');
+    expect(first).toMatchObject({ status: 'rejected', code: 'INVITATION_DELIVERY_UNAVAILABLE', needsLogin: false });
+    expect(store.get(schoolId)).toBeUndefined();
+    expect(session.snapshot()).toEqual(['[]']);
+    const second = await store.submit(create(), 'csrf');
+    expect(second.status).toBe('rejected');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test('session perdue avant l’envoi : refus qui propose de se reconnecter, sans demande à vérifier', async () => {
+    const store = await loadStore();
+    vi.stubGlobal('fetch', answer(401, { code: 'SESSION_EXPIRED' }));
+    expect(await store.submit(create(), 'csrf')).toMatchObject({ status: 'rejected', code: 'SESSION_EXPIRED', needsLogin: true });
+    expect(store.get(schoolId)).toBeUndefined();
+  });
+
+  test('session perdue pendant la réponse : le résultat est inconnu, la demande reste suivie', async () => {
+    const store = await loadStore();
+    vi.stubGlobal('fetch', answer(401, { code: 'SESSION_LOST_RESULT_UNKNOWN' }));
+    expect((await store.submit(create(), 'csrf')).status).toBe('pending');
+    expect(store.get(schoolId)).toMatchObject({ phase: 'uncertain' });
+    store.clear();
+  });
+
+  test('réponse perdue puis vérification : l’école n’a jamais reçu la demande, elle peut être renvoyée ou abandonnée', async () => {
+    const store = await loadStore();
+    vi.stubGlobal('fetch', answer(503, { code: 'SERVICE_UNAVAILABLE' }));
+    await store.submit(create(), 'csrf');
+    vi.stubGlobal('fetch', answer(404, { code: 'NOT_FOUND' }));
+    const verified = await store.verify(schoolId);
+    expect(verified.status).toBe('pending');
+    expect(store.get(schoolId)).toMatchObject({ phase: 'uncertain', notRecorded: true });
+    expect(store.get(schoolId)?.message).toContain('jamais reçu');
     store.clear();
   });
 });

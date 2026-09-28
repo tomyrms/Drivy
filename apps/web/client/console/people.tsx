@@ -33,7 +33,7 @@ const memberStatus = (status: string): { label: string; tone: Tone } => status =
 /* ---------------------------------------------------------------- Équipe et accès */
 
 export function TeamSection() {
-  const { schoolId, membership, navigate, login } = useConsole();
+  const { schoolId, membership, navigate } = useConsole();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner();
   const loaded = useLoad(() => readAll(schoolId, 'members', memberSchema), [schoolId, revision]);
@@ -71,8 +71,7 @@ export function TeamSection() {
     <div className="section-stack">
       <SectionHeading context="Personnes" title="Équipe et accès"
         actions={<button type="button" className="button secondary" onClick={() => navigate('invitations')}><Symbol kind="mail" bare />Inviter une personne</button>} />
-      <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome}
-        actions={runner.outcome?.code === 'REAUTH_REQUIRED' ? <button type="button" className="button secondary" onClick={login}>Se reconnecter</button> : undefined} />
+      <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.outcome?.code === 'REAUTH_REQUIRED' && <p className="caption">Après la reconnexion, rouvrez ce membre et saisissez à nouveau le changement : la saisie n’est pas conservée.</p>}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture de l’équipe…">{data => <SplitView
@@ -137,6 +136,11 @@ const invitationStatus = (status: Invitation['status']): { label: string; tone: 
   PENDING: { label: 'En attente', tone: 'accent' as Tone }, ACCEPTED: { label: 'Acceptée', tone: 'success' as Tone },
   REVOKED: { label: 'Révoquée', tone: 'neutral' as Tone }, EXPIRED: { label: 'Expirée', tone: 'warning' as Tone },
 })[status];
+/**
+ * The school has no e-mail relay: invitations by e-mail are not offered (a 5xx from a mail that never left used to
+ * block every other change). Existing ones stay listed; set to true to offer them again.
+ */
+const emailInvitations = false;
 type Dialog = 'create' | 'resend' | 'revoke' | null;
 type CreateMode = 'code' | 'email';
 /** The single-use code lives in this component's memory only, for as long as it is on screen. */
@@ -257,7 +261,7 @@ export function InvitationsSection() {
       <SectionHeading context="Personnes" title="Invitations"
         actions={active ? <>
           <button type="button" className={creating === 'code' ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={openCode}><Symbol kind="plus" bare />Code élève</button>
-          <button type="button" className="button quiet" disabled={!canWrite} onClick={openEmail}><Symbol kind="mail" bare />Inviter par e-mail</button>
+          {emailInvitations && <button type="button" className="button quiet" disabled={!canWrite} onClick={openEmail}><Symbol kind="mail" bare />Inviter par e-mail</button>}
         </> : undefined} />
       {!active && <Notice tone="info" title="Invitations disponibles après l’activation" live={false}
         actions={<button type="button" className="button secondary" onClick={() => navigate('configuration')}>Ouvrir la configuration</button>}>
@@ -266,7 +270,7 @@ export function InvitationsSection() {
       {codeMissing && <Notice tone="warning" title="Code non affiché"><p>La réponse de l’école ne permet pas d’afficher le code. « Nouveau code » en crée un autre.</p></Notice>}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des invitations…">{() => <SplitView
-        list={items.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation" message="Invitez les moniteurs et les élèves de votre école." />
+        list={items.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation" message="Créez un code pour inviter un élève." />
           : <table className="data-table">
             <caption className="visually-hidden">Invitations de l’école, les plus récentes d’abord</caption>
             <thead><tr><th scope="col">Invitation</th><th scope="col">Rôles</th><th scope="col">Statut</th><th scope="col">Expire le</th></tr></thead>

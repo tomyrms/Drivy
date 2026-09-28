@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Loading, Notice, Symbol } from '../ui';
-import type { Loaded, Outcome } from './context';
+import { useConsole, type Loaded, type Outcome } from './context';
 
 /** Section title. Receives focus when the section opens, so screen readers announce the new page. */
 export function SectionHeading({ title, context, actions }: { title: string; context?: string; actions?: ReactNode }) {
@@ -18,11 +18,15 @@ export function SectionHeading({ title, context, actions }: { title: string; con
   );
 }
 
-export function OutcomeNotice({ outcome, onDismiss, actions }: { outcome: Outcome; onDismiss?: () => void; actions?: ReactNode }) {
+/** A refusal caused by the session (or a step-up demand) offers to sign in again; `beforeLogin` keeps the unsent form. */
+export function OutcomeNotice({ outcome, onDismiss, actions, beforeLogin }: { outcome: Outcome; onDismiss?: () => void; actions?: ReactNode; beforeLogin?: () => void }) {
+  const { login } = useConsole();
   if (!outcome) return null;
+  const reconnect = outcome.needsLogin === true || outcome.code === 'REAUTH_REQUIRED';
   return (
     <Notice tone={outcome.tone} title={outcome.title} actions={<>
       {actions}
+      {reconnect && <button type="button" className="button secondary" onClick={() => { beforeLogin?.(); login({ reauthenticate: outcome.code === 'REAUTH_REQUIRED' }); }}>Se reconnecter</button>}
       {onDismiss && outcome.tone === 'success' && <button type="button" className="button quiet" onClick={onDismiss}>Masquer</button>}
     </>}>
       <p>{outcome.message}</p>

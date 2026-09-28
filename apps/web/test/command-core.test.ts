@@ -29,18 +29,30 @@ describe('Commande de gestion : même demande jusqu’à confirmation', () => {
       [503, 'INVITATION_DELIVERY_UNAVAILABLE']] as const) {
       expect(classifyFailure(status, code, true)).toEqual({ type: 'uncertain', code, needsLogin: false });
     }
-    expect(classifyFailure(401, 'SESSION_EXPIRED', true)).toEqual({ type: 'uncertain', code: 'SESSION_EXPIRED', needsLogin: true });
+    // Session lost while the school was answering: the command may have been committed.
+    expect(classifyFailure(401, 'SESSION_LOST_RESULT_UNKNOWN', true)).toEqual({ type: 'uncertain', code: 'SESSION_LOST_RESULT_UNKNOWN', needsLogin: true });
     expect(classifyFailure(403, 'CSRF_REJECTED', true).type).toBe('uncertain');
   });
 
-  test('un refus métier libère seulement un premier envoi ; après incertitude il ne prouve rien', () => {
-    for (const [status, code] of [[412, 'VERSION_CONFLICT'], [409, 'LAST_ADMIN'], [409, 'OFFERING_NOT_READY'], [401, 'REAUTH_REQUIRED'], [422, 'PROFILE_POLICY_RULE_INVALID']] as const) {
-      expect(classifyFailure(status, code, true)).toEqual({ type: 'rejected', code });
-      expect(classifyFailure(status, code, false)).toEqual({ type: 'review', code });
+  test('tout refus 4xx avec un code est définitif sur un premier envoi ; après incertitude il ne prouve rien', () => {
+    for (const [status, code] of [[412, 'VERSION_CONFLICT'], [409, 'LAST_ADMIN'], [409, 'OFFERING_NOT_READY'], [422, 'PROFILE_POLICY_RULE_INVALID'],
+      [409, 'INVITATION_DELIVERY_UNAVAILABLE'], [403, 'SETUP_ACCESS_REQUIRED'], [404, 'NOT_FOUND'], [422, 'UN_CODE_QUE_LE_CLIENT_NE_CONNAIT_PAS']] as const) {
+      expect(classifyFailure(status, code, true), code).toEqual({ type: 'rejected', code, needsLogin: false });
+      expect(classifyFailure(status, code, false), code).toEqual({ type: 'review', code, needsLogin: false });
     }
-    expect(classifyFailure(409, 'IDEMPOTENCY_MISMATCH', true)).toEqual({ type: 'review', code: 'IDEMPOTENCY_MISMATCH' });
-    expect(classifyFailure(403, 'SETUP_ACCESS_REQUIRED', true).type).toBe('review');
-    expect(classifyFailure(404, 'NOT_FOUND', true).type).toBe('review');
+  });
+
+  test('une session perdue ou une réauthentification demandée est un refus qui propose de se reconnecter', () => {
+    for (const code of ['SESSION_EXPIRED', 'REAUTH_REQUIRED']) {
+      expect(classifyFailure(401, code, true)).toEqual({ type: 'rejected', code, needsLogin: true });
+      expect(classifyFailure(401, code, false)).toEqual({ type: 'review', code, needsLogin: true });
+    }
+  });
+
+  test('un refus illisible ou une clé déjà utilisée ne prouvent rien, même au premier envoi', () => {
+    for (const [status, code] of [[409, 'IDEMPOTENCY_MISMATCH'], [400, 'REQUEST_FAILED'], [400, 'API_UNAVAILABLE'], [408, 'TIMEOUT']] as const) {
+      expect(classifyFailure(status, code, true), code).toEqual({ type: 'review', code, needsLogin: false });
+    }
   });
 
   test('reçu AP72 : opération, type, ressource et version postérieure doivent correspondre', () => {
@@ -100,8 +112,8 @@ describe('Invitation par code élève', () => {
 
   test('offre ou moniteur refusés : un premier envoi est libéré pour correction, un renvoi doit être vérifié', () => {
     for (const code of ['INVITATION_TRAINING_INVALID', 'INVITATION_CODE_INVALID'] as const) {
-      expect(classifyFailure(422, code, true)).toEqual({ type: 'rejected', code });
-      expect(classifyFailure(422, code, false)).toEqual({ type: 'review', code });
+      expect(classifyFailure(422, code, true)).toEqual({ type: 'rejected', code, needsLogin: false });
+      expect(classifyFailure(422, code, false)).toEqual({ type: 'review', code, needsLogin: false });
       expect(commandMessage(code)).not.toBe(commandMessage('CODE_INCONNU'));
     }
     expect(commandMessage('INVITATION_TRAINING_INVALID')).toBe('Choisissez une offre ouverte et un moniteur actif.');

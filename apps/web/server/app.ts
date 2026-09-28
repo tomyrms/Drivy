@@ -55,8 +55,8 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   app.setErrorHandler((error,_request,reply) => {
     const known = error instanceof WebError ? error : error instanceof ZodError ? new WebError(400,'INVALID_REQUEST')
       : clientError(error) ?? new WebError(503,'SERVICE_UNAVAILABLE');
-    return reply.status(known.status).send({code: known.code, title: known.status === 401 ? 'Reconnecte-toi pour continuer.' :
-      known.status === 409 ? 'La situation a changé. Recharge les informations avant de confirmer.' : 'La demande ne peut pas aboutir pour le moment.'});
+    return reply.status(known.status).send({code: known.code, title: known.status === 401 ? 'Reconnectez-vous pour continuer.' :
+      known.status === 409 ? 'La situation a changé. Rechargez les informations avant de confirmer.' : 'La demande ne peut pas aboutir pour le moment.'});
   });
   const setCookie = (reply: FastifyReply, session: Session) => reply.setCookie(cookieName,session.id,{
     path:'/', httpOnly:true, secure: !config.development, sameSite:'lax', maxAge:7200 });
@@ -95,7 +95,8 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   // demand (REAUTH_REQUIRED) keeps the session: the person reconnects with the same account.
   const callSchool = async (session: Session, command: SchoolRequest): Promise<ApiResult & { etag?: string }> => {
     const result = await schoolGateway(command,await accessToken(session));
-    if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
+    // A write may have been committed while the session ended: the browser must verify it, not assume a refusal.
+    if (!store.isCurrent(session)) throw new WebError(401,command.method === 'GET' ? 'SESSION_EXPIRED' : 'SESSION_LOST_RESULT_UNKNOWN');
     if (result.status === 401) {
       const code = z.object({code:z.literal('REAUTH_REQUIRED')}).safeParse(result.body);
       if (code.success) throw new WebError(401,'REAUTH_REQUIRED');

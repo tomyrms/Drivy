@@ -134,37 +134,30 @@ export function receiptMatches(command: CommandMetadata, receipt: OperationRecei
 }
 
 /**
- * Codes that the API returns only after refusing the command before any effect.
- * A fresh first emission refused with one of them may be released for correction.
+ * A refusal the API sends only after rolling the command back (any 4xx carrying a problem code) proves that
+ * this emission had no effect. These codes say nothing about it: an unreadable refusal, a key reused for other
+ * content (an earlier emission may exist).
  */
-const businessRefusals = new Set([
-  'INVALID_REQUEST', 'VERSION_CONFLICT', 'PRECONDITION_REQUIRED', 'REAUTH_REQUIRED', 'PAYLOAD_TOO_LARGE',
-  'SETUP_INCOMPLETE', 'CONFIG_IMPACT_REVIEW_REQUIRED', 'MODULE_NOT_READY', 'POLICY_REVIEW_REQUIRED',
-  'SCHOOL_ALREADY_ACTIVE', 'SCHOOL_ARCHIVED', 'SETUP_NOT_INITIALIZED', 'INVALID_TIME_ZONE', 'SCHOOL_NOT_ACTIVE',
-  'LAST_ADMIN', 'MEMBER_RELATIONS_REQUIRE_REVIEW', 'OFFERING_NOT_READY', 'OFFERING_CATEGORY_CHANGED',
-  'ALREADY_MEMBER', 'INVITATION_ALREADY_PENDING', 'INVITATION_USED', 'INVITATION_REVOKED', 'INVITATION_ROLE_FORBIDDEN',
-  'INVITATION_TRAINING_INVALID', 'INVITATION_CODE_INVALID',
-  'PROFILE_POLICY_RULE_INVALID', 'PROFILE_POLICY_ALREADY_PUBLISHED', 'PROFILE_POLICY_DATE_CONFLICT',
-  'INVALID_INTERVAL', 'INVALID_SERVICE_PRODUCT', 'COMMERCIAL_TERMS_NOT_APPROVED', 'SITE_SETUP_REQUIRED',
-  'ACTIVE_TRAINING_EXISTS', 'LEARNER_NOT_ACTIVE', 'LEARNER_ARCHIVED', 'TRAINING_NOT_ACTIVE', 'INSTRUCTOR_REQUIRED',
-  'ASSIGNMENT_CONFLICT', 'EXISTING_BOOKINGS',
-]);
+const undecidedRefusals = new Set(['REQUEST_FAILED', 'API_UNAVAILABLE', 'IDEMPOTENCY_MISMATCH', 'INVALID_RESPONSE']);
 
 export type CommandOutcome =
   /** Refused before any effect on a fresh first emission: release it, reload, let the person correct. */
-  | { readonly type: 'rejected'; readonly code: string }
-  /** Result unknown (lost response, 5xx, session lost): keep the same request, verify or resend it. */
+  | { readonly type: 'rejected'; readonly code: string; readonly needsLogin: boolean }
+  /** Result unknown (lost response, 5xx, session lost while the school was answering): keep the same request, verify or resend it. */
   | { readonly type: 'uncertain'; readonly code: string; readonly needsLogin: boolean }
   /** A refusal that does not disprove a previous emission: keep it, verify with AP72 only. */
-  | { readonly type: 'review'; readonly code: string };
+  | { readonly type: 'review'; readonly code: string; readonly needsLogin: boolean };
 
 export function classifyFailure(status: number, code: string, firstAttempt: boolean): CommandOutcome {
   if (status === 0 || status === 429 || status >= 500) return { type: 'uncertain', code, needsLogin: false };
-  if (status === 401 && code !== 'REAUTH_REQUIRED') return { type: 'uncertain', code, needsLogin: true };
+  // The session ended while the school was answering: the command may have been committed.
+  if (code === 'SESSION_LOST_RESULT_UNKNOWN') return { type: 'uncertain', code, needsLogin: true };
   // Rejected by the BFF itself, before the API: the same request can be sent again after refresh.
   if (code === 'CSRF_REJECTED') return { type: 'uncertain', code, needsLogin: false };
-  if (businessRefusals.has(code)) return firstAttempt ? { type: 'rejected', code } : { type: 'review', code };
-  return { type: 'review', code };
+  const needsLogin = status === 401;
+  const definitive = status >= 400 && status < 500 && status !== 408 && !undecidedRefusals.has(code);
+  if (definitive) return firstAttempt ? { type: 'rejected', code, needsLogin } : { type: 'review', code, needsLogin };
+  return { type: 'review', code, needsLogin };
 }
 
 export function commandMessage(code: string): string {
@@ -173,7 +166,8 @@ export function commandMessage(code: string): string {
     SERVICE_UNAVAILABLE: 'La réponse n’a pas été reçue. Vérifiez le résultat auprès de l’école avant de continuer.',
     API_UNAVAILABLE: 'L’école est momentanément inaccessible. Votre demande reste conservée jusqu’à vérification.',
     INVALID_RESPONSE: 'La réponse de l’école n’a pas pu être vérifiée. La modification n’est pas confirmée.',
-    SESSION_EXPIRED: 'Votre connexion a expiré. Reconnectez-vous, puis vérifiez le résultat de la demande.',
+    SESSION_EXPIRED: 'Votre connexion a expiré. Reconnectez-vous puis refaites la demande : rien n’a été modifié.',
+    SESSION_LOST_RESULT_UNKNOWN: 'Votre connexion a expiré pendant l’envoi. Reconnectez-vous, puis vérifiez le résultat de la demande.',
     CSRF_REJECTED: 'La session de cette page a changé. La demande n’a pas été transmise : renvoyez la même demande.',
     REAUTH_REQUIRED: 'Reconnectez-vous avec le même compte pour confirmer ce changement d’accès. Rien n’a été modifié.',
     INVALID_REQUEST: 'L’école a refusé ces informations. Vérifiez la saisie avant de confirmer à nouveau.',
@@ -199,7 +193,7 @@ export function commandMessage(code: string): string {
     INVITATION_USED: 'Cette invitation a déjà été utilisée.',
     INVITATION_REVOKED: 'Cette invitation a déjà été révoquée.',
     INVITATION_ROLE_FORBIDDEN: 'Vos accès ne permettent pas d’inviter avec ce rôle.',
-    INVITATION_DELIVERY_UNAVAILABLE: 'L’envoi des invitations n’est pas disponible. Le résultat reste à vérifier : ne créez pas de seconde invitation.',
+    INVITATION_DELIVERY_UNAVAILABLE: 'L’envoi par e-mail n’est pas disponible. Aucune invitation n’a été créée : utilisez un code élève.',
     INVITATION_TRAINING_INVALID: 'Choisissez une offre ouverte et un moniteur actif.',
     INVITATION_CODE_INVALID: 'Ce code n’est plus valable. Créez-en un nouveau.',
     PROFILE_POLICY_RULE_INVALID: 'Vérifiez les champs, leur utilité et le moment où ils sont demandés.',

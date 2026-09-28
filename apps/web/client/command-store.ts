@@ -24,7 +24,7 @@ export interface PendingEntry {
 }
 export type SubmitResult =
   | { status: 'confirmed'; body: unknown; via: 'response' | 'receipt' }
-  | { status: 'rejected'; code: string; message: string }
+  | { status: 'rejected'; code: string; message: string; needsLogin: boolean }
   | { status: 'pending'; message: string };
 
 const storageKey = 'drivy-gestion-demandes-v1';
@@ -90,8 +90,8 @@ class CommandStore {
     }
     const code = response.status >= 200 && response.status < 300 ? 'INVALID_RESPONSE' : response.code || 'REQUEST_FAILED';
     const outcome = response.status >= 200 && response.status < 300 ? { type: 'uncertain' as const, code, needsLogin: false } : classifyFailure(response.status, code, attempts === 0);
-    if (outcome.type === 'rejected') { this.update(command.schoolId, null); return { status: 'rejected', code, message: commandMessage(code) }; }
-    return this.keep(command, outcome.type, code, outcome.type === 'uncertain' && outcome.needsLogin, attempts + 1);
+    if (outcome.type === 'rejected') { this.update(command.schoolId, null); return { status: 'rejected', code, message: commandMessage(code), needsLogin: outcome.needsLogin }; }
+    return this.keep(command, outcome.type, code, outcome.needsLogin, attempts + 1);
   }
 
   private keep(command: SchoolCommand, phase: 'uncertain' | 'review', code: string, needsLogin: boolean, attempts: number): SubmitResult {
@@ -120,8 +120,8 @@ class CommandStore {
       const notRecorded = failure.status === 404;
       const message = notRecorded
         ? entry.command
-          ? 'L’école n’a pas trouvé cette demande : elle n’a pas été appliquée pour l’instant. Renvoyez la même demande pour la terminer.'
-          : 'L’école n’a pas trouvé cette demande : elle n’a pas été appliquée. Vous pouvez arrêter son suivi puis refaire la modification.'
+          ? 'L’école n’a jamais reçu cette demande : rien n’a été modifié. Renvoyez-la, ou abandonnez-la.'
+          : 'L’école n’a jamais reçu cette demande : rien n’a été modifié. Vous pouvez arrêter son suivi puis refaire la modification.'
         : failure.status === 401 ? 'Votre connexion a expiré. Reconnectez-vous, puis vérifiez à nouveau.'
           : failure.status === 403 ? 'Vos accès actuels ne permettent pas de consulter ce résultat. La demande reste suivie.'
             : 'Le résultat n’a pas pu être établi. La demande reste suivie : réessayez la vérification.';

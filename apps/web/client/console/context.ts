@@ -20,7 +20,8 @@ export interface ConsoleContextValue {
   csrf: () => string;
   refreshCsrf: () => Promise<string>;
   navigate: (section: SectionKey) => void;
-  login: () => void;
+  /** Sign in again with the same account; `reauthenticate` forces the identity provider to ask for the password. */
+  login: (options?: { reauthenticate?: boolean }) => void;
 }
 
 export const ConsoleContext = createContext<ConsoleContextValue | null>(null);
@@ -73,7 +74,7 @@ export function useDraft<T>(baseline: T | null) {
   return { draft, setDraft: setDraft as (update: T | ((value: T | null) => T | null)) => void, edited, reset };
 }
 
-export type Outcome = { tone: 'success' | 'error' | 'warning'; title: string; message: string; code?: string } | null;
+export type Outcome = { tone: 'success' | 'error' | 'warning'; title: string; message: string; code?: string; needsLogin?: boolean } | null;
 
 /**
  * Submit one command through the shared store and report its real outcome to the section.
@@ -105,7 +106,7 @@ export function useCommandRunner(onConfirmed?: () => void) {
       void context.reloadSchool();
     } else if (result.status === 'rejected') {
       submitted.current = null;
-      setOutcome({ tone: 'error', title: 'Modification refusée', message: `${result.message} Votre saisie est conservée.`, code: result.code });
+      setOutcome({ tone: 'error', title: 'Modification refusée', message: result.needsLogin ? result.message : `${result.message} Votre saisie est conservée.`, code: result.code, needsLogin: result.needsLogin });
     } else {
       // The pending panel at the top of the page carries the verification; move focus there.
       window.requestAnimationFrame(() => document.getElementById('pending-title')?.focus());

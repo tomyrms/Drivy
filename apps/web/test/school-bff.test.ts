@@ -197,6 +197,18 @@ describe('Écritures de gestion', () => {
     expect((await h.get('/app/bff/session')).json().authenticated).toBe(false);
   });
 
+  test('une session perdue pendant qu’une écriture est en cours n’est pas un refus : le résultat est inconnu', async () => {
+    let clear = () => {};
+    const gateway = vi.fn<SchoolGateway>(async () => { clear(); return { status: 200, body: envelope({ id: school, version: 4 }) }; });
+    const h = await harness(gateway); await h.login(); clear = () => h.store.clear();
+    const write = await h.write('PATCH', `/app/bff/schools/${school}`, body, { 'idempotency-key': operationId, 'if-match': '"3"' });
+    expect(write.statusCode).toBe(401); expect(write.json().code).toBe('SESSION_LOST_RESULT_UNKNOWN');
+    expect(write.json().title).toBe('Reconnectez-vous pour continuer.');
+    // Une lecture n’a rien à vérifier : la session perdue reste une session expirée.
+    const h2 = await harness(vi.fn<SchoolGateway>(async () => { h2.store.clear(); return { status: 200, body: envelope({}) }; })); await h2.login();
+    expect((await h2.get(`/app/bff/schools/${school}/offerings`)).json().code).toBe('SESSION_EXPIRED');
+  });
+
   test('une réponse amont perdue devient 503 : le navigateur garde la même demande', async () => {
     const gateway = vi.fn<SchoolGateway>(async () => { throw new Error('connexion interrompue après commit'); });
     const h = await harness(gateway); await h.login();
