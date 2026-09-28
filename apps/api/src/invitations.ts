@@ -4,7 +4,7 @@ import type { Pool,PoolClient } from 'pg';
 import { z } from 'zod';
 import type { Identity,TokenVerifier } from './auth.js';
 import { withActor } from './database.js';
-import { checkIdempotency,checkVersion,commandHash,recordCommand,requireVersion,schoolColumns,schoolCommand,type SchoolRow } from './commands.js';
+import { checkIdempotency,checkVersion,commandHash,recordCommand,requireVersion,schoolColumns,schoolCommand,type CommandActor,type SchoolRow } from './commands.js';
 import { Cursors } from './cursor.js';
 import { ApiError,forbidden,notFound } from './errors.js';
 import { cancelInvitationMail,queueInvitationMail,type InvitationMailConfig } from './invitation-mail.js';
@@ -12,7 +12,9 @@ import { cancelInvitationMail,queueInvitationMail,type InvitationMailConfig } fr
 const empty=z.object({}).strict();const operation={operationId:z.uuid()};
 const tokenBody=z.object({token:z.string().min(32).max(256)}).strict();
 const acceptBody=tokenBody.extend(operation);
-const createBody=z.object({...operation,email:z.email().max(254),roles:z.array(z.enum(['ADMIN','INSTRUCTOR','LEARNER'])).min(1).max(3).refine(value=>new Set(value).size===value.length)}).strict();
+// Extension du 28 septembre 2026 : une invitation d'élève peut porter sa formation et son moniteur.
+const trainingIntent=z.object({offeringId:z.uuid(),instructorMembershipId:z.uuid()}).strict();
+const createBody=z.object({...operation,email:z.email().max(254),roles:z.array(z.enum(['ADMIN','INSTRUCTOR','LEARNER'])).min(1).max(3).refine(value=>new Set(value).size===value.length),training:trainingIntent.optional()}).strict();
 const reasonBody=z.object({...operation,reason:z.string().trim().refine(value=>[...value].length>=1 && [...value].length<=1000)}).strict();
 const pagination=z.object({limit:z.coerce.number().int().min(1).max(100).default(50),cursor:z.string().max(6000).optional()}).strict();
 const parameters=z.object({schoolId:z.uuid(),invitationId:z.uuid().optional()});
@@ -21,6 +23,7 @@ const normalizeEmail=(email:string)=>email.trim().normalize('NFC').toLowerCase()
 interface InvitationRow {
   id:string;school_id:string;email:string;roles:string[];token_hash:string;status:'PENDING'|'ACCEPTED'|'REVOKED';version:number;
   expires_at:Date;inviter_membership_id:string;inviter_person_id:string;accepted_by_person_id:string|null;notice_version:number;_createdAt?:string;
+  training_offering_id:string|null;training_instructor_membership_id:string|null;
 }
 function projection(row:InvitationRow) {
   const [local,domain]=row.email.split('@');const maskedEmail=`${[...(local ?? '')][0] ?? '*'}***@${domain}`;
@@ -74,6 +77,30 @@ async function preview(pool:Pool,identity:Identity,token:string) {
     return {invitationId:invitation.id,schoolId:school.id,schoolName:school.name,roles:invitation.roles,maskedEmail:dto.maskedEmail,expiresAt:dto.expiresAt,notice};
   } catch(error) {await db.query('ROLLBACK');throw error;} finally {db.release();}
 }
+/** Une invitation avec formation : rôle Élève seul, offre ouverte, moniteur actif ; un moniteur ne s'affecte que lui-même. */
+async function trainingIntentValid(db:PoolClient,schoolId:string,actor:CommandActor,roles:string[],training:z.infer<typeof trainingIntent>) {
+  const invalid=()=>new ApiError(422,'INVITATION_TRAINING_INVALID','Choisissez une offre ouverte et un moniteur actif pour cet élève.');
+  if(roles.length!==1 || roles[0]!=='LEARNER') throw invalid();
+  if(!actor.roles.includes('ADMIN') && training.instructorMembershipId!==actor.membershipId) throw invalid();
+  const offering=(await db.query<{ready:boolean}>('SELECT drivy.catalogue_offering_ready($1) AS ready FROM drivy.offering_version WHERE school_id=$2 AND id=$1',[training.offeringId,schoolId])).rows[0];
+  if(!offering?.ready) throw invalid();
+  const instructor=(await db.query<{roles:string[];status:string}>('SELECT roles,status FROM drivy.membership WHERE school_id=$1 AND id=$2',[schoolId,training.instructorMembershipId])).rows[0];
+  if(!instructor || instructor.status!=='ACTIVE' || !instructor.roles.includes('INSTRUCTOR')) throw invalid();
+}
+
+/** À l'acceptation : formation active et moniteur affecté, sauf si l'élève suit déjà cette offre ou si l'offre a été fermée entre-temps. */
+async function openInvitedTraining(db:PoolClient,schoolId:string,personId:string,offeringId:string,instructorMembershipId:string) {
+  const learner=(await db.query<{id:string}>('SELECT id FROM drivy.learner_profile WHERE school_id=$1 AND person_id=$2',[schoolId,personId])).rows[0];
+  const offering=(await db.query<{offering_key:string}>('SELECT offering_key FROM drivy.offering_version WHERE school_id=$1 AND id=$2 AND enabled',[schoolId,offeringId])).rows[0];
+  if(!learner || !offering) return;
+  if((await db.query("SELECT 1 FROM drivy.training WHERE school_id=$1 AND learner_id=$2 AND offering_key=$3 AND status IN('ACTIVE','PAUSED')",[schoolId,learner.id,offering.offering_key])).rowCount) return;
+  const trainingId=randomUUID();
+  await db.query(`INSERT INTO drivy.training(id,school_id,learner_id,offering_id,offering_key,status,started_on) VALUES($1,$2,$3,$4,$5,'ACTIVE',current_date)`,
+    [trainingId,schoolId,learner.id,offeringId,offering.offering_key]);
+  await db.query('INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES($1,$2,$3,$4,statement_timestamp())',
+    [randomUUID(),schoolId,trainingId,instructorMembershipId]);
+}
+
 async function accept(pool:Pool,identity:Identity,body:z.infer<typeof acceptBody>) {
   const db=await pool.connect();try {
     await db.query('BEGIN');await db.query("SET LOCAL lock_timeout='5s'");await db.query("SET LOCAL statement_timeout='10s'");
@@ -125,6 +152,8 @@ async function accept(pool:Pool,identity:Identity,body:z.infer<typeof acceptBody
       }
       await db.query("UPDATE drivy.invitation SET status='ACCEPTED',accepted_by_person_id=$2,version=version+1 WHERE id=$1",[invitation.id,personId]);
       await cancelInvitationMail(db,invitation.id);
+      if(invitation.training_offering_id && invitation.training_instructor_membership_id)
+        await openInvitedTraining(db,school.id,personId,invitation.training_offering_id,invitation.training_instructor_membership_id);
     }
     const current=await memberContext(db,school,personId);
     if(!known) await recordCommand(db,{personId,membershipId:current.data.membershipId,roles:current.data.roles},school.id,'ACCEPT_INVITATION',body.operationId,hash,
@@ -166,9 +195,11 @@ export function registerInvitations(app:FastifyInstance,options:{pool:Pool;verif
         throw new ApiError(409,'INVITATION_ALREADY_PENDING','Une invitation est déjà en attente pour cette adresse.');
       const notice=(await db.query('SELECT version FROM drivy.school_data_policy WHERE school_id=$1 AND approved_at IS NOT NULL ORDER BY version DESC LIMIT 1',[school.id])).rows[0];
       if(!notice) throw new ApiError(409,'POLICY_REVIEW_REQUIRED','La notice de l’école doit être approuvée avant une invitation.');
+      if(body.training) await trainingIntentValid(db,school.id,actor,body.roles,body.training);
       const id=randomUUID();const token=randomBytes(32).toString('base64url');
-      const row=(await db.query<InvitationRow>(`INSERT INTO drivy.invitation(id,school_id,email,roles,token_hash,expires_at,inviter_membership_id,inviter_person_id,notice_version)
-        VALUES($1,$2,$3,$4,$5,now()+interval '7 days',$6,$7,$8) RETURNING *`,[id,school.id,body.email,body.roles,digest(token),actor.membershipId,actor.personId,notice.version])).rows[0]!;
+      const row=(await db.query<InvitationRow>(`INSERT INTO drivy.invitation(id,school_id,email,roles,token_hash,expires_at,inviter_membership_id,inviter_person_id,notice_version,training_offering_id,training_instructor_membership_id)
+        VALUES($1,$2,$3,$4,$5,now()+interval '7 days',$6,$7,$8,$9,$10) RETURNING *`,[id,school.id,body.email,body.roles,digest(token),actor.membershipId,actor.personId,notice.version,
+        body.training?.offeringId ?? null,body.training?.instructorMembershipId ?? null])).rows[0]!;
       await queueInvitationMail(db,options.invitationMail,school.id,id,row.version,{email:body.email,token,roles:body.roles,schoolName:school.name});
       return {data:projection(row),action:'InvitationCreated',resourceType:'Invitation',resourceId:id,changedFields:['email','roles','status']};
     },['ADMIN','INSTRUCTOR']);reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,request);

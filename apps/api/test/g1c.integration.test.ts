@@ -147,6 +147,37 @@ describe('F02 · droits, versions, concurrence et rollback',()=>{
     const after=await call('GET',`/v1/schools/${id.schoolA}/learners`,undefined,undefined,'demo-instructor');expect(after.json().data.items).toEqual(before.json().data.items);
     const proof=await call('GET',`/v1/schools/${id.schoolA}/operations/${own.operationId}`,undefined,undefined,'demo-instructor');expect(proof.statusCode).toBe(200);
   });
+  it('une invitation élève avec formation ouvre la formation et affecte le moniteur à l’acceptation',async()=>{
+    const policy=randomUUID(),curriculum=randomUUID();
+    await pool.query(`INSERT INTO drivy.school_policy_version(id,school_id,category_code,version,procedure_text,cancellation_policy_text,source_urls,approved,approval_reason,created_by,approved_at) VALUES($1,$2,'B',1,'Recette','Recette','{}',true,'Synthétique',$3,now())`,[policy,id.schoolA,id.adminMember]);
+    await pool.query(`INSERT INTO drivy.curriculum_version(id,school_id,category_code,revision,approved,approval_reason,created_by,approved_at) VALUES($1,$2,'B',1,true,'Synthétique',$3,now())`,[curriculum,id.schoolA,id.adminMember]);
+    await pool.query('UPDATE drivy.offering_version SET curriculum_version_id=$2,policy_version_id=$3,default_duration_minutes=50,default_price_cents=9000,enabled=true WHERE id=$1',[id.offeringA,curriculum,policy]);
+    const training={offeringId:id.offeringA,instructorMembershipId:id.instructorMember};
+    // Un moniteur ne s'affecte que lui-même ; seul le rôle Élève porte une formation.
+    expect((await call('POST',path,{operationId:randomUUID(),email:'other@example.invalid',roles:['LEARNER'],training:{...training,instructorMembershipId:id.otherInstructorMember}},undefined,'demo-instructor')).json().code).toBe('INVITATION_TRAINING_INVALID');
+    expect((await call('POST',path,{operationId:randomUUID(),email:'staff@example.invalid',roles:['INSTRUCTOR'],training})).json().code).toBe('INVITATION_TRAINING_INVALID');
+    expect((await call('POST',path,{operationId:randomUUID(),email:'closed@example.invalid',roles:['LEARNER'],training:{...training,offeringId:randomUUID()}})).json().code).toBe('INVITATION_TRAINING_INVALID');
+    const created=await call('POST',path,{operationId:randomUUID(),email:'new@example.invalid',roles:['LEARNER'],training},undefined,'demo-instructor');
+    expect(created.statusCode,created.body).toBe(201);conforms('InvitationEnvelope',created.json());
+    const token=await secret(created.json().data.id);
+    const accepted=await accept(token);expect(accepted.statusCode,accepted.body).toBe(201);
+    const opened=async()=>(await pool.query(`SELECT t.status,t.offering_id,a.instructor_membership_id FROM drivy.training t JOIN drivy.learner_profile l ON l.id=t.learner_id
+      JOIN drivy.instructor_assignment a ON a.training_id=t.id WHERE l.contact_email='new@example.invalid'`)).rows;
+    expect(await opened()).toEqual([{status:'ACTIVE',offering_id:id.offeringA,instructor_membership_id:id.instructorMember}]);
+    // Le moniteur voit aussitôt son nouvel élève ; rejouer l'acceptation ne crée pas de seconde formation.
+    const learners=await call('GET',`/v1/schools/${id.schoolA}/learners`,undefined,undefined,'demo-instructor');
+    expect(learners.json().data.items.some((l:{contactEmail:string|null})=>l.contactEmail==='new@example.invalid')).toBe(true);
+    await accept(token);expect(await opened()).toHaveLength(1);
+    // La politique SQL refuse toute autre formation à la personne invitée.
+    const db=await pool.connect();
+    try{
+      await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_app');
+      const person=(await pool.query("SELECT person_id,id FROM drivy.learner_profile WHERE contact_email='new@example.invalid'")).rows[0];
+      await db.query("SELECT set_config('app.person_id',$1,true),set_config('app.school_id',$2,true)",[person.person_id,id.schoolA]);
+      const key=(await pool.query('SELECT offering_key FROM drivy.offering_version WHERE id=$1',[id.offeringA])).rows[0].offering_key;
+      await expect(db.query("INSERT INTO drivy.training(id,school_id,learner_id,offering_id,offering_key,status) VALUES(gen_random_uuid(),$1,$2,$3,$4,'ACTIVE')",[id.schoolA,id.aliceLearner,id.offeringA,key])).rejects.toThrow();
+    }finally{await db.query('ROLLBACK');db.release();}
+  });
   it('concurrence : deux émetteurs ne créent pas deux invitations pour la même adresse',async()=>{
     const responses=await Promise.all(['demo-instructor','demo-other-instructor'].map(subject=>call('POST',path,{operationId:randomUUID(),email:'duplicate@example.invalid',roles:['LEARNER']},undefined,subject)));
     expect(responses.map(r=>r.statusCode).sort()).toEqual([201,409]);expect(responses.find(r=>r.statusCode===409)!.json().code).toBe('INVITATION_ALREADY_PENDING');
