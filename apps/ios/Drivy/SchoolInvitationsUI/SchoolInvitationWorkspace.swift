@@ -1,6 +1,22 @@
 import Foundation
 import Observation
 
+/// A code just handed back by the school. Kept in memory only, for this screen.
+struct SchoolIssuedInvitationCode: Identifiable, Equatable {
+    let invitationID: UUID
+    /// Display form, `XXXX-XXXX`.
+    let code: String
+    let expiresAt: String
+    var id: String { "\(invitationID.uuidString):\(code)" }
+}
+
+/// A code invitation whose creation is confirmed but whose code was not returned
+/// (a replayed answer or a receipt never carries it): a new code can be issued for it.
+struct SchoolCodeRecovery: Equatable {
+    let invitationID: UUID
+    let version: Int
+}
+
 @MainActor
 @Observable
 final class SchoolInvitationWorkspace: Identifiable {
@@ -20,6 +36,8 @@ final class SchoolInvitationWorkspace: Identifiable {
     private(set) var successMessage: String?
     private(set) var accessFailure: SchoolInvitationFailure?
     private(set) var offerings: [SchoolOffering] = []
+    private(set) var issuedCode: SchoolIssuedInvitationCode?
+    private(set) var codeRecovery: SchoolCodeRecovery?
     var email = ""
     var selectedRoles: Set<SchoolInvitationRole> = [.learner]
     var selectedOfferingID: UUID?
@@ -57,9 +75,23 @@ final class SchoolInvitationWorkspace: Identifiable {
     var carriesTraining: Bool { roles.contains("INSTRUCTOR") && selectedRoles == [.learner] }
     var selectedOffering: SchoolOffering? { offerings.first { $0.id == selectedOfferingID } }
     var selectedInvitation: SchoolInvitation? { invitations.first { $0.id == selectedID } }
+    /// A code for a learner: the instructor’s open training must be chosen when there is one.
+    var codeDraftIsValid: Bool {
+        allowedRoles.contains(.learner) && (!carriesTraining || offerings.isEmpty || selectedOffering != nil)
+    }
+    /// « Permis B » for a code invitation, when the training is known.
+    func trainingLabel(_ invitation: SchoolInvitation) -> String? {
+        if let code = invitation.trainingCategoryCode { return "Permis \(code)" }
+        guard let offeringID = invitation.training?.offeringId,
+              let offering = offerings.first(where: { $0.id == offeringID }) else { return nil }
+        return "Permis \(offering.categoryCode)"
+    }
+
+    func dismissIssuedCode() { issuedCode = nil }
 
     func invalidate() {
         generation = UUID(); pageRequest = UUID(); isInvalidated = true
+        issuedCode = nil; codeRecovery = nil
         school = nil; invitations = []; nextCursor = nil; selectedID = nil; pending = nil; offerings = []
         email = ""; selectedRoles = [.learner]; selectedOfferingID = nil; errorMessage = nil; successMessage = nil
         isLoading = false; isLoadingMore = false; isBusy = false; storageAccessible = false
@@ -93,7 +125,7 @@ final class SchoolInvitationWorkspace: Identifiable {
             let page = try await api.invitations(schoolID: scope.schoolID, cursor: nil)
             guard request == generation else { return }
             try validate(page)
-            invitations = page.items; nextCursor = page.nextCursor; seenCursors = []
+            invitations = page.items.map(\.withoutCode); nextCursor = page.nextCursor; seenCursors = []
             if !invitations.contains(where: { $0.id == selectedID }) { selectedID = nil }
             if roles.contains("INSTRUCTOR") {
                 // Sans offre lisible, l'invitation reste possible ; la formation s'ouvre alors depuis le web.
@@ -127,7 +159,7 @@ final class SchoolInvitationWorkspace: Identifiable {
                 throw SchoolInvitationFailure.invalidCursor
             }
             seenCursors.insert(cursor)
-            for item in page.items {
+            for item in page.items.map(\.withoutCode) {
                 if let index = invitations.firstIndex(where: { $0.id == item.id }) {
                     if item.version >= invitations[index].version { invitations[index] = item }
                 } else { invitations.append(item) }
@@ -152,6 +184,32 @@ final class SchoolInvitationWorkspace: Identifiable {
         let confirmed = await prepare(command, id: id, kind: .createInvitation, resource: nil, version: 0)
         if confirmed && !isInvalidated { self.email = ""; selectedRoles = [.learner] }
         return confirmed
+    }
+
+    /// Single-use code for a learner, carrying the instructor’s training when one is open.
+    /// Same outbox as every invitation command: stored encrypted before it is sent.
+    @discardableResult
+    func createCode(offeringID: UUID? = nil) async -> Bool {
+        guard mayEdit, codeDraftIsValid else { return false }
+        let id = UUID()
+        let training = carriesTraining && offerings.contains(where: { $0.id == offeringID })
+            ? offeringID.map { SchoolInvitationTraining(offeringId: $0, instructorMembershipId: scope.membershipID) } : nil
+        guard !carriesTraining || offerings.isEmpty || training != nil else { return false }
+        issuedCode = nil; codeRecovery = nil
+        let command = SchoolInviteCommand(operationId: id, delivery: .code, roles: [.learner], training: training)
+        return await prepare(command, id: id, kind: .createInvitation, resource: nil, version: 0)
+    }
+
+    /// New code for a code invitation whose code was not returned; the old one stops working.
+    @discardableResult
+    func renewRecoveredCode() async -> Bool {
+        guard mayEdit, let recovery = codeRecovery else { return false }
+        if let listed = invitations.first(where: { $0.id == recovery.invitationID }), listed.version >= recovery.version {
+            return await resendAfterConfirmation(listed)
+        }
+        let id = UUID()
+        return await prepare(SchoolResendInvitationCommand(operationId: id), id: id, kind: .resendInvitation,
+            resource: recovery.invitationID, version: recovery.version)
     }
 
     @discardableResult
@@ -187,7 +245,13 @@ final class SchoolInvitationWorkspace: Identifiable {
             try outbox.remove(command)
             guard request == generation else { return }
             pending = nil; pendingRequiresReview = false; isBusy = false
-            successMessage = "Le résultat de la demande a été confirmé."
+            if issuesCode(command) {
+                // A receipt never carries the code: only a new one can be handed over.
+                successMessage = nil
+                codeRecovery = SchoolCodeRecovery(invitationID: receipt.resourceId, version: receipt.resourceVersion)
+            } else {
+                successMessage = "Le résultat de la demande a été confirmé."
+            }
             if command.kind == .createInvitation { email = ""; selectedRoles = [.learner] }
             await load()
         } catch {
@@ -236,10 +300,16 @@ final class SchoolInvitationWorkspace: Identifiable {
             guard request == generation else { return true }
             pending = nil; pendingRequiresReview = false; isBusy = false
             if command.kind == .createInvitation { email = ""; selectedRoles = [.learner] }
-            if let index = invitations.firstIndex(where: { $0.id == result.id }) { invitations[index] = result }
-            else { invitations.insert(result, at: 0) }
-            successMessage = command.kind == .revokeInvitation ? "Invitation révoquée. Le lien ne permet plus de rejoindre l’école."
-                : "Invitation enregistrée. La réception de l’e-mail n’est pas confirmée ici."
+            let listed = result.withoutCode
+            if let index = invitations.firstIndex(where: { $0.id == result.id }) { invitations[index] = listed }
+            else { invitations.insert(listed, at: 0) }
+            if result.isCode {
+                successMessage = command.kind == .revokeInvitation ? "Code révoqué." : nil
+                receiveCode(result, command: command)
+            } else {
+                successMessage = command.kind == .revokeInvitation ? "Invitation révoquée. Le lien ne permet plus de rejoindre l’école."
+                    : "Invitation enregistrée. La réception de l’e-mail n’est pas confirmée ici."
+            }
             await load()
             return true
         } catch {
@@ -261,6 +331,35 @@ final class SchoolInvitationWorkspace: Identifiable {
             if error as? SchoolInvitationFailure == .pendingCommand { pendingRequiresReview = true }
             isBusy = false; fail(error)
             return false
+        }
+    }
+
+    private func issuesCode(_ command: PendingSchoolCommand) -> Bool {
+        switch command.kind {
+        case .createInvitation:
+            return (try? JSONDecoder().decode(SchoolInviteCommand.self, from: command.body))?.delivery == .code
+        case .resendInvitation:
+            return invitations.first(where: { $0.id == command.resourceID })?.isCode == true
+                || codeRecovery?.invitationID == command.resourceID
+        default:
+            return false
+        }
+    }
+
+    /// A created or renewed code is shown once. A replayed answer carries no code: the
+    /// invitation exists, and only a new code can be handed over.
+    private func receiveCode(_ result: SchoolInvitation, command: PendingSchoolCommand) {
+        guard command.kind != .revokeInvitation else {
+            if codeRecovery?.invitationID == result.id { codeRecovery = nil }
+            if issuedCode?.invitationID == result.id { issuedCode = nil }
+            return
+        }
+        if let raw = result.code, let code = SchoolInvitationCode.display(raw) {
+            issuedCode = SchoolIssuedInvitationCode(invitationID: result.id, code: code, expiresAt: result.expiresAt)
+            codeRecovery = nil
+        } else {
+            issuedCode = nil
+            codeRecovery = SchoolCodeRecovery(invitationID: result.id, version: result.version)
         }
     }
 
@@ -286,7 +385,7 @@ final class SchoolInvitationWorkspace: Identifiable {
             errorMessage = failure.localizedDescription
             if failure == .unauthorized || failure == .forbidden {
                 school = nil; invitations = []; nextCursor = nil; selectedID = nil
-                email = ""; selectedRoles = [.learner]; successMessage = nil
+                email = ""; selectedRoles = [.learner]; successMessage = nil; issuedCode = nil; codeRecovery = nil
                 storageAccessible = false; hasLoaded = false
                 generation = UUID(); pageRequest = UUID(); isLoading = false; isLoadingMore = false
                 accessFailure = failure

@@ -24,7 +24,11 @@ import Observation
         self.scope = scope; self.client = client; self.owner = owner
     }
 
+    /// Trips stopped on this device whose data or final confirmation has not reached the school yet.
+    private(set) var incomplete: Set<UUID> = []
+
     var isBusy: Bool { isLoading || busyCaptureID != nil }
+    var pendingUploads: [SchoolCaptureStoredSession] { captures.filter(maySend) }
 
     func load() async {
         guard !invalidated, !isBusy else { return }
@@ -54,6 +58,35 @@ import Observation
         await perform(capture, finalizing: allowPartial)
     }
 
+    /// One action for the trip: resend an already queued confirmation as is, otherwise send
+    /// the kept data then confirm a complete trip. Missing positions leave the choice of a
+    /// partial trip to the instructor.
+    func upload(_ capture: SchoolCaptureStoredSession) async {
+        if let allowPartial = pendingFinalization[capture.id] {
+            await perform(capture, finalizing: allowPartial)
+            return
+        }
+        guard !isBusy, maySend(capture), let store else { return }
+        let request = generation
+        busyCaptureID = capture.id; errorMessage = nil; feedback = nil
+        defer { if current(request) { busyCaptureID = nil } }
+        let transfer = SchoolCaptureTransferCoordinator(scope: scope, client: client, store: store,
+            stopCollection: { [weak owner = owner, scope = scope] id in owner?.rejectRemoteAccess(scope: scope, captureID: id) })
+        do {
+            _ = try await transfer.transferAvailableData(captureID: capture.id)
+            guard current(request) else { return }
+            _ = try await transfer.finalize(captureID: capture.id, allowPartial: false)
+            guard current(request) else { return }
+            incomplete.remove(capture.id)
+            try await reload(store, request: request)
+        } catch {
+            guard current(request) else { return }
+            if error as? SchoolCaptureFailure == .finalizationRefused("CAPTURE_INCOMPLETE") { incomplete.insert(capture.id) }
+            fail(error, captureID: capture.id)
+            if !accessRevoked { try? await reload(store, request: request) }
+        }
+    }
+
     private func perform(_ capture: SchoolCaptureStoredSession, finalizing: Bool?) async {
         guard !isBusy, maySend(capture), let store else { return }
         let request = generation
@@ -65,8 +98,8 @@ import Observation
             if let finalizing {
                 let result = try await transfer.finalize(captureID: capture.id, allowPartial: finalizing)
                 guard current(request) else { return }
-                feedback = result.syncState == .synced ? "Le trajet est synchronisé et reste privé."
-                    : "Le trajet est conservé comme partiel. Il reste privé."
+                incomplete.remove(capture.id)
+                feedback = result.syncState == .synced ? "Trajet envoyé." : "Trajet gardé en partiel."
             } else {
                 let count = try await transfer.transferAvailableData(captureID: capture.id)
                 guard current(request) else { return }
@@ -76,6 +109,7 @@ import Observation
             try await reload(store, request: request)
         } catch {
             guard current(request) else { return }
+            if error as? SchoolCaptureFailure == .finalizationRefused("CAPTURE_INCOMPLETE") { incomplete.insert(capture.id) }
             fail(error, captureID: capture.id)
             if !accessRevoked { try? await reload(store, request: request) }
         }
@@ -119,6 +153,7 @@ import Observation
     func invalidate() {
         invalidated = true; generation = UUID()
         captures = []; pendingCount = [:]; pendingFinalization = [:]; confirmedFinalization = [:]; errorMessage = nil; feedback = nil
+        incomplete = []
         // Admitted commands keep their original identity and persist their receipt.
         // Closing this list must not invalidate the ongoing session's lease.
     }

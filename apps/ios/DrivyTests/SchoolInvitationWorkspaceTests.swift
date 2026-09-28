@@ -319,6 +319,10 @@ final class InvitationAPIStub: SchoolInvitationAPI {
     var listHandler: ((String?) async throws -> SchoolPage<SchoolInvitation>)?
     var sendHandler: ((PendingSchoolCommand) async throws -> SchoolInvitation)?
     var offeringValues: [SchoolOffering] = []
+    /// Code handed back when a code invitation is created (nil: a replayed answer, without code).
+    var creationCode: String? = "K7Q4MX2P"
+    /// Code handed back when a code invitation is renewed.
+    var renewalCode: String? = "M3N4P5Q6"
     func school(id: UUID) async throws -> SchoolDetails { schoolValue }
     func trainingOfferings(schoolID: UUID) async throws -> [SchoolOffering] { offeringValues }
     func invitations(schoolID: UUID, cursor: String?) async throws -> SchoolPage<SchoolInvitation> {
@@ -338,7 +342,15 @@ final class InvitationAPIStub: SchoolInvitationAPI {
         let result: SchoolInvitation
         if command.kind == .createInvitation {
             let body = try JSONDecoder().decode(SchoolInviteCommand.self, from: command.body)
-            result = InvitationFixture.invitation(id: UUID(), email: "n***@example.invalid", roles: body.roles)
+            if body.delivery == .code {
+                result = InvitationFixture.codeInvitation(id: UUID(), code: creationCode)
+            } else {
+                result = InvitationFixture.invitation(id: UUID(), email: "n***@example.invalid", roles: body.roles)
+            }
+        } else if items.first(where: { $0.id == command.resourceID })?.isCode == true {
+            result = InvitationFixture.codeInvitation(id: command.resourceID!, version: command.resourceVersion + 1,
+                status: command.kind == .revokeInvitation ? .revoked : .pending,
+                code: command.kind == .resendInvitation ? renewalCode : nil)
         } else {
             result = InvitationFixture.invitation(id: command.resourceID!, version: command.resourceVersion + 1,
                 status: command.kind == .revokeInvitation ? .revoked : .pending)
@@ -355,6 +367,11 @@ enum InvitationFixture {
         roles: [SchoolInvitationRole] = [.learner], status: SchoolInvitationStatus = .pending) -> SchoolInvitation {
         .init(id: id, schoolId: ConfigurationFixture.schoolID, version: version, maskedEmail: email, roles: roles,
             status: status, expiresAt: "2026-10-01T14:30:00Z")
+    }
+    static func codeInvitation(id: UUID = invitationID, version: Int = 1, status: SchoolInvitationStatus = .pending,
+        code: String? = nil) -> SchoolInvitation {
+        .init(id: id, schoolId: ConfigurationFixture.schoolID, version: version, maskedEmail: nil, roles: [.learner],
+            status: status, expiresAt: "2026-10-01T14:30:00Z", delivery: .code, code: code)
     }
     @MainActor static func workspace(api: InvitationAPIStub, roles: [String] = ["ADMIN"],
         outbox: ConfigurationOutboxStub = ConfigurationOutboxStub()) -> SchoolInvitationWorkspace {

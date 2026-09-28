@@ -29,8 +29,29 @@ struct SchoolJoinBody: Codable, Equatable, Sendable {
     let operationId: UUID
     let token: String
 }
+/// What a learner sees before joining with a code: no address, no notice, only the school.
+struct SchoolCodePreview: Codable, Equatable, Sendable {
+    let schoolName: String
+    let roles: [String]
+    let trainingCategoryCode: String?
+    let expiresAt: String
+
+    var isValid: Bool {
+        !schoolName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && schoolName.unicodeScalars.count <= 300
+            && !roles.isEmpty && Set(roles).count == roles.count
+            && roles.allSatisfy({ ["ADMIN", "INSTRUCTOR", "LEARNER"].contains($0) })
+            && (trainingCategoryCode.map { !$0.isEmpty && $0.unicodeScalars.count <= 20 } ?? true)
+            && SchoolLesson.date(expiresAt) != nil
+    }
+}
+struct SchoolJoinCodeBody: Codable, Equatable, Sendable {
+    let operationId: UUID
+    let code: String
+}
+
 enum SchoolJoinFailure: Error, LocalizedError, Equatable {
     case invalidLink, authentication, differentAccount, mismatch, expired, revoked, used, unavailable, invalidResponse, storage, pending, unknown
+    case invalidCode, codeAttempts, notLinked
     case rejected(String)
     var errorDescription: String? { switch self {
         case .invalidLink: "Ce lien d’invitation n’est pas reconnu. Copiez le lien complet reçu de votre école."
@@ -45,12 +66,26 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
         case .storage: "La demande ne peut pas être conservée sur cet appareil. Déverrouillez-le puis réessayez."
         case .pending: "Vérifiez la demande en attente avant d’accepter une autre invitation."
         case .unknown: "La confirmation reste inconnue. Gardez cette référence et vérifiez la demande avant de la renvoyer."
+        case .invalidCode: "Ce code n’est pas valable. Vérifiez-le ou demandez un nouveau code à votre moniteur."
+        case .codeAttempts: "Trop d’essais. Patientez quelques minutes avant de réessayer."
+        case .notLinked: "Ce compte n’a pas encore accès à Drivy."
         case .rejected(let message): message
     } }
     var permitsFreshCorrection: Bool { switch self {
-        case .mismatch, .expired, .revoked, .used, .rejected: true
+        case .mismatch, .expired, .revoked, .used, .rejected, .invalidCode, .codeAttempts: true
         default: false
     } }
+    /// The same failures, told about a code rather than a link.
+    var codeMessage: String {
+        switch self {
+        case .expired: "Ce code a expiré. Demandez-en un nouveau à votre moniteur."
+        case .revoked: "Ce code a été retiré par l’école. Demandez-en un nouveau à votre moniteur."
+        case .used: "Ce code a déjà été utilisé. Demandez-en un nouveau à votre moniteur."
+        case .mismatch: "Ce code ne peut pas être utilisé avec ce compte. Demandez-en un nouveau à votre moniteur."
+        case .rejected(let message): message.replacingOccurrences(of: "un nouveau lien", with: "un nouveau code")
+        default: errorDescription ?? "La demande n’a pas abouti."
+        }
+    }
 }
 
 @MainActor final class SchoolJoinClient {
@@ -135,6 +170,37 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
         return membership
     }
 
+    // MARK: Code
+
+    /// `code` must already be normalized (eight characters, no dash).
+    func previewCode(_ code: String, principal: SchoolJoinPrincipal) async throws -> SchoolCodePreview {
+        guard SchoolInvitationCode.normalized(code) == code else { throw SchoolJoinFailure.invalidCode }
+        let body = try JSONEncoder().encode(["code": code])
+        let value: SchoolCodePreview = try await request(["v1", "invitations", "code", "preview"], principal: principal, body: body)
+        guard value.isValid else { throw SchoolJoinFailure.invalidResponse }
+        return value
+    }
+
+    /// Sends the stored bytes with the stored operation: a resend is the same request.
+    func acceptCode(_ record: SchoolCodeJoinRecord) async throws -> SchoolMembership {
+        guard let body = record.body else { throw SchoolJoinFailure.invalidResponse }
+        let value: SchoolMembership = try await request(["v1", "invitations", "code", "accept"], principal: record.principal,
+            body: body, operationID: record.operationID)
+        guard value.accessEpoch > 0, !value.schoolName.isEmpty,
+              value.roles.allSatisfy({ ["ADMIN", "INSTRUCTOR", "LEARNER"].contains($0) }),
+              Set(record.preview.roles).isSubset(of: Set(value.roles)) else { throw SchoolJoinFailure.invalidResponse }
+        return value
+    }
+
+    /// Schools this identity belongs to now; none while the identity is not linked to a person.
+    func memberships(principal: SchoolJoinPrincipal) async throws -> [SchoolMembership] {
+        do {
+            let value: SchoolPerson = try await request(["v1", "me"], principal: principal)
+            guard value.version > 0, value.memberships.allSatisfy({ $0.accessEpoch > 0 }) else { throw SchoolJoinFailure.invalidResponse }
+            return value.memberships
+        } catch SchoolJoinFailure.notLinked { return [] }
+    }
+
     private struct Envelope<Value: Decodable>: Decodable { let data: Value; let requestId: UUID; let serverTime: String }
     private struct Problem: Decodable { let code: String }
     private func request<Value: Decodable>(_ path: [String], principal: SchoolJoinPrincipal, body: Data? = nil, operationID: UUID? = nil) async throws -> Value {
@@ -172,6 +238,9 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
         case "SCHOOL_NOT_ACTIVE": return .rejected("Cette école n’accepte pas de nouveaux accès pour le moment.")
         case "LEARNER_ARCHIVED": return .rejected("Votre dossier doit être traité par l’administration avant de rejoindre cette école.")
         case "INVITATION_ROLE_FORBIDDEN": return .rejected("L’émetteur ne peut plus accorder ces rôles. Demandez un nouveau lien à l’école.")
+        case "INVITATION_CODE_INVALID": return .invalidCode
+        case "INVITATION_CODE_ATTEMPTS": return .codeAttempts
+        case "IDENTITY_NOT_LINKED": return .notLinked
         default: break
         }
         if status == 403 || status == 404 || code == "IDEMPOTENCY_MISMATCH" { return .unknown }

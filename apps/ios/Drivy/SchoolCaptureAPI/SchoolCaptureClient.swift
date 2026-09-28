@@ -212,6 +212,26 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
     }
     private struct CaptureList: Decodable { let items: [SchoolCaptureSession] }
 
+    /// Trajets de l’école lisibles par ce compte, du plus récent au plus ancien : le serveur
+    /// décide lesquels (les siens pour un moniteur, tous pour l’administration).
+    func captures(schoolID: UUID, cursor: String? = nil, limit: Int = 50,
+                  scope: SchoolCommandScope? = nil) async throws -> SchoolCaptureTripPage {
+        guard (1...100).contains(limit) else { throw SchoolCaptureFailure.invalidResponse }
+        if let scope, scope.schoolID != schoolID || scope.apiBaseURL != baseURL.absoluteString { throw SchoolCaptureFailure.forbidden }
+        var query = [URLQueryItem(name: "limit", value: String(limit))]
+        if let cursor {
+            guard !cursor.isEmpty, cursor.utf8.count <= 6000 else { throw SchoolCaptureFailure.invalidResponse }
+            query.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        let value: SchoolCaptureTripPage = try await read(schoolPath(schoolID, ["captures"]), query: query, verifying: scope)
+        guard value.items.count <= limit, Set(value.items.map(\.id)).count == value.items.count,
+              value.items.allSatisfy({ $0.isValid(schoolID: schoolID) }),
+              value.nextCursor.map({ !$0.isEmpty && $0.utf8.count <= 6000 && $0 != cursor }) ?? true else {
+            throw SchoolCaptureFailure.invalidResponse
+        }
+        return value
+    }
+
     private static func validSegment(_ value: SchoolPrivateReplaySegment) -> Bool {
         guard value.segmentIndex >= 0, ["AVAILABLE", "LOW_ACCURACY", "PARTIAL"].contains(value.qualityLabel),
               value.points.allSatisfy(\.isValid), Set(value.points.map(\.sequence)).count == value.points.count else { return false }
@@ -321,4 +341,56 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         "CHUNK_CUTOFF_REJECTED": "Ce lot dépasse la fin de collecte autorisée et ne peut pas être envoyé.",
         "LESSON_CLOSED": "Cette leçon est clôturée. Aucun nouveau trajet ne peut démarrer."
     ]
+}
+
+/// One row of `GET /v1/schools/{schoolId}/captures`: the capture projection read by
+/// `capture(schoolID:captureID:)`, plus the names and the lesson time it belongs to.
+struct SchoolCaptureTrip: Decodable, Sendable, Equatable, Identifiable {
+    let capture: SchoolCaptureSession
+    let learnerName: String
+    let instructorName: String
+    let lessonPlannedStart: String
+    let lessonTimeZone: String
+    var id: UUID { capture.id }
+
+    init(capture: SchoolCaptureSession, learnerName: String, instructorName: String,
+         lessonPlannedStart: String, lessonTimeZone: String) {
+        self.capture = capture; self.learnerName = learnerName; self.instructorName = instructorName
+        self.lessonPlannedStart = lessonPlannedStart; self.lessonTimeZone = lessonTimeZone
+    }
+
+    private enum CodingKeys: String, CodingKey { case learnerName, instructorName, lessonPlannedStart, lessonTimeZone }
+
+    init(from decoder: any Decoder) throws {
+        // The item is flat: the capture fields sit next to the names.
+        capture = try SchoolCaptureSession(from: decoder)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        learnerName = try values.decode(String.self, forKey: .learnerName)
+        instructorName = try values.decode(String.self, forKey: .instructorName)
+        lessonPlannedStart = try values.decode(String.self, forKey: .lessonPlannedStart)
+        lessonTimeZone = try values.decode(String.self, forKey: .lessonTimeZone)
+    }
+
+    var plannedStart: Date? { SchoolLesson.date(lessonPlannedStart) }
+
+    func isValid(schoolID: UUID) -> Bool {
+        capture.schoolId == schoolID && capture.hasValidTimeline
+            && learnerName.unicodeScalars.count <= 300 && instructorName.unicodeScalars.count <= 300
+            && plannedStart != nil && TimeZone(identifier: lessonTimeZone) != nil
+    }
+}
+
+struct SchoolCaptureTripPage: Decodable, Sendable, Equatable {
+    let items: [SchoolCaptureTrip]
+    let nextCursor: String?
+
+    init(items: [SchoolCaptureTrip], nextCursor: String?) { self.items = items; self.nextCursor = nextCursor }
+
+    private enum CodingKeys: String, CodingKey { case items, nextCursor }
+    init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        items = try values.decode([SchoolCaptureTrip].self, forKey: .items)
+        // The contract always carries the key, null on the last page.
+        nextCursor = try values.decode(String?.self, forKey: .nextCursor)
+    }
 }

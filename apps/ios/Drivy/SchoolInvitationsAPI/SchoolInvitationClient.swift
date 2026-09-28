@@ -92,8 +92,11 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
         }
         if command.kind == .createInvitation {
             guard let original = try? JSONDecoder().decode(SchoolInviteCommand.self, from: command.body),
-                  Set(original.roles) == Set(result.roles) else { throw SchoolInvitationFailure.invalidResponse }
+                  Set(original.roles) == Set(result.roles),
+                  result.delivery == (original.delivery ?? .email) else { throw SchoolInvitationFailure.invalidResponse }
         }
+        // A code is only ever handed back for a code invitation, when it is created or renewed.
+        if result.code != nil, command.kind == .revokeInvitation { throw SchoolInvitationFailure.invalidResponse }
         return result
     }
 
@@ -174,9 +177,18 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
     }
 
     static func valid(_ invitation: SchoolInvitation, schoolID: UUID) -> Bool {
-        invitation.schoolId == schoolID && invitation.version > 0 && !invitation.maskedEmail.isEmpty
-            && invitation.maskedEmail.unicodeScalars.count <= 320 && !invitation.roles.isEmpty
-            && Set(invitation.roles).count == invitation.roles.count && SchoolInvitation.date(invitation.expiresAt) != nil
+        guard invitation.schoolId == schoolID, invitation.version > 0, !invitation.roles.isEmpty,
+              Set(invitation.roles).count == invitation.roles.count, SchoolInvitation.date(invitation.expiresAt) != nil,
+              (invitation.maskedEmail?.unicodeScalars.count ?? 0) <= 320,
+              (invitation.trainingCategoryCode.map { !$0.isEmpty && $0.unicodeScalars.count <= 20 } ?? true) else { return false }
+        switch invitation.delivery {
+        case .email:
+            // An e-mail invitation always shows its masked address and never carries a code.
+            return !(invitation.maskedEmail ?? "").isEmpty && invitation.code == nil
+        case .code:
+            // Its code, when present, has the published format.
+            return invitation.code.map { SchoolInvitationCode.normalized($0) != nil } ?? true
+        }
     }
     private struct Envelope<Value: Decodable>: Decodable { let data: Value; let requestId: String; let serverTime: String }
     private struct Problem: Decodable { let code: String }

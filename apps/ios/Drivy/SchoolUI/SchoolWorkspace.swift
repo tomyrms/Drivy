@@ -28,6 +28,8 @@ final class SchoolWorkspace {
     private(set) var isLoadingMoreTrainings = false
     private(set) var isLoadingTraining = false
     private(set) var requiresAuthentication = false
+    /// Signed in, but the identity belongs to no school yet: joining with a code is the way in.
+    private(set) var identityNotLinked = false
 
     private(set) var accountError: String?
     private(set) var schoolError: String?
@@ -59,6 +61,7 @@ final class SchoolWorkspace {
         person = nil
         accountError = nil
         requiresAuthentication = false
+        identityNotLinked = false
         isLoadingAccount = false
         clearSchool()
     }
@@ -342,6 +345,7 @@ final class SchoolWorkspace {
         case .unauthorized, .forbidden, .identityNotLinked:
             reset()
             requiresAuthentication = failure == .unauthorized
+            identityNotLinked = failure == .identityNotLinked
             accountError = message(for: failure)
             return true
         default:
