@@ -262,7 +262,7 @@ struct DrivyTimeColumn: View {
 /// At accessibility text sizes the symbol sits above the text.
 struct DrivyEmptyState: View {
     let title: String
-    let message: String
+    var message: String = ""
     var symbol: String = "tray"
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
@@ -284,10 +284,12 @@ struct DrivyEmptyState: View {
                     .font(.headline)
                     .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(message)
-                    .font(.subheadline)
-                    .foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                if !message.isEmpty {
+                    Text(message)
+                        .font(.subheadline)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let actionTitle, let action {
                     Button(action: action) {
                         Text(actionTitle)

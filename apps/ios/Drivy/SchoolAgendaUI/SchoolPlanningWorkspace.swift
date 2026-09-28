@@ -71,7 +71,6 @@ struct SchoolPlanningInstructor: Identifiable {
             meetingPoint = lesson.meetingPoint; bufferMinutes = lesson.bufferMinutesSnapshot
         }
     }
-    var canConfigureCatalog: Bool { roles.contains("ADMIN") && grants.contains("CONFIGURE_CATALOG") }
     var canMutate: Bool { !invalidated && !accessRevoked && !isBusy && !isLoading && !needsReload && storageAvailable && pending == nil && school?.status == "ACTIVE" }
     var selectedTraining: SchoolTraining? { trainings.first { $0.id == trainingID } }
     var selectedOffering: SchoolOffering? { offerings.first { $0.id == selectedTraining?.offeringId } }

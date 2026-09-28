@@ -11,7 +11,7 @@ on:
       visual_screens:
         description: Écrans à capturer, séparés par des espaces
         type: string
-        default: 'home-tabs agenda learners learner school dossier bilan design-system'
+        default: 'home-tabs agenda learners learner dossier progression design-system'
       visual_devices:
         description: Appareils à capturer, séparés par des espaces
         type: string

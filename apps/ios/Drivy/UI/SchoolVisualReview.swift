@@ -5,7 +5,7 @@ import SwiftUI
 /// No production credentials, persistent school store or network transport is created.
 struct SchoolVisualReview: View {
     /// Shell screens routed here directly by DrivyApp, with the real tab bar.
-    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner", "school"]
+    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner"]
 
     let screen: String
     @State private var context: SchoolVisualContext?
@@ -16,11 +16,12 @@ struct SchoolVisualReview: View {
         Group {
             if let context {
                 switch screen {
-                case "catalog":
-                    SchoolCatalogView(model: context.catalog)
-                case "dossier":
-                    SchoolTrainingView(client: context.client, workspace: context.workspace,
-                        learner: context.learner, trainingID: SchoolVisualData.trainingID)
+                case "progression":
+                    NavigationStack {
+                        SchoolTrainingScreen(client: context.client, workspace: context.workspace,
+                            learner: context.learner, trainingID: SchoolVisualData.trainingID, section: .progress)
+                            .navigationTitle("Progression")
+                    }
                 case "home-tabs":
                     SchoolVisualShell(context: context, tab: .session)
                 case "agenda":
@@ -29,14 +30,9 @@ struct SchoolVisualReview: View {
                     SchoolVisualShell(context: context, tab: .learners)
                 case "learner":
                     SchoolVisualShell(context: context, tab: .learners, learnerID: SchoolVisualData.learnerID)
-                case "school":
-                    SchoolVisualShell(context: context, tab: .school)
                 default:
-                    NavigationStack {
-                        SchoolPublishedRevisionView(client: context.client, schoolID: SchoolVisualData.schoolID,
-                            trainingID: SchoolVisualData.trainingID, lessonID: SchoolVisualData.lessonID,
-                            revisionID: SchoolVisualData.revisionID, competencies: context.competencies)
-                    }
+                    SchoolTrainingView(client: context.client, workspace: context.workspace,
+                        learner: context.learner, trainingID: SchoolVisualData.trainingID)
                 }
             } else if let error {
                 ContentUnavailableView("Rendu indisponible", systemImage: "exclamationmark.triangle", description: Text(error))
@@ -76,13 +72,8 @@ private struct SchoolVisualShell: View {
     }
 
     var body: some View {
-        SchoolHomeView(workspace: context.workspace,
-            openAccount: {}, signOut: {},
-            configureSchool: {}, openInvitations: {},
-            openProfile: { _ in }, openProfilePolicy: {},
-            openOnboarding: nil, openCatalog: {},
-            openTrainingAdministration: { _ in }, agendaClient: context.agenda,
-            openMembers: {}, openAddLearner: {},
+        SchoolHomeView(workspace: context.workspace, openAccount: {}, inviteLearner: {},
+            openProfile: { _ in }, agendaClient: context.agenda,
             trainingClient: context.client, captureController: nil,
             selectedTab: $selectedTab)
         .task {
@@ -97,9 +88,7 @@ private struct SchoolVisualShell: View {
     let workspace: SchoolWorkspace
     let client: SchoolTrainingClient
     let agenda: SchoolAgendaClient
-    let catalog: SchoolCatalogWorkspace
     let learner: SchoolLearner
-    let competencies: [SchoolCatalogCompetency]
 }
 
 @MainActor private enum SchoolVisualData {
@@ -126,12 +115,8 @@ private struct SchoolVisualShell: View {
         await workspace.loadAccount()
         guard workspace.membership != nil, workspace.school != nil else { throw SchoolAPIError.invalidResponse }
         let learner: SchoolLearner = try decode(learnerObject)
-        let competencies: [SchoolCatalogCompetency] = try decode(competencyObjects)
-        let scope = SchoolCommandScope(personID: personID, schoolID: schoolID, membershipID: membershipID,
-            accessEpoch: 1, apiBaseURL: baseURL.absoluteString)
-        let catalog = SchoolCatalogWorkspace(scope: scope, api: client.catalog, outbox: SchoolVisualOutbox())
         return SchoolVisualContext(workspace: workspace, client: client, agenda: agenda,
-            catalog: catalog, learner: learner, competencies: competencies)
+            learner: learner)
     }
 
     private static func identifier(_ value: Int) -> UUID {
@@ -325,9 +310,4 @@ private struct SchoolVisualTransport: SchoolHTTPTransport {
     func accessToken() async throws -> String { "visual-fixture-only" }
 }
 
-@MainActor private final class SchoolVisualOutbox: SchoolCommandOutbox {
-    func pending(for scope: SchoolCommandScope) throws -> PendingSchoolCommand? { nil }
-    func save(_ command: PendingSchoolCommand) throws { throw SchoolConfigurationFailure.storage }
-    func remove(_ command: PendingSchoolCommand) throws { throw SchoolConfigurationFailure.storage }
-}
 #endif

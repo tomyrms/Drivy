@@ -8,11 +8,6 @@ struct SchoolInvitationsView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $model.selectedID) {
-                Section {
-                    DrivyFormIntro(context: model.school?.name ?? "Votre école",
-                        message: model.roles.contains("ADMIN") ? nil : "Vos invitations d’élèves")
-                }
-                .listRowBackground(DrivyTheme.canvas)
                 if let pending = model.pending { InvitationPendingSection(model: model, pending: pending) }
                 if let success = model.successMessage {
                     Section { DrivyFormMessage(text: success) }
@@ -20,12 +15,10 @@ struct SchoolInvitationsView: View {
                 if let error = model.errorMessage {
                     Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
                 }
-                if model.isLoading { Section { ProgressView("Chargement des invitations…").frame(maxWidth: .infinity, minHeight: 44) } }
+                if model.isLoading { Section { ProgressView().frame(maxWidth: .infinity, minHeight: 44) } }
                 if model.school != nil && model.invitations.isEmpty && !model.isLoading && model.errorMessage == nil {
                     Section {
-                        DrivyEmptyState(title: "Aucune invitation",
-                            message: "Invitez une personne à rejoindre l’école avec son propre compte.",
-                            symbol: "envelope",
+                        DrivyEmptyState(title: "Aucune invitation", symbol: "envelope",
                             actionTitle: model.mayEdit ? "Inviter une personne" : nil,
                             action: { showsCreation = true })
                             .buttonStyle(.borderless)
@@ -40,15 +33,13 @@ struct SchoolInvitationsView: View {
                     }
                     if model.nextCursor != nil {
                         Button { Task { await model.loadMore() } } label: {
-                            if model.isLoadingMore { ProgressView("Chargement des invitations suivantes…") }
+                            if model.isLoadingMore { ProgressView() }
                             else { Text("Afficher la suite").font(.subheadline.weight(.semibold)) }
                         }
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .disabled(model.isLoadingMore || model.isLoading || model.isBusy)
                         .accessibilityIdentifier("invitations-more")
                     }
-                } footer: {
-                    Text("Les adresses sont masquées. Une invitation n’atteste pas la réception de l’e-mail.")
                 }
             }
             .listStyle(.insetGrouped)
@@ -70,8 +61,7 @@ struct SchoolInvitationsView: View {
             if let invitation = model.selectedInvitation {
                 InvitationDetailView(model: model, invitation: invitation)
             } else {
-                ContentUnavailableView("Choisissez une invitation", systemImage: "envelope.open",
-                    description: Text("Son état et les actions disponibles apparaîtront ici."))
+                ContentUnavailableView("Choisissez une invitation", systemImage: "envelope.open")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(DrivyTheme.surface)
             }
@@ -174,12 +164,6 @@ private struct InvitationDetailView: View {
                         .accessibilityIdentifier("invitation-revoke")
                     }
                 }
-                Text(invitation.status == .accepted
-                     ? "L’invitation a été acceptée. Les formations et les affectations se gèrent séparément."
-                     : invitation.status == .revoked ? "Ce lien ne permet plus de rejoindre l’école. Une nouvelle invitation est nécessaire."
-                     : "Le renvoi remplace le lien précédent. La révocation empêche de rejoindre l’école avec ce lien.")
-                    .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .drivyPageContent()
         }
@@ -190,121 +174,101 @@ private struct InvitationDetailView: View {
             Button("Annuler", role: .cancel) {}
             Button("Renvoyer") { Task { await model.resendAfterConfirmation(invitation) } }
         } message: {
-            Text("\(invitation.maskedEmail) · \(invitation.roleLabel)\n\nL’ancien lien cessera de fonctionner. Un nouveau lien sera préparé pour cette personne.")
+            Text("L’ancien lien cessera de fonctionner.")
         }
         .sheet(isPresented: $showsRevocation) { InvitationRevocationView(model: model, invitation: invitation) }
     }
 }
 
+/// Inviter : une adresse, puis la formation quand un moniteur invite un élève.
 struct InvitationCreationView: View {
     @Bindable var model: SchoolInvitationWorkspace
+    /// Depuis l’onglet Élèves : rôle Élève seul, la liste se charge ici.
+    var learnerOnly = false
     @Environment(\.dismiss) private var dismiss
-    @State private var reviewedDraft: ReviewedDraft?
-    @State private var didSubmit = false
+    @State private var confirms = false
 
-    private struct ReviewedDraft: Identifiable {
-        let id = UUID()
-        let email: String
-        let roles: Set<SchoolInvitationRole>
-        let school: String
-    }
+    private var showsRoles: Bool { !learnerOnly && model.allowedRoles.count > 1 }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    DrivyFormIntro(context: model.school?.name ?? "Votre école",
-                        message: "La personne rejoindra l’école avec son propre compte, après avoir accepté l’invitation.")
-                }
-                .listRowBackground(DrivyTheme.canvas)
-                Section {
                     DrivyFormField(label: "Adresse e-mail", text: $model.email, prompt: "nom@exemple.ch", identifier: "invitation-email")
                         .keyboardType(.emailAddress).textContentType(.emailAddress)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
-                } header: { Text("Destinataire") }
+                }
                 .disabled(!model.mayEdit)
-                Section {
-                    ForEach(model.allowedRoles, id: \.self) { role in
-                        Toggle(role.label, isOn: Binding(get: { model.selectedRoles.contains(role) }, set: { enabled in
-                            if enabled { model.selectedRoles.insert(role) } else { model.selectedRoles.remove(role) }
-                        }))
-                        .accessibilityIdentifier("invitation-role-\(role.rawValue.lowercased())")
+                if showsRoles {
+                    Section("Rôles") {
+                        ForEach(model.allowedRoles, id: \.self) { role in
+                            Toggle(role.label, isOn: Binding(get: { model.selectedRoles.contains(role) }, set: { enabled in
+                                if enabled { model.selectedRoles.insert(role) } else { model.selectedRoles.remove(role) }
+                            }))
+                            .accessibilityIdentifier("invitation-role-\(role.rawValue.lowercased())")
+                        }
                     }
-                } header: { Text("Rôles dans cette école") } footer: {
-                    Text("Les rôles seront attribués après acceptation par la personne invitée. Aucun dossier pédagogique ni formation n’est créé par l’envoi.")
-                }.disabled(!model.mayEdit)
+                    .disabled(!model.mayEdit)
+                }
+                if model.carriesTraining && !model.offerings.isEmpty {
+                    Section {
+                        Picker("Formation", selection: $model.selectedOfferingID) {
+                            Text("Plus tard").tag(nil as UUID?)
+                            ForEach(model.offerings) { offering in
+                                Text("Permis \(offering.categoryCode) · \(offering.offeringKey)").tag(Optional(offering.id))
+                            }
+                        }
+                        .accessibilityIdentifier("invitation-training")
+                    } footer: {
+                        if model.selectedOfferingID != nil { Text("Vous serez son moniteur.") }
+                    }
+                    .disabled(!model.mayEdit)
+                }
                 if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) } }
                 if let pending = model.pending {
                     InvitationPendingSection(model: model, pending: pending)
-                } else if model.needsReload {
-                    Section { Button("Actualiser avant de confirmer") { Task { await model.load() } } }
+                } else if model.needsReload && !model.isLoading {
+                    Section { Button("Actualiser") { Task { await model.load() } } }
                 }
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
-                DrivyFormActionBar(hint: creationHint) {
-                    Button {
-                        reviewedDraft = ReviewedDraft(email: model.email.trimmingCharacters(in: .whitespacesAndNewlines),
-                            roles: model.selectedRoles, school: model.school?.name ?? "Votre école")
-                    } label: {
-                        DrivyBusyLabel(title: "Relire l’invitation", isBusy: model.isBusy)
+                DrivyFormActionBar(hint: !model.email.isEmpty && !model.draftIsValid ? "Vérifiez l’adresse e-mail." : nil) {
+                    Button { confirms = true } label: {
+                        DrivyBusyLabel(title: "Inviter", isBusy: model.isBusy)
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.mayEdit || !model.draftIsValid)
                     .accessibilityIdentifier("invitation-review")
                 }
             }
-            .navigationTitle("Inviter une personne").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(learnerOnly ? "Inviter un élève" : "Inviter une personne").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
-            .sheet(item: $reviewedDraft) { draft in
-                NavigationStack {
-                    Form {
-                        Section {
-                            LabeledContent("École", value: draft.school)
-                            LabeledContent("Adresse e-mail") { Text(draft.email).textSelection(.enabled) }
-                            LabeledContent("Rôles", value: SchoolInvitationRole.allCases.filter { draft.roles.contains($0) }.map(\.label).joined(separator: ", "))
-                        } header: { Text("Votre invitation") } footer: {
-                            Text("L’école enregistrera l’invitation et préparera son e-mail. La réception par le destinataire n’est pas garantie par cet écran.")
-                        }
-                        if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) } }
-                        if let pending = model.pending { InvitationPendingSection(model: model, pending: pending) }
-                        else if model.needsReload {
-                            Section { Button("Actualiser avant de confirmer") { Task { await model.load() } }.disabled(model.isBusy || model.isLoading) }
-                        }
-                    }
-                    .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
-                    .safeAreaInset(edge: .bottom) {
-                        DrivyFormActionBar {
-                            Button {
-                                didSubmit = true
-                                Task {
-                                    if await model.inviteAfterConfirmation(email: draft.email, roles: draft.roles) {
-                                        reviewedDraft = nil; dismiss()
-                                    }
-                                }
-                            } label: {
-                                DrivyBusyLabel(title: "Confirmer l’invitation", isBusy: model.isBusy)
-                            }.buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.mayEdit)
-                                .accessibilityIdentifier("invitation-confirm-create")
-                        }
-                    }
-                    .navigationTitle("Votre confirmation").navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { reviewedDraft = nil }.disabled(model.isBusy) } }
-                }.interactiveDismissDisabled(model.isBusy)
-            }
-            .onChange(of: model.isLoading) { _, loading in
-                if didSubmit && !loading && !model.needsReload && model.pending == nil && model.successMessage != nil {
-                    reviewedDraft = nil; dismiss()
-                }
+            .confirmationDialog("Envoyer l’invitation ?", isPresented: $confirms, titleVisibility: .visible) {
+                Button("Inviter") { submit() }
+                    .accessibilityIdentifier("invitation-confirm-create")
+                Button("Annuler", role: .cancel) {}
+            } message: { Text(summary) }
+            .task {
+                guard learnerOnly else { return }
+                model.selectedRoles = [.learner]
+                await model.load()
             }
         }
         .tint(DrivyTheme.accent).interactiveDismissDisabled(model.isBusy)
     }
 
-    private var creationHint: String? {
-        if model.selectedRoles.isEmpty { return "Choisissez au moins un rôle." }
-        if !model.email.isEmpty && !model.draftIsValid { return "Vérifiez l’adresse e-mail." }
-        return nil
+    private var summary: String {
+        let email = model.email.trimmingCharacters(in: .whitespacesAndNewlines)
+        if model.carriesTraining, let offering = model.selectedOffering { return "\(email) · Permis \(offering.categoryCode)" }
+        return email
+    }
+
+    private func submit() {
+        let email = model.email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let roles = model.selectedRoles
+        let offeringID = model.carriesTraining ? model.selectedOfferingID : nil
+        Task { if await model.inviteAfterConfirmation(email: email, roles: roles, offeringID: offeringID) { dismiss() } }
     }
 }
 

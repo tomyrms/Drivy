@@ -13,7 +13,6 @@ struct SchoolAgendaView: View {
     @State private var loadedScope: String?
     @State private var selectedLesson: SchoolLesson?
     @State private var planningModel: SchoolPlanningWorkspace?
-    @State private var setupModel: SchoolPlanningWorkspace?
 
     private var identityScope: String { "\(workspace.person?.id.uuidString ?? ""):\(workspace.membership?.id.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)" }
     private var mayPlan: Bool { workspace.membership?.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) == true && workspace.school?.status == "ACTIVE" }
@@ -53,8 +52,7 @@ struct SchoolAgendaView: View {
                 } else if let error {
                     SchoolErrorNotice(message: error, retry: { Task { await loadWeek() } })
                 } else if dailyLessons.isEmpty {
-                    DrivyEmptyState(title: "Aucune leçon ce jour",
-                        message: mayPlan ? "Planifiez une leçon ou consultez le jour suivant." : "Vos leçons planifiées ce jour-là s’afficheront ici.",
+                    DrivyEmptyState(title: "Aucune leçon ce jour", message: "",
                         symbol: "calendar", actionTitle: "Voir le jour suivant") {
                         if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
                     }
@@ -73,13 +71,6 @@ struct SchoolAgendaView: View {
         .background(DrivyTheme.surface)
         .navigationTitle("Agenda")
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            if mayPlan {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { setupModel = newPlanningModel() } label: { Label("Réglages du planning", systemImage: "slider.horizontal.3") }
-                }
-            }
-        }
         .task(id: scopeKey) { selectedLesson = nil; await loadWeek() }
         .refreshable { await loadWeek() }
         .sheet(item: $selectedLesson) { lesson in
@@ -87,9 +78,8 @@ struct SchoolAgendaView: View {
                 lessonID: lesson.id, learnerName: learnerName(lesson), captureController: captureController)
         }
         .sheet(item: $planningModel, onDismiss: { Task { await loadWeek() } }) { model in SchoolPlanningView(model: model) }
-        .sheet(item: $setupModel, onDismiss: { Task { await loadWeek() } }) { model in SchoolPlanningSetupView(model: model) }
         .onChange(of: identityScope) { _, _ in
-            planningModel?.invalidate(); setupModel?.invalidate(); planningModel = nil; setupModel = nil; selectedLesson = nil
+            planningModel?.invalidate(); planningModel = nil; selectedLesson = nil
         }
     }
 
@@ -270,7 +260,6 @@ private struct SchoolLessonDetailView: View {
                         DrivyRowGroup {
                             DrivyLessonFactRow(title: "Date", value: lessonDate(lesson))
                             DrivyLessonFactRow(title: "Horaire", value: interval(lesson), monospaced: true)
-                            DrivyLessonFactRow(title: "Durée", value: "\(lesson.durationMinutes) min", monospaced: true)
                             DrivyLessonFactRow(title: "Rendez-vous", value: lesson.meetingPoint)
                             DrivyLessonFactRow(title: "Prix convenu", value: (Decimal(lesson.priceCentsSnapshot) / 100).formatted(.currency(code: "CHF")), monospaced: true)
                         }
@@ -279,7 +268,7 @@ private struct SchoolLessonDetailView: View {
                         }
                         lessonActions(lesson)
                     } else if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
-                    else { ProgressView("Ouverture de la leçon…").frame(maxWidth: .infinity, minHeight: 180) }
+                    else { ProgressView().frame(maxWidth: .infinity, minHeight: 180) }
                 }
                 .drivyPageContent()
             }
@@ -323,7 +312,7 @@ private struct SchoolLessonDetailView: View {
                     .buttonStyle(DrivySecondaryButtonStyle()).accessibilityIdentifier("lesson-private-observations")
             }
             if mayPrepareCapture {
-                Button { openCapturePreparation() } label: { Label("Préparer le GPS", systemImage: "location.circle") }
+                Button { openCapturePreparation() } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
                     .buttonStyle(DrivySecondaryButtonStyle()).accessibilityIdentifier("lesson-prepare-gps")
             }
             if mayManage && lesson.status == "PLANNED" {
@@ -346,9 +335,8 @@ private struct SchoolLessonDetailView: View {
     private func reportActionTitle(_ lesson: SchoolLesson) -> String {
         let instructs = workspace.membership?.roles.contains("INSTRUCTOR") == true
         switch lesson.status {
-        case "PLANNED": return instructs ? "Préparer la leçon" : "Voir ma leçon"
-        case "COMPLETED": return instructs ? "Ouvrir le bilan" : "Lire le bilan"
-        default: return "Voir le suivi de la leçon"
+        case "PLANNED": return instructs ? "Préparer la leçon" : "Ouvrir ma leçon"
+        default: return instructs ? "Ouvrir la leçon" : "Ouvrir ma leçon"
         }
     }
     private func openPlanning(_ lesson: SchoolLesson, cancelling: Bool) {

@@ -78,12 +78,6 @@ struct SchoolDataPolicyCommand: Codable, Sendable, Equatable {
     let reviewAcknowledged: Bool
 }
 
-enum SchoolCommandResult: Sendable {
-    case school(SchoolDetails)
-    case setup(SchoolSetup)
-    case dataPolicy(SchoolDataPolicy)
-}
-
 struct SchoolOperationReceipt: Codable, Sendable, Equatable {
     let operationId: UUID
     let commandType: String
@@ -119,14 +113,4 @@ enum SchoolConfigurationFailure: Error, LocalizedError, Equatable {
         case .operationUnknown: "Le résultat n’a pas encore pu être établi. La demande reste protégée sur cet appareil."
         }
     }
-}
-
-@MainActor
-protocol SchoolConfigurationAPI: AnyObject {
-    func school(id: UUID) async throws -> SchoolDetails
-    func setup(schoolID: UUID) async throws -> SchoolSetup
-    func readiness(schoolID: UUID) async throws -> SchoolReadiness
-    func dataPolicy(schoolID: UUID) async throws -> SchoolDataPolicy
-    func operation(schoolID: UUID, id: UUID) async throws -> SchoolOperationReceipt
-    func send(_ command: PendingSchoolCommand) async throws -> SchoolCommandResult
 }

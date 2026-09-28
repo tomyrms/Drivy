@@ -5,23 +5,11 @@ struct SchoolPlanningView: View {
     var cancelling = false
     @Environment(\.dismiss) private var dismiss
     @State private var confirmsCancellation = false
-    @State private var showsSetup = false
 
     private var title: String { cancelling ? "Annuler la leçon" : model.originalLesson == nil ? "Planifier une leçon" : "Déplacer la leçon" }
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Text(model.school?.name ?? "Votre école").font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                        Text(cancelling ? "Libérer ce rendez-vous" : model.originalLesson == nil ? "Choisir, puis confirmer" : "Choisir un nouveau créneau")
-                            .font(.drivyTitle).foregroundStyle(DrivyTheme.text)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("Horaires à l’heure de l’école · \(model.timeZone)").font(.footnote).foregroundStyle(DrivyTheme.muted)
-                    }
-                    .padding(.vertical, DrivySpacing.xs)
-                    .accessibilityElement(children: .combine)
-                }.listRowBackground(Color.clear)
                 SchoolPlanningFeedback(model: model)
                 if !model.isLoading && model.school != nil {
                     if cancelling { cancellationFields }
@@ -36,17 +24,8 @@ struct SchoolPlanningView: View {
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
-                if !cancelling {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button { showsSetup = true } label: { Label("Réglages du planning", systemImage: "slider.horizontal.3") }
-                            .disabled(model.isBusy || model.isLoading)
-                    }
-                }
             }
             .task { await model.load() }
-            .sheet(isPresented: $showsSetup, onDismiss: { Task { await model.load() } }) {
-                SchoolPlanningSetupView(model: model, loadsOnAppear: false)
-            }
             .confirmationDialog("Annuler cette leçon ?", isPresented: $confirmsCancellation, titleVisibility: .visible) {
                 Button("Annuler la leçon", role: .destructive) { Task { if await model.cancel() { dismiss() } } }
                 Button("Conserver la leçon", role: .cancel) { }
@@ -105,7 +84,7 @@ struct SchoolPlanningView: View {
             }
             .onChange(of: model.instructorID) { _, _ in model.agreementConfirmed = false; Task { await model.loadAvailability() } }
             if model.assignedInstructors.isEmpty {
-                formNote("Aucun moniteur affecté ne couvre ce créneau. Vérifiez les affectations depuis le dossier de l’élève.")
+                formNote("Aucun moniteur affecté à cet élève.")
             }
             DatePicker("Date", selection: $model.startsAt, in: Date()..., displayedComponents: .date)
                 .onChange(of: model.startsAt) { _, _ in model.termsAccepted = false; model.agreementConfirmed = false }
@@ -120,7 +99,7 @@ struct SchoolPlanningView: View {
             }
             if model.instructorID != nil {
                 DisclosureGroup("Disponibilités du moniteur") {
-                    if model.availability.isEmpty { formNote("Aucune disponibilité enregistrée. Ajoutez-la dans les réglages du planning.") }
+                    if model.availability.isEmpty { formNote("Aucune disponibilité : ajoutez-la sur le web.") }
                     ForEach(model.availability) { rule in
                         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                             Text(SchoolPlanningFormat.weekdays(rule.weekdays)).font(.subheadline.weight(.semibold))
@@ -135,7 +114,6 @@ struct SchoolPlanningView: View {
                 }
             }
         } header: { Text("Le rendez-vous") }
-        footer: { Text("Le moniteur doit être affecté à cette formation. L’école vérifie le créneau, les fermetures et les autres rendez-vous à la confirmation.") }
         .disabled(!model.canMutate)
     }
     private var commercialFields: some View {
@@ -147,7 +125,7 @@ struct SchoolPlanningView: View {
                 }
             }.onChange(of: model.productID) { _, _ in model.termsAccepted = false }
             if model.availableProducts.isEmpty {
-                formNote("Aucune prestation de cette catégorie n’est valable à cette date. L’administration peut la configurer dans les réglages du planning.")
+                formNote("Aucune prestation valable à cette date.")
             }
             if let product = model.selectedProduct {
                 Stepper("Quantité : \(model.quantity)", value: $model.quantity, in: 1...100)
@@ -171,7 +149,6 @@ struct SchoolPlanningView: View {
                 }
             }
         } header: { Text("La prestation") }
-        footer: { Text("Le montant affiché sera rattaché à la leçon. Aucun paiement n’est effectué lors de la réservation.") }
         .disabled(!model.canMutate)
     }
     private var reviewFields: some View {
@@ -184,7 +161,6 @@ struct SchoolPlanningView: View {
                 Toggle("Le nouvel horaire est convenu", isOn: $model.agreementConfirmed)
             }
         } header: { Text("Vérification") }
-        footer: { Text("Le permis d’élève reste à vérifier avant la conduite.") }
     }
 
     private var bookingActionBar: some View {

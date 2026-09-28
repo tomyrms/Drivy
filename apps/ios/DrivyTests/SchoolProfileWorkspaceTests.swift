@@ -163,12 +163,6 @@ struct SchoolProfileWorkspaceTests {
         var draft = SchoolProfileDraft(ProfileFixture.profile()); draft.birthDate = "01.01.2999"
         #expect(!draft.isValid(allowed: [.birthDate], timeZone: "Europe/Zurich"))
     }
-    @Test func legacyConfigurationCannotRetryAProfileCommand() async throws {
-        let command = try ProfileFixture.command(); let box = ConfigurationOutboxStub(value: command)
-        let api = ConfigurationAPIStub(); let model = SchoolConfigurationWorkspace(scope: ConfigurationFixture.scope(), api: api, outbox: box)
-        await model.load(); await model.retryPending()
-        #expect(!model.canRetryPending && api.commands.isEmpty && box.value == command)
-    }
 }
 
 @MainActor
