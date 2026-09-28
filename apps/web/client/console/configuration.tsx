@@ -80,7 +80,6 @@ export function ConfigurationSection() {
   return (
     <div className="section-stack">
       <SectionHeading context={school.name} title={school.status === 'DRAFT' ? 'Préparer l’école' : 'Configuration'}
-        description={school.status === 'DRAFT' ? 'Trois étapes : coordonnées, textes d’information, puis activation.' : 'Coordonnées, textes d’information et fonctionnement de l’école.'}
         actions={<StatusBadge tone={status.tone} symbol={school.status === 'ACTIVE' ? 'check' : 'clock'}>{status.label}</StatusBadge>} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome}
         actions={runner.outcome?.code === 'VERSION_CONFLICT' ? <button type="button" className="button secondary" onClick={loaded.reload}>Recharger les informations</button> : undefined} />

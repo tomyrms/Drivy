@@ -99,7 +99,7 @@ export function ProfileFieldsSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context={school.name} title="Champs du profil" description="Choisissez les informations demandées aux élèves, leur utilité et le moment où elles deviennent nécessaires."
+      <SectionHeading context={school.name} title="Champs du profil"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite || !noticeAdopted} onClick={() => edit(applicable)}><Symbol kind="plus" bare />Préparer une nouvelle version</button>} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}

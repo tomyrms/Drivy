@@ -4,7 +4,7 @@ import { Loading, Notice, Symbol } from '../ui';
 import type { Loaded, Outcome } from './context';
 
 /** Section title. Receives focus when the section opens, so screen readers announce the new page. */
-export function SectionHeading({ title, context, description, actions }: { title: string; context?: string; description?: string; actions?: ReactNode }) {
+export function SectionHeading({ title, context, actions }: { title: string; context?: string; actions?: ReactNode }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, []);
   return (
@@ -12,7 +12,6 @@ export function SectionHeading({ title, context, description, actions }: { title
       <div className="section-head-text">
         {context && <p className="context">{context}</p>}
         <h1 ref={heading} tabIndex={-1}>{title}</h1>
-        {description && <p className="lead">{description}</p>}
       </div>
       {actions && <div className="section-head-actions">{actions}</div>}
     </div>

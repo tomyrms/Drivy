@@ -65,7 +65,7 @@ export function TeamSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Personnes" title="Équipe et accès" description="Rôles et autorisations des membres de l’école. Chaque changement est motivé, relu et confirmé par l’école."
+      <SectionHeading context="Personnes" title="Équipe et accès"
         actions={<button type="button" className="button secondary" onClick={() => navigate('invitations')}><Symbol kind="mail" bare />Inviter une personne</button>} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome}
         actions={runner.outcome?.code === 'REAUTH_REQUIRED' ? <button type="button" className="button secondary" onClick={login}>Se reconnecter</button> : undefined} />
@@ -178,7 +178,7 @@ export function InvitationsSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Personnes" title="Invitations" description="La personne invitée accepte avec son propre compte. Son dossier est ensuite créé, sans formation automatique."
+      <SectionHeading context="Personnes" title="Invitations"
         actions={active ? <button type="button" className={current || creating ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { runner.clearOutcome(); setSelected(null); setShowErrors(false); setCreating(true); }}>
           <Symbol kind="plus" bare />Inviter une personne</button> : undefined} />
       {!active && <Notice tone="info" title="Invitations disponibles après l’activation" live={false}

@@ -71,7 +71,7 @@ export function TermsSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Catalogue" title="Conditions commerciales" description="Textes contractuels auxquels se rattachent les prestations. Chaque modification crée une nouvelle version ; l’approbation est explicite."
+      <SectionHeading context="Catalogue" title="Conditions commerciales"
         actions={canConfigureCatalog ? <button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelles conditions</button> : undefined} />
       {!canConfigureCatalog && <GrantNotice />}
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
@@ -192,7 +192,7 @@ export function ProductsSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Catalogue" title="Prestations et tarifs" description="Ce que l’école facture, à quel prix et sous quelles conditions. Chaque modification crée une nouvelle version."
+      <SectionHeading context="Catalogue" title="Prestations et tarifs"
         actions={canConfigureCatalog ? <button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelle prestation</button> : undefined} />
       {!canConfigureCatalog && <GrantNotice />}
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />

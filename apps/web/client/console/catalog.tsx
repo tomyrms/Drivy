@@ -86,7 +86,7 @@ export function CurriculaSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Catalogue" title="Référentiels" description="Compétences travaillées pour chaque catégorie. Chaque modification crée une nouvelle révision ; l’approbation est toujours explicite."
+      <SectionHeading context="Catalogue" title="Référentiels"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouveau référentiel</button>} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
@@ -205,7 +205,7 @@ export function ProceduresSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Catalogue" title="Procédures" description="Déroulement de la formation et conditions d’annulation, par catégorie. Distinct de la notice de données et des champs du profil."
+      <SectionHeading context="Catalogue" title="Procédures"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelle procédure</button>} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
@@ -334,7 +334,7 @@ export function OfferingsSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Catalogue" title="Offres" description="Formations proposées par l’école. Une offre activée s’appuie sur un référentiel et une procédure approuvés ; ce choix ne les approuve pas."
+      <SectionHeading context="Catalogue" title="Offres"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelle offre</button>} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
