@@ -18,10 +18,10 @@ Après une revue de l’app installée, le porteur a jugé l’app difficile à 
 ## Ordre de réalisation (phase 2)
 
 1. Connexion unique : faite (serveur d’identité appliqué, app compilée).
-2. Partage automatique et écran « Ma leçon » : serveur fait et testé ([partage avec l’élève](partage-eleve.md)), app en cours.
-3. Trajet toujours avec un élève, suppression du laboratoire G0, profil GPS d’essai.
-4. Administration sur le web : console complétée (formations, affectations, disponibilités), déployée, écrans retirés de l’iPhone.
-5. Onglets par rôle et passe « moins de texte » sur l’iPhone et le web.
+2. Partage automatique et écran « Ma leçon » : faits et déployés ([partage avec l’élève](partage-eleve.md)).
+3. Trajet toujours avec un élève, suppression du laboratoire G0, profil GPS d’essai : faits.
+4. Administration sur le web : console complétée (élèves, formations, affectations, disponibilités) et déployée ; écrans retirés de l’iPhone.
+5. Onglets par rôle et passe « moins de texte » : app compilée ; le web et les écrans profil/accueil restent à alléger.
 
 Chaque étape se termine par une sauvegarde, un déploiement sur le homelab et un IPA à installer avec iLoader.
 

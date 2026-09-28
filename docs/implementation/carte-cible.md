@@ -54,3 +54,13 @@ Le profil est derrière l’avatar.
 ## Règles d’écriture
 
 Un titre suffit (pas de sous-titre explicatif) ; pas de note sous les sections ; un badge seulement pour l’inhabituel ; les mots de l’auto-école (terminer, bilan, leçon, tarif). Une explication n’apparaît qu’en cas d’erreur, et elle dit quoi faire.
+
+## Réalisation (28 septembre 2026)
+
+Les onglets par rôle, le compte derrière l’avatar et le retrait des écrans d’administration sont compilés (release `6c03c02`). Écarts assumés par rapport à la carte :
+
+- **Ajouter un élève** demande l’e-mail et la formation, pas le prénom ni le nom : l’élève les saisit en créant son compte, l’API d’invitation ne les porte pas. Un administrateur qui n’enseigne pas invite sans formation ; celle-ci s’ouvre ensuite sur le web.
+- **Trajets de cet appareil** reste dans le compte du moniteur : c’est le seul endroit pour renvoyer un trajet resté sur l’iPhone après une coupure réseau.
+- **Invitations** reste dans le compte du moniteur pour vérifier ou renvoyer une invitation en attente, tant que l’envoi d’e-mails n’est pas raccordé.
+- **Démarrer sans leçon prévue** planifie une leçon qui commence dans deux minutes, avec le formulaire de planification (élève, prestation), au lieu d’une leçon de 50 minutes créée d’un geste.
+

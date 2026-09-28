@@ -32,7 +32,8 @@ CI « Refonte · vérifications », PostgreSQL 17 réel, à chaque push depuis l
 
 Run [36451503346](https://github.com/tomyrms/Drivy/actions/runs/36451503346) : 11 fichiers sur 12 réussis ; le dernier était l’ancien échec G1B (admin autorisé à modifier une appartenance depuis AP08), corrigé dans le test.
 
-## Reste à faire
+## État
 
-- App iPhone : réglages de partage pour le moniteur et écran « Ma leçon » pour l’élève (carte, erreurs, bilan).
-- Déploiement des migrations 010 à 012 sur le homelab.
+- Déployé le 28 septembre 2026 (release `6c03c02`, migrations 010 à 013).
+- App : l’écran de leçon unique sert au moniteur (interrupteur « Visible par l’élève » sur le trajet et sur le bilan, cadenas « Gardée pour moi » par observation) et à l’élève (onglets Leçons et Progression).
+- À qualifier sur appareil : lecture d’un vrai trajet par l’élève après une leçon.
