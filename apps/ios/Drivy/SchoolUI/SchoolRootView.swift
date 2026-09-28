@@ -859,6 +859,7 @@ private struct SchoolAccountView: View {
     let openJoinSchool: (() -> Void)?
     let signOut: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppLock.self) private var appLock: AppLock?
 
     /// Mockup 11: one reading page, grouped action rows with the same anatomy
     /// as the École tab, sign-out closing the page.
@@ -868,6 +869,15 @@ private struct SchoolAccountView: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.xl) {
                     accountHeading
                     if identity.isAuthenticated { schoolGroup }
+                    if identity.isAuthenticated, let appLock, let biometry = appLock.biometryName {
+                        DrivyRowGroup(title: "Sécurité") {
+                            Toggle(isOn: Binding(get: { appLock.isEnabled }, set: { appLock.setEnabled($0) })) {
+                                Label("Ouvrir avec \(biometry)", systemImage: biometry == "Touch ID" ? "touchid" : "faceid")
+                            }
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("app-lock-toggle")
+                        }
+                    }
                     if identity.isAuthenticated, openProfilePolicy != nil || openInvitations != nil || configureSchool != nil {
                         DrivyRowGroup(title: "Administration de l’école") {
                             if let configureSchool {

@@ -23,6 +23,8 @@
     <string>Drivy enregistre votre trajet d'essai uniquement lorsque vous choisissez de commencer une séance avec GPS.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
     <string>Une séance d'essai démarrée volontairement peut continuer écran verrouillé jusqu'à votre arrêt.</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Face ID ouvre Drivy sans vous reconnecter.</string>
     <key>UIBackgroundModes</key><array><string>location</string></array>
     <key>UILaunchScreen</key><dict/>
     <key>UISupportedInterfaceOrientations</key>

@@ -1,0 +1,109 @@
+/* Drivy : mêmes jetons que DESIGN.md (clair et sombre), appliqués aux variables PatternFly 5 de keycloak.v2. */
+:root {
+  --drivy-canvas: #F7F8FA;
+  --drivy-surface: #FFFFFF;
+  --drivy-text: #18212B;
+  --drivy-muted: #536174;
+  --drivy-accent: #245BD6;
+  --drivy-accent-pressed: #1947AD;
+  --drivy-on-accent: #FFFFFF;
+  --drivy-border: #D9E0E9;
+  --drivy-font: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, sans-serif;
+
+  --keycloak-card-top-color: transparent;
+  --pf-v5-global--primary-color--100: var(--drivy-accent);
+  --pf-v5-global--primary-color--200: var(--drivy-accent-pressed);
+  --pf-v5-global--link--Color: var(--drivy-accent);
+  --pf-v5-global--link--Color--hover: var(--drivy-accent-pressed);
+  --pf-v5-global--FontFamily--text: var(--drivy-font);
+  --pf-v5-global--FontFamily--heading: var(--drivy-font);
+  --pf-v5-global--FontSize--md: 17px;
+}
+
+.pf-v5-theme-dark {
+  --drivy-canvas: #0F141A;
+  --drivy-surface: #171F28;
+  --drivy-text: #E8EDF3;
+  --drivy-muted: #9AA8BA;
+  --drivy-accent: #7AA2FF;
+  --drivy-accent-pressed: #A4C0FF;
+  --drivy-on-accent: #0F141A;
+  --drivy-border: #2A3642;
+}
+
+.login-pf body {
+  background: var(--drivy-canvas);
+  color: var(--drivy-text);
+}
+
+.pf-v5-c-login__container {
+  grid-template-columns: minmax(0, 26rem);
+}
+
+#kc-header {
+  padding-block: 40px 20px;
+}
+
+#kc-header-wrapper,
+.drivy-wordmark {
+  text-transform: none;
+}
+
+.drivy-wordmark {
+  font: 700 34px/1 var(--drivy-font);
+  letter-spacing: -0.02em;
+  color: var(--drivy-text);
+  text-align: center;
+}
+
+.pf-v5-c-login__main {
+  background: var(--drivy-surface);
+  border: 1px solid var(--drivy-border);
+  border-radius: 20px;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.pf-v5-c-login__main-header {
+  border-top: 0;
+}
+
+/* Une seule langue affichée : l'app et l'école sont en français. */
+.pf-v5-c-login__main-header-utilities {
+  display: none;
+}
+
+#kc-page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--drivy-text);
+}
+
+.pf-v5-c-form__label-text {
+  font-weight: 600;
+  color: var(--drivy-text);
+}
+
+.pf-v5-c-form-control {
+  --pf-v5-c-form-control--BorderRadius: 10px;
+  border-radius: 10px;
+  min-height: 48px;
+}
+
+.pf-v5-c-button.pf-m-primary {
+  --pf-v5-c-button--m-primary--BackgroundColor: var(--drivy-accent);
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: var(--drivy-accent-pressed);
+  --pf-v5-c-button--m-primary--focus--BackgroundColor: var(--drivy-accent-pressed);
+  --pf-v5-c-button--m-primary--Color: var(--drivy-on-accent);
+  --pf-v5-c-button--m-primary--hover--Color: var(--drivy-on-accent);
+  --pf-v5-c-button--m-primary--focus--Color: var(--drivy-on-accent);
+  border-radius: 12px;
+  min-height: 50px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.pf-v5-c-button.pf-m-primary:focus-visible {
+  outline: 3px solid var(--drivy-accent);
+  outline-offset: 2px;
+}

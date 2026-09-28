@@ -18,10 +18,14 @@ enum OIDCPolicy {
             && request.responseType == OIDResponseTypeCode && request.codeChallengeMethod == "S256"
     }
 
+    /// `offline_access` garde la session sur l'appareil 30 jours après la dernière utilisation (réglage du realm),
+    /// au lieu de 2 heures ; le jeton reste dans le Trousseau et Face ID protège l'ouverture de l'app.
+    static let scopes = [OIDScopeOpenID, OIDScopeProfile, "email", "offline_access"]
+
     static func request(service: OIDServiceConfiguration, configuration: AppConfiguration, reauthentication: Bool = false) -> OIDAuthorizationRequest {
         // AppAuth génère un state, un nonce et un vérificateur PKCE aléatoires, puis S256.
         OIDAuthorizationRequest(configuration: service, clientId: configuration.clientID, clientSecret: nil,
-                                scopes: [OIDScopeOpenID, OIDScopeProfile, "email"],
+                                scopes: scopes,
                                 redirectURL: configuration.redirectURL, responseType: OIDResponseTypeCode,
                                 additionalParameters: reauthentication ? ["prompt": "login", "max_age": "0"] : nil)
     }
