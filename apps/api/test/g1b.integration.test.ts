@@ -256,7 +256,8 @@ describe('G1B · écritures idempotentes, droits au commit et rollback PostgreSQ
     await prepare();
     for(const [sql,parameters] of [
       ['UPDATE drivy.person SET version=version+1 WHERE id=$1',[id.admin]],
-      ['UPDATE drivy.membership SET version=version+1 WHERE id=$1',[id.adminMember]],
+      // Depuis AP08 l'ADMIN modifie rôles et droits ; l'identité rattachée à une appartenance reste immuable.
+      ['UPDATE drivy.membership SET person_id=person_id WHERE id=$1',[id.adminMember]],
       ["UPDATE drivy.school_data_policy SET notice_text='altéré' WHERE school_id=$1",[id.schoolA]],
       ['DELETE FROM drivy.audit_event WHERE school_id=$1',[id.schoolA]],
       ['DELETE FROM drivy.operation WHERE school_id=$1',[id.schoolA]],
