@@ -18,10 +18,7 @@ struct SchoolRootView: View {
     let configuration: AppConfiguration?
     @Bindable var identity: IdentitySession
     let workspace: SchoolWorkspace?
-    let localController: SessionController
     @State private var showsAccount = false
-    @State private var showsLocalTrials = false
-    @State private var opensTrialsAfterAccount = false
     @State private var opensConfigurationAfterAccount = false
     @State private var configurationRoute: SchoolWorkspaceSheet<SchoolConfigurationWorkspace>?
     @State private var schoolConfiguration: SchoolConfigurationWorkspace?
@@ -88,9 +85,6 @@ struct SchoolRootView: View {
             .sheet(item: $configurationRoute, onDismiss: configurationDismissed) { route in
                 configurationSheet(route.model)
             }
-            .fullScreenCover(isPresented: $showsLocalTrials) {
-                localTrialsCover
-            }
             .sheet(item: $profileRoute, onDismiss: profileDismissed) { route in
                 profileSheet(route.model)
             }
@@ -136,7 +130,7 @@ struct SchoolRootView: View {
     @ViewBuilder
     private func authenticatedContent(_ workspace: SchoolWorkspace) -> some View {
         if workspace.person != nil {
-            SchoolHomeView(workspace: workspace, localController: localController,
+            SchoolHomeView(workspace: workspace,
                 openAccount: { showAccount() }, signOut: { signOut() },
                 configureSchool: homeConfigurationAction, openInvitations: invitationsAction,
                 openProfile: profileAction, openProfilePolicy: homeProfilePolicyAction,
@@ -160,7 +154,6 @@ struct SchoolRootView: View {
         .foregroundStyle(DrivyTheme.text)
         .background(SignInPresenter { presenter = $0 }.frame(width: 0, height: 0))
         .task(id: identity.isAuthenticated) {
-            captureController.setPersonalCaptureActive(localController.isCapturing)
             if identity.isAuthenticated { await workspace?.loadAccount() }
             else { captureController.setScope(nil); workspace?.reset() }
             updateCaptureScope()
@@ -190,17 +183,12 @@ struct SchoolRootView: View {
         .onChange(of: workspace?.school?.status) { _, status in
             if status == "ARCHIVED" { captureController.setScope(nil) }
         }
-        .onChange(of: localController.isCapturing) { _, capturing in
-            captureController.setPersonalCaptureActive(capturing)
-        }
         .onOpenURL { receiveInvitation($0) }
     }
 
     private var accountPresentation: some View {
         observedContent.sheet(isPresented: $showsAccount, onDismiss: accountDismissed) {
-            SchoolAccountView(identity: identity, workspace: workspace, localController: localController,
-                openLocalTrials: openTrialsFromAccount,
-                localTrialsAvailable: captureController.captureID == nil || captureController.state == .saved,
+            SchoolAccountView(identity: identity, workspace: workspace,
                 configureSchool: accountConfigurationAction,
                 openInvitations: accountInvitationsAction, openProfilePolicy: accountProfilePolicyAction,
                 openOnboarding: accountOnboardingAction, openJoinSchool: accountJoinAction, signOut: signOut)
@@ -254,7 +242,7 @@ struct SchoolRootView: View {
         guard !showsJoinSchool else { return }
         pendingJoinLink = url.absoluteString
         if identity.isAuthenticated {
-            guard !showsLocalTrials, !showsSchoolConfiguration, !showsInvitations, !showsProfile, !showsCatalog, !showsMembers else { return }
+            guard !showsSchoolConfiguration, !showsInvitations, !showsProfile, !showsCatalog, !showsMembers else { return }
             if showsAccount { opensJoinAfterAccount = true; showsAccount = false }
             else { openJoin() }
         }
@@ -463,28 +451,6 @@ struct SchoolRootView: View {
         }
     }
 
-    private var localTrialsCover: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button { showsLocalTrials = false } label: {
-                    Label("Retour à Drivy", systemImage: "chevron.left")
-                        .frame(minHeight: 44)
-                }
-                Spacer()
-                Text("Essais locaux")
-                    .font(.footnote)
-                    .foregroundStyle(DrivyTheme.muted)
-            }
-            .padding(.horizontal, DrivySpacing.m)
-            .background(DrivyTheme.surface)
-            .overlay(alignment: .bottom) { Divider().overlay(DrivyTheme.border) }
-            QualificationRootView(controller: localController)
-                .task { await localController.load() }
-        }
-        .tint(DrivyTheme.accent)
-        .background(DrivyTheme.surface)
-    }
-
     private var invitationsAction: (() -> Void)? {
         guard canManageInvitations else { return nil }
         let action: () -> Void = { openInvitations() }
@@ -520,12 +486,6 @@ struct SchoolRootView: View {
 
     private func showAccount() { showsAccount = true }
 
-    private func openTrialsFromAccount() {
-        guard captureController.captureID == nil || captureController.state == .saved else { return }
-        opensTrialsAfterAccount = true
-        showsAccount = false
-    }
-
     private func openConfigurationFromAccount() {
         opensConfigurationAfterAccount = true
         showsAccount = false
@@ -540,10 +500,6 @@ struct SchoolRootView: View {
         if opensJoinAfterAccount {
             opensJoinAfterAccount = false; openJoin()
             return
-        }
-        if opensTrialsAfterAccount {
-            opensTrialsAfterAccount = false
-            showsLocalTrials = true
         }
         if opensConfigurationAfterAccount {
             opensConfigurationAfterAccount = false
@@ -616,23 +572,14 @@ struct SchoolRootView: View {
                         RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous)
                             .strokeBorder(DrivyTheme.border, lineWidth: 0.5)
                     }
-                VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                    Text("Vos leçons, vos trajets, votre école.")
-                        .font(.drivyScreenTitle)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Connectez-vous pour retrouver votre école, vos dossiers et vos formations autorisés.")
-                        .font(.body)
-                        .foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("Vos leçons, vos trajets, votre école.")
+                    .font(.drivyScreenTitle)
+                    .fixedSize(horizontal: false, vertical: true)
                 if configuration == nil {
                     DrivyInlineMessage(text: "La connexion scolaire n’est pas encore activée dans cette version.", tone: .neutral)
                         .accessibilityIdentifier("school-not-configured")
                 } else if let error = identity.errorMessage {
                     SchoolErrorNotice(message: error)
-                }
-                DrivyRowGroup(title: "Sans compte") {
-                    localTrialsEntry
                 }
             }
             .drivyPageContent()
@@ -687,9 +634,6 @@ struct SchoolRootView: View {
                         Button { openJoin() } label: { Label("J’ai une invitation", systemImage: "envelope.open") }
                             .buttonStyle(DrivySecondaryButtonStyle())
                     }
-                    DrivyRowGroup(title: "Sans école") {
-                        localTrialsEntry
-                    }
                 }
                 .drivyPageContent()
             }
@@ -704,9 +648,6 @@ struct SchoolRootView: View {
                         Button { openJoin() } label: { Label("J’ai une invitation", systemImage: "envelope.open") }
                             .buttonStyle(DrivySecondaryButtonStyle())
                     }
-                    DrivyRowGroup(title: "Sans école") {
-                        localTrialsEntry
-                    }
                 }
                 .drivyPageContent()
             }
@@ -714,13 +655,6 @@ struct SchoolRootView: View {
         } else {
             SchoolChooserView(workspace: workspace)
         }
-    }
-
-    private var localTrialsEntry: some View {
-        DrivyNavigationRow(title: localController.isCapturing ? "Revenir à l’essai en cours" : "Essais locaux",
-            detail: "Essayer la carte et les observations, séparément des dossiers de l’école.",
-            symbol: "map", action: { showsLocalTrials = true })
-            .accessibilityIdentifier("open-local-trials")
     }
 
     private func signIn() {
@@ -849,9 +783,6 @@ struct SchoolRootView: View {
 private struct SchoolAccountView: View {
     @Bindable var identity: IdentitySession
     let workspace: SchoolWorkspace?
-    let localController: SessionController
-    let openLocalTrials: () -> Void
-    let localTrialsAvailable: Bool
     let configureSchool: (() -> Void)?
     let openInvitations: (() -> Void)?
     let openProfilePolicy: (() -> Void)?
@@ -897,7 +828,6 @@ private struct SchoolAccountView: View {
                             }
                         }
                     }
-                    localTrialsGroup
                     VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                         DrivySectionHeader(title: "Confidentialité")
                         StorageCaption(message: "Cet espace affiche les données autorisées par votre école. Elles sont retirées de l’appareil à la déconnexion ou au changement d’école.")
@@ -970,27 +900,6 @@ private struct SchoolAccountView: View {
                     dismiss()
                     Task { await workspace?.loadAccount() }
                 })
-        }
-    }
-
-    /// Local trials stay on this device and are not lessons of the school.
-    /// While a school session runs, the row stays visible and says why it waits.
-    private var localTrialsGroup: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            DrivyRowGroup(title: "Essais locaux") {
-                DrivyNavigationRow(title: localController.isCapturing ? "Revenir à l’essai en cours" : "Essais locaux",
-                    detail: localTrialsAvailable ? "Carte et observations, séparées des dossiers de l’école"
-                        : "Terminez la séance de l’école avant d’ouvrir un trajet personnel.",
-                    symbol: "map",
-                    badge: localTrialsAvailable ? nil : DrivyStatusBadge(title: "Indisponible", symbol: "lock"),
-                    action: openLocalTrials)
-                    .accessibilityIdentifier("open-local-trials")
-                    .disabled(!localTrialsAvailable)
-            }
-            Text("Les essais locaux restent sur cet appareil. Ils ne sont pas des leçons de votre école.")
-                .font(.footnote)
-                .foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

@@ -27,7 +27,6 @@ final class SchoolCaptureSessionController {
     @ObservationIgnored private var endedAt: ContinuousClock.Instant?
     @ObservationIgnored private var sharedJournal: SQLCipherSchoolCaptureStore?
     @ObservationIgnored private var openingJournal: Task<SQLCipherSchoolCaptureStore, Error>?
-    private var personalCaptureActive = false
 
     @MainActor private final class Context {
         let scope: SchoolCommandScope
@@ -65,7 +64,7 @@ final class SchoolCaptureSessionController {
     var canStop: Bool { state == .recording || state == .paused || state == .preparing }
     var canRetrySaving: Bool { state == .failed && context != nil }
     var learnerID: UUID? { context?.session.serverCapture.learnerId }
-    var canPrepareCapture: Bool { !personalCaptureActive && (captureID == nil || state == .saved) }
+    var canPrepareCapture: Bool { captureID == nil || state == .saved }
     var elapsedSeconds: TimeInterval {
         guard let beginning else { return 0 }
         return max(0, SchoolCaptureLocationTime.seconds(beginning.duration(to: endedAt ?? .now)))
@@ -92,14 +91,6 @@ final class SchoolCaptureSessionController {
             sharedJournal = store; openingJournal = nil
             return store
         } catch { openingJournal = nil; throw error }
-    }
-
-    func setPersonalCaptureActive(_ active: Bool) {
-        personalCaptureActive = active
-        // Les parcours personnels et scolaires ne partagent jamais un collecteur.
-        if active, let context, state != .saved {
-            remoteStop(captureID: context.session.id, request: generation)
-        }
     }
 
     func rejectRemoteAccess(scope: SchoolCommandScope, captureID: UUID?) {

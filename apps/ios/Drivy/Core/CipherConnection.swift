@@ -16,15 +16,15 @@ final class CipherConnection {
         guard sqlite3_open_v2(url.path, &pointer, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK,
               let pointer else {
             if let pointer { sqlite3_close_v2(pointer) }
-            throw SessionError.storageUnavailable
+            throw StorageError.storageUnavailable
         }
         handle = pointer
         do {
             let hex = key.map { String(format: "%02x", $0) }.joined()
             try execute("PRAGMA key = \"x'\(hex)'\"")
-            guard !(try strings("PRAGMA cipher_version")).isEmpty else { throw SessionError.encryptionUnavailable }
+            guard !(try strings("PRAGMA cipher_version")).isEmpty else { throw StorageError.encryptionUnavailable }
             _ = try integer("SELECT COUNT(*) FROM sqlite_master")
-            guard try integer("PRAGMA cipher_status") == 1 else { throw SessionError.encryptionUnavailable }
+            guard try integer("PRAGMA cipher_status") == 1 else { throw StorageError.encryptionUnavailable }
             try execute("PRAGMA cipher_memory_security=ON; PRAGMA temp_store=MEMORY; PRAGMA foreign_keys=ON; PRAGMA secure_delete=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;")
             sqlite3_busy_timeout(handle, 2_000)
         } catch {
@@ -44,18 +44,18 @@ final class CipherConnection {
 
     func execute(_ sql: String, _ values: [SQLValue] = []) throws {
         if values.isEmpty {
-            guard sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK else { throw SessionError.storageUnavailable }
+            guard sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK else { throw StorageError.storageUnavailable }
             return
         }
         let statement = try prepare(sql, values)
         defer { sqlite3_finalize(statement) }
-        guard sqlite3_step(statement) == SQLITE_DONE else { throw SessionError.storageUnavailable }
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw StorageError.storageUnavailable }
     }
 
     func integer(_ sql: String) throws -> Int {
         let statement = try prepare(sql, [])
         defer { sqlite3_finalize(statement) }
-        guard sqlite3_step(statement) == SQLITE_ROW else { throw SessionError.storageUnavailable }
+        guard sqlite3_step(statement) == SQLITE_ROW else { throw StorageError.storageUnavailable }
         return Int(sqlite3_column_int64(statement, 0))
     }
 
@@ -66,7 +66,7 @@ final class CipherConnection {
         while true {
             let status = sqlite3_step(statement)
             if status == SQLITE_DONE { return result }
-            guard status == SQLITE_ROW, let text = sqlite3_column_text(statement, 0) else { throw SessionError.storageUnavailable }
+            guard status == SQLITE_ROW, let text = sqlite3_column_text(statement, 0) else { throw StorageError.storageUnavailable }
             result.append(String(cString: text))
         }
     }
@@ -78,7 +78,7 @@ final class CipherConnection {
         while true {
             let status = sqlite3_step(statement)
             if status == SQLITE_DONE { return result }
-            guard status == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0) else { throw SessionError.storageUnavailable }
+            guard status == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0) else { throw StorageError.storageUnavailable }
             let data = Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 0)))
             result.append(try JSONDecoder().decode(T.self, from: data))
         }
@@ -87,7 +87,7 @@ final class CipherConnection {
     private func prepare(_ sql: String, _ values: [SQLValue]) throws -> OpaquePointer {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
-            throw SessionError.storageUnavailable
+            throw StorageError.storageUnavailable
         }
         do {
             for (offset, value) in values.enumerated() {
@@ -100,7 +100,7 @@ final class CipherConnection {
                 case .blob(let data):
                     status = data.withUnsafeBytes { sqlite3_bind_blob(statement, index, $0.baseAddress, Int32($0.count), transient) }
                 }
-                guard status == SQLITE_OK else { throw SessionError.storageUnavailable }
+                guard status == SQLITE_OK else { throw StorageError.storageUnavailable }
             }
             return statement
         } catch { sqlite3_finalize(statement); throw error }

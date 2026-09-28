@@ -2,7 +2,6 @@ import SwiftUI
 
 @main
 struct DrivyApp: App {
-    @State private var controller = SessionController()
     @State private var identity: IdentitySession
     @State private var workspace: SchoolWorkspace?
     @State private var appLock = AppLock()
@@ -28,10 +27,8 @@ struct DrivyApp: App {
                     DrivyDesignSystemGallery()
                         .environment(\.locale, Locale(identifier: "fr_CH"))
                         .tint(DrivyTheme.accent)
-                } else if SchoolVisualReview.shellScreens.contains(screen) {
-                    SchoolVisualReview(screen: screen)
                 } else {
-                    JourneyVisualReview(screen: screen)
+                    SchoolVisualReview(screen: screen)
                 }
             } else {
                 application
@@ -43,8 +40,7 @@ struct DrivyApp: App {
     }
 
     private var application: some View {
-            SchoolRootView(configuration: configuration, identity: identity,
-                           workspace: workspace, localController: controller)
+            SchoolRootView(configuration: configuration, identity: identity, workspace: workspace)
                 .environment(appLock)
                 .task {
                     await identity.restore()

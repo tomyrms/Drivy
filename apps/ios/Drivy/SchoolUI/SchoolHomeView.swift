@@ -6,7 +6,6 @@ enum SchoolHomeTab: Hashable { case session, agenda, learners, school }
 /// School data always remains the projection authorized by SchoolWorkspace.
 struct SchoolHomeView: View {
     @Bindable var workspace: SchoolWorkspace
-    let localController: SessionController
     let openAccount: () -> Void
     let signOut: () -> Void
     var configureSchool: (() -> Void)? = nil
@@ -30,7 +29,7 @@ struct SchoolHomeView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             sessionTab
-                .tabItem { Label("Séance", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
+                .tabItem { Label("Aujourd’hui", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
                 .tag(SchoolHomeTab.session)
             if let agendaClient {
                 NavigationStack {
@@ -74,7 +73,6 @@ struct SchoolHomeView: View {
             trainingCreationModel?.invalidate(); trainingCreationModel = nil
             captureHistoryModel?.invalidate(); captureHistoryModel = nil
         }
-        .task { await localController.load() }
         .onChange(of: captureController?.isCollecting) { wasCollecting, isCollecting in
             if wasCollecting != true && isCollecting == true { selectedTab = .session }
         }
@@ -94,11 +92,9 @@ struct SchoolHomeView: View {
                     SchoolCaptureLiveView(controller: captureController, learnerName: captureLearnerName,
                         returnToLesson: { selectedTab = .agenda })
                 } else {
-                    DrivingMapHomeView(controller: localController, schoolName: workspace.school?.name,
-                        openLearners: { selectedTab = .learners }, agendaClient: agendaClient,
-                        workspace: workspace, openAgenda: { selectedTab = .agenda })
-                        .navigationTitle("Séance")
-                        .navigationBarTitleDisplayMode(.large)
+                    SchoolTodayView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
+                        .navigationTitle("Aujourd’hui")
+                        .navigationBarTitleDisplayMode(.inline)
                 }
             }
             .toolbar { contextToolbar }
@@ -303,7 +299,7 @@ struct SchoolHomeView: View {
     @ViewBuilder private var schoolSelection: some View {
         if workspace.person?.memberships.isEmpty == true {
             ContentUnavailableView("Aucune école associée", systemImage: "building.2",
-                description: Text("Demandez à votre école de vous donner accès à votre dossier. La carte reste accessible dans Séance."))
+                description: Text("Demandez à votre école de vous inviter."))
                 .background(DrivyTheme.canvas)
         } else {
             SchoolChooserView(workspace: workspace)

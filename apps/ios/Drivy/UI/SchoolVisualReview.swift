@@ -76,7 +76,7 @@ private struct SchoolVisualShell: View {
     }
 
     var body: some View {
-        SchoolHomeView(workspace: context.workspace, localController: context.local,
+        SchoolHomeView(workspace: context.workspace,
             openAccount: {}, signOut: {},
             configureSchool: {}, openInvitations: {},
             openProfile: { _ in }, openProfilePolicy: {},
@@ -97,7 +97,6 @@ private struct SchoolVisualShell: View {
     let workspace: SchoolWorkspace
     let client: SchoolTrainingClient
     let agenda: SchoolAgendaClient
-    let local: SessionController
     let catalog: SchoolCatalogWorkspace
     let learner: SchoolLearner
     let competencies: [SchoolCatalogCompetency]
@@ -126,19 +125,12 @@ private struct SchoolVisualShell: View {
         let workspace = SchoolWorkspace(api: client.reader)
         await workspace.loadAccount()
         guard workspace.membership != nil, workspace.school != nil else { throw SchoolAPIError.invalidResponse }
-        // Isolated, throwaway encrypted journal: no example journeys, no native location.
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("DrivySchoolVisual-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let store = try SQLCipherSessionStore(url: directory.appendingPathComponent("visual.sqlite"),
-            key: Data(repeating: 0xAC, count: 32), protectFiles: false)
-        let local = SessionController(store: store, location: SchoolVisualLocationSource())
         let learner: SchoolLearner = try decode(learnerObject)
         let competencies: [SchoolCatalogCompetency] = try decode(competencyObjects)
         let scope = SchoolCommandScope(personID: personID, schoolID: schoolID, membershipID: membershipID,
             accessEpoch: 1, apiBaseURL: baseURL.absoluteString)
         let catalog = SchoolCatalogWorkspace(scope: scope, api: client.catalog, outbox: SchoolVisualOutbox())
-        return SchoolVisualContext(workspace: workspace, client: client, agenda: agenda, local: local,
+        return SchoolVisualContext(workspace: workspace, client: client, agenda: agenda,
             catalog: catalog, learner: learner, competencies: competencies)
     }
 
@@ -327,14 +319,6 @@ private struct SchoolVisualTransport: SchoolHTTPTransport {
         else { throw SchoolAPIError.invalidResponse }
         return SchoolHTTPResponse(data: bytes, status: 200, url: url, contentType: "application/json")
     }
-}
-
-@MainActor private final class SchoolVisualLocationSource: LocationSource {
-    var permission: LocationPermission { .allowed }
-    var onEvent: (@MainActor (LocationEvent) -> Void)?
-    func requestPermission() { }
-    func start() { }
-    func stop() { }
 }
 
 @MainActor private final class SchoolVisualToken: AccessTokenSource {

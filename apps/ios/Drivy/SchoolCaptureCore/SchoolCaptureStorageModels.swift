@@ -58,8 +58,7 @@ struct SchoolCaptureStoredSegment: Codable, Sendable, Identifiable {
     var endedAt: String?
 }
 
-// Mesure scolaire déjà rattachée au mapping d'horloge du segment. Ce type ne reçoit
-// ni DrivingSession ni RecordedPoint G0 ; les parcours EXAMPLE n'ont aucun adaptateur.
+// Mesure scolaire déjà rattachée au mapping d'horloge du segment.
 struct SchoolCaptureMeasurement: Sendable {
     let capturedAt: String
     let elapsedMs: Int

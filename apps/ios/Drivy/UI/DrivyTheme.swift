@@ -184,14 +184,3 @@ struct InlineErrorView: View {
         .accessibilityElement(children: .contain)
     }
 }
-
-extension Date {
-    func sessionElapsed(since start: Date) -> String {
-        let seconds = max(0, Int(timeIntervalSince(start)))
-        let hours = seconds / 3_600
-        let minutes = (seconds % 3_600) / 60
-        return hours > 0
-            ? String(format: "%d:%02d:%02d", hours, minutes, seconds % 60)
-            : String(format: "%02d:%02d", minutes, seconds % 60)
-    }
-}

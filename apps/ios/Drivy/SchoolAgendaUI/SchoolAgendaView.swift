@@ -366,21 +366,8 @@ private struct SchoolLessonDetailView: View {
     private func openCapturePreparation() {
         guard mayPrepareCapture, let person = workspace.person, let membership = workspace.membership,
               membership.schoolId == schoolID else { return }
-        let scope = client.scope(person: person, membership: membership)
-        if let captureController {
-            let handler: SchoolCaptureStartHandler = { transfer, source, session, lease, authorization, receivedAt in
-                try await captureController.adoptAndStart(transfer: transfer, source: source, session: session,
-                    lease: lease, authorization: authorization, receivedAt: receivedAt)
-            }
-            capturePreparation = SchoolCapturePreparationWorkspace(scope: scope, lessonID: lessonID,
-                client: client.captureClient, reader: client.reader, agenda: client,
-                journalProvider: { try await captureController.journal() }, onCaptureAuthorized: handler,
-                onRefusalConfirmed: { learnerID, lessonID in captureController.learnerRefused(learnerID: learnerID, lessonID: lessonID) },
-                canUseDiagnostic: { captureController.canPrepareCapture })
-        } else {
-            capturePreparation = SchoolCapturePreparationWorkspace(scope: scope, lessonID: lessonID,
-                client: client.captureClient, reader: client.reader, agenda: client)
-        }
+        capturePreparation = client.capturePreparation(scope: client.scope(person: person, membership: membership),
+            lessonID: lessonID, controller: captureController)
     }
     private func interval(_ lesson: SchoolLesson) -> String {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = TimeZone(identifier: lesson.timeZone); formatter.dateFormat = "HH:mm"
@@ -409,5 +396,23 @@ private struct SchoolLessonDetailView: View {
             }
         }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? "La leçon n’a pas pu être chargée." }
+    }
+}
+
+extension SchoolAgendaClient {
+    /// Préparation du trajet d’une leçon : l’agenda et « Aujourd’hui » partagent exactement ce chemin.
+    func capturePreparation(scope: SchoolCommandScope, lessonID: UUID, controller: SchoolCaptureSessionController?) -> SchoolCapturePreparationWorkspace {
+        guard let controller else {
+            return SchoolCapturePreparationWorkspace(scope: scope, lessonID: lessonID, client: captureClient, reader: reader, agenda: self)
+        }
+        let handler: SchoolCaptureStartHandler = { transfer, source, session, lease, authorization, receivedAt in
+            try await controller.adoptAndStart(transfer: transfer, source: source, session: session,
+                lease: lease, authorization: authorization, receivedAt: receivedAt)
+        }
+        return SchoolCapturePreparationWorkspace(scope: scope, lessonID: lessonID,
+            client: captureClient, reader: reader, agenda: self,
+            journalProvider: { try await controller.journal() }, onCaptureAuthorized: handler,
+            onRefusalConfirmed: { learnerID, lessonID in controller.learnerRefused(learnerID: learnerID, lessonID: lessonID) },
+            canUseDiagnostic: { controller.canPrepareCapture })
     }
 }

@@ -1,8 +1,8 @@
 import CryptoKit
 import Foundation
 
-// La connexion non Sendable reste confinée dans cet acteur. Aucun appel réseau,
-// aucune source GPS et aucun accès au magasin G0 ne sont effectués ici.
+// La connexion non Sendable reste confinée dans cet acteur. Aucun appel réseau
+// ni aucune source GPS ne sont utilisés ici.
 actor SQLCipherSchoolCaptureStore {
     private let database: CipherConnection
     private let url: URL

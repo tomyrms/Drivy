@@ -127,10 +127,9 @@ final class SchoolPresentationTests: XCTestCase {
         try await Task.sleep(for: .seconds(1))
         attach(darkWindow, name: "g1a-02-eleves-sombre-fixtures")
         darkWindow.isHidden = true
-        let controller = SessionController()
         for style in [UIUserInterfaceStyle.light, .dark] {
             let mapWindow = contentWindow(scene: scene, style: style,
-                content: SchoolHomeView(workspace: workspace, localController: controller, openAccount: {}, signOut: {}, selectedTab: .constant(.session)))
+                content: SchoolHomeView(workspace: workspace, openAccount: {}, signOut: {}, selectedTab: .constant(.session)))
             try await Task.sleep(for: .seconds(3))
             attach(mapWindow, name: style == .light ? "home-carte-clair-fixtures" : "home-carte-sombre-fixtures")
             mapWindow.isHidden = true

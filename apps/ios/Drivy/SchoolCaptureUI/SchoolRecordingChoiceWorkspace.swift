@@ -12,7 +12,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
     let source: SchoolRecordingChoice.Source
 }
 
-/// AP152/AP153 only. This screen has no collector, capture authorization or G0 adapter.
+/// AP152/AP153 only. This screen has no collector or capture authorization.
 @MainActor @Observable final class SchoolRecordingChoiceWorkspace: Identifiable {
     let id = UUID()
     let scope: SchoolCommandScope

@@ -1,7 +1,6 @@
 import SwiftUI
 
-// Shared anatomy of the journey screens (trajet en cours, fin de trajet, replay)
-// for the personal journey and the school GPS:
+// Shared anatomy of the school GPS screens (trajet en cours, fin de trajet, replay):
 // - an opaque top bar (leave, elapsed time readable at a glance, real GPS state, stop);
 // - the map, or an honest placeholder when no position exists;
 // - an opaque bottom bar holding the single dominant gesture (Signaler, Lecture);
@@ -34,67 +33,6 @@ enum DrivySeanceText {
     static func observations(_ count: Int) -> String {
         "\(count) observation\(count == 1 ? "" : "s")"
     }
-
-    /// Spoken and matched label of the private observations entry (E23): « Observations privées (3) ».
-    static func privateObservations(_ count: Int) -> String {
-        "Observations privées (\(count))"
-    }
-
-    /// Human duration for summaries: « moins d’une minute », « 42 min », « 1 h 05 ».
-    static func duration(_ interval: TimeInterval) -> String {
-        let minutes = max(0, Int(interval / 60))
-        if minutes < 1 { return "moins d’une minute" }
-        if minutes < 60 { return "\(minutes) min" }
-        return "\(minutes / 60) h \(String(format: "%02d", minutes % 60))"
-    }
-}
-
-extension DrivingSession {
-    /// Length of the recorded timeline, never negative, at least one second so a
-    /// timeline can always be drawn. An open session is measured until `now`.
-    func recordedDuration(now: Date = Date()) -> TimeInterval {
-        let end: Date
-        if state == .active {
-            end = now
-        } else {
-            end = endedAt ?? points.last?.timestamp ?? observations.last?.observedAt ?? startedAt
-        }
-        return max(1, end.timeIntervalSince(startedAt))
-    }
-
-    /// Title used in lists and headers when the journey has no explicit title.
-    var displayTitle: String {
-        if let title { return title }
-        let day = startedAt.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "fr_CH")))
-        return "Trajet du \(day)"
-    }
-}
-
-/// What a journey contains, for the end summary, the home card and the history rows.
-/// Counts only: no score, no grade, no driving quality derived from GPS.
-struct JourneyStats: Equatable, Sendable {
-    let duration: TimeInterval
-    let observationCount: Int
-    let locatedCount: Int
-    let pointCount: Int
-    let hasSummary: Bool
-    private let counts: [ObservationStatus: Int]
-
-    init(session: DrivingSession, now: Date = Date()) {
-        duration = session.recordedDuration(now: now)
-        observationCount = session.observations.count
-        pointCount = session.points.count
-        let pointIDs = Set(session.points.map(\.id))
-        locatedCount = session.observations.filter { observation in
-            guard let anchor = observation.anchorPointID else { return false }
-            return pointIDs.contains(anchor)
-        }.count
-        hasSummary = !session.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        counts = Dictionary(grouping: session.observations, by: \.status).mapValues(\.count)
-    }
-
-    func count(_ status: ObservationStatus) -> Int { counts[status] ?? 0 }
-    var unlocatedCount: Int { observationCount - locatedCount }
 }
 
 extension View {
@@ -324,21 +262,6 @@ struct DrivyMapStatusLabel: View {
     }
 }
 
-/// Elapsed time of a journey: tabular digits, readable at a glance while moving.
-struct DrivyElapsedTime: View {
-    let text: String
-    let accessibilityTitle: String
-
-    var body: some View {
-        Text(text)
-            .font(.title3.weight(.semibold).monospacedDigit())
-            .foregroundStyle(DrivyTheme.text)
-            .lineLimit(1)
-            .accessibilityLabel(accessibilityTitle)
-            .accessibilityValue(text)
-    }
-}
-
 /// Critical stop command of a map bar: 52 pt capsule with a word, danger tone,
 /// always confirmed by the caller. Icon only in accessibility sizes where the bar stacks.
 struct DrivyMapStopButton: View {
@@ -367,58 +290,6 @@ struct DrivyMapStopButton: View {
     }
 }
 
-/// The dominant gesture while driving: one large capsule, 64 pt tall, always outside
-/// any scrolling container. It freezes the instant; nothing is saved before the
-/// status is chosen in the reporting bubble.
-struct DrivyReportButton: View {
-    var title = "Signaler"
-    let isEnabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: DrivySpacing.xs) {
-                Image(systemName: "plus.bubble.fill").accessibilityHidden(true)
-                Text(title).fixedSize(horizontal: false, vertical: true)
-            }
-            .font(.title3.weight(.bold))
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, DrivySpacing.m)
-            .frame(maxWidth: .infinity, minHeight: 64)
-            .foregroundStyle(isEnabled ? DrivyTheme.onAccent : DrivyTheme.disabledText)
-            .background(isEnabled ? DrivyTheme.accent : DrivyTheme.disabledSurface, in: Capsule())
-            .contentShape(Capsule())
-        }
-        .buttonStyle(DrivyTileButtonStyle())
-        .disabled(!isEnabled)
-    }
-}
-
-/// Opaque round or capsule command of the bottom bar (observations, recentrer).
-struct DrivyBarButton: View {
-    let symbol: String
-    var text: String? = nil
-    var isActive = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: DrivySpacing.xxs) {
-                Image(systemName: symbol).accessibilityHidden(true)
-                if let text { Text(text).monospacedDigit() }
-            }
-            .font(.headline)
-            .foregroundStyle(isActive ? DrivyTheme.accent : DrivyTheme.text)
-            .padding(.horizontal, text == nil ? 0 : DrivySpacing.s)
-            .frame(minWidth: 56, minHeight: 56)
-            .background(isActive ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted, in: Capsule())
-            .contentShape(Capsule())
-            .fixedSize()
-        }
-        .buttonStyle(DrivyTileButtonStyle())
-    }
-}
-
 /// Bottom dock posed on the map: one opaque panel. The dominant action goes last.
 struct DrivyMapDock<Content: View>: View {
     var floating = true
@@ -430,64 +301,6 @@ struct DrivyMapDock<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .foregroundStyle(DrivyTheme.text)
             .drivyMapPanel(floating: floating)
-    }
-}
-
-/// Short confirmation after a durable write, with an immediate « Annuler » when the
-/// storage can really erase the observation. Shown only after the write succeeded.
-struct DrivyUndoBanner: View {
-    let title: String
-    let detail: String
-    let symbol: String
-    var tone: DrivyTone = .success
-    var undoTitle = "Annuler"
-    var isUndoing = false
-    let undo: (() -> Void)?
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.s))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.s))
-        layout {
-            HStack(alignment: .center, spacing: DrivySpacing.s) {
-                Image(systemName: symbol)
-                    .font(.headline)
-                    .foregroundStyle(tone.foreground)
-                    .frame(width: 36, height: 36)
-                    .background(tone.background, in: Circle())
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
-                    Text(detail).font(.caption).foregroundStyle(DrivyTheme.muted)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .accessibilityElement(children: .combine)
-            if let undo {
-                Button(action: undo) {
-                    HStack(spacing: DrivySpacing.xxs) {
-                        if isUndoing { ProgressView().accessibilityHidden(true) }
-                        Text(undoTitle)
-                    }
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.accent)
-                    .padding(.horizontal, DrivySpacing.m)
-                    .frame(minHeight: 48)
-                    .background(DrivyTheme.accentSoft, in: Capsule())
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(DrivyTileButtonStyle())
-                .disabled(isUndoing)
-                .accessibilityLabel("Annuler cette observation")
-                .accessibilityIdentifier("undo-observation")
-            }
-        }
-        .padding(.vertical, DrivySpacing.s)
-        .padding(.horizontal, DrivySpacing.m)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .drivyMapPanel()
     }
 }
 
