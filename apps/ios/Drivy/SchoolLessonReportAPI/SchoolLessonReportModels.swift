@@ -115,7 +115,7 @@ struct SchoolReportProgress: Codable, Sendable, Equatable {
 struct SchoolCompleteLesson: Encodable {
     let operationId: UUID
     let actualStart: String, actualEnd: String
-    let workedOn: String, observationText: String, nextStep: String, anomalyReason: String
+    let workedOn: String, observationText: String, nextStep: String, anomalyReason: String?
 }
 struct SchoolSavePreparation: Encodable {
     let operationId: UUID
@@ -134,15 +134,20 @@ struct SchoolSaveReport: Encodable {
     let observations: [SchoolReportObservation]
     let attachmentIds: [UUID] = []
 }
-struct SchoolPublishReport: Encodable {
+
+/// Ce que le moniteur garde pour lui sur une leçon réalisée (extension de partage, décision du 28 septembre 2026).
+/// Tout le reste est visible par l’élève automatiquement.
+struct SchoolLessonSharing: Codable, Sendable, Equatable {
+    let lessonId: UUID
+    let schoolId: UUID
+    let version: Int
+    let reportPrivate: Bool
+    let captureHidden: Bool
+    let privateObservationIds: [UUID]
+}
+struct SchoolUpdateSharing: Encodable, Sendable {
     let operationId: UUID
-    let expectedPublicationVersion: Int
-    let correctionReason: String?
-    enum CodingKeys: String, CodingKey { case operationId, expectedPublicationVersion, correctionReason, captureSelection, textObservationSelection }
-    func encode(to encoder: any Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(operationId, forKey: .operationId); try c.encode(expectedPublicationVersion, forKey: .expectedPublicationVersion)
-        try c.encode(correctionReason, forKey: .correctionReason)
-        try c.encodeNil(forKey: .captureSelection); try c.encode([UUID](), forKey: .textObservationSelection)
-    }
+    let reportPrivate: Bool
+    let captureHidden: Bool
+    let privateObservationIds: [UUID]
 }

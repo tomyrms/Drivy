@@ -21,7 +21,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
     case createOffering, createCurriculum, createCatalogPolicy, createTraining, createAssignment, updateMember
     case createLesson, moveLesson, cancelLesson, createCommercialTerms, createServiceProduct
     case createAvailabilityRule, updateAvailabilityRule, createClosure, removeAvailabilityRule, removeClosure
-    case savePreparation, saveWish, completeLesson, saveReportDraft, publishReportDraft
+    case savePreparation, saveWish, completeLesson, saveReportDraft, publishReportDraft, updateLessonSharing
     case createObservation, updateObservation, removeObservation
 
     var isObservation: Bool {
@@ -40,7 +40,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
     }
     var isReport: Bool {
         switch self {
-        case .savePreparation, .saveWish, .completeLesson, .saveReportDraft, .publishReportDraft: true
+        case .savePreparation, .saveWish, .completeLesson, .saveReportDraft, .publishReportDraft, .updateLessonSharing: true
         default: false
         }
     }
@@ -103,6 +103,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .completeLesson: "COMPLETE_LESSON"
         case .saveReportDraft: "SAVE_REPORT_DRAFT"
         case .publishReportDraft: "PUBLISH_REPORT_DRAFT"
+        case .updateLessonSharing: "UPDATE_LESSON_SHARING"
         case .createObservation: "CREATE_GEO_OBSERVATION"
         case .updateObservation: "UPDATE_GEO_OBSERVATION"
         case .removeObservation: "REMOVE_GEO_OBSERVATION"
@@ -133,6 +134,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .saveWish: "Wish"
         case .saveReportDraft: "ReportDraft"
         case .publishReportDraft: "ReportRevision"
+        case .updateLessonSharing: "LessonSharing"
         case .createObservation, .updateObservation, .removeObservation: "GeoObservation"
         }
     }
@@ -170,7 +172,7 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
             return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && expectedVersion == nil
         case .createLesson:
             return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
-        case .moveLesson, .cancelLesson, .updateAvailabilityRule, .removeAvailabilityRule, .removeClosure, .completeLesson, .saveReportDraft:
+        case .moveLesson, .cancelLesson, .updateAvailabilityRule, .removeAvailabilityRule, .removeClosure, .completeLesson, .saveReportDraft, .updateLessonSharing:
             return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
         case .savePreparation, .saveWish:
             return resourceVersion > 0 && resourceID != nil && routeResourceID != nil && expectedVersion == nil

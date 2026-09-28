@@ -68,6 +68,12 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
               value.items.allSatisfy({ SchoolLesson.date($0.observedAt) != nil && ["DISCOVERING", "GUIDED", "INDEPENDENT"].contains($0.level) }) else { throw SchoolReportFailure.invalidResponse }
         return value
     }
+    func sharing(schoolID: UUID, lessonID: UUID) async throws -> SchoolLessonSharing {
+        let value: SchoolLessonSharing = try await request(schoolID, ["lessons", lessonID.uuidString, "sharing"])
+        guard value.schoolId == schoolID, value.lessonId == lessonID, value.version > 0, value.privateObservationIds.count <= 100,
+              Set(value.privateObservationIds).count == value.privateObservationIds.count else { throw SchoolReportFailure.invalidResponse }
+        return value
+    }
     func receipt(for command: PendingSchoolCommand) async throws -> SchoolOperationReceipt {
         let value: SchoolOperationReceipt = try await request(command.scope.schoolID, ["operations", command.id.uuidString])
         guard command.scope.apiBaseURL == baseURL.absoluteString, command.matches(value) else { throw SchoolReportFailure.invalidResponse }
@@ -94,6 +100,9 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         case .publishReportDraft:
             guard let target = command.routeResourceID else { throw SchoolReportFailure.invalidResponse }
             path = ["report-drafts", target.uuidString, "publish"]; method = "POST"
+        case .updateLessonSharing:
+            guard let target = command.resourceID else { throw SchoolReportFailure.invalidResponse }
+            path = ["lessons", target.uuidString, "sharing"]; method = "PUT"
         default: throw SchoolReportFailure.invalidResponse
         }
         let _: Acknowledgement = try await request(command.scope.schoolID, path, method: method, command: command)
@@ -171,6 +180,7 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
             "WISH_LESSON_INVALID": "Le souhait doit concerner une leçon planifiée de cette formation.",
             "ATTACHMENT_NOT_READY": "Cette pièce n’est pas encore disponible pour le bilan.",
             "OBSERVATION_PUBLICATION_NOT_READY": "Cette sélection d’annotations nécessite encore une qualification avant partage.",
+            "OBSERVATION_NOT_IN_LESSON": "Cette observation n’appartient plus à la leçon. Actualisez.",
             "INVALID_REQUEST": "Vérifiez les informations saisies et leurs longueurs."
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }

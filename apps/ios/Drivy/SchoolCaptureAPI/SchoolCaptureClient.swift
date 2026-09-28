@@ -182,6 +182,36 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         }
     }
 
+    /// Trajets d’une leçon : ceux du moniteur affecté, ou ceux que l’élève peut voir (partage automatique).
+    func lessonCaptures(schoolID: UUID, lessonID: UUID) async throws -> [SchoolCaptureSession] {
+        let value: CaptureList = try await read(schoolPath(schoolID, ["lessons", lessonID.uuidString, "captures"]))
+        guard value.items.count <= 20, Set(value.items.map(\.id)).count == value.items.count,
+              value.items.allSatisfy({ $0.schoolId == schoolID && $0.lessonId == lessonID && $0.hasValidTimeline }) else { throw SchoolCaptureFailure.invalidResponse }
+        return value.items
+    }
+    /// Tout le trajet reconstruit, page après page, avec les observations ancrées visibles par ce compte.
+    func replayTrack(schoolID: UUID, captureID: UUID) async throws -> (segments: [[SchoolCapturePoint]], observations: [SchoolPrivateGeoObservation], pointsByAnchor: [String: SchoolCapturePoint]) {
+        var segments: [UUID: [SchoolCapturePoint]] = [:], order: [UUID] = [], observations: [SchoolPrivateGeoObservation] = []
+        var cursor: String?, seen = Set<String>(), pages = 0
+        repeat {
+            pages += 1
+            guard pages <= 100 else { throw SchoolCaptureFailure.invalidResponse }
+            let page = try await privateReplayPage(schoolID: schoolID, captureID: captureID, cursor: cursor)
+            for segment in page.segments {
+                if segments[segment.segmentId] == nil { order.append(segment.segmentId) }
+                segments[segment.segmentId, default: []].append(contentsOf: segment.points)
+            }
+            let known = Set(observations.map(\.id))
+            observations.append(contentsOf: page.observations.filter { !known.contains($0.id) })
+            cursor = page.nextCursor
+            if let cursor, !seen.insert(cursor).inserted { throw SchoolCaptureFailure.invalidResponse }
+        } while cursor != nil
+        var anchors: [String: SchoolCapturePoint] = [:]
+        for (id, points) in segments { for point in points { anchors["\(id.uuidString.lowercased()):\(point.sequence)"] = point } }
+        return (order.compactMap { segments[$0] }, observations, anchors)
+    }
+    private struct CaptureList: Decodable { let items: [SchoolCaptureSession] }
+
     private static func validSegment(_ value: SchoolPrivateReplaySegment) -> Bool {
         guard value.segmentIndex >= 0, ["AVAILABLE", "LOW_ACCURACY", "PARTIAL"].contains(value.qualityLabel),
               value.points.allSatisfy(\.isValid), Set(value.points.map(\.sequence)).count == value.points.count else { return false }

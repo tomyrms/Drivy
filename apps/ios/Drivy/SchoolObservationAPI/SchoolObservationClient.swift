@@ -20,7 +20,8 @@ import Foundation
         try await verify(scope, token: token)
     }
 
-    func observationPage(scope: SchoolCommandScope, lessonID: UUID, trainingID: UUID, cursor: String? = nil) async throws -> SchoolPage<SchoolObservation> {
+    /// `authorOnly` : le moniteur relit ses propres observations ; l’élève lit celles de sa leçon qui ne sont pas privées.
+    func observationPage(scope: SchoolCommandScope, lessonID: UUID, trainingID: UUID, cursor: String? = nil, authorOnly: Bool = true) async throws -> SchoolPage<SchoolObservation> {
         var query = [URLQueryItem(name: "limit", value: "25")]
         if let cursor {
             guard !cursor.isEmpty, cursor.utf8.count <= 2000 else { throw SchoolObservationFailure.invalidResponse }
@@ -30,17 +31,17 @@ import Foundation
         guard value.items.count <= 25, Set(value.items.map(\.id)).count == value.items.count,
               value.nextCursor == nil || value.nextCursor!.utf8.count <= 2000,
               value.items.allSatisfy({ $0.hasValidObservation && $0.schoolId == scope.schoolID && $0.lessonId == lessonID
-                  && $0.trainingId == trainingID && $0.authorMembershipId == scope.membershipID }) else { throw SchoolObservationFailure.invalidResponse }
+                  && $0.trainingId == trainingID && (!authorOnly || $0.authorMembershipId == scope.membershipID) }) else { throw SchoolObservationFailure.invalidResponse }
         return value
     }
 
-    func observations(scope: SchoolCommandScope, lessonID: UUID, trainingID: UUID) async throws -> [SchoolObservation] {
+    func observations(scope: SchoolCommandScope, lessonID: UUID, trainingID: UUID, authorOnly: Bool = true) async throws -> [SchoolObservation] {
         var items: [SchoolObservation] = [], cursor: String?, seen = Set<String>()
         var pageCount = 0
         repeat {
             pageCount += 1
             guard pageCount <= 20 else { throw SchoolObservationFailure.invalidResponse }
-            let page = try await observationPage(scope: scope, lessonID: lessonID, trainingID: trainingID, cursor: cursor)
+            let page = try await observationPage(scope: scope, lessonID: lessonID, trainingID: trainingID, cursor: cursor, authorOnly: authorOnly)
             guard items.count + page.items.count <= 100 else { throw SchoolObservationFailure.invalidResponse }
             items.append(contentsOf: page.items); cursor = page.nextCursor
             if let cursor, !seen.insert(cursor).inserted { throw SchoolObservationFailure.invalidResponse }
