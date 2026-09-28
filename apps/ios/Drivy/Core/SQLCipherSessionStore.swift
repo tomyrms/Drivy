@@ -22,7 +22,7 @@ actor SQLCipherSessionStore: SessionStore {
         if protectFiles { try ProtectedStorage.protectDatabaseFiles(at: url) }
         let database = try CipherConnection(url: url, key: key)
         let version = try database.integer("PRAGMA user_version")
-        guard version <= 1 else { throw SessionError.unsupportedSchema }
+        guard version <= 2 else { throw SessionError.unsupportedSchema }
         if version == 0 {
             try database.transaction {
                 try database.execute("""
@@ -47,6 +47,17 @@ actor SQLCipherSessionStore: SessionStore {
                     """)
             }
         }
+        if version < 2 {
+            try database.transaction {
+                try database.execute("""
+                    CREATE TABLE example_installation (
+                        id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL CHECK(version>0),
+                        installed_at REAL NOT NULL
+                    );
+                    PRAGMA user_version=2;
+                    """)
+            }
+        }
         if protectFiles { try ProtectedStorage.protectDatabaseFiles(at: url) }
         self.database = database
     }
@@ -59,7 +70,7 @@ actor SQLCipherSessionStore: SessionStore {
     func session(id: UUID) throws -> DrivingSession { try hydrated(metadata(id)) }
 
     func create(_ session: DrivingSession) throws {
-        guard session.state == .active, session.points.isEmpty, session.observations.isEmpty else {
+        guard session.origin == .recorded, session.state == .active, session.points.isEmpty, session.observations.isEmpty else {
             throw SessionError.sessionClosed
         }
         try write {
@@ -69,6 +80,48 @@ actor SQLCipherSessionStore: SessionStore {
             try database.execute("INSERT INTO session(id,started_at,state,data) VALUES(?,?,?,?)",
                 [.text(session.id.uuidString), .number(session.startedAt.timeIntervalSince1970),
                  .text(session.state.rawValue), .blob(try JSONEncoder().encode(session))])
+        }
+    }
+
+    // L'installation entière, y compris son reçu, partage un commit chiffré. Le reçu est conservé
+    // lors d'une suppression de séance : une mise à jour ou un redémarrage ne la ressuscite pas.
+    func installExamplesIfNeeded(now: Date = Date()) throws {
+        try write {
+            guard try database.integer("SELECT COUNT(*) FROM example_installation WHERE id=1") == 0 else { return }
+            for example in try ExampleJourneys.make(now: now) {
+                guard example.isExample, !example.usesGPS, example.state == .completed,
+                      let end = example.endedAt, end > example.startedAt, end <= now,
+                      !example.points.isEmpty, example.points.count <= 5_000 else { throw SessionError.invalidPoint }
+                var metadata = example
+                metadata.points = []; metadata.observations = []
+                try database.execute("INSERT INTO session(id,started_at,state,data) VALUES(?,?,?,?)",
+                    [.text(example.id.uuidString), .number(example.startedAt.timeIntervalSince1970),
+                     .text(example.state.rawValue), .blob(try JSONEncoder().encode(metadata))])
+                let pointIDs = Set(example.points.map(\.id))
+                guard pointIDs.count == example.points.count else { throw SessionError.invalidPoint }
+                var previous = example.startedAt.addingTimeInterval(-1)
+                for point in example.points {
+                    guard point.latitude.isFinite, point.longitude.isFinite,
+                          (-90...90).contains(point.latitude), (-180...180).contains(point.longitude),
+                          point.timestamp >= example.startedAt, point.timestamp <= end,
+                          point.timestamp > previous, point.receivedAt == point.timestamp,
+                          point.accuracy == -1 else { throw SessionError.invalidPoint }
+                    try database.execute("INSERT INTO point(id,session_id,timestamp,data) VALUES(?,?,?,?)",
+                        [.text(point.id.uuidString), .text(example.id.uuidString), .number(point.timestamp.timeIntervalSince1970),
+                         .blob(try JSONEncoder().encode(point))])
+                    previous = point.timestamp
+                }
+                for observation in example.observations {
+                    guard observation.note.count <= 1_000, observation.observedAt >= example.startedAt,
+                          observation.observedAt <= end,
+                          observation.anchorPointID.map({ pointIDs.contains($0) }) ?? true else { throw SessionError.invalidObservation }
+                    try database.execute("INSERT INTO observation(id,session_id,observed_at,data) VALUES(?,?,?,?)",
+                        [.text(observation.id.uuidString), .text(example.id.uuidString), .number(observation.observedAt.timeIntervalSince1970),
+                         .blob(try JSONEncoder().encode(observation))])
+                }
+            }
+            try database.execute("INSERT INTO example_installation(id,version,installed_at) VALUES(1,?,?)",
+                [.number(Double(ExampleJourneys.version)), .number(now.timeIntervalSince1970)])
         }
     }
 
@@ -188,109 +241,5 @@ actor SQLCipherSessionStore: SessionStore {
         try database.transaction(body)
         // Les fichiers annexes héritent du dossier protégé ; vérifier aussi leur politique explicite.
         if protectFiles { try ProtectedStorage.protectDatabaseFiles(at: url) }
-    }
-}
-
-private enum SQLValue {
-    case text(String), number(Double), blob(Data)
-}
-
-private final class CipherConnection {
-    private var handle: OpaquePointer?
-    private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-
-    init(url: URL, key: Data) throws {
-        var pointer: OpaquePointer?
-        guard sqlite3_open_v2(url.path, &pointer, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK,
-              let pointer else {
-            if let pointer { sqlite3_close_v2(pointer) }
-            throw SessionError.storageUnavailable
-        }
-        handle = pointer
-        do {
-            let hex = key.map { String(format: "%02x", $0) }.joined()
-            try execute("PRAGMA key = \"x'\(hex)'\"")
-            guard !(try strings("PRAGMA cipher_version")).isEmpty else { throw SessionError.encryptionUnavailable }
-            _ = try integer("SELECT COUNT(*) FROM sqlite_master")
-            guard try integer("PRAGMA cipher_status") == 1 else { throw SessionError.encryptionUnavailable }
-            try execute("PRAGMA cipher_memory_security=ON; PRAGMA temp_store=MEMORY; PRAGMA foreign_keys=ON; PRAGMA secure_delete=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;")
-            sqlite3_busy_timeout(handle, 2_000)
-        } catch {
-            sqlite3_close_v2(pointer)
-            handle = nil
-            throw error
-        }
-    }
-
-    deinit { sqlite3_close_v2(handle) }
-
-    func transaction(_ body: () throws -> Void) throws {
-        try execute("BEGIN IMMEDIATE")
-        do { try body(); try execute("COMMIT") }
-        catch { try? execute("ROLLBACK"); throw error }
-    }
-
-    func execute(_ sql: String, _ values: [SQLValue] = []) throws {
-        if values.isEmpty {
-            guard sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK else { throw SessionError.storageUnavailable }
-            return
-        }
-        let statement = try prepare(sql, values)
-        defer { sqlite3_finalize(statement) }
-        guard sqlite3_step(statement) == SQLITE_DONE else { throw SessionError.storageUnavailable }
-    }
-
-    func integer(_ sql: String) throws -> Int {
-        let statement = try prepare(sql, [])
-        defer { sqlite3_finalize(statement) }
-        guard sqlite3_step(statement) == SQLITE_ROW else { throw SessionError.storageUnavailable }
-        return Int(sqlite3_column_int64(statement, 0))
-    }
-
-    func strings(_ sql: String) throws -> [String] {
-        let statement = try prepare(sql, [])
-        defer { sqlite3_finalize(statement) }
-        var result: [String] = []
-        while true {
-            let status = sqlite3_step(statement)
-            if status == SQLITE_DONE { return result }
-            guard status == SQLITE_ROW, let text = sqlite3_column_text(statement, 0) else { throw SessionError.storageUnavailable }
-            result.append(String(cString: text))
-        }
-    }
-
-    func records<T: Decodable>(_ sql: String, _ values: [SQLValue] = [], as: T.Type) throws -> [T] {
-        let statement = try prepare(sql, values)
-        defer { sqlite3_finalize(statement) }
-        var result: [T] = []
-        while true {
-            let status = sqlite3_step(statement)
-            if status == SQLITE_DONE { return result }
-            guard status == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0) else { throw SessionError.storageUnavailable }
-            let data = Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 0)))
-            result.append(try JSONDecoder().decode(T.self, from: data))
-        }
-    }
-
-    private func prepare(_ sql: String, _ values: [SQLValue]) throws -> OpaquePointer {
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
-            throw SessionError.storageUnavailable
-        }
-        do {
-            for (offset, value) in values.enumerated() {
-                let index = Int32(offset + 1)
-                let status: Int32
-                switch value {
-                case .text(let text):
-                    status = text.withCString { sqlite3_bind_text(statement, index, $0, -1, transient) }
-                case .number(let number): status = sqlite3_bind_double(statement, index, number)
-                case .blob(let data):
-                    status = data.withUnsafeBytes { sqlite3_bind_blob(statement, index, $0.baseAddress, Int32($0.count), transient) }
-                }
-                guard status == SQLITE_OK else { throw SessionError.storageUnavailable }
-            }
-            return statement
-        } catch { sqlite3_finalize(statement); throw error }
     }
 }

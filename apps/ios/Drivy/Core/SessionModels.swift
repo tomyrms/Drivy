@@ -12,6 +12,11 @@ enum SessionState: String, Codable, Sendable {
     }
 }
 
+enum SessionOrigin: String, Codable, Sendable {
+    case recorded = "RECORDED"
+    case example = "EXAMPLE"
+}
+
 enum ObservationTheme: String, Codable, CaseIterable, Identifiable, Sendable {
     case priority, parking, signs, roundabout, observation, anticipation
     var id: String { rawValue }
@@ -94,19 +99,43 @@ struct DrivingSession: Identifiable, Codable, Equatable, Sendable {
     let startedAt: Date
     var endedAt: Date?
     let usesGPS: Bool
+    let origin: SessionOrigin
+    let title: String?
+    let provenance: String?
     var state: SessionState
     var points: [RecordedPoint]
     var observations: [LessonObservation]
     var summary: String
+    var isExample: Bool { origin == .example }
 
-    init(id: UUID = UUID(), startedAt: Date = Date(), usesGPS: Bool) {
+    init(id: UUID = UUID(), startedAt: Date = Date(), usesGPS: Bool,
+         origin: SessionOrigin = .recorded, title: String? = nil, provenance: String? = nil) {
         self.id = id
         self.startedAt = startedAt
         self.usesGPS = usesGPS
+        self.origin = origin
+        self.title = title
+        self.provenance = provenance
         self.state = .active
         self.points = []
         self.observations = []
         self.summary = ""
+    }
+
+    // Les séances existantes restent des enregistrements ; leur origine n'est jamais réécrite en exemple.
+    init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        startedAt = try values.decode(Date.self, forKey: .startedAt)
+        endedAt = try values.decodeIfPresent(Date.self, forKey: .endedAt)
+        usesGPS = try values.decode(Bool.self, forKey: .usesGPS)
+        origin = try values.decodeIfPresent(SessionOrigin.self, forKey: .origin) ?? .recorded
+        title = try values.decodeIfPresent(String.self, forKey: .title)
+        provenance = try values.decodeIfPresent(String.self, forKey: .provenance)
+        state = try values.decode(SessionState.self, forKey: .state)
+        points = try values.decode([RecordedPoint].self, forKey: .points)
+        observations = try values.decode([LessonObservation].self, forKey: .observations)
+        summary = try values.decode(String.self, forKey: .summary)
     }
 }
 

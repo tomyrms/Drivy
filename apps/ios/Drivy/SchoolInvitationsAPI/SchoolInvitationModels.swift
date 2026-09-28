@@ -72,7 +72,7 @@ struct SchoolRevokeInvitationCommand: Codable, Sendable, Equatable {
 
 enum SchoolInvitationFailure: Error, LocalizedError, Equatable {
     case unauthorized, forbidden, schoolInactive, policyRequired, alreadyMember, alreadyInvited, invitationUsed, invitationRevoked
-    case conflict, rejected, invalidCursor, unavailable, invalidResponse, pendingCommand, operationUnknown
+    case conflict, rejected, invalidCursor, unavailable, deliveryUnavailable, invalidResponse, pendingCommand, operationUnknown
 
     // Only a brand-new UUID's first response may release a rejected command.
     var permitsCorrectionOfFreshRequest: Bool {
@@ -95,6 +95,7 @@ enum SchoolInvitationFailure: Error, LocalizedError, Equatable {
         case .rejected: "La demande a été refusée. Vérifiez l’adresse, les rôles ou le motif."
         case .invalidCursor: "La liste a changé. Actualisez-la pour continuer."
         case .unavailable: "Connexion indisponible ou réponse non reçue. Aucune confirmation ne peut être donnée."
+        case .deliveryUnavailable: "L’envoi des invitations n’est pas encore configuré. Votre demande reste conservée jusqu’à vérification de son résultat."
         case .invalidResponse: "La réponse n’a pas pu être vérifiée. Le résultat n’est pas confirmé."
         case .pendingCommand: "Une demande attend sa confirmation. Vérifiez son résultat avant une autre action."
         case .operationUnknown: "Le résultat n’a pas encore pu être établi. La demande reste conservée sur cet appareil."

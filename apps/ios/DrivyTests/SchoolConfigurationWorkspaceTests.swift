@@ -279,7 +279,7 @@ final class ConfigurationAPIStub: SchoolConfigurationAPI {
                 approvedAt: ConfigurationFixture.timestamp, approvedByMembershipId: command.scope.membershipID)
             return .dataPolicy(policyValue)
         case .saveSetup: return .setup(ConfigurationFixture.setup(version: command.resourceVersion + 1))
-        case .createInvitation, .resendInvitation, .revokeInvitation: throw SchoolConfigurationFailure.invalidResponse
+        default: throw SchoolConfigurationFailure.invalidResponse
         }
     }
 }

@@ -1,3 +1,4 @@
+import {registerCaptureObservations} from './capture-observations.js';
 import { randomUUID } from 'node:crypto';
 import Fastify, { LogController, type FastifyReply, type FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
@@ -9,7 +10,14 @@ import { Cursors } from './cursor.js';
 import { getLearner, getTraining, listLearners, listTrainings } from './queries.js';
 import { registerSchoolSetup } from './school-setup.js';
 import { registerInvitations } from './invitations.js';
+import { registerProfiles } from './profiles.js';
+import { registerCatalogue } from './catalogue.js';
+import { registerLessons } from './lessons.js';
+import { registerLessonSetup } from './lesson-setup.js';
+import { registerLessonReports } from './lesson-reports.js';
 import type { InvitationMailConfig } from './invitation-mail.js';
+import { registerCaptures } from './captures.js';
+import type { CaptureConfig } from './capture-crypto.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
 const schoolParams = z.object({ schoolId: z.uuid() });
@@ -21,7 +29,7 @@ const learnerQuery = z.object({ ...pagination, q: z.string().max(200).optional()
 const trainingQuery = z.object({ ...pagination, learnerId: z.uuid().optional() }).strict();
 const emptyQuery = z.object({}).strict();
 
-export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig }) {
+export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig;reauthMaxAgeSeconds?:number;capture?:CaptureConfig }) {
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384 });
   const cursors = new Cursors(options.cursorSecret);
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options','nosniff'); });
@@ -112,5 +120,12 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   });
   registerSchoolSetup(app,options);
   registerInvitations(app,options);
+  registerProfiles(app,options);
+  registerCatalogue(app,options);
+  registerLessonSetup(app,options);
+  registerLessons(app,options);
+  registerLessonReports(app,options);
+  registerCaptures(app,options);
+  registerCaptureObservations(app,options);
   return app;
 }
