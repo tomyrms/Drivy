@@ -181,3 +181,34 @@ p { line-height: 1.6; }
   .button:disabled { color: GrayText; }
   :focus-visible { outline-color: Highlight; }
 }
+
+/* School workspace: readable forms, policy review, and explicit command states. */
+.workspace-heading { display:grid; gap:.65rem; margin-bottom:1.5rem; }
+.workspace-heading > .button { justify-self:start; padding-left:0; }
+.workspace-tabs { display:flex; flex-wrap:wrap; gap:.75rem; margin:1.5rem 0; }
+.workspace-tabs [aria-current=page] { border-color:var(--accent); color:var(--accent); }
+.learner-list { list-style:none; padding:0; margin:1.5rem 0 0; }
+.learner-list li { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:1rem 0; border-top:1px solid var(--border); }
+.learner-list li > div { display:grid; gap:.3rem; }
+.form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1.25rem; margin:1.25rem 0; }
+.form-field { display:grid; gap:.45rem; align-content:start; min-width:0; }
+.form-field > span { font-size:.9375rem; font-weight:600; }
+.form-field small { font-size:.8125rem; line-height:1.55; color:var(--muted); }
+.form-field.full { grid-column:1/-1; }
+.form-field input, .form-field select, .form-field textarea { font:inherit; color:var(--text); background:var(--surface); width:100%; min-height:3rem; border:1px solid var(--control-border); border-radius:.65rem; padding:.75rem; }
+.form-field textarea { resize:vertical; min-height:6rem; }
+.form-field :disabled { color:var(--muted); background:var(--surface-muted); opacity:1; }
+.profile-editor form > .caption { margin:.9rem 0; }
+.workspace fieldset { border:1px solid var(--border); border-radius:.75rem; margin:1.5rem 0; padding:1rem; min-width:0; }
+.workspace legend { padding:0 .4rem; font-weight:600; }
+.policy-version { padding:1.5rem 0; border-bottom:1px solid var(--border); }
+.policy-version h4 { margin:0 0 .5rem; }
+.rule-list { padding-left:1.25rem; line-height:1.6; }
+.rule-list li + li { margin-top:.75rem; }
+.rule-list p { color:var(--muted); font-size:.875rem; }
+.workspace form > h3 { margin-top:2rem; }
+.workspace form > .button { margin-top:1rem; }
+.command-review { border-color:var(--accent); margin-bottom:1.5rem; }
+.command-review > p { margin:.75rem 0; }
+.command-review > .checkbox-row { margin-top:1rem; }
+@media(max-width:600px) { .form-grid {grid-template-columns:1fr;} .learner-list li {align-items:flex-start;flex-direction:column;} .workspace-tabs > .button {flex:1;} }

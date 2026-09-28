@@ -7,6 +7,7 @@ import {
   request, RequestFailure, roleLabel, sessionSchema,
 } from './protocol';
 import type { InvitationPreview, Me, Member, Session } from './protocol';
+import { SchoolWorkspace } from './SchoolWorkspace';
 
 type Preview = { data: InvitationPreview; confirmation: string };
 type Page = 'account' | 'invitation';
@@ -14,6 +15,8 @@ type Page = 'account' | 'invitation';
 export function App({ invitationLink }: { invitationLink: InvitationLink }) {
   const initialPage = window.location.pathname.replace(/\/$/, '') === '/app/invitation' ? 'invitation' : 'account';
   const [page, setPage] = useState<Page>(initialPage);
+  const [selectedSchool,setSelectedSchool]=useState<string|null>(()=>window.location.pathname.match(/^\/app\/schools\/([0-9a-f-]{36})(?:\/learners\/[0-9a-f-]{36})?$/i)?.[1]??null);
+  const [workspaceDirty,setWorkspaceDirty]=useState(false);
   const pageRef = useRef<Page>(initialPage);
   const [session, setSession] = useState<Session | null>(null);
   const [me, setMe] = useState<Me | null>(null);
@@ -31,6 +34,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
   const heading = useRef<HTMLHeadingElement>(null);
 
   function navigate(next: Page) {
+    setSelectedSchool(null);
     pageRef.current = next;
     setPage(next);
     window.history.replaceState(null, '', next === 'invitation' ? '/app/invitation' : '/app/');
@@ -135,6 +139,11 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
     document.title = page === 'invitation' ? 'Rejoindre votre école · Drivy' : 'Votre espace · Drivy';
     if (loaded) heading.current?.focus({ preventScroll: true });
   }, [page, loaded]);
+  useEffect(()=>{
+    if(me&&selectedSchool&&!me.memberships.some(member=>member.schoolId===selectedSchool)){
+      setSelectedSchool(null);window.history.replaceState(null,'','/app/');setError('Cette école n’est pas accessible avec vos droits actuels.');
+    }
+  },[me,selectedSchool]);
 
   async function login() {
     await perform('Ouverture de la connexion…', async current => {
@@ -153,6 +162,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
   }
 
   async function logout() {
+    if(workspaceDirty&&!window.confirm('Des modifications ou une demande à vérifier restent dans cette session. Le brouillon non préparé sera perdu. Les demandes déjà préparées restent conservées pour ce compte et devront être relues après reconnexion. Continuer ?'))return;
     const csrf = session?.csrfToken;
     if (!csrf) return;
     await perform('Déconnexion en cours…', async current => {
@@ -296,12 +306,12 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
         {loaded && session?.authenticated && page === 'account' && <>
           {accepted && acceptedSession.current === session.csrfToken && <div className="notice success" role="status"><strong>Vous avez rejoint {accepted.schoolName}</strong><p>Votre rattachement à l’école a été confirmé.</p></div>}
           {session.invitationPending && <div className="invitation-banner"><div><strong>Une invitation vous attend</strong><p>Relisez les informations de l’école avant de l’accepter.</p></div><a className="button secondary" href="/app/invitation">Voir l’invitation</a></div>}
-          <section className="card schools-card" aria-labelledby="schools-title">
+          {selectedSchool&&me?.memberships.some(member=>member.schoolId===selectedSchool)?<SchoolWorkspace key={`${session.csrfToken}-${selectedSchool}-${me.memberships.find(member=>member.schoolId===selectedSchool)!.accessEpoch}`} member={me.memberships.find(member=>member.schoolId===selectedSchool)!} csrf={session.csrfToken} onDirty={setWorkspaceDirty} onClose={()=>{setSelectedSchool(null);window.history.replaceState(null,'','/app/');void perform('Vérification de vos écoles…',refresh);}}/>:<section className="card schools-card" aria-labelledby="schools-title">
             <div className="section-heading"><div><span className="small-label">{personName}</span><h2 id="schools-title">Vos écoles</h2></div><button className="button quiet" disabled={isBusy} type="button" onClick={() => void perform('Actualisation de vos écoles…', refresh)}>Actualiser</button></div>
-            {me && me.memberships.length > 0 ? <ul className="school-list">{me.memberships.map(member => <li key={member.membershipId}><Symbol kind="school" /><div><h3>{member.schoolName}</h3><p>{member.roles.map(roleLabel).join(' · ')}</p></div></li>)}</ul>
+            {me && me.memberships.length > 0 ? <ul className="school-list">{me.memberships.map(member => <li key={member.membershipId}><Symbol kind="school" /><div><h3>{member.schoolName}</h3><p>{member.roles.map(roleLabel).join(' · ')}</p><button className="button quiet" onClick={()=>{setSelectedSchool(member.schoolId);window.history.replaceState(null,'',`/app/schools/${member.schoolId}`);}}>Ouvrir l’école</button></div></li>)}</ul>
               : !isBusy && !error ? <div className="empty-state"><Symbol kind="school" /><h3>Votre école n’apparaît pas encore</h3><p>Rejoignez-la avec le lien qu’elle vous a envoyé. Si vous n’avez pas d’invitation, contactez votre école.</p></div>
                 : isBusy ? <p className="muted">Vos accès sont en cours de vérification.</p> : <p className="muted">Vos écoles ne peuvent pas être affichées pour le moment.</p>}
-          </section>
+          </section>}
         </>}
       </main>
       <footer className="site-footer"><span>Drivy</span><p>Vos accès sont propres à chaque école.</p></footer>

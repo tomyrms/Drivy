@@ -5,6 +5,7 @@ struct SchoolCaptureHistoryView: View {
     @Bindable var workspace: SchoolWorkspace
     @Environment(\.dismiss) private var dismiss
     @State private var partialCapture: SchoolCaptureStoredSession?
+    @State private var replayModel: SchoolCaptureReplayWorkspace?
 
     private var currentScope: SchoolCommandScope? {
         guard let person = workspace.person, let member = workspace.membership else { return nil }
@@ -50,6 +51,12 @@ struct SchoolCaptureHistoryView: View {
                             }
                             if model.busyCaptureID == capture.id { ProgressView("Échange avec l’école…") }
                         }.padding(.vertical, 6)
+                        if capture.serverCapture.publicationState == .privateCapture {
+                            Button("Revoir le trajet", systemImage: "play.circle") {
+                                replayModel = SchoolCaptureReplayWorkspace(scope: model.scope,
+                                    client: model.client, captureID: capture.id)
+                            }.disabled(model.isBusy)
+                        }
                         if model.maySend(capture) || model.busyCaptureID == capture.id {
                             if let allowPartial = model.pendingFinalization[capture.id] {
                                 Button("Reprendre la confirmation", systemImage: "arrow.clockwise") {
@@ -80,7 +87,13 @@ struct SchoolCaptureHistoryView: View {
             .refreshable { await model.load() }
             .task { await model.load() }
             .onChange(of: currentScope) { _, scope in
-                if scope != model.scope { model.invalidate(); dismiss() }
+                if scope != model.scope {
+                    replayModel?.invalidate(); replayModel = nil
+                    model.invalidate(); dismiss()
+                }
+            }
+            .sheet(item: replayPresentation) { replay in
+                SchoolCaptureReplayView(model: replay, workspace: workspace)
             }
             .confirmationDialog("Autoriser un trajet partiel ?", isPresented: confirmsPartial, titleVisibility: .visible,
                 presenting: partialCapture) { capture in
@@ -94,6 +107,12 @@ struct SchoolCaptureHistoryView: View {
 
     private var confirmsPartial: Binding<Bool> {
         Binding(get: { partialCapture != nil }, set: { if !$0 { partialCapture = nil } })
+    }
+    private var replayPresentation: Binding<SchoolCaptureReplayWorkspace?> {
+        Binding(get: { replayModel }, set: { next in
+            if next == nil { replayModel?.invalidate() }
+            replayModel = next
+        })
     }
     private func learnerName(_ capture: SchoolCaptureStoredSession) -> String {
         if workspace.learner?.id == capture.serverCapture.learnerId { return workspace.learner?.displayName ?? "Trajet de leçon" }
@@ -114,7 +133,7 @@ struct SchoolCaptureHistoryView: View {
         switch capture.serverCapture.syncState {
         case .synced: "checkmark.circle"
         case .partial, .rejected: "exclamationmark.circle"
-        case .localOnly, .uploading: "iphone.and.arrow.forward"
+        case .localOnly, .uploading: "arrow.up.circle"
         }
     }
 }

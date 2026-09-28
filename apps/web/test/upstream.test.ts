@@ -30,3 +30,25 @@ test('une redirection API ne transfère pas le jeton et les chemins arbitraires 
     await expect(gateway('/../other',access)).rejects.toThrow();
   } finally {await api.close();}
 });
+
+test('profil HTTP réel : PATCH, UUID et version transmis sans cookie navigateur',async()=>{
+  const api=Fastify({logger:false});const schoolId=randomUUID(),learnerId=randomUUID(),operationId=randomUUID(),policyVersionId=randomUUID();let called=false;
+  api.patch(`/v1/schools/${schoolId}/learners/${learnerId}/administrative-profile`,async request=>{
+    called=true;expect(request.headers['if-match']).toBe('"3"');expect(request.headers['idempotency-key']).toBe(operationId);
+    expect(request.headers.cookie).toBeUndefined();expect(request.body).toEqual({operationId,policyVersionId,contactPhone:'+41790000000'});return {data:{version:4}};
+  });
+  try {const origin=await api.listen({host:'127.0.0.1',port:0});const gateway=createGateway(origin);
+    const response=await gateway(`/v1/schools/${schoolId}/learners/${learnerId}/administrative-profile`,'test-only',{operationId,policyVersionId,contactPhone:'+41790000000'},{method:'PATCH',expectedVersion:3});
+    expect(response.status).toBe(200);expect(called).toBe(true);
+  } finally {await api.close();}
+});
+
+test('allowlist scolaire refuse query arbitraire, double paramètre, segments encodés et méthode non prévue avant HTTP',async()=>{
+  const gateway=createGateway('http://127.0.0.1:1');const schoolId=randomUUID(),learnerId=randomUUID();
+  for(const path of [`/v1/schools/${schoolId}/learners?secret=1`,`/v1/schools/${schoolId}/learners?cursor=a&cursor=b`,
+    `/v1/schools/${schoolId}/learners/%2e%2e/me`,`/v1/schools/${schoolId}/../me`,`/v1/schools/${schoolId}/members`,
+    `/v1/schools/${schoolId}/learners/${learnerId}/action-readiness?action=ENTER&schoolId=${schoolId}`]) {
+    await expect(gateway(path,'test-only')).rejects.toThrow();
+  }
+  await expect(gateway(`/v1/schools/${schoolId}/learners/${learnerId}/administrative-profile`,'test-only',{operationId:randomUUID(),policyVersionId:randomUUID(),contactPhone:null},{method:'POST',expectedVersion:1})).rejects.toThrow();
+});

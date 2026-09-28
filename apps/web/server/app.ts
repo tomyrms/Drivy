@@ -6,11 +6,10 @@ import { z, ZodError } from 'zod';
 import type { WebConfig } from './config.js';
 import type { IdentityProvider } from './oidc.js';
 import { SessionStore, matchesSecret, type Session } from './session.js';
-import { createGateway, type ApiGateway, type ApiResult } from './upstream.js';
+import { createGateway, type ApiGateway, type ApiResult, type ApiOptions } from './upstream.js';
+import { registerProfiles, WebError } from './profiles.js';
+import { JournalError,UnavailableCommandStore,type CommandStore } from './command-store.js';
 
-class WebError extends Error {
-  constructor(readonly status: number, readonly code: string) { super(code); }
-}
 const empty = z.object({}).strict();
 const previewSchema = z.object({ data: z.object({ invitationId: z.uuid(), schoolId: z.uuid(), schoolName: z.string(),
   roles: z.array(z.enum(['ADMIN','INSTRUCTOR','LEARNER'])).min(1), maskedEmail: z.string(), expiresAt: z.iso.datetime({offset:true}),
@@ -18,7 +17,7 @@ const previewSchema = z.object({ data: z.object({ invitationId: z.uuid(), school
 const digest = (data: unknown) => createHash('sha256').update(JSON.stringify(data)).digest('hex');
 
 export async function buildWebApp(options: { config: WebConfig; identity: IdentityProvider; gateway?: ApiGateway;
-  store?: SessionStore; staticRoot?: string; now?: () => number }) {
+  store?: SessionStore; commandStore?:CommandStore; staticRoot?: string; now?: () => number }) {
   const { config, identity } = options;
   const now = options.now ?? Date.now;
   const store = options.store ?? new SessionStore(now);
@@ -39,7 +38,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     }
   });
   app.setErrorHandler((error,_request,reply) => {
-    const known = error instanceof WebError ? error : error instanceof ZodError ? new WebError(400,'INVALID_REQUEST')
+    const known = error instanceof WebError || error instanceof JournalError ? error : error instanceof ZodError ? new WebError(400,'INVALID_REQUEST')
       : new WebError(503,'SERVICE_UNAVAILABLE');
     return reply.status(known.status).send({code: known.code, title: known.status === 401 ? 'Reconnecte-toi pour continuer.' :
       known.status === 409 ? 'La situation a changé. Recharge les informations avant de confirmer.' : 'La demande ne peut pas aboutir pour le moment.'});
@@ -71,8 +70,9 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     store.touch(session);
     return session.tokens.accessToken;
   };
-  const callApi = async (session: Session, path: string, body?: unknown): Promise<ApiResult> => {
-    const result = await gateway(path,await accessToken(session),body);
+  const callApi = async (session: Session, path: string, body?: unknown, options?:ApiOptions): Promise<ApiResult> => {
+    const token=await accessToken(session);
+    const result = options ? await gateway(path,token,body,options) : await gateway(path,token,body);
     if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
     if (result.status === 401) { store.destroy(session); throw new WebError(401,'SESSION_EXPIRED'); }
     return result;
@@ -178,9 +178,14 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
       return sendApi(reply,result);
     } finally { delete invitation.accepting; }
   });
+  registerProfiles(app,{current,protect,call:callApi,issuer:config.issuer,commands:options.commandStore??new UnavailableCommandStore(),
+    ensureCurrent:session=>{if(!store.isCurrent(session)||!session.tokens)throw new WebError(401,'SESSION_EXPIRED');}});
   if (options.staticRoot) {
     await app.register(staticFiles,{root:options.staticRoot,prefix:'/app/',index:false,wildcard:false,cacheControl:false});
     for (const path of ['/app','/app/','/app/invitation']) app.get(path,async (_request,reply) => reply.sendFile('index.html'));
+    for (const path of ['/app/schools/:schoolId','/app/schools/:schoolId/learners/:learnerId']) app.get(path,async(request,reply)=>{
+      z.object({schoolId:z.uuid(),learnerId:z.uuid().optional()}).strict().parse(request.params);return reply.sendFile('index.html');
+    });
   }
   app.setNotFoundHandler(async (_request,reply) => reply.status(404).send({code:'NOT_FOUND',title:'Page introuvable.'}));
   return app;

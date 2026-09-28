@@ -132,7 +132,7 @@ struct SchoolRootView: View {
         .foregroundStyle(DrivyTheme.text)
         .background(SignInPresenter { presenter = $0 }.frame(width: 0, height: 0))
         .task(id: identity.isAuthenticated) {
-            captureController.setPersonalCaptureActive(localController.isCapturing)
+            captureController.setPersonalCaptureActive(localController.activeSession != nil)
             if identity.isAuthenticated { await workspace?.loadAccount() }
             else { captureController.setScope(nil); workspace?.reset() }
             updateCaptureScope()
@@ -162,8 +162,8 @@ struct SchoolRootView: View {
         .onChange(of: workspace?.school?.status) { _, status in
             if status == "ARCHIVED" { captureController.setScope(nil) }
         }
-        .onChange(of: localController.isCapturing) { _, capturing in
-            captureController.setPersonalCaptureActive(capturing)
+        .onChange(of: localController.activeSession?.id) { _, sessionID in
+            captureController.setPersonalCaptureActive(sessionID != nil)
         }
         .onOpenURL { receiveInvitation($0) }
     }

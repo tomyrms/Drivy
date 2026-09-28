@@ -2,6 +2,8 @@
 
 Tranche AP161–164 : `SchoolObservationWorkspace`, `SchoolObservationView` et point d’entrée injectable `SchoolObservationEntryView(client:schoolWorkspace:lessonID:)`. L’entrée possède sa pile de navigation. L’agenda ouvre une route `.sheet(item:)` contenant le modèle complet dès le premier appui. Le serveur relit le rôle INSTRUCTOR, le moniteur désigné et son affectation actuelle ; ADMIN seul et l’élève ne voient pas ce carnet.
 
+**État au 25 septembre 2026 :** ce carnet, ses commandes et les accès Agenda/brouillon sont compilés et livrés dans l’IPA 0.7.0/build29, source `3f5a21d5f984df8abee0898783ed20f45edab20a`, [run36064788907 réussi](https://github.com/tomyrms/Drivy/actions/runs/36064788907). Le serveur AP161–164 est déployé avec les migrations001–009 depuis `8a7cdfc348e748fbbb4fd7aecbb8518f19245bf6`. Le raccord Live décrit ci-dessous, ajouté ensuite dans `d8855e7`, et le nouveau `SchoolCaptureReplayView` sont destinés au prochain lot : ils ne figurent pas dans l’IPA29.
+
 Le Live scolaire expose aussi `signalObservation: (() -> Void)?`, affiché pendant l’enregistrement et la pause seulement lorsqu’un raccord réel existe. L’appelant fige `Date()` dans une nouvelle route complète au geste, puis fournit `initialObservedAt` à `SchoolObservationEntryView`. Cette intention ouvre une seule fois le formulaire de repère, qualifiable ensuite, dès que le contexte est disponible. Une lecture échouée conserve l’heure pour la reprise dans ce même écran ; ni l’ouverture ni le chargement ne créent ou n’envoient d’observation. Annuler le formulaire ne le rouvre pas automatiquement. L’intention de saisie n’est pas un enregistrement durable : la persistance commence à la confirmation explicite.
 
 ## Parcours livré
@@ -22,6 +24,6 @@ Seul un refus métier explicite lors du premier envoi d’un UUID neuf permet de
 
 ## Vérification et limites
 
-Raccords et types relus statiquement sous Windows ; `git diff --check` exécuté. Aucun résultat de compilation Apple, d’essai iPhone/iPad ou d’accessibilité n’est revendiqué par cette note. Aucune nouvelle campagne de tests n’a été lancée pour cette tranche, conformément à la demande du porteur ; compilation groupée par le pilote du projet.
+Raccords et types relus statiquement sous Windows ; `git diff --check` exécuté. La compilation Apple du carnet et des raccords Agenda/brouillon est confirmée par le build29 ; le raccord Live ultérieur reste à compiler dans son propre snapshot. Aucune nouvelle campagne de tests n’a été lancée pour cette tranche, conformément à la demande du porteur. Le [run visuel36064816097](https://github.com/tomyrms/Drivy/actions/runs/36064816097), sur la même source que l’IPA29, a produit deux PNG iPhone clairs Live/replay inspectés par le pilote du projet sans recouvrement apparent. Ces fixtures synthétiques ne constituent pas une recette de saisie et de reprise du carnet, ni une qualification physique GPS, iPad ou accessibilité.
 
 Les ancres nouvelles et le partage sélectif d’observations dans une révision de bilan ne sont pas activés ici. Le signalement reste utilisable sans GPS. Un brouillon indisponible bloque seulement l’ajout d’une note de relecture ; la liste reste consultable. Un refus de version conserve la saisie affichée pour relecture, mais aucune fusion automatique avec une modification distante n’est proposée.

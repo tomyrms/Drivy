@@ -2,6 +2,13 @@ import SwiftUI
 
 enum SchoolHomeTab: Hashable { case session, agenda, learners, school }
 
+private struct SchoolLiveObservationRoute: Identifiable {
+    let id = UUID()
+    let lessonID: UUID
+    let observedAt: Date
+    let client: SchoolObservationClient
+}
+
 /// The map is an entry point, including while a school is being prepared.
 /// School data always remains the projection authorized by SchoolWorkspace.
 struct SchoolHomeView: View {
@@ -26,6 +33,7 @@ struct SchoolHomeView: View {
     @State private var dossierPlanningModel: SchoolPlanningWorkspace?
     @State private var trainingCreationModel: SchoolTrainingCreationWorkspace?
     @State private var captureHistoryModel: SchoolCaptureHistoryWorkspace?
+    @State private var liveObservationRoute: SchoolLiveObservationRoute?
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -53,6 +61,10 @@ struct SchoolHomeView: View {
         .sheet(item: historyPresentation) { model in
             SchoolCaptureHistoryView(model: model, workspace: workspace)
         }
+        .sheet(item: $liveObservationRoute) { route in
+            SchoolObservationEntryView(client: route.client, schoolWorkspace: workspace,
+                lessonID: route.lessonID, initialObservedAt: route.observedAt)
+        }
         .sheet(item: $trainingCreationModel, onDismiss: trainingCreationDismissed) { model in
             SchoolTrainingCreationView(model: model)
                 .onChange(of: model.accessRevoked) { _, revoked in
@@ -66,11 +78,13 @@ struct SchoolHomeView: View {
             dossierPlanningModel?.invalidate(); dossierPlanningModel = nil
             trainingCreationModel?.invalidate(); trainingCreationModel = nil
             captureHistoryModel?.invalidate(); captureHistoryModel = nil
+            liveObservationRoute = nil
         }
         .onChange(of: workspace.membership?.accessEpoch) { _, _ in
             dossierPlanningModel?.invalidate(); dossierPlanningModel = nil
             trainingCreationModel?.invalidate(); trainingCreationModel = nil
             captureHistoryModel?.invalidate(); captureHistoryModel = nil
+            liveObservationRoute = nil
         }
         .task { await localController.load() }
         .onChange(of: captureController?.isCollecting) { wasCollecting, isCollecting in
@@ -90,7 +104,7 @@ struct SchoolHomeView: View {
             Group {
                 if let captureController, captureController.captureID != nil {
                     SchoolCaptureLiveView(controller: captureController, learnerName: captureLearnerName,
-                        returnToLesson: { selectedTab = .agenda })
+                        returnToLesson: { selectedTab = .agenda }, signalObservation: signalObservationAction)
                 } else {
                     DrivingMapHomeView(controller: localController, schoolName: workspace.school?.name,
                         openLearners: { selectedTab = .learners }, agendaClient: agendaClient,
@@ -107,6 +121,17 @@ struct SchoolHomeView: View {
         let learnerID = captureController?.learnerID
         if let learner = workspace.learner, learner.id == learnerID { return learner.displayName }
         return workspace.learners.first(where: { $0.id == learnerID })?.displayName ?? "Leçon en cours"
+    }
+
+    private var signalObservationAction: (() -> Void)? {
+        guard let captureController, let lessonID = captureController.lessonID, let agendaClient,
+              workspace.membership?.roles.contains("INSTRUCTOR") == true else { return nil }
+        return {
+            guard captureController.lessonID == lessonID,
+                  captureController.state == .recording || captureController.state == .paused else { return }
+            liveObservationRoute = SchoolLiveObservationRoute(lessonID: lessonID,
+                observedAt: Date(), client: agendaClient.observationClient)
+        }
     }
 
     @ViewBuilder private var learnersTab: some View {
