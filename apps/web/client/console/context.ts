@@ -6,7 +6,7 @@ import { errorMessage, RequestFailure } from '../protocol';
 import type { Member, Me } from '../protocol';
 import type { School } from '../school-api';
 
-export const sectionKeys = ['apercu', 'configuration', 'champs-profil', 'offres', 'referentiels', 'procedures', 'prestations', 'conditions', 'equipe', 'invitations'] as const;
+export const sectionKeys = ['apercu', 'configuration', 'champs-profil', 'offres', 'referentiels', 'procedures', 'prestations', 'conditions', 'equipe', 'invitations', 'eleves', 'disponibilites'] as const;
 export type SectionKey = typeof sectionKeys[number];
 
 export interface ConsoleContextValue {

@@ -12,7 +12,9 @@ export type CommandKind =
   | 'createInvitation' | 'resendInvitation' | 'revokeInvitation'
   | 'createProfilePolicy' | 'publishProfilePolicy'
   | 'createOffering' | 'createCurriculum' | 'createCatalogPolicy' | 'updateMember'
-  | 'createCommercialTerms' | 'createServiceProduct';
+  | 'createCommercialTerms' | 'createServiceProduct'
+  | 'createTraining' | 'createAssignment'
+  | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
 
 interface CommandSpec {
@@ -41,6 +43,13 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   updateMember: { operationType: 'UPDATE_MEMBER', resourceType: 'Member', target: 'resource', method: 'PATCH', expectedStatus: 200, label: 'Modification des accès d’un membre' },
   createCommercialTerms: { operationType: 'CREATE_COMMERCIAL_TERMS', resourceType: 'CommercialTermsVersion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création de conditions commerciales' },
   createServiceProduct: { operationType: 'CREATE_SERVICE_PRODUCT', resourceType: 'ServiceProductVersion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une prestation' },
+  createTraining: { operationType: 'CREATE_TRAINING', resourceType: 'Training', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ouverture d’une formation' },
+  createAssignment: { operationType: 'CREATE_ASSIGNMENT', resourceType: 'Assignment', target: 'created', method: 'POST', expectedStatus: 201, label: 'Affectation d’un moniteur' },
+  createAvailabilityRule: { operationType: 'CREATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ajout d’une disponibilité' },
+  updateAvailabilityRule: { operationType: 'UPDATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'PUT', expectedStatus: 200, label: 'Modification d’une disponibilité' },
+  removeAvailabilityRule: { operationType: 'REMOVE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une disponibilité' },
+  createClosure: { operationType: 'CREATE_CLOSURE', resourceType: 'Closure', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ajout d’une absence' },
+  removeClosure: { operationType: 'REMOVE_CLOSURE', resourceType: 'Closure', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une absence' },
 };
 
 export interface SchoolCommand {
@@ -136,6 +145,8 @@ const businessRefusals = new Set([
   'ALREADY_MEMBER', 'INVITATION_ALREADY_PENDING', 'INVITATION_USED', 'INVITATION_REVOKED', 'INVITATION_ROLE_FORBIDDEN',
   'PROFILE_POLICY_RULE_INVALID', 'PROFILE_POLICY_ALREADY_PUBLISHED', 'PROFILE_POLICY_DATE_CONFLICT',
   'INVALID_INTERVAL', 'INVALID_SERVICE_PRODUCT', 'COMMERCIAL_TERMS_NOT_APPROVED', 'SITE_SETUP_REQUIRED',
+  'ACTIVE_TRAINING_EXISTS', 'LEARNER_NOT_ACTIVE', 'LEARNER_ARCHIVED', 'TRAINING_NOT_ACTIVE', 'INSTRUCTOR_REQUIRED',
+  'ASSIGNMENT_CONFLICT', 'EXISTING_BOOKINGS',
 ]);
 
 export type CommandOutcome =
@@ -195,6 +206,13 @@ export function commandMessage(code: string): string {
     INVALID_SERVICE_PRODUCT: 'Une leçon individuelle exige une catégorie et une durée.',
     COMMERCIAL_TERMS_NOT_APPROVED: 'Choisissez des conditions commerciales approuvées pour activer cette prestation.',
     SITE_SETUP_REQUIRED: 'Les prestations par site ne sont pas encore disponibles.',
+    ACTIVE_TRAINING_EXISTS: 'Cet élève suit déjà cette formation.',
+    LEARNER_NOT_ACTIVE: 'Cet élève n’a plus d’accès actif à l’école.',
+    LEARNER_ARCHIVED: 'Ce dossier est archivé.',
+    TRAINING_NOT_ACTIVE: 'Cette formation n’est plus active.',
+    INSTRUCTOR_REQUIRED: 'Choisissez un moniteur actif de l’école.',
+    ASSIGNMENT_CONFLICT: 'Ce moniteur suit déjà cette formation.',
+    EXISTING_BOOKINGS: 'Des leçons prévues tombent dans cette période : déplacez-les d’abord.',
     SETUP_ACCESS_REQUIRED: 'Vos accès ne permettent plus cette opération dans l’école.',
     ACCESS_DENIED: 'Vos accès ne permettent plus cette opération dans l’école.',
     FORBIDDEN: 'Vos accès ne permettent plus cette opération dans l’école.',

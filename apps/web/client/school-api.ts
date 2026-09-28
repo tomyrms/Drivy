@@ -71,7 +71,32 @@ export const profilePolicySchema = z.object({
   fields: z.array(rule).max(7), noticeVersionId: id, approvedByMembershipId: id.nullable(),
 });
 
+export const learnerSchema = z.object({
+  id, schoolId: id, version, personId: id, displayName: z.string(), contactEmail: z.string().nullable(),
+  contactPhone: z.string().nullable(), archivedAt: timestamp.nullable(), profileReadiness: z.string().nullable().optional(),
+});
+export const trainingSchema = z.object({
+  id, schoolId: id, version, learnerId: id, offeringId: id, categoryCode: z.string().nullable().optional(),
+  status: z.enum(['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED']), startedOn: civil.nullable(), closedOn: civil.nullable(),
+});
+export const assignmentSchema = z.object({
+  id, schoolId: id, version, trainingId: id, instructorMembershipId: id, validFrom: timestamp, validUntil: timestamp.nullable(),
+});
+const clock = z.string().regex(/^\d{2}:\d{2}$/);
+export const availabilitySchema = z.object({
+  id, schoolId: id, version, instructorMembershipId: id, weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7),
+  localStart: clock, localEnd: clock, validFrom: civil, validUntil: civil.nullable(),
+});
+export const closureSchema = z.object({
+  id, schoolId: id, version, instructorMembershipId: id, startsAt: timestamp, endsAt: timestamp, reason: z.string().nullable(),
+});
+
 export type School = z.infer<typeof schoolSchema>;
+export type Learner = z.infer<typeof learnerSchema>;
+export type Training = z.infer<typeof trainingSchema>;
+export type Assignment = z.infer<typeof assignmentSchema>;
+export type Availability = z.infer<typeof availabilitySchema>;
+export type Closure = z.infer<typeof closureSchema>;
 export type Readiness = z.infer<typeof readinessSchema>;
 export type Setup = z.infer<typeof setupSchema>;
 export type DataPolicy = z.infer<typeof dataPolicySchema>;

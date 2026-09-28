@@ -4,7 +4,7 @@
  * Anything else is refused before an access token is ever used: this is not an open proxy.
  */
 export type SchoolMethod = 'GET' | 'POST' | 'PATCH' | 'PUT';
-type QueryKey = 'limit' | 'cursor' | 'noticeVersionId';
+type QueryKey = 'limit' | 'cursor' | 'noticeVersionId' | 'learnerId' | 'instructorMembershipId' | 'from' | 'to';
 export interface SchoolRoute {
   readonly method: SchoolMethod;
   /** Literal segments after the school identifier; ':id' stands for one UUID. */
@@ -46,6 +46,22 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'GET', segments: ['profile-field-policies'], query: list },
   { method: 'POST', segments: ['profile-field-policies'], ifMatch: true, bodyLimit: 32_768 },
   { method: 'POST', segments: ['profile-field-policies', ':id', 'publish'], ifMatch: true, bodyLimit: 1_024 },
+  // Élèves et formations : l'administration ouvre la formation et affecte le moniteur depuis le web.
+  { method: 'GET', segments: ['learners'], query: list },
+  { method: 'GET', segments: ['learners', ':id'] },
+  { method: 'GET', segments: ['trainings'], query: [...list, 'learnerId'] },
+  { method: 'GET', segments: ['trainings', ':id'] },
+  { method: 'POST', segments: ['trainings'], bodyLimit: 2_048 },
+  { method: 'GET', segments: ['trainings', ':id', 'assignments'], query: list },
+  { method: 'POST', segments: ['trainings', ':id', 'assignments'], bodyLimit: 2_048 },
+  // Disponibilités et absences des moniteurs : réglées sur le web uniquement (décision du 28 septembre 2026).
+  { method: 'GET', segments: ['availability-rules'], query: [...list, 'instructorMembershipId'] },
+  { method: 'POST', segments: ['availability-rules'], bodyLimit: 2_048 },
+  { method: 'PUT', segments: ['availability-rules', ':id'], ifMatch: true, bodyLimit: 2_048 },
+  { method: 'POST', segments: ['availability-rules', ':id', 'remove'], ifMatch: true, bodyLimit: 2_048 },
+  { method: 'GET', segments: ['closures'], query: [...list, 'instructorMembershipId', 'from', 'to'] },
+  { method: 'POST', segments: ['closures'], bodyLimit: 2_048 },
+  { method: 'POST', segments: ['closures', ':id', 'remove'], ifMatch: true, bodyLimit: 2_048 },
 ];
 
 const uuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -53,6 +69,10 @@ const queryRules: Record<QueryKey, RegExp> = {
   limit: /^(?:[1-9]|[1-9][0-9]|100)$/,
   cursor: /^[A-Za-z0-9_-]{1,6000}$/,
   noticeVersionId: uuid,
+  learnerId: uuid,
+  instructorMembershipId: uuid,
+  from: /^\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:\d{2})$/,
+  to: /^\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:\d{2})$/,
 };
 export const MAX_SCHOOL_BODY = Math.max(...schoolRoutes.map(route => route.bodyLimit ?? 0));
 export const isUUID = (value: unknown): value is string => typeof value === 'string' && uuid.test(value);

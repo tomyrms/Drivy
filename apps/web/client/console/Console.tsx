@@ -13,6 +13,8 @@ import { ProfileFieldsSection } from './profile-fields';
 import { CurriculaSection, OfferingsSection, ProceduresSection } from './catalog';
 import { ProductsSection, TermsSection } from './commerce';
 import { InvitationsSection, TeamSection } from './people';
+import { LearnersSection } from './learners';
+import { AvailabilitySection } from './availability';
 
 const navigation: readonly { group: string; items: readonly { key: SectionKey; label: string; symbol: SymbolKind }[] }[] = [
   { group: 'École', items: [
@@ -28,8 +30,12 @@ const navigation: readonly { group: string; items: readonly { key: SectionKey; l
     { key: 'conditions', label: 'Conditions commerciales', symbol: 'receipt' },
   ] },
   { group: 'Personnes', items: [
-    { key: 'equipe', label: 'Équipe et accès', symbol: 'users' },
+    { key: 'eleves', label: 'Élèves', symbol: 'users' },
+    { key: 'equipe', label: 'Équipe et accès', symbol: 'shield' },
     { key: 'invitations', label: 'Invitations', symbol: 'mail' },
+  ] },
+  { group: 'Planning', items: [
+    { key: 'disponibilites', label: 'Disponibilités', symbol: 'clock' },
   ] },
 ];
 const sectionTitle = (key: SectionKey) => navigation.flatMap(group => group.items).find(item => item.key === key)!.label;
@@ -210,6 +216,8 @@ function Section({ section }: { section: SectionKey }): ReactNode {
     case 'conditions': return <TermsSection />;
     case 'equipe': return <TeamSection />;
     case 'invitations': return <InvitationsSection />;
+    case 'eleves': return <LearnersSection />;
+    case 'disponibilites': return <AvailabilitySection />;
   }
 }
 
