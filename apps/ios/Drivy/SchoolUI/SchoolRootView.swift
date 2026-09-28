@@ -74,6 +74,9 @@ struct SchoolRootView: View {
 
     private var observedContent: some View {
         rootContent
+        // The session controller is shared with every screen of the signed-in content:
+        // read it with `@Environment(SchoolCaptureSessionController.self)` (optional).
+        .environment(captureController)
         .tint(DrivyTheme.accent)
         .foregroundStyle(DrivyTheme.text)
         .background(SignInPresenter { presenter = $0 }.frame(width: 0, height: 0))
