@@ -182,6 +182,7 @@ struct SchoolStartNowView: View {
                             DrivyPendingRequest(message: error, reference: pending.id,
                                 retry: { Task { if await model.retry() != nil { dismiss() } } }, canRetry: !model.isBusy)
                         }
+                            .drivyFormRows()
                     } else {
                         Section { SchoolErrorNotice(message: error) }
                             .listRowInsets(EdgeInsets())
@@ -206,9 +207,11 @@ struct SchoolStartNowView: View {
                             .multilineTextAlignment(.trailing)
                     }
                 }
+                    .drivyFormRows()
                 .disabled(model.isBusy)
                 if model.isLoading {
                     Section { DrivyLoadingState(title: model.learnerID == nil ? "Chargement des élèves…" : "Chargement de la formation…") }
+                        .drivyFormRows()
                 }
             }
             .scrollContentBackground(.hidden)

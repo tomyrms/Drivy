@@ -33,7 +33,7 @@ struct SchoolSignInLanding: View {
                     SchoolErrorNotice(message: errorMessage)
                 }
             }
-            .drivyPageContent(maxWidth: 600)
+            .drivyPageContent(maxWidth: DrivyLayout.narrowColumn)
         }
         .background(DrivyTheme.surface)
         // Un seul grand titre : la promesse. « Drivy » reste un titre de barre discret.

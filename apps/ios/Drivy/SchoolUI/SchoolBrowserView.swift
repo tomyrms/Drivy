@@ -30,8 +30,8 @@ struct SchoolBrowserView: View {
                 }
                 DrivyAccountToolbarItem(openAccount: openAccount)
             }
-            .navigationSplitViewColumnWidth(min: LearnersLayout.listMinWidth, ideal: LearnersLayout.listIdealWidth,
-                max: LearnersLayout.listMaxWidth)
+            .navigationSplitViewColumnWidth(min: DrivyLayout.splitListMinWidth, ideal: DrivyLayout.splitListIdealWidth,
+                max: DrivyLayout.splitListMaxWidth)
         } detail: {
             if workspace.selectedLearnerID != nil {
                 SchoolLearnerDetailView(workspace: workspace, openProfile: openProfile, openPlanning: openPlanning, trainingClient: trainingClient)
@@ -128,12 +128,6 @@ struct SchoolBrowserView: View {
     }
 }
 
-/// Liste des élèves plafonnée à 360 pt sur iPad ; le dossier prend la largeur restante.
-private enum LearnersLayout {
-    static let listMinWidth: CGFloat = 280
-    static let listIdealWidth: CGFloat = 320
-    static let listMaxWidth: CGFloat = 360
-}
 
 /// School chooser presented from the leading toolbar button of every tab.
 struct SchoolChooserSheet: View {

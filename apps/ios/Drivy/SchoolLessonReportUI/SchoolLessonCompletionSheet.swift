@@ -32,7 +32,7 @@ struct SchoolLessonCompletionSheet: View {
                         .disabled(!model.canMutate || isSubmitting)
                         .accessibilityIdentifier("lesson-permit-seen")
                     }
-                    .listRowBackground(DrivyTheme.surface)
+                    .drivyFormRows()
                 }
                 if model.completionNeedsReason {
                     Section("Permis non présenté") {
@@ -44,11 +44,11 @@ struct SchoolLessonCompletionSheet: View {
                             DrivyActionNote(text: "Raccourcissez le motif à 1 000 caractères.", isError: true)
                         }
                     }
-                    .listRowBackground(DrivyTheme.surface)
+                    .drivyFormRows()
                 }
             }
             .scrollContentBackground(.hidden)
-            .frame(maxWidth: 820).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
+            .frame(maxWidth: DrivyLayout.formColumn).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 DrivyStickyActionBar {
@@ -102,15 +102,15 @@ struct SchoolLessonTariffSheet: View {
                 // Montants en chiffres tabulaires, empilés aux tailles d’accessibilité.
                 if let lesson = model.lesson {
                     DrivyKeyValueRow(title: "Prix convenu", value: SchoolCatalogFormatting.price(lesson.priceCentsSnapshot), numeric: true)
-                        .listRowBackground(DrivyTheme.surface)
+                        .drivyFormRows()
                 }
                 if let account = model.account {
                     DrivyKeyValueRow(title: "À payer", value: SchoolCatalogFormatting.price(account.balanceCents), numeric: true)
-                        .listRowBackground(DrivyTheme.surface)
+                        .drivyFormRows()
                 }
             }
             .scrollContentBackground(.hidden)
-            .frame(maxWidth: 820).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
+            .frame(maxWidth: DrivyLayout.formColumn).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .navigationTitle("Tarif").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
         }

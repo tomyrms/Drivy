@@ -136,7 +136,7 @@ struct DrivyEntityRow: View {
                 .font(.body)
                 .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.muted)
                 .frame(width: 44, height: 44)
-                .background(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted, in: Circle())
+                .background(isSelected ? DrivyTheme.surface : DrivyTheme.surfaceMuted, in: Circle())
                 .accessibilityHidden(true)
         case .none:
             EmptyView()
@@ -205,6 +205,15 @@ struct DrivyDestructiveRow: View {
 typealias DrivyDestructiveButtonStyle = DrivyDangerButtonStyle
 
 // MARK: - Forms
+
+extension View {
+    /// Row fill of every native Form and List: the surface token, so rows never keep
+    /// the system grey of dark mode on the canvas. Apply it to a Section or a row;
+    /// a special fill (selection, danger, clear header) is set on its own row instead.
+    func drivyFormRows(isSelected: Bool = false) -> some View {
+        listRowBackground(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surface)
+    }
+}
 
 /// Context shown at the top of an administration form: the school or learner
 /// concerned, then one sentence on what the form changes.
@@ -277,17 +286,20 @@ struct DrivyFormMessage: View {
 struct DrivyFormActionBar<Actions: View>: View {
     let hint: String?
     let hintTone: DrivyTone
+    let maxWidth: CGFloat
     let actions: Actions
 
-    init(hint: String? = nil, hintTone: DrivyTone = .neutral, @ViewBuilder actions: () -> Actions) {
+    init(hint: String? = nil, hintTone: DrivyTone = .neutral, maxWidth: CGFloat = DrivyLayout.formColumn,
+         @ViewBuilder actions: () -> Actions) {
         self.hint = hint
         self.hintTone = hintTone
+        self.maxWidth = maxWidth
         self.actions = actions()
     }
 
     var body: some View {
         // Same bar as the agenda and report screens: one anatomy for every form.
-        DrivyStickyActionBar {
+        DrivyStickyActionBar(maxWidth: maxWidth) {
             if let hint, !hint.isEmpty {
                 Label(hint, systemImage: hintTone == .danger ? "exclamationmark.triangle.fill" : "info.circle")
                     .font(.footnote)

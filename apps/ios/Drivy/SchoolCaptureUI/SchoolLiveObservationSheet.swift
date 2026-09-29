@@ -34,7 +34,7 @@ struct SchoolLiveObservationSheet: View {
                 .padding(.horizontal, DrivySpacing.l)
                 .padding(.top, DrivySpacing.s)
                 .padding(.bottom, DrivySpacing.l)
-                .frame(maxWidth: 560)
+                .frame(maxWidth: DrivyLayout.compactColumn)
                 .frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)

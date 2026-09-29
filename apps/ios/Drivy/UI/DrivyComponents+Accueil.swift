@@ -4,16 +4,16 @@ import SwiftUI
 // progress, one question per screen, a sentence saying why the step exists,
 // labelled fields on a reading page. Built only from DrivyTheme tokens.
 
-/// Progress of a guided flow: « Étape 2 sur 4 · Votre formation » above a
-/// segmented bar. The bar is decorative; VoiceOver reads the sentence once.
+/// Progress of a guided flow: « Étape 2 sur 4 » above a segmented bar. The step
+/// title is the heading right below, so it is not repeated here. The bar is
+/// decorative; VoiceOver reads the sentence once.
 struct DrivyStepProgress: View {
     let current: Int
     let total: Int
-    let title: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            Text("Étape \(current) sur \(total) · \(title)")
+            Text("Étape \(current) sur \(total)")
                 .font(.subheadline.weight(.semibold).monospacedDigit())
                 .foregroundStyle(DrivyTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -28,7 +28,7 @@ struct DrivyStepProgress: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Étape \(current) sur \(total), \(title)")
+        .accessibilityLabel("Étape \(current) sur \(total)")
     }
 }
 

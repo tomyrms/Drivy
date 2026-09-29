@@ -106,6 +106,7 @@ private struct SchoolTripsList: View {
             }
             if model.isLoading && model.trips.isEmpty {
                 Section { DrivyLoadingState(title: "Chargement des trajets…") }
+                    .drivyFormRows()
             }
             ForEach(model.days()) { day in
                 Section {
@@ -115,9 +116,11 @@ private struct SchoolTripsList: View {
                 } header: {
                     Text(day.title).accessibilityAddTraits(.isHeader)
                 }
+                    .drivyFormRows()
             }
             if model.nextCursor != nil && model.errorMessage == nil {
                 Section { nextPage }
+                    .drivyFormRows()
             }
         }
         .listStyle(.insetGrouped)

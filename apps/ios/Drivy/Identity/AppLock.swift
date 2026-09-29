@@ -109,7 +109,7 @@ struct AppLockView: View {
                     if let error = lock.errorMessage { SchoolErrorNotice(message: error) }
                 }
                 .frame(maxWidth: .infinity)
-                .drivyPageContent(maxWidth: 600)
+                .drivyPageContent(maxWidth: DrivyLayout.narrowColumn)
                 .frame(minHeight: proxy.size.height)
             }
         }

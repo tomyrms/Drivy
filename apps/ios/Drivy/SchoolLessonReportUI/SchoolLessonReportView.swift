@@ -80,9 +80,9 @@ struct SchoolLessonReportView: View {
 /// Seuils et colonnes de la leçon : contexte à gauche, bilan à droite dès que la fenêtre le permet.
 private enum LessonLayout {
     static let splitBreakpoint: CGFloat = 900
-    static let contextColumnWidth: CGFloat = 380
+    static let contextColumnWidth = DrivyMapLayout.sidebarWidth
     static let splitMaxWidth: CGFloat = 1248
-    static let formMaxWidth: CGFloat = 820
+    static let formMaxWidth = DrivyLayout.formColumn
 }
 
 private struct SchoolLessonReportContent: View {
@@ -216,7 +216,7 @@ private struct SchoolLessonReportContent: View {
                         if isPlanned, model.isOwnLearner, let goals = model.preparation?.goals, !goals.isEmpty { goalsReader(goals) }
                         if isPlanned, model.isAuthor { observationsSection }
                     }
-                    .listRowBackground(DrivyTheme.surface)
+                    .drivyFormRows()
                 }
                 .scrollContentBackground(.hidden)
                 .frame(maxWidth: LessonLayout.formMaxWidth)
@@ -249,12 +249,13 @@ private struct SchoolLessonReportContent: View {
         Group {
             if model.needsReload && model.hasLocalEdits {
                 Section("Saisie conservée") { Text(model.retainedEditsText).textSelection(.enabled) }
+                    .drivyFormRows()
             }
             if model.pending != nil { pendingSection }
             if isCompleted, readsLesson, !model.captures.isEmpty || !model.track.isEmpty { trackSection }
             if isCompleted, model.isAuthor || model.isOwnLearner { observationsSection }
         }
-        .listRowBackground(DrivyTheme.surface)
+        .drivyFormRows()
     }
 
     @ViewBuilder private var completedReport: some View {
@@ -262,7 +263,7 @@ private struct SchoolLessonReportContent: View {
             if model.isAuthor, isCompleted, model.draft != nil { reportEditor }
             if !model.isAuthor, model.canReadSharedReport, isCompleted { sharedReportSection }
         }
-        .listRowBackground(DrivyTheme.surface)
+        .drivyFormRows()
     }
 
     private func isGoalsBar(_ bar: PlannedBar?) -> Bool {
@@ -379,6 +380,7 @@ private struct SchoolLessonReportContent: View {
                 }
             }
         }
+            .drivyFormRows()
     }
 
     // MARK: Actions de la leçon
@@ -533,6 +535,7 @@ private struct SchoolLessonReportContent: View {
                     set: { shared in Task { await model.updateSharing(captureHidden: !shared) } }))
             }
         } header: { Text("Trajet") }
+            .drivyFormRows()
     }
 
     private var observationsSection: some View {
@@ -549,7 +552,7 @@ private struct SchoolLessonReportContent: View {
                         Button {
                             Task { await model.updateSharing(observation: observation.id, observationPrivate: !kept) }
                         } label: {
-                            PrivacyMark(isPrivate: kept)
+                            DrivyPrivacyMark(isPrivate: kept)
                                 .frame(minWidth: 44, minHeight: 44)
                         }
                         .buttonStyle(.borderless)
@@ -565,6 +568,7 @@ private struct SchoolLessonReportContent: View {
                     .accessibilityIdentifier("lesson-private-observations")
             }
         } header: { Text("Pendant la leçon") }
+            .drivyFormRows()
     }
 
     /// Constat par symbole, libellé et couleur : jamais par la couleur seule.
@@ -615,6 +619,7 @@ private struct SchoolLessonReportContent: View {
             reportField("À retenir", text: $model.observationText)
             reportField("Prochaine étape", text: $model.nextStep)
         } header: { Text("Bilan") }
+            .drivyFormRows()
         if !model.competencies.isEmpty {
             Section {
                 // Un niveau choisi suffit : le jour et le lieu sont proposés comme situation, modifiable.
@@ -636,6 +641,7 @@ private struct SchoolLessonReportContent: View {
                     }
                 }
             } header: { Text("Compétences") }
+                .drivyFormRows()
         }
     }
 
@@ -659,10 +665,12 @@ private struct SchoolLessonReportContent: View {
                         level: observation.levelLabel, context: observation.context)
                 }
             } header: { Text("Bilan") }
+                .drivyFormRows()
         } else if model.revisionsError == nil, !model.isLoading {
             Section {
                 Text("Votre moniteur n’a pas encore écrit le bilan.").foregroundStyle(DrivyTheme.muted)
             } header: { Text("Bilan") }
+                .drivyFormRows()
         }
     }
 
@@ -691,7 +699,7 @@ private struct SchoolLessonReportContent: View {
             }
             // Jamais montrée à l’élève : le cadenas le dit sans texte.
             HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
-                PrivacyMark(isPrivate: true).accessibilityHidden(true)
+                DrivyPrivacyMark(isPrivate: true).accessibilityHidden(true)
                 TextField("Note pour moi", text: $model.administrativeNote, axis: .vertical).lineLimit(1...4).disabled(!model.canMutate)
             }
             if savesInline {
@@ -699,12 +707,14 @@ private struct SchoolLessonReportContent: View {
                     .disabled(!model.canMutate || !model.preparationValid || !model.preparationChanged)
             }
         } header: { Text("Objectifs") }
+            .drivyFormRows()
     }
 
     private func goalsReader(_ goals: [SchoolLessonGoal]) -> some View {
         Section {
             ForEach(goals) { goal in Text(goal.label) }
         } header: { Text("Objectifs") }
+            .drivyFormRows()
     }
 
     private func wishSection(_ wish: SchoolLearnerWish) -> some View {
@@ -717,6 +727,7 @@ private struct SchoolLessonReportContent: View {
                 Text(wish.text)
             }
         } header: { Text(model.isOwnLearner ? "Mon souhait" : "Souhait de l’élève") }
+            .drivyFormRows()
     }
 
     // MARK: Bilan : enregistrement
@@ -738,7 +749,7 @@ private struct SchoolLessonReportContent: View {
             Label {
                 Text("Visible par l’élève")
             } icon: {
-                PrivacyMark(isPrivate: !isOn.wrappedValue)
+                DrivyPrivacyMark(isPrivate: !isOn.wrappedValue)
             }
         }
         .disabled(!model.canMutate)
@@ -752,16 +763,6 @@ private struct SchoolLessonReportContent: View {
                 .accessibilityHint("Facultatif")
         }
         .padding(.vertical, DrivySpacing.xxs)
-    }
-}
-
-/// Marque de confidentialité de la leçon : cadenas fermé (« Pour moi ») ou ouvert (visible par l’élève).
-/// La forme du symbole change, pas seulement sa couleur.
-private struct PrivacyMark: View {
-    let isPrivate: Bool
-    var body: some View {
-        Image(systemName: isPrivate ? "lock.fill" : "lock.open")
-            .foregroundStyle(isPrivate ? DrivyTheme.warning : DrivyTheme.muted)
     }
 }
 

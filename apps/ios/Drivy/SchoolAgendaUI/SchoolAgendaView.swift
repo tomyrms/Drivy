@@ -293,8 +293,8 @@ struct SchoolAgendaView: View {
 private enum AgendaLayout {
     static let twoColumnBreakpoint: CGFloat = 1000
     static let weekColumnWidth: CGFloat = 388
-    static let dayColumnMaxWidth: CGFloat = 820
-    static let singleColumnMaxWidth: CGFloat = 800
+    static let dayColumnMaxWidth = DrivyLayout.formColumn
+    static let singleColumnMaxWidth = DrivyLayout.formColumn
 }
 
 extension SchoolAgendaClient {

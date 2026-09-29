@@ -45,6 +45,7 @@ struct SchoolProfileView: View {
                         Label("Une photo est associée au dossier", systemImage: "person.crop.circle")
                             .foregroundStyle(DrivyTheme.muted)
                     } header: { Text("Photo") }
+                        .drivyFormRows()
                 }
                 readinessSection
             }
@@ -62,11 +63,12 @@ struct SchoolProfileView: View {
                         }
                     }
                 }
+                    .drivyFormRows()
             }
             if let notice = model.notice, notice.status == "APPROVED" { noticeSection(notice) }
         }
         .scrollContentBackground(.hidden)
-        .frame(maxWidth: 720)
+        .frame(maxWidth: DrivyLayout.formColumn)
         .frame(maxWidth: .infinity)
         .background(DrivyTheme.canvas)
         .safeAreaInset(edge: .bottom) {
@@ -104,6 +106,7 @@ struct SchoolProfileView: View {
                 fieldExplanation(.lastName)
             } else { LabeledContent("Nom", value: profile.lastName ?? "À compléter") }
         } header: { Text("Identité scolaire") }
+            .drivyFormRows()
         .disabled(!model.canMutate)
     }
 
@@ -122,6 +125,7 @@ struct SchoolProfileView: View {
                     fieldExplanation(.contactPhone)
                 }
             } header: { Text("Contacts") }
+                .drivyFormRows()
             .disabled(!model.canMutate)
         }
     }
@@ -136,6 +140,7 @@ struct SchoolProfileView: View {
             .padding(.vertical, DrivySpacing.xxs)
             fieldExplanation(.birthDate)
         } header: { Text("Date de naissance") }
+            .drivyFormRows()
         .disabled(!model.canMutate)
     }
     private var addressSection: some View {
@@ -152,6 +157,7 @@ struct SchoolProfileView: View {
             }
             fieldExplanation(.postalAddress)
         } header: { Text("Adresse postale") }
+            .drivyFormRows()
         .disabled(!model.canMutate)
     }
     @ViewBuilder private func fieldExplanation(_ field: SchoolProfileField) -> some View {
@@ -185,6 +191,7 @@ struct SchoolProfileView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 SchoolProfileBlockers(blockers: readiness.blockers)
             } header: { Text("Prochaine étape") }
+                .drivyFormRows()
         }
     }
     /// The welcome itself is the guided flow (SchoolOnboardingView); this screen
@@ -209,6 +216,7 @@ struct SchoolProfileView: View {
                 }
             }
         } header: { Text("Accueil dans l’école") }
+            .drivyFormRows()
     }
     private func noticeSection(_ notice: SchoolDataPolicy) -> some View {
         Section {
@@ -224,6 +232,7 @@ struct SchoolProfileView: View {
                     .foregroundStyle(DrivyTheme.muted)
             }
         }
+            .drivyFormRows()
     }
 }
 
@@ -231,7 +240,8 @@ struct SchoolProfileStatusSections: View {
     @Bindable var model: SchoolProfileWorkspace
     var body: some View {
         Group {
-            if model.isLoading { Section { ProgressView("Vérification du dossier…").frame(maxWidth: .infinity, minHeight: 44) } }
+            if model.isLoading { Section { ProgressView("Vérification du dossier…").frame(maxWidth: .infinity, minHeight: 44) }
+                .drivyFormRows() }
             if let error = model.errorMessage {
                 // The notice is the whole row: no white card around the red one.
                 Section {
@@ -243,6 +253,7 @@ struct SchoolProfileStatusSections: View {
             }
             if let success = model.successMessage, !model.hasEdits {
                 Section { DrivyFormMessage(text: success) }
+                    .drivyFormRows()
             }
             if let pending = model.pending {
                 Section {
@@ -253,6 +264,7 @@ struct SchoolProfileStatusSections: View {
                         verify: { Task { await model.verifyPending() } }, canVerify: model.canVerifyPending,
                         retry: model.canRetryPending ? { Task { await model.retryPending() } } : nil)
                 }
+                    .drivyFormRows()
             }
         }
     }

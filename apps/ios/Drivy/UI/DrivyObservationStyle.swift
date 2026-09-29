@@ -29,7 +29,7 @@ struct DrivyTileButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? DrivyPress.scale : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }
 }

@@ -65,6 +65,7 @@ struct SchoolPlanningView: View {
                 }
             }
         }
+            .drivyFormRows()
         if model.trainingID != nil {
             scheduleFields
             if model.originalLesson != nil {
@@ -76,6 +77,7 @@ struct SchoolPlanningView: View {
                         LabeledContent("Prix conservé") { Text(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot)).monospacedDigit().foregroundStyle(DrivyTheme.muted) }
                     }
                 } header: { Text("Durée et prix") }
+                    .drivyFormRows()
             }
             if model.originalLesson == nil || model.changesCommercialTerms { commercialFields }
             reviewFields
@@ -123,6 +125,7 @@ struct SchoolPlanningView: View {
                 }
             }
         } header: { Text("Le rendez-vous") }
+            .drivyFormRows()
         .disabled(!model.canMutate)
     }
     private var commercialFields: some View {
@@ -166,6 +169,7 @@ struct SchoolPlanningView: View {
                 }
             }
         } header: { Text("Le tarif") }
+            .drivyFormRows()
         .disabled(!model.canMutate)
     }
     private var reviewFields: some View {
@@ -178,6 +182,7 @@ struct SchoolPlanningView: View {
                 Toggle("Le nouvel horaire est convenu", isOn: $model.agreementConfirmed)
             }
         } header: { Text("Vérification") }
+            .drivyFormRows()
     }
 
     private var bookingActionBar: some View {
@@ -247,6 +252,7 @@ struct SchoolPlanningView: View {
                 .accessibilityElement(children: .combine)
                 lesson.drivyState.badge
             }
+                .drivyFormRows()
         }
         Section {
             Picker("Motif", selection: $model.cancellationReason) {
@@ -262,6 +268,7 @@ struct SchoolPlanningView: View {
                 DrivyFormMessage(text: "Raccourcissez la précision à 1 000 caractères.", tone: .danger)
             }
         } header: { Text("Motif d’annulation") }
+            .drivyFormRows()
         Section {
             Button(role: .destructive) { confirmsCancellation = true } label: {
                 Label("Annuler la leçon", systemImage: "calendar.badge.minus")
@@ -272,6 +279,7 @@ struct SchoolPlanningView: View {
         } footer: {
             if model.cancellationReason.isEmpty { Text("Choisissez un motif pour pouvoir annuler.") }
         }
+            .drivyFormRows()
     }
     private func formNote(_ text: String) -> some View {
         Text(text).font(.subheadline).foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
@@ -281,7 +289,8 @@ struct SchoolPlanningView: View {
 struct SchoolPlanningFeedback: View {
     @Bindable var model: SchoolPlanningWorkspace
     var body: some View {
-        if model.isLoading { Section { DrivyLoadingState(title: "Ouverture du planning…") } }
+        if model.isLoading { Section { DrivyLoadingState(title: "Ouverture du planning…") }
+            .drivyFormRows() }
         if let error = model.errorMessage {
             // Même présentation d’erreur que les pages : notice, puis « Réessayer ».
             Section {
@@ -293,6 +302,7 @@ struct SchoolPlanningFeedback: View {
         }
         if let success = model.successMessage {
             Section { DrivyFormMessage(text: success, tone: .success) }
+                .drivyFormRows()
         }
         if let command = model.pending {
             Section {
@@ -302,14 +312,16 @@ struct SchoolPlanningFeedback: View {
                     verify: { Task { await model.verify() } }, canVerify: !(model.isBusy || model.isLoading),
                     retry: model.canRetry ? { Task { _ = await model.retry() } } : nil)
             }
+                .drivyFormRows()
         }
-        if model.isBusy { Section { DrivyLoadingState(title: "Confirmation par l’école…") } }
+        if model.isBusy { Section { DrivyLoadingState(title: "Confirmation par l’école…") }
+            .drivyFormRows() }
     }
 }
 
 /// Colonne bornée des formulaires de planification (planifier, déplacer, annuler, démarrer maintenant) sur iPad.
 enum SchoolFormLayout {
-    static let maxWidth: CGFloat = 820
+    static let maxWidth = DrivyLayout.formColumn
 }
 
 enum SchoolPlanningFormat {

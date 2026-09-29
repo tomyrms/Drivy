@@ -42,7 +42,7 @@ struct SchoolCaptureLiveView: View {
                 GeometryReader { geometry in
                     if dynamicTypeSize.isAccessibilitySize {
                         accessibleContent(availableHeight: geometry.size.height)
-                    } else if geometry.size.width >= 760 {
+                    } else if geometry.size.width >= DrivyMapLayout.sidebarBreakpoint {
                         wideContent
                     } else {
                         compactContent
@@ -70,7 +70,7 @@ struct SchoolCaptureLiveView: View {
         routeMap
             .safeAreaInset(edge: .top, spacing: 0) {
                 heading()
-                    .frame(maxWidth: 640)
+                    .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
                     .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.xs)
                     .frame(maxWidth: .infinity)
             }
@@ -79,7 +79,7 @@ struct SchoolCaptureLiveView: View {
                     if controller.pointCount > 0 { mapControls(axis: .horizontal) }
                     commandPanel()
                 }
-                .frame(maxWidth: 640)
+                .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
                 .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.s)
                 .frame(maxWidth: .infinity)
             }
@@ -133,7 +133,8 @@ struct SchoolCaptureLiveView: View {
         if controller.pointCount > 0 {
             SchoolCaptureLiveMap(segments: controller.segments, resetCameraID: resetCameraID, followsPosition: $followsPosition)
         } else {
-            DrivyMapPlaceholder(title: placeholderTitle, message: placeholderMessage, symbol: "location")
+            DrivyMapPlaceholder(title: placeholderTitle, message: placeholderMessage, symbol: "location",
+                isSearching: controller.state == .preparing || controller.state == .recording)
         }
     }
 
@@ -243,26 +244,24 @@ struct SchoolCaptureLiveView: View {
                 let signal = Button {
                     observationMoment = ObservationMoment(recorder: recorder)
                 } label: {
-                    // Geste dominant en voiture : texte et cible plus grands que le bouton standard.
                     Label("Signaler", systemImage: "text.bubble.fill")
-                        .font(.title3.weight(.bold))
-                        .padding(.vertical, DrivySpacing.m)
                 }
+                // Geste dominant en voiture : variante terrain (texte et cible plus grands).
                 // Une seule action primaire : en pause, « Reprendre » prend l’aplat et Signaler
                 // garde sa taille et sa place en style secondaire.
                 Group {
                     if controller.state == .paused {
-                        signal.buttonStyle(DrivySecondaryButtonStyle())
+                        signal.buttonStyle(DrivySecondaryButtonStyle(size: .field))
                     } else {
-                        signal.buttonStyle(DrivyPrimaryButtonStyle())
+                        signal.buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                     }
                 }
                 .disabled(!recorder.canRecord || isFinishing)
                 .accessibilityIdentifier("capture-signal-observation")
                 .popover(item: $observationMoment, attachmentAnchor: .rect(.bounds)) { moment in
                     SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant)
-                        .frame(width: horizontalSizeClass == .regular ? 480 : nil,
-                               height: horizontalSizeClass == .regular ? 560 : nil)
+                        .frame(width: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.width : nil,
+                               height: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.height : nil)
                         .presentationCompactAdaptation(.sheet)
                 }
                 if recorder.isSending { DrivyLoadingState(title: "Envoi de l’observation…") }

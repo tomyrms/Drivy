@@ -453,7 +453,7 @@ struct SchoolRootView: View {
                         SchoolErrorNotice(message: error, retry: { Task { await workspace.loadAccount() } })
                     }
                 }
-                .drivyPageContent(maxWidth: 600)
+                .drivyPageContent(maxWidth: DrivyLayout.narrowColumn)
             }
             .background(DrivyTheme.surface)
         } else {

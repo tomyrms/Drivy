@@ -75,15 +75,6 @@ struct SchoolOnboardingView: View {
         value.append(.ready)
         return value
     }
-    private func title(_ screen: Screen) -> String {
-        switch screen {
-        case .welcome: "Bienvenue"
-        case .information: "Vos informations"
-        case .formation: isStaff ? "Votre rôle" : "Votre formation"
-        case .gps: "GPS pendant les leçons"
-        case .ready: "C’est prêt"
-        }
-    }
     private var ownTrainings: [SchoolTraining] {
         guard let learnerID = model.learnerID else { return [] }
         return trainings.filter { $0.learnerId == learnerID && $0.schoolId == model.scope.schoolID }
@@ -98,7 +89,7 @@ struct SchoolOnboardingView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.l) {
                 if let screen, screen != .welcome, !editsInformation, let index = steps.firstIndex(of: screen) {
-                    DrivyStepProgress(current: index + 1, total: steps.count, title: title(screen))
+                    DrivyStepProgress(current: index + 1, total: steps.count)
                 }
                 statusBlock
                 if let screen {

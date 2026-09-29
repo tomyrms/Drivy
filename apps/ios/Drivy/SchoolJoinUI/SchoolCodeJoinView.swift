@@ -24,7 +24,7 @@ struct SchoolCodeJoinView: View {
                     else if model.isReady { entry }
                     else if model.isBusy { DrivyLoadingState(title: "Vérification de votre compte…") }
                 }
-                .drivyPageContent(maxWidth: 560)
+                .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
             }
             .background(DrivyTheme.surface)
             .scrollDismissesKeyboard(.interactively)
@@ -217,7 +217,7 @@ struct SchoolCodeJoinView: View {
             }
         }
         .buttonStyle(DrivyPrimaryButtonStyle())
-        .frame(maxWidth: 560)
+        .frame(maxWidth: DrivyLayout.compactColumn)
         .frame(maxWidth: .infinity)
         .background(DrivyTheme.surface)
     }

@@ -23,7 +23,7 @@ struct SchoolJoinView: View {
                     else if let preview = model.preview { invitation(preview) }
                     else { linkEntry }
                 }
-                .drivyPageContent(maxWidth: 560)
+                .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
             }
             .background(DrivyTheme.surface)
             .scrollDismissesKeyboard(.interactively)
@@ -214,7 +214,7 @@ struct SchoolJoinView: View {
             }
         }
         .buttonStyle(DrivyPrimaryButtonStyle())
-        .frame(maxWidth: 560)
+        .frame(maxWidth: DrivyLayout.compactColumn)
         .frame(maxWidth: .infinity)
         .background(DrivyTheme.surface)
     }

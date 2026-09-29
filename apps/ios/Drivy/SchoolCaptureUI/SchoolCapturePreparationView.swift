@@ -350,6 +350,7 @@ struct SchoolCapturePreparationView: View {
                         Task { await model.resume(queued, verifyFirst: false); resendRoute = nil }
                     }.disabled(!confirmsResend || !model.mayResume(queued))
                 }
+                    .drivyFormRows()
             }.navigationTitle("Reprendre le diagnostic").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { resendRoute = nil } } }
         }

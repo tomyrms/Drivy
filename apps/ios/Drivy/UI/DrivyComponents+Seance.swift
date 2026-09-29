@@ -344,17 +344,21 @@ struct DrivyMapControls: View {
 }
 
 /// Replaces the map when there is no position to show: never a broken map,
-/// never an invented location, never a whole-country overview.
+/// never an invented location, never a whole-country overview. While the GPS
+/// signal is being searched the symbol pulses softly; Reduce Motion keeps it still.
 struct DrivyMapPlaceholder: View {
     let title: String
     let message: String
     var symbol = "location.slash"
+    var isSearching = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: DrivySpacing.s) {
             Image(systemName: symbol)
                 .font(.title)
                 .foregroundStyle(DrivyTheme.muted)
+                .symbolEffect(.pulse, options: .repeating, isActive: isSearching && !reduceMotion)
                 .frame(width: 72, height: 72)
                 .background(DrivyTheme.surfaceMuted, in: Circle())
                 .accessibilityHidden(true)
@@ -369,7 +373,7 @@ struct DrivyMapPlaceholder: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: 420)
+        .frame(maxWidth: DrivyMapLayout.placeholderMaxWidth)
         .padding(DrivySpacing.l)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(DrivyTheme.canvas)
@@ -395,7 +399,7 @@ struct DrivyDangerButtonStyle: ButtonStyle {
                 in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
             )
             .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? DrivyPress.scale : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }
 }
@@ -682,4 +686,10 @@ enum DrivyMapLayout {
     static let accessibleMaxWidth: CGFloat = 680
     /// Height of a non-interactive route preview (home, end of journey).
     static let previewHeight: CGFloat = 176
+    /// Column of the panels floating over a compact map (top bar, dock).
+    static let floatingPanelMaxWidth: CGFloat = 640
+    /// Text column of DrivyMapPlaceholder.
+    static let placeholderMaxWidth: CGFloat = 420
+    /// Popover of « Signaler » anchored on the button in regular width (iPad).
+    static let reportPopoverSize = CGSize(width: 480, height: 560)
 }

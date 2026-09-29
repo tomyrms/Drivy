@@ -68,6 +68,37 @@ enum DrivyRadius {
     static let mapPanel: CGFloat = 24
 }
 
+/// Column widths and thresholds shared by several screens. A width repeated in
+/// two screens is declared here once; map screens keep theirs in DrivyMapLayout.
+enum DrivyLayout {
+    /// Reading page column (`drivyPageContent` default).
+    static let readingColumn: CGFloat = 720
+    /// Native Form or List column on iPad, and the bottom action bar under it.
+    static let formColumn: CGFloat = 820
+    /// Short single-purpose page: sign-in, app lock, session recovery.
+    static let narrowColumn: CGFloat = 600
+    /// Code entry, created code, reporting sheet.
+    static let compactColumn: CGFloat = 560
+    /// Master list of a NavigationSplitView (learners, invitations); the detail takes the rest.
+    static let splitListMinWidth: CGFloat = 280
+    static let splitListIdealWidth: CGFloat = 320
+    static let splitListMaxWidth: CGFloat = 360
+}
+
+/// Pressed scale of every button, tile and selection card: one feedback for the app.
+enum DrivyPress {
+    static let scale: CGFloat = 0.96
+}
+
+/// Size of a full-width button. `field` is the in-car variant (« Signaler »):
+/// larger text and target, read and hit at arm’s length while driving.
+enum DrivyButtonSize {
+    case regular, field
+
+    var font: Font { self == .field ? .title3.weight(.bold) : .body.weight(.semibold) }
+    var minHeight: CGFloat { self == .field ? 64 : 52 }
+}
+
 /// Custom motion only; system transitions are never overridden.
 enum DrivyMotion {
     /// Press feedback reacts to the finger: a spring without bounce, interruptible.
@@ -80,14 +111,15 @@ enum DrivyMotion {
 /// The single dominant action of a view. Pressed state is immediate; the
 /// small scale is feedback only and disappears under Reduce Motion.
 struct DrivyPrimaryButtonStyle: ButtonStyle {
+    var size: DrivyButtonSize = .regular
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.body.weight(.semibold))
+            .font(size.font)
             .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity, minHeight: 52)
+            .frame(maxWidth: .infinity, minHeight: size.minHeight)
             .padding(.horizontal, DrivySpacing.m)
             .foregroundStyle(isEnabled ? DrivyTheme.onAccent : DrivyTheme.disabledText)
             .background(
@@ -97,7 +129,7 @@ struct DrivyPrimaryButtonStyle: ButtonStyle {
                 in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
             )
             .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? DrivyPress.scale : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }
 }
@@ -106,6 +138,7 @@ struct DrivyPrimaryButtonStyle: ButtonStyle {
 /// surface so it never looks tappable; Increase Contrast adds a control border
 /// because the muted fill alone barely separates from a white page.
 struct DrivySecondaryButtonStyle: ButtonStyle {
+    var size: DrivyButtonSize = .regular
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
@@ -113,9 +146,9 @@ struct DrivySecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
         return configuration.label
-            .font(.body.weight(.semibold))
+            .font(size.font)
             .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity, minHeight: 52)
+            .frame(maxWidth: .infinity, minHeight: size.minHeight)
             .padding(.horizontal, DrivySpacing.m)
             .foregroundStyle(isEnabled ? DrivyTheme.accent : DrivyTheme.disabledText)
             .background(
@@ -130,7 +163,7 @@ struct DrivySecondaryButtonStyle: ButtonStyle {
                 }
             }
             .contentShape(shape)
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? DrivyPress.scale : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }
 }

@@ -258,10 +258,12 @@ private struct SchoolObservationComposer: View {
                         .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                    .drivyFormRows()
                 if editor.origin == "LIVE" {
                     Section {
                         Toggle("Repère simple, à préciser ensuite", isOn: $marker)
                     }
+                        .drivyFormRows()
                 }
                 if !marker { qualification }
                 Section {
@@ -275,12 +277,14 @@ private struct SchoolObservationComposer: View {
                         Text("Libellé conservé sans commentaire : « \(label) ».")
                     }
                   }
+                    .drivyFormRows()
                 if model.pending != nil {
                     Section {
                         Label("La demande est conservée. Fermez cette saisie pour vérifier son résultat dans les observations.", systemImage: "clock.arrow.circlepath")
                             .font(.subheadline).foregroundStyle(DrivyTheme.warning)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                        .drivyFormRows()
                 }
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
@@ -342,6 +346,7 @@ private struct SchoolObservationComposer: View {
                 }
             }
         } header: { Text("Compétence et appréciation") }
+            .drivyFormRows()
     }
 }
 
@@ -355,17 +360,20 @@ private struct SchoolObservationRemoval: View {
         NavigationStack {
             Form {
                 Section("Observation concernée") { Text(observation.text).fixedSize(horizontal: false, vertical: true) }
+                    .drivyFormRows()
                 Section {
                     TextField("Pourquoi retirer cette observation ?", text: $reason, axis: .vertical).lineLimit(3...6)
                     Toggle("Je confirme son retrait", isOn: $acknowledged)
                 } header: { Text("Motif du retrait") }
                 footer: { Text("Ce retrait ne modifie pas un bilan déjà partagé.") }
+                    .drivyFormRows()
                 if model.pending != nil {
                     Section {
                         Label("La demande est conservée. Retrouvez-la dans les observations pour vérifier le résultat.", systemImage: "clock.arrow.circlepath")
                             .font(.subheadline).foregroundStyle(DrivyTheme.warning)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                        .drivyFormRows()
                 }
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
@@ -400,6 +408,7 @@ private struct SchoolObservationPendingView: View {
         NavigationStack {
             Form {
                 Section { Text(model.pendingText).fixedSize(horizontal: false, vertical: true) }
+                    .drivyFormRows()
                 Section {
                     Text("Référence : \(command.id.uuidString)").font(.caption.monospaced()).textSelection(.enabled)
                     if command.scope != model.scope {
@@ -414,12 +423,14 @@ private struct SchoolObservationPendingView: View {
                         }.disabled(!acknowledged || !model.canRetry)
                     }
                 } footer: { Text("Le contenu et la référence restent identiques. Une absence de réponse ne signifie pas que l’école a refusé la demande.") }
+                    .drivyFormRows()
                 if let error = model.errorMessage {
                     Section {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
                             .font(.subheadline).foregroundStyle(DrivyTheme.danger)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                        .drivyFormRows()
                 }
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)

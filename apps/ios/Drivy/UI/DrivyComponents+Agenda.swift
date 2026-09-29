@@ -57,44 +57,42 @@ enum DrivyLessonState {
     /// Full badge, for the head of a lesson screen.
     var badge: DrivyStatusBadge { DrivyStatusBadge(title: title, symbol: symbol, tone: tone) }
 
-    /// What a lesson screen flags: a lesson left without outcome, cancelled or missed.
-    var isUnusual: Bool { self == .toFinish || self == .cancelled || self == .noShow }
+    /// What a lesson screen flags: a lesson left without outcome, cancelled, missed,
+    /// or whose state the app cannot read.
+    var isUnusual: Bool { self == .toFinish || self == .cancelled || self == .noShow || self == .unknown }
 
-    /// Rows stay quiet for the normal case: a planned lesson carries no badge.
-    var rowBadge: DrivyStatusBadge? { self == .planned ? nil : badge }
+    /// One rule for every lesson row (agenda, Aujourd’hui, dossier): a badge only
+    /// for the unusual. A planned, running or finished lesson stays quiet.
+    var rowBadge: DrivyStatusBadge? { isUnusual ? badge : nil }
 }
 
 extension SchoolLesson {
     var drivyState: DrivyLessonState { DrivyLessonState(status: status, start: startsAt, end: endsAt) }
 }
 
-/// Report state: private draft, shared with the learner, or kept in history.
-/// Private always carries the lock; shared always names the learner as reader.
+/// Report state in the words of the driving school: kept for the instructor,
+/// visible to the learner, or an earlier report. Same lock shapes as
+/// DrivyPrivacyMark; neutral tone, because keeping a note is not an anomaly.
 enum DrivyReportState {
     case privateDraft, shared, historical
 
     var title: String {
         switch self {
-        case .privateDraft: "Brouillon privé"
-        case .shared: "Partagé"
-        case .historical: "Version historique"
+        case .privateDraft: "Pour moi"
+        case .shared: "Visible par l’élève"
+        case .historical: "Bilan précédent"
         }
     }
 
     var symbol: String {
         switch self {
         case .privateDraft: "lock.fill"
-        case .shared: "person.2.fill"
+        case .shared: "lock.open"
         case .historical: "clock.arrow.circlepath"
         }
     }
 
-    var tone: DrivyTone {
-        switch self {
-        case .privateDraft, .historical: .neutral
-        case .shared: .success
-        }
-    }
+    var tone: DrivyTone { .neutral }
 
     var badge: DrivyStatusBadge { DrivyStatusBadge(title: title, symbol: symbol, tone: tone) }
 }
@@ -230,7 +228,8 @@ struct DrivyReportBody: View {
 struct DrivyCompetencyNote: View {
     let label: String
     let level: String
-    var tone: DrivyTone = .accent
+    /// Neutral by default: the accent is reserved for actions.
+    var tone: DrivyTone = .neutral
     var context: String? = nil
     var date: String? = nil
 
@@ -256,18 +255,34 @@ struct DrivyCompetencyNote: View {
 }
 
 /// Bottom bar holding the validation action of a form or sheet, above the
-/// keyboard and the home indicator. Same margins and hairline everywhere.
+/// keyboard and the home indicator. Same margins and hairline everywhere; its
+/// column matches the content above it (a Form by default, pass the page column).
 struct DrivyStickyActionBar<Content: View>: View {
+    var maxWidth: CGFloat = DrivyLayout.formColumn
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) { content }
             .padding(.horizontal, DrivySpacing.l)
             .padding(.vertical, DrivySpacing.s)
-            .frame(maxWidth: 680)
+            .frame(maxWidth: maxWidth)
             .frame(maxWidth: .infinity)
             .background(DrivyTheme.surface)
             .overlay(alignment: .top) { Divider().overlay(DrivyTheme.border) }
+    }
+}
+
+/// Privacy of a lesson item: closed lock = kept for the instructor (« Pour moi »),
+/// open lock = visible to the learner. The symbol shape changes, not only its
+/// color; the tone stays muted because keeping a note private is not an anomaly.
+/// Alone it speaks its state; inside a labelled control, hide it from VoiceOver.
+struct DrivyPrivacyMark: View {
+    let isPrivate: Bool
+
+    var body: some View {
+        Image(systemName: isPrivate ? "lock.fill" : "lock.open")
+            .foregroundStyle(DrivyTheme.muted)
+            .accessibilityLabel(isPrivate ? "Pour moi" : "Visible par l’élève")
     }
 }
 

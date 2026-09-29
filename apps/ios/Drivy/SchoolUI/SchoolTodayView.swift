@@ -294,7 +294,7 @@ struct SchoolTodayView: View {
 /// sinon panneau bas borné en largeur et en hauteur.
 private enum TodayLayout {
     static let sidebarBreakpoint: CGFloat = 960
-    static let bottomPanelMaxWidth: CGFloat = 600
+    static let bottomPanelMaxWidth = DrivyLayout.narrowColumn
     static let bottomPanelMaxRatio: CGFloat = 0.66
 }
 

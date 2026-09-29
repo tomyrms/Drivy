@@ -19,14 +19,18 @@ struct SchoolInvitationsView: View {
                 if let pending = model.pending { InvitationPendingSection(model: model, pending: pending) }
                 if model.pending == nil, model.codeRecovery != nil, !showsCreation {
                     Section { InvitationCodeRecovery(model: model) }
+                        .drivyFormRows()
                 }
                 if let success = model.successMessage {
                     Section { DrivyFormMessage(text: success) }
+                        .drivyFormRows()
                 }
                 if let error = model.errorMessage {
                     Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
+                        .drivyFormRows()
                 }
-                if model.isLoading { Section { DrivyLoadingState(title: "Chargement des invitations…") } }
+                if model.isLoading { Section { DrivyLoadingState(title: "Chargement des invitations…") }
+                    .drivyFormRows() }
                 if model.school != nil && model.invitations.isEmpty && !model.isLoading && model.errorMessage == nil {
                     Section {
                         DrivyEmptyState(title: "Aucune invitation", symbol: "envelope",
@@ -34,6 +38,7 @@ struct SchoolInvitationsView: View {
                             action: { showsCreation = true })
                             .buttonStyle(.borderless)
                     }
+                        .drivyFormRows()
                 }
                 Section {
                     ForEach(model.invitations) { invitation in
@@ -71,7 +76,8 @@ struct SchoolInvitationsView: View {
                     }
                 }
             }
-            .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 380)
+            .navigationSplitViewColumnWidth(min: DrivyLayout.splitListMinWidth, ideal: DrivyLayout.splitListIdealWidth,
+                max: DrivyLayout.splitListMaxWidth)
         } detail: {
             if let invitation = model.selectedInvitation {
                 InvitationDetailView(model: model, invitation: invitation)
@@ -106,6 +112,7 @@ private struct InvitationPendingSection: View {
     let pending: PendingSchoolCommand
     var body: some View {
         Section { InvitationPendingNotice(model: model, pending: pending) }
+            .drivyFormRows()
     }
 }
 
@@ -304,18 +311,21 @@ struct InvitationCreationView: View {
             Group {
                 if model.isLoading && model.school == nil {
                     Section { DrivyLoadingState(title: "Chargement de l’école…") }
+                        .drivyFormRows()
                 }
                 if model.lacksOpenTraining {
                     Section {
                         DrivyEmptyState(title: "Aucune formation ouverte", message: "Ouvrez-la sur le web pour inviter un élève.",
                             symbol: "steeringwheel")
                     }
+                        .drivyFormRows()
                 }
                 if model.lacksInstructor {
                     Section {
                         DrivyEmptyState(title: "Aucun moniteur actif", message: "Ajoutez un moniteur sur le web pour inviter un élève.",
                             symbol: "person.crop.circle")
                     }
+                        .drivyFormRows()
                 }
                 if model.carriesTraining && !model.offerings.isEmpty {
                     Section("Permis") {
@@ -330,6 +340,7 @@ struct InvitationCreationView: View {
                                 .accessibilityIdentifier("invitation-training-\(offering.id.uuidString)")
                         }
                     }
+                        .drivyFormRows()
                     .disabled(!model.mayEdit)
                 }
                 if model.roles.contains("ADMIN"), !model.instructors.isEmpty {
@@ -342,24 +353,29 @@ struct InvitationCreationView: View {
                         }
                         .accessibilityIdentifier("invitation-instructor")
                     }
+                        .drivyFormRows()
                     .disabled(!model.mayEdit)
                 }
                 if let error = model.creationOptionsError {
                     Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
+                        .drivyFormRows()
                 }
-                if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) } }
+                if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) }
+                    .drivyFormRows() }
                 if let pending = model.pending {
                     InvitationPendingSection(model: model, pending: pending)
                 } else if model.codeRecovery != nil {
                     Section { InvitationCodeRecovery(model: model) }
+                        .drivyFormRows()
                 } else if model.needsReload && !model.isLoading {
                     Section { Button("Actualiser") { Task { await model.load() } } }
+                        .drivyFormRows()
                 }
             }
-            .listRowBackground(DrivyTheme.surface)
+            .drivyFormRows()
         }
         .scrollContentBackground(.hidden)
-        .frame(maxWidth: 820).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
+        .frame(maxWidth: DrivyLayout.formColumn).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
         .safeAreaInset(edge: .bottom) {
             if model.codeRecovery == nil {
                 DrivyFormActionBar(hint: hint) {
@@ -433,7 +449,7 @@ struct InvitationCodeResultView: View {
                     .accessibilityIdentifier("invitation-code-copy")
                 }
             }
-            .drivyPageContent(maxWidth: 560)
+            .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
         }
         .background(DrivyTheme.surface)
         // La copie est locale et immédiate : retour haptique puis retour au libellé d’action.
@@ -495,19 +511,21 @@ private struct InvitationRevocationView: View {
                     }
                 }
                 .disabled(!model.mayEdit)
-                .listRowBackground(DrivyTheme.surface)
+                .drivyFormRows()
                 Group {
-                    if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) } }
+                    if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) }
+                        .drivyFormRows() }
                     if let pending = model.pending {
                         InvitationPendingSection(model: model, pending: pending)
                     } else if model.needsReload {
                         Section { Button("Actualiser avant de confirmer") { Task { await model.load() } } }
+                            .drivyFormRows()
                     }
                 }
-                .listRowBackground(DrivyTheme.surface)
+                .drivyFormRows()
             }
             .scrollContentBackground(.hidden)
-            .frame(maxWidth: 820).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
+            .frame(maxWidth: DrivyLayout.formColumn).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
                 DrivyFormActionBar(hint: reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Indiquez le motif de la révocation." : nil) {

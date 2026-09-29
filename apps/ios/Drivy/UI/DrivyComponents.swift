@@ -120,6 +120,8 @@ struct DrivySectionHeader: View {
 
 /// Initials in a neutral circle. Never a photo placeholder or a fake logo.
 /// The circle keeps its size; very large text sizes shrink the initials to fit.
+/// Selected, the circle takes the surface so it stays visible on the soft-accent
+/// row that carries the selection.
 struct DrivyAvatar: View {
     let name: String
     var size: CGFloat = 44
@@ -133,7 +135,7 @@ struct DrivyAvatar: View {
             .padding(DrivySpacing.xxs)
             .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.text)
             .frame(width: size, height: size)
-            .background(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted, in: Circle())
+            .background(isSelected ? DrivyTheme.surface : DrivyTheme.surfaceMuted, in: Circle())
             .accessibilityHidden(true)
     }
 
@@ -452,7 +454,7 @@ struct DrivySelectionCardStyle: ButtonStyle {
                                    lineWidth: isSelected ? 1.5 : (contrast == .increased ? 1 : 0.5))
             }
             .contentShape(shape)
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? DrivyPress.scale : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
             .animation(DrivyMotion.feedback(reduceMotion), value: isSelected)
             .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -558,7 +560,7 @@ struct DrivyLoadingState: View {
 extension View {
     /// Content column of every reading page: page margins (wider on regular
     /// width), readable width, centered on iPad.
-    func drivyPageContent(maxWidth: CGFloat = 720) -> some View {
+    func drivyPageContent(maxWidth: CGFloat = DrivyLayout.readingColumn) -> some View {
         modifier(DrivyPageContent(maxWidth: maxWidth))
     }
 }
