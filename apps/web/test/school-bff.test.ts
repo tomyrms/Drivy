@@ -27,11 +27,12 @@ async function harness(schoolGateway: SchoolGateway) {
   apps.push(app);
   let cookie = ''; let csrf = '';
   const cookieFrom = (set: unknown) => (Array.isArray(set) ? set[0] : set)?.toString().split(';')[0] ?? '';
-  cookie = cookieFrom((await app.inject({ url: '/app/bff/session' })).headers['set-cookie']);
-  csrf = (await app.inject({ url: '/app/bff/session', headers: { cookie } })).json().csrfToken;
+  // A visitor only reads the anonymous value; the login POST is what creates the session.
+  csrf = (await app.inject({ url: '/app/bff/session' })).json().csrfToken;
   const login = async (returnTo?: string) => {
     const started = await app.inject({ method: 'POST', url: '/app/bff/login', payload: returnTo ? { returnTo } : {}, headers: { cookie, origin: config.origin, 'x-csrf-token': csrf } });
     if (started.statusCode !== 200) return started;
+    cookie = cookieFrom(started.headers['set-cookie']);
     const state = store.get(cookie.split('=')[1])!.login!.state;
     const callback = await app.inject({ url: `/app/bff/callback?code=one&state=${state}`, headers: { cookie } });
     cookie = cookieFrom(callback.headers['set-cookie']);
@@ -56,7 +57,7 @@ describe('Liste blanche des routes de gestion', () => {
     expect(matchSchoolRoute('GET', `/schools/${school}/trainings`, `?learnerId=${school}`)?.query).toBe(`?learnerId=${school}`);
     expect(matchSchoolRoute('GET', `/schools/${school}/closures`, '?from=2026-09-28T00:00:00Z')?.query).toBe('?from=2026-09-28T00%3A00%3A00Z');
     for (const [method, path, search] of [
-      ['GET', `/schools/${school}/lessons`, ''],
+      ['GET', `/schools/${school}/report-drafts`, ''],
       ['GET', `/schools/${school}/trainings`, '?q=1'],
       ['DELETE', `/schools/${school}`, ''],
       ['PATCH', `/schools/${school}/offerings`, ''],

@@ -5,6 +5,7 @@ import staticFiles from '@fastify/static';
 import { z, ZodError } from 'zod';
 import type { WebConfig } from './config.js';
 import type { IdentityProvider } from './oidc.js';
+import { RateLimiter } from './rate-limit.js';
 import { SessionStore, matchesSecret, type Session } from './session.js';
 import { createGateway, createSchoolGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
 import { isUUID, matchSchoolRoute, MAX_SCHOOL_BODY } from './school-routes.js';
@@ -19,7 +20,7 @@ const previewSchema = z.object({ data: z.object({ invitationId: z.uuid(), school
 const digest = (data: unknown) => createHash('sha256').update(JSON.stringify(data)).digest('hex');
 /** Only a management page of this origin can be a post-login destination. */
 const returnPath = /^\/app\/gestion(?:\/[0-9a-fA-F-]{36}(?:\/[a-z-]{1,40})?)?$/;
-const loginBody = z.object({ returnTo: z.string().max(200).regex(returnPath).optional() }).strict();
+const loginBody = z.object({ returnTo: z.string().max(200).regex(returnPath).optional(), reauthenticate: z.boolean().optional() }).strict();
 const strongVersion = /^"[1-9][0-9]{0,9}"$/;
 /** Fastify parser refusals (size, media type, malformed JSON) stay client errors, without echoing details. */
 function clientError(error: unknown): WebError | undefined {
@@ -31,15 +32,23 @@ function clientError(error: unknown): WebError | undefined {
 }
 
 export async function buildWebApp(options: { config: WebConfig; identity: IdentityProvider; gateway?: ApiGateway;
-  schoolGateway?: SchoolGateway; store?: SessionStore; staticRoot?: string; now?: () => number }) {
+  schoolGateway?: SchoolGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
   const { config, identity } = options;
   const now = options.now ?? Date.now;
-  const store = options.store ?? new SessionStore(now);
+  const sessionMinutes = { idle: config.sessionIdleMinutes ?? 480, max: config.sessionMaxMinutes ?? 720 };
+  const store = options.store ?? new SessionStore(now,10_000,{ idleMs: sessionMinutes.idle * 60_000, maxMs: sessionMinutes.max * 60_000 });
+  // Only the two anonymous entry points (login, invitation link) can create a session: a bounded number per address.
+  const entryLimiter = options.entryLimiter ?? new RateLimiter(30,10 * 60_000,now);
+  // Sent to a browser without session so that its first POST proves it read this origin; it protects nothing else.
+  const anonymousCsrf = randomBytes(32).toString('base64url');
   const gateway = options.gateway ?? createGateway(config.apiBaseURL);
   const schoolGateway = options.schoolGateway ?? createSchoolGateway(config.apiBaseURL);
   const cookieName = config.development ? 'drivy-dev-session' : '__Host-drivy-session';
+  // After a sign-out the identity provider may still hold its own session: the next login must ask for the credentials.
+  const reloginName = config.development ? 'drivy-dev-relogin' : '__Host-drivy-relogin';
+  const cookieBase = { path:'/', httpOnly:true, secure: !config.development, sameSite:'lax' } as const;
   const app = Fastify({ logger: false, logController: new LogController({disableRequestLogging: true}),
-    genReqId: () => randomUUID(), bodyLimit: 2048 });
+    genReqId: () => randomUUID(), bodyLimit: 2048, trustProxy: config.trustProxy ?? false });
   await app.register(cookie);
   const purge = setInterval(() => store.sweep(),60_000); purge.unref();
   app.addHook('onClose',async () => { clearInterval(purge); store.clear(); });
@@ -52,14 +61,20 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
       throw new WebError(403,'CROSS_SITE_REQUEST');
     }
   });
+  // Hashed build assets never change: cache them (only when found, so a missing file is not remembered).
+  app.addHook('onSend',async (request,reply,payload) => {
+    if (reply.statusCode === 200 && request.url.startsWith('/app/assets/')) reply.header('Cache-Control','public, max-age=31536000, immutable');
+    return payload;
+  });
   app.setErrorHandler((error,_request,reply) => {
     const known = error instanceof WebError ? error : error instanceof ZodError ? new WebError(400,'INVALID_REQUEST')
       : clientError(error) ?? new WebError(503,'SERVICE_UNAVAILABLE');
     return reply.status(known.status).send({code: known.code, title: known.status === 401 ? 'Reconnectez-vous pour continuer.' :
+      known.status === 429 ? 'Trop de tentatives. Patientez quelques minutes.' :
       known.status === 409 ? 'La situation a changé. Rechargez les informations avant de confirmer.' : 'La demande ne peut pas aboutir pour le moment.'});
   });
   const setCookie = (reply: FastifyReply, session: Session) => reply.setCookie(cookieName,session.id,{
-    path:'/', httpOnly:true, secure: !config.development, sameSite:'lax', maxAge:7200 });
+    ...cookieBase, maxAge: sessionMinutes.max * 60 });
   const current = (request: FastifyRequest): Session => {
     const session = store.get(request.cookies[cookieName]);
     if (!session) throw new WebError(401,'SESSION_EXPIRED');
@@ -70,6 +85,22 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     if (request.headers.origin !== config.origin || !matchesSecret(request.headers['x-csrf-token'],session.csrf) ||
       request.headers['content-type']?.split(';')[0]?.trim() !== 'application/json') throw new WebError(403,'CSRF_REJECTED');
     store.touch(session); return session;
+  };
+  /**
+   * Entry points (login, invitation link). An existing session is protected as usual; a browser without one may only
+   * be admitted here: same origin, JSON, the anonymous value, and within the per-address limit. The session itself is
+   * created by `open`, once the body has proved valid.
+   */
+  const admit = (request: FastifyRequest): Session | null => {
+    if (!entryLimiter.allow(request.ip)) throw new WebError(429,'RATE_LIMITED');
+    if (store.get(request.cookies[cookieName])) return protect(request);
+    if (request.headers.origin !== config.origin || !matchesSecret(request.headers['x-csrf-token'],anonymousCsrf) ||
+      request.headers['content-type']?.split(';')[0]?.trim() !== 'application/json') throw new WebError(403,'CSRF_REJECTED');
+    return null;
+  };
+  const open = (reply: FastifyReply, admitted: Session | null): Session => {
+    if (admitted) return admitted;
+    const session = store.create(); setCookie(reply,session); return session;
   };
   const accessToken = async (session: Session): Promise<string> => {
     if (!store.isCurrent(session) || !session.tokens) throw new WebError(401,'SESSION_EXPIRED');
@@ -111,17 +142,20 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     }
     return reply.status(result.status).send(result.body);
   };
-  app.get('/app/bff/session',async (request,reply) => {
-    let session = store.get(request.cookies[cookieName]);
-    if (!session) { session = store.create(); setCookie(reply,session); }
+  app.get('/app/bff/session',async request => {
+    const session = store.get(request.cookies[cookieName]);
+    // No session is created for a visitor who only looks: that would let anyone fill the table.
+    if (!session) return { authenticated:false, csrfToken:anonymousCsrf, invitationPending:false };
     if (session.tokens) await accessToken(session);
     const user = session.tokens?.principal;
     return { authenticated:!!user, csrfToken:session.csrf, invitationPending:!!session.invitation && !session.invitation.accepted,
       ...(user ? {user:{displayName:user.displayName,emailVerified:user.emailVerified,...(user.email ? {email:user.email} : {})}} : {}) };
   });
-  app.post('/app/bff/login',async request => {
-    const session = protect(request); const { returnTo } = loginBody.parse(request.body);
-    const result = await identity.begin();
+  app.post('/app/bff/login',async (request,reply) => {
+    const admitted = admit(request); const body = loginBody.parse(request.body);
+    const session = open(reply,admitted); const { returnTo } = body;
+    const reauthenticate = body.reauthenticate === true || request.cookies[reloginName] === '1';
+    const result = await identity.begin(reauthenticate ? { reauthenticate: true } : undefined);
     if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
     session.login = { ...result.transaction, ...(returnTo ? { returnTo } : {}) };
     return {url:result.url};
@@ -140,19 +174,21 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     delete session.login;
     try {
       const tokens = await identity.complete(url,transaction);
-      const next = store.rotate(session,tokens); setCookie(reply,next);
+      const next = store.rotate(session,tokens); setCookie(reply,next); reply.clearCookie(reloginName,cookieBase);
       return reply.redirect(next.invitation ? '/app/invitation' : transaction.returnTo ?? '/app');
     } catch { return reply.redirect('/app?auth=failed'); }
   });
   app.post('/app/bff/logout',async (request,reply) => {
     const session = protect(request); empty.parse(request.body); const tokens = session.tokens;
-    store.destroy(session); reply.clearCookie(cookieName,{path:'/',secure:!config.development,httpOnly:true,sameSite:'lax'});
+    store.destroy(session); reply.clearCookie(cookieName,cookieBase);
+    reply.setCookie(reloginName,'1',{ ...cookieBase, maxAge: 30 * 24 * 3600 });
     if (tokens) { try { await identity.revoke(tokens); } catch { /* Local session already destroyed; no token exposed. */ } }
     return {ok:true};
   });
-  app.post('/app/bff/invitation',async request => {
-    const session = protect(request);
+  app.post('/app/bff/invitation',async (request,reply) => {
+    const admitted = admit(request);
     const {token} = z.object({token:z.string().min(32).max(256).regex(/^[A-Za-z0-9_-]+$/)}).strict().parse(request.body);
+    const session = open(reply,admitted);
     const pending=session.invitation;
     if (pending && pending.token!==token && (pending.accepting || (pending.submitted && !pending.accepted))) {
       throw new WebError(409,'INVITATION_IN_PROGRESS');
@@ -206,6 +242,13 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     } finally { delete invitation.accepting; }
   });
   app.route({ method: ['GET','POST','PATCH','PUT'], url: '/app/bff/schools/*', bodyLimit: MAX_SCHOOL_BODY + 1_024,
+    // Refused before the body is read: an unknown path or a missing session costs nothing to serve.
+    onRequest: async request => {
+      const url = new URL(request.raw.url!,config.origin);
+      const match = matchSchoolRoute(request.method,url.pathname.slice('/app/bff'.length),url.search);
+      if (!match) throw new WebError(404,'NOT_FOUND');
+      if (match.route.method === 'GET') current(request); else protect(request);
+    },
     handler: async (request,reply) => {
       const url = new URL(request.raw.url!,config.origin);
       const match = matchSchoolRoute(request.method,url.pathname.slice('/app/bff'.length),url.search);

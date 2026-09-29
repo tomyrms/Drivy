@@ -3,7 +3,8 @@ import type { WebConfig } from './config.js';
 import type { LoginTransaction, Tokens } from './session.js';
 
 export interface IdentityProvider {
-  begin(): Promise<{ transaction: LoginTransaction; url: string }>;
+  /** `reauthenticate` forces the identity provider to ask for the credentials again (step-up, or right after a sign-out). */
+  begin(options?: { reauthenticate?: boolean }): Promise<{ transaction: LoginTransaction; url: string }>;
   complete(url: URL, transaction: LoginTransaction): Promise<Tokens>;
   refresh(tokens: Tokens): Promise<Tokens>;
   revoke(tokens: Tokens): Promise<void>;
@@ -40,11 +41,11 @@ export async function createIdentityProvider(config: WebConfig): Promise<Identit
       principal, ...(refreshToken ? { refreshToken } : {}) };
   };
   return {
-    async begin() {
+    async begin(options) {
       const transaction = { state: oidc.randomState(), nonce: oidc.randomNonce(),
         verifier: oidc.randomPKCECodeVerifier(), expiresAt: Date.now() + 5 * 60_000 };
       const url = oidc.buildAuthorizationUrl(client, { redirect_uri: redirectUri,
-        scope: 'openid profile email', response_type: 'code', prompt:'login', state: transaction.state, nonce: transaction.nonce,
+        scope: 'openid profile email', response_type: 'code', ...(options?.reauthenticate ? { prompt: 'login' } : {}), state: transaction.state, nonce: transaction.nonce,
         code_challenge: await oidc.calculatePKCECodeChallenge(transaction.verifier), code_challenge_method: 'S256' });
       return { transaction, url: url.href };
     },
