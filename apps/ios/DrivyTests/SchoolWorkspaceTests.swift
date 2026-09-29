@@ -206,7 +206,52 @@ struct SchoolWorkspaceTests {
         #expect(workspace.learners.isEmpty)
         #expect(workspace.learnersError == SchoolAPIError.invalidResponse.localizedDescription)
     }
+
+    @Test func returningToTheAppKeepsTheScreenAndOnlyARightsChangeReloadsTheSchool() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let now = Date()
+        let calls = RefreshCounter()
+        api.meHandler = { calls.value += 1; throw SchoolAPIError.unavailable }
+        // Within five minutes of the last read, nothing is asked.
+        await workspace.refreshAccount(now: now.addingTimeInterval(10))
+        #expect(calls.value == 0)
+        // Offline: everything stays on screen, nothing is revoked.
+        await workspace.refreshAccount(now: now.addingTimeInterval(400))
+        #expect(calls.value == 1)
+        #expect(workspace.person != nil && workspace.membership != nil && workspace.school != nil)
+        #expect(workspace.accountError == nil && !workspace.accessRevoked && !workspace.isLoadingAccount)
+        // Same rights: the school is not reloaded.
+        let loadedSchool = workspace.school
+        api.meHandler = { api.person }
+        await workspace.refreshAccount(now: now.addingTimeInterval(800))
+        #expect(workspace.school == loadedSchool && !workspace.isLoadingSchool)
+        // A new access epoch reloads the school with the new membership.
+        let promoted = SchoolMembership(membershipId: WorkspaceFixture.firstMembership.membershipId, schoolId: WorkspaceFixture.firstSchool,
+            schoolName: "École test A", roles: ["INSTRUCTOR", "ADMIN"], grants: [], accessEpoch: 2)
+        api.meHandler = { SchoolPerson(personId: api.person.personId, version: 2, displayName: "Compte de test", locale: "fr", memberships: [promoted]) }
+        await workspace.refreshAccount(now: now.addingTimeInterval(1_200))
+        #expect(workspace.membership?.accessEpoch == 2 && workspace.school != nil)
+        // A refusal closes the account, as any read does.
+        api.meHandler = { throw SchoolAPIError.forbidden }
+        await workspace.refreshAccount(now: now.addingTimeInterval(1_600))
+        #expect(workspace.person == nil && workspace.accessRevoked)
+    }
+
+    @Test func theGuidedWelcomeIsOfferedAtMostOnceAWeekPerMembership() throws {
+        let defaults = try #require(UserDefaults(suiteName: "drivy-tests-onboarding-\(UUID().uuidString)"))
+        let membership = UUID(), now = Date()
+        #expect(!SchoolOnboardingDeferral.isDeferred(membership, now: now, defaults: defaults))
+        SchoolOnboardingDeferral.record(membership, now: now, defaults: defaults)
+        #expect(SchoolOnboardingDeferral.isDeferred(membership, now: now.addingTimeInterval(6 * 86_400), defaults: defaults))
+        #expect(!SchoolOnboardingDeferral.isDeferred(membership, now: now.addingTimeInterval(7 * 86_400 + 1), defaults: defaults))
+        #expect(!SchoolOnboardingDeferral.isDeferred(UUID(), now: now, defaults: defaults))
+    }
 }
+
+@MainActor
+private final class RefreshCounter { var value = 0 }
 
 @MainActor
 private final class WorkspaceAPIStub: SchoolAPI {

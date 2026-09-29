@@ -38,6 +38,7 @@ struct SchoolRootView: View {
     /// The profile sheet shows the guided welcome only when it was opened for it.
     @State private var onboardingWorkspaceID: UUID?
     /// Memberships already offered the welcome during this launch: « Plus tard » never loops.
+    /// Across launches, SchoolOnboardingDeferral keeps the offer away for seven days.
     @State private var offeredOnboarding: Set<UUID> = []
 
     private var presentsSheet: Bool {
@@ -330,6 +331,7 @@ struct SchoolRootView: View {
     private func offerOnboardingIfNeeded() async {
         guard identity.isAuthenticated, let configuration, let person = workspace?.person,
               let membership = workspace?.membership, !offeredOnboarding.contains(membership.membershipId),
+              !SchoolOnboardingDeferral.isDeferred(membership.membershipId),
               membership.roles.contains("LEARNER") || membership.roles.contains("INSTRUCTOR"),
               !presentsSheet else { return }
         let isLearner = membership.roles.contains("LEARNER")
@@ -341,6 +343,8 @@ struct SchoolRootView: View {
         let api = SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
         guard await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: kind),
               workspace?.membership?.membershipId == membership.membershipId, !presentsSheet else { return }
+        // Offered once: whatever the answer (« Plus tard », closing), not again for seven days.
+        SchoolOnboardingDeferral.record(membership.membershipId)
         openOnboarding()
     }
 
@@ -530,6 +534,22 @@ struct SchoolRootView: View {
         captureController.setScope(SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
             membershipID: membership.membershipId, accessEpoch: membership.accessEpoch,
             apiBaseURL: configuration.apiBaseURL.absoluteString))
+    }
+}
+
+/// The guided welcome is offered at most once a week per membership, across launches.
+/// Only the membership identifier and a date are kept, in the app's own defaults.
+enum SchoolOnboardingDeferral {
+    static let interval: TimeInterval = 7 * 86_400
+    private static func key(_ membershipID: UUID) -> String { "drivy.onboarding.offered.\(membershipID.uuidString.lowercased())" }
+
+    static func isDeferred(_ membershipID: UUID, now: Date = Date(), defaults: UserDefaults = .standard) -> Bool {
+        guard let offered = defaults.object(forKey: key(membershipID)) as? Date else { return false }
+        return now.timeIntervalSince(offered) < interval && offered <= now
+    }
+
+    static func record(_ membershipID: UUID, now: Date = Date(), defaults: UserDefaults = .standard) {
+        defaults.set(now, forKey: key(membershipID))
     }
 }
 
