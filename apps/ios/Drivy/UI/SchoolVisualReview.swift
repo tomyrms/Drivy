@@ -15,7 +15,9 @@ struct SchoolVisualReview: View {
     var body: some View {
         VStack(spacing: 0) {
           Group {
-            if let context {
+            if SchoolAccountVisualReview.screenNames.contains(screen) {
+                SchoolAccountVisualReview(screen: screen)
+            } else if let context {
                 switch screen {
                 case "gps-choice", "signal", "observations", "capture-preparation", "live", "live-waiting":
                     SchoolFieldVisualReview(screen: screen, context: context)
@@ -71,6 +73,7 @@ struct SchoolVisualReview: View {
         .environment(\.locale, Locale(identifier: "fr_CH"))
         .tint(DrivyTheme.accent)
         .task {
+            guard !SchoolAccountVisualReview.screenNames.contains(screen) else { return }
             guard context == nil else { return }
             do { context = try await SchoolVisualData.prepare() }
             catch { self.error = error.localizedDescription }

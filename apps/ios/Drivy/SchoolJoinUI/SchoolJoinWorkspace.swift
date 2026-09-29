@@ -14,13 +14,16 @@ import Observation
     private(set) var isReady = false
     /// Joined, but the school still has to open the invited training.
     private(set) var trainingNotOpened = false
-    @ObservationIgnored private let journal = SchoolJoinJournal()
+    @ObservationIgnored private let journal: any SchoolJoinStore
     @ObservationIgnored private var principal: SchoolJoinPrincipal?
     @ObservationIgnored private var previewToken: String?
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
 
-    init(client: SchoolJoinClient, link: String? = nil) { self.client = client; self.link = link ?? "" }
+    init(client: SchoolJoinClient, link: String? = nil, journal: (any SchoolJoinStore)? = nil) {
+        self.client = client; self.link = link ?? ""
+        self.journal = journal ?? SchoolJoinJournal()
+    }
     var isPending: Bool { record != nil && record?.receipt == nil }
     var isConfirmed: Bool { record?.receipt != nil }
     var canPreview: Bool { isReady && !invalidated && !isBusy && !isPending && !link.isEmpty }

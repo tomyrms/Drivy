@@ -65,7 +65,13 @@ struct SchoolCapturePreparationView: View {
                 guard scope != model.scope else { return }
                 model.invalidate(); choiceRoute = nil; resendRoute = nil; startReview = nil; dismiss()
             }
-            .sheet(item: $choiceRoute, onDismiss: { Task { await model.load(); if model.choice?.status == .allowed { await start() } } }) { route in
+            .sheet(item: $choiceRoute, onDismiss: {
+                Task {
+                    await model.load()
+                    if model.choice?.status == .allowed { await start() }
+                    else if model.choice?.status == .refused { dismiss() }
+                }
+            }) { route in
                 SchoolRecordingChoiceEntryView(client: model.client, reader: model.reader, agenda: model.agenda,
                     schoolWorkspace: schoolWorkspace, lessonID: route.lessonID,
                     onRefusalConfirmed: { learnerID, lessonID in model.learnerRefused(learnerID, lessonID: lessonID) }, store: route.store)
@@ -106,7 +112,6 @@ struct SchoolCapturePreparationView: View {
                     switch block {
                     case .choice:
                         Label("Accord de l’élève pour le GPS", systemImage: "person.crop.circle.badge.questionmark").font(.headline)
-                        Text("Demandé une seule fois.").font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         Button {
                             model.closeDiagnostic()
                             choiceRoute = ChoiceRoute(lessonID: model.lessonID, store: model.store)

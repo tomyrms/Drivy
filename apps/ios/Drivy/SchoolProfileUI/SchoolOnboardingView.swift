@@ -14,6 +14,8 @@ struct SchoolOnboardingView: View {
     @Bindable var model: SchoolProfileWorkspace
     /// Trainings already read by the caller; only those of this learner in this school are shown.
     var trainings: [SchoolTraining] = []
+    var loadsOnAppear = true
+    var startsWithInformation = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var hasStarted = false
@@ -32,7 +34,10 @@ struct SchoolOnboardingView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbar }
                 .safeAreaInset(edge: .bottom) { actionBar }
-                .task { await model.load() }
+                .task {
+                    if startsWithInformation { hasStarted = true }
+                    if loadsOnAppear { await model.load() }
+                }
                 .confirmationDialog("Quitter sans enregistrer vos informations ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
                     Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
                 } message: {
@@ -148,28 +153,24 @@ struct SchoolOnboardingView: View {
 
     private var welcome: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
-            DrivyGuidedStepHeader(symbol: "hand.wave", title: "Bienvenue chez \(schoolName)",
-                reason: isStaff ? "Quelques étapes courtes pour préparer votre travail avec l’école."
-                    : "Quelques étapes courtes pour préparer vos leçons avec l’école.")
+            stepTitle("Bienvenue chez \(schoolName)")
             VStack(alignment: .leading, spacing: DrivySpacing.m) {
                 if isStaff {
-                    DrivyGuidedFact(symbol: "person.badge.key", text: "Votre rôle : ce que l’école vous a confié.")
+                    DrivyGuidedFact(symbol: "person.badge.key", text: "Votre rôle")
                 } else {
-                    DrivyGuidedFact(symbol: "person.text.rectangle", text: "Vos informations : votre nom tel que l’école doit l’écrire.")
-                    DrivyGuidedFact(symbol: "car", text: "Votre formation : ce que l’école a prévu pour vous.")
+                    DrivyGuidedFact(symbol: "person.text.rectangle", text: "Vos informations")
+                    DrivyGuidedFact(symbol: "car", text: "Votre formation")
                 }
                 if gpsEnabled {
-                    DrivyGuidedFact(symbol: "location", text: "Le GPS pendant les leçons : à quoi il sert, et ce que vous décidez.")
+                    DrivyGuidedFact(symbol: "location", text: "Votre choix pour le GPS")
                 }
-                DrivyGuidedFact(symbol: "arrow.uturn.backward", text: "Vous pouvez vous arrêter à tout moment : les étapes confirmées par l’école sont gardées.")
             }
         }
     }
 
     private var information: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
-            DrivyGuidedStepHeader(symbol: "person.text.rectangle", title: "Vos informations",
-                reason: "L’école en a besoin pour vous identifier et vous contacter au sujet de vos leçons.")
+            stepTitle("Vos informations")
             if let profile = model.profile {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     nameField(.firstName, text: $model.draft.firstName, value: profile.firstName, identifier: "profile-first-name")
@@ -189,13 +190,6 @@ struct SchoolOnboardingView: View {
                     }
                 }
                 .disabled(!model.canMutate)
-                VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                    Text("Ces informations sont enregistrées dans votre dossier chez \(schoolName), avec la trace de la personne qui les a saisies. Le nom de votre compte de connexion ne change pas.")
-                    Text("D’autres informations pourront vous être demandées plus tard, seulement avant la leçon ou le cours qui en a besoin.")
-                }
-                .font(.footnote)
-                .foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
                 if let notice = model.notice, notice.status == "APPROVED" {
                     Button { showsNotice = true } label: {
                         Label("Comment l’école utilise vos données", systemImage: "doc.text")
@@ -216,23 +210,20 @@ struct SchoolOnboardingView: View {
     private var formation: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if isStaff {
-                DrivyGuidedStepHeader(symbol: "person.badge.key", title: "Votre rôle",
-                    reason: "L’école décide de votre rôle et des élèves qui vous sont confiés.")
+                stepTitle("Votre rôle")
                 DrivyPanel {
                     DrivyKeyValueRow(title: "Rôle dans l’école", value: SchoolPresentation.roles(model.roles))
                 }
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     if model.roles.contains("INSTRUCTOR") {
                         DrivyGuidedFact(symbol: "calendar", text: "Vos leçons apparaissent dans l’agenda dès que l’école les planifie.")
-                        DrivyGuidedFact(symbol: "checkmark.shield", text: "Les catégories que vous enseignez sont confirmées par l’école.")
                     }
                     if model.roles.contains("ADMIN") {
-                        DrivyGuidedFact(symbol: "desktopcomputer", text: "Les réglages de l’école (offres, équipe, invitations) se préparent plus confortablement sur ordinateur, dans l’espace de gestion web.")
+                        DrivyGuidedFact(symbol: "desktopcomputer", text: "Gérez l’école depuis l’espace web.")
                     }
                 }
             } else {
-                DrivyGuidedStepHeader(symbol: "car", title: "Votre formation",
-                    reason: "Votre formation relie vos leçons, vos observations et vos bilans.")
+                stepTitle("Votre formation")
                 if ownTrainings.isEmpty {
                     DrivyPanel {
                         DrivyGuidedFact(symbol: "building.2", text: "\(schoolName) ouvre votre formation, par exemple Permis B. Elle apparaîtra ensuite dans votre dossier.")
@@ -243,8 +234,7 @@ struct SchoolOnboardingView: View {
                             DrivyEntityRow(title: "Permis \(training.categoryCode)",
                                 meta: training.startedOn.map { "Depuis le \(SchoolPresentation.civilDate($0))" },
                                 leading: .symbol("car"),
-                                badge: DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status),
-                                    tone: training.status == "ACTIVE" ? .success : .neutral))
+                                badge: training.status == "ACTIVE" ? nil : DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status), tone: .neutral))
                         }
                     }
                 }
@@ -258,31 +248,27 @@ struct SchoolOnboardingView: View {
     private var gps: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if !gpsEnabled {
-                DrivyGuidedStepHeader(symbol: "location.slash", title: "GPS pendant les leçons",
-                    reason: "\(schoolName) n’enregistre pas de trajet pendant les leçons pour le moment.")
+                stepTitle("GPS pendant les leçons")
+                Text("\(schoolName) n’enregistre pas de trajet pendant les leçons pour le moment.")
             } else if isStaff {
-                DrivyGuidedStepHeader(symbol: "location", title: "GPS pendant les leçons (facultatif)",
-                    reason: "Votre iPhone peut enregistrer le trajet d’une leçon pour la revoir avec l’élève.")
+                stepTitle("GPS pendant les leçons")
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                    DrivyGuidedFact(symbol: "hand.raised", text: "Le trajet n’est enregistré que si l’élève l’a accepté pour cette leçon.")
-                    DrivyGuidedFact(symbol: "iphone", text: "iOS demande l’accès à la position une seule fois. Vous pouvez aussi répondre plus tard, au début de votre première séance.")
+                    DrivyGuidedFact(symbol: "hand.raised", text: "Enregistrez le trajet avec l’accord de l’élève. Son choix reste modifiable.")
+                    DrivyGuidedFact(symbol: "location", text: "Autorisez la position sur cet appareil maintenant ou au début d’une leçon.")
                 }
                 locationStatus
             } else {
-                DrivyGuidedStepHeader(symbol: "location", title: "GPS pendant les leçons (facultatif)",
-                    reason: "Le trajet enregistré aide à revoir une leçon avec votre moniteur.")
+                stepTitle("GPS pendant les leçons")
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                    DrivyGuidedFact(symbol: "iphone", text: "C’est le téléphone du moniteur qui enregistre le trajet. Votre téléphone n’a pas besoin d’accéder à votre position pour cela.")
-                    DrivyGuidedFact(symbol: "hand.raised", text: "Avant chaque leçon, vous pouvez accepter ou refuser. Sans votre accord, la leçon a lieu sans trajet enregistré.")
+                    DrivyGuidedFact(symbol: "location", text: "L’appareil du moniteur enregistre le trajet, avec votre accord.")
+                    DrivyGuidedFact(symbol: "hand.raised", text: "Vous pouvez refuser ou modifier votre choix. La leçon reste possible sans trajet.")
                 }
             }
         }
     }
 
     @ViewBuilder private var locationStatus: some View {
-        if location.isAuthorized {
-            DrivyStatusBadge(title: "Position autorisée sur cet iPhone", symbol: "checkmark.circle.fill", tone: .success)
-        } else if location.isDenied {
+        if location.isDenied {
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
                 DrivyStatusBadge(title: "Position non autorisée", symbol: "location.slash", tone: .neutral)
                 Text("Les leçons restent possibles sans trajet. Vous pourrez autoriser la position plus tard dans Réglages.")
@@ -395,7 +381,7 @@ struct SchoolOnboardingView: View {
             .accessibilityIdentifier("onboarding-skip-optional")
         } else {
             Button { save(.review) } label: {
-                DrivyBusyLabel(title: gpsEnabled && !isStaff ? "J’ai compris" : "Continuer", isBusy: isWorking)
+                DrivyBusyLabel(title: "Continuer", isBusy: isWorking)
             }
             .buttonStyle(DrivyPrimaryButtonStyle())
             .disabled(!model.canMutate)
@@ -405,11 +391,6 @@ struct SchoolOnboardingView: View {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                 } label: { Text("Ouvrir Réglages") }
                 .buttonStyle(DrivySecondaryButtonStyle())
-            } else if gpsEnabled && !isStaff {
-                Button { save(.review, skipping: ["DEVICE"]) } label: { Text("Passer cette étape") }
-                    .buttonStyle(DrivySecondaryButtonStyle())
-                    .disabled(!model.canMutate)
-                    .accessibilityIdentifier("onboarding-skip-optional")
             }
         }
     }
@@ -434,7 +415,7 @@ struct SchoolOnboardingView: View {
             .disabled(!model.canMutate)
         } else {
             Button {
-                Task { _ = await model.completeOnboardingAfterConfirmation() }
+                Task { if await model.completeOnboardingAfterConfirmation() { dismiss() } }
             } label: { DrivyBusyLabel(title: "Terminer l’accueil", isBusy: isWorking) }
             .buttonStyle(DrivyPrimaryButtonStyle())
             .disabled(!model.canMutate || !blockers.isEmpty)
@@ -549,7 +530,7 @@ struct SchoolOnboardingView: View {
     }
     private func note(_ field: SchoolProfileField) -> String? {
         guard let rule = model.applicablePolicy?.fields.first(where: { $0.field == field }) else { return nil }
-        return rule.requirement == .optional ? "Facultatif · \(rule.explanation)" : rule.explanation
+        return rule.requirement == .optional ? "Facultatif" : nil
     }
     private func fieldError(_ field: SchoolProfileField) -> String? {
         guard model.hasEdits, model.editableFields.contains(field),
@@ -573,7 +554,7 @@ struct SchoolOnboardingView: View {
         return value.isEmpty ? "Non renseigné" : value
     }
     private var gpsSummary: String {
-        guard isStaff else { return "Votre choix, avant chaque leçon" }
+        guard isStaff else { return "Facultatif, selon votre choix" }
         if location.isAuthorized { return "Position autorisée" }
         if location.isDenied { return "Position non autorisée" }
         return "À décider plus tard"
@@ -607,6 +588,10 @@ struct SchoolOnboardingView: View {
             }
         }
         .tint(DrivyTheme.accent)
+    }
+
+    private func stepTitle(_ text: String) -> some View {
+        Text(text).font(.drivyTitle).fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
     }
 }
 

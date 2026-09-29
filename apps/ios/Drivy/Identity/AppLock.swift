@@ -11,6 +11,7 @@ final class AppLock {
     private(set) var isEnabled: Bool
     private(set) var isLocked: Bool
     private(set) var isUnlocking = false
+    private(set) var errorMessage: String?
     private(set) var hasAnsweredOffer: Bool
 
     @ObservationIgnored private let store: UserDefaults
@@ -47,7 +48,7 @@ final class AppLock {
     func setEnabled(_ enabled: Bool) {
         isEnabled = enabled
         store.set(enabled, forKey: Self.enabledKey)
-        if !enabled { isLocked = false }
+        if !enabled { isLocked = false; errorMessage = nil }
     }
 
     func answerOffer(enable: Bool) {
@@ -66,11 +67,11 @@ final class AppLock {
     }
 
     /// Sans session, il n'y a rien à protéger : l'écran de connexion reste accessible.
-    func sessionEnded() { isLocked = false }
+    func sessionEnded() { isLocked = false; errorMessage = nil }
 
     func unlock() async {
         guard isLocked, !isUnlocking else { return }
-        isUnlocking = true
+        isUnlocking = true; errorMessage = nil
         defer { isUnlocking = false }
         let context = LAContext()
         context.localizedCancelTitle = "Annuler"
@@ -80,27 +81,35 @@ final class AppLock {
             }
         }
         if granted { isLocked = false }
+        else { errorMessage = "Le déverrouillage n’a pas abouti. Réessayez avec la reconnaissance biométrique ou le code de l’appareil." }
     }
 }
 
 struct AppLockView: View {
     let lock: AppLock
+    var automaticallyUnlocks = true
 
     var body: some View {
-        VStack(spacing: DrivySpacing.xl) {
-            Spacer()
-            Image(systemName: "map.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(DrivyTheme.accent)
-                .accessibilityHidden(true)
-            Text("Drivy")
-                .font(.drivyScreenTitle)
-                .foregroundStyle(DrivyTheme.text)
-            Spacer()
+        ScrollView {
+            VStack(spacing: DrivySpacing.xl) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(DrivyTheme.accent)
+                    .accessibilityHidden(true)
+                Text("Drivy")
+                    .font(.drivyScreenTitle)
+                    .foregroundStyle(DrivyTheme.text)
+                if let error = lock.errorMessage { SchoolErrorNotice(message: error) }
+            }
+            .drivyPageContent()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(DrivyTheme.surface)
+        .safeAreaInset(edge: .bottom) {
             Button {
                 Task { await lock.unlock() }
             } label: {
-                Label("Déverrouiller", systemImage: lock.biometryName == "Touch ID" ? "touchid" : "faceid")
+                DrivyBusyLabel(title: "Déverrouiller", busyTitle: "Déverrouillage…", isBusy: lock.isUnlocking)
             }
             .buttonStyle(DrivyPrimaryButtonStyle())
             .disabled(lock.isUnlocking)
@@ -108,9 +117,9 @@ struct AppLockView: View {
             .padding(.horizontal, DrivySpacing.l)
             .padding(.bottom, DrivySpacing.xl)
             .frame(maxWidth: 600)
+            .frame(maxWidth: .infinity)
+            .background(DrivyTheme.surface)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DrivyTheme.surface)
-        .task { await lock.unlock() }
+        .task { if automaticallyUnlocks { await lock.unlock() } }
     }
 }

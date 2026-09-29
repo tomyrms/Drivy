@@ -10,7 +10,7 @@ read -r -a screens <<< "${DRIVY_VISUAL_SCREENS:-home-tabs agenda learners learne
 read -r -a devices <<< "${DRIVY_VISUAL_DEVICES:-iPhone iPad}"
 read -r -a appearances <<< "${DRIVY_VISUAL_APPEARANCES:-light dark}"
 for screen in "${screens[@]}"; do
-  [[ "$screen" =~ ^(dossier|progression|home-tabs|agenda|learners|learner|lesson|lesson-planned|invitation-code|trips|replay|design-system|gps-choice|signal|observations|capture-preparation|live|live-waiting|planning|invitations|invitation-create|lesson-finish|lesson-tariff)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
+  [[ "$screen" =~ ^(dossier|progression|home-tabs|agenda|learners|learner|lesson|lesson-planned|invitation-code|trips|replay|design-system|gps-choice|signal|observations|capture-preparation|live|live-waiting|planning|invitations|invitation-create|lesson-finish|lesson-tariff|sign-in|sign-in-error|sign-in-loading|sign-in-unconfigured|account|app-lock|join-code|join-code-preview|join-code-error|join-code-pending|join-code-confirmed|join-link|join-link-preview|profile|profile-error|onboarding-welcome|onboarding-information|onboarding-formation|onboarding-gps|onboarding-review|onboarding-ready)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
 done
 for kind in "${devices[@]}"; do
   [[ "$kind" == iPhone || "$kind" == iPad ]] || { echo 'Appareil de capture inconnu.' >&2; exit 1; }
@@ -35,7 +35,7 @@ print(candidates[0]["udid"])
     xcrun simctl ui "$device_id" appearance "$appearance"
     for screen in "${screens[@]}"; do
       xcrun simctl terminate "$device_id" ch.drivy.qualification 2>/dev/null || true
-      SIMCTL_CHILD_DRIVY_VISUAL_SCREEN="$screen" xcrun simctl launch "$device_id" ch.drivy.qualification
+      SIMCTL_CHILD_DRIVY_VISUAL_SCREEN="$screen" SIMCTL_CHILD_DRIVY_VISUAL_LARGE_TEXT="${DRIVY_VISUAL_LARGE_TEXT:-0}" xcrun simctl launch "$device_id" ch.drivy.qualification
       sleep 10
       xcrun simctl io "$device_id" screenshot "artifacts/ios/${kind}-${screen}-${appearance}-synthetic.png"
     done

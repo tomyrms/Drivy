@@ -118,14 +118,15 @@ struct DrivyGuidedTextField: View {
                                        lineWidth: error == nil && contrast != .increased ? 1 : 1.5)
                 }
                 .accessibilityLabel(label)
-                .accessibilityHint(error ?? note ?? "")
+                .accessibilityHint(error == nil ? note ?? "" : "")
                 .accessibilityIdentifier(identifier ?? "")
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.footnote)
                     .foregroundStyle(DrivyTheme.danger)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityHidden(true)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(error)
             } else if let note, !note.isEmpty {
                 Text(note)
                     .font(.footnote)

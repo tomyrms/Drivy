@@ -143,7 +143,7 @@ enum SchoolCaptureLocationSignal: Sendable, Equatable {
     var message: String? {
         switch self {
         case .acquiring, .receiving: nil
-        case .waitingForPosition: "Aucune position récente reçue. La recherche GPS continue ; placez l’iPhone près d’une vitre ou à découvert."
+        case .waitingForPosition: "Aucune position récente reçue. La recherche GPS continue ; placez l’appareil près d’une vitre ou à découvert."
         case .temporarilyUnavailable: "Le signal GPS est momentanément indisponible. La recherche continue."
         }
     }

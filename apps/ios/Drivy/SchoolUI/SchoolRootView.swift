@@ -141,7 +141,7 @@ struct SchoolRootView: View {
 
     private var accountLayer: some View {
         observedContent.sheet(isPresented: $showsAccount, onDismiss: accountDismissed) {
-            SchoolAccountView(identity: identity, workspace: workspace, manageURL: manageURL,
+            SchoolAccountView(isAuthenticated: identity.isAuthenticated, workspace: workspace, manageURL: manageURL,
                 openProfile: followUp(.profile, when: ownProfileLearner != nil),
                 openInvitations: followUp(.invitations, when: canManageInvitations),
                 openJoinSchool: followUp(.join, when: configuration != nil && identity.isAuthenticated),
@@ -420,60 +420,10 @@ struct SchoolRootView: View {
     // MARK: Connexion
 
     private var signInLanding: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DrivySpacing.xl) {
-                DrivyRouteGlyph()
-                    .frame(height: 120)
-                    .padding(DrivySpacing.l)
-                    .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous)
-                            .strokeBorder(DrivyTheme.border, lineWidth: 0.5)
-                    }
-                Text("Vos leçons, vos trajets, votre école.")
-                    .font(.drivyScreenTitle)
-                    .fixedSize(horizontal: false, vertical: true)
-                if configuration == nil {
-                    DrivyInlineMessage(text: "La connexion n’est pas activée dans cette version.", tone: .neutral)
-                        .accessibilityIdentifier("school-not-configured")
-                } else if let error = identity.errorMessage {
-                    SchoolErrorNotice(message: error)
-                }
-            }
-            .drivyPageContent()
-        }
-        .background(DrivyTheme.surface)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if configuration != nil {
-                VStack(spacing: DrivySpacing.s) {
-                    Button {
-                        joinsByCodeAfterSignIn = false
-                        signIn()
-                    } label: {
-                        if identity.isWorking {
-                            DrivyBusyLabel(title: "Se connecter", busyTitle: "Connexion…", isBusy: true)
-                        } else {
-                            Label("Se connecter", systemImage: "person.crop.circle")
-                        }
-                    }
-                    .buttonStyle(DrivyPrimaryButtonStyle())
-                    .accessibilityIdentifier("school-sign-in")
-                    Button {
-                        joinsByCodeAfterSignIn = true
-                        signIn()
-                    } label: { Label("J’ai un code", systemImage: "number") }
-                    .buttonStyle(DrivySecondaryButtonStyle())
-                    .accessibilityIdentifier("school-sign-in-with-code")
-                }
-                .disabled(identity.isWorking || presenter == nil)
-                .padding(.horizontal, DrivySpacing.l)
-                .padding(.vertical, DrivySpacing.s)
-                .frame(maxWidth: 600)
-                .frame(maxWidth: .infinity)
-                .background(DrivyTheme.surface)
-                .overlay(alignment: .top) { Divider().overlay(DrivyTheme.border) }
-            }
-        }
+        SchoolSignInLanding(isConfigured: configuration != nil, isWorking: identity.isWorking,
+            errorMessage: identity.errorMessage, canPresent: presenter != nil,
+            signIn: { joinsByCodeAfterSignIn = false; signIn() },
+            joinWithCode: { joinsByCodeAfterSignIn = true; signIn() })
     }
 
     @ViewBuilder
@@ -586,8 +536,8 @@ enum SchoolOnboardingDeferral {
 }
 
 /// Le compte : peu de lignes, chacune une action. La gestion de l’école ouvre le portail web.
-private struct SchoolAccountView: View {
-    @Bindable var identity: IdentitySession
+struct SchoolAccountView: View {
+    let isAuthenticated: Bool
     let workspace: SchoolWorkspace?
     let manageURL: URL?
     let openProfile: (() -> Void)?
@@ -605,7 +555,7 @@ private struct SchoolAccountView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.xl) {
                     accountHeading
-                    if identity.isAuthenticated {
+                    if isAuthenticated {
                         if openProfile != nil || openInvitations != nil || manageURL != nil {
                             DrivyRowGroup {
                                 if let openProfile {
@@ -666,7 +616,7 @@ private struct SchoolAccountView: View {
         HStack(spacing: DrivySpacing.m) {
             DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: 60)
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text(workspace?.person?.displayName ?? (identity.isAuthenticated ? "Compte connecté" : "Aucun compte connecté"))
+                Text(workspace?.person?.displayName ?? (isAuthenticated ? "Compte connecté" : "Aucun compte connecté"))
                     .font(.drivyTitle)
                     .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)

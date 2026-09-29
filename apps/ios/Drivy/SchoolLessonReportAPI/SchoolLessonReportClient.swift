@@ -132,7 +132,7 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
     }
     private func valid(_ values: [SchoolReportObservation]) -> Bool {
         values.count <= 100 && Set(values.map(\.id)).count == values.count
-            && values.allSatisfy { ["DISCOVERING", "GUIDED", "INDEPENDENT"].contains($0.level) && !$0.context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.context.unicodeScalars.count <= 500 }
+            && values.allSatisfy { ["DISCOVERING", "GUIDED", "INDEPENDENT"].contains($0.level) && $0.context.unicodeScalars.count <= 500 }
     }
     private func pages<Value: SchoolCatalogRecord>(_ schoolID: UUID, _ path: [String]) async throws -> [Value] {
         var values: [Value] = [], cursor: String?, seen = Set<String>()

@@ -184,6 +184,7 @@ struct DrivyReportBody: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? DrivySpacing.m : DrivySpacing.l) {
+            if !nextStep.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                 Label("Prochaine étape", systemImage: "arrow.forward.circle.fill")
                     .font(.subheadline.weight(.semibold))
@@ -198,8 +199,12 @@ struct DrivyReportBody: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
             .accessibilityElement(children: .combine)
-            passage("Travail réalisé", workedOn)
-            passage("À retenir", observationText)
+            }
+            if !workedOn.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { passage("Travail réalisé", workedOn) }
+            if !observationText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { passage("À retenir", observationText) }
+            if [nextStep, workedOn, observationText].allSatisfy({ $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                Text("Aucun texte ajouté.").foregroundStyle(DrivyTheme.muted)
+            }
         }
         .padding(.vertical, compact ? DrivySpacing.xs : 0)
     }

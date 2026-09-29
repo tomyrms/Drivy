@@ -30,7 +30,6 @@ struct DrivyTileButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
-            .opacity(configuration.isPressed ? 0.85 : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }
 }

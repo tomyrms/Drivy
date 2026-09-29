@@ -34,6 +34,7 @@ final class SchoolCaptureSessionController {
     @ObservationIgnored private var permittedScope: SchoolCommandScope?
     @ObservationIgnored private var context: Context?
     @ObservationIgnored private var generation = UUID()
+    @ObservationIgnored private var scopeGeneration = UUID()
     @ObservationIgnored private var beginning: ContinuousClock.Instant?
     @ObservationIgnored private var endedAt: ContinuousClock.Instant?
     @ObservationIgnored private var sharedJournal: SQLCipherSchoolCaptureStore?
@@ -47,6 +48,7 @@ final class SchoolCaptureSessionController {
     @ObservationIgnored private var checkingPendingSynchronizations = false
 
     private struct RecoveryTransfer {
+        let id: UUID
         let coordinator: SchoolCaptureTransferCoordinator
         let task: Task<Void, Never>
     }
@@ -179,6 +181,8 @@ final class SchoolCaptureSessionController {
     /// feuille est présentée. Les mesures de l'ancien contexte disparaissent aussitôt.
     func setScope(_ scope: SchoolCommandScope?) {
         guard permittedScope != scope else { return }
+        scopeGeneration = UUID()
+        if scope == nil { networkMonitor?.cancel(); networkMonitor = nil; networkAvailable = nil }
         for active in backgroundTransfers.values {
             active.synchronizationTask?.cancel()
             active.transfer.invalidate()
@@ -341,6 +345,7 @@ final class SchoolCaptureSessionController {
     /// récupéré ne rouvre jamais un collecteur ; seules ses captures scellées partent.
     func resumePendingSynchronizations(client: SchoolCaptureClient, scope: SchoolCommandScope) async {
         guard permittedScope == scope, client.baseURL.absoluteString == scope.apiBaseURL else { return }
+        let access = scopeGeneration
         synchronizationClient = client
         installNetworkMonitor()
         guard !checkingPendingSynchronizations else { return }
@@ -350,32 +355,38 @@ final class SchoolCaptureSessionController {
             let store = try await journal()
             let sessions = try await store.sessions(scope: scope)
             let finalizations = try await store.acknowledgedFinalizations(scope: scope)
-            guard permittedScope == scope else { return }
+            guard permittedScope == scope, scopeGeneration == access else { return }
             let pending = sessions.filter { $0.manifest != nil && $0.stopOperationID != nil && finalizations[$0.id] == nil }
+            let pendingIDs = Set(pending.map(\.id))
+            synchronizationFailures = synchronizationFailures.filter { pendingIDs.contains($0.key) }
+            pendingSynchronizationError = synchronizationFailures.values.first
             pendingSynchronizationCount = pending.count
             for session in pending {
-                guard permittedScope == scope else { return }
+                guard permittedScope == scope, scopeGeneration == access else { return }
                 guard backgroundTransfers[session.id] == nil, recoveryTransfers[session.id] == nil else { continue }
                 if let active = context, active.session.id == session.id, state == .saved {
                     scheduleSynchronization(active)
                     continue
                 }
                 let transfer = SchoolCaptureTransferCoordinator(scope: scope, client: client, store: store, stopCollection: { _ in })
+                let transferID = UUID()
                 let task = Task { [self] in
-                    defer { recoveryTransfers.removeValue(forKey: session.id) }
+                    defer {
+                        if recoveryTransfers[session.id]?.id == transferID { recoveryTransfers.removeValue(forKey: session.id) }
+                    }
                     do {
                         _ = try await transfer.synchronizeStoppedCapture(captureID: session.id)
-                        guard permittedScope == scope else { return }
+                        guard permittedScope == scope, scopeGeneration == access else { return }
                         synchronizationFinished(session.id)
                     } catch {
-                        guard permittedScope == scope else { return }
+                        guard permittedScope == scope, scopeGeneration == access else { return }
                         synchronizationFailed(session.id, error: error)
                     }
                 }
-                recoveryTransfers[session.id] = RecoveryTransfer(coordinator: transfer, task: task)
+                recoveryTransfers[session.id] = RecoveryTransfer(id: transferID, coordinator: transfer, task: task)
             }
         } catch {
-            guard permittedScope == scope else { return }
+            guard permittedScope == scope, scopeGeneration == access else { return }
             pendingSynchronizationError = message(error)
         }
     }
@@ -418,6 +429,7 @@ final class SchoolCaptureSessionController {
         guard recoveryTransfers[active.session.id] == nil else { return }
         if context === active, finalizedSyncState != nil { return }
         let id = active.session.id
+        let access = scopeGeneration
         backgroundTransfers[id] = active
         if context === active {
             isTransferring = true; synchronizationNeedsRetry = false; transferMessage = nil
@@ -430,13 +442,13 @@ final class SchoolCaptureSessionController {
             }
             do {
                 let result = try await active.transfer.synchronizeStoppedCapture(captureID: id)
-                guard permittedScope == active.scope else { return }
+                guard permittedScope == active.scope, scopeGeneration == access else { return }
                 synchronizationFinished(id)
                 guard context === active else { return }
                 finalizedSyncState = result.syncState
                 transferMessage = result.syncState == .synced ? "Trajet synchronisé." : "Le trajet reçu par l’école est partiel."
             } catch {
-                guard permittedScope == active.scope else { return }
+                guard permittedScope == active.scope, scopeGeneration == access else { return }
                 synchronizationFailed(id, error: error)
                 guard context === active else { return }
                 synchronizationNeedsRetry = true

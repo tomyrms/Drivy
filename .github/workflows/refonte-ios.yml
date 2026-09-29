@@ -20,10 +20,14 @@ on:
         description: Apparences à capturer, séparées par des espaces
         type: string
         default: 'light dark'
+      visual_large_text:
+        description: Vérifier les grandes tailles de texte d’accessibilité
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
-  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only }}-${{ inputs.visual_screens }}-${{ inputs.visual_devices }}
+  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only }}-${{ inputs.visual_screens }}-${{ inputs.visual_devices }}-${{ inputs.visual_large_text }}
   cancel-in-progress: false
 jobs:
   apple:
@@ -97,6 +101,7 @@ jobs:
           DRIVY_VISUAL_SCREENS: ${{ inputs.visual_screens }}
           DRIVY_VISUAL_DEVICES: ${{ inputs.visual_devices }}
           DRIVY_VISUAL_APPEARANCES: ${{ inputs.visual_appearances }}
+          DRIVY_VISUAL_LARGE_TEXT: ${{ inputs.visual_large_text && '1' || '0' }}
         run: bash scripts/ios/capture-screens.sh
       - name: Construire l'IPA pour iLoader
         if: inputs.visual_only != true

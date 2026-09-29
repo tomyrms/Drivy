@@ -32,7 +32,14 @@ struct SchoolJoinRecord: Codable, Equatable, Sendable {
 
 /// The token and intention are stored only inside the system-encrypted, device-only Keychain.
 /// A committed record keeps its receipt but erases the invitation token and command body.
-@MainActor final class SchoolJoinJournal {
+@MainActor protocol SchoolJoinStore: AnyObject {
+    func load(for principal: SchoolJoinPrincipal) throws -> SchoolJoinRecord?
+    func save(_ record: SchoolJoinRecord) throws
+    func confirm(_ record: SchoolJoinRecord, receipt: SchoolOperationReceipt) throws -> SchoolJoinRecord
+    func removeFreshRejection(_ record: SchoolJoinRecord) throws
+}
+
+@MainActor final class SchoolJoinJournal: SchoolJoinStore {
     private let service = "ch.drivy.invitation-acceptance.v1"
     private let maximumBytes = 512 * 1_024
     private func query(_ principal: SchoolJoinPrincipal) -> [String: Any] {

@@ -90,7 +90,7 @@ enum SchoolLessonHubRules {
     }
 
     /// Situation proposée pour une compétence notée : le jour et le lieu de la leçon, modifiables.
-    /// Le serveur exige un texte non vide de 500 caractères au plus.
+    /// Proposition modifiable et facultative, limitée à 500 caractères.
     static func observationContext(for lesson: SchoolLesson) -> String {
         let date = lesson.actualStart.flatMap(SchoolLesson.date) ?? lesson.startsAt
         let day = date.map { format($0, zone: lesson.timeZone, template: "dMMMM") } ?? ""

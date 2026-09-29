@@ -76,6 +76,7 @@ struct DrivyApp: App {
                 } message: {
                     Text("Vous restez connecté 30 jours sur cet appareil.")
                 }
+                .accessibilityHidden(appLock.isLocked || scenePhase != .active)
                 .overlay {
                     if appLock.isLocked {
                         AppLockView(lock: appLock)

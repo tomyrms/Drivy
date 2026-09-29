@@ -394,7 +394,6 @@ struct DrivyDangerButtonStyle: ButtonStyle {
                 isEnabled ? DrivyTheme.dangerSurface : DrivyTheme.disabledSurface,
                 in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
             )
-            .opacity(configuration.isPressed ? 0.85 : 1)
             .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
@@ -472,6 +471,7 @@ struct DrivyReplayScrubber: View {
         .accessibilityLabel("Instant du trajet")
         .accessibilityValue(valueDescription)
         .accessibilityAdjustableAction { direction in
+            onScrubStart()
             let step = max(5, duration / 20)
             switch direction {
             case .increment: offset = min(duration, offset + step)
@@ -512,7 +512,7 @@ struct DrivyReplayScrubber: View {
                     let style = isGap
                         ? StrokeStyle(lineWidth: 3, lineCap: .round, dash: [2, 5])
                         : StrokeStyle(lineWidth: 6, lineCap: .round)
-                    let color = isPlayed ? DrivyTheme.accent : (isGap ? DrivyTheme.muted : DrivyTheme.controlBorder.opacity(0.45))
+                    let color = isPlayed ? DrivyTheme.accent : (isGap ? DrivyTheme.muted : DrivyTheme.controlBorder)
                     context.stroke(path, with: .color(color), style: style)
                 }
             }
@@ -585,7 +585,28 @@ struct DrivyReplayTransport: View {
     var openList: (() -> Void)? = nil
 
     var body: some View {
-        HStack(spacing: DrivySpacing.xs) {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: DrivySpacing.xs) {
+                speedButton
+                Spacer(minLength: 0)
+                playbackButtons
+                Spacer(minLength: 0)
+                listButton
+            }
+            VStack(spacing: DrivySpacing.s) {
+                HStack(spacing: DrivySpacing.xs) { playbackButtons }
+                HStack {
+                    speedButton
+                    Spacer(minLength: 0)
+                    listButton
+                }
+            }
+        }
+        .buttonStyle(DrivyTileButtonStyle())
+        .foregroundStyle(DrivyTheme.text)
+    }
+
+    private var speedButton: some View {
             Button(action: cycleSpeed) {
                 Text("×\(speed)")
                     .font(.headline.monospacedDigit())
@@ -597,7 +618,9 @@ struct DrivyReplayTransport: View {
             .accessibilityValue("\(speed) fois")
             .accessibilityHint("Change la vitesse : une, deux ou quatre fois")
             .accessibilityIdentifier("replay-speed")
-            Spacer(minLength: 0)
+    }
+
+    @ViewBuilder private var playbackButtons: some View {
             roundButton("backward.end.fill", label: "Observation précédente", isEnabled: canGoBack, action: previous)
                 .keyboardShortcut(.leftArrow, modifiers: [])
                 .accessibilityIdentifier("replay-previous")
@@ -615,7 +638,9 @@ struct DrivyReplayTransport: View {
             roundButton("forward.end.fill", label: "Observation suivante", isEnabled: canGoForward, action: next)
                 .keyboardShortcut(.rightArrow, modifiers: [])
                 .accessibilityIdentifier("replay-next")
-            Spacer(minLength: 0)
+    }
+
+    @ViewBuilder private var listButton: some View {
             if let openList {
                 Button(action: openList) {
                     Image(systemName: "list.bullet")
@@ -629,9 +654,6 @@ struct DrivyReplayTransport: View {
             } else {
                 Spacer().frame(width: 52, height: 48)
             }
-        }
-        .buttonStyle(DrivyTileButtonStyle())
-        .foregroundStyle(DrivyTheme.text)
     }
 
     private func roundButton(_ symbol: String, label: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {

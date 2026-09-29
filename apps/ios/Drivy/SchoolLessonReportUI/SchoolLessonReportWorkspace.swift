@@ -68,7 +68,10 @@ import Observation
             !$0.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.label.unicodeScalars.count <= 500 && ($0.context?.unicodeScalars.count ?? 0) <= 500
         }
     }
-    var observationsValid: Bool { observations.count <= 100 && Set(observations.map(\.id)).count == observations.count && observations.allSatisfy { !$0.context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.context.unicodeScalars.count <= 500 } }
+    var observationsValid: Bool {
+        observations.count <= 100 && Set(observations.map(\.id)).count == observations.count
+            && observations.allSatisfy { ["DISCOVERING", "GUIDED", "INDEPENDENT"].contains($0.level) && $0.context.unicodeScalars.count <= 500 }
+    }
     var draftChanged: Bool {
         guard let draft else { return false }
         return workedOn != draft.workedOn || observationText != draft.observationText || nextStep != draft.nextStep || observations != draft.observations

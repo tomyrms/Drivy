@@ -646,7 +646,7 @@ private struct SchoolLessonReportContent: View {
     private var saveBar: some View {
         DrivyStickyActionBar {
             if !model.validTexts { DrivyActionNote(text: "Un texte dépasse 4 000 caractères.", isError: true) }
-            else if !model.observationsValid { DrivyActionNote(text: "Décrivez la situation de chaque compétence.", isError: true) }
+            else if !model.observationsValid { DrivyActionNote(text: "Vérifiez les niveaux et limitez chaque situation à 500 caractères.", isError: true) }
             Button { Task { await model.saveDraft() } } label: { Label("Enregistrer le bilan", systemImage: "square.and.arrow.down") }
                 .buttonStyle(DrivyPrimaryButtonStyle())
                 .disabled(!model.canMutate || !model.validTexts || !model.observationsValid)

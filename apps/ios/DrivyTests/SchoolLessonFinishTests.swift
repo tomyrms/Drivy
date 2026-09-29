@@ -24,6 +24,15 @@ import Testing
         #expect(model.reportSaveConfirmed)
     }
 
+    @Test func competencyContextCanBeEmptyWithoutBlockingReadOrSave() async {
+        let model = workspace(LessonFinishServer(emptyContext: true), outbox: ConfigurationOutboxStub())
+        await model.load()
+        #expect(model.draft?.observations.count == 1 && model.observations.first?.context == "")
+        #expect(model.observationsValid && model.canMutate)
+        #expect(await model.saveDraft())
+        #expect(model.reportSaveConfirmed)
+    }
+
     @Test func lostReceiptRetainsTextUntilVerificationThenClosesWithoutAnotherSave() async throws {
         let server = LessonFinishServer(), outbox = ConfigurationOutboxStub()
         let model = workspace(server, outbox: outbox)
@@ -85,12 +94,13 @@ import Testing
 actor LessonFinishServer: SchoolHTTPTransport {
     private let fallback = HubServer()
     private let roles: [String]
+    private let emptyContext: Bool
     private var receiptAvailable = true
     private var rejectSave = false
     private var operation: UUID?
     private var recorded: [URLRequest] = []
     private let draftID = UUID(uuidString: "70000000-0000-4000-8000-000000000050")!
-    init(roles: [String] = ["INSTRUCTOR"]) { self.roles = roles }
+    init(roles: [String] = ["INSTRUCTOR"], emptyContext: Bool = false) { self.roles = roles; self.emptyContext = emptyContext }
     func setReceiptAvailable(_ value: Bool) { receiptAvailable = value }
     func setRejectSave(_ value: Bool) { rejectSave = value }
     func requests() -> [URLRequest] { recorded }
@@ -117,7 +127,9 @@ actor LessonFinishServer: SchoolHTTPTransport {
         if parts.last == "report-drafts" {
             let draft = SchoolReportDraft(id: draftID, schoolId: HubFixture.schoolID, lessonId: HubFixture.lessonID,
                 authorMembershipId: ConfigurationFixture.membershipID, version: 1, basePublicationVersion: 0,
-                workedOn: "", observationText: "", nextStep: "", observations: [], attachmentIds: [], geoObservationIds: [])
+                workedOn: "", observationText: "", nextStep: "",
+                observations: emptyContext ? [SchoolReportObservation(competencyId: UUID(), level: "GUIDED", context: "")] : [],
+                attachmentIds: [], geoObservationIds: [])
             let item = try JSONSerialization.jsonObject(with: JSONEncoder().encode(draft))
             return try ok(["items": [item], "nextCursor": NSNull()])
         }

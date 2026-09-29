@@ -395,12 +395,14 @@ struct SchoolCaptureReplayView: View {
                     .accessibilityHidden(true)
                 Text(item.offset.map { DrivyReplayScrubber.clock($0) } ?? "—")
                     .font(.subheadline.weight(.semibold).monospacedDigit())
+                Text(item.title)
+                    .font(.subheadline)
             }
             .foregroundStyle(DrivyTheme.text)
             .padding(.horizontal, DrivySpacing.s)
             .frame(minHeight: 44)
             .background(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted, in: Capsule())
-            .overlay { Capsule().strokeBorder(isSelected ? DrivyTheme.accent : DrivyTheme.border, lineWidth: isSelected ? 1.5 : 0.5) }
+            .overlay { Capsule().strokeBorder(isSelected ? DrivyTheme.accent : DrivyTheme.controlBorder, lineWidth: isSelected ? 1.5 : 1) }
             .contentShape(Capsule())
             .fixedSize()
         }
