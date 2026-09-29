@@ -172,19 +172,19 @@ export async function readSchool<T extends z.ZodTypeAny>(schoolId: string, path:
   return (parsed.data as { data: z.infer<T> }).data;
 }
 
-export async function readPage<T extends z.ZodTypeAny>(schoolId: string, path: string, item: T, cursor?: string | null): Promise<Page<z.infer<T>>> {
+export async function readPage<T extends z.ZodTypeAny>(schoolId: string, path: string, item: T, cursor?: string | null, filters?: Record<string, string>): Promise<Page<z.infer<T>>> {
   const page = z.object({ items: z.array(item).max(100), nextCursor: z.string().min(1).max(6000).nullable() });
-  const result = await readSchool(schoolId, path, page, { limit: '100', ...(cursor ? { cursor } : {}) });
+  const result = await readSchool(schoolId, path, page, { ...(filters ?? {}), limit: '100', ...(cursor ? { cursor } : {}) });
   if (result.items.some(entry => (entry as { schoolId?: string }).schoolId !== schoolId)) throw new RequestFailure('INVALID_RESPONSE');
   return result as Page<z.infer<T>>;
 }
 
 /** Read every page of a short management list (at most 1 000 entries); `truncated` says when more exist. */
-export async function readAll<T extends z.ZodTypeAny>(schoolId: string, path: string, item: T): Promise<{ items: z.infer<T>[]; truncated: boolean }> {
+export async function readAll<T extends z.ZodTypeAny>(schoolId: string, path: string, item: T, filters?: Record<string, string>): Promise<{ items: z.infer<T>[]; truncated: boolean }> {
   const items: z.infer<T>[] = [];
   let cursor: string | null = null;
   for (let page = 0; page < 10; page++) {
-    const result: Page<z.infer<T>> = await readPage(schoolId, path, item, cursor);
+    const result: Page<z.infer<T>> = await readPage(schoolId, path, item, cursor, filters);
     items.push(...result.items);
     cursor = result.nextCursor;
     if (!cursor) return { items, truncated: false };
