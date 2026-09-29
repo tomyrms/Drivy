@@ -155,8 +155,7 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    /// Same top bar as the personal journey: leave, learner, elapsed time at a glance,
-    /// real GPS state, then the protected stop command far from the other commands.
+    /// Identité et état GPS ; les commandes de leçon restent dans le panneau inférieur.
     private func heading(floating: Bool = true) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             DrivyLiveTopBar(
@@ -168,14 +167,7 @@ struct SchoolCaptureLiveView: View {
                     hint: controller.canStop ? "Le GPS conserve son état actuel" : "Fermer le trajet",
                     isDisabled: isFinishing) { close() },
                 floating: floating
-            ) {
-                if [SchoolCaptureSessionController.State.recording, .paused, .preparing].contains(controller.state) {
-                    DrivyMapStopButton(label: "Terminer la leçon", isEnabled: controller.canStop && !isFinishing) {
-                        finishLesson()
-                    }
-                    .accessibilityIdentifier("school-capture-stop")
-                }
-            }
+            ) { EmptyView() }
         }
     }
 
@@ -274,7 +266,9 @@ struct SchoolCaptureLiveView: View {
                     DrivyInlineMessage(text: error, tone: .warning)
                 }
             }
-            HStack(spacing: DrivySpacing.s) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: DrivySpacing.s)) : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
+            layout {
                 pauseResumeButton
                 Button("Terminer la leçon", systemImage: "checkmark.circle") { finishLesson() }
                     .buttonStyle(DrivySecondaryButtonStyle())

@@ -13,7 +13,10 @@ struct SchoolFieldVisualReview: View {
     var body: some View {
         Group {
             if let models {
-                if screen == "observations" {
+                if screen == "live" || screen == "live-waiting" {
+                    SchoolCaptureLiveView(controller: screen == "live" ? models.live : models.waiting,
+                        learnerName: context.learner.displayName)
+                } else if screen == "observations" {
                     SchoolObservationView(model: models.observations, schoolWorkspace: context.workspace)
                 } else if screen == "capture-preparation" {
                     SchoolCapturePreparationView(model: models.preparation, schoolWorkspace: context.workspace)
@@ -62,6 +65,8 @@ struct SchoolFieldVisualReview: View {
     let recorder: SchoolLiveObservationRecorder
     let observations: SchoolObservationWorkspace
     let preparation: SchoolCapturePreparationWorkspace
+    let live: SchoolCaptureSessionController
+    let waiting: SchoolCaptureSessionController
     let instant = Date()
 
     init(context: SchoolVisualContext) throws {
@@ -79,10 +84,14 @@ struct SchoolFieldVisualReview: View {
             client: agenda.captureClient, reader: agenda.reader, agenda: agenda, onRefusalConfirmed: { _, _ in }, store: store)
         recorder = SchoolLiveObservationRecorder(scope: scope, lessonID: SchoolVisualData.plannedLessonID,
             client: agenda.observationClient, outbox: SchoolFieldVisualOutbox())
+        live = SchoolCaptureSessionController.visualReviewRecording(lessonID: SchoolVisualData.plannedLessonID, recorder: recorder)
+        waiting = SchoolCaptureSessionController.visualReviewRecording(lessonID: SchoolVisualData.plannedLessonID,
+            recorder: recorder, waitingForPosition: true)
         observations = SchoolObservationWorkspace(scope: scope, lessonID: SchoolVisualData.plannedLessonID,
             client: agenda.observationClient, outbox: SchoolFieldVisualOutbox())
         preparation = SchoolCapturePreparationWorkspace(scope: scope, lessonID: SchoolVisualData.plannedLessonID,
-            client: agenda.captureClient, reader: agenda.reader, agenda: agenda, store: store)
+            client: agenda.captureClient, reader: agenda.reader, agenda: agenda, store: store,
+            onCaptureAuthorized: { _, _, _, _, _, _ in }, onRefusalConfirmed: { _, _ in })
     }
 }
 

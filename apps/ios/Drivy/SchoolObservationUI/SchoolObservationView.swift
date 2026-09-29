@@ -43,12 +43,18 @@ struct SchoolObservationView: View {
     @State private var route: ObservationRoute?
 
     private enum ObservationRoute: Identifiable {
+        case signal(SignalRoute)
         case edit(SchoolObservationEditor)
         case remove(SchoolObservation)
         case pending(PendingSchoolCommand)
         var id: UUID {
-            switch self { case .edit(let value): value.id; case .remove(let value): value.id; case .pending(let value): value.id }
+            switch self { case .signal(let value): value.id; case .edit(let value): value.id; case .remove(let value): value.id; case .pending(let value): value.id }
         }
+    }
+    private struct SignalRoute: Identifiable {
+        let id = UUID()
+        let observedAt = Date()
+        let recorder: SchoolLiveObservationRecorder
     }
     private var scopeMatches: Bool {
         model.scope.personID == schoolWorkspace.person?.personId
@@ -81,8 +87,9 @@ struct SchoolObservationView: View {
                 }
             }
             .task { await model.load() }
-            .sheet(item: $route) { route in
+            .sheet(item: $route, onDismiss: { Task { await model.load() } }) { route in
                 switch route {
+                case .signal(let value): SchoolLiveObservationSheet(recorder: value.recorder, observedAt: value.observedAt)
                 case .edit(let editor): SchoolObservationComposer(model: model, editor: editor)
                 case .remove(let observation): SchoolObservationRemoval(model: model, observation: observation)
                 case .pending(let command): SchoolObservationPendingView(model: model, command: command)
@@ -118,19 +125,9 @@ struct SchoolObservationView: View {
         VStack(spacing: DrivySpacing.s) {
             if model.lesson?.status == "PLANNED" {
                 Button {
-                    if let editor = model.begin(marker: true) { route = .edit(editor) }
-                } label: { Label("Garder un repère maintenant", systemImage: "bookmark") }
-                    .buttonStyle(DrivyPrimaryButtonStyle()).accessibilityIdentifier("school-observation-marker")
-                if !model.competencies.isEmpty {
-                    Button {
-                        if let editor = model.begin(marker: false) { route = .edit(editor) }
-                    } label: { Label("Observer une compétence", systemImage: "eye") }
-                        .buttonStyle(DrivySecondaryButtonStyle()).accessibilityIdentifier("school-observation-qualified")
-                }
-                Text("L’heure est gardée dès votre appui. Aucune position GPS n’est ajoutée.")
-                    .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if let recorder = model.liveRecorder() { route = .signal(.init(recorder: recorder)) }
+                } label: { Label("Signaler", systemImage: "text.bubble.fill") }
+                    .buttonStyle(DrivyPrimaryButtonStyle()).accessibilityIdentifier("school-observation-signal")
             } else {
                 Button {
                     if let editor = model.begin(marker: false) { route = .edit(editor) }
@@ -148,8 +145,7 @@ struct SchoolObservationView: View {
                     .accessibilityLabel("\(model.observations.count) au total")
             }
             if model.observations.isEmpty {
-                DrivyEmptyState(title: "Le carnet est encore vide",
-                    message: "Un repère fonctionne aussi sans enregistrer le trajet.", symbol: "text.bubble")
+                DrivyEmptyState(title: "Aucune observation", symbol: "text.bubble")
             } else {
                 ForEach(model.observations.reversed()) { observation in observationCard(observation) }
             }
@@ -162,7 +158,7 @@ struct SchoolObservationView: View {
                     Image(systemName: observation.isMarker ? "bookmark.fill" : "text.bubble.fill")
                         .font(.title3).foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Text(model.competencyLabel(observation.competencyId) ?? (observation.isMarker ? "Repère" : "Note de relecture"))
+                        Text(observation.eventKind == "QUALIFIED" ? observation.text : (observation.isMarker ? "Moment à revoir" : "Note de relecture"))
                             .font(.headline)
                         if let time = model.timeLabel(observation.observedAt) {
                             Text(time).font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
@@ -173,7 +169,9 @@ struct SchoolObservationView: View {
                 if let status = observation.statusLabel {
                     DrivyStatusBadge(title: status, symbol: statusSymbol(observation.eventStatus), tone: statusTone(observation.eventStatus))
                 }
-                Text(observation.text).fixedSize(horizontal: false, vertical: true)
+                if observation.eventKind != "QUALIFIED" {
+                    Text(observation.text).fixedSize(horizontal: false, vertical: true)
+                }
                 if observation.hasPosition {
                     Label("Position déjà enregistrée par l’école", systemImage: "mappin")
                         .font(.caption).foregroundStyle(DrivyTheme.muted)
@@ -235,7 +233,7 @@ private struct SchoolObservationComposer: View {
     private var emptyNoteLabel: String? {
         guard editor.origin == "LIVE" else { return nil }
         if marker { return "Moment à revoir" }
-        return model.competencies.first(where: { $0.id == competencyID })?.label
+        return model.competencies.first(where: { $0.id == competencyID })?.displayLabel
     }
     private var changed: Bool {
         text != (editor.original?.text ?? "") || marker != editor.marker || competencyID != editor.original?.competencyId
@@ -254,7 +252,7 @@ private struct SchoolObservationComposer: View {
                 if editor.origin == "LIVE" {
                     Section {
                         Toggle("Repère simple, à préciser ensuite", isOn: $marker)
-                    } footer: { Text("Un repère garde l’instant ; vous pourrez choisir la compétence plus tard.") }
+                    }
                 }
                 if !marker { qualification }
                 Section {
@@ -287,7 +285,7 @@ private struct SchoolObservationComposer: View {
                     } label: {
                         HStack(spacing: DrivySpacing.xs) {
                             if model.isBusy { ProgressView() }
-                            Text(model.isBusy ? "Enregistrement…" : "Enregistrer dans le carnet")
+                            Text(model.isBusy ? "Enregistrement…" : "Enregistrer")
                         }
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle())
@@ -321,7 +319,7 @@ private struct SchoolObservationComposer: View {
         Section {
             Picker("Compétence", selection: $competencyID) {
                 Text(editor.origin == "LIVE" ? "Choisir une compétence" : "Sans compétence associée").tag(Optional<UUID>.none)
-                ForEach(model.competencies) { value in Text(value.label).tag(Optional(value.id)) }
+                ForEach(model.competencies) { value in Text(value.displayLabel).tag(Optional(value.id)) }
                 if let id = editor.original?.competencyId, !model.competencies.contains(where: { $0.id == id }) {
                     Text("Compétence déjà associée").tag(Optional(id))
                 }

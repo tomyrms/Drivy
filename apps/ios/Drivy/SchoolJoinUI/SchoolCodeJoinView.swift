@@ -6,6 +6,7 @@ struct SchoolCodeJoinView: View {
     let openSchool: (SchoolMembership) -> Void
     /// An e-mail invitation link is still accepted, on its own screen.
     var useLink: (() -> Void)? = nil
+    var loadsOnAppear = true
     @Environment(\.dismiss) private var dismiss
     @FocusState private var fieldFocused: Bool
     @ScaledMetric(relativeTo: .title) private var codeSize: CGFloat = 32
@@ -35,8 +36,9 @@ struct SchoolCodeJoinView: View {
             }
         }
         .tint(DrivyTheme.accent)
-        .interactiveDismissDisabled(model.isBusy || model.isPending)
+        .interactiveDismissDisabled(model.isBusy)
         .task {
+            guard loadsOnAppear else { return }
             await model.load()
             if model.isReady && model.preview == nil && !model.isPending { fieldFocused = true }
         }
@@ -102,7 +104,7 @@ struct SchoolCodeJoinView: View {
             .accessibilityElement(children: .combine)
             if !model.isConfirmed && !model.isPending {
                 Button { model.anotherCode() } label: {
-                    Text("Autre code")
+                    Text("Saisir un autre code")
                         .font(.subheadline.weight(.semibold))
                         .frame(minHeight: 44)
                         .contentShape(Rectangle())
@@ -125,9 +127,7 @@ struct SchoolCodeJoinView: View {
             if let preview = model.record?.preview { summary(preview) }
             DrivyPanel {
                 DrivyPendingRequest(
-                    message: "La réponse de l’école n’est pas arrivée. Votre demande est gardée sur cet appareil : vérifiez-la.",
-                    verify: { Task { await model.verify() } }, canVerify: !model.isBusy,
-                    verifyIdentifier: "join-code-verify")
+                    message: "La réponse de l’école n’est pas arrivée. Votre demande est conservée sur cet appareil.")
             }
         }
     }
@@ -161,6 +161,7 @@ struct SchoolCodeJoinView: View {
                     DrivyBusyLabel(title: "Vérifier auprès de l’école", busyTitle: "Vérification…", isBusy: model.isBusy)
                 }
                 .disabled(model.isBusy)
+                .accessibilityIdentifier("join-code-verify")
             } else if model.preview != nil {
                 Button { Task { await model.accept() } } label: {
                     DrivyBusyLabel(title: "Rejoindre", busyTitle: "Envoi…", isBusy: model.isBusy)

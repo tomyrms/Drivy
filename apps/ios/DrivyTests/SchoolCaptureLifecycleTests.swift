@@ -74,6 +74,47 @@ import Testing
         #expect(sent[0].value(forHTTPHeaderField: "Idempotency-Key") != sent[1].value(forHTTPHeaderField: "Idempotency-Key"))
         #expect(sent[0].value(forHTTPHeaderField: "If-Match") != sent[1].value(forHTTPHeaderField: "If-Match"))
     }
+
+    @Test func returningToTheAppReplaysAClosedLessonsPendingFinalization() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        await fixture.server.loseNextFinalizationResponse()
+        #expect(await fixture.controller.stopAndSynchronize())
+        await fixture.waitUntilSettled()
+        fixture.controller.closeLessonFlow(lessonID: fixture.capture.lessonId)
+        #expect(fixture.controller.pendingSynchronizationError != nil)
+        #expect(fixture.controller.pendingSynchronizationCount == 1)
+
+        // Comme au prochain lancement, aucun contexte GPS n'est restauré.
+        let resumed = SchoolCaptureSessionController(store: fixture.store)
+        resumed.setScope(fixture.scope)
+        let client = SchoolCaptureClient(baseURL: URL(string: fixture.scope.apiBaseURL)!, tokenSource: HubToken(), transport: fixture.server)
+        await resumed.resumePendingSynchronizations(client: client, scope: fixture.scope)
+        for _ in 0..<300 {
+            if resumed.pendingSynchronizationCount == 0 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(resumed.pendingSynchronizationCount == 0 && resumed.pendingSynchronizationError == nil)
+        #expect(resumed.captureID == nil && !resumed.isCollecting)
+        let sent = await fixture.server.requests().filter { $0.url?.lastPathComponent == "finalize" }
+        #expect(sent.count == 2 && sent[0].httpBody == sent[1].httpBody)
+        #expect(sent[0].value(forHTTPHeaderField: "Idempotency-Key") == sent[1].value(forHTTPHeaderField: "Idempotency-Key"))
+        resumed.setScope(nil)
+    }
+
+    @Test func signingOutPreventsPendingCaptureReplay() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        await fixture.server.loseNextFinalizationResponse()
+        #expect(await fixture.controller.stopAndSynchronize())
+        await fixture.waitUntilSettled()
+        let before = await fixture.server.requests().count
+        fixture.controller.setScope(nil)
+        let client = SchoolCaptureClient(baseURL: URL(string: fixture.scope.apiBaseURL)!, tokenSource: HubToken(), transport: fixture.server)
+        await fixture.controller.resumePendingSynchronizations(client: client, scope: fixture.scope)
+        #expect(await fixture.server.requests().count == before)
+        #expect(fixture.controller.pendingSynchronizationError == nil)
+        let pending = try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId)
+        #expect(pending.contains { $0.mutation.kind == .finalizeCapture })
+    }
 }
 
 @MainActor private struct CaptureLifecycleFixture {

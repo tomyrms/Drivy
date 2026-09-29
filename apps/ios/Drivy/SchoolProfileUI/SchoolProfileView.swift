@@ -2,8 +2,8 @@ import SwiftUI
 
 struct SchoolProfileView: View {
     @Bindable var model: SchoolProfileWorkspace
+    var loadsOnAppear = true
     @Environment(\.dismiss) private var dismiss
-    @State private var confirmsSave = false
     @State private var showsGuidedWelcome = false
     @State private var confirmsDiscard = false
     @State private var attemptedSave = false
@@ -20,15 +20,7 @@ struct SchoolProfileView: View {
                         }.disabled(model.isBusy)
                     }
                 }
-                .task { await model.load() }
-                .confirmationDialog("Enregistrer ces informations dans le dossier de l’école ?", isPresented: $confirmsSave, titleVisibility: .visible) {
-                    Button("Enregistrer le profil") {
-                        attemptedSave = true
-                        Task { _ = await model.saveProfileAfterConfirmation() }
-                    }
-                } message: {
-                    Text("L’auteur de la saisie sera conservé. Le nom du compte de connexion ne sera pas modifié.")
-                }
+                .task { if loadsOnAppear { await model.load() } }
                 .sheet(isPresented: $showsGuidedWelcome) { SchoolOnboardingView(model: model) }
                 .confirmationDialog("Quitter sans enregistrer les changements du formulaire ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
                     Button("Quitter le formulaire", role: .destructive) { dismiss() }
@@ -44,28 +36,31 @@ struct SchoolProfileView: View {
         Form {
             SchoolProfileStatusSections(model: model)
             if let profile = model.profile {
-                Section {
-                    DrivyFormIntro(context: model.school?.name ?? "Dossier scolaire",
-                        message: model.isOwnProfile ? "Saisissez vos noms administratifs tels qu’ils doivent figurer dans le dossier."
-                            : "Complétez uniquement les informations confirmées avec l’élève.")
-                    if !model.isOwnProfile && !model.roles.contains("ADMIN") {
-                        Text("Votre affectation vous permet de mettre à jour les contacts utiles à l’enseignement.")
-                            .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .listRowBackground(DrivyTheme.canvas)
                 identitySection(profile)
                 contactSection
                 if model.editableFields.contains(.birthDate) { birthSection }
                 if model.editableFields.contains(.postalAddress) { addressSection }
-                Section {
-                    Label(profile.profilePhotoDocumentId == nil ? "Photo facultative" : "Une photo est associée au dossier", systemImage: "person.crop.circle")
-                        .foregroundStyle(DrivyTheme.muted)
-                } header: { Text("Photo") }
+                if profile.profilePhotoDocumentId != nil {
+                    Section {
+                        Label("Une photo est associée au dossier", systemImage: "person.crop.circle")
+                            .foregroundStyle(DrivyTheme.muted)
+                    } header: { Text("Photo") }
+                }
                 readinessSection
             }
-            if let onboarding = model.onboarding { onboardingSection(onboarding) }
+            if let onboarding = model.onboarding, onboarding.status != "COMPLETED" { onboardingSection(onboarding) }
+            if let policy = model.applicablePolicy {
+                Section {
+                    DisclosureGroup("Pourquoi ces informations ?") {
+                        ForEach(policy.fields) { rule in
+                            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                                Text(rule.field.label).font(.subheadline.weight(.semibold))
+                                Text(rule.explanation).font(.footnote).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+            }
             if let notice = model.notice, notice.status == "APPROVED" { noticeSection(notice) }
         }
         .scrollContentBackground(.hidden)
@@ -74,7 +69,8 @@ struct SchoolProfileView: View {
             if model.profile != nil, !model.editableFields.isEmpty {
                 DrivyFormActionBar(hint: saveHint.text, hintTone: saveHint.tone) {
                     Button {
-                        confirmsSave = true
+                        attemptedSave = true
+                        Task { _ = await model.saveProfileAfterConfirmation() }
                     } label: {
                         DrivyBusyLabel(title: "Enregistrer les modifications", isBusy: model.isBusy)
                     }
@@ -104,7 +100,7 @@ struct SchoolProfileView: View {
                 fieldExplanation(.lastName)
             } else { LabeledContent("Nom", value: profile.lastName ?? "À compléter") }
         } header: { Text("Identité scolaire") }
-        .disabled(!model.canMutate || confirmsSave)
+        .disabled(!model.canMutate)
     }
 
     @ViewBuilder private var contactSection: some View {
@@ -122,7 +118,7 @@ struct SchoolProfileView: View {
                     fieldExplanation(.contactPhone)
                 }
             } header: { Text("Contacts") }
-            .disabled(!model.canMutate || confirmsSave)
+            .disabled(!model.canMutate)
         }
     }
     private var birthSection: some View {
@@ -136,7 +132,7 @@ struct SchoolProfileView: View {
             .padding(.vertical, DrivySpacing.xxs)
             fieldExplanation(.birthDate)
         } header: { Text("Date de naissance") }
-        .disabled(!model.canMutate || confirmsSave)
+        .disabled(!model.canMutate)
     }
     private var addressSection: some View {
         Section {
@@ -152,13 +148,12 @@ struct SchoolProfileView: View {
             }
             fieldExplanation(.postalAddress)
         } header: { Text("Adresse postale") }
-        .disabled(!model.canMutate || confirmsSave)
+        .disabled(!model.canMutate)
     }
     @ViewBuilder private func fieldExplanation(_ field: SchoolProfileField) -> some View {
         if let rule = model.applicablePolicy?.fields.first(where: { $0.field == field }) {
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(rule.requirement == .optional ? "Facultatif" : "\(rule.requirement.label) · \(rule.stage.label)").font(.caption.weight(.semibold))
-                Text(rule.explanation).font(.footnote)
             }
             .foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
         }
@@ -184,7 +179,7 @@ struct SchoolProfileView: View {
         DrivyFormField(label: title, text: text, identifier: identifier)
     }
     @ViewBuilder private var readinessSection: some View {
-        if let readiness = model.readiness {
+        if let readiness = model.readiness, !readiness.ready {
             Section {
                 Label(readiness.ready ? "Accès à l’espace scolaire possible" : "Accès à l’espace scolaire à préparer",
                     systemImage: readiness.ready ? "checkmark.circle.fill" : "list.bullet.clipboard")

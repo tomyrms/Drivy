@@ -615,3 +615,27 @@ final class SchoolCaptureSessionController {
         (error as? LocalizedError)?.errorDescription ?? "L’opération n’a pas pu être confirmée. Les données conservées restent dans le journal."
     }
 }
+
+#if DEBUG && targetEnvironment(simulator)
+extension SchoolCaptureSessionController {
+    /// Présentation synthétique seulement : aucune source Core Location, aucun
+    /// coffre ni autorisation réelle. Ce chemin n'existe pas dans l'IPA Release.
+    static func visualReviewRecording(lessonID: UUID, recorder: SchoolLiveObservationRecorder? = nil,
+                                     waitingForPosition: Bool = false) -> SchoolCaptureSessionController {
+        let controller = SchoolCaptureSessionController()
+        controller.state = .recording
+        controller.captureID = UUID(uuidString: "00000000-0000-0000-0000-000000009091")!
+        controller.lessonID = lessonID
+        controller.beginning = ContinuousClock.now.advanced(by: .seconds(-214))
+        controller.liveObservations = recorder
+        controller.locationMessage = waitingForPosition ? SchoolCaptureLocationSignal.waitingForPosition.message : nil
+        let points: [SchoolCaptureMeasurement] = waitingForPosition ? [] : [
+            .init(capturedAt: "2026-09-29T10:00:00.000Z", elapsedMs: 0, latitude: 46.520, longitude: 6.630, accuracyMeters: 8),
+            .init(capturedAt: "2026-09-29T10:00:05.000Z", elapsedMs: 5_000, latitude: 46.521, longitude: 6.631, accuracyMeters: 7),
+            .init(capturedAt: "2026-09-29T10:00:10.000Z", elapsedMs: 10_000, latitude: 46.522, longitude: 6.632, accuracyMeters: 6)
+        ]
+        controller.segments = [.init(id: UUID(uuidString: "00000000-0000-0000-0000-000000009092")!, measurements: points)]
+        return controller
+    }
+}
+#endif

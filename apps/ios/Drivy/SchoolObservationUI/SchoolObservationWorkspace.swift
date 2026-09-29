@@ -85,7 +85,11 @@ struct SchoolObservationEditor: Identifiable {
     }
     func competencyLabel(_ id: UUID?) -> String? {
         guard let id else { return nil }
-        return competencies.first(where: { $0.id == id })?.label ?? "Compétence du référentiel"
+        return competencies.first(where: { $0.id == id })?.displayLabel ?? "Compétence du référentiel"
+    }
+    func liveRecorder() -> SchoolLiveObservationRecorder? {
+        guard canAdd, lesson?.status == "PLANNED" else { return nil }
+        return SchoolLiveObservationRecorder(scope: scope, lessonID: lessonID, client: client, outbox: outbox)
     }
     func timeLabel(_ value: String?) -> String? {
         guard let value, let date = SchoolLesson.date(value) else { return nil }

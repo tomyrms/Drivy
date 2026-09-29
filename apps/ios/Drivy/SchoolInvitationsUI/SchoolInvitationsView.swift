@@ -344,7 +344,8 @@ struct InvitationCreationView: View {
                 Section { Button("Actualiser") { Task { await model.load() } } }
             }
         }
-        .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
+        .scrollContentBackground(.hidden)
+        .frame(maxWidth: 820).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
         .safeAreaInset(edge: .bottom) {
             if model.codeRecovery == nil {
                 DrivyFormActionBar(hint: hint) {
@@ -476,7 +477,8 @@ private struct InvitationRevocationView: View {
                     Section { Button("Actualiser avant de confirmer") { Task { await model.load() } } }
                 }
             }
-            .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
+            .scrollContentBackground(.hidden)
+            .frame(maxWidth: 820).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
                 DrivyFormActionBar(hint: reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Indiquez le motif de la révocation." : nil) {

@@ -17,8 +17,10 @@ struct SchoolVisualReview: View {
           Group {
             if let context {
                 switch screen {
-                case "gps-choice", "signal", "observations", "capture-preparation":
+                case "gps-choice", "signal", "observations", "capture-preparation", "live", "live-waiting":
                     SchoolFieldVisualReview(screen: screen, context: context)
+                case "planning", "invitations", "invitation-create", "lesson-tariff", "lesson-finish":
+                    SchoolOfficeVisualReview(screen: screen, context: context)
                 case "lesson", "lesson-planned":
                     NavigationStack {
                         SchoolLessonReportView(client: context.agenda.reportClient, schoolWorkspace: context.workspace,
@@ -112,19 +114,19 @@ struct SchoolVisualShell: View {
 }
 
 @MainActor enum SchoolVisualData {
-    static let schoolID = identifier(1)
-    static let personID = identifier(2)
-    static let membershipID = identifier(3)
-    static let learnerID = identifier(4)
-    static let trainingID = identifier(5)
-    static let offeringID = identifier(6)
-    static let curriculumID = identifier(7)
-    static let policyID = identifier(8)
-    static let lessonID = identifier(9)
-    static let revisionID = identifier(10)
-    static let plannedLessonID = identifier(13)
-    static let captureID = identifier(70)
-    static let time = "2026-09-24T10:00:00Z"
+    nonisolated static let schoolID = identifier(1)
+    nonisolated static let personID = identifier(2)
+    nonisolated static let membershipID = identifier(3)
+    nonisolated static let learnerID = identifier(4)
+    nonisolated static let trainingID = identifier(5)
+    nonisolated static let offeringID = identifier(6)
+    nonisolated static let curriculumID = identifier(7)
+    nonisolated static let policyID = identifier(8)
+    nonisolated static let lessonID = identifier(9)
+    nonisolated static let revisionID = identifier(10)
+    nonisolated static let plannedLessonID = identifier(13)
+    nonisolated static let captureID = identifier(70)
+    nonisolated static let time = "2026-09-24T10:00:00Z"
 
     static func prepare() async throws -> SchoolVisualContext {
         let baseURL = URL(string: "https://visual.drivy.invalid")!
@@ -143,7 +145,7 @@ struct SchoolVisualShell: View {
             learner: learner, replay: replay)
     }
 
-    private static func identifier(_ value: Int) -> UUID {
+    nonisolated private static func identifier(_ value: Int) -> UUID {
         UUID(uuidString: "10000000-0000-4000-8000-" + String(format: "%012d", value))!
     }
 

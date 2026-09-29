@@ -38,6 +38,7 @@ struct SchoolRootView: View {
     @State private var joinsByCodeAfterSignIn = false
     @State private var selectedHomeTab: SchoolHomeTab = .session
     @State private var captureController = SchoolCaptureSessionController()
+    @Environment(\.scenePhase) private var scenePhase
     /// The profile sheet shows the guided welcome only when it was opened for it.
     @State private var onboardingWorkspaceID: UUID?
     /// Memberships already offered the welcome during this launch: « Plus tard » never loops.
@@ -116,6 +117,22 @@ struct SchoolRootView: View {
         }
         .onChange(of: workspace?.school?.status) { _, status in
             if status == "ARCHIVED" { captureController.setScope(nil) }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { updateCaptureScope() }
+        }
+        .safeAreaInset(edge: .top) {
+            if identity.isAuthenticated, let error = captureController.pendingSynchronizationError {
+                VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                    Text(error).font(.callout).fixedSize(horizontal: false, vertical: true)
+                    Button("Réessayer la synchronisation") {
+                        Task { await captureController.retryPendingSynchronizations() }
+                    }
+                    .frame(minHeight: 44)
+                }
+                .drivyPageContent()
+                .background(DrivyTheme.surface)
+            }
         }
         .onOpenURL { receiveInvitation($0) }
     }
@@ -429,7 +446,10 @@ struct SchoolRootView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if configuration != nil {
                 VStack(spacing: DrivySpacing.s) {
-                    Button(action: signIn) {
+                    Button {
+                        joinsByCodeAfterSignIn = false
+                        signIn()
+                    } label: {
                         if identity.isWorking {
                             DrivyBusyLabel(title: "Se connecter", busyTitle: "Connexion…", isBusy: true)
                         } else {
@@ -539,9 +559,13 @@ struct SchoolRootView: View {
         }
         // La recharge conserve la même portée. Changer d'école, de compte ou
         // d'epoch ferme immédiatement la source de l'ancienne séance.
-        captureController.setScope(SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
             membershipID: membership.membershipId, accessEpoch: membership.accessEpoch,
-            apiBaseURL: configuration.apiBaseURL.absoluteString))
+            apiBaseURL: configuration.apiBaseURL.absoluteString)
+        captureController.setScope(scope)
+        if let client = homeAgendaClient?.captureClient {
+            Task { await captureController.resumePendingSynchronizations(client: client, scope: scope) }
+        }
     }
 }
 

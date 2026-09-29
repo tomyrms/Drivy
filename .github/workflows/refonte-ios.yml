@@ -23,7 +23,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only }}
+  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only }}-${{ inputs.visual_screens }}-${{ inputs.visual_devices }}
   cancel-in-progress: false
 jobs:
   apple:

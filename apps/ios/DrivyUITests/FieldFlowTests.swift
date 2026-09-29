@@ -28,6 +28,19 @@ import XCTest
         XCTAssertFalse(attention.exists)
     }
 
+    func testFinishingALessonNeedsNoDateConfirmationOrReportText() {
+        let app = launch("lesson-finish")
+        let finish = app.buttons["lesson-complete"]
+        XCTAssertTrue(finish.waitForExistence(timeout: 20), app.debugDescription)
+        finish.tap()
+        let save = app.buttons["lesson-save-report"]
+        XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(app.datePickers.count, 0)
+        XCTAssertTrue(save.isEnabled)
+        save.tap()
+        XCTAssertTrue(app.staticTexts["field-lesson-closed"].waitForExistence(timeout: 10), app.debugDescription)
+    }
+
     private func launch(_ screen: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = screen

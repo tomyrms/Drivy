@@ -16,7 +16,8 @@ struct SchoolPlanningView: View {
                     else { bookingFields }
                 }
             }
-            .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
+            .scrollContentBackground(.hidden)
+            .frame(maxWidth: 820).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !cancelling && !model.isLoading && model.school != nil { bookingActionBar }
             }
@@ -25,7 +26,7 @@ struct SchoolPlanningView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
             }
-            .task { await model.load() }
+            .task { if model.school == nil { await model.load() } }
             .confirmationDialog("Annuler cette leçon ?", isPresented: $confirmsCancellation, titleVisibility: .visible) {
                 Button("Annuler la leçon", role: .destructive) { Task { if await model.cancel() { dismiss() } } }
                 Button("Conserver la leçon", role: .cancel) { }

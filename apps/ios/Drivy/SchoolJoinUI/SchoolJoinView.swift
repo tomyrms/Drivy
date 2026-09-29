@@ -3,6 +3,7 @@ import SwiftUI
 struct SchoolJoinView: View {
     @Bindable var model: SchoolJoinWorkspace
     let openSchool: (SchoolMembership) -> Void
+    var loadsOnAppear = true
     @Environment(\.dismiss) private var dismiss
     @State private var expandsRetention = false
 
@@ -13,7 +14,7 @@ struct SchoolJoinView: View {
                     if model.isBusy {
                         ProgressView("Vérification auprès de l’école…").frame(maxWidth: .infinity, minHeight: 44)
                     }
-                    if let error = model.errorMessage {
+                    if let error = model.errorMessage, model.preview == nil {
                         SchoolErrorNotice(message: error, retry: model.isReady ? nil : { Task { await model.load() } })
                     }
                     if model.isConfirmed { confirmed }
@@ -36,7 +37,7 @@ struct SchoolJoinView: View {
         }
         .tint(DrivyTheme.accent)
         .interactiveDismissDisabled(model.isBusy)
-        .task { await model.load() }
+        .task { if loadsOnAppear { await model.load() } }
         .accessibilityIdentifier("join-school")
     }
     private var linkEntry: some View {
@@ -133,7 +134,7 @@ struct SchoolJoinView: View {
                 Text("La confirmation est conservée. Actualisez vos accès pour ouvrir l’école.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
             }
-            secondaryLink("Une autre invitation") { model.anotherInvitation() }
+            secondaryLink("Consulter une autre invitation") { model.anotherInvitation() }
         }
     }
     private var actionHint: (text: String?, tone: DrivyTone) {
