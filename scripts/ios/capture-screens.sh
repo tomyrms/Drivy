@@ -75,7 +75,10 @@ PY
   mkdir -p "$exported"
   xcrun xcresulttool export attachments --path "$result" --output-path "$exported"
   python3 - "$exported" "$kind" "$appearance" "${screens[*]}" "${orientations[*]}" <<'PY'
-import hashlib, json, pathlib, shutil, struct, sys
+import hashlib, json, pathlib, shutil, sys
+
+from scripts.ios.png_geometry import png_geometry
+
 exported = pathlib.Path(sys.argv[1]).resolve()
 kind, appearance, screens, orientations = sys.argv[2:]
 expected = {f'{kind}-{screen}-{appearance}-{orientation}-synthetic': orientation
@@ -97,15 +100,18 @@ for test in manifest:
         if source.parent != exported:
             raise SystemExit('Chemin de capture exportée hors du répertoire prévu.')
         payload = source.read_bytes()
-        if payload[:8] != b'\x89PNG\r\n\x1a\n' or payload[12:16] != b'IHDR':
-            raise SystemExit('La capture système exportée ne constitue pas un PNG valide.')
-        width, height = struct.unpack('>II', payload[16:24])
-        if width == height or min(width, height) <= 0 or (width > height) != (expected[name] == 'landscape'):
+        try:
+            width, height, display_width, display_height, exif_orientation = png_geometry(payload)
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
+        if display_width == display_height or min(width, height) <= 0 or (display_width > display_height) != (expected[name] == 'landscape'):
             raise SystemExit(f'Dimensions incompatibles avec l’orientation demandée : {name}.')
         destination = pathlib.Path('artifacts/ios') / (name + '.png')
         shutil.copyfile(source, destination)  # Original attachment bytes; never rotate or re-encode.
-        found[name] = dict(file=destination.name, widthPixels=width, heightPixels=height,
-                           orientation=expected[name], sha256=hashlib.sha256(payload).hexdigest())
+        found[name] = dict(file=destination.name, storedWidthPixels=width, storedHeightPixels=height,
+                           displayWidthPixels=display_width, displayHeightPixels=display_height,
+                           exifOrientation=exif_orientation, orientation=expected[name],
+                           sha256=hashlib.sha256(payload).hexdigest())
 if set(found) != set(expected):
     raise SystemExit('Captures orientées manquantes : ' + ', '.join(sorted(set(expected) - set(found))))
 proof = dict(deviceFamily=kind, appearance=appearance, capture='XCUIScreen.main.screenshot',
