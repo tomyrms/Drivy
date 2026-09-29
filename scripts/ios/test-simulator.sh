@@ -26,11 +26,16 @@ xcrun simctl ui "$device_id" appearance dark
 sleep 1
 xcrun simctl io "$device_id" screenshot artifacts/ios/iphone-dark.png || true
 ipad_id=$(xcrun simctl list devices available -j | python3 -c '
-import json,sys
+import json,pathlib,re,sys
 devices=json.load(sys.stdin)["devices"]
 candidates=[d for runtime,items in devices.items() if "iOS" in runtime for d in items if d.get("isAvailable") and d["name"].startswith("iPad")]
-if not candidates: raise SystemExit("Aucun simulateur iPad disponible")
-print(candidates[0]["udid"])
+groups = [[d for d in candidates if re.search(r"^iPad Air 11-inch", d["name"])],
+          [d for d in candidates if re.search(r"^iPad Pro 11-inch", d["name"])]]
+candidates = next((group for group in groups if group), [])
+if not candidates: raise SystemExit("Aucun iPad Air 11 ou Pro 11 disponible pour la campagne native ; aucun repli sur 13 pouces.")
+selected = candidates[0]
+pathlib.Path("artifacts/ios/test-device-iPad.json").write_text(json.dumps(dict(deviceFamily="iPad", simulatorName=selected["name"]), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+print(selected["udid"])
 ')
 xcrun simctl shutdown "$device_id"
 xcrun simctl boot "$ipad_id" || true

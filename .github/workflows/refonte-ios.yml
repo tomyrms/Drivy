@@ -16,6 +16,10 @@ on:
         description: Appareils à capturer, séparés par des espaces
         type: string
         default: 'iPhone iPad'
+      visual_compact_ipad:
+        description: Exiger un iPad Air 11 ou 10,9 pouces, sinon Pro 11 pouces
+        type: boolean
+        default: false
       visual_appearances:
         description: Apparences à capturer, séparées par des espaces
         type: string
@@ -31,7 +35,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only }}-${{ inputs.visual_screens }}-${{ inputs.visual_devices }}-${{ inputs.visual_large_text }}-${{ inputs.visual_orientations }}
+  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only }}-${{ inputs.visual_screens }}-${{ inputs.visual_devices }}-${{ inputs.visual_large_text }}-${{ inputs.visual_orientations }}-${{ inputs.visual_compact_ipad }}
   cancel-in-progress: false
 jobs:
   apple:
@@ -106,6 +110,7 @@ jobs:
         env:
           DRIVY_VISUAL_SCREENS: ${{ inputs.visual_screens }}
           DRIVY_VISUAL_DEVICES: ${{ inputs.visual_devices }}
+          DRIVY_VISUAL_COMPACT_IPAD: ${{ inputs.visual_compact_ipad && '1' || '0' }}
           DRIVY_VISUAL_APPEARANCES: ${{ inputs.visual_appearances }}
           DRIVY_VISUAL_ORIENTATIONS: ${{ inputs.visual_orientations }}
           DRIVY_VISUAL_LARGE_TEXT: ${{ inputs.visual_large_text && '1' || '0' }}
@@ -152,6 +157,9 @@ jobs:
             artifacts/ios/test-reports/
             artifacts/ios/*.png
             artifacts/ios/visual-orientation-*.json
+            artifacts/ios/visual-device-*.json
+            artifacts/ios/test-device-*.json
+            artifacts/ios/simctl-ui-help.txt
             artifacts/ios/*-build.log
             artifacts/ios/*-test.log
             artifacts/ios/Package.resolved

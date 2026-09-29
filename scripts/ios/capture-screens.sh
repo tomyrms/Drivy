@@ -27,6 +27,15 @@ done
 for orientation in "${orientations[@]}"; do
   [[ "$orientation" == portrait || "$orientation" == landscape ]] || { echo 'Orientation de capture inconnue.' >&2; exit 1; }
 done
+xcrun simctl help ui > artifacts/ios/simctl-ui-help.txt 2>&1
+active_device_id=""
+cleanup_device() {
+  if [[ -n "$active_device_id" ]]; then
+    xcrun simctl ui "$active_device_id" content_size large || true
+    xcrun simctl shutdown "$active_device_id" || true
+  fi
+}
+trap cleanup_device EXIT
 
 capture_oriented() {
   local kind=$1 appearance=$2 device_id=$3 xctestrun test_status=0
@@ -110,15 +119,46 @@ PY
 
 for kind in "${devices[@]}"; do
   device_id=$(xcrun simctl list devices available -j | python3 -c '
-import json,sys
+import json,pathlib,re,sys
 kind=sys.argv[1]
+compact=sys.argv[2] == "1"
 devices=json.load(sys.stdin)["devices"]
 candidates=[d for runtime,items in devices.items() if "iOS" in runtime for d in items if d.get("isAvailable") and d["name"].startswith(kind)]
+if kind == "iPad" and compact:
+    groups = [
+        [d for d in candidates if re.search(r"^iPad Air 11-inch", d["name"])],
+        [d for d in candidates if re.search(r"^iPad Air.*(10[.,]9|\((4th|5th) generation\))", d["name"])],
+        [d for d in candidates if re.search(r"^iPad Pro 11-inch", d["name"])]
+    ]
+    candidates = next((group for group in groups if group), [])
+    if not candidates:
+        raise SystemExit("Aucun iPad Air 11/10,9 ou Pro 11 disponible ; aucun repli vers un iPad 13 pouces.")
 if not candidates: raise SystemExit("Aucun simulateur disponible")
-print(candidates[0]["udid"])
-' "$kind")
+selected = candidates[0]
+proof = dict(deviceFamily=kind, simulatorName=selected["name"], compactIPadRequested=kind == "iPad" and compact)
+pathlib.Path(f"artifacts/ios/visual-device-{kind}.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+print(selected["udid"])
+' "$kind" "${DRIVY_VISUAL_COMPACT_IPAD:-0}")
+  active_device_id="$device_id"
   xcrun simctl boot "$device_id" || true
   xcrun simctl bootstatus "$device_id" -b
+  content_size=large
+  if [[ "${DRIVY_VISUAL_LARGE_TEXT:-0}" == 1 ]]; then content_size=accessibility-extra-large; fi
+  # System Dynamic Type also reaches sheets/popovers outside the fixture environment.
+  # Unsupported commands or values fail explicitly: no claim from a source flag alone.
+  xcrun simctl ui "$device_id" content_size "$content_size"
+  reported_content_size=$(xcrun simctl ui "$device_id" content_size)
+  python3 - "$kind" "$content_size" "$reported_content_size" <<'PY'
+import json, pathlib, sys
+kind, requested, actual = sys.argv[1:]
+actual = actual.strip()
+if actual != requested:
+    raise SystemExit(f'Taille système non confirmée : demandé {requested}, reçu {actual}.')
+path = pathlib.Path(f'artifacts/ios/visual-device-{kind}.json')
+proof = json.loads(path.read_text(encoding='utf-8'))
+proof.update(requestedContentSize=requested, reportedContentSize=actual)
+path.write_text(json.dumps(proof, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+PY
   xcrun simctl status_bar "$device_id" override --time '9:41' --batteryState charged --batteryLevel 100
   xcrun simctl install "$device_id" "$app"
   for appearance in "${appearances[@]}"; do
@@ -134,5 +174,7 @@ print(candidates[0]["udid"])
       xcrun simctl io "$device_id" screenshot "artifacts/ios/${kind}-${screen}-${appearance}-synthetic.png"
     done
   done
+  xcrun simctl ui "$device_id" content_size large
   xcrun simctl shutdown "$device_id"
+  active_device_id=""
 done

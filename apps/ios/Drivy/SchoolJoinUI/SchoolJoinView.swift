@@ -60,7 +60,6 @@ struct SchoolJoinView: View {
             PasteButton(payloadType: String.self) { values in
                 if let value = values.first, value.utf8.count <= 2_048 { model.link = value }
             }
-            .labelStyle(SchoolInvitationPasteLabelStyle())
             .accessibilityLabel("Coller le lien")
             .frame(minHeight: 44)
             .disabled(model.isBusy || !model.isReady)
@@ -169,15 +168,5 @@ struct SchoolJoinView: View {
             }
         }
         .buttonStyle(DrivyPrimaryButtonStyle())
-    }
-}
-
-/// Le contrôle de collage reste natif ; seul son libellé suit la langue de Drivy.
-private struct SchoolInvitationPasteLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: DrivySpacing.xs) {
-            configuration.icon
-            Text("Coller")
-        }
     }
 }
