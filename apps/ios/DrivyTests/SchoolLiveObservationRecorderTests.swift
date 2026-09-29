@@ -161,10 +161,13 @@ private actor DelayedLiveObservationTransport: SchoolHTTPTransport {
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         guard let url = request.url, url.lastPathComponent == "geo-observations" else { return try await fallback.send(request) }
-        func response(_ value: some Encodable) throws -> SchoolHTTPResponse {
-            let data = try JSONSerialization.jsonObject(with: JSONEncoder().encode(value))
+        func response(_ value: some Encodable, status: Int = 200) throws -> SchoolHTTPResponse {
+            var data = try JSONSerialization.jsonObject(with: JSONEncoder().encode(value))
+            if var page = data as? [String: Any], page["items"] != nil {
+                page["nextCursor"] = NSNull(); data = page
+            }
             return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["data": data,
-                "requestId": UUID().uuidString, "serverTime": "2026-09-28T12:15:00Z"]), status: 200, url: url, contentType: "application/json")
+                "requestId": UUID().uuidString, "serverTime": "2026-09-28T12:15:00Z"]), status: status, url: url, contentType: "application/json")
         }
         if request.httpMethod == "POST" {
             let body = try JSONDecoder().decode(SchoolObservationBody.self, from: request.httpBody ?? Data())
@@ -176,7 +179,7 @@ private actor DelayedLiveObservationTransport: SchoolHTTPTransport {
                 text: body.text, origin: body.origin, observedAt: body.observedAt, eventKind: body.eventKind,
                 eventStatus: body.eventStatus, authorMembershipId: ConfigurationFixture.membershipID)
             observations.append(observation)
-            return try response(observation)
+            return try response(observation, status: 201)
         }
         return try response(SchoolPage(items: observations, nextCursor: nil))
     }
@@ -192,7 +195,13 @@ private actor LiveObservationTransport: SchoolHTTPTransport {
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         let url = request.url!
         func response(_ value: some Encodable) throws -> SchoolHTTPResponse {
-            let data = try JSONSerialization.jsonObject(with: JSONEncoder().encode(value))
+            var data = try JSONSerialization.jsonObject(with: JSONEncoder().encode(value))
+            if value is SchoolTraining, var training = data as? [String: Any] {
+                training["startedOn"] = NSNull(); training["closedOn"] = NSNull(); data = training
+            }
+            if var page = data as? [String: Any], page["items"] != nil {
+                page["nextCursor"] = NSNull(); data = page
+            }
             return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["data": data,
                 "requestId": UUID().uuidString, "serverTime": "2026-09-28T12:15:00Z"]), status: 200, url: url, contentType: "application/json")
         }

@@ -122,7 +122,7 @@ private actor SchoolFieldVisualTransport: SchoolHTTPTransport {
             value["lessonId"] = SchoolVisualData.plannedLessonID.uuidString
             value["trainingId"] = SchoolVisualData.trainingID.uuidString
             value["authorMembershipId"] = SchoolVisualData.membershipID.uuidString
-            return SchoolHTTPResponse(data: try envelope(value), status: 200, url: url, contentType: "application/json")
+            return SchoolHTTPResponse(data: try envelope(value), status: 201, url: url, contentType: "application/json")
         }
         guard (request.httpMethod ?? "GET") == "GET", let bytes = responses[url.path] else { throw SchoolAPIError.invalidResponse }
         return SchoolHTTPResponse(data: bytes, status: 200, url: url, contentType: "application/json")

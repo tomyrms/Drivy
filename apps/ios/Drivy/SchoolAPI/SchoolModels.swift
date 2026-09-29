@@ -134,6 +134,7 @@ extension SchoolTraining {
         status = try c.decode(String.self, forKey: .status)
         startedOn = try c.decode(String?.self, forKey: .startedOn)
         closedOn = try c.decode(String?.self, forKey: .closedOn)
+        startNowBlockerCode = try c.decodeIfPresent(String.self, forKey: .startNowBlockerCode)
     }
 }
 

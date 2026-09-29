@@ -9,6 +9,7 @@ import XCTest
         XCTAssertFalse(app.buttons["recording-review-choice"].exists)
         app.buttons["recording-notice-link"].tap()
         XCTAssertTrue(app.staticTexts["Document de contrôle : le trajet sert à revoir la leçon avec l’élève et son moniteur. Les positions ne sont pas publiques."].waitForExistence(timeout: 5))
+        capture(app, name: "gps-document")
         app.buttons["Fermer"].tap()
         allow.tap()
         XCTAssertTrue(app.staticTexts["field-choice-saved"].waitForExistence(timeout: 10), app.debugDescription)
@@ -20,9 +21,11 @@ import XCTest
         let priority = app.buttons["live-observation-theme-Priorité à droite"]
         XCTAssertTrue(priority.waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(app.buttons["live-observation-theme-Signalisation"].exists)
+        capture(app, name: "signal-themes")
         priority.tap()
         let attention = app.buttons["live-observation-status-ATTENTION"]
         XCTAssertTrue(attention.waitForExistence(timeout: 5))
+        capture(app, name: "signal-status")
         attention.tap()
         XCTAssertTrue(app.staticTexts["field-observation-saved"].waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertFalse(attention.exists)
@@ -37,6 +40,7 @@ import XCTest
         XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(app.datePickers.count, 0)
         XCTAssertTrue(save.isEnabled)
+        capture(app, name: "lesson-empty-report")
         save.tap()
         XCTAssertTrue(app.staticTexts["field-lesson-closed"].waitForExistence(timeout: 10), app.debugDescription)
     }
@@ -46,5 +50,12 @@ import XCTest
         app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = screen
         app.launch()
         return app
+    }
+
+    private func capture(_ app: XCUIApplication, name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }
