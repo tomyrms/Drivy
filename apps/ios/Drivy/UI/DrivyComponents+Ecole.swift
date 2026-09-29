@@ -23,14 +23,34 @@ struct DrivySchoolToolbarItem: ToolbarContent {
     }
 }
 
-/// Trailing item of every tab, always the last one on the trailing edge.
+/// Trailing item of every tab, always the last one on the trailing edge: the initials of the
+/// signed-in person (`drivyAccountName` in the environment), the generic symbol otherwise.
 struct DrivyAccountToolbarItem: ToolbarContent {
     let openAccount: () -> Void
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            Button(action: openAccount) { Label("Compte", systemImage: "person.crop.circle") }
+            Button(action: openAccount) { DrivyAccountButtonLabel() }
+                .accessibilityLabel("Compte")
                 .accessibilityIdentifier("school-account")
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// Display name of the signed-in person, for the account button.
+    @Entry var drivyAccountName: String? = nil
+}
+
+private struct DrivyAccountButtonLabel: View {
+    @Environment(\.drivyAccountName) private var name
+
+    var body: some View {
+        if let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            DrivyAvatar(name: name, size: 32)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        } else {
+            Label("Compte", systemImage: "person.crop.circle")
         }
     }
 }
