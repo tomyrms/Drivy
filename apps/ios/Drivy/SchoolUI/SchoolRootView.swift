@@ -15,6 +15,8 @@ struct SchoolRootView: View {
     let configuration: AppConfiguration?
     @Bindable var identity: IdentitySession
     let workspace: SchoolWorkspace?
+    /// Created once by the app; nil only without configuration.
+    var clients: SchoolHomeClients? = nil
     @State private var showsAccount = false
     @State private var afterAccount: AccountFollowUp?
     @State private var presenter: UIViewController?
@@ -391,15 +393,8 @@ struct SchoolRootView: View {
 
     // MARK: Clients de l’accueil
 
-    private var homeAgendaClient: SchoolAgendaClient? {
-        guard let configuration else { return nil }
-        return SchoolAgendaClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
-    }
-
-    private var homeTrainingClient: SchoolTrainingClient? {
-        guard let configuration else { return nil }
-        return SchoolTrainingClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
-    }
+    private var homeAgendaClient: SchoolAgendaClient? { configuration == nil ? nil : clients?.agenda }
+    private var homeTrainingClient: SchoolTrainingClient? { configuration == nil ? nil : clients?.training }
 
 
     // MARK: Connexion
