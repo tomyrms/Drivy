@@ -41,13 +41,9 @@ struct SchoolJoinView: View {
     }
     private var linkEntry: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.m) {
-            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                Text("Lien d’invitation").font(.drivyTitle).accessibilityAddTraits(.isHeader)
-                Text("Utilisez le compte correspondant à l’adresse destinataire de l’invitation.")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            SecureField("Coller le lien reçu", text: $model.link)
+            Text("Lien d’invitation").font(.drivyTitle).accessibilityAddTraits(.isHeader)
+            TextField("Coller le lien reçu", text: $model.link)
+                .keyboardType(.URL).textContentType(.URL)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .submitLabel(.go).onSubmit { Task { await model.inspect() } }
                 .padding(DrivySpacing.m)
@@ -64,9 +60,6 @@ struct SchoolJoinView: View {
                 if let value = values.first, value.utf8.count <= 2_048 { model.link = value }
             }
             .disabled(model.isBusy || !model.isReady)
-            Text("Vous relirez l’école, les rôles et la notice avant d’accepter.")
-                .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
     private func invitation(_ preview: SchoolJoinPreview) -> some View {
@@ -75,7 +68,6 @@ struct SchoolJoinView: View {
             Divider().overlay(DrivyTheme.border)
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
                 Text("Vos données dans l’école").font(.drivySection).accessibilityAddTraits(.isHeader)
-                Text("Notice · version \(preview.notice.version)").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                 Text(preview.notice.noticeText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 DisclosureGroup("Conservation des données", isExpanded: $expandsRetention) {
                     Text(preview.notice.retentionText).textSelection(.enabled).padding(.top, DrivySpacing.s)
@@ -123,7 +115,6 @@ struct SchoolJoinView: View {
             DrivyPanel {
                 DrivyPendingRequest(
                     message: "Votre demande est conservée sur cet appareil. Vous pouvez fermer cet écran et revenir la vérifier avec ce compte.",
-                    reference: model.record?.operationID,
                     retry: { Task { await model.retry() } }, canRetry: !model.isBusy)
             }
         }
@@ -138,16 +129,6 @@ struct SchoolJoinView: View {
             } else {
                 Text("La confirmation est conservée. Actualisez vos accès pour ouvrir l’école.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            }
-            if let receipt = model.record?.receipt {
-                DisclosureGroup("Confirmation enregistrée") {
-                    VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                        Text(receipt.operationId.uuidString).font(.caption.monospaced()).textSelection(.enabled)
-                        Text(SchoolTrainingFormatting.instant(receipt.committedAt, zone: TimeZone.current.identifier)).font(.caption)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, DrivySpacing.xs)
-                }.font(.subheadline).foregroundStyle(DrivyTheme.muted)
             }
             secondaryLink("Une autre invitation") { model.anotherInvitation() }
         }

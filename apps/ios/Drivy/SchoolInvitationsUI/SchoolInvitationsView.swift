@@ -113,7 +113,6 @@ private struct InvitationPendingNotice: View {
                 ? "La demande est conservée sur cet appareil. Vérifiez son résultat avant une nouvelle action."
                 : "Une modification de l’école attend sa confirmation. La consultation des invitations reste disponible.",
             notes: notes,
-            reference: pending.id,
             verify: { Task { await model.verifyPending() } }, canVerify: model.canVerifyPending,
             verifyIdentifier: "invitation-verify-command",
             retry: model.canRetryPending ? { Task { await model.retryPending() } } : nil,
