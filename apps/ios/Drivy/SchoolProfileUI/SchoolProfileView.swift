@@ -22,8 +22,8 @@ struct SchoolProfileView: View {
                 }
                 .task { if loadsOnAppear { await model.load() } }
                 .sheet(isPresented: $showsGuidedWelcome) { SchoolOnboardingView(model: model) }
-                .confirmationDialog("Quitter sans enregistrer les changements du formulaire ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
-                    Button("Quitter le formulaire", role: .destructive) { dismiss() }
+                .confirmationDialog("Quitter sans enregistrer tes changements ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+                    Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
                 } message: {
                     Text("Une demande déjà envoyée reste conservée sur cet appareil jusqu’à confirmation.")
                 }
@@ -36,6 +36,7 @@ struct SchoolProfileView: View {
         Form {
             SchoolProfileStatusSections(model: model)
             if let profile = model.profile {
+                heading(profile)
                 identitySection(profile)
                 contactSection
                 if model.editableFields.contains(.birthDate) { birthSection }
@@ -92,7 +93,35 @@ struct SchoolProfileView: View {
         if attemptedSave, let error = model.errorMessage { return (error, .danger) }
         guard model.hasEdits else { return (nil, .neutral) }
         return (model.draft.isValid(allowed: model.editableFields, timeZone: model.school?.timeZone ?? "Europe/Zurich")
-            ? "Modifications à enregistrer dans cette école." : "Vérifiez les champs signalés.", .neutral)
+            ? "Modifications à enregistrer dans cette école." : "Vérifie les champs signalés.", .neutral)
+    }
+
+    /// Même tête que l’écran Compte : avatar, nom, école. Elle ne redit pas les champs, elle nomme la personne.
+    @ViewBuilder private func heading(_ profile: SchoolAdministrativeProfile) -> some View {
+        let name = [profile.firstName, profile.lastName].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
+        if !name.isEmpty {
+            Section {
+                HStack(spacing: DrivySpacing.m) {
+                    DrivyAvatar(name: name, size: 72)
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        Text(name)
+                            .font(.drivyTitle)
+                            .foregroundStyle(DrivyTheme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let school = model.school?.name {
+                            Text(school)
+                                .font(.subheadline)
+                                .foregroundStyle(DrivyTheme.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: DrivySpacing.xs, leading: 0, bottom: DrivySpacing.xs, trailing: 0))
+            }
+        }
     }
 
     private func identitySection(_ profile: SchoolAdministrativeProfile) -> some View {
@@ -114,13 +143,13 @@ struct SchoolProfileView: View {
         if model.editableFields.contains(.contactEmail) || model.editableFields.contains(.contactPhone) {
             Section {
                 if model.editableFields.contains(.contactEmail) {
-                    profileField("E-mail", text: $model.draft.contactEmail, identifier: "profile-email")
+                    profileField("E-mail", text: $model.draft.contactEmail, prompt: "nom@exemple.ch", identifier: "profile-email")
                         .textContentType(.emailAddress).keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                     fieldExplanation(.contactEmail)
                 }
                 if model.editableFields.contains(.contactPhone) {
-                    profileField("Téléphone", text: $model.draft.contactPhone, identifier: "profile-phone")
+                    profileField("Téléphone", text: $model.draft.contactPhone, prompt: "Facultatif", identifier: "profile-phone")
                         .textContentType(.telephoneNumber).keyboardType(.phonePad)
                     fieldExplanation(.contactPhone)
                 }
@@ -170,17 +199,17 @@ struct SchoolProfileView: View {
     }
     private func fieldError(_ field: SchoolProfileField) -> String {
         switch field {
-        case .firstName: "Renseignez le prénom, limité à 150 caractères."
-        case .lastName: "Renseignez le nom, limité à 150 caractères."
-        case .contactEmail: "Vérifiez le format de l’adresse e-mail."
+        case .firstName: "Renseigne le prénom, limité à 150 caractères."
+        case .lastName: "Renseigne le nom, limité à 150 caractères."
+        case .contactEmail: "Vérifie le format de l’adresse e-mail."
         case .contactPhone: "Le téléphone est limité à 32 caractères."
-        case .birthDate: "Utilisez JJ.MM.AAAA pour une date réelle, non future."
-        case .postalAddress: "Vérifiez la rue, le code postal, la localité et le code pays à deux lettres."
-        case .profilePhotoDocumentId: "Vérifiez la photo du profil."
+        case .birthDate: "Utilise JJ.MM.AAAA pour une date réelle, non future."
+        case .postalAddress: "Vérifie la rue, le code postal, la localité et le code pays à deux lettres."
+        case .profilePhotoDocumentId: "Vérifie la photo du profil."
         }
     }
-    private func profileField(_ title: String, text: Binding<String>, identifier: String? = nil) -> some View {
-        DrivyFormField(label: title, text: text, identifier: identifier)
+    private func profileField(_ title: String, text: Binding<String>, prompt: String? = nil, identifier: String? = nil) -> some View {
+        DrivyFormField(label: title, text: text, prompt: prompt, identifier: identifier)
     }
     @ViewBuilder private var readinessSection: some View {
         if let readiness = model.readiness, !readiness.ready {
@@ -210,7 +239,7 @@ struct SchoolProfileView: View {
                     .disabled(model.isBusy || model.hasEdits)
                     .accessibilityIdentifier("onboarding-resume")
                 if model.hasEdits {
-                    Text("Enregistrez d’abord les modifications du formulaire.")
+                    Text("Enregistre d’abord tes modifications.")
                         .font(.footnote).foregroundStyle(DrivyTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -221,11 +250,11 @@ struct SchoolProfileView: View {
     private func noticeSection(_ notice: SchoolDataPolicy) -> some View {
         Section {
             // Same wording and content as the notice sheet of the guided welcome.
-            DisclosureGroup("Comment l’école utilise vos données") {
+            DisclosureGroup("Comment l’école utilise tes données") {
                 Text(notice.noticeText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 Text(notice.retentionText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 if let email = notice.contactEmail {
-                    DrivyContactRow(title: "Contact pour vos données", value: email, symbol: "envelope")
+                    DrivyContactRow(title: "Contact pour tes données", value: email, symbol: "envelope")
                 }
                 Text("Version \(notice.version)")
                     .font(.footnote.monospacedDigit())
@@ -273,7 +302,7 @@ extension SchoolProfileStatusSections {
     fileprivate func pendingNotes(_ pending: PendingSchoolCommand) -> [String] {
         var notes: [String] = []
         if !pending.kind.isProfile { notes.append("Cette demande vient d’un autre écran de l’école.") }
-        if pending.scope != model.scope { notes.append("Vos accès ont changé depuis l’envoi. Le renvoi reste désactivé.") }
+        if pending.scope != model.scope { notes.append("Tes accès ont changé depuis l’envoi. Le renvoi reste désactivé.") }
         return notes
     }
 }

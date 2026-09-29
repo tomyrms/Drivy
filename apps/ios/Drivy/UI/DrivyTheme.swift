@@ -25,6 +25,8 @@ enum DrivyTheme {
     static let disabledSurface = adaptive(0xE8EDF3, 0x222E3E)
     static let route = adaptive(0x245BD6, 0x91B5FF)
     static let routeHalo = adaptive(0xFFFFFF, 0x10151C)
+    /// Shadow tint: a deep blue-grey, never pure black, so shadows stay soft on every surface.
+    static let shadow = adaptive(0x18212B, 0x05080C)
 
     private static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
         Color(uiColor: UIColor { traits in
@@ -97,6 +99,22 @@ enum DrivyButtonSize {
 
     var font: Font { self == .field ? .title3.weight(.bold) : .body.weight(.semibold) }
     var minHeight: CGFloat { self == .field ? 64 : 52 }
+}
+
+/// Elevation of a surface laid over another (map panel, floating thumb): two soft
+/// layers, one tight for the contact edge and one wide for the lift. Colors come from
+/// `DrivyTheme.shadow`; outside the map a hairline replaces the shadow.
+enum DrivyElevation {
+    static let contactOpacity = 0.10
+    static let liftOpacity = 0.12
+}
+
+extension View {
+    /// Soft two-layer shadow from the theme tint. `isOn` false keeps the layout identical without shadow.
+    func drivyShadow(_ isOn: Bool = true, radius: CGFloat = 18, y: CGFloat = 4) -> some View {
+        shadow(color: DrivyTheme.shadow.opacity(isOn ? DrivyElevation.contactOpacity : 0), radius: 1, y: 0.5)
+            .shadow(color: DrivyTheme.shadow.opacity(isOn ? DrivyElevation.liftOpacity : 0), radius: radius, y: y)
+    }
 }
 
 /// Custom motion only; system transitions are never overridden.
@@ -214,6 +232,10 @@ struct InlineErrorView: View {
         .padding(DrivySpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(DrivyTheme.dangerSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
+                .strokeBorder(DrivyTheme.danger.opacity(0.35), lineWidth: 0.5)
+        }
         .accessibilityElement(children: .contain)
     }
 }

@@ -120,7 +120,7 @@ struct SchoolAgendaView: View {
 
     @ViewBuilder private var dayContent: some View {
         if workspace.membership == nil {
-            ContentUnavailableView("Choisissez votre école", systemImage: "building.2", description: Text("Votre agenda s’affiche une fois l’école choisie."))
+            ContentUnavailableView("Choisis ton école", systemImage: "building.2", description: Text("Ton agenda s’affiche une fois l’école choisie."))
         } else if isLoading || (loadedScope != scopeKey && error == nil) {
             DrivyLoadingState(title: "Chargement de l’agenda…")
         } else if let error {
@@ -202,30 +202,40 @@ struct SchoolAgendaView: View {
             .environment(\.calendar, calendar)
             .environment(\.locale, Locale(identifier: "fr_CH"))
     }
+    /// La semaine d’un coup d’œil : le jour choisi plein, aujourd’hui en bleu, un point par leçon (trois au plus).
     private var weekStrip: some View {
         HStack(spacing: DrivySpacing.xxs) {
             ForEach(weekDays, id: \.self) { day in
                 let selected = calendar.isDate(day, inSameDayAs: selectedDate)
+                let today = calendar.isDateInToday(day)
+                let count = lessonCount(on: day)
                 Button { selectedDate = day } label: {
                     VStack(spacing: DrivySpacing.xs) {
                         Text(formattedDay(day, template: "EEEEE").uppercased())
-                            .font(.caption.weight(.medium))
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(selected ? DrivyTheme.onAccent : DrivyTheme.muted)
-                        Text(String(calendar.component(.day, from: day))).font(.headline.monospacedDigit())
-                        Circle().fill(hasLessons(on: day) ? (selected ? DrivyTheme.onAccent : DrivyTheme.accent) : .clear)
-                            .frame(width: 5, height: 5)
+                        Text(String(calendar.component(.day, from: day)))
+                            .font(.title3.weight(selected || today ? .bold : .regular).monospacedDigit())
+                            .foregroundStyle(selected ? DrivyTheme.onAccent : today ? DrivyTheme.accent : DrivyTheme.text)
+                        HStack(spacing: DrivySpacing.xxs) {
+                            ForEach(0..<max(min(count, 3), 1), id: \.self) { _ in
+                                Circle().fill(count > 0 ? (selected ? DrivyTheme.onAccent : DrivyTheme.accent) : .clear)
+                                    .frame(width: 5, height: 5)
+                            }
+                        }
                     }
-                    .frame(minWidth: 44, maxWidth: .infinity, minHeight: 76)
-                    .foregroundStyle(selected ? DrivyTheme.onAccent : DrivyTheme.text)
+                    .frame(minWidth: 44, maxWidth: .infinity, minHeight: 80)
                     .background(selected ? DrivyTheme.accent : .clear, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                     .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(AgendaDayButtonStyle())
                 .accessibilityLabel(formattedDay(day, template: "EEEE d MMMM"))
-                .accessibilityValue(hasLessons(on: day) ? "Contient des leçons" : "")
+                .accessibilityValue(count == 0 ? "" : count == 1 ? "1 leçon" : "\(count) leçons")
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
             }
         }
+        .padding(DrivySpacing.xxs)
+        .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.xxs))
     }
 
     /// Same row anatomy as the training dossier and the report lists: the time column already
@@ -248,8 +258,8 @@ struct SchoolAgendaView: View {
     private func formattedDay(_ date: Date, template: String) -> String {
         SchoolDateFormat.template(template, date, zone: calendar.timeZone.identifier)
     }
-    private func hasLessons(on day: Date) -> Bool {
-        loadedScope == scopeKey && !(dayIndex[calendar.startOfDay(for: day)] ?? []).isEmpty
+    private func lessonCount(on day: Date) -> Int {
+        loadedScope == scopeKey ? (dayIndex[calendar.startOfDay(for: day)] ?? []).count : 0
     }
     private func moveWeek(_ offset: Int) { if let date = calendar.date(byAdding: .weekOfYear, value: offset, to: selectedDate) { selectedDate = date } }
     private func newPlanningModel() -> SchoolPlanningWorkspace? {
@@ -285,6 +295,17 @@ struct SchoolAgendaView: View {
             guard !Task.isCancelled, requestID == id else { return }
             self.error = (error as? LocalizedError)?.errorDescription ?? "L’agenda n’a pas pu être chargé."
         }
+    }
+}
+
+/// Retour d’appui d’un jour de la semaine : le même que partout, nul sous Réduire les animations.
+private struct AgendaDayButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? DrivyPress.scale : 1)
+            .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }
 }
 

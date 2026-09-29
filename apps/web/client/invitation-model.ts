@@ -88,5 +88,5 @@ export function invitationLabel(invitation: Pick<Invitation, 'delivery' | 'maske
 
 /** The single line the administration sends to the learner. */
 export function invitationCodeMessage(code: string, expiry: string, schoolName: string): string {
-  return `Votre code pour rejoindre ${schoolName} sur Drivy : ${code}. Valable jusqu’au ${expiry}.`;
+  return `Ton code pour rejoindre ${schoolName} sur Drivy : ${code}. Valable jusqu’au ${expiry}.`;
 }

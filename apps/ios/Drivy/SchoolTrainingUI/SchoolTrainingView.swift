@@ -152,14 +152,14 @@ private struct SchoolTrainingContent: View {
         // Le dossier est celui d’une personne : son nom est le titre, la formation la précise.
         HStack(spacing: DrivySpacing.m) {
             if !dynamicTypeSize.isAccessibilitySize {
-                DrivyAvatar(name: learner.displayName, size: 44)
+                DrivyAvatar(name: learner.displayName, size: 60)
             }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(learner.displayName)
                     .font(.drivyTitle).foregroundStyle(DrivyTheme.text).fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
-                Text(model.training.map { "Permis \($0.categoryCode)" } ?? "Formation")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                Label(model.training.map { "Permis \($0.categoryCode)" } ?? "Formation", systemImage: "steeringwheel")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
             }
             Spacer(minLength: 0)
             if let training = model.training, training.status != "ACTIVE" {
@@ -207,7 +207,7 @@ private struct SchoolTrainingContent: View {
         }
     }
     private var progress: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+        VStack(alignment: .leading, spacing: DrivySpacing.m) {
             if let value = model.progress {
                 if let error = model.progressError { SchoolErrorNotice(message: error, retry: { Task { await model.loadProgress() } }) }
                 VStack(spacing: 0) {
@@ -238,6 +238,7 @@ private struct SchoolTrainingContent: View {
             DrivyCompetencyNote(label: model.competencies.first(where: { $0.id == item.id })?.displayLabel ?? item.displayLabel,
                 level: SchoolTrainingFormatting.level(item.level), context: item.context,
                 date: SchoolTrainingFormatting.day(item.observedAt, zone: workspace.school?.timeZone ?? "Europe/Zurich"))
+            SchoolLevelMeter(rank: SchoolProgressStyle.rank(item.level)).padding(.top, DrivySpacing.xs)
             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                 .padding(.top, DrivySpacing.xxs)
                 .accessibilityHidden(true)
@@ -266,6 +267,39 @@ private struct SchoolTrainingLessonRow: View {
             title: SchoolTrainingFormatting.rowDay(lesson.plannedStart, zone: lesson.timeZone),
             details: [lesson.meetingPoint],
             badge: lesson.drivyState.isUnusual ? lesson.drivyState.badge : nil)
+    }
+}
+
+/// Niveaux de progression : un rang par niveau observé et une couleur de jeton, jamais la couleur seule
+/// (le libellé du niveau est toujours écrit à côté). « Pas encore vu » n’est pas un niveau : aucune graduation, aucun total.
+private enum SchoolProgressStyle {
+    static func rank(_ code: String) -> Int {
+        switch code { case "DISCOVERING": 1; case "GUIDED": 2; case "INDEPENDENT": 3; default: 0 }
+    }
+    static func color(rank: Int) -> Color {
+        switch rank {
+        case 1: DrivyTheme.controlBorder
+        case 2: DrivyTheme.route
+        case 3: DrivyTheme.success
+        default: DrivyTheme.border
+        }
+    }
+}
+
+/// Trois graduations : le niveau observé d’une compétence, lisible sans lire le libellé. Décoratif :
+/// VoiceOver entend le niveau écrit.
+private struct SchoolLevelMeter: View {
+    let rank: Int
+
+    var body: some View {
+        HStack(spacing: DrivySpacing.xxs) {
+            ForEach(1...3, id: \.self) { step in
+                Capsule()
+                    .fill(step <= rank ? SchoolProgressStyle.color(rank: rank) : DrivyTheme.border)
+                    .frame(width: 10, height: 6)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 

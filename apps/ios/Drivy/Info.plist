@@ -22,11 +22,11 @@
         <key>CFBundleURLSchemes</key><array><string>ch.drivy.qualification</string></array>
     </dict></array>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Drivy enregistre votre trajet d'essai uniquement lorsque vous choisissez de commencer une séance avec GPS.</string>
+    <string>Drivy enregistre ton trajet uniquement quand tu démarres un trajet avec GPS.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>Une séance d'essai démarrée volontairement peut continuer écran verrouillé jusqu'à votre arrêt.</string>
+    <string>Un trajet que tu as démarré continue écran verrouillé jusqu’à ce que tu l’arrêtes.</string>
     <key>NSFaceIDUsageDescription</key>
-    <string>Face ID ouvre Drivy sans vous reconnecter.</string>
+    <string>Face ID ouvre Drivy sans te reconnecter.</string>
     <key>UIBackgroundModes</key><array><string>location</string></array>
     <key>UILaunchScreen</key><dict/>
     <key>UISupportedInterfaceOrientations</key>

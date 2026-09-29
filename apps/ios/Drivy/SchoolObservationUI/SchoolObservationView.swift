@@ -127,7 +127,7 @@ struct SchoolObservationView: View {
                 Button {
                     if let recorder = model.liveRecorder() { route = .signal(.init(recorder: recorder)) }
                 } label: { Label("Signaler", systemImage: "text.bubble.fill") }
-                    .buttonStyle(DrivyPrimaryButtonStyle()).accessibilityIdentifier("school-observation-signal")
+                    .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).accessibilityIdentifier("school-observation-signal")
             } else {
                 Button {
                     if let editor = model.begin(marker: false) { route = .edit(editor) }
@@ -202,7 +202,7 @@ struct SchoolObservationView: View {
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
                 Label("Demande à vérifier", systemImage: "clock.arrow.circlepath").font(.headline)
                     .foregroundStyle(DrivyTheme.warning)
-                Text(model.pendingBelongsHere ? "La demande est conservée sur cet appareil. Vérifiez son résultat avant une autre modification." : model.pendingText)
+                Text(model.pendingBelongsHere ? "La demande est conservée sur cet appareil. Vérifie son résultat avant une autre modification." : model.pendingText)
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 if model.pendingBelongsHere {
@@ -267,7 +267,7 @@ private struct SchoolObservationComposer: View {
                 }
                 if !marker { qualification }
                 Section {
-                    TextField(editor.origin == "LIVE" ? "Précision facultative" : "Ce que vous souhaitez retenir", text: $text, axis: .vertical)
+                    TextField(editor.origin == "LIVE" ? "Précision facultative" : "Ce que tu souhaites retenir", text: $text, axis: .vertical)
                         .lineLimit(4...10).accessibilityIdentifier("school-observation-text")
                     Text("\(text.unicodeScalars.count) / 4 000").font(.caption.monospacedDigit())
                         .foregroundStyle(text.unicodeScalars.count > 4_000 ? DrivyTheme.danger : DrivyTheme.muted)
@@ -280,7 +280,7 @@ private struct SchoolObservationComposer: View {
                     .drivyFormRows()
                 if model.pending != nil {
                     Section {
-                        Label("La demande est conservée. Fermez cette saisie pour vérifier son résultat dans les observations.", systemImage: "clock.arrow.circlepath")
+                        Label("La demande est conservée. Ferme cette saisie pour vérifier son résultat dans les observations.", systemImage: "clock.arrow.circlepath")
                             .font(.subheadline).foregroundStyle(DrivyTheme.warning)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -320,10 +320,10 @@ private struct SchoolObservationComposer: View {
     private var saveHint: String? {
         if model.isBusy || valid && model.canMutate { return nil }
         if text.unicodeScalars.count > 4_000 { return "Le texte est limité à 4 000 caractères." }
-        if editor.origin == "LIVE" && !marker && competencyID == nil { return "Choisissez une compétence, ou gardez un repère simple." }
-        if editor.origin == "LIVE" && !marker && status == nil { return "Choisissez une appréciation pour cette compétence." }
-        if !valid { return "Écrivez ce que vous souhaitez retenir." }
-        return "Enregistrement indisponible pour l’instant. Vérifiez les observations."
+        if editor.origin == "LIVE" && !marker && competencyID == nil { return "Choisis une compétence, ou garde un repère simple." }
+        if editor.origin == "LIVE" && !marker && status == nil { return "Choisis une appréciation pour cette compétence." }
+        if !valid { return "Écris ce que tu souhaites retenir." }
+        return "Enregistrement indisponible pour l’instant. Vérifie les observations."
     }
     private var qualification: some View {
         Section {
@@ -338,6 +338,13 @@ private struct SchoolObservationComposer: View {
                 ForEach(SchoolObservationStatus.allCases) { value in
                     Button { status = value } label: {
                         HStack(spacing: DrivySpacing.s) {
+                            // Même pastille que les tuiles du signalement : le symbole et le mot portent l’état.
+                            Image(systemName: value.symbol)
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(value.fieldTone.foreground)
+                                .frame(width: 32, height: 32)
+                                .background(value.fieldTone.background, in: Circle())
+                                .accessibilityHidden(true)
                             Text(value.label).foregroundStyle(DrivyTheme.text)
                             Spacer(minLength: DrivySpacing.xs)
                             DrivySelectionMark(isSelected: status == value)
@@ -369,7 +376,7 @@ private struct SchoolObservationRemoval: View {
                     .drivyFormRows()
                 if model.pending != nil {
                     Section {
-                        Label("La demande est conservée. Retrouvez-la dans les observations pour vérifier le résultat.", systemImage: "clock.arrow.circlepath")
+                        Label("La demande est conservée. Retrouve-la dans les observations pour vérifier le résultat.", systemImage: "clock.arrow.circlepath")
                             .font(.subheadline).foregroundStyle(DrivyTheme.warning)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -381,9 +388,9 @@ private struct SchoolObservationRemoval: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 DrivyStickyActionBar {
                     if let error = model.errorMessage { DrivyActionNote(text: error, isError: true) }
-                    else if reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { DrivyActionNote(text: "Indiquez le motif du retrait.") }
+                    else if reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { DrivyActionNote(text: "Indique le motif du retrait.") }
                     else if reason.unicodeScalars.count > 1_000 { DrivyActionNote(text: "Le motif est limité à 1 000 caractères.") }
-                    else if !acknowledged { DrivyActionNote(text: "Confirmez le retrait pour continuer.") }
+                    else if !acknowledged { DrivyActionNote(text: "Confirme le retrait pour continuer.") }
                     Button(role: .destructive) { Task { if await model.remove(observation, reason: reason) { dismiss() } } } label: {
                         DrivyBusyLabel(title: "Retirer l’observation", busyTitle: "Retrait en cours…", isBusy: model.isBusy)
                     }
@@ -412,7 +419,7 @@ private struct SchoolObservationPendingView: View {
                 Section {
                     Text("Référence : \(command.id.uuidString)").font(.caption.monospaced()).textSelection(.enabled)
                     if command.scope != model.scope {
-                        Label("Vos droits ont changé depuis cette demande. Elle reste conservée et ne peut pas être renvoyée avec ces nouveaux accès.", systemImage: "exclamationmark.triangle.fill")
+                        Label("Tes droits ont changé depuis cette demande. Elle reste conservée et ne peut pas être renvoyée avec ces nouveaux accès.", systemImage: "exclamationmark.triangle.fill")
                             .font(.subheadline).foregroundStyle(DrivyTheme.warning)
                     } else {
                         Button("Vérifier auprès de l’école") { Task { await model.verifyPending(); if model.pending == nil { dismiss() } } }
@@ -437,5 +444,12 @@ private struct SchoolObservationPendingView: View {
             .navigationTitle("Demande conservée").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
         }.tint(DrivyTheme.accent).interactiveDismissDisabled(model.isBusy)
+    }
+}
+
+private extension SchoolObservationStatus {
+    /// Mêmes teintes que les tuiles du signalement et le replay.
+    var fieldTone: DrivyTone {
+        switch self { case .positive: .success; case .attention: .warning; case .toWorkOn: .danger }
     }
 }

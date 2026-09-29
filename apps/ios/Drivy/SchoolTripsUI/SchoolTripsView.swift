@@ -114,9 +114,11 @@ private struct SchoolTripsList: View {
                         SchoolTripRow(trip: trip, instructorName: model.instructorName(trip, viewerRoles: roles), open: open)
                     }
                 } header: {
-                    Text(day.title).accessibilityAddTraits(.isHeader)
+                    Text(day.title)
+                        .font(.headline).foregroundStyle(DrivyTheme.text).textCase(nil)
+                        .accessibilityAddTraits(.isHeader)
                 }
-                    .drivyFormRows()
+                .drivyFormRows()
             }
             if model.nextCursor != nil && model.errorMessage == nil {
                 Section { nextPage }
@@ -126,7 +128,7 @@ private struct SchoolTripsList: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         // Sur iPad, la liste reste une colonne lisible au lieu de s’étirer d’un bord à l’autre.
-        .frame(maxWidth: SchoolFormLayout.maxWidth)
+        .frame(maxWidth: DrivyLayout.formColumn)
         .frame(maxWidth: .infinity)
         .background(DrivyTheme.canvas)
         .overlay {

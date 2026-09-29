@@ -47,7 +47,7 @@ struct SchoolInvitationsView: View {
                                 isSelected: model.selectedID == invitation.id)
                         }
                         .accessibilityIdentifier("invitation-\(invitation.id.uuidString)")
-                        .listRowBackground(model.selectedID == invitation.id ? DrivyTheme.accentSoft : DrivyTheme.surface)
+                        .drivyFormRows(isSelected: model.selectedID == invitation.id)
                     }
                     if model.nextCursor != nil {
                         Button { Task { await model.loadMore() } } label: {
@@ -250,6 +250,7 @@ private struct InvitationDetailView: View {
                         .disabled(!model.canManage(invitation))
                         .accessibilityIdentifier("invitation-revoke")
                     }
+                    .frame(maxWidth: DrivyLayout.compactColumn)
                 }
             }
             .drivyPageContent()
@@ -415,9 +416,10 @@ struct InvitationCodeResultView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: DrivySpacing.l) {
-                VStack(spacing: DrivySpacing.s) {
+                VStack(spacing: DrivySpacing.m) {
                     Text(issued.code)
                         .font(.system(size: codeSize, weight: .bold, design: .monospaced))
+                        .tracking(codeSize * 0.12)
                         .foregroundStyle(DrivyTheme.text)
                         .lineLimit(1)
                         .minimumScaleFactor(0.4)
@@ -425,14 +427,16 @@ struct InvitationCodeResultView: View {
                         .accessibilityLabel("Code")
                         .accessibilityValue(Text(issued.code.replacingOccurrences(of: "-", with: " ")).speechSpellsOutCharacters())
                         .accessibilityIdentifier("invitation-code-value")
-                    Text(Self.validity(until: issued.expiresAt, now: now))
-                        .font(.subheadline)
+                    // Filet court entre le code et sa validité : le code reste le seul point focal.
+                    Capsule().fill(DrivyTheme.border).frame(width: DrivySpacing.xl, height: 2).accessibilityHidden(true)
+                    Label(Self.validity(until: issued.expiresAt, now: now), systemImage: "clock")
+                        .font(.subheadline.monospacedDigit())
                         .foregroundStyle(DrivyTheme.muted)
                 }
-                .padding(.vertical, DrivySpacing.xl)
+                .padding(.vertical, DrivySpacing.xxl)
                 .padding(.horizontal, DrivySpacing.m)
                 .frame(maxWidth: .infinity)
-                .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.m))
+                .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content))
                 VStack(spacing: DrivySpacing.s) {
                     // Un verbe et son objet ; l’aperçu du partage nomme ce qui part.
                     ShareLink(item: Self.message(code: issued.code, schoolName: schoolName),
@@ -442,7 +446,13 @@ struct InvitationCodeResultView: View {
                     .buttonStyle(DrivyPrimaryButtonStyle())
                     .accessibilityIdentifier("invitation-code-share")
                     Button(action: copy) {
-                        Label(copied ? "Code copié" : "Copier le code", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        // Le symbole bascule en fondu, sans mouvement sous « Réduire les animations ».
+                        HStack(spacing: DrivySpacing.xs) {
+                            Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
+                                .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                                .accessibilityHidden(true)
+                            Text(copied ? "Code copié" : "Copier le code")
+                        }
                     }
                     .buttonStyle(DrivySecondaryButtonStyle())
                     .animation(DrivyMotion.feedback(reduceMotion), value: copied)
@@ -501,6 +511,7 @@ private struct InvitationRevocationView: View {
                             : "La personne ne pourra plus rejoindre l’école avec ce lien.")
                 }
                 .listRowBackground(DrivyTheme.canvas)
+                .listRowSeparator(.hidden)
                 Section("Motif") {
                     TextField(invitation.isCode ? "Pourquoi révoquer ce code ?" : "Expliquez pourquoi ce lien doit être révoqué",
                         text: $reason, axis: .vertical).lineLimit(3...8)

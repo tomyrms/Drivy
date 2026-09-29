@@ -30,7 +30,7 @@ struct SchoolCapturePreparationView: View {
                     if !model.pendingAssessments.isEmpty { pendingPanel }
                     if !model.pendingStarts.isEmpty { pendingStartsPanel }
                     if model.hasOldScope {
-                        DrivyInlineMessage(text: "Une demande conservée dépend de vos anciens accès. Elle ne sera pas renvoyée avec ces nouveaux droits.",
+                        DrivyInlineMessage(text: "Une demande conservée dépend de tes anciens accès. Elle ne sera pas renvoyée avec ces nouveaux droits.",
                             tone: .warning)
                     }
                     if model.contextIsCurrent && model.isInstructor && model.quickStep == nil && model.quickBlock != nil {
@@ -48,7 +48,7 @@ struct SchoolCapturePreparationView: View {
                 }
                 .drivyPageContent()
                 } else {
-                    ContentUnavailableView("Accès à actualiser", systemImage: "lock", description: Text("Vos droits ont changé. Rouvrez la préparation depuis votre leçon."))
+                    ContentUnavailableView("Accès à actualiser", systemImage: "lock", description: Text("Tes droits ont changé. Rouvre la préparation depuis ta leçon."))
                 }
             }
             .background(DrivyTheme.surface)
@@ -84,7 +84,7 @@ struct SchoolCapturePreparationView: View {
 
     private var heading: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            Text(model.learner?.displayName ?? "Votre leçon").font(.drivyScreenTitle)
+            Text(model.learner?.displayName ?? "Ta leçon").font(.drivyScreenTitle)
                 .fixedSize(horizontal: false, vertical: true)
             if let lesson = model.lesson { Text(lessonDate(lesson)).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
         }
@@ -100,8 +100,8 @@ struct SchoolCapturePreparationView: View {
         if let step = model.quickStep {
             DrivyPanel {
                 HStack(spacing: DrivySpacing.m) {
-                    ProgressView().accessibilityHidden(true)
-                    Text(step).font(.headline)
+                    ProgressView().controlSize(.large).accessibilityHidden(true)
+                    Text(step).font(.title3.weight(.semibold))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -134,7 +134,7 @@ struct SchoolCapturePreparationView: View {
                         }
                         .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.mayOpenChoice)
                     case .permission(let denied):
-                        Label("Autorisez la localisation", systemImage: "location.slash").font(.headline)
+                        Label("Autorise la localisation", systemImage: "location.slash").font(.headline)
                         if denied {
                             Button("Ouvrir les réglages", systemImage: "gearshape") {
                                 if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
@@ -178,7 +178,7 @@ struct SchoolCapturePreparationView: View {
                     .accessibilityIdentifier("preparation-choice-state")
                 if let notice = model.notice {
                     if let choice = model.choice, choice.noticeVersionId != notice.noticeVersionId {
-                        DrivyInlineMessage(text: "L’information de l’école a changé. Relisez-la avant de confirmer un nouvel accord.",
+                        DrivyInlineMessage(text: "L’information de l’école a changé. Relis-la avant de confirmer un nouvel accord.",
                             tone: .warning)
                     }
                     DisclosureGroup("Information et conservation des données") {
@@ -206,7 +206,7 @@ struct SchoolCapturePreparationView: View {
             VStack(alignment: .leading, spacing: DrivySpacing.m) {
                 Label("L’appareil du moniteur", systemImage: "iphone").font(.drivySection)
                 if !model.diagnosticIsAvailable {
-                    DrivyInlineMessage(text: "Arrêtez et sauvegardez le trajet en cours avant de vérifier un autre départ.", tone: .warning)
+                    DrivyInlineMessage(text: "Arrête et sauvegarde le trajet en cours avant de vérifier un autre départ.", tone: .warning)
                 }
                 if let snapshot = model.snapshot {
                     DrivyMapStatusLabel(status: DrivyMapStatus(title: permissionLabel(snapshot.permission),

@@ -6,7 +6,7 @@ final class LaunchTests: XCTestCase {
     func testLaunchOpensSignInWithoutLocalTrials() throws {
         let app = XCUIApplication()
         app.launch()
-        XCTAssertTrue(app.staticTexts["Vos leçons, vos trajets, votre école."].waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["Tes leçons, tes trajets, ton école."].waitForExistence(timeout: 15), app.debugDescription)
         XCTAssertFalse(app.buttons["open-local-trials"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "01-connexion"

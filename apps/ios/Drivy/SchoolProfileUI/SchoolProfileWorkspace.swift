@@ -134,7 +134,7 @@ final class SchoolProfileWorkspace: Identifiable {
                 }
             }
             isLoading = false; needsReload = false
-            errorMessage = storageError ?? (receiptRefused ? "Le résultat ne peut pas être consulté avec vos droits actuels. Sa référence reste conservée." : nil)
+            errorMessage = storageError ?? (receiptRefused ? "Le résultat ne peut pas être consulté avec tes droits actuels. Sa référence reste conservée." : nil)
         } catch {
             guard request == generation else { return }; isLoading = false; fail(error)
         }

@@ -59,30 +59,30 @@ struct SchoolBrowserView: View {
             if workspace.isLoadingSchool || workspace.isSearching {
                 DrivyLoadingState(title: workspace.isSearching ? "Recherche des élèves…" : "Chargement des élèves…")
                     .listRowSeparator(.hidden)
-                    .listRowBackground(DrivyTheme.surface)
+                    .drivyFormRows()
             }
             if let error = workspace.schoolError {
                 SchoolErrorNotice(message: error, retry: {
                     if let membership = workspace.membership { Task { await workspace.selectSchool(membership) } }
                 })
                 .listRowSeparator(.hidden)
-                .listRowBackground(DrivyTheme.surface)
+                .drivyFormRows()
             } else if let error = workspace.learnersError {
                 SchoolErrorNotice(message: error, retry: { Task { await workspace.searchLearners(workspace.searchText) } })
                     .listRowSeparator(.hidden)
-                    .listRowBackground(DrivyTheme.surface)
+                    .drivyFormRows()
             }
             if let school = workspace.school, school.status != "ACTIVE" {
                 DrivyEmptyState(title: school.status == "ARCHIVED" ? "École archivée" : "L’école se prépare",
-                    message: school.status == "ARCHIVED" ? "" : "Terminez sa préparation sur le web.",
+                    message: school.status == "ARCHIVED" ? "" : "Termine sa préparation sur le web.",
                     symbol: school.status == "ARCHIVED" ? "archivebox" : "building.2")
                     .listRowSeparator(.hidden)
-                    .listRowBackground(DrivyTheme.surface)
+                    .drivyFormRows()
             } else if !workspace.isSearching && !workspace.isLoadingSchool && workspace.school != nil && workspace.learners.isEmpty && workspace.learnersError == nil {
                 emptyLearners
                     .buttonStyle(.borderless)
                     .listRowSeparator(.hidden)
-                    .listRowBackground(DrivyTheme.surface)
+                    .drivyFormRows()
             }
             ForEach(workspace.learners) { learner in
                 NavigationLink(value: learner.id) {
@@ -92,7 +92,7 @@ struct SchoolBrowserView: View {
                 .listRowInsets(EdgeInsets(top: DrivySpacing.xxs, leading: DrivySpacing.l, bottom: DrivySpacing.xxs, trailing: DrivySpacing.m))
                 .listRowSeparatorTint(DrivyTheme.border)
                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-                .listRowBackground(workspace.selectedLearnerID == learner.id ? DrivyTheme.accentSoft : DrivyTheme.surface)
+                .drivyFormRows(isSelected: workspace.selectedLearnerID == learner.id)
             }
             if workspace.nextLearnersCursor != nil {
                 Button { Task { await workspace.loadMoreLearners() } } label: {
@@ -104,7 +104,7 @@ struct SchoolBrowserView: View {
                 .disabled(workspace.isLoadingMoreLearners || workspace.isSearching)
                 .accessibilityIdentifier("more-learners")
                 .listRowSeparator(.hidden)
-                .listRowBackground(DrivyTheme.surface)
+                .drivyFormRows()
             }
         }
         .listStyle(.plain)
@@ -211,7 +211,7 @@ private struct SchoolOverviewView: View {
     var body: some View {
         Group {
             if workspace.school != nil {
-                ContentUnavailableView("Sélectionnez un élève", systemImage: "person.text.rectangle")
+                ContentUnavailableView("Sélectionne un élève", systemImage: "person.text.rectangle")
             } else if workspace.isLoadingSchool {
                 ProgressView("Chargement de l’école…")
             } else if let error = workspace.schoolError {
@@ -368,7 +368,7 @@ private struct SchoolLearnerDetailView: View {
                     .padding(.vertical, DrivySpacing.xs)
             }
             if !workspace.isLoadingTrainings && workspace.trainings.isEmpty && workspace.trainingsError == nil {
-                DrivyEmptyState(title: "Aucune formation", message: "Ouvrez-la sur le web.", symbol: "steeringwheel")
+                DrivyEmptyState(title: "Aucune formation", message: "Ouvre-la sur le web.", symbol: "steeringwheel")
             }
             DrivyRowGroup(title: workspace.trainings.isEmpty ? nil : "Formation") {
                 ForEach(workspace.trainings) { training in

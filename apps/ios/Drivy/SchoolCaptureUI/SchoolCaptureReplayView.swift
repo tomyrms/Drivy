@@ -141,6 +141,7 @@ struct SchoolCaptureReplayView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @State private var timeline: SchoolReplayTimeline?
     @State private var offset: TimeInterval = 0
     @State private var isPlaying = false
@@ -195,7 +196,7 @@ struct SchoolCaptureReplayView: View {
             header(floating: false)
                 .padding(DrivySpacing.m)
             if model.isLoading || (model.errorMessage == nil && !model.isComplete) {
-                ProgressView("Ouverture du trajet…")
+                DrivyLoadingState(title: "Ouverture du trajet…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = model.errorMessage {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
@@ -301,7 +302,7 @@ struct SchoolCaptureReplayView: View {
             DrivyMapPlaceholder(title: "Aucune position confirmée",
                 message: timeline.items.isEmpty
                     ? "L’école n’a reconstruit aucune position pour ce trajet."
-                    : "Les observations gardent leur heure. Retrouvez-les sur la chronologie.")
+                    : "Les observations gardent leur heure. Retrouve-les sur la chronologie.")
         } else {
             SchoolReplayMap(timeline: timeline, current: timeline.sample(at: offset), selectedID: $selectedID,
                 resetCameraID: resetCameraID, followsPosition: $followsPosition)
@@ -322,11 +323,12 @@ struct SchoolCaptureReplayView: View {
     private func selectedDetail(_ timeline: SchoolReplayTimeline) -> some View {
         if let item = timeline.items.first(where: { $0.id == selectedID }) {
             HStack(alignment: .top, spacing: DrivySpacing.s) {
+                // Focus du dock : pastille pleine, comme les tuiles du signalement.
                 Image(systemName: item.symbol)
-                    .font(.headline)
-                    .foregroundStyle(item.tone.foreground)
-                    .frame(width: 36, height: 36)
-                    .background(item.tone.background, in: Circle())
+                    .font(.headline.weight(.heavy))
+                    .foregroundStyle(item.tone == .neutral ? DrivyTheme.text : item.tone.background)
+                    .frame(width: 44, height: 44)
+                    .background(item.tone == .neutral ? item.tone.background : item.tone.foreground, in: Circle())
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                     Text(item.title)
@@ -349,9 +351,10 @@ struct SchoolCaptureReplayView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(DrivyTheme.muted)
                         .frame(width: 44, height: 44)
+                        .background(DrivyTheme.surfaceMuted, in: Circle())
                         .contentShape(Circle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(DrivyTileButtonStyle())
                 .accessibilityLabel("Fermer l’observation")
             }
         }
@@ -395,7 +398,7 @@ struct SchoolCaptureReplayView: View {
                 Image(systemName: item.symbol)
                     .font(.caption.weight(.bold))
                     .foregroundStyle(item.tone.foreground)
-                    .frame(width: 20, height: 20)
+                    .frame(width: 24, height: 24)
                     .background(item.tone.background, in: Circle())
                     .accessibilityHidden(true)
                 Text(item.offset.map { DrivyReplayScrubber.clock($0) } ?? "—")
@@ -407,9 +410,14 @@ struct SchoolCaptureReplayView: View {
             .padding(.horizontal, DrivySpacing.s)
             .frame(minHeight: 44)
             .background(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted, in: Capsule())
-            .overlay { Capsule().strokeBorder(isSelected ? DrivyTheme.accent : DrivyTheme.controlBorder, lineWidth: isSelected ? 1.5 : 1) }
+            .overlay {
+                // Filet léger au repos ; Contraste accru le remplace par la bordure de contrôle.
+                Capsule().strokeBorder(isSelected ? DrivyTheme.accent : (contrast == .increased ? DrivyTheme.controlBorder : DrivyTheme.border),
+                                       lineWidth: isSelected ? 1.5 : 1)
+            }
             .contentShape(Capsule())
             .fixedSize()
+            .animation(DrivyMotion.feedback(reduceMotion), value: isSelected)
         }
         .buttonStyle(DrivyTileButtonStyle())
         .accessibilityLabel("\(item.title), \(item.statusLabel), \(meta(item))")
@@ -567,13 +575,14 @@ private struct SchoolReplayMap: View {
     let resetCameraID: UUID
     @Binding var followsPosition: Bool
     @State private var camera: MapCameraPosition = .automatic
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Map(position: $camera) {
             ForEach(timeline.fragments) { fragment in
                 if fragment.coordinates.count > 1 {
-                    MapPolyline(coordinates: fragment.coordinates).stroke(DrivyTheme.routeHalo, lineWidth: 9)
-                    MapPolyline(coordinates: fragment.coordinates).stroke(DrivyTheme.route, lineWidth: 5)
+                    MapPolyline(coordinates: fragment.coordinates).stroke(DrivyTheme.routeHalo, lineWidth: 11)
+                    MapPolyline(coordinates: fragment.coordinates).stroke(DrivyTheme.route, lineWidth: 6)
                 } else if let coordinate = fragment.coordinates.first {
                     Annotation("Position enregistrée", coordinate: coordinate) {
                         Circle().fill(DrivyTheme.route).frame(width: 8, height: 8)
@@ -619,6 +628,7 @@ private struct SchoolReplayMap: View {
             .overlay(Circle().strokeBorder(selected ? DrivyTheme.routeHalo : item.tone.foreground, lineWidth: selected ? 3 : 2))
             .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
             .dynamicTypeSize(...DynamicTypeSize.xLarge)
+            .animation(DrivyMotion.context(reduceMotion), value: selected)
             .frame(width: 44, height: 44)
             .contentShape(Circle())
     }

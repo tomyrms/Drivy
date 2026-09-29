@@ -7,15 +7,17 @@ struct SchoolLiveObservationSheet: View {
     @State private var selected: SchoolLiveObservationTheme?
     @State private var saved = false
     @State private var savedStatus: SchoolObservationStatus?
+    @State private var confirmationPop = false
     @Namespace private var emblems
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
     @AccessibilityFocusState private var selectionFocused: Bool
 
-    /// Changement de contexte provoqué par le doigt : ressort court et interrompable (DrivyMotion),
-    /// supprimé sous Réduire les animations où le fondu système suffit.
-    private var motion: Animation? { DrivyMotion.context(reduceMotion) }
+    /// Changement de contexte provoqué par le doigt : ressort court, sans rebond marqué, interrompable
+    /// (un nouvel appui reprend l’animation là où elle en est). Court, car le moniteur conduit et répète
+    /// ce geste ; supprimé sous Réduire les animations.
+    private var motion: Animation? { reduceMotion ? nil : .snappy(duration: 0.22, extraBounce: 0.03) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,7 +25,7 @@ struct SchoolLiveObservationSheet: View {
             ScrollView {
                 VStack(spacing: DrivySpacing.l) {
                     if saved {
-                        savedFeedback.transition(.opacity)
+                        savedFeedback.transition(reduceMotion ? .opacity : .scale(scale: 0.92).combined(with: .opacity))
                     } else if let selected {
                         appraisal(for: selected).transition(.opacity)
                     } else {
@@ -52,8 +54,9 @@ struct SchoolLiveObservationSheet: View {
         .task { await recorder.loadCompetencies() }
         .task(id: saved) {
             guard saved else { return }
-            // Retour bref après écriture chiffrée, aucune confirmation supplémentaire.
-            try? await Task.sleep(for: .milliseconds(reduceMotion ? 120 : 280))
+            // `saved` n’est posé qu’après l’écriture locale durable (record / markMoment ont répondu vrai) :
+            // la confirmation ne précède jamais l’enregistrement. Retour bref, sans étape en plus.
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 250 : 420))
             dismiss()
         }
     }
@@ -118,7 +121,7 @@ struct SchoolLiveObservationSheet: View {
             }
             Button {
                 if recorder.markMoment(at: observedAt) {
-                    withAnimation(DrivyMotion.feedback(reduceMotion)) { saved = true }
+                    withAnimation(motion) { saved = true }
                 }
             } label: {
                 Label("Marquer un moment", systemImage: "bookmark")
@@ -142,16 +145,20 @@ struct SchoolLiveObservationSheet: View {
             .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.xxs))
             .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs, style: .continuous))
         } else {
+            // Tuile pleine : le thème se lit comme un bouton, et la cible dépasse largement 44 pt.
             VStack(spacing: DrivySpacing.xs) {
-                emblem(theme, size: 68)
+                emblem(theme, size: 64)
                 Text(theme.title)
                     .font(.subheadline.weight(.semibold))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(minHeight: 38, alignment: .top)
             }
-            .frame(maxWidth: .infinity, minHeight: 112, alignment: .top)
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+            .padding(.vertical, DrivySpacing.s)
+            .padding(.horizontal, DrivySpacing.xxs)
+            .frame(maxWidth: .infinity, minHeight: 128, alignment: .top)
+            .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.xxs))
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs, style: .continuous))
         }
     }
 
@@ -185,60 +192,92 @@ struct SchoolLiveObservationSheet: View {
     }
 
     private func appraisalButton(_ status: SchoolObservationStatus, theme: SchoolLiveObservationTheme) -> some View {
-        let tone = tone(status)
-        return Button {
+        SchoolAppraisalTile(status: status, tone: tone(status)) {
             guard recorder.record(theme: theme, status: status, at: observedAt) else { return }
-            withAnimation(DrivyMotion.feedback(reduceMotion)) { savedStatus = status; saved = true }
-        } label: {
-            let layout = dynamicTypeSize.isAccessibilitySize
-                ? AnyLayout(HStackLayout(spacing: DrivySpacing.m))
-                : AnyLayout(VStackLayout(spacing: DrivySpacing.s))
-            layout {
-                Image(systemName: status.symbol)
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(tone.foreground)
-                    .frame(width: 56, height: 56)
-                    .background(tone.background, in: Circle())
-                    .accessibilityHidden(true)
-                Text(status.label)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.text)
-                    .multilineTextAlignment(dynamicTypeSize.isAccessibilitySize ? .leading : .center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, minHeight: 38, alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .top)
-            }
-            .padding(.vertical, DrivySpacing.m)
-            .padding(.horizontal, DrivySpacing.xs)
-            .frame(maxWidth: .infinity, minHeight: 112)
-            // Filet et Contraste accru partagés : la tuile se détache aussi de la feuille en mode sombre.
-            .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.xxs))
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs, style: .continuous))
+            withAnimation(motion) { savedStatus = status; saved = true }
         }
-        .buttonStyle(DrivyTileButtonStyle())
         .disabled(!recorder.canRecord || saved)
-        .accessibilityLabel(status.label)
-        .accessibilityIdentifier("live-observation-status-\(status.rawValue)")
     }
 
+    /// Confirmation brève, à la couleur de l’appréciation choisie : le pictogramme rebondit une fois,
+    /// le sceau vert dit « enregistré », puis la feuille se ferme d’elle-même.
     private var savedFeedback: some View {
-        VStack(spacing: DrivySpacing.m) {
-            Image(systemName: "checkmark")
-                .font(.largeTitle.weight(.semibold))
-                .foregroundStyle(DrivyTheme.success)
-                .frame(width: 88, height: 88)
-                .background(DrivyTheme.successSurface, in: Circle())
-                .accessibilityHidden(true)
+        let savedTone: DrivyTone = savedStatus.map(tone) ?? .accent
+        return VStack(spacing: DrivySpacing.m) {
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: savedStatus?.symbol ?? "bookmark.fill")
+                    .font(.largeTitle.weight(.bold))
+                    .foregroundStyle(savedTone.foreground)
+                    .frame(width: 96, height: 96)
+                    .background(savedTone.background, in: Circle())
+                    .overlay { Circle().strokeBorder(savedTone.foreground.opacity(0.45), lineWidth: 1) }
+                    .symbolEffect(.bounce, options: .nonRepeating, value: confirmationPop)
+                Image(systemName: "checkmark")
+                    .font(.footnote.weight(.heavy))
+                    .foregroundStyle(DrivyTheme.successSurface)
+                    .frame(width: 32, height: 32)
+                    .background(DrivyTheme.success, in: Circle())
+                    .overlay { Circle().strokeBorder(DrivyTheme.surface, lineWidth: 3) }
+            }
+            .accessibilityHidden(true)
             Text(selected?.title ?? "Moment ajouté").font(.drivyTitle)
+                .multilineTextAlignment(.center)
             if let savedStatus { Text(savedStatus.label).font(.headline).foregroundStyle(tone(savedStatus).foreground) }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DrivySpacing.xl)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(selected == nil ? "Moment ajouté à la leçon" : "Observation ajoutée à la leçon")
+        .task { if !reduceMotion { confirmationPop = true } }
     }
 
     /// Même ton que `ObservationStatus.tone` (DrivyObservationStyle) : Attention, À retravailler, Point positif.
     private func tone(_ status: SchoolObservationStatus) -> DrivyTone {
         switch status { case .toWorkOn: .danger; case .attention: .warning; case .positive: .success }
+    }
+}
+
+/// Tuile d’appréciation : aplat de la teinte de l’état, pastille pleine et libellé en gras, pour se lire
+/// d’un coup d’œil en plein soleil comme de nuit. L’état n’est jamais porté par la seule couleur :
+/// symbole et mot sont toujours présents. Aucune animation d’entrée propre : le geste se répète des dizaines
+/// de fois par leçon, seuls l’appui (DrivyTileButtonStyle) et le passage de l’écran précédent bougent.
+private struct SchoolAppraisalTile: View {
+    let status: SchoolObservationStatus
+    let tone: DrivyTone
+    let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        let stacked = dynamicTypeSize.isAccessibilitySize
+        let shape = RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs, style: .continuous)
+        Button(action: action) {
+            let layout = stacked
+                ? AnyLayout(HStackLayout(spacing: DrivySpacing.m))
+                : AnyLayout(VStackLayout(spacing: DrivySpacing.s))
+            layout {
+                Image(systemName: status.symbol)
+                    .font(.title.weight(.heavy))
+                    .foregroundStyle(tone.background)
+                    .frame(width: 64, height: 64)
+                    .background(tone.foreground, in: Circle())
+                    .accessibilityHidden(true)
+                Text(status.label)
+                    .font(.headline)
+                    .foregroundStyle(DrivyTheme.text)
+                    .multilineTextAlignment(stacked ? .leading : .center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 38, alignment: stacked ? .leading : .top)
+            }
+            .padding(.vertical, DrivySpacing.m)
+            .padding(.horizontal, DrivySpacing.xs)
+            .frame(maxWidth: .infinity, minHeight: 136)
+            .background(tone.background, in: shape)
+            .overlay { shape.strokeBorder(tone.foreground.opacity(contrast == .increased ? 1 : 0.45), lineWidth: contrast == .increased ? 2 : 1) }
+            .contentShape(shape)
+        }
+        .buttonStyle(DrivyTileButtonStyle())
+        .accessibilityLabel(status.label)
+        .accessibilityIdentifier("live-observation-status-\(status.rawValue)")
     }
 }

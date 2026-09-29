@@ -6,6 +6,7 @@ struct SchoolJoinView: View {
     var loadsOnAppear = true
     @Environment(\.dismiss) private var dismiss
     @State private var expandsRetention = false
+    @FocusState private var linkFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -13,7 +14,7 @@ struct SchoolJoinView: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     // First read only: later operations show their progress in the action itself.
                     if model.isBusy && !model.isReady {
-                        DrivyLoadingState(title: "Vérification de votre compte…")
+                        DrivyLoadingState(title: "Vérification de ton compte…")
                     }
                     if let error = model.errorMessage, model.preview == nil, !isEntering {
                         SchoolErrorNotice(message: error, retry: model.isReady ? nil : { Task { await model.load() } })
@@ -41,59 +42,53 @@ struct SchoolJoinView: View {
         .task { if loadsOnAppear { await model.load() } }
         .accessibilityIdentifier("join-school")
     }
+
     /// Entry state: the field is on screen, so a refused link is said under it.
     private var isEntering: Bool {
         model.isReady && model.preview == nil && !model.isPending && !model.isConfirmed
     }
 
-    /// Same anatomy as the code field: permanent label, bordered field, error under it, paste.
+    /// Same anatomy as the code field: permanent label, field, error under it, paste.
     private var linkEntry: some View {
         let error = isEntering ? model.errorMessage : nil
-        let shape = RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
-        return VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            Text("Lien d’invitation")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(DrivyTheme.text)
-                .accessibilityHidden(true)
-            TextField("Coller le lien reçu", text: $model.link)
-                .keyboardType(.URL).textContentType(.URL)
-                .textInputAutocapitalization(.never).autocorrectionDisabled()
-                .submitLabel(.go).onSubmit { Task { await model.inspect() } }
-                .padding(.horizontal, DrivySpacing.s)
-                .frame(minHeight: 52)
-                .background(DrivyTheme.surface, in: shape)
-                .overlay {
-                    shape.strokeBorder(error == nil ? DrivyTheme.controlBorder : DrivyTheme.danger,
-                                       lineWidth: error == nil ? 1 : 1.5)
-                }
-                .disabled(model.isBusy || !model.isReady)
-                .accessibilityLabel("Lien d’invitation")
-                .accessibilityHint(error ?? "")
-                .accessibilityIdentifier("join-invitation-link")
-            if let error {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.footnote)
-                    .foregroundStyle(DrivyTheme.danger)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(error)
+        return VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            SchoolJoinFieldBlock(label: "Lien d’invitation", error: error) {
+                TextField("Coller le lien reçu", text: $model.link)
+                    .font(.body)
+                    .foregroundStyle(DrivyTheme.text)
+                    .keyboardType(.URL).textContentType(.URL)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .submitLabel(.go).onSubmit { Task { await model.inspect() } }
+                    .focused($linkFocused)
+                    .schoolJoinFieldChrome(hasError: error != nil, isFocused: linkFocused, minHeight: 64)
+                    .disabled(model.isBusy || !model.isReady)
+                    .accessibilityLabel("Lien d’invitation")
+                    .accessibilityHint(error ?? "")
+                    .accessibilityIdentifier("join-invitation-link")
             }
             PasteButton(payloadType: String.self) { values in
                 if let value = values.first, value.utf8.count <= 2_048 { model.link = value }
             }
             .accessibilityLabel("Coller le lien")
             .frame(minHeight: 44)
-            .padding(.top, DrivySpacing.xs)
             .disabled(model.isBusy || !model.isReady)
         }
     }
+
     private func invitation(_ preview: SchoolJoinPreview) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             schoolSummary(preview)
             Divider().overlay(DrivyTheme.border)
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                Text("Vos données dans l’école").font(.drivySection).accessibilityAddTraits(.isHeader)
-                Text(preview.notice.noticeText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                Text("Tes données dans l’école")
+                    .font(.drivySection)
+                    .foregroundStyle(DrivyTheme.text)
+                    .accessibilityAddTraits(.isHeader)
+                Text(preview.notice.noticeText)
+                    .font(.body)
+                    .foregroundStyle(DrivyTheme.text)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
                 DisclosureGroup("Conservation des données", isExpanded: $expandsRetention) {
                     Text(preview.notice.retentionText).textSelection(.enabled).padding(.top, DrivySpacing.s)
                         .fixedSize(horizontal: false, vertical: true)
@@ -112,74 +107,58 @@ struct SchoolJoinView: View {
             secondaryLink("Utiliser un autre lien") { model.anotherInvitation() }
         }
     }
+
     private func secondaryLink(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .multilineTextAlignment(.leading)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(model.isBusy ? DrivyTheme.disabledText : DrivyTheme.accent)
-        .disabled(model.isBusy)
+        SchoolJoinTextLink(title: title, isBusy: model.isBusy, action: action)
     }
+
     private func schoolSummary(_ preview: SchoolJoinPreview) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            Text(preview.schoolName)
-                .font(.drivyTitle)
-                .foregroundStyle(DrivyTheme.text)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-            Label(SchoolPresentation.roles(preview.roles), systemImage: "person.crop.circle")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
-                .fixedSize(horizontal: false, vertical: true)
-            Label(preview.maskedEmail, systemImage: "envelope")
-                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
-            if !model.isConfirmed {
-                Label("Valable jusqu’au \(SchoolTrainingFormatting.instant(preview.expiresAt, zone: TimeZone.current.identifier))",
-                      systemImage: "clock")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        var facts = [
+            SchoolJoinFact(symbol: "person.crop.circle", text: SchoolPresentation.roles(preview.roles), isEmphasized: true),
+            SchoolJoinFact(symbol: "envelope", text: preview.maskedEmail),
+        ]
+        if !model.isConfirmed {
+            facts.append(SchoolJoinFact(symbol: "clock",
+                text: "Valable jusqu’au \(SchoolTrainingFormatting.instant(preview.expiresAt, zone: TimeZone.current.identifier))"))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        return SchoolJoinSchoolHeader(name: preview.schoolName, facts: facts)
     }
+
     private var pending: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if let preview = model.preview { schoolSummary(preview) }
             DrivyPanel {
                 DrivyPendingRequest(
-                    message: "La réponse de l’école n’est pas arrivée. Votre demande est conservée sur cet appareil.",
+                    message: "La réponse de l’école n’est pas arrivée. Ta demande est conservée sur cet appareil.",
                     retry: { Task { await model.retry() } }, canRetry: !model.isBusy)
             }
         }
     }
+
     private var confirmed: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if let preview = model.preview { schoolSummary(preview) }
-            DrivyInlineMessage(text: "Vous avez rejoint l’école.")
+            DrivyInlineMessage(text: "Tu as rejoint l’école.")
             if model.trainingNotOpened {
-                DrivyInlineMessage(text: "Votre école doit encore ouvrir votre formation.", tone: .neutral)
+                DrivyInlineMessage(text: "Ton école doit encore ouvrir ta formation.", tone: .neutral)
             }
             if let member = model.member {
                 Text("Accès actuel : \(SchoolPresentation.roles(member.roles))")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                Text("Actualisez vos accès pour ouvrir l’école.")
+                Text("Actualise tes accès pour ouvrir l’école.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             secondaryLink("Consulter une autre invitation") { model.anotherInvitation() }
         }
     }
+
     private var actionHint: (text: String?, tone: DrivyTone) {
         if let error = model.errorMessage, model.preview != nil { return (error, .danger) }
         if model.preview != nil && !model.isConfirmed && !model.isPending && !model.acknowledgesNotice && !model.isBusy {
-            return ("Confirmez votre lecture de la notice pour rejoindre l’école.", .neutral)
+            return ("Confirme ta lecture de la notice pour rejoindre l’école.", .neutral)
         }
         return (nil, .neutral)
     }
@@ -217,5 +196,127 @@ struct SchoolJoinView: View {
         .frame(maxWidth: DrivyLayout.compactColumn)
         .frame(maxWidth: .infinity)
         .background(DrivyTheme.surface)
+    }
+}
+
+// MARK: - Éléments communs aux parcours « code » et « lien »
+
+/// Ligne de fait sous le nom de l’école : symbole et texte, identiques dans les deux parcours.
+struct SchoolJoinFact: Identifiable {
+    let symbol: String
+    let text: String
+    var isEmphasized = false
+    var id: String { symbol + text }
+}
+
+/// Tête de l’aperçu d’une école : pastille de symbole, nom, faits. Une seule anatomie pour le code et le lien.
+struct SchoolJoinSchoolHeader: View {
+    let name: String
+    let facts: [SchoolJoinFact]
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .title2) private var plate: CGFloat = 56
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            if !typeSize.isAccessibilitySize {
+                Image(systemName: "building.2")
+                    .font(.title2)
+                    .foregroundStyle(DrivyTheme.accent)
+                    .frame(width: plate, height: plate)
+                    .background(DrivyTheme.accentSoft, in: Circle())
+                    .accessibilityHidden(true)
+            }
+            Text(name)
+                .font(.drivyTitle)
+                .foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                ForEach(facts) { fact in
+                    Label(fact.text, systemImage: fact.symbol)
+                        .font(fact.isEmphasized ? .subheadline.weight(.semibold) : .subheadline)
+                        .foregroundStyle(fact.isEmphasized ? DrivyTheme.text : DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Action texte des écrans pour rejoindre une école : même taille, même teinte, cible de 44 pt.
+struct SchoolJoinTextLink: View {
+    let title: String
+    let isBusy: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .multilineTextAlignment(.leading)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isBusy ? DrivyTheme.disabledText : DrivyTheme.accent)
+        .disabled(isBusy)
+    }
+}
+
+/// Libellé permanent, champ, puis l’erreur sous le champ : le même bloc pour le code et le lien.
+struct SchoolJoinFieldBlock<Field: View>: View {
+    let label: String
+    let error: String?
+    var errorIdentifier: String? = nil
+    @ViewBuilder let field: Field
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            Text(label)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(DrivyTheme.text)
+                .accessibilityHidden(true)
+            field
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(DrivyTheme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(error)
+                    .accessibilityIdentifier(errorIdentifier ?? "")
+            }
+        }
+    }
+}
+
+/// Cadre d’un champ de saisie d’invitation : creux sur `canvas`, contour de contrôle,
+/// contour d’accent quand le champ a le focus, de danger quand il est refusé.
+private struct SchoolJoinFieldChrome: ViewModifier {
+    let hasError: Bool
+    let isFocused: Bool
+    let minHeight: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
+        content
+            .padding(.horizontal, DrivySpacing.m)
+            .frame(minHeight: minHeight)
+            .background(DrivyTheme.canvas, in: shape)
+            .overlay {
+                shape.strokeBorder(hasError ? DrivyTheme.danger : (isFocused ? DrivyTheme.accent : DrivyTheme.controlBorder),
+                                   lineWidth: hasError || isFocused ? 2 : 1)
+            }
+            .animation(DrivyMotion.feedback(reduceMotion), value: isFocused)
+            .animation(DrivyMotion.feedback(reduceMotion), value: hasError)
+    }
+}
+
+extension View {
+    func schoolJoinFieldChrome(hasError: Bool, isFocused: Bool, minHeight: CGFloat) -> some View {
+        modifier(SchoolJoinFieldChrome(hasError: hasError, isFocused: isFocused, minHeight: minHeight))
     }
 }

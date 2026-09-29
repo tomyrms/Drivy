@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Présentation de connexion ; l'identité et l'autorisation restent dans la racine.
 /// Les quatre états (prêt, connexion en cours, échec, non configuré) gardent la même
-/// charpente : la trace, la promesse, puis au plus un message au-dessus des actions.
+/// charpente : la trace sur son aplat de marque, la promesse, puis au plus un message
+/// au-dessus des actions. L'ensemble est centré dans l'espace au-dessus des boutons.
 struct SchoolSignInLanding: View {
     let isConfigured: Bool
     let isWorking: Bool
@@ -10,30 +11,29 @@ struct SchoolSignInLanding: View {
     let canPresent: Bool
     let signIn: () -> Void
     let joinWithCode: () -> Void
-    @ScaledMetric(relativeTo: .largeTitle) private var glyphHeight: CGFloat = 120
+    @ScaledMetric(relativeTo: .largeTitle) private var glyphHeight: CGFloat = 148
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DrivySpacing.xl) {
-                DrivyRouteGlyph()
-                    .frame(height: glyphHeight)
-                    .padding(DrivySpacing.l)
-                    .background(DrivyTheme.canvas,
-                                in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
-                    .accessibilityHidden(true)
-                Text("Vos leçons, vos trajets, votre école.")
-                    .font(.drivyScreenTitle)
-                    .foregroundStyle(DrivyTheme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
-                if !isConfigured {
-                    DrivyInlineMessage(text: "La connexion n’est pas activée dans cette version.", tone: .neutral)
-                        .accessibilityIdentifier("school-not-configured")
-                } else if let errorMessage, !isWorking {
-                    SchoolErrorNotice(message: errorMessage)
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: DrivySpacing.xl) {
+                    hero
+                    Text("Tes leçons, tes trajets, ton école.")
+                        .font(.drivyScreenTitle)
+                        .foregroundStyle(DrivyTheme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                    if !isConfigured {
+                        DrivyInlineMessage(text: "La connexion n’est pas activée dans cette version.", tone: .neutral)
+                            .accessibilityIdentifier("school-not-configured")
+                    } else if let errorMessage, !isWorking {
+                        SchoolErrorNotice(message: errorMessage)
+                    }
                 }
+                .padding(.bottom, DrivySpacing.xl)
+                .drivyPageContent(maxWidth: DrivyLayout.narrowColumn)
+                .frame(minHeight: proxy.size.height)
             }
-            .drivyPageContent(maxWidth: DrivyLayout.narrowColumn)
         }
         .background(DrivyTheme.surface)
         // Un seul grand titre : la promesse. « Drivy » reste un titre de barre discret.
@@ -53,5 +53,17 @@ struct SchoolSignInLanding: View {
                 .disabled(isWorking || !canPresent)
             }
         }
+    }
+
+    /// Aplat de marque doux, trace au centre : le trajet est l'image de l'app. Profondeur par filet, sans ombre ni dégradé.
+    private var hero: some View {
+        let shape = RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous)
+        return DrivyRouteGlyph()
+            .frame(height: glyphHeight)
+            .padding(DrivySpacing.l)
+            .frame(maxWidth: .infinity)
+            .background(DrivyTheme.accentSoft, in: shape)
+            .overlay { shape.strokeBorder(DrivyTheme.border, lineWidth: 0.5) }
+            .accessibilityHidden(true)
     }
 }

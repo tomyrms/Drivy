@@ -7,8 +7,8 @@ import UIKit
 /// The screen shown follows the step confirmed by the server: nothing advances,
 /// and nothing is marked done, before the school has answered.
 ///
-/// Server step → screen: IDENTITY → « Bienvenue » then « Vos informations »
-/// (staff: « Bienvenue » only), FORMATIONS → « Votre formation » / « Votre rôle »,
+/// Server step → screen: IDENTITY → « Bienvenue » then « Tes informations »
+/// (staff: « Bienvenue » only), FORMATIONS → « Ta formation » / « Ton rôle »,
 /// INFORMATION or DEVICE → « GPS pendant les leçons », REVIEW → « C’est prêt ».
 struct SchoolOnboardingView: View {
     @Bindable var model: SchoolProfileWorkspace
@@ -38,10 +38,10 @@ struct SchoolOnboardingView: View {
                     if startsWithInformation { hasStarted = true }
                     if loadsOnAppear { await model.load() }
                 }
-                .confirmationDialog("Quitter sans enregistrer vos informations ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+                .confirmationDialog("Quitter sans enregistrer tes informations ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
                     Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
                 } message: {
-                    Text("Les étapes déjà confirmées par l’école restent enregistrées. Vous pourrez reprendre plus tard.")
+                    Text("Les étapes déjà confirmées par l’école restent enregistrées. Tu pourras reprendre plus tard.")
                 }
                 .sheet(isPresented: $showsNotice) { noticeSheet }
         }
@@ -55,7 +55,7 @@ struct SchoolOnboardingView: View {
     private var isCompleted: Bool { model.onboarding?.status == "COMPLETED" }
     private var isWorking: Bool { model.isBusy || model.isLoading }
     private var gpsEnabled: Bool { model.school?.modules.gpsEnabled ?? false }
-    private var schoolName: String { model.school?.name ?? "votre école" }
+    private var schoolName: String { model.school?.name ?? "ton école" }
     private var timeZone: String { model.school?.timeZone ?? "Europe/Zurich" }
 
     private var screen: Screen? {
@@ -95,7 +95,7 @@ struct SchoolOnboardingView: View {
                 if let screen {
                     content(screen)
                 } else if model.isLoading {
-                    DrivyLoadingState(title: "Préparation de votre accueil…")
+                    DrivyLoadingState(title: "Préparation de ton accueil…")
                 } else if model.errorMessage == nil {
                     DrivyEmptyState(title: "Accueil indisponible",
                         message: "L’accueil de cette école ne peut pas être affiché pour le moment.",
@@ -126,7 +126,7 @@ struct SchoolOnboardingView: View {
     private func pendingNotes(_ pending: PendingSchoolCommand) -> [String] {
         var notes: [String] = []
         if !pending.kind.isProfile { notes.append("Cette demande vient d’un autre écran de l’école.") }
-        if pending.scope != model.scope { notes.append("Vos accès ont changé depuis l’envoi. Le renvoi reste désactivé.") }
+        if pending.scope != model.scope { notes.append("Tes accès ont changé depuis l’envoi. Le renvoi reste désactivé.") }
         return notes
     }
 
@@ -143,19 +143,17 @@ struct SchoolOnboardingView: View {
     // MARK: - Screens
 
     private var welcome: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.l) {
-            // Same head as the last screens: the welcome and the end answer each other.
-            DrivyGuidedStepHeader(symbol: "figure.wave", title: "Bienvenue chez \(schoolName)",
-                reason: "Quelques étapes courtes avant de commencer.")
-            VStack(alignment: .leading, spacing: DrivySpacing.m) {
+        VStack(alignment: .leading, spacing: DrivySpacing.xl) {
+            hero(symbol: "figure.wave", title: "Bienvenue chez \(schoolName)")
+            DrivyRowGroup {
                 if isStaff {
-                    DrivyGuidedFact(symbol: "person.badge.key", text: "Votre rôle")
+                    DrivyEntityRow(title: "Ton rôle", leading: .symbol("person.badge.key"))
                 } else {
-                    DrivyGuidedFact(symbol: "person.text.rectangle", text: "Vos informations")
-                    DrivyGuidedFact(symbol: "car", text: "Votre formation")
+                    DrivyEntityRow(title: "Tes informations", leading: .symbol("person.text.rectangle"))
+                    DrivyEntityRow(title: "Ta formation", leading: .symbol("car"))
                 }
                 if gpsEnabled {
-                    DrivyGuidedFact(symbol: "location", text: "Votre choix pour le GPS")
+                    DrivyEntityRow(title: "Ton choix pour le GPS", leading: .symbol("location"))
                 }
             }
         }
@@ -163,9 +161,9 @@ struct SchoolOnboardingView: View {
 
     private var information: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
-            stepTitle("Vos informations")
+            stepTitle("Tes informations")
             if let profile = model.profile {
-                VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     nameField(.firstName, text: $model.draft.firstName, value: profile.firstName, identifier: "profile-first-name")
                         .textContentType(.givenName)
                     nameField(.lastName, text: $model.draft.lastName, value: profile.lastName, identifier: "profile-last-name")
@@ -185,7 +183,7 @@ struct SchoolOnboardingView: View {
                 .disabled(!model.canMutate)
                 if let notice = model.notice, notice.status == "APPROVED" {
                     Button { showsNotice = true } label: {
-                        Label("Comment l’école utilise vos données", systemImage: "doc.text")
+                        Label("Comment l’école utilise tes données", systemImage: "doc.text")
                             .font(.subheadline.weight(.semibold))
                             .frame(minHeight: 44)
                             .contentShape(Rectangle())
@@ -194,7 +192,7 @@ struct SchoolOnboardingView: View {
                     .foregroundStyle(DrivyTheme.accent)
                 }
             } else {
-                DrivyInlineMessage(text: "Votre dossier n’est pas encore prêt chez \(schoolName). Vous pouvez continuer : l’école le préparera.",
+                DrivyInlineMessage(text: "Ton dossier n’est pas encore prêt chez \(schoolName). Tu peux continuer : l’école le préparera.",
                     tone: .neutral)
             }
         }
@@ -203,22 +201,22 @@ struct SchoolOnboardingView: View {
     private var formation: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if isStaff {
-                stepTitle("Votre rôle")
+                stepTitle("Ton rôle")
                 DrivyPanel {
                     DrivyKeyValueRow(title: "Rôle dans l’école", value: SchoolPresentation.roles(model.roles))
                 }
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     if model.roles.contains("INSTRUCTOR") {
-                        DrivyGuidedFact(symbol: "calendar", text: "Vos leçons apparaissent dans l’agenda dès que l’école les planifie.")
+                        DrivyGuidedFact(symbol: "calendar", text: "Tes leçons apparaissent dans l’agenda dès que l’école les planifie.")
                     }
                     if model.roles.contains("ADMIN") {
-                        DrivyGuidedFact(symbol: "desktopcomputer", text: "Gérez l’école depuis l’espace web.")
+                        DrivyGuidedFact(symbol: "desktopcomputer", text: "Gère l’école depuis l’espace web.")
                     }
                 }
             } else {
-                stepTitle("Votre formation")
+                stepTitle("Ta formation")
                 if ownTrainings.isEmpty {
-                    DrivyEmptyState(title: "\(schoolName) va ouvrir votre formation", symbol: "car")
+                    DrivyEmptyState(title: "\(schoolName) va ouvrir ta formation", symbol: "car")
                 } else {
                     DrivyRowGroup {
                         ForEach(ownTrainings) { training in
@@ -244,15 +242,15 @@ struct SchoolOnboardingView: View {
             } else if isStaff {
                 stepTitle("GPS pendant les leçons")
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                    DrivyGuidedFact(symbol: "hand.raised", text: "Enregistrez le trajet avec l’accord de l’élève. Son choix reste modifiable.")
-                    DrivyGuidedFact(symbol: "location", text: "Autorisez la position sur cet appareil maintenant ou au début d’une leçon.")
+                    DrivyGuidedFact(symbol: "hand.raised", text: "Enregistre le trajet avec l’accord de l’élève. Son choix reste modifiable.")
+                    DrivyGuidedFact(symbol: "location", text: "Autorise la position sur cet appareil maintenant ou au début d’une leçon.")
                 }
                 locationStatus
             } else {
                 stepTitle("GPS pendant les leçons")
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                    DrivyGuidedFact(symbol: "location", text: "L’appareil du moniteur enregistre le trajet, avec votre accord.")
-                    DrivyGuidedFact(symbol: "hand.raised", text: "Vous pouvez refuser ou modifier votre choix. La leçon reste possible sans trajet.")
+                    DrivyGuidedFact(symbol: "location", text: "L’appareil du moniteur enregistre le trajet, avec ton accord.")
+                    DrivyGuidedFact(symbol: "hand.raised", text: "Tu peux refuser ou modifier ton choix. La leçon reste possible sans trajet.")
                 }
             }
         }
@@ -262,7 +260,7 @@ struct SchoolOnboardingView: View {
         if location.isDenied {
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
                 DrivyStatusBadge(title: "Position non autorisée", symbol: "location.slash", tone: .warning)
-                Text("Les leçons restent possibles sans trajet. Vous pourrez autoriser la position plus tard dans Réglages.")
+                Text("Les leçons restent possibles sans trajet. Tu pourras autoriser la position plus tard dans Réglages.")
                     .font(.footnote)
                     .foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -272,19 +270,17 @@ struct SchoolOnboardingView: View {
 
     @ViewBuilder private var ready: some View {
         if isCompleted {
-            VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                DrivyGuidedStepHeader(symbol: "checkmark.circle", title: "C’est prêt",
-                    reason: "Votre accueil chez \(schoolName) est terminé.")
+            VStack(alignment: .leading, spacing: DrivySpacing.xl) {
+                hero(symbol: "checkmark.circle", title: "C’est prêt")
                 if let success = model.successMessage, !model.hasEdits {
                     DrivyInlineMessage(text: success)
                 }
-                DrivyGuidedFact(symbol: "calendar", text: isStaff ? "Vos leçons apparaissent dans l’agenda dès que l’école les planifie."
-                    : "Vos leçons et vos bilans apparaissent dans Drivy dès que l’école les prépare.")
+                DrivyGuidedFact(symbol: "calendar", text: isStaff ? "Tes leçons apparaissent dans l’agenda dès que l’école les planifie."
+                    : "Tes leçons et tes bilans apparaissent dans Drivy dès que l’école les prépare.")
             }
         } else if !blockers.isEmpty {
-            VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                DrivyGuidedStepHeader(symbol: "list.bullet.clipboard", title: "Il reste à compléter",
-                    reason: "L’école a besoin de ces éléments avant de terminer votre accueil.")
+            VStack(alignment: .leading, spacing: DrivySpacing.xl) {
+                hero(symbol: "list.bullet.clipboard", title: "Il reste à compléter")
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     ForEach(Array(blockers.enumerated()), id: \.offset) { _, blocker in
                         DrivyGuidedFact(symbol: "circle", text: blockerText(blocker))
@@ -292,9 +288,8 @@ struct SchoolOnboardingView: View {
                 }
             }
         } else {
-            VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                DrivyGuidedStepHeader(symbol: "checkmark.seal", title: "Tout est en ordre",
-                    reason: "Terminez l’accueil pour utiliser Drivy avec \(schoolName).")
+            VStack(alignment: .leading, spacing: DrivySpacing.xl) {
+                hero(symbol: "checkmark.seal", title: "Tout est en ordre")
                 DrivyPanel {
                     VStack(alignment: .leading, spacing: 0) {
                         if let profile = model.profile {
@@ -412,17 +407,17 @@ struct SchoolOnboardingView: View {
 
     private func hint(_ screen: Screen) -> (text: String?, tone: DrivyTone) {
         if isWorking { return (nil, .neutral) }
-        if model.pending != nil { return ("Vérifiez d’abord la demande en attente, plus haut.", .neutral) }
+        if model.pending != nil { return ("Vérifie d’abord la demande en attente, plus haut.", .neutral) }
         if model.school?.status == "ARCHIVED" { return ("Cette école est archivée : l’accueil ne peut plus être modifié.", .neutral) }
-        if model.errorMessage != nil && !model.canMutate { return ("Réessayez plus haut pour continuer.", .danger) }
+        if model.errorMessage != nil && !model.canMutate { return ("Réessaie plus haut pour continuer.", .danger) }
         switch screen {
         case .information:
-            if model.profile != nil && !namesValid { return ("Renseignez votre prénom et votre nom pour continuer.", .neutral) }
-            if model.hasEdits && !model.canSaveProfile { return ("Vérifiez les informations signalées.", .neutral) }
+            if model.profile != nil && !namesValid { return ("Renseigne ton prénom et ton nom pour continuer.", .neutral) }
+            if model.hasEdits && !model.canSaveProfile { return ("Vérifie les informations signalées.", .neutral) }
             return (nil, .neutral)
         case .ready:
             if !isCompleted && !blockers.isEmpty && !(blockers.contains(where: { $0.field != nil }) && model.profile != nil) {
-                return ("L’école doit d’abord préparer votre dossier. Vous pourrez terminer ensuite.", .neutral)
+                return ("L’école doit d’abord préparer ton dossier. Tu pourras terminer ensuite.", .neutral)
             }
             return (nil, .neutral)
         case .welcome, .formation, .gps:
@@ -523,9 +518,9 @@ struct SchoolOnboardingView: View {
         guard model.hasEdits, model.editableFields.contains(field),
               !model.draft.isValid(allowed: [field], timeZone: timeZone) else { return nil }
         switch field {
-        case .firstName: return "Renseignez votre prénom (150 caractères au plus)."
-        case .lastName: return "Renseignez votre nom (150 caractères au plus)."
-        case .contactEmail: return "Vérifiez l’adresse e-mail, par exemple nom@exemple.ch."
+        case .firstName: return "Renseigne ton prénom (150 caractères au plus)."
+        case .lastName: return "Renseigne ton nom (150 caractères au plus)."
+        case .contactEmail: return "Vérifie l’adresse e-mail, par exemple nom@exemple.ch."
         case .contactPhone: return "Le téléphone est limité à 32 caractères."
         case .birthDate, .postalAddress, .profilePhotoDocumentId: return nil
         }
@@ -541,7 +536,7 @@ struct SchoolOnboardingView: View {
         return value.isEmpty ? "Non renseigné" : value
     }
     private var gpsSummary: String {
-        guard isStaff else { return "Facultatif, selon votre choix" }
+        guard isStaff else { return "Facultatif, selon ton choix" }
         if location.isAuthorized { return "Position autorisée" }
         if location.isDenied { return "Position non autorisée" }
         return "À décider plus tard"
@@ -555,7 +550,7 @@ struct SchoolOnboardingView: View {
                         Text(notice.noticeText).textSelection(.enabled)
                         Text(notice.retentionText).textSelection(.enabled)
                         if let email = notice.contactEmail {
-                            DrivyContactRow(title: "Contact pour vos données", value: email, symbol: "envelope")
+                            DrivyContactRow(title: "Contact pour tes données", value: email, symbol: "envelope")
                         }
                         Text("Version \(notice.version)")
                             .font(.footnote.monospacedDigit())
@@ -568,13 +563,18 @@ struct SchoolOnboardingView: View {
                 .drivyPageContent()
             }
             .background(DrivyTheme.surface)
-            .navigationTitle("Vos données")
+            .navigationTitle("Tes données")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Fermer") { showsNotice = false } }
             }
         }
         .tint(DrivyTheme.accent)
+    }
+
+    /// Welcome and end of the flow answer each other: a brand plate, then the title. No sentence under it.
+    private func hero(symbol: String, title: String) -> some View {
+        SchoolOnboardingHero(symbol: symbol, title: title)
     }
 
     private func stepTitle(_ text: String) -> some View {
@@ -607,4 +607,32 @@ private final class SchoolOnboardingLocationPermission: NSObject, @preconcurrenc
     override init() { super.init(); status = manager.authorizationStatus; manager.delegate = self }
     func request() { status = manager.authorizationStatus; if status == .notDetermined { manager.requestWhenInUseAuthorization() } }
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) { status = manager.authorizationStatus }
+}
+
+/// Tête des écrans d’ouverture et de fin de l’accueil : pastille de symbole sur l’aplat de marque, puis le titre.
+/// La pastille disparaît aux tailles d’accessibilité pour laisser la largeur au titre.
+private struct SchoolOnboardingHero: View {
+    let symbol: String
+    let title: String
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .largeTitle) private var plate: CGFloat = 88
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.l) {
+            if !typeSize.isAccessibilitySize {
+                Image(systemName: symbol)
+                    .font(.largeTitle)
+                    .foregroundStyle(DrivyTheme.accent)
+                    .frame(width: plate, height: plate)
+                    .background(DrivyTheme.accentSoft, in: Circle())
+                    .accessibilityHidden(true)
+            }
+            Text(title)
+                .font(.drivyScreenTitle)
+                .foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 }

@@ -81,13 +81,14 @@ final class AppLock {
             }
         }
         if granted { isLocked = false }
-        else { errorMessage = "Le déverrouillage n’a pas abouti. Réessayez avec la reconnaissance biométrique ou le code de l’appareil." }
+        else { errorMessage = "Le déverrouillage n’a pas abouti. Réessaie avec la reconnaissance biométrique ou le code de l’appareil." }
     }
 }
 
 struct AppLockView: View {
     let lock: AppLock
     var automaticallyUnlocks = true
+    @ScaledMetric(relativeTo: .largeTitle) private var plate: CGFloat = 96
 
     var body: some View {
         // The lock sits in the optical centre of the screen; the error, when there is
@@ -97,8 +98,9 @@ struct AppLockView: View {
                 VStack(spacing: DrivySpacing.l) {
                     Image(systemName: "lock.fill")
                         .font(.largeTitle)
-                        .imageScale(.large)
                         .foregroundStyle(DrivyTheme.muted)
+                        .frame(width: plate, height: plate)
+                        .background(DrivyTheme.surfaceMuted, in: Circle())
                         .accessibilityHidden(true)
                     Text("Drivy verrouillé")
                         .font(.drivyTitle)

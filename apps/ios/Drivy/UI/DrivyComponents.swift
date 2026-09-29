@@ -180,7 +180,8 @@ struct DrivyNavigationRow: View {
             HStack(alignment: stacked ? .firstTextBaseline : .center, spacing: DrivySpacing.m) {
                 if let symbol {
                     Image(systemName: symbol)
-                        .font(.title3)
+                        .font(.title3.weight(.medium))
+                        .symbolRenderingMode(.monochrome)
                         .foregroundStyle(DrivyTheme.muted)
                         .frame(width: symbolWidth)
                         .accessibilityHidden(true)
@@ -211,6 +212,8 @@ struct DrivyNavigationRow: View {
 
 /// Rows highlight while pressed without drawing a card around every item.
 struct DrivyRowButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background {
@@ -219,6 +222,7 @@ struct DrivyRowButtonStyle: ButtonStyle {
                     .padding(.horizontal, -DrivySpacing.xs)
                     .opacity(configuration.isPressed ? 1 : 0)
             }
+            .animation(DrivyMotion.feedback(reduceMotion), value: configuration.isPressed)
     }
 }
 
@@ -277,7 +281,8 @@ struct DrivyEmptyState: View {
             : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.m))
         layout {
             Image(systemName: symbol)
-                .font(.title2)
+                .font(.title2.weight(.medium))
+                .symbolRenderingMode(.monochrome)
                 .foregroundStyle(DrivyTheme.muted)
                 .frame(minWidth: 32, alignment: stacked ? .leading : .center)
                 .accessibilityHidden(true)

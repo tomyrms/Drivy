@@ -28,7 +28,7 @@ struct SchoolRecordingChoiceEntryView: View {
             } else {
                 NavigationStack {
                     ContentUnavailableView("Choix GPS de la leçon", systemImage: "location.slash",
-                        description: Text(currentScope == nil ? "Ouvrez une leçon de votre école pour retrouver ce choix." : "Vérification de la leçon…"))
+                        description: Text(currentScope == nil ? "Ouvre une leçon de ton école pour retrouver ce choix." : "Vérification de la leçon…"))
                         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
                 }
             }
@@ -46,6 +46,7 @@ struct SchoolRecordingChoiceView: View {
     @Bindable var model: SchoolRecordingChoiceWorkspace
     @Environment(\.dismiss) private var dismiss
     @State private var document: RecordingDocument?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationStack {
@@ -63,7 +64,7 @@ struct SchoolRecordingChoiceView: View {
                         else { pendingRequests }
                     }
                     if model.hasOldScope {
-                        DrivyInlineMessage(text: "Une demande dépend de vos anciens accès. Reconnectez-vous au compte d’origine pour la retrouver.", tone: .warning)
+                        DrivyInlineMessage(text: "Une demande dépend de tes anciens accès. Reconnecte-toi au compte d’origine pour la retrouver.", tone: .warning)
                     }
                     if let notice = model.notice { documentLinks(notice) }
                 }
@@ -84,14 +85,20 @@ struct SchoolRecordingChoiceView: View {
 
     private var choiceControls: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.m) {
-            Text(model.source == .verbal ? "L’élève accepte-t-il le GPS ?" : "Acceptez-vous le GPS ?")
+            Text(model.source == .verbal ? "L’élève accepte-t-il le GPS ?" : "Acceptes-tu le GPS ?")
                 .font(.drivySection).accessibilityAddTraits(.isHeader)
             if model.choice?.status != .unknown, model.choice != nil {
                 Text(model.currentChoiceLabel).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .accessibilityIdentifier("recording-current-choice")
             }
-            choiceButton(.allowed, title: "Avec GPS", symbol: "location.fill")
-            choiceButton(.refused, title: "Sans GPS", symbol: "location.slash")
+            // Deux cartes de même taille, même poids, même teinte : aucune réponse n’est mise en avant.
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: DrivySpacing.s))
+                : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
+            layout {
+                choiceButton(.allowed, title: "Avec GPS", symbol: "location.fill")
+                choiceButton(.refused, title: "Sans GPS", symbol: "location.slash")
+            }
             if model.isBusy { DrivyLoadingState(title: "Enregistrement du choix…") }
             if model.verbalAgreementIsProtected {
                 DrivyInlineMessage(text: "L’élève a refusé depuis son compte. Lui seul peut modifier ce choix.", tone: .warning)
@@ -106,18 +113,23 @@ struct SchoolRecordingChoiceView: View {
         } label: {
             // Motif unique de sélection : les deux réponses ont le même poids (aucun biais vers
             // l’accord) et le choix déjà enregistré se lit à la coche, pas à la couleur seule.
-            HStack(spacing: DrivySpacing.m) {
+            let isChosen = model.choice?.status == status
+            VStack(spacing: DrivySpacing.s) {
                 Image(systemName: symbol)
-                    .font(.title3)
+                    .font(.title.weight(.semibold))
                     .foregroundStyle(isEnabled ? DrivyTheme.accent : DrivyTheme.disabledText)
+                    .frame(width: 56, height: 56)
+                    .background(isChosen ? DrivyTheme.surface : DrivyTheme.accentSoft, in: Circle())
                     .accessibilityHidden(true)
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(isEnabled ? DrivyTheme.text : DrivyTheme.disabledText)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: DrivySpacing.xs)
-                DrivySelectionMark(isSelected: model.choice?.status == status)
+                HStack(spacing: DrivySpacing.xs) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(isEnabled ? DrivyTheme.text : DrivyTheme.disabledText)
+                        .fixedSize(horizontal: false, vertical: true)
+                    DrivySelectionMark(isSelected: isChosen)
+                }
             }
+            .frame(maxWidth: .infinity, minHeight: 120)
         }
         .buttonStyle(DrivySelectionCardStyle(isSelected: model.choice?.status == status))
         .disabled(!isEnabled)
@@ -127,8 +139,8 @@ struct SchoolRecordingChoiceView: View {
 
     private func documentLinks(_ notice: SchoolRecordingNotice) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button("Informations de votre école") {
-                document = .init(id: "notice", title: "Informations de votre école", text: notice.noticeText, contact: notice.contactEmail)
+            Button("Informations de ton école") {
+                document = .init(id: "notice", title: "Informations de ton école", text: notice.noticeText, contact: notice.contactEmail)
             }
             .accessibilityIdentifier("recording-notice-link")
             .frame(minHeight: 44)

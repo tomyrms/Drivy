@@ -302,7 +302,7 @@ La composition dépend de la largeur réellement accordée (`GeometryReader`, `h
 ## Elevation & Depth
 
 - Surfaces de lecture, formulaires, valeurs et coordonnées : opaques. La hiérarchie vient du couple `surface` / `canvas` et du filet `border` de 0,5 pt (`DrivyGroupedSurface`), pas d’une ombre.
-- Ombre uniquement pour une superposition sur la carte, et seulement via `.drivyMapPanel()` (panneau flottant ; hors carte, le filet remplace l’ombre) ou les repères du replay. Aucune ombre sur une carte de page, une ligne ou un bouton.
+- Ombre douce à deux couches (`drivyShadow`, teinte `DrivyTheme.shadow`, jamais de noir en dur) uniquement pour une superposition sur la carte, et seulement via `.drivyMapPanel()` (panneau flottant ; hors carte, le filet remplace l’ombre) ou les repères du replay. Aucune ombre sur une carte de page, une ligne ou un bouton.
 - Liquid Glass uniquement pour les commandes flottant sur la carte : `.drivyLegibleMapControl(in:)` (teinte `surface`), regroupées dans `GlassEffectContainer` (`DrivyMapControls`). Jamais de vitre sur un formulaire, un texte long ou un thème global.
 - Aucun dégradé : aplat de marque, profondeur par filet ou ombre de superposition.
 
@@ -375,6 +375,20 @@ Les styles système `.borderedProminent`, `.bordered` et `.controlSize` ne rempl
 | Carte sans position | `DrivyMapPlaceholder` | Jamais une carte vide, jamais une vue de pays. |
 | Statut | `DrivyStatusBadge(title:symbol:tone:)` | Seulement pour l’inhabituel ; symbole + texte + couleur. |
 
+### Composants partagés de la passe du 29–30/09/2026
+
+| Composant | Rôle |
+|---|---|
+| `DrivyLayout` | Largeurs communes : `readingColumn` 720, `formColumn` 820, `narrowColumn` 600, `compactColumn` 560, `splitListMin/Ideal/MaxWidth` 280/320/360. Aucun littéral local équivalent. |
+| `DrivyPress.scale` | Échelle d’appui unique, 0,96, pour bouton, tuile et carte de sélection ; supprimée sous Réduire les animations. |
+| `DrivyButtonSize` | `.regular` (corps semi-gras, 52 pt) et `.field` (title3 gras, 64 pt), variante terrain pour `DrivyPrimaryButtonStyle(size:)` et `DrivySecondaryButtonStyle(size:)`. |
+| `drivyFormRows(isSelected:)` | Fond des lignes de Form et de List (surface) ; remplace les `listRowBackground(DrivyTheme.surface)` locaux. Les fonds spéciaux (danger, clair) restent. |
+| `DrivyPrivacyMark(isPrivate:)` | Cadenas privé/partagé, teinte `muted` : le privé n’est jamais alarmant. |
+| `DrivyMapPlaceholder(isSearching:)` | Emplacement GPS sans position inventée ; pulsation pendant la recherche, fixe sous Réduire les animations. |
+| `DrivyElevation` et `drivyShadow` | Ombre douce à deux couches issue de `DrivyTheme.shadow`. |
+
+Décisions du porteur du 29/09/2026, reportées ici : tutoiement ; « Quitter sans enregistrer » ; « Pas encore vu » ; appui 0,96 ; en pause du trajet, « Reprendre » domine et « Signaler » est secondaire ; le privé reste en teinte `muted` ; vocabulaire « Pour moi » (privé au moniteur), « Visible par l’élève », « Bilan précédent ». Ce DESIGN.md fait foi pour l’iOS.
+
 ### Carte
 
 `DrivyLiveTopBar` (temps écoulé en plus grand, état GPS, arrêt), `DrivyMapHeader` (replay), `DrivyMapDock` (action dominante en dernier), `DrivyMapControls`, `DrivyReplayScrubber`, `DrivyReplayTransport` (cibles de 48 pt, visibles même désactivées), `DrivyMapStatus` pour le vocabulaire GPS.
@@ -422,7 +436,7 @@ Un contrôle réagit sans changer d’identité : même taille de libellé, mêm
 - Français, phrases courtes ; identifiants de code en anglais. Heures en 24 h, dates explicites avec capitale initiale seule (`capitalizedFirst`), montants en CHF.
 - Moniteur : vouvoiement et verbes à l’infinitif sur les boutons. Élève : même ton dans l’app actuelle.
 - Boutons : un verbe précis et son objet (« Terminer la leçon », « Planifier une leçon », « Inviter un élève », « Démarrer le trajet », « Créer le code »). « Fermer » pour quitter une feuille sans effet ; « Annuler » dans une feuille qui a une saisie ; « Réessayer » pour reprendre une lecture échouée ; « Renvoyer la même demande » pour un résultat inconnu. Pas de « OK » ni « Valider » quand un verbe précis existe ; « Terminé » reste réservé au bouton de confirmation de la barre système.
-- Abandon d’une saisie et renvoi d’une demande incertaine : une seule formulation chacun dans toute l’app (quatre aujourd’hui, voir Écarts). Proposition à faire valider par le porteur : « Quitter sans enregistrer » et « Renvoyer la même demande ».
+- Abandon d’une saisie : « Quitter sans enregistrer », seul libellé (décision du 29/09/2026). Renvoi d’une demande incertaine : « Renvoyer la même demande ».
 - Chargement : nom de l’opération au présent progressif avec points de suspension (« Chargement de l’agenda… »).
 - Erreur : ce qui s’est passé, puis ce qu’il faut faire ; saisie conservée ; jamais d’erreur réseau présentée comme une liste vide.
 - Vocabulaire stable : leçon, trajet, observation, bilan, Prochaine étape, Travail réalisé, À retenir, Signaler, Pour moi / Visible par l’élève, GPS actif / en pause / arrêté, Sans GPS, Demande à vérifier, Moniteur, Élève, Administration, Permis B.
@@ -441,7 +455,7 @@ Un contrôle réagit sans changer d’identité : même taille de libellé, mêm
 | Attention · À retravailler · Point positif | Les trois appréciations exactes d’une observation, avec `exclamationmark` / `xmark` / `checkmark`. | `SchoolObservationStatus.label`, `ObservationStatus.label` |
 | Thèmes de signalement | Priorité à droite, Signalisation, Céder le passage, Vitesse, Stationnement, Observation, Anticipation, Giratoire : noms dérivés du référentiel de l’école, jamais inventés. | `SchoolCaptureLiveObservations.swift:10-30` |
 | bilan | Travail réalisé, À retenir, Prochaine étape. | `DrivyReportBody` |
-| Niveaux d’une compétence | En découverte, Avec accompagnement, En autonomie ; absence : « Non observé » dans le bilan, « Pas encore vu » dans la progression (deux mots pour un même cas, à arbitrer). | `SchoolReportObservation.levelLabel`, `SchoolLessonReportView.swift:607`, `SchoolTrainingView.swift:221` |
+| Niveaux d’une compétence | En découverte, Avec accompagnement, En autonomie ; absence : « Pas encore vu » partout (décision du 29/09/2026, remplace « Non observé »). | `SchoolReportObservation.levelLabel`, `SchoolLessonReportView.swift:607`, `SchoolTrainingView.swift:221` |
 | Pour moi · Visible par l’élève | Visibilité d’un élément de leçon. | `SchoolLessonReportView.swift:513` |
 | élève · moniteur · Administration | Rôles affichés. | `SchoolPresentation.roles` |
 | Permis B | Formation, écrite « Permis » + catégorie. | `SchoolHomeView` |
@@ -460,10 +474,10 @@ Un contrôle réagit sans changer d’identité : même taille de libellé, mêm
 | Résultat inconnu | « Vérifier auprès de l’école », puis « Renvoyer la même demande » | Établi (`DrivyPendingRequest`). |
 | Fermer une feuille sans saisie | « Fermer » (barre, `.cancellationAction`) | Établi (25 emplois). |
 | Quitter une feuille avec saisie | « Annuler » dans la barre | Établi dans les formulaires. |
-| Confirmer l’abandon d’une saisie | « Quitter sans enregistrer » proposé | À arbitrer par le porteur (quatre formulations aujourd’hui). |
+| Confirmer l’abandon d’une saisie | « Quitter sans enregistrer » | Décidé le 29/09/2026 : seul libellé d’abandon de saisie. |
 | Confirmer une suppression | Verbe exact de l’effet (« Révoquer », « Retirer », « Annuler la leçon »), rôle destructif | Établi. |
 
-Registre : les écrans vouvoient (« Saisissez le code reçu de votre moniteur. ») ; le message d’invitation partagé à l’élève tutoie (`SchoolInvitationsView.swift:453`). Le registre pour l’élève est à arbitrer par le porteur.
+Registre (décidé le 29/09/2026) : tutoiement partout où l’app s’adresse à l’utilisateur, élève ou moniteur (« Saisis le code reçu de ton moniteur. »). Cela vaut pour les textes d’autorisation de `Info.plist`, la boîte de dialogue Face ID de `DrivyApp.swift` et le message d’invitation web (« Ton code pour rejoindre… »). Les espaces avant la ponctuation ne sont pas touchés.
 
 ## Localisation française
 
@@ -534,4 +548,4 @@ Relevé factuel du 29 septembre 2026 sur la branche `codex/revue-integration-202
 23. **Haute — textes d’autorisation système périmés.** `Info.plist:25` et `:27` parlent encore de « trajet d’essai » et de « séance d’essai » (laboratoire retiré le 28 septembre) avec une apostrophe droite ; ce sont les textes des alertes de localisation montrées à l’utilisateur. Le moniteur lit une promesse qui ne décrit plus l’usage réel.
 24. **Moyenne — deux mots pour l’absence de niveau.** « Non observé » dans le bilan (`SchoolLessonReportUI/SchoolLessonReportView.swift:607`) contre « Pas encore vu » dans la progression (`SchoolTrainingUI/SchoolTrainingView.swift:221`).
 25. **Basse — formats de date dispersés.** `SchoolDateFormat` n’est employé que par l’agenda ; les autres écrans créent leur propre `DateFormatter` (`SchoolCaptureUI/SchoolCapturePreparationView.swift:385`, `:391`, `:457`, `SchoolAgendaUI/SchoolPlanningView.swift:330`, `SchoolTrainingUI/SchoolTrainingView.swift:280`, `SchoolObservationUI/SchoolObservationWorkspace.swift:102`) ; ce dernier affiche des secondes (`timeStyle = .medium`, ligne 104).
-26. **Moyenne — registre de l’élève non fixé.** Écrans en vouvoiement, message d’invitation partagé en tutoiement (`SchoolInvitationsUI/SchoolInvitationsView.swift:453`).
+26. **Moyenne — registre de l’élève (résolu le 29/09/2026).** Tutoiement partout ; les composants partagés, `Info.plist` et le message d’invitation web sont tutoyés, les écrans School* suivent leur passe dédiée.

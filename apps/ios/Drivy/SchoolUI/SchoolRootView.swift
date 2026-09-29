@@ -208,7 +208,7 @@ struct SchoolRootView: View {
     private var accessCheckOverlay: some View {
         if isCheckingSchoolAccess {
             DrivyTheme.canvas.ignoresSafeArea().overlay {
-                ProgressView("Vérification de vos accès…").foregroundStyle(DrivyTheme.muted)
+                ProgressView("Vérification de tes accès…").foregroundStyle(DrivyTheme.muted)
             }
         }
     }
@@ -632,14 +632,18 @@ struct SchoolAccountView: View {
 
     private var accountHeading: some View {
         HStack(spacing: DrivySpacing.m) {
-            DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: 60)
+            DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: 72)
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(workspace?.person?.displayName ?? (isAuthenticated ? "Compte connecté" : "Aucun compte connecté"))
                     .font(.drivyTitle)
                     .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
                 if let membership = workspace?.membership {
-                    Text("\(membership.schoolName) · \(SchoolPresentation.roles(membership.roles))")
+                    // École puis rôles, chacun sur sa ligne : jamais un « · » orphelin en début de ligne.
+                    Text(membership.schoolName)
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(SchoolPresentation.roles(membership.roles))
                         .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }

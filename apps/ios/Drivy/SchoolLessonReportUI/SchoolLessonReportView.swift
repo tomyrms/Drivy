@@ -318,29 +318,18 @@ private struct SchoolLessonReportContent: View {
     private var headerSection: some View {
         Section {
             HStack(alignment: .center, spacing: DrivySpacing.m) {
-                DrivyAvatar(name: learnerName, size: 52)
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                DrivyAvatar(name: learnerName, size: 56)
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     Text(learnerName).font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
                     if let lesson = model.lesson {
-                        if let schedule = SchoolLessonHubRules.schedule(lesson) {
-                            // L’intervalle horaire ne se coupe jamais entre ses deux heures.
-                            Text(schedule.replacingOccurrences(of: " – ", with: "\u{00A0}–\u{00A0}"))
-                                .font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        // Symbole collé au lieu, aligné sur la ligne de base (le Label réservait une colonne d’icône trop large).
-                        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xxs) {
-                            Image(systemName: "mappin").accessibilityHidden(true)
-                            Text(lesson.meetingPoint).fixedSize(horizontal: false, vertical: true)
-                        }
-                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        scheduleLines(lesson)
+                        // Le badge de l’inhabituel vit dans l’en-tête, sous le lieu, dans la même colonne de texte.
+                        if lesson.drivyState.isUnusual { lesson.drivyState.badge }
                     }
                 }
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            // Un badge seulement pour l’inhabituel.
-            if let lesson = model.lesson, lesson.drivyState.isUnusual { lesson.drivyState.badge }
             if model.isLoading || model.isBusy {
                 DrivyLoadingState(title: model.isLoading ? "Chargement de la leçon…" : "Enregistrement…")
             }
@@ -354,6 +343,37 @@ private struct SchoolLessonReportContent: View {
         .listRowBackground(Color.clear)
         // En-tête posé sur le canevas : aucun filet entre le nom, l’état et les messages.
         .listRowSeparator(.hidden)
+    }
+
+    /// Date, horaire et lieu : sur une ligne quand la colonne le permet, sinon la date, l’horaire puis le lieu.
+    /// L’intervalle horaire ne se coupe jamais entre ses deux heures.
+    @ViewBuilder private func scheduleLines(_ lesson: SchoolLesson) -> some View {
+        let schedule = SchoolLessonHubRules.schedule(lesson)?.replacingOccurrences(of: " – ", with: "\u{00A0}–\u{00A0}")
+        let parts = schedule?.components(separatedBy: " · ") ?? []
+        ViewThatFits(in: .horizontal) {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                if let schedule { headerLine("clock", schedule).fixedSize(horizontal: true, vertical: false) }
+                headerLine("mappin", lesson.meetingPoint).fixedSize(horizontal: true, vertical: false)
+            }
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                if parts.count == 2 {
+                    headerLine("calendar", parts[0])
+                    headerLine("clock", parts[1])
+                } else if let schedule {
+                    headerLine("clock", schedule)
+                }
+                headerLine("mappin", lesson.meetingPoint)
+            }
+        }
+    }
+
+    /// Ligne de contexte de l’en-tête : symbole collé au texte, aligné sur la ligne de base, graisse constante.
+    private func headerLine(_ symbol: String, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
+            Image(systemName: symbol).font(.footnote.weight(.semibold)).accessibilityHidden(true)
+            Text(text).monospacedDigit().fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
     }
 
     /// Même présentation que partout ailleurs pour une demande au résultat inconnu.
@@ -757,12 +777,12 @@ private struct SchoolLessonReportContent: View {
 
     private func reportField(_ label: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-            Text(label).font(.headline).accessibilityHidden(true)
+            Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
             TextField("Facultatif", text: text, axis: .vertical).lineLimit(1...10).disabled(!model.canMutate)
                 .accessibilityLabel(label)
                 .accessibilityHint("Facultatif")
         }
-        .padding(.vertical, DrivySpacing.xxs)
+        .padding(.vertical, DrivySpacing.xs)
     }
 }
 

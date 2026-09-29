@@ -202,12 +202,12 @@ struct SchoolHomeView: View {
                 .frame(maxHeight: .infinity, alignment: .top).background(DrivyTheme.surface)
         } else if workspace.isLoadingSchool || workspace.isSearching || workspace.isLoadingLearner || workspace.isLoadingTrainings
                     || (ownLearner != nil && workspace.learner == nil) {
-            ProgressView("Chargement de votre dossier…").frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.surface)
+            ProgressView("Chargement de ton dossier…").frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.surface)
         } else if workspace.school?.status != "ACTIVE" {
             ContentUnavailableView("L’école se prépare", systemImage: "building.2")
         } else if ownLearner == nil {
             ContentUnavailableView("Dossier pas encore ouvert", systemImage: "person.crop.circle.badge.questionmark",
-                description: Text("Votre école l’ouvrira bientôt."))
+                description: Text("Ton école l’ouvrira bientôt."))
         } else {
             ContentUnavailableView("Aucune formation", systemImage: "steeringwheel")
         }

@@ -60,7 +60,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
             guard request == generation else { return }
             learners = all.filter { $0.archivedAt == nil }
                 .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
-            if learners.isEmpty { errorMessage = "Aucun élève ne vous est affecté. Demandez à l’administration de vérifier les affectations." }
+            if learners.isEmpty { errorMessage = "Aucun élève ne t’est affecté. Demande à l’administration de vérifier les affectations." }
             isLoading = false
             if learners.count == 1, let only = learners.first { await select(only.id) }
         } catch {
@@ -100,11 +100,11 @@ struct SchoolStartNowBody: Encodable, Sendable {
     static func startBlockerMessage(_ code: String?) -> String {
         switch code {
         case "INSTRUCTOR_NOT_ASSIGNED", "ASSIGNMENT_ENDS_BEFORE_LESSON_END":
-            "Votre affectation ne couvre pas cette leçon. Demandez à l’administration de la vérifier."
+            "Ton affectation ne couvre pas cette leçon. Demande à l’administration de la vérifier."
         case "INSTRUCTOR_REQUIRED": "Seul un moniteur peut démarrer une leçon."
-        case "OFFERING_NOT_READY": "Le tarif de cette formation n’est pas prêt. Demandez à l’administration de la vérifier."
-        case "SCHOOL_NOT_ACTIVE": "L’école n’est pas active. Contactez son administration."
-        default: "Aucune formation disponible pour démarrer avec cet élève. Demandez à l’administration de vérifier sa formation."
+        case "OFFERING_NOT_READY": "Le tarif de cette formation n’est pas prêt. Demande à l’administration de la vérifier."
+        case "SCHOOL_NOT_ACTIVE": "L’école n’est pas active. Contacte son administration."
+        default: "Aucune formation disponible pour démarrer avec cet élève. Demande à l’administration de vérifier sa formation."
         }
     }
 

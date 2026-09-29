@@ -114,13 +114,13 @@ struct SchoolTodayView: View {
                 Button { opened = OpenedLesson(lesson: lesson, completing: true) } label: {
                     Label("Terminer la leçon", systemImage: "checkmark.circle")
                 }
-                .buttonStyle(DrivyPrimaryButtonStyle())
+                .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                 .accessibilityIdentifier("today-finish-lesson")
             } else if let next {
                 lessonSummary(next, badge: nil)
                 if mayStart(next, now: now) {
                     Button { start(next) } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
-                        .buttonStyle(DrivyPrimaryButtonStyle())
+                        .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                         .accessibilityIdentifier("today-start")
                 } else if let opening = startOpening(next, now: now) {
                     Label("Démarrer dès \(opening)", systemImage: "clock")
@@ -146,18 +146,29 @@ struct SchoolTodayView: View {
         }
     }
 
+    /// Point focal du panneau : l’heure de départ en grand chiffre tabulaire, puis l’élève (avatar, nom, lieu).
     private func lessonSummary(_ lesson: SchoolLesson, badge: DrivyStatusBadge?) -> some View {
-        Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(time(lesson)).font(.drivySection).monospacedDigit().foregroundStyle(DrivyTheme.text)
-                    Spacer(minLength: DrivySpacing.xs)
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.xs))
+        return Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
+            VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                layout {
+                    Text(startTime(lesson)).font(.drivyScreenTitle.monospacedDigit()).foregroundStyle(DrivyTheme.text)
+                    Text("– \(endTime(lesson))").font(.title3.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+                    if !stacked { Spacer(minLength: DrivySpacing.xs) }
                     if let badge { badge }
                 }
-                Text(name(lesson)).font(.headline).foregroundStyle(DrivyTheme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: DrivySpacing.s) {
+                    if !stacked { DrivyAvatar(name: name(lesson), size: 44) }
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        Text(name(lesson)).font(.headline).foregroundStyle(DrivyTheme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
@@ -174,18 +185,12 @@ struct SchoolTodayView: View {
                 VStack(spacing: 0) {
                     ForEach(others) { lesson in
                         Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
-                            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
-                                Text(startTime(lesson)).font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-                                Text(name(lesson)).font(.subheadline).foregroundStyle(DrivyTheme.text)
-                                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
-                                Spacer(minLength: DrivySpacing.xs)
-                                if let badge = lesson.drivyState(now: now).rowBadge { badge }
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .contentShape(Rectangle())
+                            DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
+                                details: [lesson.meetingPoint], badge: lesson.drivyState(now: now).rowBadge, showsChevron: false)
                         }
                         .buttonStyle(DrivyRowButtonStyle())
                         .accessibilityHint("Ouvre la leçon")
+                        Divider().overlay(DrivyTheme.border)
                     }
                 }
             } label: {
@@ -202,12 +207,11 @@ struct SchoolTodayView: View {
             ?? workspace.learners.first { $0.id == lesson.learnerId }?.displayName
             ?? (workspace.learner?.id == lesson.learnerId ? workspace.learner?.displayName : nil) ?? "Leçon de conduite"
     }
-    private func time(_ lesson: SchoolLesson) -> String {
-        guard let start = lesson.startsAt, let end = lesson.endsAt else { return "—" }
-        return "\(SchoolDateFormat.time(start, zone: lesson.timeZone)) – \(SchoolDateFormat.time(end, zone: lesson.timeZone))"
-    }
     private func startTime(_ lesson: SchoolLesson) -> String {
         lesson.startsAt.map { SchoolDateFormat.time($0, zone: lesson.timeZone) } ?? "—"
+    }
+    private func endTime(_ lesson: SchoolLesson) -> String {
+        lesson.endsAt.map { SchoolDateFormat.time($0, zone: lesson.timeZone) } ?? "—"
     }
 
     /// Même règle que l’écran de la leçon : moniteur de la leçon, GPS de l’école actif, aucun autre trajet,

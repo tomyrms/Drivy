@@ -32,7 +32,7 @@ struct SchoolCaptureLiveView: View {
                 ContentUnavailableView {
                     Label("Aucun trajet en cours", systemImage: "location.slash")
                 } description: {
-                    Text("Ouvrez une leçon pour préparer son enregistrement GPS.")
+                    Text("Ouvre une leçon pour préparer son enregistrement GPS.")
                 } actions: {
                     Button("Fermer") { close() }
                         .buttonStyle(DrivySecondaryButtonStyle())
@@ -214,7 +214,7 @@ struct SchoolCaptureLiveView: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     collectingActions
                     if !controller.canResume {
-                        DrivyInlineMessage(text: "La reprise du GPS n’est plus autorisée. Vous pouvez arrêter le GPS et poursuivre la leçon.",
+                        DrivyInlineMessage(text: "La reprise du GPS n’est plus autorisée. Tu peux arrêter le GPS et poursuivre la leçon.",
                             tone: .warning)
                     }
                 }
@@ -257,6 +257,7 @@ struct SchoolCaptureLiveView: View {
                     }
                 }
                 .disabled(!recorder.canRecord || isFinishing)
+                .sensoryFeedback(.impact(weight: .medium), trigger: observationMoment?.id)
                 .accessibilityIdentifier("capture-signal-observation")
                 .popover(item: $observationMoment, attachmentAnchor: .rect(.bounds)) { moment in
                     SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant)
@@ -451,8 +452,9 @@ private struct SchoolCaptureLiveMap: View {
             ForEach(segments) { segment in
                 let coordinates = segment.measurements.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
                 if coordinates.count > 1 {
-                    MapPolyline(coordinates: coordinates).stroke(DrivyTheme.routeHalo, lineWidth: 9)
-                    MapPolyline(coordinates: coordinates).stroke(DrivyTheme.route, lineWidth: 5)
+                    // Trait épais : lisible d’un regard, en plein soleil comme de nuit.
+                    MapPolyline(coordinates: coordinates).stroke(DrivyTheme.routeHalo, lineWidth: 11)
+                    MapPolyline(coordinates: coordinates).stroke(DrivyTheme.route, lineWidth: 6)
                 } else if let coordinate = coordinates.first {
                     Annotation("Position enregistrée", coordinate: coordinate) {
                         Circle().fill(DrivyTheme.route).frame(width: 8, height: 8)
@@ -461,10 +463,11 @@ private struct SchoolCaptureLiveMap: View {
             }
             if let last {
                 Annotation("Dernière position enregistrée", coordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude)) {
-                    Circle().fill(DrivyTheme.route).frame(width: 16, height: 16)
-                        .overlay(Circle().stroke(DrivyTheme.routeHalo, lineWidth: 3))
-                        .padding(DrivySpacing.xs)
-                        .background(DrivyTheme.route.opacity(0.18), in: Circle())
+                    Circle().fill(DrivyTheme.route).frame(width: 20, height: 20)
+                        .overlay(Circle().stroke(DrivyTheme.routeHalo, lineWidth: 4))
+                        .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
+                        .padding(DrivySpacing.s)
+                        .background(DrivyTheme.route.opacity(0.2), in: Circle())
                         .accessibilityLabel("Dernière position enregistrée")
                 }.annotationTitles(.hidden)
             }

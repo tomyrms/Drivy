@@ -62,7 +62,7 @@ private struct DrivyMapPanelModifier: ViewModifier {
                         .strokeBorder(DrivyTheme.border, lineWidth: 0.5)
                 }
             }
-            .shadow(color: .black.opacity(floating ? 0.12 : 0), radius: 18, y: 4)
+            .drivyShadow(floating)
     }
 }
 
@@ -551,7 +551,7 @@ struct DrivyReplayScrubber: View {
             .fill(DrivyTheme.surface)
             .frame(width: 22, height: 22)
             .overlay(Circle().strokeBorder(DrivyTheme.accent, lineWidth: 4))
-            .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
+            .drivyShadow(radius: 3, y: 1)
     }
 
     private func scrubGesture(usable: CGFloat) -> some Gesture {

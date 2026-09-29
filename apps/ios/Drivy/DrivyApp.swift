@@ -74,19 +74,19 @@ struct DrivyApp: App {
                     Button("Utiliser \(appLock.biometryName ?? "Face ID")") { appLock.answerOffer(enable: true) }
                     Button("Plus tard", role: .cancel) { appLock.answerOffer(enable: false) }
                 } message: {
-                    Text("Vous restez connecté 30 jours sur cet appareil.")
+                    Text("Tu restes connecté 30 jours sur cet appareil.")
                 }
                 .accessibilityHidden(appLock.isLocked || scenePhase != .active)
                 .overlay {
                     if appLock.isLocked {
                         AppLockView(lock: appLock)
                     } else if scenePhase != .active {
-                        Color(.systemBackground)
+                        DrivyTheme.canvas
                             .ignoresSafeArea()
                             .overlay {
                                 Image(systemName: "map.fill")
                                     .font(.largeTitle)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(DrivyTheme.muted)
                             }
                     }
                 }

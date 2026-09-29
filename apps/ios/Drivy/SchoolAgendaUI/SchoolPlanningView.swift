@@ -45,7 +45,7 @@ struct SchoolPlanningView: View {
                     Text("Choisir un élève").tag(nil as UUID?)
                     ForEach(model.learners) { learner in Text(learner.displayName).tag(Optional(learner.id)) }
                 }.disabled(!model.canMutate)
-                if model.learners.isEmpty { formNote("Aucun dossier d’élève actif n’est accessible avec votre rôle.") }
+                if model.learners.isEmpty { formNote("Aucun dossier d’élève actif n’est accessible avec ton rôle.") }
                 if model.learnerID != nil {
                     Picker("Formation", selection: Binding(get: { model.trainingID }, set: { id in
                         if let id { Task { await model.selectTraining(id) } }
@@ -110,7 +110,7 @@ struct SchoolPlanningView: View {
             }
             if model.instructorID != nil {
                 DisclosureGroup("Disponibilités du moniteur") {
-                    if model.availability.isEmpty { formNote("Aucune disponibilité : ajoutez-la sur le web.") }
+                    if model.availability.isEmpty { formNote("Aucune disponibilité : ajoute-la sur le web.") }
                     ForEach(model.availability) { rule in
                         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                             Text(SchoolPlanningFormat.weekdays(rule.weekdays)).font(.subheadline.weight(.semibold))
@@ -229,16 +229,16 @@ struct SchoolPlanningView: View {
     /// client validation and the server still decides whether to book.
     private var bookingHint: String {
         if model.isBusy { return "Confirmation par l’école…" }
-        if model.pending != nil { return "Vérifiez d’abord la confirmation en attente." }
-        if model.learnerID == nil { return "Commencez par choisir l’élève." }
-        if model.trainingID == nil { return "Choisissez sa formation." }
-        if model.instructorID == nil { return "Choisissez le moniteur pour cette leçon." }
-        if model.startsAt <= Date() { return "Choisissez un horaire à venir." }
-        if model.meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Indiquez le lieu de rendez-vous." }
-        if model.originalLesson != nil && !model.agreementConfirmed { return "Confirmez que le nouvel horaire est convenu." }
-        if (model.originalLesson == nil || model.changesCommercialTerms) && model.productID == nil { return "Choisissez un tarif pour fixer la durée et le prix." }
-        if (model.originalLesson == nil || model.changesCommercialTerms) && !model.termsAccepted { return "Relisez puis acceptez le prix et les conditions." }
-        return "Vérifiez les informations du rendez-vous avant de confirmer."
+        if model.pending != nil { return "Vérifie d’abord la confirmation en attente." }
+        if model.learnerID == nil { return "Commence par choisir l’élève." }
+        if model.trainingID == nil { return "Choisis sa formation." }
+        if model.instructorID == nil { return "Choisis le moniteur pour cette leçon." }
+        if model.startsAt <= Date() { return "Choisis un horaire à venir." }
+        if model.meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Indique le lieu de rendez-vous." }
+        if model.originalLesson != nil && !model.agreementConfirmed { return "Confirme que le nouvel horaire est convenu." }
+        if (model.originalLesson == nil || model.changesCommercialTerms) && model.productID == nil { return "Choisis un tarif pour fixer la durée et le prix." }
+        if (model.originalLesson == nil || model.changesCommercialTerms) && !model.termsAccepted { return "Relis puis accepte le prix et les conditions." }
+        return "Vérifie les informations du rendez-vous avant de confirmer."
     }
     @ViewBuilder private var cancellationFields: some View {
         if let lesson = model.originalLesson {
@@ -265,7 +265,7 @@ struct SchoolPlanningView: View {
             TextField("Précision facultative", text: $model.reason, axis: .vertical).lineLimit(3...6)
             // Explication seulement en cas d’erreur : la limite n’apparaît qu’une fois dépassée.
             if model.reason.count > 1000 {
-                DrivyFormMessage(text: "Raccourcissez la précision à 1 000 caractères.", tone: .danger)
+                DrivyFormMessage(text: "Raccourcis la précision à 1 000 caractères.", tone: .danger)
             }
         } header: { Text("Motif d’annulation") }
             .drivyFormRows()
@@ -277,7 +277,7 @@ struct SchoolPlanningView: View {
             }
             .disabled(!model.canMutate || model.cancellationReason.isEmpty || model.reason.count > 1000 || model.originalLesson?.status != "PLANNED")
         } footer: {
-            if model.cancellationReason.isEmpty { Text("Choisissez un motif pour pouvoir annuler.") }
+            if model.cancellationReason.isEmpty { Text("Choisis un motif pour pouvoir annuler.") }
         }
             .drivyFormRows()
     }
@@ -306,8 +306,8 @@ struct SchoolPlanningFeedback: View {
         }
         if let command = model.pending {
             Section {
-                DrivyPendingRequest(message: "La demande est conservée. Vérifiez son résultat avant d’en envoyer une nouvelle.",
-                    notes: !model.canRetry && command.scope != model.scope ? ["Vos accès ont changé. La demande initiale reste conservée."] : [],
+                DrivyPendingRequest(message: "La demande est conservée. Vérifie son résultat avant d’en envoyer une nouvelle.",
+                    notes: !model.canRetry && command.scope != model.scope ? ["Tes accès ont changé. La demande initiale reste conservée."] : [],
                     reference: command.id,
                     verify: { Task { await model.verify() } }, canVerify: !(model.isBusy || model.isLoading),
                     retry: model.canRetry ? { Task { _ = await model.retry() } } : nil)

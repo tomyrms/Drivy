@@ -85,6 +85,7 @@ struct SchoolLessonCompletionSheet: View {
         }
         // Feuille courte : mi-hauteur sur iPhone, pleine hauteur aux tailles d’accessibilité.
         .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(model.isBusy || isSubmitting)
         .tint(DrivyTheme.accent)
     }
@@ -99,13 +100,13 @@ struct SchoolLessonTariffSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                // Montants en chiffres tabulaires, empilés aux tailles d’accessibilité.
+                // Montants en chiffres tabulaires : le prix convenu se lit, le solde à payer est le point focal.
                 if let lesson = model.lesson {
-                    DrivyKeyValueRow(title: "Prix convenu", value: SchoolCatalogFormatting.price(lesson.priceCentsSnapshot), numeric: true)
+                    amountRow("Prix convenu", SchoolCatalogFormatting.price(lesson.priceCentsSnapshot), emphasized: false)
                         .drivyFormRows()
                 }
                 if let account = model.account {
-                    DrivyKeyValueRow(title: "À payer", value: SchoolCatalogFormatting.price(account.balanceCents), numeric: true)
+                    amountRow("À payer", SchoolCatalogFormatting.price(account.balanceCents), emphasized: true)
                         .drivyFormRows()
                 }
             }
@@ -115,6 +116,25 @@ struct SchoolLessonTariffSheet: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
         }
         .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
         .tint(DrivyTheme.accent)
+    }
+
+    /// Libellé et montant sur une ligne ; empilés aux tailles d’accessibilité.
+    private func amountRow(_ title: String, _ amount: String, emphasized: Bool) -> some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xxs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.s))
+        return layout {
+            Text(title).font(emphasized ? .headline : .body).foregroundStyle(emphasized ? DrivyTheme.text : DrivyTheme.muted)
+            if !typeSize.isAccessibilitySize { Spacer(minLength: DrivySpacing.s) }
+            Text(amount)
+                .font(emphasized ? .title2.weight(.bold) : .body)
+                .monospacedDigit()
+                .foregroundStyle(DrivyTheme.text)
+        }
+        .padding(.vertical, DrivySpacing.xxs)
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .combine)
     }
 }
