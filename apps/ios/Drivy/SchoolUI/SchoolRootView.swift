@@ -514,9 +514,15 @@ struct SchoolRootView: View {
     }
 
     private func updateCaptureScope() {
-        guard identity.isAuthenticated, workspace?.school?.status != "ARCHIVED", let configuration,
-              let person = workspace?.person, let membership = workspace?.membership else {
+        guard identity.isAuthenticated, workspace?.school?.status != "ARCHIVED", let configuration, let workspace else {
             captureController.setScope(nil)
+            return
+        }
+        guard let person = workspace.person, let membership = workspace.membership else {
+            // Reloading, offline or choosing a school: an ongoing trip keeps recording. Only a
+            // refusal from the school (expired session, withdrawn access) closes its scope;
+            // another account or school replaces it as soon as it is known.
+            if workspace.accessRevoked { captureController.setScope(nil) }
             return
         }
         // La recharge conserve la même portée. Changer d'école, de compte ou
