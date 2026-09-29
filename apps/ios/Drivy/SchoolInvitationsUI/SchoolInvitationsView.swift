@@ -38,9 +38,11 @@ struct SchoolInvitationsView: View {
                 Section {
                     ForEach(model.invitations) { invitation in
                         NavigationLink(value: invitation.id) {
-                            InvitationRow(invitation: invitation, training: model.trainingLabel(invitation))
+                            InvitationRow(invitation: invitation, training: model.trainingLabel(invitation),
+                                isSelected: model.selectedID == invitation.id)
                         }
                         .accessibilityIdentifier("invitation-\(invitation.id.uuidString)")
+                        .listRowBackground(model.selectedID == invitation.id ? DrivyTheme.accentSoft : DrivyTheme.surface)
                     }
                     if model.nextCursor != nil {
                         Button { Task { await model.loadMore() } } label: {
@@ -170,18 +172,20 @@ enum InvitationPresentation {
 private struct InvitationRow: View {
     let invitation: SchoolInvitation
     let training: String?
+    let isSelected: Bool
     var body: some View {
         if invitation.isCode {
             // A badge only for what is not the usual waiting state.
             DrivyEntityRow(title: InvitationPresentation.title(invitation, training: training), leading: .symbol("number"),
                 badge: invitation.status == .pending ? nil
                     : DrivyStatusBadge(title: InvitationPresentation.codeStatus(invitation.status),
-                        symbol: InvitationPresentation.symbol(invitation.status), tone: InvitationPresentation.tone(invitation.status)))
+                        symbol: InvitationPresentation.symbol(invitation.status), tone: InvitationPresentation.tone(invitation.status)),
+                isSelected: isSelected)
         } else {
             DrivyEntityRow(title: InvitationPresentation.title(invitation, training: training), meta: invitation.roleLabel,
                 leading: .symbol("envelope"),
                 badge: DrivyStatusBadge(title: invitation.status.label, symbol: InvitationPresentation.symbol(invitation.status),
-                    tone: InvitationPresentation.tone(invitation.status)))
+                    tone: InvitationPresentation.tone(invitation.status)), isSelected: isSelected)
         }
     }
 }

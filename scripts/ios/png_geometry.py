@@ -49,4 +49,3 @@ def png_geometry(payload: bytes) -> tuple[int, int, int, int, int]:
             break
     display_width, display_height = (height, width) if orientation in (5, 6, 7, 8) else (width, height)
     return width, height, display_width, display_height, orientation
-
