@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { fullFormats } from 'ajv-formats/dist/formats.js';
 import { AttemptLimiter } from '../src/attempt-limiter.js';
-import { generateInvitationCode,normalizeInvitationCode } from '../src/invitations.js';
+import { createHash } from 'node:crypto';
+import { readConfig } from '../src/config.js';
+import { generateInvitationCode,invitationCodeHasher,normalizeInvitationCode } from '../src/invitation-code.js';
 
 describe('code d’invitation', () => {
   it('a 8 caractères de l’alphabet sans ambiguïté, au format XXXX-XXXX', () => {
@@ -26,6 +28,41 @@ describe('code d’invitation', () => {
     expect(normalizeInvitationCode('abcd-efgh')).toBe('ABCDEFGH');
     expect(normalizeInvitationCode(' ab cd - ef gh ')).toBe('ABCDEFGH');
     expect(normalizeInvitationCode('ABCDEFGH')).toBe('ABCDEFGH');
+  });
+});
+
+describe('empreinte à clé serveur des codes', () => {
+  const cursorSecret = 'secret-de-curseur-de-test-32-caracteres-minimum';
+  it('est un HMAC de 64 caractères hexadécimaux, pas le SHA-256 du code', () => {
+    const hash = invitationCodeHasher(cursorSecret)('ABCD-EFGH');
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(hash).not.toBe(createHash('sha256').update('ABCDEFGH').digest('hex'));
+    expect(hash).not.toBe(createHash('sha256').update('ABCD-EFGH').digest('hex'));
+  });
+  it('est déterministe et insensible à la saisie : casse, tirets et espaces', () => {
+    const hasher = invitationCodeHasher(cursorSecret);
+    const reference = hasher('ABCD-EFGH');
+    for (const typed of ['abcd-efgh', 'ABCDEFGH', ' abcd efgh ', 'AbCd - eFgH']) expect(hasher(typed)).toBe(reference);
+    expect(hasher('ABCD-EFGJ')).not.toBe(reference);
+    expect(invitationCodeHasher(cursorSecret)('ABCD-EFGH')).toBe(reference);
+  });
+  it('dépend du secret : une autre clé, ou le secret dédié qui l’emporte, donne une autre empreinte', () => {
+    const derived = invitationCodeHasher(cursorSecret)('ABCD-EFGH');
+    expect(invitationCodeHasher('un-autre-secret-de-curseur-de-32-caracteres')('ABCD-EFGH')).not.toBe(derived);
+    const dedicated = 'secret-dedie-aux-codes-de-test-32-caracteres';
+    expect(invitationCodeHasher(cursorSecret, dedicated)('ABCD-EFGH')).not.toBe(derived);
+    // Le secret dédié remplace le secret de curseur : seul lui compte.
+    expect(invitationCodeHasher('autre-secret-de-curseur-32-caracteres-xx', dedicated)('ABCD-EFGH')).toBe(invitationCodeHasher(cursorSecret, dedicated)('ABCD-EFGH'));
+  });
+  it('ne se confond pas avec la clé de curseur : le curseur chiffre avec SHA-256(secret), les codes avec une clé dérivée', () => {
+    const hash = invitationCodeHasher(cursorSecret)('ABCD-EFGH');
+    expect(hash).not.toBe(createHash('sha256').update(cursorSecret).update('ABCDEFGH').digest('hex'));
+  });
+  it('lit INVITATION_CODE_SECRET comme un secret facultatif d’au moins 32 caractères', () => {
+    const env = { DATABASE_URL: 'postgresql://localhost/drivy', OIDC_ISSUER: 'https://identity.example.invalid', OIDC_AUDIENCE: 'drivy-api', OIDC_JWKS_URL: 'https://identity.example.invalid/jwks', CURSOR_SECRET: 'x'.repeat(32) };
+    expect(readConfig(env).INVITATION_CODE_SECRET).toBeUndefined();
+    expect(readConfig({ ...env, INVITATION_CODE_SECRET: 'y'.repeat(32) }).INVITATION_CODE_SECRET).toBe('y'.repeat(32));
+    expect(() => readConfig({ ...env, INVITATION_CODE_SECRET: 'court' })).toThrow('INVITATION_CODE_SECRET');
   });
 });
 

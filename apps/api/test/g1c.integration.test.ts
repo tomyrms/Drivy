@@ -10,12 +10,13 @@ import { parse } from 'yaml';
 import { buildApp } from '../src/app.js';
 import { createTokenVerifier } from '../src/auth.js';
 import { deliverOneInvitation,invitationMailConfig,type InvitationMailConfig } from '../src/invitation-mail.js';
+import { invitationCodeHasher } from '../src/invitation-code.js';
 import { migrate } from '../scripts/migrations.js';
 import { fixtureIds as id,seedFixtures } from '../scripts/fixtures.js';
 const url=process.env.TEST_DATABASE_URL;
 if(!url || new URL(url).pathname!=='/drivy_test') throw new Error('TEST_DATABASE_URL vers drivy_test isolée obligatoire.');
 const pool=new Pool({connectionString:url,max:10,connectionTimeoutMillis:5000,application_name:'drivy-g1c-tests'});
-const issuer='https://identity.test.invalid';const path=`/v1/schools/${id.schoolA}/invitations`;
+const cursorSecret='secret-test-32-caracteres-minimum';const issuer='https://identity.test.invalid';const path=`/v1/schools/${id.schoolA}/invitations`;
 const mail:InvitationMailConfig={webURL:'http://127.0.0.1:3002/app/invitation',encryptionKey:'a1'.repeat(32),host:'127.0.0.1',
   port:Number(process.env.TEST_SMTP_PORT ?? 1025),secure:false,requireTLS:false,from:'drivy@example.invalid'};
 const mailpit=process.env.TEST_MAILPIT_URL ?? 'http://127.0.0.1:8025';
@@ -23,7 +24,7 @@ let app:ReturnType<typeof buildApp>;let keys:Awaited<ReturnType<typeof generateK
 const validators=new Map<string,ReturnType<Ajv2020['compile']>>();
 beforeAll(async()=>{
   await migrate(pool);keys=await generateKeyPair('RS256');const key=await exportJWK(keys.publicKey);
-  app=buildApp({pool,cursorSecret:'secret-test-32-caracteres-minimum',invitationMail:mail,verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/jwks`},createLocalJWKSet({keys:[{...key,kid:'g1c',alg:'RS256'}]}))});
+  app=buildApp({pool,cursorSecret,invitationMail:mail,verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/jwks`},createLocalJWKSet({keys:[{...key,kid:'g1c',alg:'RS256'}]}))});
   const document=parse(await readFile(new URL('../../../Drivy_Conception_v3_17_2026-09-20/04-technique/openapi.yaml',import.meta.url),'utf8')) as {components:object};
   const ajv=new Ajv2020({strict:false,allErrors:true,formats:fullFormats});ajv.addSchema({$id:'g1c-contract',components:document.components});
   for(const name of ['MemberContextEnvelope','OperationResultEnvelope']) validators.set(name,ajv.compile({$ref:`g1c-contract#/components/schemas/${name}`}));
@@ -370,7 +371,10 @@ describe('Invitation par code · sans e-mail',()=>{
     expect((await pool.query('SELECT count(*)::int n FROM drivy.invitation_mail')).rows[0].n).toBe(0);
     const stored=(await pool.query('SELECT email,delivery,token_hash,roles,training_offering_id,training_instructor_membership_id FROM drivy.invitation WHERE id=$1',[data.id])).rows[0];
     expect(stored).toMatchObject({email:null,delivery:'CODE',roles:['LEARNER'],training_offering_id:id.offeringA,training_instructor_membership_id:id.instructorMember});
-    expect(stored.token_hash).toBe(createHash('sha256').update(data.code.replace('-','')).digest('hex'));
+    // Empreinte à clé serveur (HMAC dérivé du secret de curseur), jamais le SHA-256 du code : une base copiée ne permet pas de le deviner.
+    expect(stored.token_hash).toBe(invitationCodeHasher(cursorSecret)(data.code));
+    expect(stored.token_hash).not.toBe(createHash('sha256').update(data.code.replace('-','')).digest('hex'));
+    expect(stored.token_hash).not.toBe(createHash('sha256').update(data.code).digest('hex'));
     // Ni le code ni sa forme normalisée ne sont écrits ailleurs (opération, audit).
     const operation=JSON.stringify((await pool.query('SELECT * FROM drivy.operation WHERE operation_id=$1',[body.operationId])).rows);
     expect(operation).not.toContain(data.code);expect(operation).not.toContain(data.code.replace('-',''));expect(operation).not.toContain('"code"');
@@ -383,6 +387,25 @@ describe('Invitation par code · sans e-mail',()=>{
     const list=await call('GET',path,undefined,undefined,'demo-instructor');conforms('InvitationPageEnvelope',list.json());
     expect(list.json().data.items).toHaveLength(1);expect(list.json().data.items[0]).toMatchObject({delivery:'CODE',maskedEmail:null});expect(list.body).not.toContain(data.code);
     expect((await call('GET',path)).body).not.toContain(data.code);
+  });
+  it('la clé des codes appartient au serveur : un autre secret ne retrouve pas un code, le secret dédié l’emporte sur le secret de curseur',async()=>{
+    const invitation=await issue();const dedicatedSecret='secret-dedie-aux-codes-de-test-32-caracteres';
+    const instructor=async()=>({issuer,subject:'demo-instructor'});
+    const dedicated=buildApp({pool,cursorSecret,invitationCodeSecret:dedicatedSecret,verifyToken:instructor});
+    const otherCursor=buildApp({pool,cursorSecret:'un-autre-secret-de-curseur-de-32-caracteres',verifyToken:instructor});
+    const previewOn=(server:ReturnType<typeof buildApp>,code:string)=>server.inject({method:'POST',url:'/v1/invitations/code/preview',payload:{code}});
+    try {
+      for(const server of [dedicated,otherCursor]) {const response=await previewOn(server,invitation.code);expect(response.statusCode).toBe(404);expect(response.json().code).toBe('INVITATION_CODE_INVALID');}
+      const operationId=randomUUID();
+      const created=await dedicated.inject({method:'POST',url:path,headers:{'idempotency-key':operationId},payload:{operationId,delivery:'CODE',roles:['LEARNER'],training:trainingFor()}});
+      expect(created.statusCode,created.body).toBe(201);const {id:createdId,code}=created.json().data as {id:string;code:string};
+      expect((await pool.query('SELECT token_hash FROM drivy.invitation WHERE id=$1',[createdId])).rows[0].token_hash).toBe(invitationCodeHasher(cursorSecret,dedicatedSecret)(code));
+      expect((await previewOn(dedicated,code)).statusCode).toBe(200);
+      // Le serveur principal (secret de curseur seul) ne reconnaît pas ce code, et inversement.
+      expect((await preview(code)).statusCode).toBe(404);
+      expect((await previewOn(otherCursor,code)).statusCode).toBe(404);
+      expect((await preview(invitation.code)).statusCode).toBe(200);
+    } finally {await dedicated.close();await otherCursor.close();}
   });
   it('les invitations par e-mail gardent leur forme et annoncent delivery EMAIL',async()=>{
     const invitation=await invite('mail@example.invalid');const listed=await call('GET',path);

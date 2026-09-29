@@ -41,7 +41,7 @@ export function lowercaseIds(value: unknown): unknown {
   return value;
 }
 
-export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig;reauthMaxAgeSeconds?:number;capture?:CaptureConfig }) {
+export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig }) {
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384 });
   const cursors = new Cursors(options.cursorSecret);
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options','nosniff'); });

@@ -9,6 +9,7 @@ import { Cursors } from './cursor.js';
 import { ApiError,forbidden,notFound } from './errors.js';
 import { cancelInvitationMail,queueInvitationMail,type InvitationMailConfig } from './invitation-mail.js';
 import { AttemptLimiter } from './attempt-limiter.js';
+import { generateInvitationCode,invitationCodeHasher } from './invitation-code.js';
 
 const empty=z.object({}).strict();const operation={operationId:z.uuid()};
 const tokenBody=z.object({token:z.string().min(32).max(256)}).strict();
@@ -43,13 +44,6 @@ function projection(row:InvitationRow) {
   return {id:row.id,schoolId:row.school_id,version:row.version,maskedEmail,roles:row.roles,
     status:row.status==='PENDING' && row.expires_at.getTime()<=Date.now()?'EXPIRED':row.status,expiresAt:row.expires_at.toISOString(),delivery:row.delivery};
 }
-// Code d'invitation : 8 caractères sans O/0/I/1 ambigus. 256 est multiple de 32 : l'octet modulo 32 est uniforme.
-const codeAlphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-export function generateInvitationCode():string {
-  const bytes=randomBytes(8);const chars=Array.from(bytes,byte=>codeAlphabet[byte%32]).join('');return `${chars.slice(0,4)}-${chars.slice(4)}`;
-}
-export const normalizeInvitationCode=(code:string)=>code.toUpperCase().replace(/[\s-]/g,'');
-const codeDigest=(code:string)=>digest(normalizeInvitationCode(code));
 /**
  * Sans transport d'e-mail, la création par e-mail est un refus définitif (409), jamais un 503 : un 5xx est une incertitude pour les clients,
  * qui bloqueraient alors toute autre écriture de l'école. Rien n'est écrit ; le refus n'est pas conservé et la même opération peut être renvoyée.
@@ -206,10 +200,10 @@ async function accept(pool:Pool,identity:Identity,body:z.infer<typeof acceptBody
  * Aperçu d'un code : lecture seule, aucune personne ni adhésion requise. Tout échec (inconnu, expiré, utilisé, révoqué, émetteur
  * sans droit, école inactive) répond de la même façon pour ne rien apprendre à qui essaie des codes.
  */
-async function previewCode(pool:Pool,code:string) {
+async function previewCode(pool:Pool,hashed:string) {
   const db=await pool.connect();try {
     await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');await db.query('SET LOCAL ROLE drivy_app');
-    await db.query("SELECT set_config('app.invitation_code_hash',$1,true)",[codeDigest(code)]);
+    await db.query("SELECT set_config('app.invitation_code_hash',$1,true)",[hashed]);
     const invitation=(await db.query<InvitationRow>("SELECT * FROM drivy.invitation WHERE token_hash=current_setting('app.invitation_code_hash') AND delivery='CODE'")).rows[0];
     if(!invitation || invitation.status!=='PENDING' || invitation.expires_at.getTime()<=Date.now()) throw invalidCode();
     await db.query("SELECT set_config('app.school_id',$1,true)",[invitation.school_id]);
@@ -225,8 +219,7 @@ async function previewCode(pool:Pool,code:string) {
   } catch(error) {await db.query('ROLLBACK');throw error;} finally {db.release();}
 }
 /** Comme l'acceptation par jeton (mêmes verrous, mêmes écritures, même preuve), sans adresse vérifiée : le code prouve l'invitation. */
-async function acceptCode(pool:Pool,identity:Identity,body:z.infer<typeof codeAcceptBody>) {
-  const hashed=codeDigest(body.code);
+async function acceptCode(pool:Pool,identity:Identity,body:z.infer<typeof codeAcceptBody>,hashed:string) {
   const db=await pool.connect();try {
     await db.query('BEGIN');await db.query("SET LOCAL lock_timeout='5s'");await db.query("SET LOCAL statement_timeout='10s'");
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`oidc:${identity.issuer}:${identity.subject}`]);
@@ -292,8 +285,10 @@ async function acceptCode(pool:Pool,identity:Identity,body:z.infer<typeof codeAc
     await db.query('COMMIT');return result;
   } catch(error) {await db.query('ROLLBACK');throw error;} finally {db.release();}
 }
-export function registerInvitations(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string;invitationMail?:InvitationMailConfig;codeAttempts?:AttemptLimiter}) {
+export function registerInvitations(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string;invitationMail?:InvitationMailConfig;codeAttempts?:AttemptLimiter;invitationCodeSecret?:string}) {
   const cursors=new Cursors(options.cursorSecret);const attempts=options.codeAttempts ?? new AttemptLimiter();
+  // Empreinte à clé serveur des codes (HMAC-SHA256) : voir invitation-code.ts.
+  const codeDigest=invitationCodeHasher(options.cursorSecret,options.invitationCodeSecret);
   // Chaque code refusé (aperçu ou acceptation) compte pour l'identité OIDC qui l'a essayé ; l'accès est coupé au-delà de la limite.
   const guarded=async<T>(identity:Identity,work:()=>Promise<T>):Promise<T>=>{
     const key=AttemptLimiter.key(identity.issuer,identity.subject);attempts.check(key);
@@ -310,10 +305,10 @@ export function registerInvitations(app:FastifyInstance,options:{pool:Pool;verif
   // Extension du 28 septembre 2026 : invitation par code. Connexion requise (toute identité, même sans compte Drivy) ; aucune adresse vérifiée n'est exigée.
   app.post('/v1/invitations/code/preview',async request=>{empty.parse(request.query);const body=codeBody.parse(request.body);
     const identity=await options.verifyToken(request.headers.authorization);
-    return envelope(await guarded(identity,()=>previewCode(options.pool,body.code)),request);});
+    return envelope(await guarded(identity,()=>previewCode(options.pool,codeDigest(body.code))),request);});
   app.post('/v1/invitations/code/accept',async(request,reply)=>{empty.parse(request.query);const body=codeAcceptBody.parse(request.body);
     checkIdempotency(request.headers['idempotency-key'],body.operationId);const identity=await options.verifyToken(request.headers.authorization);
-    const data=await guarded(identity,()=>acceptCode(options.pool,identity,body));reply.code(201);return envelope(data,request);});
+    const data=await guarded(identity,()=>acceptCode(options.pool,identity,body,codeDigest(body.code)));reply.code(201);return envelope(data,request);});
   // Extension : ce que l'école peut envoyer, pour que les clients masquent l'invitation par e-mail quand aucun transport n'est configuré.
   app.get('/v1/schools/:schoolId/invitation-options',async request=>{
     empty.parse(request.query);const {schoolId}=parameters.parse(request.params);const identity=await options.verifyToken(request.headers.authorization);

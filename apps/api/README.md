@@ -84,7 +84,8 @@ Les variables sont fournies au processus ; ce package ne charge ni ne crée impl
 | `OIDC_ISSUER` | Issuer exact accepté et issuer des liens d’identité des fixtures |
 | `OIDC_AUDIENCE` | Audience dédiée à l’API, pas l’identifiant du client web |
 | `OIDC_JWKS_URL` | Endpoint JWKS fixe du fournisseur approuvé |
-| `CURSOR_SECRET` | Secret aléatoire d’au moins 32 caractères, propre à l’environnement |
+| `CURSOR_SECRET` | Secret aléatoire d’au moins 32 caractères, propre à l’environnement ; sert aussi à dériver (HKDF) la clé d’empreinte des codes d’invitation |
+| `INVITATION_CODE_SECRET` | Facultatif, au moins 32 caractères : clé propre aux codes d’invitation, prioritaire sur la dérivation depuis `CURSOR_SECRET`. Le changer invalide les codes en attente |
 | `NODE_ENV` | `development`, `test` ou `production` |
 | `HOST`, `PORT` | Par défaut `127.0.0.1`, `3001` |
 | `ALLOW_FIXTURES` | `true` exigé par le script seed ; interdit avec `NODE_ENV=production` |
@@ -102,7 +103,7 @@ L’authentification accepte uniquement un Bearer signé RS256/ES256, avec issue
 
 `migrate` utilise un verrou PostgreSQL, une transaction par fichier SQL et une empreinte SHA-256. Un fichier déjà appliqué ne peut pas changer silencieusement. Les migrations 001–003 sont conservées. 004 ajoute politiques de champs, progressions et colonnes de profil ; les dix-sept tables métier gardent ENABLE/FORCE RLS. Aucune migration ne crée une invitation ni n'adopte une politique pour l'utilisateur.
 
-Avant 003, un administrateur prépare les rôles avec [prepare-invitation-mailer.sql](scripts/prepare-invitation-mailer.sql), puis génère le mot de passe du login worker côté serveur et configure son accès PostgreSQL TLS/HBA propre. Ce script ne s'exécute jamais automatiquement. Le propriétaire de migration n'a pas besoin de CREATEROLE si le rôle NOLOGIN est précréé. Le worker démarre séparément avec `npm run mail:worker --workspace @drivy/api` après build (`mail:worker:dev` en développement). L'absence de configuration SMTP ferme la création et le renvoi avec 503 ; aucune requête HTTP ne lance un transport implicite.
+Avant 003, un administrateur prépare les rôles avec [prepare-invitation-mailer.sql](scripts/prepare-invitation-mailer.sql), puis génère le mot de passe du login worker côté serveur et configure son accès PostgreSQL TLS/HBA propre. Ce script ne s'exécute jamais automatiquement. Le propriétaire de migration n'a pas besoin de CREATEROLE si le rôle NOLOGIN est précréé. Le worker démarre séparément avec `npm run mail:worker --workspace @drivy/api` après build (`mail:worker:dev` en développement). L'absence de configuration SMTP ferme la création et le renvoi par e-mail avec un refus définitif 409 `INVITATION_DELIVERY_UNAVAILABLE` (l'invitation par code n'en dépend pas) ; aucune requête HTTP ne lance un transport implicite.
 
 Le rôle `drivy_app` est sans login ni privilège de contournement RLS. En hébergement, le propriétaire de migration distinct n’est ni SUPERUSER, BYPASSRLS, CREATEDB ni CREATEROLE ; le rôle applicatif est précréé, avec ADMIN OPTION accordée à ce propriétaire pour la migration 001. Le runtime reçoit seulement le droit de prendre `drivy_app` ; l’API exécute `SET LOCAL ROLE drivy_app` dans chaque transaction. Les lectures utilisent un instant cohérent. Les commandes verrouillent accès global, école et appartenance puis relisent les droits avant le commit. Les droits d’écriture G1B sont bornés par table/colonne et RLS ; les preuves, audits et révisions restent immuables pour le runtime.
 

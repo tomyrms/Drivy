@@ -18,7 +18,7 @@ try {
   }
   const invitationMail=invitationMailConfig();
   const capture=readCaptureConfig();
-  const app = buildApp({ pool, verifyToken: createTokenVerifier(config), cursorSecret: config.CURSOR_SECRET, reauthMaxAgeSeconds:config.REAUTH_MAX_AGE_SECONDS,logger: true,...(invitationMail?{invitationMail}:{}),...(capture?{capture}:{}) });
+  const app = buildApp({ pool, verifyToken: createTokenVerifier(config), cursorSecret: config.CURSOR_SECRET, reauthMaxAgeSeconds:config.REAUTH_MAX_AGE_SECONDS,logger: true,...(config.INVITATION_CODE_SECRET?{invitationCodeSecret:config.INVITATION_CODE_SECRET}:{}),...(invitationMail?{invitationMail}:{}),...(capture?{capture}:{}) });
   const shutdown = async () => { await app.close(); await pool.end(); };
   process.once('SIGINT', () => { void shutdown(); });
   process.once('SIGTERM', () => { void shutdown(); });
