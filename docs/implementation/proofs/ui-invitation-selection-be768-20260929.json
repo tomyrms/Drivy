@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-09-29",
+  "sourceCommit": "be768134ddaaada0b437cfd8cbd4558542c25b5a",
+  "runId": 36588826160,
+  "runURL": "https://github.com/tomyrms/Drivy/actions/runs/36588826160",
+  "jobConclusion": "success",
+  "captureTests": {
+    "light": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "dark": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "device": "iPad Air 11-inch (M4)",
+  "operatingSystem": "iOS Simulator 26.4.1",
+  "appearance": [
+    "light",
+    "dark"
+  ],
+  "dynamicType": "default",
+  "dynamicTypeEvidence": {
+    "source": "artifacts/review-20260929/ipad-oriented/36588826160/visual-device-iPad.json",
+    "requestedContentSize": "large",
+    "reportedContentSize": "large",
+    "workflowEnvironment": "DRIVY_VISUAL_LARGE_TEXT: 0",
+    "workflowLog": "artifacts/review-20260929/ipad-oriented/invitation-be768-run.log",
+    "workflowLogTimestamp": "2026-09-29T15:22:27.9885250Z"
+  },
+  "syntheticData": true,
+  "originalPNGBytesPreserved": true,
+  "fileRotationApplied": false,
+  "fileReencodingApplied": false,
+  "reviewedFileCount": 4,
+  "files": [
+    {
+      "name": "iPad-invitation-detail-dark-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36588826160/iPad-invitation-detail-dark-landscape-synthetic.png",
+      "originalAttachment": "artifacts/review-20260929/ipad-oriented/36588826160/test-reports/Visual-iPad-dark/attachments/B24EC2B8-7621-47BD-8E47-169D52C729F3.png",
+      "sha256": "c69049443f0b5ef7cc51ad7be5b7157e5ce7c86fe79fd5bf64562769376d6014",
+      "appearance": "dark",
+      "dynamicType": "default",
+      "storedWidthPixels": 1640,
+      "storedHeightPixels": 2360,
+      "displayWidthPixels": 2360,
+      "displayHeightPixels": 1640,
+      "exifOrientation": 8,
+      "requestedOrientation": "landscape",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "selectedTitleContrast": {
+        "storedPixelRegion": [
+          1275,
+          185,
+          1340,
+          580
+        ],
+        "foreground": "#91B5FF",
+        "background": "#233859",
+        "foregroundExactPixelCount": 2086,
+        "backgroundExactPixelCount": 21860,
+        "ratio": 5.7581
+      }
+    },
+    {
+      "name": "iPad-invitation-detail-dark-portrait-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36588826160/iPad-invitation-detail-dark-portrait-synthetic.png",
+      "originalAttachment": "artifacts/review-20260929/ipad-oriented/36588826160/test-reports/Visual-iPad-dark/attachments/7DC052E1-24E0-4741-95F1-21180115F3AF.png",
+      "sha256": "bc16604f406d1d14f210ffa7b2d39f58e48113b07fa4c34bf7a0a12611351efb",
+      "appearance": "dark",
+      "dynamicType": "default",
+      "storedWidthPixels": 1640,
+      "storedHeightPixels": 2360,
+      "displayWidthPixels": 1640,
+      "displayHeightPixels": 2360,
+      "exifOrientation": 1,
+      "requestedOrientation": "portrait",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "selectedTitleContrast": {
+        "storedPixelRegion": [
+          185,
+          300,
+          580,
+          365
+        ],
+        "foreground": "#91B5FF",
+        "background": "#233859",
+        "foregroundExactPixelCount": 2086,
+        "backgroundExactPixelCount": 21860,
+        "ratio": 5.7581
+      }
+    },
+    {
+      "name": "iPad-invitation-detail-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36588826160/iPad-invitation-detail-light-landscape-synthetic.png",
+      "originalAttachment": "artifacts/review-20260929/ipad-oriented/36588826160/test-reports/Visual-iPad-light/attachments/79F5BDE2-28D4-47A3-978C-DF72F15A9431.png",
+      "sha256": "38f361c4a5aa69c17ab5f723056e07ffa894460598d53f1c78e56e1a5fc39488",
+      "appearance": "light",
+      "dynamicType": "default",
+      "storedWidthPixels": 1640,
+      "storedHeightPixels": 2360,
+      "displayWidthPixels": 2360,
+      "displayHeightPixels": 1640,
+      "exifOrientation": 8,
+      "requestedOrientation": "landscape",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "selectedTitleContrast": {
+        "storedPixelRegion": [
+          1275,
+          185,
+          1340,
+          580
+        ],
+        "foreground": "#245BD6",
+        "background": "#EAF0FE",
+        "foregroundExactPixelCount": 2086,
+        "backgroundExactPixelCount": 21860,
+        "ratio": 5.1924
+      }
+    },
+    {
+      "name": "iPad-invitation-detail-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36588826160/iPad-invitation-detail-light-portrait-synthetic.png",
+      "originalAttachment": "artifacts/review-20260929/ipad-oriented/36588826160/test-reports/Visual-iPad-light/attachments/47FBD2D7-338B-4467-9973-FB15F7BD9447.png",
+      "sha256": "b6989f6d4f01f07e724ce25a4bb15529758d6672433d2f7c382acaf9a65486c6",
+      "appearance": "light",
+      "dynamicType": "default",
+      "storedWidthPixels": 1640,
+      "storedHeightPixels": 2360,
+      "displayWidthPixels": 1640,
+      "displayHeightPixels": 2360,
+      "exifOrientation": 1,
+      "requestedOrientation": "portrait",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "selectedTitleContrast": {
+        "storedPixelRegion": [
+          185,
+          300,
+          580,
+          365
+        ],
+        "foreground": "#245BD6",
+        "background": "#EAF0FE",
+        "foregroundExactPixelCount": 2086,
+        "backgroundExactPixelCount": 21860,
+        "ratio": 5.1924
+      }
+    }
+  ],
+  "resolvedFindings": [
+    {
+      "id": "INVITATION_SELECTED_CONTRAST",
+      "priorProof": "docs/implementation/proofs/ui-ipad-office-e720-20260929.json",
+      "priorContrast": 2.7434,
+      "correctedRenderVerified": true,
+      "result": "All four originals show the selected title and both detail actions without clipping. Selected-title contrast is 5.1924 in light and 5.7581 in dark appearance."
+    }
+  ],
+  "limitations": [
+    "Static selected-invitation fixture with default text size only.",
+    "No claim of physical VoiceOver verification or coverage of all invitation statuses and keyboard states."
+  ]
+}

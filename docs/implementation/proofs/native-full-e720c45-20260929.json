@@ -1,0 +1,118 @@
+{
+  "sourceCommit": "e720c4579d8e12c6d0aedb7d0ada6f2f529f30a0",
+  "runUrl": "https://github.com/tomyrms/Drivy/actions/runs/36584364280",
+  "result": "success",
+  "tests": [
+    {
+      "suite": "Tests",
+      "device": "iPhone 17 Pro",
+      "passed": 171,
+      "failed": 0,
+      "skipped": 0,
+      "summarySHA256": "8e6d8303ffa65792eb4c1f2b80fd31024ef56ae5e362b90986eececdf71be794"
+    },
+    {
+      "suite": "iPadTests",
+      "device": "iPad Pro 13-inch (M5)",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "summarySHA256": "b603dd0785b27bb959acdc6cbeb163c7aff3d857797937adff1e2f1be6d39a14"
+    }
+  ],
+  "examinedOriginals": 10,
+  "editedImages": false,
+  "fieldFlowImages": [
+    {
+      "suite": "Tests",
+      "label": "signal-status_0_7E6DD4FF-74E9-422E-8666-7B25BFA509B7.png",
+      "file": "4C55B97D-80BC-46A3-BAEC-0EE6768C285A.png",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "sha256": "a633ea8b061a0ef68ca5ce16062f9dc9f6b1a6208f21e3a677a280612769361e",
+      "inspected": true
+    },
+    {
+      "suite": "Tests",
+      "label": "signal-themes_0_CD7E67EF-DE9A-45BA-8F09-221F17DCBB66.png",
+      "file": "F2E505B7-C8DC-4FF9-9AA2-317E383AD8AF.png",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "sha256": "51ed43f40c00b83a6840d4879627805c5f558dfea3e7ba9466a041d147d10c04",
+      "inspected": true
+    },
+    {
+      "suite": "Tests",
+      "label": "lesson-empty-report_0_3FE77568-8FF5-4309-85EC-8CB78150A11B.png",
+      "file": "A54B70DC-4B2A-4EB6-8F4E-4B9305178CFD.png",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "sha256": "7effb68315f8c01bbf26a2cba8b07a724df1ea309b410cd82eb84647211f3041",
+      "inspected": true
+    },
+    {
+      "suite": "Tests",
+      "label": "gps-document_0_D103D25F-7243-4CE1-B8C7-EE726CA5C8FC.png",
+      "file": "B4DF9D9F-8F64-4617-93D6-892D758F3FB7.png",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "sha256": "4351a2a57f6b686c9871b5483a549ba9bc99a31b25b623cd16076cf9bd71f881",
+      "inspected": true
+    },
+    {
+      "suite": "Tests",
+      "label": "live-signal-reopened_0_3A295D12-D92D-4668-870B-B944EF7FFA31.png",
+      "file": "9787E018-95DC-4CB9-A3B6-81419966E68C.png",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "sha256": "29733255daaee9813ce843ee419ece6f03da311dcc8ca22e78fac0c1e13668d3",
+      "inspected": true
+    },
+    {
+      "suite": "iPadTests",
+      "label": "signal-status_0_151012ED-4661-4676-886B-507B6BD06E9C.png",
+      "file": "16ECE48F-6863-4F85-B7BC-C6C660A60C95.png",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "sha256": "7c487654c322d5d59426cde63dac9b06b6937f2a02c5f56cfec63157a700bc0a",
+      "inspected": true
+    },
+    {
+      "suite": "iPadTests",
+      "label": "signal-themes_0_9B6BA210-3DF8-4B6E-8C4F-6B1D3E6B3C25.png",
+      "file": "8DE5B143-CFE1-45D2-A657-8A532BF6201D.png",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "sha256": "0ba6e293e7b56a8fbae2a751c4cfc465c1c29a84e7f160224946744f594c9c60",
+      "inspected": true
+    },
+    {
+      "suite": "iPadTests",
+      "label": "lesson-empty-report_0_AD275FDF-CAE7-4D28-B585-EA47BE5F21C8.png",
+      "file": "33CE8B64-B601-4ADD-A40F-B3DB7FB02541.png",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "sha256": "4fa8bc9c9b4ac5671c7c8bbdcd4438ce6b84a3afb95292a109a19537f8c96fe4",
+      "inspected": true
+    },
+    {
+      "suite": "iPadTests",
+      "label": "gps-document_0_98D24306-871C-49DA-AAA3-DB0895D32E63.png",
+      "file": "9420D401-B612-48A3-BEF8-BD3D381300F3.png",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "sha256": "e83446c27ab13f1066942a0a284ee557d23100f782163acfbdabb7c342364834",
+      "inspected": true
+    },
+    {
+      "suite": "iPadTests",
+      "label": "live-signal-reopened_0_8AD1DF71-6BED-4F1A-ABEC-C9ED9563F358.png",
+      "file": "72552CA9-1615-4E61-AEA4-62F64F7E2769.png",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "sha256": "bb3f40897b9eede108ffcca2e9620c6024b36d8199202389150b43ffaa1e1fbb",
+      "inspected": true
+    }
+  ],
+  "note": "New visual signal panel, status choice, cancel/back/reopen and empty report executed. The iPad report actual page sheet shows two columns. Synthetic fixtures only."
+}

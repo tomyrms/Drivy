@@ -1,0 +1,144 @@
+{
+  "runId": "36581707597",
+  "headSha": "fb809bc009c6f8b5dfd366916e57955d883d58b0",
+  "conclusion": "success",
+  "runURL": "https://github.com/tomyrms/Drivy/actions/runs/36581707597",
+  "syntheticOnly": true,
+  "tests": [
+    {
+      "suite": "Tests",
+      "device": "iPhone 17 Pro",
+      "platform": "iOS Simulator",
+      "osVersion": "26.4.1",
+      "result": "Passed",
+      "passed": 170,
+      "failed": 0,
+      "skipped": 0,
+      "summarySHA256": "1d033eda8996371580ea53a50690bfec062b47cdbc97d0c7aadcdef557a0b1e0"
+    },
+    {
+      "suite": "iPadTests",
+      "device": "iPad Pro 13-inch (M5)",
+      "platform": "iOS Simulator",
+      "osVersion": "26.4.1",
+      "result": "Passed",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "summarySHA256": "2841b22a40a1cd555cd30e1f980fb96677d869e9fe953b1cb1b31e8d79d5df6a"
+    }
+  ],
+  "fieldFlowImages": [
+    {
+      "suite": "Tests",
+      "test": "FieldFlowTests/testAnObservationUsesAPreciseThemeAndAnExplicitStatus()",
+      "label": "signal-status_0_4BF57553-FCB2-45B4-88A6-49B95C874338.png",
+      "file": "7C96DE8B-B8D0-484E-B778-E741CE18030F.png",
+      "sha256": "8b05cbc3f7ac5789e3d3df6ef44d08dc41752bc7c08e6e8930393cd2fc3a716b",
+      "inspected": true,
+      "inspection": "view_image original PNG, no image editing"
+    },
+    {
+      "suite": "Tests",
+      "test": "FieldFlowTests/testAnObservationUsesAPreciseThemeAndAnExplicitStatus()",
+      "label": "signal-themes_0_2DFD42B6-5C59-4547-BB84-4D875B9EB132.png",
+      "file": "F5B65B3B-AF94-480C-907D-408E94AA2CBB.png",
+      "sha256": "7bc67fdf94452d5f6e2d6aa388f7f1c6bb4ee1241b20cf5d05ddc8873d727943",
+      "inspected": true,
+      "inspection": "view_image original PNG, no image editing"
+    },
+    {
+      "suite": "Tests",
+      "test": "FieldFlowTests/testFinishingALessonNeedsNoDateConfirmationOrReportText()",
+      "label": "lesson-empty-report_0_28A83EEB-C4F7-43A5-9986-0B3729724016.png",
+      "file": "974C204C-7D6F-4E5D-8FDE-D18DF3D63A6B.png",
+      "sha256": "2377b2ba9ad615430a057ae7efb6eff364f527c79bb335b83ffcf5f5a06dd4f9",
+      "inspected": true,
+      "inspection": "view_image original PNG, no image editing"
+    },
+    {
+      "suite": "Tests",
+      "test": "FieldFlowTests/testGPSChoiceShowsDocumentsOnDemandAndClosesAfterOneChoice()",
+      "label": "gps-document_0_DB7A5F33-F436-48F1-B117-7162AE991397.png",
+      "file": "A81DFFA9-FE6E-4E11-ADA6-36132633AB60.png",
+      "sha256": "de7c34ae6f82af6f2985f161c05d4232abbd7eb65483f93c499b9ddf9cbefb15",
+      "inspected": true,
+      "inspection": "view_image original PNG, no image editing"
+    },
+    {
+      "suite": "iPadTests",
+      "test": "FieldFlowTests/testAnObservationUsesAPreciseThemeAndAnExplicitStatus()",
+      "label": "signal-status_0_46596B30-2CAB-4496-AF42-39D9A5CC1C72.png",
+      "file": "8E0F3494-FBDB-4117-B73B-EE265F38B6ED.png",
+      "sha256": "846dd357c1287cfe9a869286ff773faabb34665b236e4d8bcab8264d6c388281",
+      "inspected": true,
+      "inspection": "view_image original PNG, no image editing"
+    },
+    {
+      "suite": "iPadTests",
+      "test": "FieldFlowTests/testAnObservationUsesAPreciseThemeAndAnExplicitStatus()",
+      "label": "signal-themes_0_138D1C51-1B6D-4566-A52D-16306DF89050.png",
+      "file": "D8869AA6-094A-46CD-B635-A79CF365CC26.png",
+      "sha256": "bc8463bf9cd13abca2bf1b0b0b19e25b1cfe538779a3970c29730c799a707b35",
+      "inspected": true,
+      "inspection": "view_image original PNG, no image editing"
+    },
+    {
+      "suite": "iPadTests",
+      "test": "FieldFlowTests/testFinishingALessonNeedsNoDateConfirmationOrReportText()",
+      "label": "lesson-empty-report_0_9C99942E-3CC2-43D3-96A8-E996099D4B4C.png",
+      "file": "501D7881-55D7-4142-A0CD-084745230896.png",
+      "sha256": "03c16a77f444f45ff3b0b88355e0617a2b3b8ada015908621d62c0fa1f98d717",
+      "inspected": true,
+      "inspection": "view_image original PNG, no image editing"
+    },
+    {
+      "suite": "iPadTests",
+      "test": "FieldFlowTests/testGPSChoiceShowsDocumentsOnDemandAndClosesAfterOneChoice()",
+      "label": "gps-document_0_398D1F9C-DFEF-4556-B7D4-487386603D61.png",
+      "file": "F8940FAF-0736-474D-B9B7-DAA4EBA902A7.png",
+      "sha256": "9d2a69c977de8dd9eeae7b24303c98947c165d2da801c9be2ea3a02e199cc487",
+      "inspected": true,
+      "inspection": "view_image original PNG, no image editing"
+    }
+  ],
+  "fieldFlowImageCount": 8,
+  "limitation": "Signalement screenshots precede compact-panel redesign. Lesson report balance unavailable is synthetic fixture response, not a real server result.",
+  "captureLifecycleTests": {
+    "passed": 9,
+    "names": [
+      "slowFirstFixDoesNotBecomeASignalBreak",
+      "backgroundSignalRecoveryRequiresTheSameLiveCaptureAndScope",
+      "waitingForGPSDoesNotStopTheLessonOrInventAPoint",
+      "aSignalGapResumesLocallyInANewSegmentWithoutASecondAuthorization",
+      "closingTheLessonDoesNotCancelDurableSynchronization",
+      "lostFinalizationResponseRetriesTheSameDurableOperation",
+      "concurrentLessonCompletionVersionIsReconciledWithoutAnotherUserAction",
+      "returningToTheAppReplaysAClosedLessonsPendingFinalization",
+      "signingOutPreventsPendingCaptureReplay"
+    ],
+    "logSHA256": "cd9d68a62a05cfb40ef3576f5fdff1465d322e19f96c9da03ba43c33b2db36d3"
+  },
+  "ipaLanguageInspection": {
+    "ipaBuild": "72",
+    "version": "0.7.0",
+    "sha256": "f4462ec929abe2ed43bf50074d9a68209537a016ca8487eed208145f5957afed",
+    "plist": "Payload/Drivy.app/Info.plist",
+    "CFBundleDevelopmentRegion": null,
+    "CFBundleLocalizations": null,
+    "lprojPaths": [],
+    "method": "Zip read and plistlib decode of built IPA; source files unchanged",
+    "appleReference": "https://developer.apple.com/library/archive/qa/qa1828/_index.html"
+  },
+  "followingIPARequiredCheck": {
+    "status": "passed on IPA 0a379b1, run 36586171978",
+    "expectedDevelopmentRegion": "fr",
+    "expectedLocalizations": [
+      "fr"
+    ],
+    "sourcePlistDecodedSuccessfully": true,
+    "runtimeLaunchMustNotForceAppleLanguagesOrAppleLocale": true,
+    "physicalInstallVerified": false,
+    "resultProof": "native-ipa-language-0a379b1-20260929.json"
+  }
+}

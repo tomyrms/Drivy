@@ -1,0 +1,91 @@
+{
+  "sourceCommit": "fb809bc009c6f8b5dfd366916e57955d883d58b0",
+  "runUrl": "https://github.com/tomyrms/Drivy/actions/runs/36581812616",
+  "result": "success",
+  "requestedDynamicType": "accessibility3",
+  "actualScope": "Only live, replay and profile visibly use enlarged text. Signal and lesson-finish modals render at standard size; do not qualify those as AX captures.",
+  "examinedOriginals": 10,
+  "editedImages": false,
+  "files": [
+    {
+      "file": "iPad-lesson-finish-light-synthetic.png",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "sha256": "b8be652884f7ace7ed5fdc0be1da598ff17c3f2449e29d85b35b18c67444c5fd",
+      "inspected": true,
+      "enlargedTextObserved": false
+    },
+    {
+      "file": "iPad-live-light-synthetic.png",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "sha256": "a72943c40f78016e4187e5523025d188fa480723bb3e3e5a79be655592a12668",
+      "inspected": true,
+      "enlargedTextObserved": true
+    },
+    {
+      "file": "iPad-profile-light-synthetic.png",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "sha256": "03d3542dfbdfe35f098cfed0595a245f2a8bbe67dd0c5a484ffe9d59dd671cf0",
+      "inspected": true,
+      "enlargedTextObserved": true
+    },
+    {
+      "file": "iPad-replay-light-synthetic.png",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "sha256": "921b5a3c6f553cd8474b13187b38ac0b48c9f6cdd4f8203a0d1c1e2f6854818b",
+      "inspected": true,
+      "enlargedTextObserved": true
+    },
+    {
+      "file": "iPad-signal-light-synthetic.png",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "sha256": "1b173a75406c4ec62a25c7d23b00e7856eab6bc439db7b77ed2fa9a18eb5c286",
+      "inspected": true,
+      "enlargedTextObserved": false
+    },
+    {
+      "file": "iPhone-lesson-finish-light-synthetic.png",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "sha256": "d9f660cbaa666b526e1f1544957030c197236f504b13f607334a85564996aabc",
+      "inspected": true,
+      "enlargedTextObserved": false
+    },
+    {
+      "file": "iPhone-live-light-synthetic.png",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "sha256": "44ba647fb448c8106a850bd22f2d8456da881f613363687187e6d906f274c61a",
+      "inspected": true,
+      "enlargedTextObserved": true
+    },
+    {
+      "file": "iPhone-profile-light-synthetic.png",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "sha256": "2f9ee37fbc2fa36a21a294791c5e1ef9e7fe96f05f39c796d280cc28c47f45db",
+      "inspected": true,
+      "enlargedTextObserved": true
+    },
+    {
+      "file": "iPhone-replay-light-synthetic.png",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "sha256": "2cee15248bf35e986229b34310c8c9dab0f4dca93655b5f34b7b0ea2cf7ec043",
+      "inspected": true,
+      "enlargedTextObserved": true
+    },
+    {
+      "file": "iPhone-signal-light-synthetic.png",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "sha256": "2e9cc5c2b4e281a8f1ffcb6bc62ca41453841bada49c08857c6d718efce1447e",
+      "inspected": true,
+      "enlargedTextObserved": false
+    }
+  ]
+}

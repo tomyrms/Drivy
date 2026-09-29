@@ -1,0 +1,211 @@
+{
+  "date": "2026-09-29",
+  "sourceCommit": "d769e144252e1ef45c31104ab31e9e9f8abbc726",
+  "runId": 36578702250,
+  "artifactId": 11038969334,
+  "artifactName": "Drivy-native-results-d769e144252e1ef45c31104ab31e9e9f8abbc726",
+  "runConclusion": "success",
+  "filesPresent": 28,
+  "uniqueImagesVisuallyInspected": 28,
+  "montageOrRetouchPerformed": false,
+  "syntheticFixturesOnly": true,
+  "physicalGPSOrVoiceOverQualification": false,
+  "files": [
+    {
+      "file": "iPad-capture-preparation-dark-synthetic.png",
+      "sha256": "7f38f7621d48e6f7e381d851438d8c9129f6528d8e5c906a0169607ce21ccdbb",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-capture-preparation-light-synthetic.png",
+      "sha256": "70bd4b9bb3f875335a04caefe86bd1ccabc0426608f49bee4fa0fcfa72104edf",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-gps-choice-dark-synthetic.png",
+      "sha256": "95806d0de731d45ec3761a35471dc0597cebcc151c847c6814df10d0f0b5832c",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-gps-choice-light-synthetic.png",
+      "sha256": "fe6787c9e457e4a24aa39153358bf87fd032f2273e00f17001187b4fecc01215",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-live-dark-synthetic.png",
+      "sha256": "87927c6e14e1e2856d603988319616defaea795ef81835006c3fa8add784a46d",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-live-light-synthetic.png",
+      "sha256": "03948588d67c569c209bca592b8f437d807f95b23503cfd898f3e4a4f8ce443d",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-live-waiting-dark-synthetic.png",
+      "sha256": "a5e47757f07e2a7679ffc04bc8d022bb254b7544bb1f0cec4d9cc5776d701edf",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-live-waiting-light-synthetic.png",
+      "sha256": "f933bffbdc92e1ffc5a877551a420eaf44c996d2bb3f1212a43361a9b9911b8a",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-observations-dark-synthetic.png",
+      "sha256": "de1a6d83ede6f612b6a37dcb65d85211cd95164810485e07a77e3c2088a7b74c",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-observations-light-synthetic.png",
+      "sha256": "e0eac183c9385d023f002394c548eb6663efabc9bc29bd93d37fe01e5b660226",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-replay-dark-synthetic.png",
+      "sha256": "a92109c08cc7faf99a382e4956b560f76ad1b97fc3583e1c5b18342e32f573cd",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-replay-light-synthetic.png",
+      "sha256": "69d01fca48b6eef1a968b9bb39474efc8b3ec81a660a58b21750583798c833a5",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-signal-dark-synthetic.png",
+      "sha256": "1148adaedb47efb58e17ddf671a23342a88e333fd00ace7b2afd510f95c3142f",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-signal-light-synthetic.png",
+      "sha256": "c482e717eed3e3c0e131c556d5e6b6d858c9fc13a05349cb636c1e7c3e316e2d",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-capture-preparation-dark-synthetic.png",
+      "sha256": "6d94176922f04415882c48ed09bfc7acf46fa6cfd15709c075ac76514a011a34",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-capture-preparation-light-synthetic.png",
+      "sha256": "666445d395959efc180916a4e65810ca7b4e223d7efb48229505a99735ad1230",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-gps-choice-dark-synthetic.png",
+      "sha256": "b1118adfdf1db704fd95b63dd73fa2efb78b3178f24df3e503142ae005211e51",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-gps-choice-light-synthetic.png",
+      "sha256": "b54afb1ac643217b643628ec22778d09225c4b42c0e3d9fa3484ae7ffd43d513",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-live-dark-synthetic.png",
+      "sha256": "dc4a082be137f5db2e027d580ab98e0833d3b73fd3ec4e67eb825adac656d786",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-live-light-synthetic.png",
+      "sha256": "87c66a60b5f05e6321940e9bf30851435cffc7e2305c0b4fabeb6b6e7bf4c660",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-live-waiting-dark-synthetic.png",
+      "sha256": "1a38850863e18d175d5fd3f9b5b6ff251f18a1fa4802c819c85dfaec7c8202cb",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-live-waiting-light-synthetic.png",
+      "sha256": "3e541c7977157bfafe0e33942f84978453811059b557d27dde4387a32019f348",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-observations-dark-synthetic.png",
+      "sha256": "2425bf03abbcd490d188152fe393f21c414349f5232617764a8f9644d09651a9",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-observations-light-synthetic.png",
+      "sha256": "2cbe818df80d69f5a8f9eed2931a6da0769677cb0ba88da50921eaeab0e8b0e6",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-replay-dark-synthetic.png",
+      "sha256": "973cfd1b89b7795fe37dd30574cf4c98c927c7060a0bb8d27778c56091bb23c7",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-replay-light-synthetic.png",
+      "sha256": "df1a1918db5e09cf00b5f4a43784dbb0ecdda6c0ccbad42a9a5b99f4106c1a4b",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-signal-dark-synthetic.png",
+      "sha256": "ff5173f96c41fcd4bf6e502dc03844fcdad99603073f2ed685ed6cc82230c103",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-signal-light-synthetic.png",
+      "sha256": "09e0ace6025b66a9b7ea34a3ab033597eb35657961ddef082d5953106f09eac2",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    }
+  ]
+}

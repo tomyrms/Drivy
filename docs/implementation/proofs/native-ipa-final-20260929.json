@@ -1,0 +1,17 @@
+{
+  "commit": "be768134ddaaada0b437cfd8cbd4558542c25b5a",
+  "run": "36588755101",
+  "version": "0.7.0",
+  "build": "73",
+  "ipaSHA256": "2a59f4e0e6900bfe7f0aba74d5e050f0cbca51ccb477143d2370ba2b156041f1",
+  "archiveCreated": true,
+  "unsigned": true,
+  "zipAndBinaryHashesVerified": true,
+  "productionConfigurationVerified": true,
+  "debugVisualFixturesExcluded": true,
+  "physicalQualification": "NOT_EXECUTED",
+  "frenchBundleVerified": true,
+  "iPhoneAndiPadFamiliesVerified": true,
+  "allIPadOrientationsDeclared": true,
+  "ipa": "artifacts/review-20260929/ipa-field-final/Drivy.ipa"
+}
