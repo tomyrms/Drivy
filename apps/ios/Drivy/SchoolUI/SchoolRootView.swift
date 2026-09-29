@@ -9,12 +9,14 @@ private struct SchoolWorkspaceSheet<Model: AnyObject>: Identifiable {
 }
 
 /// Ce que le compte ouvre une fois sa feuille fermée : une seule feuille à la fois.
-private enum AccountFollowUp { case join, invitations, profile, captureHistory }
+private enum AccountFollowUp { case join, invitations, profile }
 
 struct SchoolRootView: View {
     let configuration: AppConfiguration?
     @Bindable var identity: IdentitySession
     let workspace: SchoolWorkspace?
+    /// Created once by the app; nil only without configuration.
+    var clients: SchoolHomeClients? = nil
     @State private var showsAccount = false
     @State private var afterAccount: AccountFollowUp?
     @State private var presenter: UIViewController?
@@ -27,8 +29,10 @@ struct SchoolRootView: View {
     @State private var profileRoute: SchoolWorkspaceSheet<SchoolProfileWorkspace>?
     @State private var joinWorkspace: SchoolJoinWorkspace?
     @State private var joinRoute: SchoolWorkspaceSheet<SchoolJoinWorkspace>?
-    @State private var history: SchoolCaptureHistoryWorkspace?
-    @State private var historyRoute: SchoolWorkspaceSheet<SchoolCaptureHistoryWorkspace>?
+    @State private var codeJoinWorkspace: SchoolCodeJoinWorkspace?
+    @State private var codeJoinRoute: SchoolWorkspaceSheet<SchoolCodeJoinWorkspace>?
+    /// « J’ai un lien d’invitation » closes the code sheet, then opens the link one.
+    @State private var opensLinkAfterCode = false
     @State private var joinMembershipToOpen: SchoolMembership?
     @State private var pendingJoinLink: String?
     @State private var selectedHomeTab: SchoolHomeTab = .session
@@ -36,10 +40,11 @@ struct SchoolRootView: View {
     /// The profile sheet shows the guided welcome only when it was opened for it.
     @State private var onboardingWorkspaceID: UUID?
     /// Memberships already offered the welcome during this launch: « Plus tard » never loops.
+    /// Across launches, SchoolOnboardingDeferral keeps the offer away for seven days.
     @State private var offeredOnboarding: Set<UUID> = []
 
     private var presentsSheet: Bool {
-        joinRoute != nil || invitationsRoute != nil || inviteRoute != nil || profileRoute != nil || historyRoute != nil
+        joinRoute != nil || codeJoinRoute != nil || invitationsRoute != nil || inviteRoute != nil || profileRoute != nil
     }
 
     var body: some View {
@@ -56,7 +61,7 @@ struct SchoolRootView: View {
                 SchoolHomeView(workspace: workspace, openAccount: { showsAccount = true },
                     inviteLearner: inviteAction, openProfile: profileAction, agendaClient: homeAgendaClient,
                     trainingClient: homeTrainingClient, captureController: captureController,
-                    selectedTab: $selectedHomeTab)
+                    joinSchool: joinByCodeAction, selectedTab: $selectedHomeTab)
             } else {
                 NavigationStack {
                     accountLanding(workspace)
@@ -74,6 +79,10 @@ struct SchoolRootView: View {
 
     private var observedContent: some View {
         rootContent
+        // The session controller is shared with every screen of the signed-in content:
+        // read it with `@Environment(SchoolCaptureSessionController.self)` (optional).
+        .environment(captureController)
+        .environment(\.drivyAccountName, workspace?.person?.displayName)
         .tint(DrivyTheme.accent)
         .foregroundStyle(DrivyTheme.text)
         .background(SignInPresenter { presenter = $0 }.frame(width: 0, height: 0))
@@ -115,7 +124,6 @@ struct SchoolRootView: View {
         observedContent.sheet(isPresented: $showsAccount, onDismiss: accountDismissed) {
             SchoolAccountView(identity: identity, workspace: workspace, manageURL: manageURL,
                 openProfile: followUp(.profile, when: ownProfileLearner != nil),
-                openCaptureHistory: followUp(.captureHistory, when: canOpenCaptureHistory),
                 openInvitations: followUp(.invitations, when: canManageInvitations),
                 openJoinSchool: followUp(.join, when: configuration != nil && identity.isAuthenticated),
                 signOut: signOut)
@@ -123,11 +131,17 @@ struct SchoolRootView: View {
     }
 
     private var joinLayer: some View {
-        accountLayer.sheet(item: $joinRoute, onDismiss: joinDismissed) { route in
-            SchoolJoinView(model: route.model, openSchool: { membership in
-                joinMembershipToOpen = membership; joinRoute = nil
-            })
-        }
+        accountLayer
+            .sheet(item: $joinRoute, onDismiss: joinDismissed) { route in
+                SchoolJoinView(model: route.model, openSchool: { membership in
+                    joinMembershipToOpen = membership; joinRoute = nil
+                })
+            }
+            .sheet(item: $codeJoinRoute, onDismiss: codeJoinDismissed) { route in
+                SchoolCodeJoinView(model: route.model, openSchool: { membership in
+                    joinMembershipToOpen = membership; codeJoinRoute = nil
+                }, useLink: { opensLinkAfterCode = true; codeJoinRoute = nil })
+            }
     }
 
     private var invitationLayer: some View {
@@ -151,11 +165,7 @@ struct SchoolRootView: View {
         }
     }
 
-    private var presentations: some View {
-        profileLayer.sheet(item: $historyRoute, onDismiss: { history?.invalidate(); history = nil }) { route in
-            if let workspace { SchoolCaptureHistoryView(model: route.model, workspace: workspace) }
-        }
-    }
+    private var presentations: some View { profileLayer }
 
     private func invitationSheet<Content: View>(_ content: Content, model: SchoolInvitationWorkspace) -> some View {
         content
@@ -193,10 +203,9 @@ struct SchoolRootView: View {
         guard let action = afterAccount else { return }
         afterAccount = nil
         switch action {
-        case .join: openJoin()
+        case .join: openCodeJoin()
         case .invitations: openInvitations(creation: false)
         case .profile: if let learner = ownProfileLearner { openProfile(learner) }
-        case .captureHistory: openCaptureHistory()
         }
     }
 
@@ -237,6 +246,32 @@ struct SchoolRootView: View {
         let principal = joinWorkspace?.record?.principal
         let client = joinWorkspace?.client
         joinMembershipToOpen = nil; joinWorkspace?.invalidate(); joinWorkspace = nil
+        openJoinedSchool(membership, principal: principal, client: client)
+    }
+
+    // MARK: Rejoindre avec un code
+
+    private var joinByCodeAction: (() -> Void)? {
+        configuration != nil && identity.isAuthenticated ? { openCodeJoin() } : nil
+    }
+    private func openCodeJoin() {
+        guard identity.isAuthenticated, let configuration, !presentsSheet else { return }
+        codeJoinWorkspace?.invalidate()
+        let model = SchoolCodeJoinWorkspace(client: SchoolJoinClient(configuration: configuration, tokenSource: identity))
+        codeJoinWorkspace = model; codeJoinRoute = SchoolWorkspaceSheet(model: model)
+    }
+    private func closeCodeJoin() { codeJoinWorkspace?.invalidate(); codeJoinRoute = nil; opensLinkAfterCode = false }
+    private func codeJoinDismissed() {
+        let membership = joinMembershipToOpen
+        let principal = codeJoinWorkspace?.record?.principal
+        let client = codeJoinWorkspace?.client
+        joinMembershipToOpen = nil; codeJoinWorkspace?.invalidate(); codeJoinWorkspace = nil
+        if opensLinkAfterCode { opensLinkAfterCode = false; openJoin(); return }
+        openJoinedSchool(membership, principal: principal, client: client)
+    }
+
+    /// After joining: reload the account with the same identity, then open the school joined.
+    private func openJoinedSchool(_ membership: SchoolMembership?, principal: SchoolJoinPrincipal?, client: SchoolJoinClient?) {
         guard let membership, let principal, let client, identity.isAuthenticated, let workspace else { return }
         Task {
             guard (try? await client.principal()) == principal, identity.isAuthenticated else { return }
@@ -257,8 +292,9 @@ struct SchoolRootView: View {
             && (workspace?.membership?.roles.contains("ADMIN") == true || workspace?.membership?.roles.contains("INSTRUCTOR") == true)
     }
 
+    /// A code always carries the inviting instructor's training: only an instructor invites from the app.
     private var inviteAction: (() -> Void)? {
-        canManageInvitations ? { openInvitations(creation: true) } : nil
+        canManageInvitations && workspace?.membership?.roles.contains("INSTRUCTOR") == true ? { openInvitations(creation: true) } : nil
     }
 
     private func openInvitations(creation: Bool) {
@@ -299,6 +335,7 @@ struct SchoolRootView: View {
     private func offerOnboardingIfNeeded() async {
         guard identity.isAuthenticated, let configuration, let person = workspace?.person,
               let membership = workspace?.membership, !offeredOnboarding.contains(membership.membershipId),
+              !SchoolOnboardingDeferral.isDeferred(membership.membershipId),
               membership.roles.contains("LEARNER") || membership.roles.contains("INSTRUCTOR"),
               !presentsSheet else { return }
         let isLearner = membership.roles.contains("LEARNER")
@@ -310,6 +347,8 @@ struct SchoolRootView: View {
         let api = SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
         guard await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: kind),
               workspace?.membership?.membershipId == membership.membershipId, !presentsSheet else { return }
+        // Offered once: whatever the answer (« Plus tard », closing), not again for seven days.
+        SchoolOnboardingDeferral.record(membership.membershipId)
         openOnboarding()
     }
 
@@ -353,29 +392,11 @@ struct SchoolRootView: View {
         }
     }
 
-    // MARK: Trajets de l’appareil
+    // MARK: Clients de l’accueil
 
-    private var homeAgendaClient: SchoolAgendaClient? {
-        guard let configuration else { return nil }
-        return SchoolAgendaClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
-    }
+    private var homeAgendaClient: SchoolAgendaClient? { configuration == nil ? nil : clients?.agenda }
+    private var homeTrainingClient: SchoolTrainingClient? { configuration == nil ? nil : clients?.training }
 
-    private var homeTrainingClient: SchoolTrainingClient? {
-        guard let configuration else { return nil }
-        return SchoolTrainingClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
-    }
-
-    private var canOpenCaptureHistory: Bool {
-        configuration != nil && workspace?.membership?.roles.contains("INSTRUCTOR") == true && workspace?.school?.status != "ARCHIVED"
-    }
-
-    private func openCaptureHistory() {
-        guard canOpenCaptureHistory, let agendaClient = homeAgendaClient, let person = workspace?.person,
-              let membership = workspace?.membership else { return }
-        let model = SchoolCaptureHistoryWorkspace(scope: agendaClient.scope(person: person, membership: membership),
-            client: agendaClient.captureClient, owner: captureController)
-        history = model; historyRoute = SchoolWorkspaceSheet(model: model)
-    }
 
     // MARK: Connexion
 
@@ -427,7 +448,10 @@ struct SchoolRootView: View {
 
     @ViewBuilder
     private func accountLanding(_ workspace: SchoolWorkspace) -> some View {
-        if let error = workspace.accountError {
+        if workspace.identityNotLinked, let joinByCodeAction {
+            // A new account belongs to no school yet: the code received from the instructor is the way in.
+            SchoolWithoutSchoolView(joinSchool: joinByCodeAction)
+        } else if let error = workspace.accountError {
             ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     SchoolErrorNotice(message: error)
@@ -470,8 +494,7 @@ struct SchoolRootView: View {
     }
 
     private func closeAll() {
-        closeJoin(); closeInvitations(); closeProfile()
-        history?.invalidate(); historyRoute = nil
+        closeJoin(); closeCodeJoin(); closeInvitations(); closeProfile()
     }
 
     // MARK: Portée
@@ -489,15 +512,18 @@ struct SchoolRootView: View {
         }
         if let model = profileWorkspace, !current(model.scope) { closeProfile() }
         if let model = invitations, !canManageInvitations || !current(model.scope) { closeInvitations() }
-        if let model = history, !canOpenCaptureHistory || !current(model.scope) {
-            model.invalidate(); historyRoute = nil
-        }
     }
 
     private func updateCaptureScope() {
-        guard identity.isAuthenticated, workspace?.school?.status != "ARCHIVED", let configuration,
-              let person = workspace?.person, let membership = workspace?.membership else {
+        guard identity.isAuthenticated, workspace?.school?.status != "ARCHIVED", let configuration, let workspace else {
             captureController.setScope(nil)
+            return
+        }
+        guard let person = workspace.person, let membership = workspace.membership else {
+            // Reloading, offline or choosing a school: an ongoing trip keeps recording. Only a
+            // refusal from the school (expired session, withdrawn access) closes its scope;
+            // another account or school replaces it as soon as it is known.
+            if workspace.accessRevoked { captureController.setScope(nil) }
             return
         }
         // La recharge conserve la même portée. Changer d'école, de compte ou
@@ -508,13 +534,28 @@ struct SchoolRootView: View {
     }
 }
 
+/// The guided welcome is offered at most once a week per membership, across launches.
+/// Only the membership identifier and a date are kept, in the app's own defaults.
+enum SchoolOnboardingDeferral {
+    static let interval: TimeInterval = 7 * 86_400
+    private static func key(_ membershipID: UUID) -> String { "drivy.onboarding.offered.\(membershipID.uuidString.lowercased())" }
+
+    static func isDeferred(_ membershipID: UUID, now: Date = Date(), defaults: UserDefaults = .standard) -> Bool {
+        guard let offered = defaults.object(forKey: key(membershipID)) as? Date else { return false }
+        return now.timeIntervalSince(offered) < interval && offered <= now
+    }
+
+    static func record(_ membershipID: UUID, now: Date = Date(), defaults: UserDefaults = .standard) {
+        defaults.set(now, forKey: key(membershipID))
+    }
+}
+
 /// Le compte : peu de lignes, chacune une action. La gestion de l’école ouvre le portail web.
 private struct SchoolAccountView: View {
     @Bindable var identity: IdentitySession
     let workspace: SchoolWorkspace?
     let manageURL: URL?
     let openProfile: (() -> Void)?
-    let openCaptureHistory: (() -> Void)?
     let openInvitations: (() -> Void)?
     let openJoinSchool: (() -> Void)?
     let signOut: () -> Void
@@ -530,15 +571,11 @@ private struct SchoolAccountView: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.xl) {
                     accountHeading
                     if identity.isAuthenticated {
-                        if openProfile != nil || openCaptureHistory != nil || openInvitations != nil || manageURL != nil {
+                        if openProfile != nil || openInvitations != nil || manageURL != nil {
                             DrivyRowGroup {
                                 if let openProfile {
                                     DrivyNavigationRow(title: "Mon profil", symbol: "person.text.rectangle", action: openProfile)
                                         .accessibilityIdentifier("open-my-profile")
-                                }
-                                if let openCaptureHistory {
-                                    DrivyNavigationRow(title: "Trajets de cet appareil", symbol: "point.topleft.down.to.point.bottomright.curvepath",
-                                        action: openCaptureHistory)
                                 }
                                 if let openInvitations {
                                     DrivyNavigationRow(title: "Invitations", symbol: "envelope", action: openInvitations)
@@ -561,7 +598,7 @@ private struct SchoolAccountView: View {
                                     .accessibilityIdentifier("school-change-school")
                             }
                             if let openJoinSchool {
-                                DrivyNavigationRow(title: "Rejoindre une école", symbol: "envelope.open", action: openJoinSchool)
+                                DrivyNavigationRow(title: "Rejoindre une école", symbol: "number", action: openJoinSchool)
                                     .accessibilityIdentifier("open-join-school")
                             }
                             if let appLock, let biometry = appLock.biometryName {

@@ -1,8 +1,8 @@
 import SwiftUI
 
-enum SchoolHomeTab: Hashable { case session, agenda, learners, lessons, progress }
+enum SchoolHomeTab: Hashable { case session, agenda, learners, trips, lessons, progress }
 
-/// Onglets par rôle : le moniteur conduit (Aujourd’hui, Agenda, Élèves), l’élève suit (Leçons, Progression).
+/// Onglets par rôle : le moniteur conduit (Aujourd’hui, Agenda, Élèves, Trajets), l’élève suit (Leçons, Progression).
 /// La gestion de l’école vit sur le web ; le compte reste derrière l’avatar.
 struct SchoolHomeView: View {
     @Bindable var workspace: SchoolWorkspace
@@ -12,6 +12,8 @@ struct SchoolHomeView: View {
     var agendaClient: SchoolAgendaClient? = nil
     var trainingClient: SchoolTrainingClient? = nil
     var captureController: SchoolCaptureSessionController? = nil
+    /// Rejoindre une école avec un code, quand le compte n’en a encore aucune.
+    var joinSchool: (() -> Void)? = nil
     @Binding var selectedTab: SchoolHomeTab
     @State private var choosesSchool = false
     @State private var dossierPlanningModel: SchoolPlanningWorkspace?
@@ -39,6 +41,14 @@ struct SchoolHomeView: View {
         .onChange(of: captureController?.isCollecting) { wasCollecting, isCollecting in
             if wasCollecting != true && isCollecting == true { selectedTab = .session }
         }
+        .onChange(of: selectedTab) { previous, _ in
+            // A trip the school has confirmed (complete or partial) is over: leaving the live
+            // view closes it, so « Aujourd’hui » shows the day again instead of the ended trip.
+            if previous == .session, let captureController, captureController.state == .saved,
+               let result = captureController.finalizedSyncState, result == .synced || result == .partial {
+                captureController.closeSaved()
+            }
+        }
     }
 
     private func resetScope() {
@@ -48,7 +58,7 @@ struct SchoolHomeView: View {
     // MARK: Moniteur
 
     private var staffSelection: Binding<SchoolHomeTab> {
-        Binding(get: { [.session, .agenda, .learners].contains(selectedTab) ? selectedTab : .session }, set: { selectedTab = $0 })
+        Binding(get: { [.session, .agenda, .learners, .trips].contains(selectedTab) ? selectedTab : .session }, set: { selectedTab = $0 })
     }
 
     private var staffTabs: some View {
@@ -68,6 +78,14 @@ struct SchoolHomeView: View {
                 inviteLearner: inviteLearner, openProfile: openProfile, openPlanning: planningAction, trainingClient: trainingClient)
                 .tabItem { Label("Élèves", systemImage: "person.2") }
                 .tag(SchoolHomeTab.learners)
+            if let agendaClient {
+                NavigationStack {
+                    SchoolTripsView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
+                        .toolbar { contextToolbar }
+                }
+                .tabItem { Label("Trajets", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
+                .tag(SchoolHomeTab.trips)
+            }
         }
     }
 
@@ -76,6 +94,7 @@ struct SchoolHomeView: View {
             Group {
                 if let captureController, captureController.captureID != nil {
                     SchoolCaptureLiveView(controller: captureController, learnerName: captureLearnerName,
+                        closeSaved: { captureController.closeSaved() },
                         returnToLesson: { selectedTab = .agenda })
                 } else {
                     SchoolTodayView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
@@ -193,9 +212,7 @@ struct SchoolHomeView: View {
 
     @ViewBuilder private var schoolSelection: some View {
         if workspace.person?.memberships.isEmpty == true {
-            ContentUnavailableView("Aucune école associée", systemImage: "building.2",
-                description: Text("Demandez à votre école de vous inviter."))
-                .background(DrivyTheme.canvas)
+            SchoolWithoutSchoolView(joinSchool: joinSchool)
         } else {
             SchoolChooserView(workspace: workspace)
         }

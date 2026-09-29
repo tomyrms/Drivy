@@ -4,6 +4,7 @@ import SwiftUI
 struct DrivyApp: App {
     @State private var identity: IdentitySession
     @State private var workspace: SchoolWorkspace?
+    @State private var clients: SchoolHomeClients?
     @State private var appLock = AppLock()
     @State private var offersAppLock = false
     private let configuration: AppConfiguration?
@@ -14,8 +15,13 @@ struct DrivyApp: App {
         self.configuration = configuration
         let identity = IdentitySession(configuration: configuration)
         _identity = State(initialValue: identity)
+        // One transport (one URLSession) for the account reads and the shell's clients.
+        let transport = SchoolURLSessionTransport()
         _workspace = State(initialValue: configuration.map {
-            SchoolWorkspace(api: DrivyAPIClient(baseURL: $0.apiBaseURL, tokenSource: identity))
+            SchoolWorkspace(api: DrivyAPIClient(baseURL: $0.apiBaseURL, tokenSource: identity, transport: transport))
+        })
+        _clients = State(initialValue: configuration.map {
+            SchoolHomeClients(configuration: $0, tokenSource: identity, transport: transport)
         })
     }
 
@@ -40,7 +46,7 @@ struct DrivyApp: App {
     }
 
     private var application: some View {
-            SchoolRootView(configuration: configuration, identity: identity, workspace: workspace)
+            SchoolRootView(configuration: configuration, identity: identity, workspace: workspace, clients: clients)
                 .environment(appLock)
                 .task {
                     await identity.restore()
@@ -52,9 +58,11 @@ struct DrivyApp: App {
                     if previous != .active, current == .active {
                         appLock.didBecomeActive(authenticated: identity.isAuthenticated)
                     }
+                    // Coming back never tears the screen down: the account is re-read silently,
+                    // at most every five minutes, and only a change of rights reloads the school.
                     if previous != .active, current == .active, identity.isAuthenticated,
                        let workspace, workspace.person != nil, !workspace.isLoadingAccount {
-                        Task { await workspace.loadAccount() }
+                        Task { await workspace.refreshAccount() }
                     }
                 }
                 .onChange(of: identity.isAuthenticated) { wasAuthenticated, isAuthenticated in
