@@ -13,6 +13,20 @@ enum SchoolObservationStatus: String, CaseIterable, Sendable, Identifiable {
         case .positive: "Point positif"
         }
     }
+    var symbol: String {
+        switch self {
+        case .attention: "exclamationmark"
+        case .toWorkOn: "xmark"
+        case .positive: "checkmark"
+        }
+    }
+    /// Repère posé d’une tuile pendant le trajet : le serveur n’admet pas de constat sans compétence,
+    /// le libellé garde donc le constat jusqu’à la relecture.
+    init?(markerText: String) {
+        let text = markerText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Self.allCases.first(where: { $0.label == text }) else { return nil }
+        self = value
+    }
 }
 
 extension SchoolPrivateGeoObservation {

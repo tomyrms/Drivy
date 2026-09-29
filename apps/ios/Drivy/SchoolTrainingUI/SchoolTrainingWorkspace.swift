@@ -40,10 +40,12 @@ import Observation
     func invalidate() { invalidated = true; generation = UUID(); progressRequest = UUID(); clear(); isLoading = false; isLoadingMore = false }
     private func clear() { training = nil; lessons = []; nextCursor = nil; progress = nil; competencies = []; seenCursors = []; lessonsLoaded = false }
 
-    func load() async {
+    /// `keepingCurrent` : relecture au retour d’une leçon ; ce qui est affiché reste visible jusqu’à la réponse.
+    func load(keepingCurrent: Bool = false) async {
         guard !invalidated else { return }
         generation = UUID(); progressRequest = UUID(); let request = generation
-        isLoading = true; isLoadingMore = false; errorMessage = nil; progressError = nil
+        isLoading = !keepingCurrent || training == nil; isLoadingMore = false; errorMessage = nil
+        if !keepingCurrent { progressError = nil }
         do {
             try await client.checkScope(scope, membership: membership)
             let value = try await client.reader.training(schoolID: scope.schoolID, id: trainingID)
@@ -52,8 +54,10 @@ import Observation
             training = value
         } catch {
             guard request == generation, !invalidated else { return }
+            isLoading = false
+            if error is CancellationError { return }
             if error as? SchoolAPIError == .notFound { clear() }
-            isLoading = false; fail(error); return
+            fail(error); return
         }
         do {
             let page = try await client.lessons(schoolID: scope.schoolID, trainingID: trainingID, cursor: nil)
@@ -62,11 +66,11 @@ import Observation
             lessons = page.items; nextCursor = page.nextCursor; seenCursors = []; lessonsLoaded = true
         } catch {
             guard request == generation, !invalidated else { return }
-            fail(error)
+            if !(error is CancellationError) { fail(error) }
         }
         guard request == generation, !invalidated, !accessRevoked else { return }
         isLoading = false
-        if hasPedagogicalRole { await loadProgress() }
+        if hasPedagogicalRole { await loadProgress(keepingCurrent: keepingCurrent) }
     }
     func loadMore() async {
         guard !invalidated, !accessRevoked, !isLoading, !isLoadingMore, let cursor = nextCursor else { return }
@@ -78,26 +82,35 @@ import Observation
                   page.items.allSatisfy({ $0.learnerId == learnerID }),
                   Set(lessons.map(\.id)).isDisjoint(with: Set(page.items.map(\.id))) else { throw SchoolAPIError.invalidResponse }
             seenCursors.insert(cursor); lessons.append(contentsOf: page.items); nextCursor = page.nextCursor; isLoadingMore = false
-        } catch { guard request == generation else { return }; isLoadingMore = false; fail(error) }
+        } catch {
+            guard request == generation else { return }
+            isLoadingMore = false
+            if !(error is CancellationError) { fail(error) }
+        }
     }
-    func loadProgress() async {
+    func loadProgress(keepingCurrent: Bool = false) async {
         guard !invalidated, !accessRevoked, hasPedagogicalRole, let training else { return }
         let request = generation; progressRequest = UUID(); let detailRequest = progressRequest
-        progressError = nil; progress = nil; competencies = []
+        progressError = nil
+        if !keepingCurrent { progress = nil; competencies = [] }
         do {
             let value = try await client.reports.progress(schoolID: scope.schoolID, trainingID: trainingID)
             guard Set(value.unobservedCompetencyIds).count == value.unobservedCompetencyIds.count,
                   Set(value.items.map(\.id)).isDisjoint(with: Set(value.unobservedCompetencyIds)) else { throw SchoolAPIError.invalidResponse }
             guard request == generation, detailRequest == progressRequest, !invalidated else { return }
             progress = value
-            let offerings = try await client.collect { try await self.client.catalog.offerings(schoolID: self.scope.schoolID, cursor: $0) }
-            guard let offering = offerings.first(where: { $0.id == training.offeringId }) else { throw SchoolAPIError.notFound }
-            let curricula = try await client.collect { try await self.client.catalog.curricula(schoolID: self.scope.schoolID, cursor: $0) }
-            guard let curriculum = curricula.first(where: { $0.id == offering.curriculumVersionId }) else { throw SchoolAPIError.notFound }
-            guard request == generation, detailRequest == progressRequest, !invalidated else { return }
-            competencies = curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }
+            // Le référentiel ne change pas d’une leçon à l’autre : il n’est relu qu’une fois.
+            if competencies.isEmpty {
+                let offerings = try await client.collect { try await self.client.catalog.offerings(schoolID: self.scope.schoolID, cursor: $0) }
+                guard let offering = offerings.first(where: { $0.id == training.offeringId }) else { throw SchoolAPIError.notFound }
+                let curricula = try await client.collect { try await self.client.catalog.curricula(schoolID: self.scope.schoolID, cursor: $0) }
+                guard let curriculum = curricula.first(where: { $0.id == offering.curriculumVersionId }) else { throw SchoolAPIError.notFound }
+                guard request == generation, detailRequest == progressRequest, !invalidated else { return }
+                competencies = curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }
+            }
         } catch {
             guard request == generation, detailRequest == progressRequest, !invalidated else { return }
+            if error is CancellationError { return }
             if SchoolTrainingAccess.isRevoked(error) { fail(error) }
             else { progressError = SchoolTrainingAccess.message(error) }
         }
@@ -110,3 +123,20 @@ import Observation
     }
 }
 
+/// Les onglets « Leçons » et « Progression » de l’élève montrent la même formation :
+/// ils partagent un seul modèle au lieu de tout relire chacun.
+@MainActor enum SchoolTrainingModelCache {
+    private static var current: SchoolTrainingWorkspace?
+
+    static func model(scope: SchoolCommandScope, membership: SchoolMembership, learnerID: UUID, trainingID: UUID,
+                      client: SchoolTrainingClient) -> (model: SchoolTrainingWorkspace, isNew: Bool) {
+        if let current, current.scope == scope, current.membership == membership, current.learnerID == learnerID,
+           current.trainingID == trainingID, current.client.baseURL == client.baseURL, !current.accessRevoked {
+            return (current, false)
+        }
+        // Un écran encore ouvert garde son propre modèle : il n’est pas invalidé ici.
+        let value =SchoolTrainingWorkspace(scope: scope, membership: membership, learnerID: learnerID, trainingID: trainingID, client: client)
+        current = value
+        return (value, true)
+    }
+}

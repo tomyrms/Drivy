@@ -88,6 +88,8 @@ import Foundation
         let response: SchoolHTTPResponse
         do { response = try await transport.send(request) }
         catch is CancellationError { throw CancellationError() }
+        // Une requête annulée (changement d’onglet, écran fermé) n’est pas une panne réseau.
+        catch let error as URLError where error.code == .cancelled { throw CancellationError() }
         catch { throw SchoolAPIError.unavailable }
         try Task.checkCancellation()
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolAPIError.invalidResponse }

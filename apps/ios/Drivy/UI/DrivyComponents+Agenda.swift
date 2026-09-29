@@ -6,12 +6,14 @@ import SwiftUI
 
 /// Lesson state as shown to people. Same title, symbol and tone everywhere.
 enum DrivyLessonState {
-    case planned, inProgress, completed, cancelled, noShow, unknown
+    case planned, inProgress, toFinish, completed, cancelled, noShow, unknown
 
     init(status: String, start: Date?, end: Date?, now: Date = Date()) {
         switch status {
         case "PLANNED":
-            if let start, let end, start <= now, now < end { self = .inProgress } else { self = .planned }
+            if let start, let end, start <= now, now < end { self = .inProgress }
+            else if let end, end <= now { self = .toFinish }
+            else { self = .planned }
         case "COMPLETED": self = .completed
         case "CANCELLED": self = .cancelled
         case "NO_SHOW": self = .noShow
@@ -23,6 +25,7 @@ enum DrivyLessonState {
         switch self {
         case .planned: "Planifiée"
         case .inProgress: "En cours"
+        case .toFinish: "À terminer"
         case .completed: "Terminée"
         case .cancelled: "Annulée"
         case .noShow: "Absence"
@@ -34,6 +37,7 @@ enum DrivyLessonState {
         switch self {
         case .planned: "calendar"
         case .inProgress: "clock"
+        case .toFinish: "clock.badge.exclamationmark"
         case .completed: "checkmark"
         case .cancelled: "xmark"
         case .noShow: "person.crop.circle.badge.xmark"
@@ -46,12 +50,15 @@ enum DrivyLessonState {
         case .planned, .unknown: .neutral
         case .inProgress: .accent
         case .completed: .success
-        case .cancelled, .noShow: .warning
+        case .toFinish, .cancelled, .noShow: .warning
         }
     }
 
     /// Full badge, for the head of a lesson screen.
     var badge: DrivyStatusBadge { DrivyStatusBadge(title: title, symbol: symbol, tone: tone) }
+
+    /// What a lesson screen flags: a lesson left without outcome, cancelled or missed.
+    var isUnusual: Bool { self == .toFinish || self == .cancelled || self == .noShow }
 
     /// Rows stay quiet for the normal case: a planned lesson carries no badge.
     var rowBadge: DrivyStatusBadge? { self == .planned ? nil : badge }

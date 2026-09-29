@@ -46,13 +46,19 @@ struct SchoolTrainingScreen: View {
         }
         .id(scopeKey)
         .task(id: scopeKey) {
-            if let model, matches(model), model.trainingID == trainingID { return }
-            model?.invalidate(); model = nil
+            if let model, matches(model), model.trainingID == trainingID {
+                // Une requête annulée par un changement d’onglet a pu laisser une erreur : relire sans effacer.
+                if model.errorMessage != nil { await model.load(keepingCurrent: true) }
+                return
+            }
+            model = nil
             guard let person = workspace.person, let membership = workspace.membership else { return }
             let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
                 membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: client.baseURL.absoluteString)
-            let value = SchoolTrainingWorkspace(scope: scope, membership: membership, learnerID: learner.id, trainingID: trainingID, client: client)
-            model = value; await value.load()
+            let shared = SchoolTrainingModelCache.model(scope: scope, membership: membership, learnerID: learner.id,
+                trainingID: trainingID, client: client)
+            model = shared.model
+            if shared.isNew || shared.model.errorMessage != nil { await shared.model.load(keepingCurrent: !shared.isNew) }
         }
         .onChange(of: model?.accessRevoked) { _, revoked in
             if revoked == true { Task { await workspace.loadAccount() } }
@@ -95,11 +101,12 @@ private struct SchoolTrainingContent: View {
             .drivyPageContent()
         }
         .background(DrivyTheme.surface)
-        .refreshable { await model.load() }
+        .refreshable { await model.load(keepingCurrent: true) }
         .accessibilityIdentifier("training-dossier")
-        .sheet(item: $opened, onDismiss: { Task { await model.load() } }) { lesson in
+        .sheet(item: $opened, onDismiss: { Task { await model.load(keepingCurrent: true) } }) { lesson in
             NavigationStack {
-                SchoolLessonReportView(client: model.client.reports, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: learner.displayName)
+                SchoolLessonReportView(client: model.client.reports, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: learner.displayName,
+                    isNextPlanned: lesson.id == model.upcomingLessons.first?.id)
             }
             .tint(DrivyTheme.accent)
         }
@@ -219,7 +226,7 @@ private struct SchoolTrainingLessonRow: View {
             end: SchoolTrainingFormatting.time(lesson.plannedEnd, zone: lesson.timeZone),
             title: SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone),
             details: [lesson.meetingPoint],
-            badge: [.cancelled, .noShow].contains(lesson.drivyState) ? lesson.drivyState.badge : nil)
+            badge: lesson.drivyState.isUnusual ? lesson.drivyState.badge : nil)
     }
 }
 

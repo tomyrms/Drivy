@@ -20,6 +20,11 @@ struct SchoolLesson: Codable, Sendable, Equatable, Identifiable {
     let publicationVersion: Int
     let currentPublishedRevisionId: UUID?
     let commercialRevisionVersion: Int
+    /// Extensions de lecture (hors canon) : absentes d’un serveur plus ancien.
+    var learnerDisplayName: String? = nil
+    var instructorDisplayName: String? = nil
+    /// Sélection commerciale acceptée à la réservation ; lue seulement pour ne pas redemander des conditions déjà acceptées.
+    var commercialSelection: SchoolLessonCommercialSelection? = nil
 
     var startsAt: Date? { Self.date(plannedStart) }
     var endsAt: Date? { Self.date(plannedEnd) }
@@ -40,7 +45,32 @@ struct SchoolLesson: Codable, Sendable, Equatable, Identifiable {
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: value)
     }
+    /// Noms fournis avec la leçon, s’ils existent : aucun nom n’est déduit d’une liste partielle.
+    var providedLearnerName: String? { Self.name(learnerDisplayName) }
+    var providedInstructorName: String? { Self.name(instructorDisplayName) }
+    private static func name(_ value: String?) -> String? {
+        guard let text = value?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty, text.count <= 200 else { return nil }
+        return text
+    }
 }
+
+/// Lecture tolérante : un champ absent ou d’une autre forme n’empêche jamais de lire la leçon.
+struct SchoolLessonCommercialSelection: Codable, Sendable, Equatable {
+    var serviceProductVersionId: UUID?
+    var acceptedTermsVersionId: UUID?
+    enum CodingKeys: String, CodingKey { case serviceProductVersionId, acceptedTermsVersionId }
+    init(serviceProductVersionId: UUID? = nil, acceptedTermsVersionId: UUID? = nil) {
+        self.serviceProductVersionId = serviceProductVersionId; self.acceptedTermsVersionId = acceptedTermsVersionId
+    }
+    init(from decoder: any Decoder) throws {
+        let values = try? decoder.container(keyedBy: CodingKeys.self)
+        serviceProductVersionId = try? values?.decodeIfPresent(UUID.self, forKey: .serviceProductVersionId)
+        acceptedTermsVersionId = try? values?.decodeIfPresent(UUID.self, forKey: .acceptedTermsVersionId)
+    }
+}
+
+/// Les leçons se lisent aussi par pages génériques (dernier lieu de rendez-vous, conditions déjà acceptées).
+extension SchoolLesson: SchoolCatalogRecord {}
 
 enum SchoolAgendaFailure: Error, LocalizedError {
     case unavailable, authentication, forbidden, invalidResponse
@@ -73,12 +103,15 @@ final class SchoolAgendaClient {
         self.baseURL = baseURL; self.tokenSource = tokenSource; self.transport = transport
     }
 
-    func lessons(schoolID: UUID, from: Date, to: Date, cursor: String?) async throws -> SchoolPage<SchoolLesson> {
+    /// `instructorMembershipID` : seulement les leçons de ce moniteur (filtre relu par le serveur).
+    func lessons(schoolID: UUID, from: Date, to: Date, cursor: String?, instructorMembershipID: UUID? = nil) async throws -> SchoolPage<SchoolLesson> {
         let iso = ISO8601DateFormatter()
         var query = [URLQueryItem(name: "from", value: iso.string(from: from)), URLQueryItem(name: "to", value: iso.string(from: to)), URLQueryItem(name: "limit", value: "100")]
+        if let instructorMembershipID { query.append(URLQueryItem(name: "instructorMembershipId", value: instructorMembershipID.uuidString.lowercased())) }
         if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
         let result: SchoolPage<SchoolLesson> = try await read(["v1", "schools", schoolID.uuidString, "lessons"], query: query)
-        guard result.items.allSatisfy({ valid($0, schoolID: schoolID) }), Set(result.items.map(\.id)).count == result.items.count else { throw SchoolAgendaFailure.invalidResponse }
+        guard result.items.allSatisfy({ valid($0, schoolID: schoolID) && (instructorMembershipID == nil || $0.instructorMembershipId == instructorMembershipID) }),
+              Set(result.items.map(\.id)).count == result.items.count else { throw SchoolAgendaFailure.invalidResponse }
         return result
     }
 

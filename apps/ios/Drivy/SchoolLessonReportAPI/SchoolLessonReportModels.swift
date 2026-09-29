@@ -1,9 +1,19 @@
 import Foundation
 
-struct SchoolLessonGoal: Codable, Sendable, Equatable {
+/// Un objectif ; l’identifiant local sert seulement à la liste modifiable et n’est jamais envoyé.
+struct SchoolLessonGoal: Codable, Sendable, Equatable, Identifiable {
+    var id = UUID()
     var label: String
     var competencyId: UUID?
     var context: String?
+
+    init(label: String, competencyId: UUID? = nil, context: String? = nil) {
+        self.label = label; self.competencyId = competencyId; self.context = context
+    }
+    enum CodingKeys: String, CodingKey { case label, competencyId, context }
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.label == rhs.label && lhs.competencyId == rhs.competencyId && lhs.context == rhs.context
+    }
 }
 struct SchoolPlannedWaypoint: Codable, Sendable, Equatable, Identifiable {
     let id: UUID
@@ -85,22 +95,6 @@ struct SchoolReportRevision: SchoolCatalogRecord {
         try c.encode(correctionReason, forKey: .correctionReason); try c.encodeNil(forKey: .capturePublication); try c.encode([UUID](), forKey: .textObservations)
     }
 }
-struct SchoolLessonCharge: Codable, Sendable, Equatable, Identifiable {
-    let id: UUID, schoolId: UUID, accountId: UUID
-    let version: Int
-    let kind: String
-    let amountSignedCents: Int64
-    let reason: String?
-}
-struct SchoolLessonAccount: Codable, Sendable, Equatable, Identifiable {
-    let id: UUID, ownerId: UUID
-    let ownerType: String
-    let lessonId: UUID?
-    let version: Int
-    let currency: String
-    let plannedPriceCents: Int64, chargeCents: Int64, netReceivedCents: Int64, balanceCents: Int64
-    let charges: [SchoolLessonCharge]
-}
 struct SchoolReportProgressItem: Codable, Sendable, Equatable, Identifiable {
     let competencyId: UUID, sourceLessonId: UUID, sourceRevisionId: UUID
     let label: String, level: String, context: String, observedAt: String
@@ -150,4 +144,24 @@ struct SchoolUpdateSharing: Encodable, Sendable {
     let reportPrivate: Bool
     let captureHidden: Bool
     let privateObservationIds: [UUID]
+}
+
+/// AP30 : le moniteur atteste avoir vu l’original du permis d’élève. Aucune date de validité n’est
+/// inventée : sans date lue sur la pièce, `validUntil` est omis (le serveur l’enregistre à `null`).
+/// Le contrôleur et l’heure sont imposés par le serveur.
+struct SchoolRecordPermitCheck: Encodable, Sendable {
+    let operationId: UUID
+    let physicalSeen: Bool
+    let categoryCode: String
+    let decision: String
+
+    static func seen(operationId: UUID, categoryCode: String) -> SchoolRecordPermitCheck {
+        SchoolRecordPermitCheck(operationId: operationId, physicalSeen: true, categoryCode: categoryCode, decision: "APPROVED")
+    }
+}
+
+/// AP44 : absence de l’élève, notée après la fin prévue du rendez-vous.
+struct SchoolMarkNoShow: Encodable, Sendable {
+    let operationId: UUID
+    let reason: String
 }

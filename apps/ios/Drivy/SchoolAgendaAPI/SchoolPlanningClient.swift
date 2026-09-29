@@ -93,6 +93,7 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         guard command.kind.isPlanning, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,
               let object = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any],
               UUID(uuidString: object["operationId"] as? String ?? "") == command.id else { throw SchoolPlanningFailure.invalidResponse }
+        if command.kind == .startLessonNow { _ = try await startNow(command); return }
         var path: [String]
         switch command.kind {
         case .createLesson: path = ["lessons"]
@@ -115,10 +116,26 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         // AP72 confirms both the operation and its target; a bare HTTP success is insufficient.
         _ = try await receipt(for: command)
     }
+    /// « Démarrer une leçon » (extension start-now) : le serveur fixe le début à maintenant, la durée, la prestation
+    /// courante et le moniteur appelant, puis renvoie la leçon. La leçon renvoyée tient lieu de preuve ;
+    /// une réponse perdue se vérifie ensuite par le reçu AP72.
+    func startNow(_ command: PendingSchoolCommand) async throws -> SchoolLesson {
+        guard command.kind == .startLessonNow, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,
+              let trainingID = command.routeResourceID,
+              let object = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any],
+              UUID(uuidString: object["operationId"] as? String ?? "") == command.id else { throw SchoolPlanningFailure.invalidResponse }
+        let lesson: SchoolLesson = try await request(command.scope.schoolID, ["lessons", "start-now"], command: command, statuses: [200, 201])
+        guard lesson.schoolId == command.scope.schoolID, lesson.trainingId == trainingID, lesson.status == "PLANNED",
+              lesson.instructorMembershipId == command.scope.membershipID, lesson.version > 0,
+              let start = lesson.startsAt, let end = lesson.endsAt, end > start,
+              abs(start.timeIntervalSinceNow) < 3_600 else { throw SchoolPlanningFailure.invalidResponse }
+        return lesson
+    }
     private struct MutationAcknowledgement: Decodable { }
     private struct Envelope<Value: Decodable>: Decodable { let data: Value; let requestId: String; let serverTime: String }
-    private struct Problem: Decodable { let code: String }
-    private func request<Value: Decodable>(_ schoolID: UUID, _ path: [String], query: [URLQueryItem] = [], command: PendingSchoolCommand? = nil) async throws -> Value {
+    private struct Problem: Decodable { let code: String; let title: String? }
+    private func request<Value: Decodable>(_ schoolID: UUID, _ path: [String], query: [URLQueryItem] = [], command: PendingSchoolCommand? = nil,
+                                          statuses: Set<Int>? = nil) async throws -> Value {
         guard DrivyAPIClient.permits(baseURL) else { throw SchoolPlanningFailure.invalidResponse }
         var url = baseURL
         for part in ["v1", "schools", schoolID.uuidString] + path { url.appendPathComponent(part) }
@@ -148,11 +165,9 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolPlanningFailure.invalidResponse }
         let contentType = response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased()
         let expectedStatus = command.map { $0.resourceVersion == 0 ? 201 : 200 } ?? 200
-        guard response.status == expectedStatus else {
-            let code: String?
-            if contentType == "application/problem+json" { code = try? JSONDecoder().decode(Problem.self, from: response.data).code }
-            else { code = nil }
-            throw Self.failure(response.status, code)
+        guard (statuses ?? [expectedStatus]).contains(response.status) else {
+            let problem = contentType == "application/problem+json" ? (try? JSONDecoder().decode(Problem.self, from: response.data)) : nil
+            throw Self.failure(response.status, problem?.code, title: problem?.title)
         }
         guard contentType == "application/json" else { throw SchoolPlanningFailure.invalidResponse }
         do {
@@ -161,7 +176,7 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             return result.data
         } catch { throw SchoolPlanningFailure.invalidResponse }
     }
-    private static func failure(_ status: Int, _ code: String?) -> SchoolPlanningFailure {
+    static func failure(_ status: Int, _ code: String?, title: String? = nil) -> SchoolPlanningFailure {
         if status == 401 { return .unauthorized }; if status == 403 { return .forbidden }
         if status == 404 { return .notFound }; if status == 412 && code == "VERSION_CONFLICT" { return .conflict }
         let messages = [
@@ -191,6 +206,12 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             "INVALID_REQUEST": "Vérifiez les informations saisies avant de confirmer."
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }
+        // Tout autre refus 4xx motivé par l’école est définitif : son explication (en français) est affichée.
+        // Un identifiant d’opération déjà utilisé reste à vérifier.
+        if (400...499).contains(status), status != 429, let code, code != "IDEMPOTENCY_MISMATCH" {
+            let text = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return .rejected(text.isEmpty || text.count > 300 ? "L’école a refusé cette demande. Vérifiez les informations puis réessayez." : text)
+        }
         return status >= 500 || status == 429 ? .unavailable : .invalidResponse
     }
 }
