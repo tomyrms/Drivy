@@ -4,7 +4,7 @@
  * Anything else is refused before an access token is ever used: this is not an open proxy.
  */
 export type SchoolMethod = 'GET' | 'POST' | 'PATCH' | 'PUT';
-type QueryKey = 'limit' | 'cursor' | 'noticeVersionId' | 'learnerId' | 'instructorMembershipId' | 'from' | 'to';
+type QueryKey = 'limit' | 'cursor' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to';
 export interface SchoolRoute {
   readonly method: SchoolMethod;
   /** Literal segments after the school identifier; ':id' stands for one UUID. */
@@ -62,6 +62,19 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'GET', segments: ['closures'], query: [...list, 'instructorMembershipId', 'from', 'to'] },
   { method: 'POST', segments: ['closures'], bodyLimit: 2_048 },
   { method: 'POST', segments: ['closures', ':id', 'remove'], ifMatch: true, bodyLimit: 2_048 },
+  // Dossier de l'élève, équipe et module GPS (contrats de la branche claude/api-corrections ; noms de champs à confirmer).
+  { method: 'POST', segments: ['members', ':id', 'deactivate'], ifMatch: true, bodyLimit: 8_192 },
+  { method: 'POST', segments: ['learners', ':id', 'archive'], ifMatch: true, bodyLimit: 8_192 },
+  { method: 'POST', segments: ['trainings', ':id', 'transition'], ifMatch: true, bodyLimit: 8_192 },
+  { method: 'POST', segments: ['trainings', ':id', 'assignments', ':id', 'end'], ifMatch: true, bodyLimit: 2_048 },
+  { method: 'PUT', segments: ['modules'], ifMatch: true, bodyLimit: 2_048 },
+  // Contrôle du permis : l'historique se lit, la décision se consigne (If-Match = version de la formation).
+  { method: 'GET', segments: ['trainings', ':id', 'permit-checks'], query: list },
+  { method: 'POST', segments: ['trainings', ':id', 'permit-checks'], ifMatch: true, bodyLimit: 8_192 },
+  // Lectures seules : agenda de l'école, progression et bilans publiés.
+  { method: 'GET', segments: ['lessons'], query: [...list, 'from', 'to', 'trainingId', 'instructorMembershipId'] },
+  { method: 'GET', segments: ['lessons', ':id', 'reports'], query: list },
+  { method: 'GET', segments: ['trainings', ':id', 'progress'] },
 ];
 
 const uuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -70,6 +83,7 @@ const queryRules: Record<QueryKey, RegExp> = {
   cursor: /^[A-Za-z0-9_-]{1,6000}$/,
   noticeVersionId: uuid,
   learnerId: uuid,
+  trainingId: uuid,
   instructorMembershipId: uuid,
   from: /^\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:\d{2})$/,
   to: /^\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:\d{2})$/,

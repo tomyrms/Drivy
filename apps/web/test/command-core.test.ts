@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
-  classifyFailure, commandHeaders, commandMessage, commandSpecs, createCommand, instantToSchoolTime, isEmail, parseCents, parseMetadata,
-  profilePolicyProblem, receiptMatches, schoolTimeToInstant, toMetadata, type ProfileRule,
+  classifyFailure, commandHeaders, commandMessage, commandSpecs, createCommand, instantToSchoolTime, isEmail, latestPermit, matchesSearch, normalizeSearch,
+  parseCents, parseMetadata, permitBody, permitProblem, permitState, profilePolicyProblem, receiptMatches, schoolTimeToInstant, toMetadata,
+  trainingTransitions, transitionProblem, type PermitDraft, type ProfileRule,
 } from '../client/command-core.js';
 
 const schoolId = randomUUID();
@@ -128,6 +129,80 @@ describe('Invitation par code élève', () => {
     expect(stored).not.toContain('training');
     expect(parseMetadata({ ...JSON.parse(stored), code: 'K7Q4-MX2P' })).toBeNull();
     expect(parseMetadata({ ...JSON.parse(stored), training: { offeringId } })).toBeNull();
+  });
+});
+
+describe('Dossier de l’élève : formation, permis, archivage, accès', () => {
+  const training = randomUUID();
+
+  test('une formation active peut être suspendue, terminée ou annulée ; une formation close ne change plus', () => {
+    expect(trainingTransitions('ACTIVE').map(item => item.target)).toEqual(['PAUSED', 'COMPLETED', 'CANCELLED']);
+    expect(trainingTransitions('PAUSED').map(item => item.target)).toEqual(['ACTIVE', 'COMPLETED', 'CANCELLED']);
+    expect(trainingTransitions('COMPLETED')).toEqual([]);
+    expect(trainingTransitions('CANCELLED')).toEqual([]);
+    const cancel = trainingTransitions('ACTIVE').find(item => item.target === 'CANCELLED')!;
+    expect(transitionProblem(cancel, '   ')).not.toBeNull();
+    expect(transitionProblem(cancel, 'L’élève a déménagé.')).toBeNull();
+    expect(transitionProblem(trainingTransitions('ACTIVE')[0]!, '')).toBeNull();
+    expect(transitionProblem(cancel, 'x'.repeat(1001))).not.toBeNull();
+  });
+
+  test('les nouvelles commandes visent la bonne ressource avec If-Match et ne se rejouent que sur reçu concordant', () => {
+    const assignment = randomUUID(), learner = randomUUID(), member = randomUUID();
+    for (const [kind, path, id, type, resource] of [
+      ['transitionTraining', `trainings/${training}/transition`, training, 'TRANSITION_TRAINING', 'Training'],
+      ['endAssignment', `trainings/${training}/assignments/${assignment}/end`, assignment, 'END_ASSIGNMENT', 'Assignment'],
+      ['archiveLearner', `learners/${learner}/archive`, learner, 'ARCHIVE_LEARNER', 'Learner'],
+      ['deactivateMember', `members/${member}/deactivate`, member, 'DEACTIVATE_MEMBER', 'Member'],
+    ] as const) {
+      const command = createCommand({ schoolId, kind, path, ifMatch: 4, resourceId: id, resourceVersion: 4, body: { reason: 'Motif' } });
+      expect(commandHeaders(command, 'csrf')['If-Match']).toBe('"4"');
+      const receipt = { operationId: command.operationId, commandType: type, resourceType: resource, resourceId: id, committedAt: '2026-09-29T08:00:00Z', resourceVersion: 5 };
+      expect(receiptMatches(command, receipt), kind).toBe(true);
+      expect(receiptMatches(command, { ...receipt, resourceId: randomUUID() }), kind).toBe(false);
+      expect(() => createCommand({ schoolId, kind, path, body: {}, resourceVersion: 4 }), kind).toThrow();
+    }
+    const modules = createCommand({ schoolId, kind: 'updateModules', path: 'modules', ifMatch: 9, resourceVersion: 9, body: { gpsEnabled: false } });
+    expect(commandSpecs.updateModules.method).toBe('PUT');
+    expect(receiptMatches(modules, { operationId: modules.operationId, commandType: 'UPDATE_SCHOOL_MODULES', resourceType: 'School', resourceId: schoolId,
+      committedAt: '2026-09-29T08:00:00Z', resourceVersion: 10 })).toBe(true);
+    const permit = createCommand({ schoolId, kind: 'recordPermitCheck', path: `trainings/${training}/permit-checks`, ifMatch: 3, resourceVersion: 0,
+      body: permitBody({ physicalSeen: true, validUntil: '', decision: 'APPROVED', reason: '' }, 'B') });
+    expect(commandHeaders(permit, 'csrf')['If-Match']).toBe('"3"');
+    expect(commandSpecs.recordPermitCheck).toMatchObject({ target: 'created', expectedStatus: 200 });
+  });
+
+  test('contrôle du permis : original vu et date en vigueur pour approuver, motif pour refuser', () => {
+    const draft = (change: Partial<PermitDraft>): PermitDraft => ({ physicalSeen: true, validUntil: '2031-05-04', decision: 'APPROVED', reason: '', ...change });
+    const today = '2026-09-29';
+    expect(permitProblem(draft({}), today)).toBeNull();
+    expect(permitProblem(draft({ validUntil: '' }), today)).toBeNull();
+    expect(permitProblem(draft({ physicalSeen: false }), today)).not.toBeNull();
+    expect(permitProblem(draft({ validUntil: '2026-09-28' }), today)).not.toBeNull();
+    expect(permitProblem(draft({ validUntil: '2026-09-29' }), today)).toBeNull();
+    expect(permitProblem(draft({ validUntil: '2026-02-30' }), today)).not.toBeNull();
+    expect(permitProblem(draft({ decision: 'REJECTED', physicalSeen: false }), today)).not.toBeNull();
+    expect(permitProblem(draft({ decision: 'REJECTED', physicalSeen: false, reason: 'Permis provisoire' }), today)).toBeNull();
+    expect(permitBody(draft({ validUntil: '' }), 'B')).toEqual({ documentId: null, physicalSeen: true, categoryCode: 'B', validUntil: null, decision: 'APPROVED', reason: null });
+  });
+
+  test('l’état du permis est celui de la dernière décision de la catégorie', () => {
+    expect(permitState(undefined)).toBe('none');
+    expect(permitState({ decision: 'APPROVED', isExpired: false })).toBe('valid');
+    expect(permitState({ decision: 'APPROVED', isExpired: true })).toBe('expired');
+    expect(permitState({ decision: 'REJECTED', isExpired: false })).toBe('rejected');
+    const history = [{ categoryCode: 'B', n: 1 }, { categoryCode: 'A', n: 2 }, { categoryCode: 'B', n: 3 }];
+    expect(latestPermit(history, 'B')?.n).toBe(3);
+    expect(latestPermit(history, 'C')).toBeUndefined();
+  });
+
+  test('recherche insensible à la casse et aux accents', () => {
+    expect(normalizeSearch('  Éloïse ')).toBe('eloise');
+    expect(matchesSearch(['Éloïse Müller', 'eloise@example.test'], 'eloi')).toBe(true);
+    expect(matchesSearch(['Éloïse Müller', null], 'muller')).toBe(true);
+    expect(matchesSearch(['Éloïse Müller', 'eloise@example.test'], 'EXAMPLE')).toBe(true);
+    expect(matchesSearch(['Éloïse Müller'], 'zoe')).toBe(false);
+    expect(matchesSearch(['Éloïse'], '   ')).toBe(true);
   });
 });
 

@@ -13,7 +13,8 @@ export type CommandKind =
   | 'createProfilePolicy' | 'publishProfilePolicy'
   | 'createOffering' | 'createCurriculum' | 'createCatalogPolicy' | 'updateMember'
   | 'createCommercialTerms' | 'createServiceProduct'
-  | 'createTraining' | 'createAssignment'
+  | 'createTraining' | 'createAssignment' | 'transitionTraining' | 'endAssignment' | 'archiveLearner' | 'deactivateMember'
+  | 'updateModules' | 'recordPermitCheck'
   | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
 
@@ -45,6 +46,12 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   createServiceProduct: { operationType: 'CREATE_SERVICE_PRODUCT', resourceType: 'ServiceProductVersion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une prestation' },
   createTraining: { operationType: 'CREATE_TRAINING', resourceType: 'Training', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ouverture d’une formation' },
   createAssignment: { operationType: 'CREATE_ASSIGNMENT', resourceType: 'Assignment', target: 'created', method: 'POST', expectedStatus: 201, label: 'Affectation d’un moniteur' },
+  transitionTraining: { operationType: 'TRANSITION_TRAINING', resourceType: 'Training', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Changement d’état d’une formation' },
+  endAssignment: { operationType: 'END_ASSIGNMENT', resourceType: 'Assignment', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Fin d’une affectation' },
+  archiveLearner: { operationType: 'ARCHIVE_LEARNER', resourceType: 'Learner', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Archivage d’un dossier élève' },
+  deactivateMember: { operationType: 'DEACTIVATE_MEMBER', resourceType: 'Member', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait de l’accès d’un membre' },
+  updateModules: { operationType: 'UPDATE_SCHOOL_MODULES', resourceType: 'School', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Modification des modules de l’école' },
+  recordPermitCheck: { operationType: 'RECORD_PERMIT_CHECK', resourceType: 'PermitCheck', target: 'created', method: 'POST', expectedStatus: 200, label: 'Contrôle du permis' },
   createAvailabilityRule: { operationType: 'CREATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ajout d’une disponibilité' },
   updateAvailabilityRule: { operationType: 'UPDATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'PUT', expectedStatus: 200, label: 'Modification d’une disponibilité' },
   removeAvailabilityRule: { operationType: 'REMOVE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une disponibilité' },
@@ -351,4 +358,56 @@ export function profilePolicyProblem(rules: readonly ProfileRule[]): string | nu
   if (!rules.some(rule => rule.field === 'firstName') || !rules.some(rule => rule.field === 'lastName')) return 'Le prénom et le nom sont toujours demandés.';
   for (const rule of rules) { const problem = profileRuleProblem(rule); if (problem) return problem; }
   return null;
+}
+
+/* ---------- Dossier de l'élève : formation, permis, recherche ---------- */
+
+export type TrainingStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+export interface TrainingTransition { readonly target: TrainingStatus; readonly label: string; readonly reasonRequired: boolean; readonly danger: boolean }
+const transitions: Readonly<Record<'pause' | 'resume' | 'complete' | 'cancel', TrainingTransition>> = {
+  pause: { target: 'PAUSED', label: 'Mettre en pause', reasonRequired: false, danger: false },
+  resume: { target: 'ACTIVE', label: 'Reprendre', reasonRequired: false, danger: false },
+  complete: { target: 'COMPLETED', label: 'Terminer', reasonRequired: false, danger: false },
+  cancel: { target: 'CANCELLED', label: 'Annuler la formation', reasonRequired: true, danger: true },
+};
+/** Changes of state a training in this state may take; a completed or cancelled training is closed. */
+export function trainingTransitions(status: TrainingStatus): readonly TrainingTransition[] {
+  if (status === 'ACTIVE') return [transitions.pause, transitions.complete, transitions.cancel];
+  if (status === 'PAUSED') return [transitions.resume, transitions.complete, transitions.cancel];
+  return [];
+}
+export function transitionProblem(transition: TrainingTransition, reason: string): string | null {
+  if (characters(reason) > 1000) return '1 000 caractères au plus.';
+  return transition.reasonRequired && !filled(reason, 1000) ? 'Indiquez le motif (1 000 caractères au plus).' : null;
+}
+
+export interface PermitDraft { physicalSeen: boolean; validUntil: string; decision: 'APPROVED' | 'REJECTED'; reason: string }
+/** Same rules as the API (AP30): an approval needs the original seen and a date still in force; a refusal needs a reason. */
+export function permitProblem(draft: PermitDraft, today: string): string | null {
+  if (draft.validUntil !== '' && !isCivilDate(draft.validUntil)) return 'Indiquez une date valide.';
+  if (characters(draft.reason) > 2000) return '2 000 caractères au plus.';
+  if (draft.decision === 'REJECTED') return filled(draft.reason, 2000) ? null : 'Indiquez le motif du refus.';
+  if (!draft.physicalSeen) return 'Attestez avoir vu l’original du permis.';
+  if (draft.validUntil !== '' && draft.validUntil < today) return 'Cette date est dépassée : le permis n’est plus valable.';
+  return null;
+}
+export function permitBody(draft: PermitDraft, categoryCode: string): Record<string, unknown> {
+  return { documentId: null, physicalSeen: draft.physicalSeen, categoryCode, validUntil: draft.validUntil === '' ? null : draft.validUntil,
+    decision: draft.decision, reason: draft.reason.trim() === '' ? null : draft.reason.trim() };
+}
+export type PermitState = 'none' | 'valid' | 'expired' | 'rejected';
+export function permitState(latest: { decision: 'APPROVED' | 'REJECTED'; isExpired: boolean } | undefined): PermitState {
+  if (!latest) return 'none';
+  return latest.decision === 'REJECTED' ? 'rejected' : latest.isExpired ? 'expired' : 'valid';
+}
+/** The history is in recording order: the last decision of the category is the current one. */
+export function latestPermit<T extends { categoryCode: string }>(history: readonly T[], categoryCode: string): T | undefined {
+  return [...history].reverse().find(item => item.categoryCode === categoryCode);
+}
+
+/** Lower case without accents, so « eleve » finds « Élève ». */
+export const normalizeSearch = (value: string): string => value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('fr').trim();
+export function matchesSearch(fields: readonly (string | null | undefined)[], query: string): boolean {
+  const wanted = normalizeSearch(query);
+  return wanted === '' || fields.some(field => field != null && normalizeSearch(field).includes(wanted));
 }

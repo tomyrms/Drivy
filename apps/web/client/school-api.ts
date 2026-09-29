@@ -87,7 +87,36 @@ export const closureSchema = z.object({
   id, schoolId: id, version, instructorMembershipId: id, startsAt: timestamp, endsAt: timestamp, reason: z.string().nullable(),
 });
 
+/** Contrôle du permis (AP29/AP30) : la dernière décision d'une formation est son état courant. */
+export const permitSchema = z.object({
+  id, schoolId: id, version, trainingId: id, documentId: id.nullable(), physicalSeen: z.boolean(), categoryCode: z.string(),
+  validUntil: civil.nullable(), decision: z.enum(['APPROVED', 'REJECTED']), reviewerMembershipId: id, reviewedAt: timestamp,
+  reason: z.string().nullable(), isExpired: z.boolean(),
+});
+/** Leçon planifiée : lecture seule dans la gestion (la planification se fait dans l'app). */
+export const lessonSchema = z.object({
+  id, schoolId: id, version, trainingId: id, learnerId: id, instructorMembershipId: id, plannedStart: timestamp, plannedEnd: timestamp,
+  timeZone: z.string(), meetingPoint: z.string(), status: z.enum(['PLANNED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']),
+  permitWarning: z.boolean().optional(), currentPublishedRevisionId: id.nullable().optional(),
+});
+export const observationLevels = ['DISCOVERING', 'GUIDED', 'INDEPENDENT'] as const;
+export const progressSchema = z.object({
+  trainingId: id, computedAt: timestamp, unobservedCompetencyIds: z.array(id).max(500),
+  items: z.array(z.object({ competencyId: id, label: z.string(), level: z.enum(observationLevels), context: z.string(), observedAt: timestamp,
+    sourceLessonId: id, sourceRevisionId: id })).max(500),
+});
+/** Bilan publié d'une leçon (révision immuable). */
+export const reportSchema = z.object({
+  id, schoolId: id, version, lessonId: id, sequence: z.number().int().positive(), authorMembershipId: id, publishedAt: timestamp,
+  workedOn: z.string(), observationText: z.string(), nextStep: z.string(), correctionReason: z.string().nullable().optional(),
+  observations: z.array(z.object({ competencyId: id, level: z.enum(observationLevels), context: z.string() })).max(200),
+});
+
 export type School = z.infer<typeof schoolSchema>;
+export type Permit = z.infer<typeof permitSchema>;
+export type Lesson = z.infer<typeof lessonSchema>;
+export type Progress = z.infer<typeof progressSchema>;
+export type Report = z.infer<typeof reportSchema>;
 export type Learner = z.infer<typeof learnerSchema>;
 export type Training = z.infer<typeof trainingSchema>;
 export type Assignment = z.infer<typeof assignmentSchema>;

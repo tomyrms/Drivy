@@ -56,7 +56,28 @@ describe('Liste blanche des routes de gestion', () => {
     expect(matchSchoolRoute('PUT', `/schools/${school}/availability-rules/${school}`, '')?.route.ifMatch).toBe(true);
     expect(matchSchoolRoute('GET', `/schools/${school}/trainings`, `?learnerId=${school}`)?.query).toBe(`?learnerId=${school}`);
     expect(matchSchoolRoute('GET', `/schools/${school}/closures`, '?from=2026-09-28T00:00:00Z')?.query).toBe('?from=2026-09-28T00%3A00%3A00Z');
+    // Dossier de l'élève, équipe, module GPS, permis, agenda et progression (lecture seule pour ces trois derniers).
+    const training = randomUUID(), assignment = randomUUID();
+    for (const [method, path, ifMatch] of [
+      ['POST', `/schools/${school}/members/${school}/deactivate`, true], ['POST', `/schools/${school}/learners/${school}/archive`, true],
+      ['POST', `/schools/${school}/trainings/${training}/transition`, true], ['POST', `/schools/${school}/trainings/${training}/assignments/${assignment}/end`, true],
+      ['PUT', `/schools/${school}/modules`, true], ['POST', `/schools/${school}/trainings/${training}/permit-checks`, true],
+      ['GET', `/schools/${school}/trainings/${training}/permit-checks`, undefined], ['GET', `/schools/${school}/lessons/${school}/reports`, undefined],
+      ['GET', `/schools/${school}/trainings/${training}/progress`, undefined],
+    ] as const) {
+      const match = matchSchoolRoute(method, path, '');
+      expect(match?.path, `${method} ${path}`).toBe(`/v1${path}`);
+      expect(match?.route.ifMatch === true, `${method} ${path}`).toBe(ifMatch === true);
+    }
+    expect(matchSchoolRoute('GET', `/schools/${school}/lessons`, `?from=2026-09-28T00:00:00Z&to=2026-10-05T00:00:00Z&instructorMembershipId=${school}&trainingId=${training}&limit=100`)?.query)
+      .toBe(`?from=2026-09-28T00%3A00%3A00Z&to=2026-10-05T00%3A00%3A00Z&instructorMembershipId=${school}&trainingId=${training}&limit=100`);
     for (const [method, path, search] of [
+      ['GET', `/schools/${school}/lessons`, '?trainingId=1'],
+      ['GET', `/schools/${school}/lessons`, '?status=PLANNED'],
+      ['POST', `/schools/${school}/lessons/${school}/cancel`, ''],
+      ['GET', `/schools/${school}/lessons/${school}`, ''],
+      ['PATCH', `/schools/${school}/members/${school}/deactivate`, ''],
+      ['POST', `/schools/${school}/trainings/${training}/assignments/${assignment}/remove`, ''],
       ['GET', `/schools/${school}/report-drafts`, ''],
       ['GET', `/schools/${school}/trainings`, '?q=1'],
       ['DELETE', `/schools/${school}`, ''],
@@ -79,7 +100,7 @@ describe('Liste blanche des routes de gestion', () => {
   test('un chemin hors liste ne consomme jamais le jeton de la session', async () => {
     const gateway = vi.fn<SchoolGateway>(async () => ({ status: 200, body: envelope({}) }));
     const h = await harness(gateway); await h.login();
-    for (const url of [`/app/bff/schools/${school}/lessons`, `/app/bff/schools/${school}/report-drafts`, `/app/bff/schools/x/setup`,
+    for (const url of [`/app/bff/schools/${school}/lessons/${school}`, `/app/bff/schools/${school}/report-drafts`, `/app/bff/schools/x/setup`,
       `/app/bff/schools/${school}/offerings?q=1`, `/app/bff/schools/${school}/captures`]) {
       expect((await h.get(url)).statusCode, url).toBe(404);
     }
@@ -253,7 +274,7 @@ test('échange HTTP réel : méthode, Bearer, Idempotency-Key, If-Match et ETag,
     expect(result).toMatchObject({ status: 200, etag: '"8"' }); expect(seen).toBe(true);
     expect((await gateway({ method: 'GET', path: `/v1/schools/${school}/setup`, query: '' }, access)).etag).toBeUndefined();
     await expect(gateway({ method: 'GET', path: `/v1/schools/${school}/readiness`, query: '' }, access)).rejects.toThrow();
-    await expect(gateway({ method: 'GET', path: `/v1/schools/${school}/lessons`, query: '' }, access)).rejects.toThrow();
+    await expect(gateway({ method: 'GET', path: `/v1/schools/${school}/report-drafts`, query: '' }, access)).rejects.toThrow();
     await expect(gateway({ method: 'GET', path: '/v1/me', query: '' }, access)).rejects.toThrow();
     await expect(gateway({ method: 'POST', path: `/v1/schools/${school}/offerings`, query: '', body: {} }, access)).rejects.toThrow();
   } finally { await api.close(); }
