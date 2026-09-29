@@ -1,0 +1,84 @@
+{
+  "checkedAtUtc": "2026-09-29T13:04:52Z",
+  "environment": "homelab",
+  "commit": "7b2d8aa9f4ce745cb4df13a4e2fa720a85ab6c90",
+  "archiveSHA256": "3376678fc4ac368b4d2f97035a1a90b8ee797f2c559ad2ea77f50da94380e9cd",
+  "migrations": {
+    "count": 18,
+    "last": "018_invitation_trainings.sql",
+    "verifiedAgainst": "public.drivy_migrations"
+  },
+  "databaseBackups": [
+    {
+      "database": "drivy_refonte",
+      "path": "/root/drivy_refonte-before-7b2d8aa9f4ce745cb4df13a4e2fa720a85ab6c90-20260929T125627Z-2b7bff726c1b.dump",
+      "root0600": true,
+      "pgRestoreListVerified": true
+    },
+    {
+      "database": "drivy_identity",
+      "path": "/root/drivy-identity-before-7b2d8aa9f4ce745cb4df13a4e2fa720a85ab6c90-20260929T125746Z-4a0b1601a86b.dump",
+      "root0600": true,
+      "pgRestoreListVerified": true
+    }
+  ],
+  "backupRestoreExercisePerformed": false,
+  "webDatabaseMigrationRequiredByRelease": false,
+  "services": {
+    "drivy-refonte-api": "active",
+    "drivy-refonte-web": "active",
+    "drivy-refonte-identity": "active"
+  },
+  "apiAndWebProcessDirectoriesMatchCommit": true,
+  "internalApiReadyHttpStatus": 200,
+  "internalApiProbeUsesConfiguredBindAddress": true,
+  "publicHttp": {
+    "/refonte/v1/me": 401,
+    "/app/": 200,
+    "/refonte/health/ready": 404,
+    "/identity/admin/": 404
+  },
+  "commandUserAgent": "DrivyReleaseVerification/1.0",
+  "defaultPythonUserAgentRejectedByCloudflare": true,
+  "webProxy": {
+    "trustedProxyEnabledInRunningProcess": true,
+    "onlyEnvironmentKeyChanged": "WEB_TRUST_PROXY",
+    "ingressAllowsOnlyCaddyAndLoopback": true,
+    "caddyUsesDefaultForwardedHeaderHandling": true,
+    "backupPath": "/root/drivy-web-env-before-proxy-20260929T130043Z-6314394bcc94.backup",
+    "backupRoot0600": true,
+    "configRoot0600": true,
+    "internalWebHttpStatus": 200
+  },
+  "identity": {
+    "registrationAllowed": true,
+    "registrationEmailAsUsername": true,
+    "verifyEmail": false,
+    "resetPasswordAllowed": false,
+    "smtpConfigured": false,
+    "verifyEmailDefaultRequiredAction": false,
+    "internalDiscoveryHttpStatus": 200,
+    "theme": "drivy",
+    "themeBackupPath": "/root/drivy-identity-theme-before-messages-20260929T130250Z-46af041e3547.tar.gz",
+    "themeBackupRoot0600": true,
+    "themeBackupMessageContentsVerified": true,
+    "changedThemeFilesSHA256": {
+      "login/messages/messages_en.properties": "48525b17f7b8f68870933327bf63612b51f5c1ee5bf7907cbc319f0d7f035aa2",
+      "login/messages/messages_fr.properties": "9257ecf7ecc426d849d102a007c95662c4e9f5681ca561a9c45e0dac68a459a7"
+    },
+    "publicLoginHttpStatus": 200,
+    "publicRegistrationHttpStatus": 200,
+    "frenchCreateAccountAndEmailLabelsVerifiedInHtml": true,
+    "accountCreatedForVerification": false
+  },
+  "productionConfiguration": {
+    "apiProductionMode": true,
+    "webDevelopmentDisabled": true,
+    "oidcAndWebHttps": true,
+    "databaseSslVerifyFull": true,
+    "databaseNamesAndRolesMatchExpected": true,
+    "privateConfigFilesRootOnly": true
+  },
+  "containsPersonalDataTokensOrPositions": false,
+  "physicalDeviceQualificationPerformed": false
+}

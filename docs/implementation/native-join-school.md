@@ -34,4 +34,4 @@ Un résultat incertain reste conservé, même après 401, 403, 404, révocation 
 
 Modules isolés `SchoolJoinAPI` et `SchoolJoinUI`, raccord limité à `SchoolRootView`. Aucun changement des identités, de la base serveur ou des modules de dossier et de capture. Le collage natif constitue l’entrée livrée. Le gestionnaire de liens valide aussi les URL transmises par iOS ; cette tranche ne configure pas les domaines associés ni la signature nécessaires à l’ouverture universelle depuis un email.
 
-Revue statique des contrats et invariants effectuée. Aucun nouveau test de masse n’a été lancé. La compilation Apple de cette tranche doit être confirmée par la CI groupée ; aucune qualification sur appareil n’est revendiquée.
+La reprise du 29 septembre a ajouté les tests Swift du code, des doubles validations, des réponses incertaines et du changement de compte. Les résultats Apple et la version de l’API déployée sont suivis dans [STATUS.md](STATUS.md) ; aucune qualification sur appareil n’est déduite de ces tests.

@@ -28,4 +28,4 @@ La révocation conserve son motif et sa confirmation destructrice distincte. Une
 
 ## Preuve
 
-Relecture du diff et `git diff --check` effectués. Compilation Apple groupée à confirmer, sans nouvelle campagne de tests. Les captures iPad catalogue/dossier/bilan précédentes ne qualifient pas ces deux écrans ; aucun rendu Join/Invitations ni résultat physique n’est revendiqué ici.
+La revue du 29 septembre a compilé les vues natives et inspecté le résultat du code à partager sur iPhone et iPad, en clair et en sombre, avec des données fictives. Les tests et versions livrées sont suivis dans [STATUS.md](STATUS.md). Ces captures ne qualifient pas la connexion OIDC ni l’appairage sur appareil physique.

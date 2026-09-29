@@ -1,0 +1,111 @@
+{
+  "reviewDate": "2026-09-29",
+  "product": "Drivy iOS natif",
+  "simulatorTests": {
+    "sourceCommit": "1014ccecbbed08c11412e8f5da6cdaa40efe80a1",
+    "runId": 36569928729,
+    "runUrl": "https://github.com/tomyrms/Drivy/actions/runs/36569928729",
+    "evidenceDirectory": "artifacts/review-20260929/native-tests",
+    "resultsReadFrom": "xcresulttool test-results summary exports and simulator logs",
+    "iPhone": {
+      "device": "iPhone 17 Pro",
+      "osVersion": "26.4.1",
+      "platform": "iOS Simulator",
+      "scope": "Tous les tests natifs et le test de lancement UI",
+      "summaryPath": "test-reports/Tests/summary.json",
+      "result": "Passed",
+      "total": 145,
+      "passed": 145,
+      "failed": 0,
+      "skipped": 0,
+      "expectedFailures": 0
+    },
+    "iPad": {
+      "device": "iPad Pro 13-inch (M5)",
+      "osVersion": "26.4.1",
+      "platform": "iOS Simulator",
+      "scope": "Trois tests de présentation et un test de lancement UI",
+      "summaryPath": "test-reports/iPadTests/summary.json",
+      "result": "Passed",
+      "total": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "expectedFailures": 0
+    }
+  },
+  "finalIPA": {
+    "sourceCommit": "41f6c791177c76cddb077eb7d6fd6aa68018578b",
+    "runId": 36572072736,
+    "runUrl": "https://github.com/tomyrms/Drivy/actions/runs/36572072736",
+    "result": "Success",
+    "buildNumber": "63",
+    "sha256": "4d633e74ff1ce291b96405f70800d43267db21f3872994db69eb4ed2db3a6b8f",
+    "archiveType": "Xcode archive .xcarchive",
+    "unsigned": true,
+    "reviewedBy": "Root implementation review",
+    "verified": ["ZIP structure", "Device binaries", "Application configuration", "DEBUG fixture exclusion", "Unsigned archive and iLoader packaging"],
+    "differenceFromTestedNativeSource": "Largeur du formulaire leçon limitée à 820 points, titre des leçons planifiées devenu Prévues; ajouts de fixtures DEBUG et délai de capture. Aucun changement de logique métier après les tests."
+  },
+  "visualReview": {
+    "method": "Captures du compositeur réel des simulateurs Apple, écrans SwiftUI du produit alimentés par fixtures DEBUG isolées et fictives.",
+    "initial": {
+      "sourceCommit": "1014ccecbbed08c11412e8f5da6cdaa40efe80a1",
+      "runId": 36569933263,
+      "runUrl": "https://github.com/tomyrms/Drivy/actions/runs/36569933263",
+      "captured": 24,
+      "usable": 22,
+      "screens": ["home-tabs", "agenda", "learner", "lesson", "lesson-planned", "invitation-code"],
+      "devices": ["iPhone", "iPad"],
+      "appearances": ["light", "dark"],
+      "unusable": [
+        {"file": "iPhone-home-tabs-dark-synthetic.png", "reason": "Écran encore blanc au moment de la capture."},
+        {"file": "iPhone-lesson-planned-dark-synthetic.png", "reason": "Chargement encore visible au moment de la capture."}
+      ],
+      "findings": [
+        "Code d’invitation lisible en clair et sombre, contenu centré sur iPad.",
+        "Formulaire de leçon trop large sur iPad: largeur de lecture limitée dans la source finale.",
+        "Bandeau DEBUG masquant le bas du bouton de leçon: rendu du bandeau séparé du safe-area inset dans la source finale.",
+        "Groupe À venir incluant une leçon en retard: renommé Prévues dans la source finale.",
+        "Délai avant capture porté de 5 à 10 secondes pour revoir les deux images non exploitables."
+      ]
+    },
+    "final": {
+      "sourceCommit": "41f6c791177c76cddb077eb7d6fd6aa68018578b",
+      "runId": 36572113947,
+      "runUrl": "https://github.com/tomyrms/Drivy/actions/runs/36572113947",
+      "status": "Success; all 28 PNG files inspected",
+      "evidenceDirectory": "artifacts/review-20260929/native-visual-final/Drivy-native-results-41f6c791177c76cddb077eb7d6fd6aa68018578b",
+      "captured": 28,
+      "inspected": 28,
+      "usable": 28,
+      "screens": ["home-tabs", "learner", "lesson", "lesson-planned", "trips", "replay", "progression"],
+      "devices": ["iPhone", "iPad"],
+      "appearances": ["light", "dark"],
+      "blockingVisualFindings": [],
+      "verifiedRendering": [
+        "Formulaire de leçon centré sur iPad; champs, compétences et tarif lisibles en clair et sombre.",
+        "Boutons bas des leçons désormais entièrement visibles sur les deux appareils; le bandeau DEBUG ne les masque plus.",
+        "Leçon prévue sombre et accueil sombre iPhone désormais chargés, sans spinner ni écran blanc.",
+        "Dossier affichant Prévues, y compris la leçon à terminer, avec liste et détail côte à côte sur iPad.",
+        "Liste des trajets lisible: trajet normal sans badge, états Partiel et Supprimé visibles; accès à la relecture uniquement sur les lignes disponibles.",
+        "Replay montrant deux fragments distincts et une interruption sur la chronologie, trois observations et commandes de lecture; panneau latéral distinct sur iPad.",
+        "Progression lisible, largeur de lecture limitée sur iPad et contextes associés aux niveaux observés."
+      ],
+      "independentRootCrossReview": [
+        "iPad-lesson-light-synthetic.png",
+        "iPad-learner-light-synthetic.png",
+        "iPhone-replay-dark-synthetic.png",
+        "iPhone-home-tabs-dark-synthetic.png",
+        "iPhone-lesson-planned-dark-synthetic.png",
+        "iPhone-trips-light-synthetic.png"
+      ]
+    }
+  },
+  "limitations": [
+    "Aucune qualification physique GPS, batterie, arrière-plan ou VoiceOver n’est déduite du simulateur.",
+    "Les captures attestent du rendu; elles ne remplacent pas une recette interactive avec compte réel.",
+    "Signature iLoader et installation physique restent à effectuer par le porteur.",
+    "Le replay de contrôle utilise uniquement une géométrie synthétique DEBUG, jamais des positions de personnes."
+  ]
+}

@@ -1,5 +1,30 @@
 # État de la réalisation
 
+## 29 septembre 2026 — reprise et intégration des parcours
+
+L’inventaire ci-dessous décrit le code intégré, avec les [corrections API du 29 septembre](corrections-api-2026-09-29.md) et les [décisions du porteur](decisions-2026-09-28.md). L’app couvre le terrain ; la console web couvre l’administration. La présence d’un parcours et sa compilation ne constituent pas une qualification sur appareil.
+
+| Parcours / problème | Correction présente | Preuve et qualification |
+|---|---|---|
+| **Comptes et entrée élève :** invitation e-mail bloquée sans SMTP, formation unique. | Connexion OIDC existante ; « J’ai un code » ; invitation multi-permis avec moniteur, copie/partage et renouvellement. Acceptation atomique et reprise de la même opération. | Tests API codes, double acceptation et droits ; tests Swift réussis (campagne ci-dessous). [Invitations natives](native-invitations-design.md), [entrée dans l’école](native-join-school.md), [contrat codes](api-trajets-codes.md). |
+| **Élèves, formations et équipe :** cycle de vie incomplet, lectures en attente prises pour des données absentes. | Retrait d’accès, fin d’affectation, pause/reprise/clôture/réouverture, archivage/restauration ADMIN ; filtre équipe et dossiers archivés ; permis et moniteurs attendent leur lecture. Offre déjà active/en pause exclue du nouveau formulaire. | Tests PostgreSQL des droits, versions, rejeux et affectations futures annulées ; tests web des commandes et règles de formulaire. [Contrats et refus](corrections-api-2026-09-29.md). |
+| **Agenda et leçons :** entrées dispersées, création immédiate difficile, réglages et tarifs incohérents. | Aujourd’hui, Agenda et dossier ouvrent la même leçon : préparation, trajet, observations, bilan et fin. Démarrage immédiat, déplacement/annulation, contrôle du permis et dernière prestation applicable raccordés. | Tests API de planification, permis, issues et bilans ; tests Swift de la leçon réussis sur simulateur Apple. [Planification](g2-lessons.md), [permis](g2-permis.md), [corrections](corrections-api-2026-09-29.md). |
+| **Trajets et replay :** historique peu accessible et administration sans vue d’école. | Onglet Trajets iOS et page web ; moniteur limité à ses trajets accessibles, ADMIN à son école. Replay, erreurs et transferts en attente restent visibles ; départ toujours avec un élève. | Tests PostgreSQL d’isolement des écoles et des observations privées ; tests Swift trajets réussis sur simulateur Apple. [Trajets et droits](api-trajets-codes.md), [capture native](native-capture-live.md). |
+| **Observations et compétences :** signalement pendant le trajet trop lent, repères vulnérables à l’interruption. | Tuiles directes horodatées au geste, intention chiffrée avant envoi, même opération au renvoi ; précision ultérieure depuis le référentiel réel. Progression par compétence avec accès à la leçon source. | Tests API observations/bilans et tests Swift de persistance réussis sur simulateur Apple. [Observations natives](native-school-observations.md), [dossier et progression](native-training.md). |
+| **Espace élève et console :** accès au suivi et séparation des rôles à consolider. | Élève : Leçons/Progression, trajet, observations partagées, bilan et objectifs ; notes gardées privées exclues. Console : école, politique de profil, catalogue/tarifs, équipe, invitations, élèves, agenda, trajets et disponibilités. | Tests API partage et confidentialité ; TypeScript et 93 tests web réussis. [Partage élève](partage-eleve.md), [console](../../apps/web/README.md). |
+
+**Vérifications exécutées :** PostgreSQL **16.14 réel sur le homelab**, dans une instance de recette distincte : **208 tests réussis**, puis **98 tests ciblés réussis** après les dernières corrections ([preuve](proofs/review-api-20260929.json)). La [CI serveur/web 36570914236](https://github.com/tomyrms/Drivy/actions/runs/36570914236) passe également sur PostgreSQL 17 : **208 tests API et 93 tests web**, typage, builds et intégrité du canon. Le [run Apple 36569928729](https://github.com/tomyrms/Drivy/actions/runs/36569928729), source native `1014cce`, réussit : **145/145 tests iPhone** (métier et UI) et **4/4 iPad** (présentation et lancement), sans échec ni test ignoré, sur simulateurs iOS 26.4.1. Les rapports exportés ont été relus ; le build final ajoute seulement les deux finitions visuelles et les fixtures de contrôle. Les captures ont conduit à centrer le formulaire de leçon sur iPad et à remplacer « À venir » par « Prévues » pour ne pas mal classer les leçons en retard. La [revue visuelle finale 36572113947](https://github.com/tomyrms/Drivy/actions/runs/36572113947) a produit **28/28 captures exploitables et relues**, sur iPhone/iPad en clair et sombre : trajets, replay synthétique, progression, accueil, dossier et leçons. Aucune anomalie visuelle bloquante relevée sur ces captures. [Preuve native détaillée](proofs/native-review-20260929.json).
+
+**Homelab déployé :** API et web `7b2d8aa`, migrations **001 à 018**, trois services actifs, chemins des processus et contrôles HTTPS vérifiés. Sauvegarde privée de `drivy_refonte` avant migration et de `drivy_identity` avant activation de l’inscription ; catalogues `pg_restore --list` relus. Inscription OIDC et libellés français actifs, sans SMTP ni vérification par e-mail ; aucun compte créé pour cette vérification. [Preuve de déploiement](proofs/deployment-review-20260929.json).
+
+**IPA exportée :** **0.7.0 / build 63**, source `41f6c791177c76cddb077eb7d6fd6aa68018578b`, [run 36572072736](https://github.com/tomyrms/Drivy/actions/runs/36572072736). Archive Xcode créée, IPA appareil arm64 non signée ; téléchargement, CRC ZIP, hashes des binaires et configuration API/OIDC de production vérifiés. SHA-256 : `4d633e74ff1ce291b96405f70800d43267db21f3872994db69eb4ed2db3a6b8f`. Le code API/web de cette source est identique à la release déployée `7b2d8aa`. Fichier local : `artifacts/review-20260929/ipa-final/Drivy.ipa`. Signature et installation par le porteur avec iLoader ; aucune installation de ce build revendiquée.
+
+**Limites :** pas encore de documents, cours collectifs/packs, saisie des règlements ni notifications in-app/push ; les charges du compte de leçon ne constituent pas un module de paiements. Aucun SMTP ajouté : le code permet l’invitation élève, mais la récupération de mot de passe par e-mail reste indisponible. Les sauvegardes ne sont pas automatisées. **Les brouillons web ne sont pas persistés** : les saisies restent en mémoire ; seules les métadonnées de commande permettent de rechercher un reçu après rechargement, sans restaurer le contenu. Après reconnexion, une saisie peut donc devoir être refaite. Installation iPhone/iPad, GPS réel, autonomie et VoiceOver restent à qualifier ; aucun résultat physique n’est déduit du simulateur.
+
+## Historique (états datés)
+
+Les états suivants sont conservés avec leurs dates et leurs preuves. Leurs mentions « courant », « déployé » ou « reste » décrivent leur jalon historique ; l’état du 29 septembre ci-dessus prévaut.
+
 **28 septembre 2026 · phase 2 en cours** ([décisions du porteur](decisions-2026-09-28.md), [carte cible](carte-cible.md)). Branche `claude/refonte-parcours`, issue de `claude/tender-volta-bxdjd9`.
 
 - **Homelab :** CT114 agrandi à chaud de 16 à 32 Go (45 % utilisés). Release API et web `1b03ae1` déployée le 28 septembre 2026 (migrations 010 à 013), chaque installation précédée d’une sauvegarde `/root/drivy-refonte-before-<SHA>.dump` sur CT113 ; services actifs, `/app/gestion` sert la console avec Élèves et Disponibilités. Aucune tâche de sauvegarde automatique n’existe sur le Proxmox.
@@ -60,13 +85,13 @@ Les paragraphes et tableaux suivants conservent les jalons antérieurs et leurs 
 | G1 complet / G2 connecté | À poursuivre | SMTP externe, profils/onboarding, formations administrées, planning, leçons et bilans partagés |
 | G3/G4 et pilote G5 | À réaliser | Cours/packs, web de gestion, exploitation et procédures |
 
-## G1D1 en développement isolé
+### G1D1 en développement isolé
 
 La [PR3 en brouillon](https://github.com/tomyrms/Drivy/pull/3), branche `codex/g1d-profils`, contient API et formulaires natifs de politique de champs, profil scolaire et onboarding. Migration004 et AP16/AP169–177 passent **113 tests** sur PostgreSQL17.11 et16.14 ; typecheck/build réussis. Une revue indépendante a corrigé la portée AP169 non-ADMIN et l’encodage d’adresse native sans complément. Les **27 nouveaux tests Swift et une présentation capturée** sont en cours sur [GitHub Apple](https://github.com/tomyrms/Drivy/actions/runs/36037236148), version0.5.0 ; ne pas les déclarer réussis avant le rapport.
 
 Le web G1D1 a passé34 tests et une revue visuelle synthétique, puis son journal de commandes durable a été mis en chantier : PostgreSQL séparé, chiffrement authentifié, droits et confirmation relus après reconnexion. Le harness intégré OIDC/BFF/API réel et le stockage sont en cours. Les installateurs de cette base distincte et du keyring privé sont préparés, **pas appliqués**. Aucun G1D1 n’est déployé ; l’IPA proposé et l’hébergement restent G1C.
 
-## Preuves serveur
+### Preuves serveur
 
 Sous Node 24, `npm run typecheck`, `npm test` et `npm run build` réussissent. Les **89 tests** comprennent 13 tests JWT/configuration/curseurs, 21 tests d’intégration G1A, 23 tests d’intégration G1B et 32 tests F02 ; aucun n’est ignoré. La suite passe sur PostgreSQL 17.11 et 16.14, version hébergée. Le [run `36033466605`](https://github.com/tomyrms/Drivy/actions/runs/36033466605) confirme tests serveur/web, builds et intégrité documentaire.
 
@@ -74,7 +99,7 @@ G1A couvre les six lectures du contrat, les dates et curseurs, affectations moni
 
 G1B couvre coordonnées, progression, readiness, adoption versionnée des textes, activation et preuve AP72. Les tests vérifient atomicité effet/preuve/audit, idempotence concurrente, versions obsolètes, refus d'activation prématurée, révocation pendant l'attente, rollback sur échec d'audit et séparation des écoles. L'extension `data-policy` possède son propre schéma machine, sans modifier le canon. La migration 002 a également été éprouvée après 001 et deux écoles existantes sous un propriétaire NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/NOCREATEROLE. Voir [G1B](g1b-school-setup.md) et [le guide API](../../apps/api/README.md).
 
-## Hébergement et identité
+### Hébergement et identité
 
 La release API/web **`6ffc1036890ccc3d8232f5f8b90be4d77f6db195`** tourne sous Node 24.21.0 dans `/opt/drivy-refonte` sur CT114. Une sauvegarde privée vérifiée de la seule base `drivy_refonte` a précédé la migration 003. Les processus API et web utilisent les dossiers de cette release ; identité et filtrage sont actifs. Le Caddyfile complet a été validé avant le rechargement du snippet refonte. L’ancienne API sur 3000 et les anciennes bases sont conservées.
 
@@ -90,7 +115,7 @@ La [preuve du déploiement G1B](proofs/g1b-deployment-2026-09-24.json) confirme 
 
 Le client OIDC public `drivy-apple` a reçu le scope `email` le 24 septembre pour préparer F02 : scopes `basic/email/profile`, callback exact et PKCE S256 relus et inchangés. Une requête d’autorisation HTTPS avec `openid profile email` retourne le formulaire 200 sans soumettre d’identifiants. Le portail web a ensuite été déployé avec son propre client confidentiel. Sa recette HTTPS compte 11 contrôles réussis, sans utiliser `luc` ; la sonde a été supprimée et son absence relue. Ce contrôle ne qualifie pas la connexion Apple physique ou le SMTP externe.
 
-## IPA et preuves Apple
+### IPA et preuves Apple
 
 Le [run IPA G1C `36033239737`](https://github.com/tomyrms/Drivy/actions/runs/36033239737) produit **0.4.0/build 9**, source `7836441a2e1a2f62071f28fdcadb8239a2780efb`, SHA-256 `bad253440bd97bca2a2a5fa4051832d1a5c13e2ef38dc7523adfc751e6faf1e1`. CRC ZIP, manifeste, hashes des deux binaires et configuration HTTPS ont été vérifiés après téléchargement ; aucun bundle signé. Le [run natif `36033239715`](https://github.com/tomyrms/Drivy/actions/runs/36033239715) réussit : **97/97 tests sur iPhone 17 Pro et 4/4 sur iPad Pro 13 pouces (M5), simulateurs iOS 26.4.1**, zéro échec/ignoré. Les 27 nouveaux tests Swift et le nouveau test de présentation G1C passent. Les huit captures F02 iPhone/iPad (clair, sombre, grand texte, demande incertaine) sont relues sans défaut visuel bloquant ; [preuve native](proofs/g1c-native-2026-09-24.json). Le champ descriptif `scope` de son manifest mentionne encore G1B ; la source et les versions ci-dessus identifient le contenu G1C. Les précédentes preuves G1B sont conservées ci-dessous pour la traçabilité. Les essais physiques restent distincts.
 
@@ -104,7 +129,7 @@ Les [commandes scolaires](commandes-ios.md) sont chiffrées et persistées avant
 
 Le porteur a confirmé l'installation et l'ouverture du premier IPA 0.1.0/build 1 (`ebdb6ca`, run `36013615026`), tout en signalant son faible contenu. Cela ne valide pas encore la connexion AppAuth ni la configuration de 0.3.0 sur appareil. La [recette scolaire](recette-g1b.md) et la [recette G0](recette-g0.md) restent à exécuter sur les appareils concernés.
 
-## Limites de qualification et suite
+### Limites de qualification et suite
 
 Le laboratoire G0 n'est pas une capture scolaire ni un bilan partagé. Le produit complet conserve invitations, onboarding, administration des formations, agenda, leçons, bilans publiés, cours collectifs, packs et web de gestion dans son périmètre. Aucun service d'envoi d'emails utilisable n'a été établi par la documentation de l'ancien hébergement ; il reste à raccorder pour les invitations.
 
