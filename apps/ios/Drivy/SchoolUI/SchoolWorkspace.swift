@@ -30,6 +30,9 @@ final class SchoolWorkspace {
     private(set) var requiresAuthentication = false
     /// Signed in, but the identity belongs to no school yet: joining with a code is the way in.
     private(set) var identityNotLinked = false
+    /// The school refused this account (session expired, access withdrawn, identity not linked).
+    /// A network failure never sets it: an ongoing trip keeps recording.
+    private(set) var accessRevoked = false
 
     private(set) var accountError: String?
     private(set) var schoolError: String?
@@ -48,6 +51,7 @@ final class SchoolWorkspace {
     @ObservationIgnored private var debounceTask: Task<Void, Never>?
     @ObservationIgnored private var learnerCursors: Set<String> = []
     @ObservationIgnored private var trainingCursors: Set<String> = []
+    @ObservationIgnored private var accountReadAt: Date?
 
     init(api: any SchoolAPI) { self.api = api }
 
@@ -62,6 +66,8 @@ final class SchoolWorkspace {
         accountError = nil
         requiresAuthentication = false
         identityNotLinked = false
+        accessRevoked = false
+        accountReadAt = nil
         isLoadingAccount = false
         clearSchool()
     }
@@ -75,6 +81,7 @@ final class SchoolWorkspace {
             let result = try await api.me()
             guard request == accountRequest else { return }
             person = result
+            accountReadAt = Date()
             isLoadingAccount = false
             if let preferred = result.memberships.first(where: { $0.schoolId == preferredSchool }) {
                 await selectSchool(preferred)
@@ -85,6 +92,42 @@ final class SchoolWorkspace {
             guard request == accountRequest else { return }
             isLoadingAccount = false
             if !invalidateAccess(for: error) { accountError = message(for: error) }
+        }
+    }
+
+    /// Return to the app: re-read the account without clearing anything on screen, at most
+    /// every five minutes. Only a change of rights in the current school reloads it; a network
+    /// failure changes nothing, a refusal from the school closes the account as any read does.
+    func refreshAccount(minimumInterval: TimeInterval = 300, now: Date = Date()) async {
+        guard let current = person, !isLoadingAccount else { return }
+        if let accountReadAt, now.timeIntervalSince(accountReadAt) < minimumInterval { return }
+        let request = accountRequest
+        accountReadAt = now
+        do {
+            let result = try await api.me()
+            guard request == accountRequest else { return }
+            guard result.personId == current.personId else { await loadAccount(); return }
+            person = result
+            guard let selected = membership else {
+                if result.memberships.count == 1, let only = result.memberships.first { await selectSchool(only) }
+                return
+            }
+            guard let updated = result.memberships.first(where: { $0.schoolId == selected.schoolId }) else {
+                // No longer a member of this school.
+                clearSchool()
+                if result.memberships.count == 1, let only = result.memberships.first { await selectSchool(only) }
+                return
+            }
+            if updated.membershipId != selected.membershipId || updated.accessEpoch != selected.accessEpoch
+                || Set(updated.roles) != Set(selected.roles) || Set(updated.grants) != Set(selected.grants) {
+                await selectSchool(updated)
+            } else if updated != selected {
+                // Same rights (a renamed school): the projection changes, nothing is reloaded.
+                membership = updated
+            }
+        } catch {
+            guard request == accountRequest else { return }
+            invalidateAccess(for: error)
         }
     }
 
@@ -346,6 +389,7 @@ final class SchoolWorkspace {
             reset()
             requiresAuthentication = failure == .unauthorized
             identityNotLinked = failure == .identityNotLinked
+            accessRevoked = true
             accountError = message(for: failure)
             return true
         default:

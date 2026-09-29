@@ -52,9 +52,11 @@ struct DrivyApp: App {
                     if previous != .active, current == .active {
                         appLock.didBecomeActive(authenticated: identity.isAuthenticated)
                     }
+                    // Coming back never tears the screen down: the account is re-read silently,
+                    // at most every five minutes, and only a change of rights reloads the school.
                     if previous != .active, current == .active, identity.isAuthenticated,
                        let workspace, workspace.person != nil, !workspace.isLoadingAccount {
-                        Task { await workspace.loadAccount() }
+                        Task { await workspace.refreshAccount() }
                     }
                 }
                 .onChange(of: identity.isAuthenticated) { wasAuthenticated, isAuthenticated in
