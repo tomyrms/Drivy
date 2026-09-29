@@ -136,6 +136,9 @@ struct SchoolCodeJoinView: View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if let preview = model.record?.preview { summary(preview) }
             DrivyInlineMessage(text: "Vous avez rejoint l’école.")
+            if model.trainingNotOpened {
+                DrivyInlineMessage(text: "Votre école doit encore ouvrir votre formation.", tone: .neutral)
+            }
         }
     }
 

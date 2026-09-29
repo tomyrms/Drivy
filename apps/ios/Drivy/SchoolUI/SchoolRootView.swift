@@ -292,8 +292,9 @@ struct SchoolRootView: View {
             && (workspace?.membership?.roles.contains("ADMIN") == true || workspace?.membership?.roles.contains("INSTRUCTOR") == true)
     }
 
+    /// A code always carries the inviting instructor's training: only an instructor invites from the app.
     private var inviteAction: (() -> Void)? {
-        canManageInvitations ? { openInvitations(creation: true) } : nil
+        canManageInvitations && workspace?.membership?.roles.contains("INSTRUCTOR") == true ? { openInvitations(creation: true) } : nil
     }
 
     private func openInvitations(creation: Bool) {

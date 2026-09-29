@@ -12,6 +12,8 @@ import Observation
     private(set) var isBusy = false
     private(set) var errorMessage: String?
     private(set) var isReady = false
+    /// Joined, but the school still has to open the invited training.
+    private(set) var trainingNotOpened = false
     @ObservationIgnored private let journal = SchoolJoinJournal()
     @ObservationIgnored private var principal: SchoolJoinPrincipal?
     @ObservationIgnored private var previewToken: String?
@@ -25,7 +27,7 @@ import Observation
     var canAccept: Bool { isReady && !invalidated && !isBusy && !isPending && !isConfirmed && preview != nil && acknowledgesNotice }
     func invalidate() {
         invalidated = true; generation = UUID(); link = ""; previewToken = nil; preview = nil
-        record = nil; member = nil; acknowledgesNotice = false; isBusy = false; isReady = false
+        record = nil; member = nil; acknowledgesNotice = false; isBusy = false; isReady = false; trainingNotOpened = false
     }
     func load() async {
         guard !invalidated, !isBusy else { return }
@@ -94,6 +96,7 @@ import Observation
     func anotherInvitation() {
         guard !invalidated, !isBusy, !isPending else { return }
         preview = nil; record = nil; member = nil; previewToken = nil; acknowledgesNotice = false; link = ""; errorMessage = nil
+        trainingNotOpened = false
     }
     private func transmit(firstAttempt: Bool) async {
         guard !invalidated, !isBusy, let record, record.receipt == nil else { return }
@@ -101,8 +104,10 @@ import Observation
         var receivedSuccess = false
         do {
             try journal.save(record)
-            let membership = try await client.accept(record)
+            let answer = try await client.accept(record)
+            let membership = answer.membership
             receivedSuccess = true
+            trainingNotOpened = answer.trainingNotOpened
             let receipt = try await client.receipt(record)
             guard receipt.resourceId == membership.membershipId else { throw SchoolJoinFailure.invalidResponse }
             let confirmed = try journal.confirm(record, receipt: receipt)

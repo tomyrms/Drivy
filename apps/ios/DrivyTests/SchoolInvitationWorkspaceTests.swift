@@ -126,7 +126,7 @@ struct SchoolInvitationWorkspaceTests {
         // Other refusals of a resent command still keep it for review.
         api.sendFailure = .unavailable
         await model.load()
-        #expect(await model.createCode() == false)
+        #expect(await model.inviteAfterConfirmation(email: "autre@example.invalid", roles: [.learner]) == false)
         let uncertain = try #require(outbox.value)
         api.sendFailure = .conflict
         await model.retryPending()

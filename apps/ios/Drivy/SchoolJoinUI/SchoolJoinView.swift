@@ -123,6 +123,9 @@ struct SchoolJoinView: View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if let preview = model.preview { schoolSummary(preview) }
             DrivyInlineMessage(text: "Votre invitation a été acceptée.")
+            if model.trainingNotOpened {
+                DrivyInlineMessage(text: "Votre école doit encore ouvrir votre formation.", tone: .neutral)
+            }
             if let member = model.member {
                 Text("Accès actuel : \(SchoolPresentation.roles(member.roles))")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)

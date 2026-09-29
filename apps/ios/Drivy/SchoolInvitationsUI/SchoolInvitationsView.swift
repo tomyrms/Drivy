@@ -29,7 +29,7 @@ struct SchoolInvitationsView: View {
                 if model.school != nil && model.invitations.isEmpty && !model.isLoading && model.errorMessage == nil {
                     Section {
                         DrivyEmptyState(title: "Aucune invitation", symbol: "envelope",
-                            actionTitle: model.mayEdit ? "Inviter un élève" : nil,
+                            actionTitle: model.mayEdit && model.canCreateCode ? "Inviter un élève" : nil,
                             action: { showsCreation = true })
                             .buttonStyle(.borderless)
                     }
@@ -60,10 +60,12 @@ struct SchoolInvitationsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showsCreation = true } label: { Label("Inviter un élève", systemImage: "plus") }
-                        .disabled(!model.mayEdit)
-                        .accessibilityIdentifier("invitation-create")
+                if model.canCreateCode {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { showsCreation = true } label: { Label("Inviter un élève", systemImage: "plus") }
+                            .disabled(!model.mayEdit)
+                            .accessibilityIdentifier("invitation-create")
+                    }
                 }
             }
             .navigationSplitViewColumnWidth(min: 300, ideal: 380, max: 460)
@@ -290,6 +292,12 @@ struct InvitationCreationView: View {
         Form {
             if model.isLoading && model.school == nil {
                 Section { DrivyLoadingState(title: "Chargement de l’école…") }
+            }
+            if model.lacksOpenTraining {
+                Section {
+                    DrivyEmptyState(title: "Aucune formation ouverte", message: "Ouvrez-la sur le web pour inviter un élève.",
+                        symbol: "steeringwheel")
+                }
             }
             if model.carriesTraining && !model.offerings.isEmpty {
                 Section {

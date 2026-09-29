@@ -44,6 +44,24 @@ struct SchoolCodePreview: Codable, Equatable, Sendable {
             && SchoolLesson.date(expiresAt) != nil
     }
 }
+/// Answer of an acceptance (link or code): the member context, and `trainingOpened: false`
+/// when the invited training has no ready version yet (the key is absent otherwise).
+struct SchoolJoinAnswer: Decodable, Sendable, Equatable {
+    let membership: SchoolMembership
+    let trainingOpened: Bool?
+
+    init(membership: SchoolMembership, trainingOpened: Bool? = nil) {
+        self.membership = membership; self.trainingOpened = trainingOpened
+    }
+    private enum CodingKeys: String, CodingKey { case trainingOpened }
+    init(from decoder: any Decoder) throws {
+        membership = try SchoolMembership(from: decoder)
+        trainingOpened = try decoder.container(keyedBy: CodingKeys.self).decodeIfPresent(Bool.self, forKey: .trainingOpened)
+    }
+    /// The school joined, but the training still has to be opened by the school.
+    var trainingNotOpened: Bool { trainingOpened == false }
+}
+
 struct SchoolJoinCodeBody: Codable, Equatable, Sendable {
     let operationId: UUID
     let code: String
@@ -148,14 +166,15 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
               value.roles.allSatisfy({ ["ADMIN", "INSTRUCTOR", "LEARNER"].contains($0) }) else { throw SchoolJoinFailure.invalidResponse }
         return value
     }
-    func accept(_ record: SchoolJoinRecord) async throws -> SchoolMembership {
+    func accept(_ record: SchoolJoinRecord) async throws -> SchoolJoinAnswer {
         guard let body = record.body else { throw SchoolJoinFailure.invalidResponse }
-        let value: SchoolMembership = try await request(["v1", "invitations", "accept"], principal: record.principal,
+        let answer: SchoolJoinAnswer = try await request(["v1", "invitations", "accept"], principal: record.principal,
             body: body, operationID: record.operationID)
+        let value = answer.membership
         guard value.schoolId == record.preview.schoolId, value.accessEpoch > 0,
               value.roles.allSatisfy({ ["ADMIN", "INSTRUCTOR", "LEARNER"].contains($0) }),
               Set(record.preview.roles).isSubset(of: Set(value.roles)) else { throw SchoolJoinFailure.invalidResponse }
-        return value
+        return answer
     }
     func receipt(_ record: SchoolJoinRecord) async throws -> SchoolOperationReceipt {
         let value: SchoolOperationReceipt = try await request(["v1", "schools", record.preview.schoolId.uuidString,
@@ -182,14 +201,15 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
     }
 
     /// Sends the stored bytes with the stored operation: a resend is the same request.
-    func acceptCode(_ record: SchoolCodeJoinRecord) async throws -> SchoolMembership {
+    func acceptCode(_ record: SchoolCodeJoinRecord) async throws -> SchoolJoinAnswer {
         guard let body = record.body else { throw SchoolJoinFailure.invalidResponse }
-        let value: SchoolMembership = try await request(["v1", "invitations", "code", "accept"], principal: record.principal,
+        let answer: SchoolJoinAnswer = try await request(["v1", "invitations", "code", "accept"], principal: record.principal,
             body: body, operationID: record.operationID)
+        let value = answer.membership
         guard value.accessEpoch > 0, !value.schoolName.isEmpty,
               value.roles.allSatisfy({ ["ADMIN", "INSTRUCTOR", "LEARNER"].contains($0) }),
               Set(record.preview.roles).isSubset(of: Set(value.roles)) else { throw SchoolJoinFailure.invalidResponse }
-        return value
+        return answer
     }
 
     /// Schools this identity belongs to now; none while the identity is not linked to a person.

@@ -75,10 +75,12 @@ final class SchoolInvitationWorkspace: Identifiable {
     var carriesTraining: Bool { roles.contains("INSTRUCTOR") && selectedRoles == [.learner] }
     var selectedOffering: SchoolOffering? { offerings.first { $0.id == selectedOfferingID } }
     var selectedInvitation: SchoolInvitation? { invitations.first { $0.id == selectedID } }
-    /// A code for a learner: the instructor’s open training must be chosen when there is one.
-    var codeDraftIsValid: Bool {
-        allowedRoles.contains(.learner) && (!carriesTraining || offerings.isEmpty || selectedOffering != nil)
-    }
+    /// Only an instructor creates a code from the app: it always carries one of his open trainings,
+    /// with himself as instructor (the school requires both for a code).
+    var canCreateCode: Bool { roles.contains("INSTRUCTOR") && allowedRoles.contains(.learner) }
+    var codeDraftIsValid: Bool { canCreateCode && carriesTraining && selectedOffering != nil }
+    /// Loaded, but no training is open for a code yet.
+    var lacksOpenTraining: Bool { hasLoaded && canCreateCode && offerings.isEmpty }
     /// « Permis B » for a code invitation, when the training is known.
     func trainingLabel(_ invitation: SchoolInvitation) -> String? {
         if let code = invitation.trainingCategoryCode { return "Permis \(code)" }
@@ -189,12 +191,10 @@ final class SchoolInvitationWorkspace: Identifiable {
     /// Single-use code for a learner, carrying the instructor’s training when one is open.
     /// Same outbox as every invitation command: stored encrypted before it is sent.
     @discardableResult
-    func createCode(offeringID: UUID? = nil) async -> Bool {
-        guard mayEdit, codeDraftIsValid else { return false }
+    func createCode(offeringID: UUID?) async -> Bool {
+        guard mayEdit, codeDraftIsValid, let offeringID, offerings.contains(where: { $0.id == offeringID }) else { return false }
         let id = UUID()
-        let training = carriesTraining && offerings.contains(where: { $0.id == offeringID })
-            ? offeringID.map { SchoolInvitationTraining(offeringId: $0, instructorMembershipId: scope.membershipID) } : nil
-        guard !carriesTraining || offerings.isEmpty || training != nil else { return false }
+        let training = SchoolInvitationTraining(offeringId: offeringID, instructorMembershipId: scope.membershipID)
         issuedCode = nil; codeRecovery = nil
         let command = SchoolInviteCommand(operationId: id, delivery: .code, roles: [.learner], training: training)
         return await prepare(command, id: id, kind: .createInvitation, resource: nil, version: 0)

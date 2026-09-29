@@ -13,6 +13,8 @@ import Observation
     private(set) var isBusy = false
     private(set) var isReady = false
     private(set) var errorMessage: String?
+    /// Joined, but the school still has to open the invited training.
+    private(set) var trainingNotOpened = false
     @ObservationIgnored private let store: any SchoolCodeJoinStore
     @ObservationIgnored private var principal: SchoolJoinPrincipal?
     @ObservationIgnored private var previewedCode: String?
@@ -96,12 +98,12 @@ import Observation
     func anotherCode() {
         guard !invalidated, !isBusy, !isPending else { return }
         if let record, record.membership != nil { try? store.remove(record) }
-        preview = nil; previewedCode = nil; record = nil; code = ""; errorMessage = nil
+        preview = nil; previewedCode = nil; record = nil; code = ""; errorMessage = nil; trainingNotOpened = false
     }
 
     func invalidate() {
         invalidated = true; generation = UUID()
-        code = ""; preview = nil; previewedCode = nil; record = nil; isBusy = false; isReady = false
+        code = ""; preview = nil; previewedCode = nil; record = nil; isBusy = false; isReady = false; trainingNotOpened = false
     }
 
     private func transmit(_ record: SchoolCodeJoinRecord, firstAttempt: Bool) async {
@@ -109,8 +111,9 @@ import Observation
         let request = generation
         isBusy = true; errorMessage = nil
         do {
-            let membership = try await client.acceptCode(record)
-            confirm(record, membership: membership, request: request)
+            let answer = try await client.acceptCode(record)
+            confirm(record, membership: answer.membership, request: request)
+            if current(request) { trainingNotOpened = answer.trainingNotOpened }
         } catch let failure as SchoolJoinFailure where failure.permitsFreshCorrection {
             if !firstAttempt {
                 // The code no longer answers. If the first request went through, the school is
