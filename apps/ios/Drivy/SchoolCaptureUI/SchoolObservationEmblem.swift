@@ -4,6 +4,7 @@ import SwiftUI
 struct SchoolObservationEmblem: View {
     let theme: SchoolLiveObservationTheme
     var size: CGFloat = 72
+    @Environment(\.colorSchemeContrast) private var contrast
 
     private enum Motif { case intersection, sign, giveWay, speed, parking, motorway, anticipation, symbol }
 
@@ -21,13 +22,12 @@ struct SchoolObservationEmblem: View {
     }
 
     var body: some View {
+        // Aplat de marque et filet, sans dégradé ni ombre : l’emblème reste net en plein soleil
+        // comme de nuit, et les routes claires se détachent du fond accentSoft dans les deux thèmes.
         ZStack {
-            Circle()
-                .fill(LinearGradient(colors: [DrivyTheme.surface, DrivyTheme.accentSoft],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-                .shadow(color: DrivyTheme.text.opacity(0.09), radius: size * 0.06, y: size * 0.035)
-            Circle().inset(by: size * 0.035)
-                .strokeBorder(DrivyTheme.surface.opacity(0.8), lineWidth: size * 0.025)
+            Circle().fill(DrivyTheme.accentSoft)
+            Circle().strokeBorder(contrast == .increased ? DrivyTheme.controlBorder : DrivyTheme.border,
+                                  lineWidth: contrast == .increased ? 1 : 0.5)
             drawing
         }
         .frame(width: size, height: size)
@@ -67,14 +67,14 @@ struct SchoolObservationEmblem: View {
             symbol("parkingsign", scale: 0.29, x: 0.5, y: 0.41, color: DrivyTheme.onAccent)
         case .motorway:
             SchoolEmblemLine(points: [(0.21, 0.79), (0.42, 0.21), (0.58, 0.21), (0.79, 0.79)], closed: true)
-                .fill(DrivyTheme.surfaceMuted)
+                .fill(DrivyTheme.surface)
             stroke([(0.23, 0.79), (0.42, 0.22)], color: DrivyTheme.accent, width: 0.045)
             stroke([(0.77, 0.79), (0.58, 0.22)], color: DrivyTheme.accent, width: 0.045)
             stroke([(0.5, 0.77), (0.5, 0.27)], color: DrivyTheme.muted, width: 0.03, dash: true)
             stroke([(0.25, 0.43), (0.75, 0.43)], color: DrivyTheme.accent, width: 0.07)
         case .anticipation:
             SchoolEmblemBend()
-                .stroke(DrivyTheme.surfaceMuted, style: StrokeStyle(lineWidth: size * 0.19, lineCap: .round))
+                .stroke(DrivyTheme.surface, style: StrokeStyle(lineWidth: size * 0.19, lineCap: .round))
             SchoolEmblemBend()
                 .stroke(DrivyTheme.accent, style: StrokeStyle(lineWidth: size * 0.035, lineCap: .round,
                                                             dash: [size * 0.065, size * 0.06]))
@@ -94,7 +94,7 @@ struct SchoolObservationEmblem: View {
 
     private func road(_ points: [(CGFloat, CGFloat)]) -> some View {
         SchoolEmblemLine(points: points)
-            .stroke(DrivyTheme.surfaceMuted, style: StrokeStyle(lineWidth: size * 0.2, lineCap: .round))
+            .stroke(DrivyTheme.surface, style: StrokeStyle(lineWidth: size * 0.2, lineCap: .round))
     }
 
     private func stroke(_ points: [(CGFloat, CGFloat)], color: Color, width: CGFloat,

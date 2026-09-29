@@ -90,37 +90,41 @@ struct AppLockView: View {
     var automaticallyUnlocks = true
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: DrivySpacing.xl) {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(DrivyTheme.accent)
-                    .accessibilityHidden(true)
-                Text("Drivy")
-                    .font(.drivyScreenTitle)
-                    .foregroundStyle(DrivyTheme.text)
-                if let error = lock.errorMessage { SchoolErrorNotice(message: error) }
+        // The lock sits in the optical centre of the screen; the error, when there is
+        // one, stays next to it and the single action stays at the bottom.
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: DrivySpacing.l) {
+                    Image(systemName: "lock.fill")
+                        .font(.largeTitle)
+                        .imageScale(.large)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .accessibilityHidden(true)
+                    Text("Drivy verrouillé")
+                        .font(.drivyTitle)
+                        .foregroundStyle(DrivyTheme.text)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                    if let error = lock.errorMessage { SchoolErrorNotice(message: error) }
+                }
+                .frame(maxWidth: .infinity)
+                .drivyPageContent(maxWidth: 600)
+                .frame(minHeight: proxy.size.height)
             }
-            .frame(maxWidth: .infinity)
-            .multilineTextAlignment(.center)
-            .drivyPageContent(maxWidth: 600)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(DrivyTheme.surface)
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                Task { await lock.unlock() }
-            } label: {
-                DrivyBusyLabel(title: "Déverrouiller", busyTitle: "Déverrouillage…", isBusy: lock.isUnlocking)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            DrivyStickyActionBar {
+                Button {
+                    Task { await lock.unlock() }
+                } label: {
+                    DrivyBusyLabel(title: "Déverrouiller", busyTitle: "Déverrouillage…", isBusy: lock.isUnlocking)
+                }
+                .buttonStyle(DrivyPrimaryButtonStyle())
+                .disabled(lock.isUnlocking)
+                .accessibilityIdentifier("app-unlock")
             }
-            .buttonStyle(DrivyPrimaryButtonStyle())
-            .disabled(lock.isUnlocking)
-            .accessibilityIdentifier("app-unlock")
-            .padding(.horizontal, DrivySpacing.l)
-            .padding(.bottom, DrivySpacing.xl)
-            .frame(maxWidth: 600)
-            .frame(maxWidth: .infinity)
-            .background(DrivyTheme.surface)
         }
         .task { if automaticallyUnlocks { await lock.unlock() } }
     }

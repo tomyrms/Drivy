@@ -153,7 +153,9 @@ struct SchoolOnboardingView: View {
 
     private var welcome: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
-            stepTitle("Bienvenue chez \(schoolName)")
+            // Same head as the last screens: the welcome and the end answer each other.
+            DrivyGuidedStepHeader(symbol: "figure.wave", title: "Bienvenue chez \(schoolName)",
+                reason: "Quelques étapes courtes avant de commencer.")
             VStack(alignment: .leading, spacing: DrivySpacing.m) {
                 if isStaff {
                     DrivyGuidedFact(symbol: "person.badge.key", text: "Votre rôle")
@@ -225,9 +227,7 @@ struct SchoolOnboardingView: View {
             } else {
                 stepTitle("Votre formation")
                 if ownTrainings.isEmpty {
-                    DrivyPanel {
-                        DrivyGuidedFact(symbol: "building.2", text: "\(schoolName) ouvre votre formation, par exemple Permis B. Elle apparaîtra ensuite dans votre dossier.")
-                    }
+                    DrivyEmptyState(title: "\(schoolName) va ouvrir votre formation", symbol: "car")
                 } else {
                     DrivyRowGroup {
                         ForEach(ownTrainings) { training in
@@ -239,7 +239,7 @@ struct SchoolOnboardingView: View {
                     }
                 }
                 if let email = model.school?.contactEmail, !email.isEmpty {
-                    DrivyGuidedFact(symbol: "envelope", text: "Une question sur votre formation ? Écrivez à l’école : \(email)")
+                    DrivyContactRow(title: "Contact de l’école", value: email, symbol: "envelope")
                 }
             }
         }
@@ -270,7 +270,7 @@ struct SchoolOnboardingView: View {
     @ViewBuilder private var locationStatus: some View {
         if location.isDenied {
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                DrivyStatusBadge(title: "Position non autorisée", symbol: "location.slash", tone: .neutral)
+                DrivyStatusBadge(title: "Position non autorisée", symbol: "location.slash", tone: .warning)
                 Text("Les leçons restent possibles sans trajet. Vous pourrez autoriser la position plus tard dans Réglages.")
                     .font(.footnote)
                     .foregroundStyle(DrivyTheme.muted)
@@ -287,11 +287,8 @@ struct SchoolOnboardingView: View {
                 if let success = model.successMessage, !model.hasEdits {
                     DrivyInlineMessage(text: success)
                 }
-                VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                    DrivyGuidedFact(symbol: "calendar", text: isStaff ? "Vos leçons apparaissent dans l’agenda dès que l’école les planifie."
-                        : "Vos leçons et vos bilans apparaissent dans Drivy dès que l’école les prépare.")
-                    DrivyGuidedFact(symbol: "checkmark.shield", text: "Les conditions propres à une leçon ou à un cours sont vérifiées au moment utile.")
-                }
+                DrivyGuidedFact(symbol: "calendar", text: isStaff ? "Vos leçons apparaissent dans l’agenda dès que l’école les planifie."
+                    : "Vos leçons et vos bilans apparaissent dans Drivy dès que l’école les prépare.")
             }
         } else if !blockers.isEmpty {
             VStack(alignment: .leading, spacing: DrivySpacing.l) {
@@ -322,7 +319,6 @@ struct SchoolOnboardingView: View {
                         }
                     }
                 }
-                DrivyGuidedFact(symbol: "checkmark.shield", text: "Les conditions propres à une leçon ou à un cours seront vérifiées au moment utile.")
             }
         }
     }

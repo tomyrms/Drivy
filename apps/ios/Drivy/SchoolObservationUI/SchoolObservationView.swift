@@ -113,7 +113,7 @@ struct SchoolObservationView: View {
         }
     }
     @ViewBuilder private var feedback: some View {
-        if model.isLoading { ProgressView("Lecture du carnet…").frame(maxWidth: .infinity, alignment: .leading) }
+        if model.isLoading { DrivyLoadingState(title: "Chargement des observations…") }
         if let error = model.errorMessage {
             SchoolErrorNotice(message: error, retry: model.accessRevoked || model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
         }
@@ -136,76 +136,85 @@ struct SchoolObservationView: View {
             }
         }
     }
+    /// Liste sur page de lecture : lignes séparées par un filet (DrivyRowGroup), pas une carte par
+    /// observation ; même pastille de statut (symbole, libellé, ton) que le replay et le signalement.
     private var observationList: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Repères et observations").font(.drivySection).accessibilityAddTraits(.isHeader)
-                Spacer(minLength: DrivySpacing.xs)
-                Text(model.observations.count.formatted()).font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-                    .accessibilityLabel("\(model.observations.count) au total")
-            }
+        DrivyRowGroup(title: "Pendant la leçon") {
             if model.observations.isEmpty {
                 DrivyEmptyState(title: "Aucune observation", symbol: "text.bubble")
             } else {
-                ForEach(model.observations.reversed()) { observation in observationCard(observation) }
+                ForEach(model.observations.reversed()) { observation in observationRow(observation) }
             }
         }
     }
-    private func observationCard(_ observation: SchoolObservation) -> some View {
-        DrivyPanel {
-            VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                HStack(alignment: .top, spacing: DrivySpacing.s) {
-                    Image(systemName: observation.isMarker ? "bookmark.fill" : "text.bubble.fill")
-                        .font(.title3).foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Text(observation.eventKind == "QUALIFIED" ? observation.text : (observation.isMarker ? "Moment à revoir" : "Note de relecture"))
-                            .font(.headline)
-                        if let time = model.timeLabel(observation.observedAt) {
-                            Text(time).font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-                        }
+    private func observationRow(_ observation: SchoolObservation) -> some View {
+        let status = observation.eventStatus.flatMap(SchoolObservationStatus.init(rawValue:))
+        let rowTone: DrivyTone = status.map { tone($0) } ?? .neutral
+        let title = observation.eventKind == "QUALIFIED" ? observation.text : (observation.isMarker ? "Moment à revoir" : "Note de relecture")
+        let meta = [model.timeLabel(observation.observedAt), observation.hasPosition ? "Sur le trajet" : nil]
+            .compactMap { $0 }.joined(separator: " · ")
+        return VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            HStack(alignment: .top, spacing: DrivySpacing.s) {
+                Image(systemName: status?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble.fill"))
+                    .font(.headline)
+                    .foregroundStyle(rowTone.foreground)
+                    .frame(width: 36, height: 36)
+                    .background(rowTone.background, in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                    Text(title).font(.headline).foregroundStyle(DrivyTheme.text)
+                    if let status {
+                        Text(status.label).font(.subheadline.weight(.semibold)).foregroundStyle(rowTone.foreground)
                     }
-                    Spacer(minLength: 0)
+                    if observation.eventKind != "QUALIFIED" {
+                        Text(observation.text).font(.body)
+                    }
+                    if !meta.isEmpty {
+                        Text(meta).font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+                    }
                 }
-                if let status = observation.statusLabel {
-                    DrivyStatusBadge(title: status, symbol: statusSymbol(observation.eventStatus), tone: statusTone(observation.eventStatus))
-                }
-                if observation.eventKind != "QUALIFIED" {
-                    Text(observation.text).fixedSize(horizontal: false, vertical: true)
-                }
-                if observation.hasPosition {
-                    Label("Position déjà enregistrée par l’école", systemImage: "mappin")
-                        .font(.caption).foregroundStyle(DrivyTheme.muted)
-                }
-                HStack(spacing: DrivySpacing.l) {
-                    Button(observation.isMarker ? "Préciser" : "Modifier") {
-                        if let editor = model.edit(observation) { route = .edit(editor) }
-                    }.frame(minHeight: 44).disabled(!model.canMutate)
-                    Spacer(minLength: 0)
-                    Button("Retirer", role: .destructive) { route = .remove(observation) }
-                        .frame(minHeight: 44).disabled(!model.canMutate)
-                }.font(.subheadline.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
             }
-        }.accessibilityIdentifier("school-observation-\(observation.id.uuidString)")
+            HStack(spacing: DrivySpacing.l) {
+                Button(observation.isMarker ? "Préciser" : "Modifier") {
+                    if let editor = model.edit(observation) { route = .edit(editor) }
+                }
+                .foregroundStyle(model.canMutate ? DrivyTheme.accent : DrivyTheme.disabledText)
+                .frame(minHeight: 44).contentShape(Rectangle())
+                .disabled(!model.canMutate)
+                Spacer(minLength: 0)
+                Button("Retirer", role: .destructive) { route = .remove(observation) }
+                    .foregroundStyle(model.canMutate ? DrivyTheme.danger : DrivyTheme.disabledText)
+                    .frame(minHeight: 44).contentShape(Rectangle())
+                    .disabled(!model.canMutate)
+            }
+            .buttonStyle(.plain)
+            .font(.subheadline.weight(.semibold))
+        }
+        .padding(.vertical, DrivySpacing.s)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("school-observation-\(observation.id.uuidString)")
     }
     private func pendingCard(_ command: PendingSchoolCommand) -> some View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                Label("Enregistrement à vérifier", systemImage: "clock.badge.exclamationmark").font(.headline)
+                Label("Demande à vérifier", systemImage: "clock.arrow.circlepath").font(.headline)
                     .foregroundStyle(DrivyTheme.warning)
                 Text(model.pendingBelongsHere ? "La demande est conservée sur cet appareil. Vérifiez son résultat avant une autre modification." : model.pendingText)
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
                 if model.pendingBelongsHere {
-                    Button("Relire la demande") { route = .pending(command) }.frame(minHeight: 44)
+                    Button("Relire la demande") { route = .pending(command) }
+                        .buttonStyle(DrivySecondaryButtonStyle())
                 }
             }
         }
     }
-    /// Same symbols and tones as the local signalement tiles (ObservationStatus).
-    private func statusTone(_ raw: String?) -> DrivyTone {
-        switch raw { case "POSITIVE": .success; case "ATTENTION": .warning; default: .danger }
-    }
-    private func statusSymbol(_ raw: String?) -> String {
-        switch raw { case "POSITIVE": "checkmark"; case "ATTENTION": "exclamationmark"; default: "xmark" }
+    /// Same tones as the signalement tiles and the replay (ObservationStatus.tone).
+    private func tone(_ status: SchoolObservationStatus) -> DrivyTone {
+        switch status { case .positive: .success; case .attention: .warning; case .toWorkOn: .danger }
     }
 }
 
@@ -244,7 +253,7 @@ private struct SchoolObservationComposer: View {
             Form {
                 Section {
                     if let label = model.timeLabel(editor.observedAt) { Label(label, systemImage: "clock").font(.subheadline.monospacedDigit()) }
-                    Label(editor.original?.hasPosition == true ? "La position enregistrée et l’instant sont conservés." : "Sans position GPS ajoutée.",
+                    Label(editor.original?.hasPosition == true ? "Sur le trajet" : "Sans position",
                           systemImage: editor.original?.hasPosition == true ? "mappin" : "location.slash")
                         .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -268,7 +277,7 @@ private struct SchoolObservationComposer: View {
                   }
                 if model.pending != nil {
                     Section {
-                        Label("La demande est conservée. Fermez cette saisie pour vérifier son résultat dans le carnet.", systemImage: "clock.arrow.circlepath")
+                        Label("La demande est conservée. Fermez cette saisie pour vérifier son résultat dans les observations.", systemImage: "clock.arrow.circlepath")
                             .font(.subheadline).foregroundStyle(DrivyTheme.warning)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -283,10 +292,7 @@ private struct SchoolObservationComposer: View {
                     Button {
                         Task { if await model.save(editor, text: text, marker: marker, competencyID: competencyID, status: status) { dismiss() } }
                     } label: {
-                        HStack(spacing: DrivySpacing.xs) {
-                            if model.isBusy { ProgressView() }
-                            Text(model.isBusy ? "Enregistrement…" : "Enregistrer")
-                        }
+                        DrivyBusyLabel(title: "Enregistrer", isBusy: model.isBusy)
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle())
                     .disabled(!valid || !model.canMutate)
@@ -300,8 +306,8 @@ private struct SchoolObservationComposer: View {
                     Button("Annuler") { if changed && model.pending == nil { confirmsDiscard = true } else { dismiss() } }.disabled(model.isBusy)
                 }
             }
-            .confirmationDialog("Quitter cette saisie ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
-                Button("Abandonner la saisie", role: .destructive) { dismiss() }
+            .confirmationDialog("Quitter sans enregistrer ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+                Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
                 Button("Continuer", role: .cancel) { }
             }
         }.tint(DrivyTheme.accent).interactiveDismissDisabled(changed || model.isBusy)
@@ -311,9 +317,9 @@ private struct SchoolObservationComposer: View {
         if model.isBusy || valid && model.canMutate { return nil }
         if text.unicodeScalars.count > 4_000 { return "Le texte est limité à 4 000 caractères." }
         if editor.origin == "LIVE" && !marker && competencyID == nil { return "Choisissez une compétence, ou gardez un repère simple." }
-        if editor.origin == "LIVE" && !marker && status == nil { return "Choisissez un constat pour cette compétence." }
+        if editor.origin == "LIVE" && !marker && status == nil { return "Choisissez une appréciation pour cette compétence." }
         if !valid { return "Écrivez ce que vous souhaitez retenir." }
-        return "Enregistrement indisponible pour l’instant. Vérifiez le carnet."
+        return "Enregistrement indisponible pour l’instant. Vérifiez les observations."
     }
     private var qualification: some View {
         Section {
@@ -335,7 +341,7 @@ private struct SchoolObservationComposer: View {
                     }.buttonStyle(.plain).accessibilityAddTraits(status == value ? [.isSelected] : [])
                 }
             }
-        } header: { Text("Compétence et constat") }
+        } header: { Text("Compétence et appréciation") }
     }
 }
 
@@ -356,7 +362,7 @@ private struct SchoolObservationRemoval: View {
                 footer: { Text("Ce retrait ne modifie pas un bilan déjà partagé.") }
                 if model.pending != nil {
                     Section {
-                        Label("La demande est conservée. Retrouvez-la dans le carnet pour vérifier le résultat.", systemImage: "clock.arrow.circlepath")
+                        Label("La demande est conservée. Retrouvez-la dans les observations pour vérifier le résultat.", systemImage: "clock.arrow.circlepath")
                             .font(.subheadline).foregroundStyle(DrivyTheme.warning)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -371,14 +377,9 @@ private struct SchoolObservationRemoval: View {
                     else if reason.unicodeScalars.count > 1_000 { DrivyActionNote(text: "Le motif est limité à 1 000 caractères.") }
                     else if !acknowledged { DrivyActionNote(text: "Confirmez le retrait pour continuer.") }
                     Button(role: .destructive) { Task { if await model.remove(observation, reason: reason) { dismiss() } } } label: {
-                        HStack(spacing: DrivySpacing.xs) {
-                            if model.isBusy { ProgressView() }
-                            Text(model.isBusy ? "Retrait en cours…" : "Retirer du carnet")
-                        }
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        DrivyBusyLabel(title: "Retirer l’observation", busyTitle: "Retrait en cours…", isBusy: model.isBusy)
                     }
-                    .buttonStyle(.bordered).controlSize(.large)
+                    .buttonStyle(DrivyDangerButtonStyle())
                     .disabled(!acknowledged || reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || reason.unicodeScalars.count > 1_000 || !model.canMutate)
                 }
             }

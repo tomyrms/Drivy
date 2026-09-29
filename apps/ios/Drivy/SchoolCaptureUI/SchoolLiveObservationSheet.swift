@@ -13,7 +13,9 @@ struct SchoolLiveObservationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @AccessibilityFocusState private var selectionFocused: Bool
 
-    private var motion: Animation? { reduceMotion ? nil : .spring(duration: 0.3, bounce: 0) }
+    /// Changement de contexte provoqué par le doigt : ressort court et interrompable (DrivyMotion),
+    /// supprimé sous Réduire les animations où le fondu système suffit.
+    private var motion: Animation? { DrivyMotion.context(reduceMotion) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,7 +82,7 @@ struct SchoolLiveObservationSheet: View {
             Image(systemName: symbol)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(DrivyTheme.muted)
-                .frame(width: 44, height: 44)
+                .frame(width: 48, height: 48)
                 .background(DrivyTheme.surfaceMuted, in: Circle())
                 .contentShape(Circle())
         }
@@ -90,7 +92,7 @@ struct SchoolLiveObservationSheet: View {
 
     private var themes: some View {
         VStack(spacing: DrivySpacing.l) {
-            if recorder.isLoadingCompetencies { ProgressView("Chargement des thèmes…") }
+            if recorder.isLoadingCompetencies { DrivyLoadingState(title: "Chargement des thèmes…") }
             LazyVGrid(columns: dynamicTypeSize.isAccessibilitySize
                       ? [GridItem(.flexible())]
                       : Array(repeating: GridItem(.flexible(), spacing: DrivySpacing.s), count: 3),
@@ -109,9 +111,10 @@ struct SchoolLiveObservationSheet: View {
                 }
             }
             if let message = recorder.competenciesMessage {
+                // Avertissement, pas une erreur : « Marquer un moment » reste disponible.
                 DrivyInlineMessage(text: message, tone: .warning)
-                Button("Réessayer") { Task { await recorder.loadCompetencies() } }
-                    .frame(minHeight: 44)
+                Button("Réessayer", systemImage: "arrow.clockwise") { Task { await recorder.loadCompetencies() } }
+                    .buttonStyle(DrivySecondaryButtonStyle())
             }
             Button {
                 if recorder.markMoment(at: observedAt) {
@@ -119,11 +122,8 @@ struct SchoolLiveObservationSheet: View {
                 }
             } label: {
                 Label("Marquer un moment", systemImage: "bookmark")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .foregroundStyle(DrivyTheme.muted)
             }
-            .buttonStyle(DrivyTileButtonStyle())
+            .buttonStyle(DrivySecondaryButtonStyle())
             .disabled(!recorder.canRecord)
             .accessibilityIdentifier("live-observation-marker")
         }
@@ -138,8 +138,9 @@ struct SchoolLiveObservationSheet: View {
                 Image(systemName: "chevron.right").font(.body.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
             }
             .padding(DrivySpacing.s)
-            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel))
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel))
+            .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+            .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.xxs))
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs, style: .continuous))
         } else {
             VStack(spacing: DrivySpacing.xs) {
                 emblem(theme, size: 68)
@@ -150,7 +151,7 @@ struct SchoolLiveObservationSheet: View {
                     .frame(minHeight: 38, alignment: .top)
             }
             .frame(maxWidth: .infinity, minHeight: 112, alignment: .top)
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content))
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
         }
     }
 
@@ -206,10 +207,12 @@ struct SchoolLiveObservationSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, minHeight: 38, alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .top)
             }
-            .padding(DrivySpacing.s)
-            .frame(maxWidth: .infinity, minHeight: 88)
-            .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs))
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs))
+            .padding(.vertical, DrivySpacing.m)
+            .padding(.horizontal, DrivySpacing.xs)
+            .frame(maxWidth: .infinity, minHeight: 112)
+            // Filet et Contraste accru partagés : la tuile se détache aussi de la feuille en mode sombre.
+            .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.xxs))
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs, style: .continuous))
         }
         .buttonStyle(DrivyTileButtonStyle())
         .disabled(!recorder.canRecord || saved)
@@ -224,15 +227,17 @@ struct SchoolLiveObservationSheet: View {
                 .foregroundStyle(DrivyTheme.success)
                 .frame(width: 88, height: 88)
                 .background(DrivyTheme.successSurface, in: Circle())
+                .accessibilityHidden(true)
             Text(selected?.title ?? "Moment ajouté").font(.drivyTitle)
             if let savedStatus { Text(savedStatus.label).font(.headline).foregroundStyle(tone(savedStatus).foreground) }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DrivySpacing.xl)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Observation ajoutée à la leçon")
+        .accessibilityLabel(selected == nil ? "Moment ajouté à la leçon" : "Observation ajoutée à la leçon")
     }
 
+    /// Même ton que `ObservationStatus.tone` (DrivyObservationStyle) : Attention, À retravailler, Point positif.
     private func tone(_ status: SchoolObservationStatus) -> DrivyTone {
         switch status { case .toWorkOn: .danger; case .attention: .warning; case .positive: .success }
     }

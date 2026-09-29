@@ -11,10 +11,11 @@ struct SchoolJoinView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                    if model.isBusy {
-                        ProgressView("Vérification auprès de l’école…").frame(maxWidth: .infinity, minHeight: 44)
+                    // First read only: later operations show their progress in the action itself.
+                    if model.isBusy && !model.isReady {
+                        DrivyLoadingState(title: "Vérification de votre compte…")
                     }
-                    if let error = model.errorMessage, model.preview == nil {
+                    if let error = model.errorMessage, model.preview == nil, !isEntering {
                         SchoolErrorNotice(message: error, retry: model.isReady ? nil : { Task { await model.load() } })
                     }
                     if model.isConfirmed { confirmed }
@@ -22,7 +23,7 @@ struct SchoolJoinView: View {
                     else if let preview = model.preview { invitation(preview) }
                     else { linkEntry }
                 }
-                .drivyPageContent()
+                .drivyPageContent(maxWidth: 560)
             }
             .background(DrivyTheme.surface)
             .scrollDismissesKeyboard(.interactively)
@@ -40,28 +41,49 @@ struct SchoolJoinView: View {
         .task { if loadsOnAppear { await model.load() } }
         .accessibilityIdentifier("join-school")
     }
+    /// Entry state: the field is on screen, so a refused link is said under it.
+    private var isEntering: Bool {
+        model.isReady && model.preview == nil && !model.isPending && !model.isConfirmed
+    }
+
+    /// Same anatomy as the code field: permanent label, bordered field, error under it, paste.
     private var linkEntry: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.m) {
-            Text("Lien d’invitation").font(.drivyTitle).accessibilityAddTraits(.isHeader)
+        let error = isEntering ? model.errorMessage : nil
+        let shape = RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
+        return VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            Text("Lien d’invitation")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(DrivyTheme.text)
+                .accessibilityHidden(true)
             TextField("Coller le lien reçu", text: $model.link)
                 .keyboardType(.URL).textContentType(.URL)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .submitLabel(.go).onSubmit { Task { await model.inspect() } }
-                .padding(DrivySpacing.m)
+                .padding(.horizontal, DrivySpacing.s)
                 .frame(minHeight: 52)
-                .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+                .background(DrivyTheme.surface, in: shape)
                 .overlay {
-                    RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
-                        .strokeBorder(DrivyTheme.controlBorder, lineWidth: 1)
+                    shape.strokeBorder(error == nil ? DrivyTheme.controlBorder : DrivyTheme.danger,
+                                       lineWidth: error == nil ? 1 : 1.5)
                 }
                 .disabled(model.isBusy || !model.isReady)
                 .accessibilityLabel("Lien d’invitation")
+                .accessibilityHint(error ?? "")
                 .accessibilityIdentifier("join-invitation-link")
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(DrivyTheme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(error)
+            }
             PasteButton(payloadType: String.self) { values in
                 if let value = values.first, value.utf8.count <= 2_048 { model.link = value }
             }
             .accessibilityLabel("Coller le lien")
             .frame(minHeight: 44)
+            .padding(.top, DrivySpacing.xs)
             .disabled(model.isBusy || !model.isReady)
         }
     }
@@ -94,7 +116,8 @@ struct SchoolJoinView: View {
         Button(action: action) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
-                .frame(minHeight: 48)
+                .multilineTextAlignment(.leading)
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -103,22 +126,33 @@ struct SchoolJoinView: View {
     }
     private func schoolSummary(_ preview: SchoolJoinPreview) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            Text(preview.schoolName).font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
+            Text(preview.schoolName)
+                .font(.drivyTitle)
+                .foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
             Label(SchoolPresentation.roles(preview.roles), systemImage: "person.crop.circle")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
-            Label(preview.maskedEmail, systemImage: "envelope").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            Label(preview.maskedEmail, systemImage: "envelope")
+                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
             if !model.isConfirmed {
-                Text("Invitation valable jusqu’au \(SchoolTrainingFormatting.instant(preview.expiresAt, zone: TimeZone.current.identifier))")
-                    .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                Label("Valable jusqu’au \(SchoolTrainingFormatting.instant(preview.expiresAt, zone: TimeZone.current.identifier))",
+                      systemImage: "clock")
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-        }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
     private var pending: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if let preview = model.preview { schoolSummary(preview) }
             DrivyPanel {
                 DrivyPendingRequest(
-                    message: "Votre demande est conservée sur cet appareil. Vous pouvez fermer cet écran et revenir la vérifier avec ce compte.",
+                    message: "La réponse de l’école n’est pas arrivée. Votre demande est conservée sur cet appareil.",
                     retry: { Task { await model.retry() } }, canRetry: !model.isBusy)
             }
         }
@@ -126,16 +160,18 @@ struct SchoolJoinView: View {
     private var confirmed: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if let preview = model.preview { schoolSummary(preview) }
-            DrivyInlineMessage(text: "Votre invitation a été acceptée.")
+            DrivyInlineMessage(text: "Vous avez rejoint l’école.")
             if model.trainingNotOpened {
                 DrivyInlineMessage(text: "Votre école doit encore ouvrir votre formation.", tone: .neutral)
             }
             if let member = model.member {
                 Text("Accès actuel : \(SchoolPresentation.roles(member.roles))")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
-                Text("La confirmation est conservée. Actualisez vos accès pour ouvrir l’école.")
+                Text("Actualisez vos accès pour ouvrir l’école.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             secondaryLink("Consulter une autre invitation") { model.anotherInvitation() }
         }
@@ -143,7 +179,7 @@ struct SchoolJoinView: View {
     private var actionHint: (text: String?, tone: DrivyTone) {
         if let error = model.errorMessage, model.preview != nil { return (error, .danger) }
         if model.preview != nil && !model.isConfirmed && !model.isPending && !model.acknowledgesNotice && !model.isBusy {
-            return ("Confirmez votre lecture de la notice pour accepter.", .neutral)
+            return ("Confirmez votre lecture de la notice pour rejoindre l’école.", .neutral)
         }
         return (nil, .neutral)
     }
@@ -155,18 +191,31 @@ struct SchoolJoinView: View {
                 if let member = model.member {
                     Button("Ouvrir mon école") { openSchool(member) }.disabled(model.isBusy)
                 } else {
-                    Button("Actualiser mes accès") { Task { await model.verify() } }.disabled(model.isBusy)
+                    Button { Task { await model.verify() } } label: {
+                        DrivyBusyLabel(title: "Actualiser mes accès", busyTitle: "Vérification…", isBusy: model.isBusy)
+                    }
+                    .disabled(model.isBusy)
                 }
             } else if model.isPending {
-                Button("Vérifier auprès de l’école") { Task { await model.verify() } }.disabled(model.isBusy)
+                Button { Task { await model.verify() } } label: {
+                    DrivyBusyLabel(title: "Vérifier auprès de l’école", busyTitle: "Vérification…", isBusy: model.isBusy)
+                }
+                .disabled(model.isBusy)
             } else if model.preview != nil {
-                Button("Accepter l’invitation") { Task { await model.accept() } }
-                    .disabled(!model.canAccept).accessibilityIdentifier("join-confirm")
+                Button { Task { await model.accept() } } label: {
+                    DrivyBusyLabel(title: "Rejoindre l’école", busyTitle: "Envoi…", isBusy: model.isBusy)
+                }
+                .disabled(!model.canAccept).accessibilityIdentifier("join-confirm")
             } else {
-                Button("Consulter l’invitation") { Task { await model.inspect() } }
-                    .disabled(!model.canPreview).accessibilityIdentifier("join-preview")
+                Button { Task { await model.inspect() } } label: {
+                    DrivyBusyLabel(title: "Continuer", busyTitle: "Vérification…", isBusy: model.isBusy && model.isReady)
+                }
+                .disabled(!model.canPreview).accessibilityIdentifier("join-preview")
             }
         }
         .buttonStyle(DrivyPrimaryButtonStyle())
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
+        .background(DrivyTheme.surface)
     }
 }

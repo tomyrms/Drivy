@@ -102,7 +102,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
         case "INSTRUCTOR_NOT_ASSIGNED", "ASSIGNMENT_ENDS_BEFORE_LESSON_END":
             "Votre affectation ne couvre pas cette leçon. Demandez à l’administration de la vérifier."
         case "INSTRUCTOR_REQUIRED": "Seul un moniteur peut démarrer une leçon."
-        case "OFFERING_NOT_READY": "La prestation n’est pas prête. Demandez à l’administration de la vérifier."
+        case "OFFERING_NOT_READY": "Le tarif de cette formation n’est pas prêt. Demandez à l’administration de la vérifier."
         case "SCHOOL_NOT_ACTIVE": "L’école n’est pas active. Contactez son administration."
         default: "Aucune formation disponible pour démarrer avec cet élève. Demandez à l’administration de vérifier sa formation."
         }
@@ -176,14 +176,16 @@ struct SchoolStartNowView: View {
         NavigationStack {
             Form {
                 if let error = model.errorMessage {
-                    Section {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.danger)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if model.pending != nil {
-                            Button("Renvoyer la même demande") { Task { if await model.retry() != nil { dismiss() } } }
-                                .disabled(model.isBusy)
+                    if let pending = model.pending {
+                        // Résultat inconnu : même présentation que partout (« Demande à vérifier »).
+                        Section {
+                            DrivyPendingRequest(message: error, reference: pending.id,
+                                retry: { Task { if await model.retry() != nil { dismiss() } } }, canRetry: !model.isBusy)
                         }
+                    } else {
+                        Section { SchoolErrorNotice(message: error) }
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
                     }
                 }
                 Section {
@@ -199,13 +201,18 @@ struct SchoolStartNowView: View {
                             ForEach(model.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
                         }
                     }
-                    TextField("Lieu de rendez-vous", text: $model.meetingPoint, axis: .vertical).lineLimit(1...3)
+                    LabeledContent("Lieu") {
+                        TextField("Lieu du rendez-vous", text: $model.meetingPoint, axis: .vertical).lineLimit(1...3)
+                            .multilineTextAlignment(.trailing)
+                    }
                 }
                 .disabled(model.isBusy)
-                if model.isLoading { Section { ProgressView().frame(maxWidth: .infinity) } }
+                if model.isLoading {
+                    Section { DrivyLoadingState(title: model.learnerID == nil ? "Chargement des élèves…" : "Chargement de la formation…") }
+                }
             }
             .scrollContentBackground(.hidden)
-            .frame(maxWidth: 820).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
+            .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 DrivyStickyActionBar {
                     Button {
@@ -215,7 +222,7 @@ struct SchoolStartNowView: View {
                         }
                     } label: {
                         HStack(spacing: DrivySpacing.xs) {
-                            if model.isBusy { ProgressView() }
+                            if model.isBusy { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
                             Label("Démarrer maintenant", systemImage: "location.fill")
                         }
                     }

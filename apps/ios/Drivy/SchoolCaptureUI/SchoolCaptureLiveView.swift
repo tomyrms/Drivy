@@ -34,7 +34,9 @@ struct SchoolCaptureLiveView: View {
                 } description: {
                     Text("Ouvrez une leçon pour préparer son enregistrement GPS.")
                 } actions: {
-                    Button("Fermer") { close() }.buttonStyle(.bordered)
+                    Button("Fermer") { close() }
+                        .buttonStyle(DrivySecondaryButtonStyle())
+                        .fixedSize()
                 }
             } else {
                 GeometryReader { geometry in
@@ -190,11 +192,6 @@ struct SchoolCaptureLiveView: View {
                     .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if controller.state == .paused && controller.pointCount > 0 {
-                Text("Aucune position n’est enregistrée pendant la pause.")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
             if let error = controller.errorMessage {
                 DrivyInlineMessage(text: error, tone: .warning)
             }
@@ -243,13 +240,23 @@ struct SchoolCaptureLiveView: View {
     private var collectingActions: some View {
         VStack(spacing: DrivySpacing.s) {
             if let recorder = controller.liveObservations {
-                Button {
+                let signal = Button {
                     observationMoment = ObservationMoment(recorder: recorder)
                 } label: {
+                    // Geste dominant en voiture : texte et cible plus grands que le bouton standard.
                     Label("Signaler", systemImage: "text.bubble.fill")
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .font(.title3.weight(.bold))
+                        .padding(.vertical, DrivySpacing.m)
                 }
-                .buttonStyle(DrivyPrimaryButtonStyle())
+                // Une seule action primaire : en pause, « Reprendre » prend l’aplat et Signaler
+                // garde sa taille et sa place en style secondaire.
+                Group {
+                    if controller.state == .paused {
+                        signal.buttonStyle(DrivySecondaryButtonStyle())
+                    } else {
+                        signal.buttonStyle(DrivyPrimaryButtonStyle())
+                    }
+                }
                 .disabled(!recorder.canRecord || isFinishing)
                 .accessibilityIdentifier("capture-signal-observation")
                 .popover(item: $observationMoment, attachmentAnchor: .rect(.bounds)) { moment in
@@ -258,28 +265,47 @@ struct SchoolCaptureLiveView: View {
                                height: horizontalSizeClass == .regular ? 560 : nil)
                         .presentationCompactAdaptation(.sheet)
                 }
-                if recorder.isSending { ProgressView("Envoi de l’observation…") }
+                if recorder.isSending { DrivyLoadingState(title: "Envoi de l’observation…") }
                 else if recorder.pending != nil {
                     DrivyInlineMessage(text: recorder.errorMessage ?? "Une observation attend son envoi.", tone: .warning)
                     if recorder.canRetry {
-                        Button("Réessayer l’envoi") { Task { await recorder.retry() } }
+                        Button("Réessayer l’envoi", systemImage: "arrow.clockwise") { Task { await recorder.retry() } }
+                            .buttonStyle(DrivySecondaryButtonStyle())
                     } else {
-                        Button("Actualiser") { recorder.refreshPending() }
+                        Button("Actualiser", systemImage: "arrow.clockwise") { recorder.refreshPending() }
+                            .buttonStyle(DrivySecondaryButtonStyle())
                     }
                 } else if let error = recorder.errorMessage {
                     DrivyInlineMessage(text: error, tone: .warning)
                 }
             }
-            let layout = dynamicTypeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(spacing: DrivySpacing.s)) : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
-            layout {
-                pauseResumeButton
-                Button("Terminer la leçon", systemImage: "checkmark.circle") { finishLesson() }
-                    .buttonStyle(DrivySecondaryButtonStyle())
-                    .disabled(isFinishing || !controller.canStop)
-                    .accessibilityIdentifier("capture-finish-lesson")
+            // Côte à côte quand les deux libellés tiennent sur une ligne ; sinon empilés
+            // (colonne iPad de 380 pt, grand texte) plutôt qu’un « Terminer / la leçon » coupé.
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: DrivySpacing.s) { secondaryCommands(pauseHugsLabel: false) }
+            } else {
+                // En ligne, « Pause » prend sa largeur naturelle et « Terminer la leçon » le reste :
+                // un partage à 50/50 coupait ce libellé même sur un grand iPhone.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: DrivySpacing.s) { secondaryCommands(pauseHugsLabel: true) }
+                    VStack(spacing: DrivySpacing.s) { secondaryCommands(pauseHugsLabel: false) }
+                }
             }
         }
+    }
+
+    @ViewBuilder private func secondaryCommands(pauseHugsLabel: Bool) -> some View {
+        pauseResumeButton
+            .fixedSize(horizontal: pauseHugsLabel, vertical: false)
+        Button {
+            finishLesson()
+        } label: {
+            Label("Terminer la leçon", systemImage: "checkmark.circle")
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+        }
+        .buttonStyle(DrivySecondaryButtonStyle())
+        .disabled(isFinishing || !controller.canStop)
+        .accessibilityIdentifier("capture-finish-lesson")
     }
 
     @ViewBuilder private var pauseResumeButton: some View {
@@ -288,7 +314,7 @@ struct SchoolCaptureLiveView: View {
             run(controller.canPause ? .pause : .resume)
         } label: {
             Label(paused ? "Reprendre" : "Pause", systemImage: paused ? "play.fill" : "pause.fill")
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
         }
         // Resuming is the next gesture of a paused journey; pausing stays secondary.
         if paused {
@@ -306,7 +332,7 @@ struct SchoolCaptureLiveView: View {
 
     private var savedActions: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            if controller.isTransferring { ProgressView("Enregistrement du trajet…") }
+            if controller.isTransferring { DrivyLoadingState(title: "Enregistrement du trajet…") }
             if controller.synchronizationNeedsRetry {
                 Button("Réessayer l’envoi du trajet", systemImage: "arrow.clockwise") {
                     Task { await controller.retrySynchronization() }

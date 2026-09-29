@@ -40,7 +40,7 @@ struct SchoolTrainingScreen: View {
             if let model, matches(model) {
                 SchoolTrainingContent(model: model, workspace: workspace, learner: learner, fixedSection: section)
             } else {
-                ProgressView()
+                ProgressView("Chargement de la formation…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(DrivyTheme.surface)
             }
@@ -94,7 +94,7 @@ private struct SchoolTrainingContent: View {
         GeometryReader { geometry in
             // Dans un grand détail, les leçons et leur progression restent visibles ensemble.
             // Le sélecteur est conservé quand chaque colonne n’aurait plus 460 pt de lecture.
-            if geometry.size.width >= 1040 && fixedSection == nil && model.hasPedagogicalRole
+            if geometry.size.width >= TrainingLayout.twoColumnBreakpoint && fixedSection == nil && model.hasPedagogicalRole
                 && model.training != nil && !dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     heading
@@ -118,12 +118,12 @@ private struct SchoolTrainingContent: View {
                         .refreshable { await model.loadProgress() }
                     }
                 }
-                .drivyPageContent(maxWidth: 1200)
+                .drivyPageContent(maxWidth: TrainingLayout.twoColumnMaxWidth)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: DrivySpacing.l) {
                         if fixedSection == nil { heading }
-                        if model.isLoading && model.training == nil { ProgressView().frame(maxWidth: .infinity, minHeight: 100) }
+                        if model.isLoading && model.training == nil { DrivyLoadingState(title: "Chargement de la formation…") }
                         if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
                         if model.training != nil {
                             if fixedSection == nil && model.hasPedagogicalRole { sectionPicker }
@@ -149,13 +149,17 @@ private struct SchoolTrainingContent: View {
         }
     }
     private var heading: some View {
+        // Le dossier est celui d’une personne : son nom est le titre, la formation la précise.
         HStack(spacing: DrivySpacing.m) {
-            DrivyAvatar(name: learner.displayName, size: 44)
+            if !dynamicTypeSize.isAccessibilitySize {
+                DrivyAvatar(name: learner.displayName, size: 44)
+            }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text(model.training.map { "Permis \($0.categoryCode)" } ?? "Formation")
-                    .font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
+                Text(learner.displayName)
+                    .font(.drivyTitle).foregroundStyle(DrivyTheme.text).fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
-                Text(learner.displayName).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                Text(model.training.map { "Permis \($0.categoryCode)" } ?? "Formation")
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
             }
             Spacer(minLength: 0)
             if let training = model.training, training.status != "ACTIVE" {
@@ -225,7 +229,7 @@ private struct SchoolTrainingContent: View {
             } else if let error = model.progressError {
                 SchoolErrorNotice(message: error, retry: { Task { await model.loadProgress() } })
             } else {
-                ProgressView().frame(maxWidth: .infinity, minHeight: 80)
+                DrivyLoadingState(title: "Chargement de la progression…")
             }
         }
     }
@@ -246,10 +250,7 @@ private struct SchoolTrainingContent: View {
     @ViewBuilder private var moreLessons: some View {
         if model.nextCursor != nil {
             Button { Task { await model.loadMore() } } label: {
-                HStack(spacing: DrivySpacing.xs) {
-                    if model.isLoadingMore { ProgressView() }
-                    Text("Afficher plus")
-                }
+                DrivyBusyLabel(title: "Afficher d’autres leçons", busyTitle: "Chargement…", isBusy: model.isLoadingMore)
             }
             .buttonStyle(DrivySecondaryButtonStyle()).disabled(model.isLoadingMore)
         }
@@ -262,10 +263,16 @@ private struct SchoolTrainingLessonRow: View {
     var body: some View {
         DrivyLessonRow(start: SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone),
             end: SchoolTrainingFormatting.time(lesson.plannedEnd, zone: lesson.timeZone),
-            title: SchoolTrainingFormatting.day(lesson.plannedStart, zone: lesson.timeZone),
+            title: SchoolTrainingFormatting.rowDay(lesson.plannedStart, zone: lesson.timeZone),
             details: [lesson.meetingPoint],
             badge: lesson.drivyState.isUnusual ? lesson.drivyState.badge : nil)
     }
+}
+
+/// Leçons et progression côte à côte dès 1040 pt de détail (460 pt de lecture par colonne).
+private enum TrainingLayout {
+    static let twoColumnBreakpoint: CGFloat = 1040
+    static let twoColumnMaxWidth: CGFloat = 1200
 }
 
 enum SchoolTrainingFormatting {
@@ -275,6 +282,15 @@ enum SchoolTrainingFormatting {
     static func instant(_ value: String, zone: String) -> String { format(value, zone: zone, template: "d MMMM yyyy HHmm") }
     static func day(_ value: String, zone: String) -> String { format(value, zone: zone, template: "d MMMM yyyy") }
     static func time(_ value: String, zone: String) -> String { format(value, zone: zone, template: "HHmm") }
+    /// Titre d’une ligne de leçon : l’année seulement quand ce n’est pas l’année en cours,
+    /// pour que la date tienne sur une ligne à côté d’un badge.
+    static func rowDay(_ value: String, zone: String) -> String {
+        guard let date = SchoolLesson.date(value), let timeZone = TimeZone(identifier: zone) else { return "Date indisponible" }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: Date())
+        return format(value, zone: zone, template: sameYear ? "EEE d MMMM" : "d MMMM yyyy").capitalizedFirst
+    }
     private static func format(_ value: String, zone: String, template: String) -> String {
         guard let date = SchoolLesson.date(value), let timeZone = TimeZone(identifier: zone) else { return "Date indisponible" }
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = timeZone

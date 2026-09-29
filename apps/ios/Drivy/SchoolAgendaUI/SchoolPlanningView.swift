@@ -17,7 +17,7 @@ struct SchoolPlanningView: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .frame(maxWidth: 820).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
+            .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !cancelling && !model.isLoading && model.school != nil { bookingActionBar }
             }
@@ -51,7 +51,7 @@ struct SchoolPlanningView: View {
                         if let id { Task { await model.selectTraining(id) } }
                     })) {
                         Text("Choisir une formation").tag(nil as UUID?)
-                        ForEach(model.trainings) { training in Text("\(training.categoryCode) · formation active").tag(Optional(training.id)) }
+                        ForEach(model.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
                     }.disabled(!model.canMutate)
                     if model.trainings.isEmpty { formNote("Aucune formation active. L’administration peut en ouvrir une depuis le dossier de cet élève.") }
                 }
@@ -69,14 +69,13 @@ struct SchoolPlanningView: View {
             scheduleFields
             if model.originalLesson != nil {
                 Section {
-                    Toggle("Changer la durée ou la prestation", isOn: $model.changesCommercialTerms)
+                    Toggle("Changer la durée ou le tarif", isOn: $model.changesCommercialTerms)
                         .disabled(!model.canMutate)
                     if !model.changesCommercialTerms, let lesson = model.originalLesson {
                         LabeledContent("Durée conservée") { Text("\(lesson.durationMinutes) min").monospacedDigit().foregroundStyle(DrivyTheme.muted) }
                         LabeledContent("Prix conservé") { Text(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot)).monospacedDigit().foregroundStyle(DrivyTheme.muted) }
                     }
                 } header: { Text("Durée et prix") }
-                footer: { Text("Un changement de prestation demande une nouvelle lecture des conditions et un motif.") }
             }
             if model.originalLesson == nil || model.changesCommercialTerms { commercialFields }
             reviewFields
@@ -96,8 +95,12 @@ struct SchoolPlanningView: View {
                 .onChange(of: model.startsAt) { _, _ in model.termsAccepted = false; model.agreementConfirmed = false }
             DatePicker("Heure", selection: $model.startsAt, displayedComponents: .hourAndMinute)
                 .onChange(of: model.startsAt) { _, _ in model.termsAccepted = false; model.agreementConfirmed = false }
-            TextField("Lieu du rendez-vous", text: $model.meetingPoint, axis: .vertical).lineLimit(1...3)
-                .onChange(of: model.meetingPoint) { _, _ in model.agreementConfirmed = false }
+            // Libellé permanent : une fois le lieu repris, la ligne dit encore ce qu’elle contient.
+            LabeledContent("Lieu") {
+                TextField("Lieu du rendez-vous", text: $model.meetingPoint, axis: .vertical).lineLimit(1...3)
+                    .multilineTextAlignment(.trailing)
+            }
+            .onChange(of: model.meetingPoint) { _, _ in model.agreementConfirmed = false }
             if model.originalLesson == nil {
                 DisclosureGroup("Temps entre deux leçons") {
                     Stepper("\(model.bufferMinutes) min", value: $model.bufferMinutes, in: 0...240, step: 5)
@@ -124,24 +127,32 @@ struct SchoolPlanningView: View {
     }
     private var commercialFields: some View {
         Section {
-            Picker("Prestation", selection: $model.productID) {
-                Text("Choisir une prestation").tag(nil as UUID?)
+            Picker("Tarif", selection: $model.productID) {
+                Text("Choisir un tarif").tag(nil as UUID?)
                 ForEach(model.availableProducts) { product in
                     Text("\(product.label) · \(SchoolCatalogFormatting.price(product.unitPriceCents))").tag(Optional(product.id))
                 }
             }.onChange(of: model.productID) { _, _ in model.termsAccepted = false }
             if model.availableProducts.isEmpty {
-                formNote("Aucune prestation valable à cette date.")
+                formNote("Aucun tarif valable à cette date.")
             }
             if let product = model.selectedProduct {
-                Stepper("Quantité : \(model.quantity)", value: $model.quantity, in: 1...100)
-                    .onChange(of: model.quantity) { _, _ in model.termsAccepted = false }
+                Stepper(value: $model.quantity, in: 1...100) {
+                    Text("Quantité : \(model.quantity)").monospacedDigit()
+                }
+                .onChange(of: model.quantity) { _, _ in model.termsAccepted = false }
                 LabeledContent("Durée") { Text("\(model.duration) min").monospacedDigit().foregroundStyle(DrivyTheme.muted) }
                 if let price = model.selectedPrice { LabeledContent("Prix convenu") { Text(SchoolCatalogFormatting.price(price)).monospacedDigit().foregroundStyle(DrivyTheme.muted) } }
-                Text("\(product.unitLabel) · \(SchoolCatalogFormatting.price(product.unitPriceCents)) l’unité").font(.footnote.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+                // Le prix unitaire n’apporte rien quand il est déjà le prix convenu.
+                if model.quantity > 1 {
+                    LabeledContent("Prix par \(product.unitLabel)") {
+                        Text(SchoolCatalogFormatting.price(product.unitPriceCents)).monospacedDigit().foregroundStyle(DrivyTheme.muted)
+                    }
+                }
                 if let terms = model.selectedTerms {
-                    DisclosureGroup("Conditions · \(terms.label)") {
-                        Text(terms.termsText).font(.subheadline).textSelection(.enabled)
+                    DisclosureGroup("Conditions") {
+                        Text(terms.label).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                        Text(terms.termsText).font(.subheadline).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                         Text(SchoolPlanningFormat.validity(terms.validFrom, until: terms.validUntil)).font(.caption).foregroundStyle(DrivyTheme.muted)
                     }
                     Toggle("Prix et conditions acceptés", isOn: $model.termsAccepted)
@@ -154,7 +165,7 @@ struct SchoolPlanningView: View {
                     Text(policy.cancellationPolicyText).font(.subheadline).textSelection(.enabled)
                 }
             }
-        } header: { Text("La prestation") }
+        } header: { Text("Le tarif") }
         .disabled(!model.canMutate)
     }
     private var reviewFields: some View {
@@ -194,7 +205,7 @@ struct SchoolPlanningView: View {
                 Task { if await model.saveBooking() { dismiss() } }
             } label: {
                 HStack(spacing: DrivySpacing.xs) {
-                    if model.isBusy { ProgressView().tint(DrivyTheme.disabledText) }
+                    if model.isBusy { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
                     Label(model.originalLesson == nil ? "Confirmer la leçon" : "Confirmer le déplacement", systemImage: "calendar.badge.checkmark")
                 }
             }
@@ -220,7 +231,7 @@ struct SchoolPlanningView: View {
         if model.startsAt <= Date() { return "Choisissez un horaire à venir." }
         if model.meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Indiquez le lieu de rendez-vous." }
         if model.originalLesson != nil && !model.agreementConfirmed { return "Confirmez que le nouvel horaire est convenu." }
-        if (model.originalLesson == nil || model.changesCommercialTerms) && model.productID == nil { return "Choisissez une prestation pour fixer la durée et le prix." }
+        if (model.originalLesson == nil || model.changesCommercialTerms) && model.productID == nil { return "Choisissez un tarif pour fixer la durée et le prix." }
         if (model.originalLesson == nil || model.changesCommercialTerms) && !model.termsAccepted { return "Relisez puis acceptez le prix et les conditions." }
         return "Vérifiez les informations du rendez-vous avant de confirmer."
     }
@@ -246,17 +257,20 @@ struct SchoolPlanningView: View {
                 Text("Autre motif").tag("OTHER")
             }
             TextField("Précision facultative", text: $model.reason, axis: .vertical).lineLimit(3...6)
+            // Explication seulement en cas d’erreur : la limite n’apparaît qu’une fois dépassée.
+            if model.reason.count > 1000 {
+                DrivyFormMessage(text: "Raccourcissez la précision à 1 000 caractères.", tone: .danger)
+            }
         } header: { Text("Motif d’annulation") }
-        footer: { Text("Précision limitée à 1 000 caractères.") }
         Section {
             Button(role: .destructive) { confirmsCancellation = true } label: {
-                Label("Annuler cette leçon", systemImage: "calendar.badge.minus")
+                Label("Annuler la leçon", systemImage: "calendar.badge.minus")
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity, minHeight: 48)
             }
             .disabled(!model.canMutate || model.cancellationReason.isEmpty || model.reason.count > 1000 || model.originalLesson?.status != "PLANNED")
         } footer: {
-            Text(model.cancellationReason.isEmpty ? "Choisissez un motif pour pouvoir annuler." : "Une confirmation vous est demandée avant l’annulation.")
+            if model.cancellationReason.isEmpty { Text("Choisissez un motif pour pouvoir annuler.") }
         }
     }
     private func formNote(_ text: String) -> some View {
@@ -267,39 +281,35 @@ struct SchoolPlanningView: View {
 struct SchoolPlanningFeedback: View {
     @Bindable var model: SchoolPlanningWorkspace
     var body: some View {
-        if model.isLoading { Section { ProgressView("Ouverture du planning…").frame(maxWidth: .infinity, alignment: .leading) } }
+        if model.isLoading { Section { DrivyLoadingState(title: "Ouverture du planning…") } }
         if let error = model.errorMessage {
+            // Même présentation d’erreur que les pages : notice, puis « Réessayer ».
             Section {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.danger)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !model.accessRevoked {
-                    Button { Task { await model.load() } } label: { Label("Actualiser les informations", systemImage: "arrow.clockwise") }
-                        .disabled(model.isBusy || model.isLoading)
-                }
+                SchoolErrorNotice(message: error, retry: model.accessRevoked ? nil : { Task { await model.load() } })
+                    .disabled(model.isBusy || model.isLoading)
             }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
         }
         if let success = model.successMessage {
-            Section {
-                Label(success, systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(DrivyTheme.success)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Section { DrivyFormMessage(text: success, tone: .success) }
         }
         if let command = model.pending {
             Section {
-                Label("Confirmation en attente", systemImage: "clock.arrow.circlepath").font(.headline).foregroundStyle(DrivyTheme.warning)
-                Text("La demande est conservée. Vérifiez son résultat avant d’en envoyer une nouvelle.").font(.subheadline)
-                    .fixedSize(horizontal: false, vertical: true)
-                DisclosureGroup("Référence de la demande") {
-                    Text(command.id.uuidString).font(.caption.monospaced()).textSelection(.enabled)
-                }
-                Button("Vérifier auprès de l’école") { Task { await model.verify() } }.disabled(model.isBusy || model.isLoading)
-                if model.canRetry { Button("Renvoyer la même demande") { Task { _ = await model.retry() } } }
-                else if command.scope != model.scope { Text("Vos accès ont changé. La demande initiale reste conservée.").font(.caption).foregroundStyle(DrivyTheme.muted) }
+                DrivyPendingRequest(message: "La demande est conservée. Vérifiez son résultat avant d’en envoyer une nouvelle.",
+                    notes: !model.canRetry && command.scope != model.scope ? ["Vos accès ont changé. La demande initiale reste conservée."] : [],
+                    reference: command.id,
+                    verify: { Task { await model.verify() } }, canVerify: !(model.isBusy || model.isLoading),
+                    retry: model.canRetry ? { Task { _ = await model.retry() } } : nil)
             }
         }
-        if model.isBusy { Section { ProgressView("Confirmation par l’école…") } }
+        if model.isBusy { Section { DrivyLoadingState(title: "Confirmation par l’école…") } }
     }
+}
+
+/// Colonne bornée des formulaires de planification (planifier, déplacer, annuler, démarrer maintenant) sur iPad.
+enum SchoolFormLayout {
+    static let maxWidth: CGFloat = 820
 }
 
 enum SchoolPlanningFormat {

@@ -26,7 +26,7 @@ struct SchoolInvitationsView: View {
                 if let error = model.errorMessage {
                     Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
                 }
-                if model.isLoading { Section { ProgressView().frame(maxWidth: .infinity, minHeight: 44) } }
+                if model.isLoading { Section { DrivyLoadingState(title: "Chargement des invitations…") } }
                 if model.school != nil && model.invitations.isEmpty && !model.isLoading && model.errorMessage == nil {
                     Section {
                         DrivyEmptyState(title: "Aucune invitation", symbol: "envelope",
@@ -93,7 +93,7 @@ struct SchoolInvitationsView: View {
                     .navigationTitle("Code élève")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .confirmationAction) { Button("Terminé") { model.dismissIssuedCode() } }
+                        ToolbarItem(placement: .confirmationAction) { Button("Fermer") { model.dismissIssuedCode() } }
                     }
             }
             .tint(DrivyTheme.accent)
@@ -207,8 +207,11 @@ private struct InvitationDetailView: View {
                     Text(InvitationPresentation.title(invitation, training: model.trainingLabel(invitation)))
                         .font(.drivyTitle).foregroundStyle(DrivyTheme.text)
                         .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                    DrivyStatusBadge(title: statusTitle, symbol: InvitationPresentation.symbol(invitation.status),
-                        tone: InvitationPresentation.tone(invitation.status))
+                    // Un badge seulement pour l’inhabituel, comme dans la liste : un code valable n’en porte pas.
+                    if !(invitation.isCode && invitation.status == .pending) {
+                        DrivyStatusBadge(title: statusTitle, symbol: InvitationPresentation.symbol(invitation.status),
+                            tone: InvitationPresentation.tone(invitation.status))
+                    }
                 }
                 DrivyRowGroup {
                     if !invitation.isCode {
@@ -278,10 +281,10 @@ struct InvitationCreationView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if model.issuedCode == nil {
-                    ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
+                    ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(model.isBusy) }
                 } else {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Terminé") { model.dismissIssuedCode(); dismiss() }
+                        Button("Fermer") { model.dismissIssuedCode(); dismiss() }
                             .accessibilityIdentifier("invitation-code-done")
                     }
                 }
@@ -297,59 +300,63 @@ struct InvitationCreationView: View {
 
     private var form: some View {
         Form {
-            if model.isLoading && model.school == nil {
-                Section { DrivyLoadingState(title: "Chargement de l’école…") }
-            }
-            if model.lacksOpenTraining {
-                Section {
-                    DrivyEmptyState(title: "Aucune formation ouverte", message: "Ouvrez-la sur le web pour inviter un élève.",
-                        symbol: "steeringwheel")
+            // Lignes sur la surface du thème, comme la liste des invitations (le gris système du sombre ne s’accorde pas).
+            Group {
+                if model.isLoading && model.school == nil {
+                    Section { DrivyLoadingState(title: "Chargement de l’école…") }
                 }
-            }
-            if model.lacksInstructor {
-                Section {
-                    DrivyEmptyState(title: "Aucun moniteur actif", message: "Ajoutez un moniteur sur le web pour inviter un élève.",
-                        symbol: "person.crop.circle")
-                }
-            }
-            if model.carriesTraining && !model.offerings.isEmpty {
-                Section("Permis") {
-                    ForEach(model.offerings) { offering in
-                        Toggle(offeringLabel(offering), isOn: Binding(
-                            get: { model.selectedOfferingIDs.contains(offering.id) },
-                            set: { selected in
-                                if selected { model.selectedOfferingIDs.insert(offering.id) }
-                                else { model.selectedOfferingIDs.remove(offering.id) }
-                            }))
-                            .disabled(!model.selectedOfferingIDs.contains(offering.id) && model.selectedOfferingIDs.count >= 16)
-                            .accessibilityIdentifier("invitation-training-\(offering.id.uuidString)")
+                if model.lacksOpenTraining {
+                    Section {
+                        DrivyEmptyState(title: "Aucune formation ouverte", message: "Ouvrez-la sur le web pour inviter un élève.",
+                            symbol: "steeringwheel")
                     }
                 }
-                .disabled(!model.mayEdit)
-            }
-            if model.roles.contains("ADMIN"), !model.instructors.isEmpty {
-                Section {
-                    Picker("Moniteur", selection: $model.selectedInstructorID) {
-                        if model.selectedInstructorID == nil { Text("Choisir").tag(nil as UUID?) }
-                        ForEach(model.instructors) { instructor in
-                            Text(instructor.displayName).tag(Optional(instructor.id))
+                if model.lacksInstructor {
+                    Section {
+                        DrivyEmptyState(title: "Aucun moniteur actif", message: "Ajoutez un moniteur sur le web pour inviter un élève.",
+                            symbol: "person.crop.circle")
+                    }
+                }
+                if model.carriesTraining && !model.offerings.isEmpty {
+                    Section("Permis") {
+                        ForEach(model.offerings) { offering in
+                            Toggle(offeringLabel(offering), isOn: Binding(
+                                get: { model.selectedOfferingIDs.contains(offering.id) },
+                                set: { selected in
+                                    if selected { model.selectedOfferingIDs.insert(offering.id) }
+                                    else { model.selectedOfferingIDs.remove(offering.id) }
+                                }))
+                                .disabled(!model.selectedOfferingIDs.contains(offering.id) && model.selectedOfferingIDs.count >= 16)
+                                .accessibilityIdentifier("invitation-training-\(offering.id.uuidString)")
                         }
                     }
-                    .accessibilityIdentifier("invitation-instructor")
+                    .disabled(!model.mayEdit)
                 }
-                .disabled(!model.mayEdit)
+                if model.roles.contains("ADMIN"), !model.instructors.isEmpty {
+                    Section {
+                        Picker("Moniteur", selection: $model.selectedInstructorID) {
+                            if model.selectedInstructorID == nil { Text("Choisir").tag(nil as UUID?) }
+                            ForEach(model.instructors) { instructor in
+                                Text(instructor.displayName).tag(Optional(instructor.id))
+                            }
+                        }
+                        .accessibilityIdentifier("invitation-instructor")
+                    }
+                    .disabled(!model.mayEdit)
+                }
+                if let error = model.creationOptionsError {
+                    Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
+                }
+                if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) } }
+                if let pending = model.pending {
+                    InvitationPendingSection(model: model, pending: pending)
+                } else if model.codeRecovery != nil {
+                    Section { InvitationCodeRecovery(model: model) }
+                } else if model.needsReload && !model.isLoading {
+                    Section { Button("Actualiser") { Task { await model.load() } } }
+                }
             }
-            if let error = model.creationOptionsError {
-                Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
-            }
-            if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) } }
-            if let pending = model.pending {
-                InvitationPendingSection(model: model, pending: pending)
-            } else if model.codeRecovery != nil {
-                Section { InvitationCodeRecovery(model: model) }
-            } else if model.needsReload && !model.isLoading {
-                Section { Button("Actualiser") { Task { await model.load() } } }
-            }
+            .listRowBackground(DrivyTheme.surface)
         }
         .scrollContentBackground(.hidden)
         .frame(maxWidth: 820).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
@@ -387,6 +394,7 @@ struct InvitationCodeResultView: View {
     var now = Date()
     @State private var copied = false
     @ScaledMetric(relativeTo: .largeTitle) private var codeSize: CGFloat = 46
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollView {
@@ -410,21 +418,30 @@ struct InvitationCodeResultView: View {
                 .frame(maxWidth: .infinity)
                 .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.m))
                 VStack(spacing: DrivySpacing.s) {
-                    ShareLink(item: Self.message(code: issued.code, schoolName: schoolName)) {
-                        Label("Partager", systemImage: "square.and.arrow.up")
+                    // Un verbe et son objet ; l’aperçu du partage nomme ce qui part.
+                    ShareLink(item: Self.message(code: issued.code, schoolName: schoolName),
+                              preview: SharePreview("Code élève")) {
+                        Label("Partager le code", systemImage: "square.and.arrow.up")
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle())
                     .accessibilityIdentifier("invitation-code-share")
                     Button(action: copy) {
-                        Label(copied ? "Copié" : "Copier", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        Label(copied ? "Code copié" : "Copier le code", systemImage: copied ? "checkmark" : "doc.on.doc")
                     }
                     .buttonStyle(DrivySecondaryButtonStyle())
+                    .animation(DrivyMotion.feedback(reduceMotion), value: copied)
                     .accessibilityIdentifier("invitation-code-copy")
                 }
             }
             .drivyPageContent(maxWidth: 560)
         }
         .background(DrivyTheme.surface)
+        // La copie est locale et immédiate : retour haptique puis retour au libellé d’action.
+        .sensoryFeedback(.success, trigger: copied) { _, isCopied in isCopied }
+        .task(id: copied) {
+            guard copied, (try? await Task.sleep(for: .seconds(2))) != nil else { return }
+            copied = false
+        }
     }
 
     private func copy() {
@@ -476,13 +493,18 @@ private struct InvitationRevocationView: View {
                         Text("\(reason.unicodeScalars.count)/1 000 caractères").font(.caption)
                             .foregroundStyle(reason.unicodeScalars.count > 1000 ? DrivyTheme.danger : DrivyTheme.muted)
                     }
-                }.disabled(!model.mayEdit)
-                if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) } }
-                if let pending = model.pending {
-                    InvitationPendingSection(model: model, pending: pending)
-                } else if model.needsReload {
-                    Section { Button("Actualiser avant de confirmer") { Task { await model.load() } } }
                 }
+                .disabled(!model.mayEdit)
+                .listRowBackground(DrivyTheme.surface)
+                Group {
+                    if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) } }
+                    if let pending = model.pending {
+                        InvitationPendingSection(model: model, pending: pending)
+                    } else if model.needsReload {
+                        Section { Button("Actualiser avant de confirmer") { Task { await model.load() } } }
+                    }
+                }
+                .listRowBackground(DrivyTheme.surface)
             }
             .scrollContentBackground(.hidden)
             .frame(maxWidth: 820).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
@@ -498,7 +520,7 @@ private struct InvitationRevocationView: View {
                 }
             }
             .navigationTitle(invitation.isCode ? "Révoquer le code" : "Révoquer le lien").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(model.isBusy) } }
             .alert("Confirmer la révocation ?", isPresented: $confirms) {
                 Button("Annuler", role: .cancel) {}
                 Button("Révoquer", role: .destructive) {

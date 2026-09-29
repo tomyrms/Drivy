@@ -22,7 +22,7 @@ struct SchoolCodeJoinView: View {
                     else if model.isPending { pending }
                     else if let preview = model.preview { summary(preview) }
                     else if model.isReady { entry }
-                    else if model.isBusy { ProgressView().frame(maxWidth: .infinity, minHeight: 120) }
+                    else if model.isBusy { DrivyLoadingState(title: "Vérification de votre compte…") }
                 }
                 .drivyPageContent(maxWidth: 560)
             }
@@ -49,10 +49,26 @@ struct SchoolCodeJoinView: View {
         Binding(get: { model.code }, set: { model.code = SchoolInvitationCode.formatted($0) })
     }
 
+    /// Entry state: the field is on screen, so what is wrong with the code is said under it.
+    private var isEntering: Bool {
+        model.isReady && model.preview == nil && !model.isPending && !model.isConfirmed
+    }
+
+    /// Refused or mistyped code, shown under the field rather than in the bottom bar.
+    private var fieldError: String? {
+        guard isEntering else { return nil }
+        if let error = model.errorMessage { return error }
+        if model.isMistyped { return "Vérifiez le code : il ne contient ni I, ni O, ni 0, ni 1." }
+        return nil
+    }
+
     private var entry: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.m) {
+        let error = fieldError
+        let shape = RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
+        return VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             Text("Code d’invitation")
-                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(DrivyTheme.text)
                 .accessibilityHidden(true)
             TextField("XXXX-XXXX", text: codeBinding)
                 .font(.system(size: codeSize, weight: .semibold, design: .monospaced))
@@ -66,29 +82,54 @@ struct SchoolCodeJoinView: View {
                 .focused($fieldFocused)
                 .padding(DrivySpacing.m)
                 .frame(minHeight: 64)
-                .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+                .background(DrivyTheme.surface, in: shape)
                 .overlay {
-                    RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
-                        .strokeBorder(model.isMistyped ? DrivyTheme.danger : DrivyTheme.controlBorder, lineWidth: 1)
+                    shape.strokeBorder(error == nil ? DrivyTheme.controlBorder : DrivyTheme.danger,
+                                       lineWidth: error == nil ? 1 : 1.5)
                 }
                 .disabled(model.isBusy)
                 .accessibilityLabel("Code d’invitation")
+                .accessibilityHint(error ?? "")
                 .accessibilityIdentifier("join-code-field")
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(DrivyTheme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(error)
+                    .accessibilityIdentifier("join-code-field-error")
+            }
+            // Same paste control as the invitation link; the field formats what is pasted.
+            PasteButton(payloadType: String.self) { values in
+                if let value = values.first, value.utf8.count <= 64 { model.code = SchoolInvitationCode.formatted(value) }
+            }
+            .accessibilityLabel("Coller le code")
+            .frame(minHeight: 44)
+            .padding(.top, DrivySpacing.xs)
+            .disabled(model.isBusy)
             if let useLink {
-                Button(action: useLink) {
-                    Text("J’ai un lien d’invitation")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(model.isBusy ? DrivyTheme.disabledText : DrivyTheme.accent)
-                .disabled(model.isBusy)
-                .accessibilityIdentifier("join-use-link")
+                secondaryLink("J’ai un lien d’invitation", action: useLink)
+                    .accessibilityIdentifier("join-use-link")
             }
         }
     }
 
+    /// Text action of the join screens: same size, colour and 44 pt target in both sheets.
+    private func secondaryLink(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .multilineTextAlignment(.leading)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(model.isBusy ? DrivyTheme.disabledText : DrivyTheme.accent)
+        .disabled(model.isBusy)
+    }
+
+    /// Same school summary as the invitation link: name, then one labelled line per fact.
     private func summary(_ preview: SchoolCodePreview) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.m) {
             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
@@ -97,29 +138,28 @@ struct SchoolCodeJoinView: View {
                     .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
-                Text(details(preview))
+                Label(SchoolPresentation.roles(preview.roles), systemImage: "person.crop.circle")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.muted)
+                    .foregroundStyle(DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let categories = categories(preview) {
+                    Label(categories, systemImage: "car")
+                        .font(.subheadline)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             if !model.isConfirmed && !model.isPending {
-                Button { model.anotherCode() } label: {
-                    Text("Saisir un autre code")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(model.isBusy ? DrivyTheme.disabledText : DrivyTheme.accent)
-                .disabled(model.isBusy)
+                secondaryLink("Saisir un autre code") { model.anotherCode() }
             }
         }
     }
 
-    private func details(_ preview: SchoolCodePreview) -> String {
-        var parts = [SchoolPresentation.roles(preview.roles)]
-        if !preview.categories.isEmpty { parts.append("Permis \(Array(Set(preview.categories)).sorted().joined(separator: ", "))") }
-        return parts.joined(separator: " · ")
+    private func categories(_ preview: SchoolCodePreview) -> String? {
+        guard !preview.categories.isEmpty else { return nil }
+        return "Permis \(Array(Set(preview.categories)).sorted().joined(separator: ", "))"
     }
 
     private var pending: some View {
@@ -142,9 +182,9 @@ struct SchoolCodeJoinView: View {
         }
     }
 
+    /// Once the field is gone (preview, pending), a failure is said next to the action.
     private var hint: (text: String?, tone: DrivyTone) {
-        if let error = model.errorMessage, model.isReady { return (error, .danger) }
-        if model.isMistyped && model.preview == nil { return ("Vérifiez le code : il ne contient ni I, ni O, ni 0, ni 1.", .danger) }
+        if let error = model.errorMessage, model.isReady, !isEntering { return (error, .danger) }
         return (nil, .neutral)
     }
 
@@ -164,7 +204,7 @@ struct SchoolCodeJoinView: View {
                 .accessibilityIdentifier("join-code-verify")
             } else if model.preview != nil {
                 Button { Task { await model.accept() } } label: {
-                    DrivyBusyLabel(title: "Rejoindre", busyTitle: "Envoi…", isBusy: model.isBusy)
+                    DrivyBusyLabel(title: "Rejoindre l’école", busyTitle: "Envoi…", isBusy: model.isBusy)
                 }
                 .disabled(!model.canAccept)
                 .accessibilityIdentifier("join-code-confirm")
@@ -190,6 +230,8 @@ struct SchoolWithoutSchoolView: View {
     var body: some View {
         ContentUnavailableView {
             Label("Aucune école", systemImage: "building.2")
+        } description: {
+            Text("Saisissez le code reçu de votre moniteur.")
         } actions: {
             if let joinSchool {
                 Button(action: joinSchool) { Label("J’ai un code", systemImage: "number") }

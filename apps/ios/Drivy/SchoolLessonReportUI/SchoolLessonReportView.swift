@@ -36,7 +36,9 @@ struct SchoolLessonReportView: View {
                 SchoolLessonReportContent(model: model, learnerName: learnerName, schoolWorkspace: schoolWorkspace, agenda: client.agenda,
                     opensCompletion: opensCompletion, isNextPlanned: isNextPlanned)
             } else if schoolWorkspace.membership != nil {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.canvas)
+                ProgressView("Chargement de la leçon…")
+                    .foregroundStyle(DrivyTheme.muted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.canvas)
             } else {
                 ContentUnavailableView("Choisissez votre école", systemImage: "building.2")
             }
@@ -73,6 +75,14 @@ struct SchoolLessonReportView: View {
             model = value; await value.load()
         }
     }
+}
+
+/// Seuils et colonnes de la leçon : contexte à gauche, bilan à droite dès que la fenêtre le permet.
+private enum LessonLayout {
+    static let splitBreakpoint: CGFloat = 900
+    static let contextColumnWidth: CGFloat = 380
+    static let splitMaxWidth: CGFloat = 1248
+    static let formMaxWidth: CGFloat = 820
 }
 
 private struct SchoolLessonReportContent: View {
@@ -184,28 +194,32 @@ private struct SchoolLessonReportContent: View {
         return GeometryReader { geometry in
             // Le contexte reste à portée pendant la rédaction. La saisie vit dans le modèle,
             // au-dessus de ce changement de composition et des rotations de la fenêtre.
-            if geometry.size.width >= 900 && hasCompletedReport && !typeSize.isAccessibilitySize {
+            if geometry.size.width >= LessonLayout.splitBreakpoint && hasCompletedReport && !typeSize.isAccessibilitySize {
                 HStack(spacing: 0) {
                     Form { lessonContext }
                         .scrollContentBackground(.hidden)
-                        .frame(width: 380)
+                        .frame(width: LessonLayout.contextColumnWidth)
                     Form { completedReport }
                         .scrollContentBackground(.hidden)
                         .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: 1248)
+                .frame(maxWidth: LessonLayout.splitMaxWidth)
                 .frame(maxWidth: .infinity)
             } else {
                 Form {
                     lessonContext
                     completedReport
-                    if isPlanned, model.isAuthor { goalsEditor(savesInline: !isGoalsBar(bar)) }
-                    if isPlanned, model.isOwnLearner, let goals = model.preparation?.goals, !goals.isEmpty { goalsReader(goals) }
-                    if isPlanned, model.isAuthor { observationsSection }
-                    if let wish = model.wish, showsWish(wish) { wishSection(wish) }
+                    // Avant la leçon : le souhait de l’élève éclaire les objectifs, puis viennent les observations.
+                    Group {
+                        if let wish = model.wish, showsWish(wish) { wishSection(wish) }
+                        if isPlanned, model.isAuthor { goalsEditor(savesInline: !isGoalsBar(bar)) }
+                        if isPlanned, model.isOwnLearner, let goals = model.preparation?.goals, !goals.isEmpty { goalsReader(goals) }
+                        if isPlanned, model.isAuthor { observationsSection }
+                    }
+                    .listRowBackground(DrivyTheme.surface)
                 }
                 .scrollContentBackground(.hidden)
-                .frame(maxWidth: 820)
+                .frame(maxWidth: LessonLayout.formMaxWidth)
                 .frame(maxWidth: .infinity)
             }
         }
@@ -229,19 +243,26 @@ private struct SchoolLessonReportContent: View {
         isCompleted && ((model.isAuthor && model.draft != nil) || (!model.isAuthor && model.canReadSharedReport))
     }
 
+    /// Les lignes des sections prennent la surface du thème (le gris système du sombre ne s’accorde pas au canevas).
     @ViewBuilder private var lessonContext: some View {
         headerSection
-        if model.needsReload && model.hasLocalEdits {
-            Section("Saisie conservée") { Text(model.retainedEditsText).textSelection(.enabled) }
+        Group {
+            if model.needsReload && model.hasLocalEdits {
+                Section("Saisie conservée") { Text(model.retainedEditsText).textSelection(.enabled) }
+            }
+            if model.pending != nil { pendingSection }
+            if isCompleted, readsLesson, !model.captures.isEmpty || !model.track.isEmpty { trackSection }
+            if isCompleted, model.isAuthor || model.isOwnLearner { observationsSection }
         }
-        if model.pending != nil { pendingSection }
-        if isCompleted, readsLesson, !model.captures.isEmpty || !model.track.isEmpty { trackSection }
-        if isCompleted, model.isAuthor || model.isOwnLearner { observationsSection }
+        .listRowBackground(DrivyTheme.surface)
     }
 
     @ViewBuilder private var completedReport: some View {
-        if model.isAuthor, isCompleted, model.draft != nil { reportEditor }
-        if !model.isAuthor, model.canReadSharedReport, isCompleted { sharedReportSection }
+        Group {
+            if model.isAuthor, isCompleted, model.draft != nil { reportEditor }
+            if !model.isAuthor, model.canReadSharedReport, isCompleted { sharedReportSection }
+        }
+        .listRowBackground(DrivyTheme.surface)
     }
 
     private func isGoalsBar(_ bar: PlannedBar?) -> Bool {
@@ -301,11 +322,17 @@ private struct SchoolLessonReportContent: View {
                     Text(learnerName).font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
                     if let lesson = model.lesson {
                         if let schedule = SchoolLessonHubRules.schedule(lesson) {
-                            Text(schedule).font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+                            // L’intervalle horaire ne se coupe jamais entre ses deux heures.
+                            Text(schedule.replacingOccurrences(of: " – ", with: "\u{00A0}–\u{00A0}"))
+                                .font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        Label(lesson.meetingPoint, systemImage: "mappin").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
+                        // Symbole collé au lieu, aligné sur la ligne de base (le Label réservait une colonne d’icône trop large).
+                        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xxs) {
+                            Image(systemName: "mappin").accessibilityHidden(true)
+                            Text(lesson.meetingPoint).fixedSize(horizontal: false, vertical: true)
+                        }
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     }
                 }
             }
@@ -314,7 +341,7 @@ private struct SchoolLessonReportContent: View {
             // Un badge seulement pour l’inhabituel.
             if let lesson = model.lesson, lesson.drivyState.isUnusual { lesson.drivyState.badge }
             if model.isLoading || model.isBusy {
-                ProgressView().frame(maxWidth: .infinity, alignment: .leading)
+                DrivyLoadingState(title: model.isLoading ? "Chargement de la leçon…" : "Enregistrement…")
             }
             if let error = model.errorMessage {
                 SchoolErrorNotice(message: error, retry: model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
@@ -324,16 +351,32 @@ private struct SchoolLessonReportContent: View {
             if let message = model.information { DrivyInlineMessage(text: message, tone: .neutral) }
         }
         .listRowBackground(Color.clear)
+        // En-tête posé sur le canevas : aucun filet entre le nom, l’état et les messages.
+        .listRowSeparator(.hidden)
     }
 
+    /// Même présentation que partout ailleurs pour une demande au résultat inconnu.
     private var pendingSection: some View {
-        Section {
-            Label("Envoi en attente de confirmation", systemImage: "clock.arrow.circlepath").foregroundStyle(DrivyTheme.warning)
-            DisclosureGroup("Voir la demande") { Text(model.pendingDescription).textSelection(.enabled) }
-            Button("Vérifier") { Task { await model.verifyPending() } }.disabled(model.isBusy || model.isLoading)
-            if model.pending?.kind.isReport == true {
-                Button("Renvoyer") { model.reviewPending(); Task { await model.retryPending() } }
-                    .disabled(model.isBusy || model.isLoading)
+        let idle = !(model.isBusy || model.isLoading)
+        let retry: (() -> Void)? = model.pending?.kind.isReport == true
+            ? { model.reviewPending(); Task { await model.retryPending() } }
+            : nil
+        return Section {
+            DrivyPendingRequest(
+                message: "La demande est conservée sur cet appareil. Vérifiez son résultat avant une nouvelle action.",
+                verify: { Task { await model.verifyPending() } }, canVerify: idle,
+                retry: retry, canRetry: idle
+            ) {
+                DisclosureGroup {
+                    Text(model.pendingDescription)
+                        .font(.footnote)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } label: {
+                    Text("Voir la demande").font(.footnote).foregroundStyle(DrivyTheme.muted)
+                }
             }
         }
     }
@@ -408,20 +451,23 @@ private struct SchoolLessonReportContent: View {
     @ViewBuilder private func completeButton(primary: Bool) -> some View {
         if primary {
             Button { Task { _ = await finishLesson("") } } label: {
-                HStack { if isFinishing { ProgressView() }; Label("Terminer la leçon", systemImage: "checkmark.circle") }
+                HStack(spacing: DrivySpacing.xs) {
+                    if isFinishing { ProgressView().accessibilityHidden(true) }
+                    Label("Terminer la leçon", systemImage: "checkmark.circle")
+                }
             }
                 .buttonStyle(DrivyPrimaryButtonStyle())
                 .disabled(!model.canMutate || isFinishing)
                 .accessibilityIdentifier("lesson-complete")
         } else {
+            // Action alternative sous « Démarrer le trajet » ou « Trajet en cours » : même composant que partout.
             Button { Task { _ = await finishLesson("") } } label: {
-                Text("Terminer la leçon")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(Rectangle())
+                HStack(spacing: DrivySpacing.xs) {
+                    if isFinishing { ProgressView().accessibilityHidden(true) }
+                    Label("Terminer la leçon", systemImage: "checkmark.circle")
+                }
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(model.canMutate ? DrivyTheme.accent : DrivyTheme.disabledText)
+            .buttonStyle(DrivySecondaryButtonStyle())
             .disabled(!model.canMutate || isFinishing)
             .accessibilityIdentifier("lesson-complete")
         }
@@ -483,9 +529,8 @@ private struct SchoolLessonReportContent: View {
                 Label("Trajet en cours d’envoi", systemImage: "arrow.triangle.2.circlepath").foregroundStyle(DrivyTheme.muted)
             }
             if model.isAuthor, model.sharing != nil {
-                Toggle("Visible par l’élève", isOn: Binding(get: { model.captureShared },
+                sharingToggle(Binding(get: { model.captureShared },
                     set: { shared in Task { await model.updateSharing(captureHidden: !shared) } }))
-                    .disabled(!model.canMutate)
             }
         } header: { Text("Trajet") }
     }
@@ -504,8 +549,7 @@ private struct SchoolLessonReportContent: View {
                         Button {
                             Task { await model.updateSharing(observation: observation.id, observationPrivate: !kept) }
                         } label: {
-                            Image(systemName: kept ? "lock.fill" : "lock.open")
-                                .foregroundStyle(kept ? DrivyTheme.warning : DrivyTheme.muted)
+                            PrivacyMark(isPrivate: kept)
                                 .frame(minWidth: 44, minHeight: 44)
                         }
                         .buttonStyle(.borderless)
@@ -564,9 +608,8 @@ private struct SchoolLessonReportContent: View {
     @ViewBuilder private var reportEditor: some View {
         Section {
             if model.sharing != nil {
-                Toggle("Visible par l’élève", isOn: Binding(get: { model.reportShared },
+                sharingToggle(Binding(get: { model.reportShared },
                     set: { shared in Task { await model.updateSharing(reportPrivate: !shared) } }))
-                    .disabled(!model.canMutate)
             }
             reportField("Travail réalisé", text: $model.workedOn)
             reportField("À retenir", text: $model.observationText)
@@ -646,9 +689,13 @@ private struct SchoolLessonReportContent: View {
                 }
                 .disabled(!model.canMutate)
             }
-            TextField("Note pour moi", text: $model.administrativeNote, axis: .vertical).lineLimit(1...4).disabled(!model.canMutate)
+            // Jamais montrée à l’élève : le cadenas le dit sans texte.
+            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+                PrivacyMark(isPrivate: true).accessibilityHidden(true)
+                TextField("Note pour moi", text: $model.administrativeNote, axis: .vertical).lineLimit(1...4).disabled(!model.canMutate)
+            }
             if savesInline {
-                Button("Enregistrer") { Task { await model.savePreparation() } }
+                Button("Enregistrer les objectifs") { Task { await model.savePreparation() } }
                     .disabled(!model.canMutate || !model.preparationValid || !model.preparationChanged)
             }
         } header: { Text("Objectifs") }
@@ -664,7 +711,7 @@ private struct SchoolLessonReportContent: View {
         Section {
             if model.isOwnLearner {
                 TextField("Ce que j’aimerais travailler", text: $model.wishText, axis: .vertical).lineLimit(2...6).disabled(!model.canMutate)
-                Button("Enregistrer") { Task { await model.saveWish() } }
+                Button("Enregistrer le souhait") { Task { await model.saveWish() } }
                     .disabled(!model.canMutate || model.wishText.unicodeScalars.count > 500 || model.wishText == wish.text)
             } else {
                 Text(wish.text)
@@ -685,6 +732,18 @@ private struct SchoolLessonReportContent: View {
         }
     }
 
+    /// Partage d’un bloc avec l’élève : le cadenas fermé signale ce que le moniteur garde pour lui.
+    private func sharingToggle(_ isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Label {
+                Text("Visible par l’élève")
+            } icon: {
+                PrivacyMark(isPrivate: !isOn.wrappedValue)
+            }
+        }
+        .disabled(!model.canMutate)
+    }
+
     private func reportField(_ label: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             Text(label).font(.headline).accessibilityHidden(true)
@@ -693,6 +752,16 @@ private struct SchoolLessonReportContent: View {
                 .accessibilityHint("Facultatif")
         }
         .padding(.vertical, DrivySpacing.xxs)
+    }
+}
+
+/// Marque de confidentialité de la leçon : cadenas fermé (« Pour moi ») ou ouvert (visible par l’élève).
+/// La forme du symbole change, pas seulement sa couleur.
+private struct PrivacyMark: View {
+    let isPrivate: Bool
+    var body: some View {
+        Image(systemName: isPrivate ? "lock.fill" : "lock.open")
+            .foregroundStyle(isPrivate ? DrivyTheme.warning : DrivyTheme.muted)
     }
 }
 

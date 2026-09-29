@@ -100,12 +100,18 @@ struct SchoolCapturePreparationView: View {
         if let step = model.quickStep {
             DrivyPanel {
                 HStack(spacing: DrivySpacing.m) {
-                    ProgressView()
+                    ProgressView().accessibilityHidden(true)
                     Text(step).font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
             }
             .accessibilityIdentifier("capture-quick-start-progress")
+        } else if case .failed(let message) = model.quickBlock {
+            // Même présentation d’erreur que partout : notice danger et « Réessayer », sans panneau autour.
+            SchoolErrorNotice(message: message, retry: model.isLoading || model.isBusy ? nil : { Task { await start() } })
+                .accessibilityIdentifier("capture-quick-start-block")
         } else if let block = model.quickBlock {
             DrivyPanel {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
@@ -119,8 +125,9 @@ struct SchoolCapturePreparationView: View {
                             .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.mayOpenChoice)
                             .accessibilityIdentifier("preparation-open-choice")
                     case .refused:
+                        // Un refus est un choix normal : ton neutre, pas de phrase de rappel sous le titre.
                         Label("L’élève a refusé l’enregistrement du trajet", systemImage: "location.slash").font(.headline)
-                        Text("La leçon se fait sans GPS.").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                         Button("Modifier l’accord") {
                             model.closeDiagnostic()
                             choiceRoute = ChoiceRoute(lessonID: model.lessonID, store: model.store)
@@ -134,11 +141,8 @@ struct SchoolCapturePreparationView: View {
                             }.buttonStyle(DrivyPrimaryButtonStyle())
                         }
                         retryButton
-                    case .failed(let message):
-                        Label(message, systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.danger)
-                            .fixedSize(horizontal: false, vertical: true)
-                        retryButton
+                    case .failed:
+                        EmptyView()
                     }
                 }
             }
@@ -157,8 +161,7 @@ struct SchoolCapturePreparationView: View {
 
     @ViewBuilder private var feedback: some View {
         if model.isLoading || model.isBusy {
-            ProgressView(model.isBusy ? "Vérification auprès de l’école…" : "Ouverture de la préparation…")
-                .frame(maxWidth: .infinity)
+            DrivyLoadingState(title: model.isBusy ? "Vérification auprès de l’école…" : "Ouverture de la préparation…")
         }
         if let message = model.errorMessage {
             SchoolErrorNotice(message: message,
@@ -216,7 +219,7 @@ struct SchoolCapturePreparationView: View {
                     } else { Text("Aucune mesure récente pour le diagnostic.").font(.subheadline).foregroundStyle(DrivyTheme.muted) }
                 }
                 diagnosticActions
-                if model.isSampling { ProgressView("Recherche d’une mesure ponctuelle…") }
+                if model.isSampling { DrivyLoadingState(title: "Recherche d’une mesure ponctuelle…") }
                 Text("La mesure reste sur cet appareil. Seuls sa fraîcheur, sa précision et les paramètres du téléphone servent au diagnostic.")
                     .font(.footnote).foregroundStyle(DrivyTheme.muted)
                 Divider()
@@ -299,9 +302,6 @@ struct SchoolCapturePreparationView: View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: DrivySpacing.m) {
                 Label("Le départ du trajet", systemImage: "location.fill").font(.drivySection)
-                Text("Après confirmation, seules les positions de cette leçon seront enregistrées. Vous pourrez arrêter le GPS à tout moment.")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
                 if let message = model.startMessage { DrivyInlineMessage(text: message, tone: .neutral) }
                 Button { Task { startReview = await model.reviewStart() } } label: { Label("Relire et démarrer", systemImage: "arrow.right.circle") }
                     .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.mayReviewStart)
@@ -418,14 +418,11 @@ private struct SchoolCaptureStartReviewView: View {
                                 .foregroundStyle(DrivyTheme.success)
                             Label("Diagnostic de l’appareil qualifié", systemImage: "checkmark.shield")
                                 .foregroundStyle(DrivyTheme.success)
-                            Label("Le trajet reste privé. Cette action ne publie ni carte ni bilan.", systemImage: "lock")
-                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .font(.subheadline.weight(.semibold))
                     }
                     DisclosureGroup("Relire l’information GPS de l’école") {
-                        VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: DrivySpacing.m) {
                             Text(review.notice.noticeText)
                             Text("Conservation des données").font(.headline)
                             Text(review.notice.retentionText)
@@ -440,7 +437,7 @@ private struct SchoolCaptureStartReviewView: View {
                         .disabled(model.isBusy).accessibilityIdentifier("capture-confirm-start")
                     if let error = model.errorMessage { SchoolErrorNotice(message: error) }
                     if let message = model.startMessage { DrivyInlineMessage(text: message, tone: .neutral) }
-                    if model.isBusy { ProgressView("Vérification et ouverture du trajet…").frame(maxWidth: .infinity) }
+                    if model.isBusy { DrivyLoadingState(title: "Vérification et ouverture du trajet…") }
                     Button {
                         Task { if await model.confirmStart(review, acknowledged: acknowledged) { dismiss() } }
                     } label: { Label("Démarrer le GPS", systemImage: "location.fill") }

@@ -49,7 +49,7 @@ struct SchoolAgendaView: View {
         GeometryReader { geometry in
             // La semaine garde ses commandes pendant que la liste défile. Les deux
             // colonnes ne sont proposées qu’avec 340 pt de calendrier et 520 pt de liste.
-            if geometry.size.width >= 1000 && !typeSize.isAccessibilitySize {
+            if geometry.size.width >= AgendaLayout.twoColumnBreakpoint && !typeSize.isAccessibilitySize {
                 HStack(alignment: .top, spacing: DrivySpacing.xl) {
                     ScrollView {
                         VStack(alignment: .leading, spacing: DrivySpacing.l) {
@@ -59,7 +59,7 @@ struct SchoolAgendaView: View {
                         }
                         .padding(DrivySpacing.l)
                     }
-                    .frame(width: 388)
+                    .frame(width: AgendaLayout.weekColumnWidth)
                     .background(DrivyTheme.canvas)
                     ScrollView {
                         VStack(alignment: .leading, spacing: DrivySpacing.l) {
@@ -69,21 +69,23 @@ struct SchoolAgendaView: View {
                         .padding(.vertical, DrivySpacing.l)
                         .padding(.trailing, DrivySpacing.xl)
                     }
-                    .frame(maxWidth: 820)
+                    .frame(maxWidth: AgendaLayout.dayColumnMaxWidth)
                     .refreshable { await loadWeek(keepingCurrent: true) }
                 }
-                .frame(maxWidth: 1248, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxWidth: AgendaLayout.weekColumnWidth + DrivySpacing.xl + AgendaLayout.dayColumnMaxWidth,
+                    maxHeight: .infinity, alignment: .topLeading)
                 .frame(maxWidth: .infinity, alignment: .center)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                        // Le filtre agit sur toute la semaine : il reste avec elle, pas entre le jour et ses leçons.
                         weekHeader
                         dayPicker
-                        dayHeading
                         schoolFilter
+                        dayHeading
                         dayContent
                     }
-                    .drivyPageContent(maxWidth: 800)
+                    .drivyPageContent(maxWidth: AgendaLayout.singleColumnMaxWidth)
                 }
                 .refreshable { await loadWeek(keepingCurrent: true) }
             }
@@ -120,12 +122,12 @@ struct SchoolAgendaView: View {
         if workspace.membership == nil {
             ContentUnavailableView("Choisissez votre école", systemImage: "building.2", description: Text("Votre agenda s’affiche une fois l’école choisie."))
         } else if isLoading || (loadedScope != scopeKey && error == nil) {
-            ProgressView("Chargement de l’agenda…").frame(maxWidth: .infinity, minHeight: 160)
+            DrivyLoadingState(title: "Chargement de l’agenda…")
         } else if let error {
             SchoolErrorNotice(message: error, retry: { Task { await loadWeek() } })
         } else if dailyLessons.isEmpty {
             DrivyEmptyState(title: "Aucune leçon ce jour", message: "",
-                symbol: "calendar", actionTitle: mayPlan ? "Planifier" : "Voir le jour suivant") {
+                symbol: "calendar", actionTitle: mayPlan ? "Planifier une leçon" : "Voir le jour suivant") {
                 if mayPlan { planningModel = newPlanningModel() }
                 else if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
             }
@@ -134,6 +136,7 @@ struct SchoolAgendaView: View {
                 ForEach(dailyLessons) { lesson in
                     Button { selectedLesson = lesson } label: { lessonRow(lesson) }
                         .buttonStyle(DrivyRowButtonStyle())
+                        .accessibilityHint("Ouvre la leçon")
                     Divider().overlay(DrivyTheme.border)
                 }
             }
@@ -179,10 +182,9 @@ struct SchoolAgendaView: View {
     }
     private var planButton: some View {
         Button { planningModel = newPlanningModel() } label: {
-            Label("Planifier", systemImage: "plus").font(.body.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
+            Label("Planifier une leçon", systemImage: "plus").font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
                 .frame(minHeight: 44).fixedSize().contentShape(Rectangle())
         }
-        .accessibilityLabel("Planifier une leçon")
         .accessibilityIdentifier("agenda-plan-lesson")
     }
     @ViewBuilder private var dayPicker: some View {
@@ -226,9 +228,10 @@ struct SchoolAgendaView: View {
         }
     }
 
-    /// Same row anatomy as the training dossier and the report lists.
+    /// Same row anatomy as the training dossier and the report lists: the time column already
+    /// gives start and end, so the meta lines keep only who and where.
     private func lessonRow(_ lesson: SchoolLesson) -> some View {
-        var details = ["\(lesson.durationMinutes) min", lesson.meetingPoint]
+        var details = [lesson.meetingPoint]
         if showsInstructor, let instructor = lesson.providedInstructorName { details.insert(instructor, at: 0) }
         return DrivyLessonRow(start: time(lesson.startsAt), end: time(lesson.endsAt), title: learnerName(lesson),
             details: details, badge: lesson.drivyState.rowBadge)
@@ -283,6 +286,15 @@ struct SchoolAgendaView: View {
             self.error = (error as? LocalizedError)?.errorDescription ?? "L’agenda n’a pas pu être chargé."
         }
     }
+}
+
+/// Colonnes de l’agenda : semaine et liste du jour côte à côte dès 1000 pt
+/// (340 pt de calendrier utile et 520 pt de liste), sinon un seul flux.
+private enum AgendaLayout {
+    static let twoColumnBreakpoint: CGFloat = 1000
+    static let weekColumnWidth: CGFloat = 388
+    static let dayColumnMaxWidth: CGFloat = 820
+    static let singleColumnMaxWidth: CGFloat = 800
 }
 
 extension SchoolAgendaClient {

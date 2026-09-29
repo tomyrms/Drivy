@@ -23,7 +23,7 @@ struct SchoolTripsView: View {
                 SchoolTripsList(model: model, uploads: uploads, roles: roles, learnerName: learnerName,
                     open: open, refresh: refresh)
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.canvas)
+                ProgressView("Chargement des trajets…").frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.canvas)
             }
         }
         .navigationTitle("Trajets")
@@ -122,6 +122,9 @@ private struct SchoolTripsList: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        // Sur iPad, la liste reste une colonne lisible au lieu de s’étirer d’un bord à l’autre.
+        .frame(maxWidth: SchoolFormLayout.maxWidth)
+        .frame(maxWidth: .infinity)
         .background(DrivyTheme.canvas)
         .overlay {
             if model.isEmpty && !hasUploads && !hasUploadError {
@@ -133,13 +136,9 @@ private struct SchoolTripsList: View {
 
     @ViewBuilder private var nextPage: some View {
         if let error = model.moreErrorMessage {
-            VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.danger)
-                    .fixedSize(horizontal: false, vertical: true)
-                DrivyRetryButton { Task { await model.loadMore() } }
-            }
-            .padding(.vertical, DrivySpacing.xs)
+            SchoolErrorNotice(message: error, retry: { Task { await model.loadMore() } })
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
         } else {
             DrivyLoadingState(title: "Chargement des trajets précédents…")
                 .task(id: model.nextCursor) { await model.loadMore() }

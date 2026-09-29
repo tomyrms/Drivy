@@ -233,8 +233,13 @@ struct SchoolCaptureReplayView: View {
                 VStack(alignment: .trailing, spacing: DrivySpacing.s) {
                     if !timeline.samples.isEmpty { controls(timeline, axis: .horizontal) }
                     DrivyMapDock {
-                        selectedDetail(timeline)
-                        rail(timeline)
+                        // Sur iPhone, l’observation choisie remplace le rail : le dock ne grandit
+                        // pas et la carte garde sa place. Fermer le détail rend le rail.
+                        if selectedID != nil, timeline.items.contains(where: { $0.id == selectedID }) {
+                            selectedDetail(timeline)
+                        } else {
+                            rail(timeline)
+                        }
                         player(timeline, showsList: true)
                         if let error = model.errorMessage { DrivyInlineMessage(text: error, tone: .warning) }
                     }
@@ -328,8 +333,8 @@ struct SchoolCaptureReplayView: View {
                         .font(.headline)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 3)
                         .fixedSize(horizontal: false, vertical: true)
-                    Label(item.statusLabel, systemImage: item.symbol)
-                        .font(.subheadline).foregroundStyle(item.tone.foreground)
+                    Text(item.statusLabel)
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(item.tone.foreground)
                     if item.isMarker, item.text != item.title {
                         Text(item.text).font(.subheadline)
                     }
@@ -347,7 +352,7 @@ struct SchoolCaptureReplayView: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Désélectionner l’observation")
+                .accessibilityLabel("Fermer l’observation")
             }
         }
     }
@@ -388,7 +393,7 @@ struct SchoolCaptureReplayView: View {
         Button(action: action) {
             HStack(spacing: DrivySpacing.xs) {
                 Image(systemName: item.symbol)
-                    .font(.caption.weight(.heavy))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(item.tone.foreground)
                     .frame(width: 20, height: 20)
                     .background(item.tone.background, in: Circle())
@@ -607,7 +612,7 @@ private struct SchoolReplayMap: View {
     private func marker(_ item: SchoolReplayTimeline.Item) -> some View {
         let selected = selectedID == item.id
         return Image(systemName: item.symbol)
-            .font(selected ? .body.weight(.bold) : .caption.weight(.heavy))
+            .font(selected ? .body.weight(.bold) : .caption.weight(.bold))
             .foregroundStyle(selected ? DrivyTheme.onAccent : item.tone.foreground)
             .frame(width: selected ? 40 : 26, height: selected ? 40 : 26)
             .background(selected ? DrivyTheme.accent : DrivyTheme.surface, in: Circle())

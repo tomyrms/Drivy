@@ -30,7 +30,8 @@ struct SchoolBrowserView: View {
                 }
                 DrivyAccountToolbarItem(openAccount: openAccount)
             }
-            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 360)
+            .navigationSplitViewColumnWidth(min: LearnersLayout.listMinWidth, ideal: LearnersLayout.listIdealWidth,
+                max: LearnersLayout.listMaxWidth)
         } detail: {
             if workspace.selectedLearnerID != nil {
                 SchoolLearnerDetailView(workspace: workspace, openProfile: openProfile, openPlanning: openPlanning, trainingClient: trainingClient)
@@ -56,8 +57,7 @@ struct SchoolBrowserView: View {
     private var learnerList: some View {
         List(selection: Binding(get: { workspace.selectedLearnerID }, set: { workspace.selectLearner($0) })) {
             if workspace.isLoadingSchool || workspace.isSearching {
-                ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 80)
+                DrivyLoadingState(title: workspace.isSearching ? "Recherche des élèves…" : "Chargement des élèves…")
                     .listRowSeparator(.hidden)
                     .listRowBackground(DrivyTheme.surface)
             }
@@ -96,10 +96,11 @@ struct SchoolBrowserView: View {
             }
             if workspace.nextLearnersCursor != nil {
                 Button { Task { await workspace.loadMoreLearners() } } label: {
-                    if workspace.isLoadingMoreLearners { ProgressView() }
-                    else { Text("Afficher la suite").font(.subheadline.weight(.semibold)) }
+                    DrivyBusyLabel(title: "Afficher d’autres élèves", busyTitle: "Chargement…", isBusy: workspace.isLoadingMoreLearners)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, minHeight: 48)
                 .disabled(workspace.isLoadingMoreLearners || workspace.isSearching)
                 .accessibilityIdentifier("more-learners")
                 .listRowSeparator(.hidden)
@@ -125,6 +126,13 @@ struct SchoolBrowserView: View {
             DrivyEmptyState(title: "Aucun élève", symbol: "person.2")
         }
     }
+}
+
+/// Liste des élèves plafonnée à 360 pt sur iPad ; le dossier prend la largeur restante.
+private enum LearnersLayout {
+    static let listMinWidth: CGFloat = 280
+    static let listIdealWidth: CGFloat = 320
+    static let listMaxWidth: CGFloat = 360
 }
 
 /// School chooser presented from the leading toolbar button of every tab.
@@ -211,7 +219,7 @@ private struct SchoolOverviewView: View {
             if workspace.school != nil {
                 ContentUnavailableView("Sélectionnez un élève", systemImage: "person.text.rectangle")
             } else if workspace.isLoadingSchool {
-                ProgressView()
+                ProgressView("Chargement de l’école…")
             } else if let error = workspace.schoolError {
                 SchoolErrorNotice(message: error, retry: {
                     if let membership = workspace.membership { Task { await workspace.selectSchool(membership) } }
@@ -300,7 +308,7 @@ private struct SchoolLearnerDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.xl) {
                 if workspace.isLoadingLearner {
-                    ProgressView().frame(maxWidth: .infinity, minHeight: 120)
+                    DrivyLoadingState(title: "Chargement du dossier…")
                 } else if let error = workspace.learnerError {
                     SchoolErrorNotice(message: error, retry: { Task { await workspace.loadSelectedLearner() } })
                 } else if let learner = workspace.learner {
@@ -359,7 +367,7 @@ private struct SchoolLearnerDetailView: View {
     private var trainings: some View {
         VStack(alignment: .leading, spacing: 0) {
             if workspace.isLoadingTrainings {
-                ProgressView().frame(maxWidth: .infinity, minHeight: 64)
+                DrivyLoadingState(title: "Chargement des formations…")
             }
             if let error = workspace.trainingsError {
                 SchoolErrorNotice(message: error, retry: { Task { await workspace.loadTrainings() } })
@@ -383,10 +391,11 @@ private struct SchoolLearnerDetailView: View {
             }
             if workspace.nextTrainingsCursor != nil {
                 Button { Task { await workspace.loadMoreTrainings() } } label: {
-                    if workspace.isLoadingMoreTrainings { ProgressView() }
-                    else { Text("Afficher les autres formations").font(.subheadline.weight(.semibold)) }
+                    DrivyBusyLabel(title: "Afficher les autres formations", busyTitle: "Chargement…", isBusy: workspace.isLoadingMoreTrainings)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, minHeight: 48)
                 .disabled(workspace.isLoadingMoreTrainings)
             }
         }

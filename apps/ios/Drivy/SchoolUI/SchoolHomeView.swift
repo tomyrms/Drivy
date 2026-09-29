@@ -202,7 +202,7 @@ struct SchoolHomeView: View {
                 .frame(maxHeight: .infinity, alignment: .top).background(DrivyTheme.surface)
         } else if workspace.isLoadingSchool || workspace.isSearching || workspace.isLoadingLearner || workspace.isLoadingTrainings
                     || (ownLearner != nil && workspace.learner == nil) {
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.surface)
+            ProgressView("Chargement de votre dossier…").frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.surface)
         } else if workspace.school?.status != "ACTIVE" {
             ContentUnavailableView("L’école se prépare", systemImage: "building.2")
         } else if ownLearner == nil {

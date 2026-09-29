@@ -47,24 +47,26 @@ struct SchoolTodayView: View {
             GeometryReader { geometry in
                 // 380 pt pour la leçon et au moins 580 pt de carte ; une fenêtre étroite
                 // conserve le panneau du bas, indépendamment du modèle d’iPad.
-                if geometry.size.width >= 960 && !typeSize.isAccessibilitySize {
+                if geometry.size.width >= TodayLayout.sidebarBreakpoint && !typeSize.isAccessibilitySize {
+                    // Hors de la carte, le panneau latéral est posé sur le fond : filet, pas d’ombre.
                     map
                         .safeAreaInset(edge: .leading, spacing: 0) {
                             ScrollView {
-                                card(now: context.date).padding(DrivySpacing.m)
+                                card(now: context.date, floating: false).padding(DrivySpacing.m)
                             }
-                            .frame(width: 380)
+                            .frame(width: DrivyMapLayout.sidebarWidth)
                             .background(DrivyTheme.canvas)
                         }
                 } else {
+                    let maxHeight = geometry.size.height * TodayLayout.bottomPanelMaxRatio
                     map.safeAreaInset(edge: .bottom, spacing: 0) {
                         ScrollView {
-                            card(now: context.date).padding(DrivySpacing.m)
+                            card(now: context.date, floating: true).padding(DrivySpacing.m)
                                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
                         }
                         .scrollBounceBehavior(.basedOnSize)
-                        .frame(maxWidth: 600)
-                        .frame(height: min(cardHeight > 0 ? cardHeight : geometry.size.height * 0.66, geometry.size.height * 0.66))
+                        .frame(maxWidth: TodayLayout.bottomPanelMaxWidth)
+                        .frame(height: min(cardHeight > 0 ? cardHeight : maxHeight, maxHeight))
                     }
                 }
             }
@@ -102,10 +104,11 @@ struct SchoolTodayView: View {
             .mapControls { MapUserLocationButton() }
     }
 
-    @ViewBuilder private func card(now: Date) -> some View {
+    /// Panneau de la journée : la leçon qui compte maintenant et son action dominante, puis le reste du jour.
+    @ViewBuilder private func card(now: Date, floating: Bool) -> some View {
         let toFinish = planned.filter { ($0.endsAt ?? .distantFuture) <= now }
         let next = planned.first { ($0.endsAt ?? .distantPast) > now }
-        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+        DrivyMapDock(floating: floating) {
             if let lesson = toFinish.first {
                 lessonSummary(lesson, badge: lesson.drivyState(now: now).badge)
                 Button { opened = OpenedLesson(lesson: lesson, completing: true) } label: {
@@ -116,19 +119,22 @@ struct SchoolTodayView: View {
             } else if let next {
                 lessonSummary(next, badge: nil)
                 if mayStart(next, now: now) {
-                    Button { start(next) } label: { Label("Démarrer", systemImage: "location.fill") }
+                    Button { start(next) } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
                         .buttonStyle(DrivyPrimaryButtonStyle())
                         .accessibilityIdentifier("today-start")
                 } else if let opening = startOpening(next, now: now) {
                     Label("Démarrer dès \(opening)", systemImage: "clock")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                        .font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .accessibilityIdentifier("today-start-later")
                 }
             } else if isLoading && loadedKey != scopeKey {
-                ProgressView().frame(maxWidth: .infinity)
+                DrivyLoadingState(title: "Chargement de la journée…")
             } else {
-                Text("Aucune autre leçon aujourd’hui").font(.headline).foregroundStyle(DrivyTheme.text)
+                Text(lessons.isEmpty ? "Aucune leçon aujourd’hui" : "Aucune autre leçon aujourd’hui")
+                    .font(.headline).foregroundStyle(DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
                 if instructs {
                     Button { openStartNow() } label: { Label("Démarrer une leçon", systemImage: "plus") }
                         .buttonStyle(DrivyPrimaryButtonStyle())
@@ -138,27 +144,26 @@ struct SchoolTodayView: View {
             if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
             dayList(now: now, focus: toFinish.first?.id ?? next?.id)
         }
-        .padding(DrivySpacing.m)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
     }
 
     private func lessonSummary(_ lesson: SchoolLesson, badge: DrivyStatusBadge?) -> some View {
         Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(time(lesson)).font(.title3.weight(.bold)).monospacedDigit().foregroundStyle(DrivyTheme.text)
+                    Text(time(lesson)).font(.drivySection).monospacedDigit().foregroundStyle(DrivyTheme.text)
                     Spacer(minLength: DrivySpacing.xs)
                     if let badge { badge }
                 }
                 Text(name(lesson)).font(.headline).foregroundStyle(DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityHint("Ouvrir la leçon")
+        .buttonStyle(DrivyRowButtonStyle())
+        .accessibilityHint("Ouvre la leçon")
     }
 
     /// Les autres leçons du jour, repliées : une ligne par leçon, un badge seulement pour l’inhabituel.
@@ -169,20 +174,23 @@ struct SchoolTodayView: View {
                 VStack(spacing: 0) {
                     ForEach(others) { lesson in
                         Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
-                            HStack(spacing: DrivySpacing.s) {
+                            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
                                 Text(startTime(lesson)).font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-                                Text(name(lesson)).font(.subheadline).foregroundStyle(DrivyTheme.text).lineLimit(1)
+                                Text(name(lesson)).font(.subheadline).foregroundStyle(DrivyTheme.text)
+                                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                                 Spacer(minLength: DrivySpacing.xs)
                                 if let badge = lesson.drivyState(now: now).rowBadge { badge }
                             }
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(DrivyRowButtonStyle())
+                        .accessibilityHint("Ouvre la leçon")
                     }
                 }
             } label: {
-                Text("Leçons du jour (\(lessons.count))").font(.subheadline.weight(.semibold))
+                Text("Leçons du jour (\(lessons.count))").font(.subheadline.weight(.semibold)).monospacedDigit()
+                    .frame(minHeight: 44, alignment: .leading)
             }
             .accessibilityIdentifier("today-day-list")
         }
@@ -280,6 +288,14 @@ struct SchoolTodayView: View {
             self.error = (error as? LocalizedError)?.errorDescription ?? "Les leçons du jour n’ont pas pu être chargées."
         }
     }
+}
+
+/// Seuils d’Aujourd’hui : panneau latéral dès 960 pt (380 pt de leçon, au moins 580 pt de carte),
+/// sinon panneau bas borné en largeur et en hauteur.
+private enum TodayLayout {
+    static let sidebarBreakpoint: CGFloat = 960
+    static let bottomPanelMaxWidth: CGFloat = 600
+    static let bottomPanelMaxRatio: CGFloat = 0.66
 }
 
 extension SchoolLesson {

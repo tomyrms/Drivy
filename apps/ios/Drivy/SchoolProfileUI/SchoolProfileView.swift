@@ -179,10 +179,9 @@ struct SchoolProfileView: View {
     @ViewBuilder private var readinessSection: some View {
         if let readiness = model.readiness, !readiness.ready {
             Section {
-                Label(readiness.ready ? "Accès à l’espace scolaire possible" : "Accès à l’espace scolaire à préparer",
-                    systemImage: readiness.ready ? "checkmark.circle.fill" : "list.bullet.clipboard")
+                Label("Accès à l’espace scolaire à préparer", systemImage: "list.bullet.clipboard")
                     .font(.headline)
-                    .foregroundStyle(readiness.ready ? DrivyTheme.success : DrivyTheme.text)
+                    .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
                 SchoolProfileBlockers(blockers: readiness.blockers)
             } header: { Text("Prochaine étape") }
@@ -199,9 +198,6 @@ struct SchoolProfileView: View {
                 .foregroundStyle(completed ? DrivyTheme.success : DrivyTheme.text)
                 .fixedSize(horizontal: false, vertical: true)
             if !completed {
-                Text("Quelques étapes courtes : vos informations, votre formation, puis le GPS pendant les leçons.")
-                    .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
                 Button("Reprendre l’accueil") { showsGuidedWelcome = true }
                     .frame(minHeight: 44)
                     .disabled(model.isBusy || model.hasEdits)
@@ -216,10 +212,16 @@ struct SchoolProfileView: View {
     }
     private func noticeSection(_ notice: SchoolDataPolicy) -> some View {
         Section {
-            DisclosureGroup("Comment l’école utilise vos données · version \(notice.version)") {
-                Text(notice.noticeText).textSelection(.enabled)
-                Text(notice.retentionText).textSelection(.enabled)
-                if let email = notice.contactEmail { Text(email).textSelection(.enabled) }
+            // Same wording and content as the notice sheet of the guided welcome.
+            DisclosureGroup("Comment l’école utilise vos données") {
+                Text(notice.noticeText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                Text(notice.retentionText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                if let email = notice.contactEmail {
+                    DrivyContactRow(title: "Contact pour vos données", value: email, symbol: "envelope")
+                }
+                Text("Version \(notice.version)")
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(DrivyTheme.muted)
             }
         }
     }
@@ -231,9 +233,12 @@ struct SchoolProfileStatusSections: View {
         Group {
             if model.isLoading { Section { ProgressView("Vérification du dossier…").frame(maxWidth: .infinity, minHeight: 44) } }
             if let error = model.errorMessage {
+                // The notice is the whole row: no white card around the red one.
                 Section {
                     SchoolErrorNotice(message: error,
                         retry: model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(DrivyTheme.dangerSurface)
                 }
             }
             if let success = model.successMessage, !model.hasEdits {

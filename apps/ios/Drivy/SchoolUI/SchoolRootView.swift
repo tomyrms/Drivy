@@ -68,6 +68,7 @@ struct SchoolRootView: View {
                 NavigationStack {
                     accountLanding(workspace)
                         .navigationTitle("Drivy")
+                        .navigationBarTitleDisplayMode(.inline)
                         .toolbar { DrivyAccountToolbarItem(openAccount: { showsAccount = true }) }
                 }
             }
@@ -206,7 +207,9 @@ struct SchoolRootView: View {
     @ViewBuilder
     private var accessCheckOverlay: some View {
         if isCheckingSchoolAccess {
-            DrivyTheme.canvas.ignoresSafeArea().overlay { ProgressView() }
+            DrivyTheme.canvas.ignoresSafeArea().overlay {
+                ProgressView("Vérification de vos accès…").foregroundStyle(DrivyTheme.muted)
+            }
         }
     }
 
@@ -432,10 +435,12 @@ struct SchoolRootView: View {
             // A new account belongs to no school yet: the code received from the instructor is the way in.
             SchoolWithoutSchoolView(joinSchool: joinByCodeAction)
         } else if let error = workspace.accountError {
+            // Same error anatomy as every screen: the notice carries « Réessayer »;
+            // an expired session needs a new sign-in, which is the one dominant action.
             ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                    SchoolErrorNotice(message: error)
                     if workspace.requiresAuthentication {
+                        SchoolErrorNotice(message: error)
                         Button("Se reconnecter") {
                             workspace.reset()
                             Task {
@@ -445,15 +450,15 @@ struct SchoolRootView: View {
                         }
                         .buttonStyle(DrivyPrimaryButtonStyle())
                     } else {
-                        Button("Réessayer") { Task { await workspace.loadAccount() } }
-                            .buttonStyle(DrivyPrimaryButtonStyle())
+                        SchoolErrorNotice(message: error, retry: { Task { await workspace.loadAccount() } })
                     }
                 }
-                .drivyPageContent()
+                .drivyPageContent(maxWidth: 600)
             }
             .background(DrivyTheme.surface)
         } else {
-            ProgressView()
+            ProgressView("Chargement du compte…")
+                .foregroundStyle(DrivyTheme.muted)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(DrivyTheme.canvas)
         }
@@ -547,6 +552,7 @@ struct SchoolAccountView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(AppLock.self) private var appLock: AppLock?
+    @ScaledMetric(relativeTo: .title3) private var symbolWidth: CGFloat = 28
 
     private var hasSeveralSchools: Bool { (workspace?.person?.memberships.count ?? 0) > 1 }
 
@@ -587,10 +593,22 @@ struct SchoolAccountView: View {
                                     .accessibilityIdentifier("open-join-school")
                             }
                             if let appLock, let biometry = appLock.biometryName {
+                                // Same symbol column and height as the navigation rows around it.
                                 Toggle(isOn: Binding(get: { appLock.isEnabled }, set: { appLock.setEnabled($0) })) {
-                                    Label("Ouvrir avec \(biometry)", systemImage: biometry == "Touch ID" ? "touchid" : "faceid")
+                                    HStack(spacing: DrivySpacing.m) {
+                                        Image(systemName: biometry == "Touch ID" ? "touchid" : "faceid")
+                                            .font(.title3)
+                                            .foregroundStyle(DrivyTheme.muted)
+                                            .frame(width: symbolWidth)
+                                            .accessibilityHidden(true)
+                                        Text("Ouvrir avec \(biometry)")
+                                            .font(.headline)
+                                            .foregroundStyle(DrivyTheme.text)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
                                 }
-                                .frame(minHeight: 44)
+                                .padding(.vertical, DrivySpacing.s)
+                                .frame(minHeight: 64)
                                 .accessibilityIdentifier("app-lock-toggle")
                             }
                         }

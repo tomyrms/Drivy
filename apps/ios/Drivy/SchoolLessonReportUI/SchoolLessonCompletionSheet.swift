@@ -5,6 +5,7 @@ struct SchoolLessonCompletionSheet: View {
     @Bindable var model: SchoolLessonReportWorkspace
     let finish: (String) async -> Bool
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var reason = ""
     @State private var isSubmitting = false
 
@@ -31,15 +32,19 @@ struct SchoolLessonCompletionSheet: View {
                         .disabled(!model.canMutate || isSubmitting)
                         .accessibilityIdentifier("lesson-permit-seen")
                     }
+                    .listRowBackground(DrivyTheme.surface)
                 }
                 if model.completionNeedsReason {
                     Section("Permis non présenté") {
                         TextField("Situation du permis", text: $reason, axis: .vertical).lineLimit(2...6)
                             .disabled(isSubmitting)
+                            .accessibilityLabel("Situation du permis")
+                            .accessibilityIdentifier("lesson-permit-reason")
                         if reason.unicodeScalars.count > 1_000 {
                             DrivyActionNote(text: "Raccourcissez le motif à 1 000 caractères.", isError: true)
                         }
                     }
+                    .listRowBackground(DrivyTheme.surface)
                 }
             }
             .scrollContentBackground(.hidden)
@@ -47,7 +52,12 @@ struct SchoolLessonCompletionSheet: View {
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 DrivyStickyActionBar {
-                    if let message = model.errorMessage { DrivyActionNote(text: message, isError: true) }
+                    if let message = model.errorMessage {
+                        DrivyActionNote(text: message, isError: true)
+                    } else if model.completionNeedsReason && !validReason && !isSubmitting {
+                        // Une action indisponible dit pourquoi, au-dessus d’elle.
+                        DrivyActionNote(text: "Indiquez la situation du permis.")
+                    }
                     Button {
                         isSubmitting = true
                         Task {
@@ -56,7 +66,7 @@ struct SchoolLessonCompletionSheet: View {
                         }
                     } label: {
                         HStack(spacing: DrivySpacing.xs) {
-                            if isSubmitting { ProgressView() }
+                            if isSubmitting { ProgressView().accessibilityHidden(true) }
                             Label("Terminer la leçon", systemImage: "checkmark.circle")
                         }
                     }
@@ -68,10 +78,13 @@ struct SchoolLessonCompletionSheet: View {
             .navigationTitle("Permis d’élève").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") { dismiss() }.disabled(model.isBusy || isSubmitting)
+                    // Une feuille qui porte une saisie se quitte par « Annuler ».
+                    Button("Annuler") { dismiss() }.disabled(model.isBusy || isSubmitting)
                 }
             }
         }
+        // Feuille courte : mi-hauteur sur iPhone, pleine hauteur aux tailles d’accessibilité.
+        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .interactiveDismissDisabled(model.isBusy || isSubmitting)
         .tint(DrivyTheme.accent)
     }
@@ -81,19 +94,19 @@ struct SchoolLessonCompletionSheet: View {
 struct SchoolLessonTariffSheet: View {
     @Bindable var model: SchoolLessonReportWorkspace
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         NavigationStack {
             Form {
+                // Montants en chiffres tabulaires, empilés aux tailles d’accessibilité.
                 if let lesson = model.lesson {
-                    LabeledContent("Prix convenu") {
-                        Text(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot)).foregroundStyle(DrivyTheme.muted)
-                    }
+                    DrivyKeyValueRow(title: "Prix convenu", value: SchoolCatalogFormatting.price(lesson.priceCentsSnapshot), numeric: true)
+                        .listRowBackground(DrivyTheme.surface)
                 }
                 if let account = model.account {
-                    LabeledContent("À payer") {
-                        Text(SchoolCatalogFormatting.price(account.balanceCents)).foregroundStyle(DrivyTheme.muted)
-                    }
+                    DrivyKeyValueRow(title: "À payer", value: SchoolCatalogFormatting.price(account.balanceCents), numeric: true)
+                        .listRowBackground(DrivyTheme.surface)
                 }
             }
             .scrollContentBackground(.hidden)
@@ -101,6 +114,7 @@ struct SchoolLessonTariffSheet: View {
             .navigationTitle("Tarif").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
         }
+        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .tint(DrivyTheme.accent)
     }
 }

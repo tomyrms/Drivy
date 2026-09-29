@@ -55,7 +55,7 @@ struct SchoolRecordingChoiceView: View {
                         Text(learner.displayName).font(.drivyScreenTitle)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    if model.isLoading { ProgressView("Lecture du choix…") }
+                    if model.isLoading { DrivyLoadingState(title: "Chargement du choix…") }
                     if let error = model.errorMessage { SchoolErrorNotice(message: error) }
                     if let error = model.storageError { SchoolErrorNotice(message: error) }
                     if model.notice != nil, !model.accessRevoked {
@@ -92,7 +92,7 @@ struct SchoolRecordingChoiceView: View {
             }
             choiceButton(.allowed, title: "Avec GPS", symbol: "location.fill")
             choiceButton(.refused, title: "Sans GPS", symbol: "location.slash")
-            if model.isBusy { ProgressView("Enregistrement du choix…") }
+            if model.isBusy { DrivyLoadingState(title: "Enregistrement du choix…") }
             if model.verbalAgreementIsProtected {
                 DrivyInlineMessage(text: "L’élève a refusé depuis son compte. Lui seul peut modifier ce choix.", tone: .warning)
             }
@@ -100,14 +100,27 @@ struct SchoolRecordingChoiceView: View {
     }
 
     private func choiceButton(_ status: SchoolRecordingChoice.Status, title: String, symbol: String) -> some View {
-        Button {
+        let isEnabled = model.mayChoose && !(status == .allowed && model.verbalAgreementIsProtected)
+        return Button {
             Task { if await model.choose(status) { dismiss() } }
         } label: {
-            Label(title, systemImage: symbol).font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            // Motif unique de sélection : les deux réponses ont le même poids (aucun biais vers
+            // l’accord) et le choix déjà enregistré se lit à la coche, pas à la couleur seule.
+            HStack(spacing: DrivySpacing.m) {
+                Image(systemName: symbol)
+                    .font(.title3)
+                    .foregroundStyle(isEnabled ? DrivyTheme.accent : DrivyTheme.disabledText)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(isEnabled ? DrivyTheme.text : DrivyTheme.disabledText)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: DrivySpacing.xs)
+                DrivySelectionMark(isSelected: model.choice?.status == status)
+            }
         }
-        .buttonStyle(DrivySecondaryButtonStyle())
-        .disabled(!model.mayChoose || (status == .allowed && model.verbalAgreementIsProtected))
+        .buttonStyle(DrivySelectionCardStyle(isSelected: model.choice?.status == status))
+        .disabled(!isEnabled)
         .accessibilityHint(status == .allowed ? "Enregistrer l’accord et continuer" : "Enregistrer le refus et continuer sans GPS")
         .accessibilityIdentifier(status == .allowed ? "recording-allow" : "recording-refuse")
     }
