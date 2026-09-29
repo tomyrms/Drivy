@@ -17,7 +17,8 @@
       "ratio": 16.2631,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -28,7 +29,8 @@
       "ratio": 14.6739,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -39,7 +41,8 @@
       "ratio": 15.3045,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -50,7 +53,8 @@
       "ratio": 16.7677,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -61,7 +65,8 @@
       "ratio": 14.4659,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -72,7 +77,8 @@
       "ratio": 12.5734,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -83,7 +89,8 @@
       "ratio": 6.3066,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -94,7 +101,8 @@
       "ratio": 8.3318,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -105,7 +113,8 @@
       "ratio": 5.9348,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -116,7 +125,8 @@
       "ratio": 9.5206,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -127,7 +137,8 @@
       "ratio": 5.6096,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -138,7 +149,8 @@
       "ratio": 7.1391,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -149,7 +161,8 @@
       "ratio": 5.9281,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -160,7 +173,8 @@
       "ratio": 7.8326,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -171,7 +185,8 @@
       "ratio": 5.5787,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -182,7 +197,8 @@
       "ratio": 8.9502,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -193,7 +209,8 @@
       "ratio": 5.273,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -204,7 +221,8 @@
       "ratio": 6.7114,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -215,7 +233,8 @@
       "ratio": 7.2701,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -226,7 +245,8 @@
       "ratio": 10.0235,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -237,7 +257,8 @@
       "ratio": 6.8416,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -248,7 +269,8 @@
       "ratio": 11.4537,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -259,7 +281,8 @@
       "ratio": 6.4667,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -270,7 +293,8 @@
       "ratio": 8.5887,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -281,7 +305,8 @@
       "ratio": 7.2688,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -292,7 +317,8 @@
       "ratio": 10.4197,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -303,7 +329,8 @@
       "ratio": 6.8403,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -314,7 +341,8 @@
       "ratio": 11.9064,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -325,7 +353,8 @@
       "ratio": 6.4655,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -336,7 +365,8 @@
       "ratio": 8.9282,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -347,7 +377,8 @@
       "ratio": 6.468,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -358,7 +389,8 @@
       "ratio": 9.078,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -369,7 +401,8 @@
       "ratio": 6.0868,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -380,7 +413,8 @@
       "ratio": 10.3733,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -391,7 +425,8 @@
       "ratio": 5.7533,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -402,7 +437,8 @@
       "ratio": 7.7785,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -413,7 +449,8 @@
       "ratio": 5.9281,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -424,7 +461,8 @@
       "ratio": 7.2932,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -435,7 +473,8 @@
       "ratio": 8.2481,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -446,7 +485,8 @@
       "ratio": 9.2587,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -457,7 +497,8 @@
       "ratio": 5.1924,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -468,7 +509,8 @@
       "ratio": 5.7581,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -479,7 +521,8 @@
       "ratio": 14.2447,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -490,7 +533,8 @@
       "ratio": 10.7876,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -501,7 +545,8 @@
       "ratio": 6.4947,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -512,7 +557,8 @@
       "ratio": 8.1092,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -523,7 +569,8 @@
       "ratio": 6.5915,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -534,7 +581,8 @@
       "ratio": 8.761,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -545,7 +593,8 @@
       "ratio": 5.6737,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -556,7 +605,8 @@
       "ratio": 7.8187,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -567,7 +617,8 @@
       "ratio": 4.6722,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -578,7 +629,8 @@
       "ratio": 7.1391,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -589,7 +641,8 @@
       "ratio": 3.7003,
       "referenceThreshold": 3,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -600,7 +653,8 @@
       "ratio": 4.1918,
       "referenceThreshold": 3,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -611,7 +665,8 @@
       "ratio": 3.4822,
       "referenceThreshold": 3,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -622,7 +677,8 @@
       "ratio": 4.7899,
       "referenceThreshold": 3,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -633,7 +689,8 @@
       "ratio": 3.2914,
       "referenceThreshold": 3,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -644,7 +701,8 @@
       "ratio": 3.5917,
       "referenceThreshold": 3,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -655,7 +713,8 @@
       "ratio": 5.9281,
       "referenceThreshold": 3,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "dark",
@@ -666,7 +725,8 @@
       "ratio": 8.9502,
       "referenceThreshold": 3,
       "passes": true,
-      "scope": "declaredOpaquePair"
+      "scope": "declaredOpaquePair",
+      "phase": "currentOpaqueTokenPairs"
     },
     {
       "mode": "light",
@@ -677,7 +737,8 @@
       "ratio": 1.6747,
       "referenceThreshold": 3,
       "passes": false,
-      "scope": "declaredAlphaCompositedPair"
+      "scope": "declaredAlphaCompositedPair",
+      "phase": "initialSourceBeforeCorrections"
     },
     {
       "mode": "light",
@@ -689,7 +750,8 @@
       "ratio": 4.4043,
       "referenceThreshold": 4.5,
       "passes": false,
-      "scope": "declaredAlphaCompositedPair"
+      "scope": "declaredAlphaCompositedPair",
+      "phase": "initialSourceBeforeCorrections"
     },
     {
       "mode": "light",
@@ -701,7 +763,8 @@
       "ratio": 4.4261,
       "referenceThreshold": 4.5,
       "passes": false,
-      "scope": "declaredAlphaCompositedPair"
+      "scope": "declaredAlphaCompositedPair",
+      "phase": "initialSourceBeforeCorrections"
     },
     {
       "mode": "dark",
@@ -712,7 +775,8 @@
       "ratio": 1.8963,
       "referenceThreshold": 3,
       "passes": false,
-      "scope": "declaredAlphaCompositedPair"
+      "scope": "declaredAlphaCompositedPair",
+      "phase": "initialSourceBeforeCorrections"
     },
     {
       "mode": "dark",
@@ -724,7 +788,8 @@
       "ratio": 6.1345,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredAlphaCompositedPair"
+      "scope": "declaredAlphaCompositedPair",
+      "phase": "initialSourceBeforeCorrections"
     },
     {
       "mode": "dark",
@@ -736,7 +801,28 @@
       "ratio": 6.1557,
       "referenceThreshold": 4.5,
       "passes": true,
-      "scope": "declaredAlphaCompositedPair"
+      "scope": "declaredAlphaCompositedPair",
+      "phase": "initialSourceBeforeCorrections"
     }
-  ]
+  ],
+  "postCorrection": {
+    "status": "declared_source_only",
+    "sourceSHA256ByFile": {
+      "apps/ios/Drivy/UI/DrivyTheme.swift": "54ef80a808e707d84ff655658d00815d817c0ffabc82093630c3f521fba94fb2",
+      "apps/ios/Drivy/UI/DrivyComponents+Seance.swift": "edc97972395c87bfe69f3bdb04711067585ab7ccd9dba6e56f78dcfe5e0edf58",
+      "apps/ios/Drivy/UI/DrivyObservationStyle.swift": "8f98c28ebfeacba14fbe89120cc4f4356c331767d1c600add3a798b27cf88791",
+      "apps/ios/Drivy/UI/DrivyComponents+Accueil.swift": "b716a7fe9b211eda4742dfa30ce57f8e2866149025a51f31a756751f741a29ca"
+    },
+    "railUsesOpaqueControlBorder": true,
+    "railRatioLight": 3.7003,
+    "railRatioDark": 4.1918,
+    "dangerAndTileWholeGroupOpacityRemoved": true,
+    "dangerPressedRatioLight": 5.6737,
+    "dangerPressedRatioDark": 7.8187,
+    "replayTransportHasViewThatFitsFallback": true,
+    "accessibleScrubCallsPauseCallback": true,
+    "fieldErrorIsIndependentAccessibleElement": true,
+    "swiftCompilationPerformedHere": false,
+    "physicalVoiceOverPerformed": false
+  }
 }

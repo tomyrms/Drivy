@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 29 septembre 2026 — retour sur appareil et revue UI Skills
+
+Le retour du porteur après installation a ouvert une nouvelle passe ; les résultats de la passe précédente ci-dessous ne qualifient pas ces corrections.
+
+- **Signalement restauré** : Signaler → type de situation → statut explicite → écriture durable et fermeture. Même geste avec ou sans GPS ; type visible dans le replay. Accord GPS direct, documents sur demande, arrêt/transfert automatiques à la fin de leçon, bilan facultatif et fermeture après confirmation. [Revue de chaque écran natif](ui-review-native-20260929.md).
+- **Serveur exécuté et déployé** : 215/215 tests sur PostgreSQL 16.14 isolée ; API/web du homelab à `f054bc6`, sauvegarde privée contrôlée avant migration019, 19 migrations comparées par nom et SHA256, trois services actifs et routes publiques contrôlées. [Tests](proofs/api-field-flow-20260929.json), [déploiement](proofs/deployment-field-20260929.json).
+- **iPad autorisé pour essai** : profil limité au modèle réel `iPad13,17`, conservé au déploiement. [Preuve](proofs/ipad-trial-20260929.json). Aucune qualification GPS/batterie physique n’est revendiquée.
+- **UI Skills installé** : dix guides permanents, appliqués à l’inventaire natif et aux composants communs. Les rapports distinguent lecture du code, mesures de contraste, rendus et gestes exécutés.
+- **Validation Apple en cours** : compilation de `d769e14` réussie ; nouvelles campagnes sur `ed56802` pour les corrections communes, les gestes terrain et les rendus de toutes les familles. Les résultats et l’IPA final seront rattachés une fois vérifiés. Première position, autonomie, biométrie et VoiceOver physiques restent à constater sur les appareils du porteur.
+
 ## 29 septembre 2026 — reprise et intégration des parcours
 
 L’inventaire ci-dessous décrit le code intégré, avec les [corrections API du 29 septembre](corrections-api-2026-09-29.md) et les [décisions du porteur](decisions-2026-09-28.md). L’app couvre le terrain ; la console web couvre l’administration. La présence d’un parcours et sa compilation ne constituent pas une qualification sur appareil.

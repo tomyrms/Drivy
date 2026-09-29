@@ -12,6 +12,31 @@ import Testing
         #expect(policy.distanceFilterMeters == 0)
     }
 
+    @Test func backgroundSignalRecoveryRequiresTheSameLiveCaptureAndScope() {
+        let scope = ConfigurationFixture.scope(), captureID = UUID()
+        var gate = SchoolCaptureLocationStartGate()
+        func permitted(_ value: SchoolCaptureLocationStartGate, foreground: Bool = false, id: UUID? = nil,
+                       current: SchoolCommandScope? = nil, scopeAvailable: Bool = true,
+                       lease: Bool = true, background: Bool = true) -> Bool {
+            value.permits(captureID: id ?? captureID, scope: scope, currentScope: scopeAvailable ? current ?? scope : nil,
+                isForeground: foreground, allowsBackground: background, leasePermitsCollection: lease)
+        }
+        #expect(!permitted(gate))
+        #expect(permitted(gate, foreground: true))
+        gate.didStartInForeground(captureID: captureID, scope: scope)
+        #expect(permitted(gate))
+        #expect(!permitted(gate, id: UUID()))
+        #expect(!permitted(gate, lease: false))
+        #expect(!permitted(gate, foreground: true, lease: false))
+        #expect(!permitted(gate, scopeAvailable: false))
+        #expect(!permitted(gate, background: false))
+        let changed = SchoolCommandScope(personID: scope.personID, schoolID: scope.schoolID,
+            membershipID: scope.membershipID, accessEpoch: scope.accessEpoch + 1, apiBaseURL: scope.apiBaseURL)
+        #expect(!permitted(gate, current: changed))
+        gate.reset()
+        #expect(!permitted(gate))
+    }
+
     @Test func waitingForGPSDoesNotStopTheLessonOrInventAPoint() async throws {
         let fixture = try await CaptureLifecycleFixture.make()
         fixture.source.onEvent?(.signalChanged(.temporarilyUnavailable))
@@ -23,6 +48,22 @@ import Testing
         let saved = try await fixture.store.storedSession(captureID: fixture.capture.id, scope: fixture.scope)
         #expect(saved.manifest?.count == 1 && saved.manifest?.first?.expectedPointCount == 0)
         #expect(fixture.controller.lessonTimes(lessonID: fixture.capture.lessonId) != nil)
+    }
+
+    @Test func aSignalGapResumesLocallyInANewSegmentWithoutASecondAuthorization() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        let count = await fixture.server.requests().count
+        let boundary = try #require(fixture.source.stop())
+        fixture.source.onEvent?(.interrupted(.signalLost, boundary))
+        for _ in 0..<300 {
+            if fixture.controller.isCollecting && fixture.controller.segments.count == 2 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(fixture.controller.isCollecting && fixture.source.isRunning)
+        #expect(fixture.controller.segments.count == 2 && fixture.controller.pointCount == 0)
+        #expect(await fixture.server.requests().count == count)
+        #expect(await fixture.controller.stopAndSynchronize())
+        await fixture.waitUntilSettled()
     }
 
     @Test func closingTheLessonDoesNotCancelDurableSynchronization() async throws {

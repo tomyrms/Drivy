@@ -63,6 +63,26 @@ struct SchoolCaptureLocationPolicy: Sendable {
     }
 }
 
+/// Mémoire volatile du seul départ effectivement lancé au premier plan. Elle
+/// n'autorise ni une autre capture ni une restauration GPS après relance.
+struct SchoolCaptureLocationStartGate: Sendable {
+    private var foregroundCaptureID: UUID?
+    private var foregroundScope: SchoolCommandScope?
+
+    mutating func reset() { foregroundCaptureID = nil; foregroundScope = nil }
+
+    mutating func didStartInForeground(captureID: UUID, scope: SchoolCommandScope) {
+        foregroundCaptureID = captureID; foregroundScope = scope
+    }
+
+    func permits(captureID: UUID, scope: SchoolCommandScope, currentScope: SchoolCommandScope?,
+                 isForeground: Bool, allowsBackground: Bool, leasePermitsCollection: Bool) -> Bool {
+        guard scope == currentScope, leasePermitsCollection else { return false }
+        if isForeground { return true }
+        return allowsBackground && foregroundCaptureID == captureID && foregroundScope == scope
+    }
+}
+
 // Référence prise dès réception de la réponse AP154 contrôlée. Elle ne se persiste
 // pas et ne remplace pas le début de requête monotone utilisé par le bail signé.
 struct SchoolCaptureClockReference: Sendable {

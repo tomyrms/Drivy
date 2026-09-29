@@ -42,6 +42,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
     private var lastStorageCheck: ContinuousClock.Instant?
     private var lastDiagnostic: (ageAtReceipt: TimeInterval, accuracy: Double, receivedAt: ContinuousClock.Instant)?
     private var diagnosticRequested = false
+    private var startGate = SchoolCaptureLocationStartGate()
     private(set) var discardedCallbackCount = 0
 
     override init() {
@@ -111,6 +112,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         let changed = currentScope != scope
         currentScope = scope
         if changed {
+            startGate.reset()
             preparedSegmentID = nil
             diagnosticRequested = false
             lastDiagnostic = nil
@@ -154,7 +156,12 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
               segment.lease.permitsCollection(at: now), now >= segment.monotonicStartedAt else {
             throw SchoolCaptureLocationFailure.invalidContext
         }
-        guard UIApplication.shared.applicationState == .active else { throw SchoolCaptureLocationFailure.foregroundRequired }
+        let isForeground = UIApplication.shared.applicationState == .active
+        guard startGate.permits(captureID: segment.captureID, scope: segment.scope, currentScope: currentScope,
+            isForeground: isForeground, allowsBackground: segment.policy.allowsBackground,
+            leasePermitsCollection: segment.lease.permitsCollection(at: now)) else {
+            throw SchoolCaptureLocationFailure.foregroundRequired
+        }
         try requirePermission(segment.policy)
         guard let bytes = Self.availableBytes(), bytes >= segment.policy.minimumFreeBytes else {
             throw SchoolCaptureLocationFailure.insufficientStorage
@@ -184,6 +191,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         armGap(segment, lastMeasurement: now)
         onEvent?(.signalChanged(.acquiring))
         manager.startUpdatingLocation()
+        if isForeground { startGate.didStartInForeground(captureID: segment.captureID, scope: segment.scope) }
     }
 
     @discardableResult
