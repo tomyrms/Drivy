@@ -3,17 +3,19 @@ import type { Pool,PoolClient } from 'pg';
 import { z } from 'zod';
 import type { TokenVerifier } from './auth.js';
 import { withActor } from './database.js';
-import { ApiError,notFound } from './errors.js';
+import { ApiError,forbidden,notFound } from './errors.js';
 import { Cursors } from './cursor.js';
 import { checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandActor,type CommandEffect,type CommandGuards,type SchoolRow } from './commands.js';
 import { getLesson } from './lessons.js';
 import { assessmentCommand,assessmentProjection,choiceCommand,choiceProjection,chunkCommand,captureProjection,finalizeCommand,startCommand,stopCommand,uuid,type AssessmentInput,type AssessmentRow,type CaptureRow,type ChoiceRow,type ChunkInput,type ChunkRow,type Manifest,type TrackPoint } from './capture-contracts.js';
 import { CaptureAuthority,canonicalCaptureJSON,chunkAAD,decryptPoints,encryptPoints,trackContentHash,type CaptureConfig,type QualificationProfile } from './capture-crypto.js';
 import {geoObservationProjection,type GeoObservationRow} from './capture-contracts.js';
+import {anchorObservations} from './capture-observations.js';
 
 const empty=z.object({}).strict();
 const error=(code:string,message:string,status=409)=>new ApiError(status,code,message);
 type Target={learnerId:string}|{lessonId:string}|{captureId:string}|{deviceId:string};
+type TripRow=CaptureRow&{learner_name:string;instructor_name:string;lesson_planned_start:Date;lesson_time_zone:string;_createdAt:string};
 async function getCapture(db:PoolClient,schoolId:string,captureId:string,lock=false){const row=(await db.query<CaptureRow>(`SELECT * FROM drivy.capture_session WHERE school_id=$1 AND id=$2 ${lock?'FOR UPDATE':''}`,[schoolId,captureId])).rows[0];if(!row)throw notFound();return row;}
 async function getAssessment(db:PoolClient,schoolId:string,deviceId:string,assessmentId:string){const row=(await db.query<AssessmentRow>('SELECT * FROM drivy.capture_device_assessment WHERE school_id=$1 AND device_id=$2 AND id=$3',[schoolId,deviceId,assessmentId])).rows[0];if(!row)throw notFound();return row;}
 async function requireLatestAssessment(db:PoolClient,row:AssessmentRow){const latest=(await db.query<{id:string}>('SELECT id FROM drivy.capture_device_assessment WHERE school_id=$1 AND device_id=$2 AND membership_id=$3 ORDER BY assessed_at DESC,id DESC LIMIT 1',[row.school_id,row.device_id,row.membership_id])).rows[0];if(latest?.id!==row.id)throw error('DEVICE_ASSESSMENT_SUPERSEDED','Utilisez le diagnostic le plus récent de cet appareil.');}
@@ -159,6 +161,27 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
   reply.code(201).header('ETag',`"${row.version}"`);return envelope({capture:captureProjection(row),signedCaptureAuthorization:await authority.sign(row,'capture:collect'),signedUploadAuthorization:await authority.sign(row,'capture:upload'),serverTime:new Date().toISOString()},r);
  });
  app.get(`${base}/captures/:captureId`,async(r,reply)=>{empty.parse(r.query);const value=await read(r,async db=>captureProjection(await getCapture(db,schoolID(r),param(r,'captureId'))));reply.header('ETag',`"${value.version}"`);return envelope(value,r);});
+ // Extension hors canon : liste des trajets visibles par le compte (administrateur : toute l'école ; moniteur : ses formations ;
+ // élève : ses trajets partagés). La RLS décide seule des lignes ; les trajets supprimés sont exclus.
+ app.get(`${base}/captures`,async r=>{
+  const query=z.object({limit:z.coerce.number().int().min(1).max(100).default(50),cursor:z.string().max(6000).optional()}).strict().parse(r.query),schoolId=schoolID(r);
+  const data=await withActor(options.pool,await options.verifyToken(r.headers.authorization),schoolId,async(db,actor,member)=>{
+   if(!member)throw forbidden();
+   const scope=JSON.stringify(['schoolCaptures',schoolId,actor.personId,member.accessEpoch,query.limit]),position=cursors.decode(query.cursor,scope);
+   const values:unknown[]=[schoolId],where=['c.school_id=$1',"c.publication_state<>'DELETED'"],bind=(v:unknown)=>{values.push(v);return `$${values.length}`;};
+   // Ordre décroissant : la position du curseur est la dernière ligne servie (authorized_at, id).
+   if(position)where.push(`(c.authorized_at,c.id)<(${bind(position.createdAt)}::timestamptz,${bind(position.id)}::uuid)`);
+   const rows=(await db.query<TripRow>(`SELECT c.*,n.learner_name,n.instructor_name,l.planned_start AS lesson_planned_start,l.time_zone AS lesson_time_zone,
+    to_char(c.authorized_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "_createdAt"
+    FROM drivy.capture_session c JOIN drivy.lesson l ON l.school_id=c.school_id AND l.id=c.lesson_id
+    CROSS JOIN LATERAL drivy.capture_trip_names(c.id) n
+    WHERE ${where.join(' AND ')} ORDER BY c.authorized_at DESC,c.id DESC LIMIT ${bind(query.limit+1)}`,values)).rows;
+   const last=rows.length>query.limit?rows[query.limit-1]:undefined;
+   return {items:rows.slice(0,query.limit).map(row=>({...captureProjection(row),learnerName:row.learner_name,instructorName:row.instructor_name,lessonPlannedStart:row.lesson_planned_start.toISOString(),lessonTimeZone:row.lesson_time_zone})),
+    nextCursor:last?cursors.encode(scope,{id:last.id,createdAt:last._createdAt}):null};
+  });
+  return envelope(data,r);
+ });
  app.put(`${base}/captures/:captureId/segments/:segmentId/chunks/:chunkIndex`,{bodyLimit:524_288},async(r,reply)=>{
   const config=configured(options.capture),body=chunkCommand.parse(r.body),captureId=param(r,'captureId'),segmentId=param(r,'segmentId'),chunkIndex=z.coerce.number().int().min(0).max(999).parse(z.record(z.string(),z.string()).parse(r.params).chunkIndex),bound={...body,captureId,segmentId,chunkIndex};
   const authority=new CaptureAuthority(config),baseGuards=guards<ReturnType<typeof receipt>>(schoolID(r),{captureId});
@@ -191,12 +214,16 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
  app.post(`${base}/captures/:captureId/finalize`,{bodyLimit:524_288},async(r,reply)=>{
   const body=finalizeCommand.parse(r.body),captureId=param(r,'captureId'),bound={...body,captureId},expected=requireVersion(r.headers['if-match']);
   const value=await command(r,'FINALIZE_CAPTURE',bound,expected,{captureId},async(db,_actor,school)=>{
+   // Même ordre de verrous que les observations (leçon puis capture) : l'ancrage de F3 modifie les observations de la leçon.
+   await getLesson(db,school.id,(await getCapture(db,school.id,captureId)).lesson_id,true);
    const row=await getCapture(db,school.id,captureId,true);checkVersion(row.version,expected);
    if(row.capture_state==='AUTHORIZED'&&row.expires_at.getTime()>Date.now())throw error('CAPTURE_STOP_REQUIRED','Arrêtez le collecteur avant de finaliser la capture.');
    if(!row.manifest||canonicalCaptureJSON(row.manifest)!==canonicalCaptureJSON(body.segments))throw error('CAPTURE_MANIFEST_MISMATCH','La finalisation exige le manifeste de l’arrêt durable.');
    const quality=manifestQuality(await chunks(db,row),body.segments);if(quality==='PARTIAL'&&!body.allowPartial)throw error('CAPTURE_INCOMPLETE','Des lots manquent ; poursuivez le transfert ou confirmez la finalisation partielle.');
    const updated=(await db.query<CaptureRow>(`UPDATE drivy.capture_session SET version=version+1,capture_state=CASE WHEN capture_state='AUTHORIZED' THEN 'EXPIRED' ELSE capture_state END,cutoff_at=coalesce(cutoff_at,expires_at),sync_state=$2,finalized_at=coalesce(finalized_at,statement_timestamp()) WHERE id=$1 RETURNING *`,[row.id,quality])).rows[0]!;
-   return {data:captureProjection(updated),action:'CaptureFinalized',resourceType:'CaptureSession',resourceId:row.id,changedFields:['syncState','finalizedAt']};
+   // F3 : les observations prises pendant le trajet reçoivent leur position (mesure la plus proche), sans jamais en inventer.
+   const anchored=options.capture?await anchorObservations(db,options.capture,updated):0;
+   return {data:captureProjection(updated),action:'CaptureFinalized',resourceType:'CaptureSession',resourceId:row.id,changedFields:anchored?['syncState','finalizedAt','observationAnchors']:['syncState','finalizedAt']};
   },false,{replay:async db=>captureProjection(await getCapture(db,schoolID(r),captureId))});reply.header('ETag',`"${value.version}"`);return envelope(value,r);
  });
  app.get(`${base}/captures/:captureId/replay`,async r=>{

@@ -58,7 +58,9 @@ try{
  assert.equal((await call('PUT',`/captures/${capture.id}/segments/${segment}/chunks/0`,chunk)).json().data.duplicate,true);
  assert.equal((await call('PUT',`/captures/${capture.id}/segments/${segment}/chunks/0`,{...chunk,operationId:randomUUID()})).json().data.duplicate,true);
  const ciphertext=(await pool.query('SELECT encrypted_points FROM drivy.capture_chunk WHERE capture_id=$1',[capture.id])).rows[0].encrypted_points as Buffer;assert(!ciphertext.includes(Buffer.from('latitude')));
- assert.equal((await call('GET',`/captures/${capture.id}`,undefined,undefined,'demo-alice')).statusCode,404);assert.equal((await call('GET',`/captures/${capture.id}`,undefined,undefined,'demo-admin')).statusCode,404);
+ // L'élève ne lit rien avant la fin de la leçon ; l'administration lit tous les trajets de l'école (décision du 28 septembre 2026), en lecture seule.
+ assert.equal((await call('GET',`/captures/${capture.id}`,undefined,undefined,'demo-alice')).statusCode,404);
+ const adminRead=await call('GET',`/captures/${capture.id}`,undefined,undefined,'demo-admin');assert.equal(adminRead.statusCode,200,JSON.stringify(adminRead.json()));assert.equal(adminRead.json().data.id,capture.id);
  const manifest=[{segmentId:segment,segmentIndex:0,expectedChunkIndices:[0,1],expectedPointCount:3,lastSequence:2,endReason:'STOP'}];
  const stop=await call('POST',`/captures/${capture.id}/stop`,{operationId:randomUUID(),stoppedAt:new Date().toISOString(),reason:'USER_STOP',segments:manifest,localCollectorStopped:true});assert.equal(stop.statusCode,200,JSON.stringify(stop.json()));
  const finalized=await call('POST',`/captures/${capture.id}/finalize`,{operationId:randomUUID(),segments:manifest,allowPartial:false},stop.json().data.version);assert.equal(finalized.statusCode,200,JSON.stringify(finalized.json()));assert.equal(finalized.json().data.syncState,'SYNCED');
@@ -73,7 +75,8 @@ try{
   assert.deepEqual((await call('GET',`/lessons/${lesson}/captures`,undefined,undefined,'demo-alice')).json().data.items.map((c:any)=>c.id),[capture.id]);
   const learnerReplay=await call('GET',`/captures/${capture.id}/replay?limit=10`,undefined,undefined,'demo-alice');assert.equal(learnerReplay.statusCode,200,JSON.stringify(learnerReplay.json()));
   assert.equal(learnerReplay.json().data.segments[0].points.length,3);
-  for(const subject of ['demo-bob','demo-admin'])assert.equal((await call('GET',`/captures/${capture.id}/replay`,undefined,undefined,subject)).statusCode,404);
+  assert.equal((await call('GET',`/captures/${capture.id}/replay`,undefined,undefined,'demo-bob')).statusCode,404);
+  assert.equal((await call('GET',`/captures/${capture.id}/replay?limit=10`,undefined,undefined,'demo-admin')).statusCode,200);
   const sharing=(await call('GET',`/lessons/${lesson}/sharing`)).json().data;assert.equal(sharing.captureHidden,false);
   const hide=await call('PUT',`/lessons/${lesson}/sharing`,{operationId:randomUUID(),reportPrivate:false,captureHidden:true,privateObservationIds:[]},sharing.version);assert.equal(hide.statusCode,200,JSON.stringify(hide.json()));
   assert.deepEqual((await call('GET',`/lessons/${lesson}/captures`,undefined,undefined,'demo-alice')).json().data.items,[]);

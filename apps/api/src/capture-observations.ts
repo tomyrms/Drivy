@@ -64,6 +64,48 @@ async function touchDraft(db:PoolClient,schoolId:string,ids:(string|null)[]){
  const distinct=[...new Set(ids.filter((id):id is string=>id!==null))];
  if(distinct.length)await db.query('UPDATE drivy.report_draft SET version=version+1 WHERE school_id=$1 AND id=ANY($2::uuid[])',[schoolId,distinct]);
 }
+/** Une mesure reçue : identité (segment + séquence) et instant de mesure. Jamais de position en dehors du déchiffrement local. */
+export interface AnchorCandidate {segmentId:string;sequence:number;at:number}
+/**
+ * Mesure qui place un instant sur le trajet : la plus récente qui ne le suit pas (comme l'exige validateAnchor à la réécriture d'une
+ * observation), à `maxGapMs` au plus. Aucune position n'est déduite : sans mesure assez proche, l'observation reste sans position.
+ */
+export function nearestAnchorPoint(points:AnchorCandidate[],at:number,maxGapMs=60_000):AnchorCandidate|undefined{
+ let best:AnchorCandidate|undefined;
+ for(const point of points){if(point.at>at||at-point.at>maxGapMs)continue;if(!best||point.at>best.at)best=point;}
+ return best;
+}
+/**
+ * F3 : l'app n'envoie une ancre que si elle en a une, et le serveur n'en accepte qu'après l'acquittement du lot. Une observation prise
+ * pendant le trajet reste donc sans position. À la finalisation (et pour une observation tardive), le serveur place chaque observation
+ * non ancrée de la leçon, dont l'instant tombe dans la capture, sur la mesure la plus proche qui ne la suit pas (60 s au plus).
+ * Sous le verrou de la leçon, dans la transaction de l'appelant ; l'auteur seul voit et modifie ses observations (RLS).
+ * Un lot illisible n'ancre rien et n'échoue jamais l'appelant. `only` limite à une observation (arrivée tardive).
+ */
+export async function anchorObservations(db:PoolClient,config:CaptureConfig,capture:CaptureRow,only?:string):Promise<number>{
+ if(capture.publication_state!=='PRIVATE'||capture.capture_state==='REVOKED'||capture.sync_state==='REJECTED')return 0;
+ const cutoff=new Date(Math.min(capture.expires_at.getTime(),capture.cutoff_at?.getTime()??Infinity));
+ const values:unknown[]=[capture.school_id,capture.lesson_id,capture.authorized_at,cutoff];if(only)values.push(only);
+ const rows=(await db.query<GeoObservationRow>(`SELECT * FROM drivy.geo_observation WHERE school_id=$1 AND lesson_id=$2 AND capture_id IS NULL AND removed_at IS NULL
+  AND observed_at IS NOT NULL AND observed_at>=$3 AND observed_at<=$4 ${only?'AND id=$5':''} ORDER BY created_at,id FOR UPDATE`,values)).rows;
+ if(!rows.length)return 0;
+ const times=rows.map(row=>row.observed_at!.getTime()),points:AnchorCandidate[]=[];
+ const chunks=(await db.query<ChunkRow>('SELECT * FROM drivy.capture_chunk WHERE school_id=$1 AND capture_id=$2 AND encrypted_points IS NOT NULL ORDER BY segment_index,chunk_index',[capture.school_id,capture.id])).rows;
+ for(const chunk of chunks){
+  // Un lot qui ne peut couvrir aucune observation (à 60 s près) n'est pas déchiffré.
+  const from=chunk.first_captured_at.getTime(),to=chunk.last_captured_at.getTime();
+  if(!times.some(at=>at>=from&&at-to<=60_000))continue;
+  try{for(const point of decryptPoints(config,chunk.encrypted_points!,chunk.key_id,chunkAAD(chunk.school_id,chunk.capture_id,chunk.segment_id,chunk.chunk_index,chunk.content_hash)))points.push({segmentId:chunk.segment_id,sequence:point.sequence,at:Date.parse(point.capturedAt)});}
+  catch{ /* Mesure illisible : elle n'ancre rien. */ }
+ }
+ const drafts:(string|null)[]=[];let anchored=0;
+ for(const row of rows){
+  const point=nearestAnchorPoint(points,row.observed_at!.getTime());if(!point)continue;
+  await db.query('UPDATE drivy.geo_observation SET capture_id=$3,segment_id=$4,point_sequence=$5,version=version+1 WHERE school_id=$1 AND id=$2 AND capture_id IS NULL',[capture.school_id,row.id,capture.id,point.segmentId,point.sequence]);
+  drafts.push(row.draft_id);anchored++;
+ }
+ await touchDraft(db,capture.school_id,drafts);return anchored;
+}
 /** Appelé uniquement sous le verrou de leçon du constat, dans sa transaction. */
 export async function attachLiveObservations(db:PoolClient,lesson:LessonRow,draftId:string,memberId:string){
  await db.query(`UPDATE drivy.geo_observation SET draft_id=$4,version=version+1 WHERE school_id=$1 AND lesson_id=$2 AND training_id=$3
@@ -102,7 +144,15 @@ export function registerCaptureObservations(app:FastifyInstance,options:{pool:Po
    await validateTheme(db,lesson,body.competencyId);await validateAnchor(db,lesson,body,options.capture);
    const row=(await db.query<GeoObservationRow>(`INSERT INTO drivy.geo_observation(school_id,lesson_id,training_id,author_membership_id,draft_id,capture_id,segment_id,point_sequence,competency_id,text,origin,observed_at,event_kind,event_status)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,[school.id,lessonId,lesson.training_id,actor.membershipId,draftId,body.captureId,body.segmentId,body.pointSequence,body.competencyId,body.text,body.origin??'REVIEW',body.observedAt??null,body.eventKind??null,body.eventStatus??null])).rows[0]!;
-   await touchDraft(db,school.id,[draftId]);return {data:geoObservationProjection(row),action:'GeoObservationCreated',resourceType:'GeoObservation',resourceId:row.id,changedFields:['observation']};
+   await touchDraft(db,school.id,[draftId]);
+   // F3 : une observation sans ancre qui arrive après la finalisation du trajet est placée tout de suite (avant, la finalisation s'en charge).
+   let created=row;
+   if(body.captureId===null&&row.observed_at&&options.capture){
+    const finalized=(await db.query<CaptureRow>(`SELECT * FROM drivy.capture_session WHERE school_id=$1 AND lesson_id=$2 AND finalized_at IS NOT NULL AND publication_state='PRIVATE'
+     AND capture_state<>'REVOKED' AND sync_state IN('SYNCED','PARTIAL') AND authorized_at<=$3 AND least(expires_at,coalesce(cutoff_at,expires_at))>=$3 ORDER BY authorized_at,id`,[school.id,lessonId,row.observed_at])).rows;
+    for(const capture of finalized)if(await anchorObservations(db,options.capture,capture,row.id)){created=await observation(db,school.id,row.id);break;}
+   }
+   return {data:geoObservationProjection(created),action:'GeoObservationCreated',resourceType:'GeoObservation',resourceId:row.id,changedFields:['observation']};
   });reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,r);
  });
  app.put(`${base}/geo-observations/:observationId`,{bodyLimit:24_000},async(r,reply)=>{
