@@ -170,7 +170,8 @@ import Observation
                 }
             }
             var results: [UUID: Result<SchoolCaptureSession, any Error>] = [:]
-            for await (id, result) in group { results[id] = result }
+            // No tuple pattern here: the region-based isolation checker rejects it in `for await`.
+            for await answer in group { results[answer.0] = answer.1 }
             return results
         }
     }
