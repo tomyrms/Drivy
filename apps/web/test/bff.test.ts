@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { randomBytes, randomUUID } from 'node:crypto';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { buildWebApp } from '../server/app.js';
 import { readConfig } from '../server/config.js';
+import { RateLimiter } from '../server/rate-limit.js';
 import { SessionStore, type Tokens } from '../server/session.js';
 import type { IdentityProvider } from '../server/oidc.js';
 import type { ApiGateway } from '../server/upstream.js';
+import type { WebConfig } from '../server/config.js';
 
 const config = {origin:'https://drivy.example',apiBaseURL:'https://drivy.example/refonte',issuer:'https://identity.example/realm',
   clientId:'drivy-web',clientSecret:randomBytes(32).toString('hex'),development:false,host:'127.0.0.1',port:3002};
@@ -15,7 +20,7 @@ const sample = () => ({data:{invitationId:randomUUID(),schoolId:randomUUID(),sch
 const apps: Awaited<ReturnType<typeof buildWebApp>>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map(app=>app.close())); });
 
-async function harness(gateway?: ApiGateway) {
+async function harness(gateway?: ApiGateway, extra: { entryLimiter?: RateLimiter; staticRoot?: string; config?: Partial<WebConfig> } = {}) {
   let now = Date.now();
   const tokens: Tokens = {accessToken:token(),refreshToken:token(),expiresAt:now+300_000,
     principal:{subject:randomUUID(),displayName:'Test local',email:'test@example.test',emailVerified:true}};
@@ -24,19 +29,25 @@ async function harness(gateway?: ApiGateway) {
     complete:vi.fn(async ()=>tokens), refresh:vi.fn(async()=>({...tokens,expiresAt:now+300_000})),revoke:vi.fn(async()=>{})
   };
   const store = new SessionStore(()=>now);
-  const app = await buildWebApp({config,identity,store,now:()=>now,gateway:gateway ?? vi.fn(async()=>({status:200,body:{data:{memberships:[]}}}))});
+  const app = await buildWebApp({config:{...config,...extra.config},identity,store,now:()=>now,gateway:gateway ?? vi.fn(async()=>({status:200,body:{data:{memberships:[]}}})),
+    ...(extra.entryLimiter ? {entryLimiter:extra.entryLimiter} : {}),...(extra.staticRoot ? {staticRoot:extra.staticRoot} : {})});
   apps.push(app);
   let cookie = ''; let csrf = '';
   const cookieFrom = (response: {headers:Record<string,unknown>}) => {
     const set = response.headers['set-cookie']; return (Array.isArray(set) ? set[0] : set)?.toString().split(';')[0] ?? '';
   };
-  const start = async () => {
-    const response = await app.inject({url:'/app/bff/session'});
-    cookie = cookieFrom(response); csrf=response.json().csrfToken; return response;
-  };
   const get = (url:string) => app.inject({url,headers:{cookie}});
-  const post = (url:string,payload:Record<string,unknown>={}) => app.inject({method:'POST',url,payload,
-    headers:{cookie,origin:config.origin,'x-csrf-token':csrf}});
+  const post = async (url:string,payload:Record<string,unknown>={}) => {
+    const response = await app.inject({method:'POST',url,payload,headers:{cookie,origin:config.origin,'x-csrf-token':csrf}});
+    const created = cookieFrom(response); if (created.includes('=') && !created.endsWith('=')) cookie = created;
+    return response;
+  };
+  /** A visitor reads the anonymous value, then the login POST creates the session (the only place that does). */
+  const start = async () => {
+    cookie = ''; csrf = (await app.inject({url:'/app/bff/session'})).json().csrfToken;
+    const response = await post('/app/bff/login');
+    csrf = (await get('/app/bff/session')).json().csrfToken; return response;
+  };
   const login = async () => {
     await post('/app/bff/login');
     const session = store.get(cookie.split('=')[1])!;
@@ -101,6 +112,124 @@ describe('Session BFF et frontière navigateur',()=>{
   test('ne réfléchit pas un détail amont sensible dans une erreur',async()=>{
     const secret=token(); const h=await harness(async()=>({status:403,body:{code:'FORBIDDEN',title:secret,internal:secret}}));
     await h.start();await h.login();const response=await h.get('/app/bff/me');expect(response.statusCode).toBe(403);expect(response.body).not.toContain(secret);
+  });
+});
+
+describe('Entrée anonyme, limites et cache',()=>{
+  const anonymousValue = async (h: Awaited<ReturnType<typeof harness>>) => (await h.app.inject({url:'/app/bff/session'})).json().csrfToken as string;
+  const enter = (h: Awaited<ReturnType<typeof harness>>,url: string,headers: Record<string,string>,payload: Record<string,unknown> = {}) =>
+    h.app.inject({method:'POST',url,payload,headers,remoteAddress:'203.0.113.7'});
+
+  test('lire /session ne crée aucune session ni cookie, même répété',async()=>{
+    const h=await harness();
+    for(let index=0;index<5;index++){
+      const response=await h.app.inject({url:'/app/bff/session'});
+      expect(response.headers['set-cookie']).toBeUndefined();
+      expect(response.json()).toMatchObject({authenticated:false,invitationPending:false});
+      expect(response.json().csrfToken).toBeTypeOf('string');
+    }
+    expect(h.store.size).toBe(0);
+  });
+
+  test('seul POST /login (ou le lien d’invitation) crée la session, avec origine, JSON et valeur anonyme',async()=>{
+    const h=await harness();const value=await anonymousValue(h);
+    for(const headers of [{},{origin:config.origin},{origin:config.origin,'x-csrf-token':token()},{origin:'https://evil.example','x-csrf-token':value}]) {
+      expect((await enter(h,'/app/bff/login',headers)).statusCode).toBe(403);
+    }
+    expect((await enter(h,'/app/bff/login',{origin:config.origin,'x-csrf-token':value},{returnTo:'https://evil.example'})).statusCode).toBe(400);
+    expect(h.store.size).toBe(0);
+    const created=await enter(h,'/app/bff/login',{origin:config.origin,'x-csrf-token':value});
+    expect(created.statusCode).toBe(200);expect(created.headers['set-cookie']).toContain('__Host-drivy-session=');expect(h.store.size).toBe(1);
+    const invite=await enter(h,'/app/bff/invitation',{origin:config.origin,'x-csrf-token':value},{token:token()});
+    expect(invite.statusCode).toBe(200);expect(h.store.size).toBe(2);
+    // Les autres écritures n’admettent jamais un visiteur sans session.
+    expect((await enter(h,'/app/bff/logout',{origin:config.origin,'x-csrf-token':value})).statusCode).toBe(401);
+    expect(h.store.size).toBe(2);
+  });
+
+  test('au plus quelques créations par adresse et par fenêtre, puis 429 ; une autre adresse reste servie',async()=>{
+    let now=0;const limiter=new RateLimiter(3,60_000,()=>now);
+    const h=await harness(undefined,{entryLimiter:limiter});const value=await anonymousValue(h);
+    const headers={origin:config.origin,'x-csrf-token':value};
+    const statuses=[];for(let index=0;index<5;index++) statuses.push((await enter(h,'/app/bff/login',headers)).statusCode);
+    expect(statuses).toEqual([200,200,200,429,429]);
+    expect((await enter(h,'/app/bff/login',headers)).json().title).toBe('Trop de tentatives. Patientez quelques minutes.');
+    expect(h.store.size).toBe(3);
+    const other=await h.app.inject({method:'POST',url:'/app/bff/login',payload:{},headers,remoteAddress:'198.51.100.9'});
+    expect(other.statusCode).toBe(200);
+    now=60_001;expect((await enter(h,'/app/bff/login',headers)).statusCode).toBe(200);
+  });
+
+  test('le limiteur reste borné : plein de fenêtres actives, une nouvelle adresse est refusée',()=>{
+    let now=0;const limiter=new RateLimiter(1,1000,()=>now,2);
+    expect(limiter.allow('a')).toBe(true);expect(limiter.allow('b')).toBe(true);expect(limiter.allow('c')).toBe(false);
+    now=1001;expect(limiter.allow('c')).toBe(true);
+  });
+
+  test('l’adresse du client vient de X-Forwarded-For seulement derrière un proxy déclaré',async()=>{
+    const limiter=new RateLimiter(1,60_000);const behind=await harness(undefined,{entryLimiter:limiter,config:{trustProxy:true}});
+    const value=await anonymousValue(behind);const call=(address:string)=>behind.app.inject({method:'POST',url:'/app/bff/login',payload:{},
+      headers:{origin:config.origin,'x-csrf-token':value,'x-forwarded-for':address},remoteAddress:'10.0.0.1'});
+    expect((await call('203.0.113.1')).statusCode).toBe(200);expect((await call('203.0.113.2')).statusCode).toBe(200);expect((await call('203.0.113.1')).statusCode).toBe(429);
+    const direct=await harness(undefined,{entryLimiter:new RateLimiter(1,60_000)});const other=await anonymousValue(direct);
+    const spoof=(address:string)=>direct.app.inject({method:'POST',url:'/app/bff/login',payload:{},headers:{origin:config.origin,'x-csrf-token':other,'x-forwarded-for':address},remoteAddress:'10.0.0.1'});
+    expect((await spoof('203.0.113.1')).statusCode).toBe(200);expect((await spoof('203.0.113.2')).statusCode).toBe(429);
+  });
+
+  test('l’invite de mot de passe n’est demandée que pour se réauthentifier ou après une déconnexion',async()=>{
+    const h=await harness();
+    await h.start();expect(vi.mocked(h.identity.begin)).toHaveBeenLastCalledWith(undefined);
+    await h.post('/app/bff/login',{reauthenticate:true});expect(vi.mocked(h.identity.begin)).toHaveBeenLastCalledWith({reauthenticate:true});
+    await h.login();
+    const out=await h.post('/app/bff/logout');expect(out.headers['set-cookie']).toEqual(expect.arrayContaining([expect.stringContaining('__Host-drivy-relogin=1')]));
+    // Le navigateur garde ce marqueur : la connexion suivante redemande les identifiants, puis le marqueur disparaît.
+    const value=await anonymousValue(h);
+    const next=await h.app.inject({method:'POST',url:'/app/bff/login',payload:{},headers:{origin:config.origin,'x-csrf-token':value,cookie:'__Host-drivy-relogin=1'}});
+    expect(next.statusCode).toBe(200);expect(vi.mocked(h.identity.begin)).toHaveBeenLastCalledWith({reauthenticate:true});
+    const cookie=(Array.isArray(next.headers['set-cookie']) ? next.headers['set-cookie'] : [String(next.headers['set-cookie'])]).find(item=>item.startsWith('__Host-drivy-session='))!.split(';')[0]!;
+    const state=h.store.get(cookie.split('=')[1])!.login!.state;
+    const callback=await h.app.inject({url:`/app/bff/callback?code=one&state=${state}`,headers:{cookie}});
+    expect(String(callback.headers['set-cookie'])).toContain('__Host-drivy-relogin=;');
+  });
+
+  test('un chemin inconnu ou une session absente est refusé avant de lire le corps',async()=>{
+    const h=await harness();
+    const oversize=JSON.stringify({operationId:randomUUID(),filler:'x'.repeat(2_000_000)});
+    const unknown=await h.app.inject({method:'POST',url:`/app/bff/schools/${randomUUID()}/report-drafts`,payload:oversize,headers:{'content-type':'application/json'}});
+    expect(unknown.statusCode).toBe(404);
+    const known=await h.app.inject({method:'POST',url:`/app/bff/schools/${randomUUID()}/offerings`,payload:'{pas du json',headers:{'content-type':'application/json'}});
+    expect(known.statusCode).toBe(401);expect(known.json().code).toBe('SESSION_EXPIRED');
+    const read=await h.app.inject({url:`/app/bff/schools/${randomUUID()}/members`});
+    expect(read.statusCode).toBe(401);
+  });
+
+  test('les fichiers construits sont immuables, jamais une page ni un fichier absent',async()=>{
+    const root=mkdtempSync(join(tmpdir(),'drivy-web-'));mkdirSync(join(root,'assets'));
+    writeFileSync(join(root,'index.html'),'<!doctype html><title>x</title>');writeFileSync(join(root,'assets','index-abc123.js'),'export {}');
+    try {
+      const h=await harness(undefined,{staticRoot:root});
+      const asset=await h.app.inject({url:'/app/assets/index-abc123.js'});
+      expect(asset.statusCode).toBe(200);expect(asset.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+      const missing=await h.app.inject({url:'/app/assets/absent-def456.js'});
+      expect(missing.statusCode).toBe(404);expect(missing.headers['cache-control']).toBe('no-store');
+      const page=await h.app.inject({url:'/app/gestion'});
+      expect(page.statusCode).toBe(200);expect(page.headers['cache-control']).toBe('no-store');
+    } finally { rmSync(root,{recursive:true,force:true}); }
+  });
+
+  test('durée de session : 8 h d’inactivité et 12 h au plus par défaut, réglables',async()=>{
+    const env={WEB_ORIGIN:config.origin,API_BASE_URL:config.apiBaseURL,OIDC_ISSUER:config.issuer,OIDC_WEB_CLIENT_ID:config.clientId,OIDC_WEB_CLIENT_SECRET:config.clientSecret};
+    expect(readConfig(env)).toMatchObject({sessionIdleMinutes:480,sessionMaxMinutes:720,trustProxy:false});
+    expect(readConfig({...env,WEB_SESSION_IDLE_MINUTES:'60',WEB_SESSION_MAX_MINUTES:'240',WEB_TRUST_PROXY:'true'})).toMatchObject({sessionIdleMinutes:60,sessionMaxMinutes:240,trustProxy:true});
+    expect(()=>readConfig({...env,WEB_SESSION_IDLE_MINUTES:'300',WEB_SESSION_MAX_MINUTES:'120'})).toThrow();
+    // Le cookie et le magasin suivent la configuration.
+    let now=Date.now();const h=await harness(undefined,{config:{sessionIdleMinutes:480,sessionMaxMinutes:720}});
+    const store=new SessionStore(()=>now,10,{idleMs:480*60_000,maxMs:720*60_000});const session=store.create();session.tokens=h.tokens;
+    now+=400*60_000;store.touch(session);expect(store.get(session.id)).toBe(session);
+    now+=300*60_000;store.touch(session);expect(store.get(session.id)).toBe(session);
+    now+=30*60_000;store.touch(session);expect(store.get(session.id)).toBeUndefined();
+    const idle=store.create();idle.tokens=h.tokens;now+=481*60_000;expect(store.get(idle.id)).toBeUndefined();
+    const created=await h.start();expect(String(created.headers['set-cookie'])).toContain('Max-Age=43200');
   });
 });
 

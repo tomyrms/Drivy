@@ -15,6 +15,7 @@ import { ProductsSection, TermsSection } from './commerce';
 import { InvitationsSection, TeamSection } from './people';
 import { LearnersSection } from './learners';
 import { AvailabilitySection } from './availability';
+import { AgendaSection } from './agenda';
 
 const navigation: readonly { group: string; items: readonly { key: SectionKey; label: string; symbol: SymbolKind }[] }[] = [
   { group: 'École', items: [
@@ -35,6 +36,7 @@ const navigation: readonly { group: string; items: readonly { key: SectionKey; l
     { key: 'invitations', label: 'Invitations', symbol: 'mail' },
   ] },
   { group: 'Planning', items: [
+    { key: 'agenda', label: 'Agenda', symbol: 'list' },
     { key: 'disponibilites', label: 'Disponibilités', symbol: 'clock' },
   ] },
 ];
@@ -104,13 +106,14 @@ export function ManagementConsole() {
     document.title = `${sectionTitle(route.section)}${school ? ` · ${school}` : ''} · Gestion Drivy`;
   }, [route.section, state]);
 
-  async function login() {
+  async function login(options?: { reauthenticate?: boolean }) {
     if (busy) return;
     setBusy(true);
     try {
       const next = await request('session', sessionSchema);
       const returnTo = window.location.pathname.replace(/\/$/, '');
-      const result = await request('login', loginSchema, { csrf: next.csrfToken, body: /^\/app\/gestion(\/|$)/.test(returnTo) ? { returnTo } : {} });
+      const result = await request('login', loginSchema, { csrf: next.csrfToken, body: {
+        ...(/^\/app\/gestion(\/|$)/.test(returnTo) ? { returnTo } : {}), ...(options?.reauthenticate ? { reauthenticate: true } : {}) } });
       const target = new URL(result.url);
       const loopback = ['localhost', '127.0.0.1', '[::1]'];
       const localPage = window.location.protocol === 'http:' && loopback.includes(window.location.hostname);
@@ -144,7 +147,7 @@ export function ManagementConsole() {
       window.history.pushState(null, '', pathFor(state.membership.schoolId, section));
       setRoute({ schoolId: state.membership.schoolId, section });
     },
-    login: () => { void login(); },
+    login: options => { void login(options); },
   }, [state]);
 
   const personName = state.status === 'ready' || state.status === 'choose' || state.status === 'denied' ? state.me.displayName : session?.user?.displayName;
@@ -217,6 +220,7 @@ function Section({ section }: { section: SectionKey }): ReactNode {
     case 'equipe': return <TeamSection />;
     case 'invitations': return <InvitationsSection />;
     case 'eleves': return <LearnersSection />;
+    case 'agenda': return <AgendaSection />;
     case 'disponibilites': return <AvailabilitySection />;
   }
 }
@@ -302,8 +306,10 @@ function PendingPanel() {
       <div className="button-row compact">
         <button type="button" className="button primary" onClick={() => void verify()} disabled={working}>Vérifier auprès de l’école</button>
         {canResend && <button type="button" className="button secondary" onClick={() => void resend()} disabled={working}>Renvoyer la même demande</button>}
-        {entry.needsLogin && <button type="button" className="button secondary" onClick={context.login}>Se reconnecter</button>}
-        {canRelease && !releasing && <button type="button" className="button quiet" onClick={() => setReleasing(true)}>Arrêter le suivi…</button>}
+        {entry.needsLogin && <button type="button" className="button secondary" onClick={() => context.login()}>Se reconnecter</button>}
+        {canRelease && !releasing && (entry.notRecorded
+          ? <button type="button" className="button quiet" onClick={() => commandStore.release(context.schoolId)}>Abandonner la demande</button>
+          : <button type="button" className="button quiet" onClick={() => setReleasing(true)}>Arrêter le suivi…</button>)}
       </div>
       {releasing && <div className="notice warning">
         <Symbol kind="alert" />

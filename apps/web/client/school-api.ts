@@ -33,10 +33,6 @@ export const memberSchema = z.object({
   id, schoolId: id, version, personId: id, displayName: z.string(), status: z.string(),
   roles: z.array(z.enum(['ADMIN', 'INSTRUCTOR', 'LEARNER'])).max(3), grants: z.array(z.string()).max(20), accessEpoch: z.number().int(),
 });
-export const invitationSchema = z.object({
-  id, schoolId: id, version, maskedEmail: z.string(), roles: z.array(z.enum(['ADMIN', 'INSTRUCTOR', 'LEARNER'])).min(1).max(3),
-  status: z.enum(['PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED']), expiresAt: timestamp,
-});
 export const offeringSchema = z.object({
   id, schoolId: id, version, offeringKey: z.string(), categoryCode: z.string(), curriculumVersionId: id, policyVersionId: id,
   enabled: z.boolean(), defaultDurationMinutes: z.number().int().min(1).max(480), defaultPriceCents: z.number().int().min(0),
@@ -91,7 +87,36 @@ export const closureSchema = z.object({
   id, schoolId: id, version, instructorMembershipId: id, startsAt: timestamp, endsAt: timestamp, reason: z.string().nullable(),
 });
 
+/** Contrôle du permis (AP29/AP30) : la dernière décision d'une formation est son état courant. */
+export const permitSchema = z.object({
+  id, schoolId: id, version, trainingId: id, documentId: id.nullable(), physicalSeen: z.boolean(), categoryCode: z.string(),
+  validUntil: civil.nullable(), decision: z.enum(['APPROVED', 'REJECTED']), reviewerMembershipId: id, reviewedAt: timestamp,
+  reason: z.string().nullable(), isExpired: z.boolean(),
+});
+/** Leçon planifiée : lecture seule dans la gestion (la planification se fait dans l'app). */
+export const lessonSchema = z.object({
+  id, schoolId: id, version, trainingId: id, learnerId: id, instructorMembershipId: id, plannedStart: timestamp, plannedEnd: timestamp,
+  timeZone: z.string(), meetingPoint: z.string(), status: z.enum(['PLANNED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']),
+  permitWarning: z.boolean().optional(), currentPublishedRevisionId: id.nullable().optional(),
+});
+export const observationLevels = ['DISCOVERING', 'GUIDED', 'INDEPENDENT'] as const;
+export const progressSchema = z.object({
+  trainingId: id, computedAt: timestamp, unobservedCompetencyIds: z.array(id).max(500),
+  items: z.array(z.object({ competencyId: id, label: z.string(), level: z.enum(observationLevels), context: z.string(), observedAt: timestamp,
+    sourceLessonId: id, sourceRevisionId: id })).max(500),
+});
+/** Bilan publié d'une leçon (révision immuable). */
+export const reportSchema = z.object({
+  id, schoolId: id, version, lessonId: id, sequence: z.number().int().positive(), authorMembershipId: id, publishedAt: timestamp,
+  workedOn: z.string(), observationText: z.string(), nextStep: z.string(), correctionReason: z.string().nullable().optional(),
+  observations: z.array(z.object({ competencyId: id, level: z.enum(observationLevels), context: z.string() })).max(200),
+});
+
 export type School = z.infer<typeof schoolSchema>;
+export type Permit = z.infer<typeof permitSchema>;
+export type Lesson = z.infer<typeof lessonSchema>;
+export type Progress = z.infer<typeof progressSchema>;
+export type Report = z.infer<typeof reportSchema>;
 export type Learner = z.infer<typeof learnerSchema>;
 export type Training = z.infer<typeof trainingSchema>;
 export type Assignment = z.infer<typeof assignmentSchema>;
@@ -102,7 +127,6 @@ export type Setup = z.infer<typeof setupSchema>;
 export type DataPolicy = z.infer<typeof dataPolicySchema>;
 export type Receipt = z.infer<typeof receiptSchema>;
 export type SchoolMember = z.infer<typeof memberSchema>;
-export type Invitation = z.infer<typeof invitationSchema>;
 export type Offering = z.infer<typeof offeringSchema>;
 export type Curriculum = z.infer<typeof curriculumSchema>;
 export type CatalogPolicy = z.infer<typeof catalogPolicySchema>;
@@ -148,19 +172,19 @@ export async function readSchool<T extends z.ZodTypeAny>(schoolId: string, path:
   return (parsed.data as { data: z.infer<T> }).data;
 }
 
-export async function readPage<T extends z.ZodTypeAny>(schoolId: string, path: string, item: T, cursor?: string | null): Promise<Page<z.infer<T>>> {
+export async function readPage<T extends z.ZodTypeAny>(schoolId: string, path: string, item: T, cursor?: string | null, filters?: Record<string, string>): Promise<Page<z.infer<T>>> {
   const page = z.object({ items: z.array(item).max(100), nextCursor: z.string().min(1).max(6000).nullable() });
-  const result = await readSchool(schoolId, path, page, { limit: '100', ...(cursor ? { cursor } : {}) });
+  const result = await readSchool(schoolId, path, page, { ...(filters ?? {}), limit: '100', ...(cursor ? { cursor } : {}) });
   if (result.items.some(entry => (entry as { schoolId?: string }).schoolId !== schoolId)) throw new RequestFailure('INVALID_RESPONSE');
   return result as Page<z.infer<T>>;
 }
 
 /** Read every page of a short management list (at most 1 000 entries); `truncated` says when more exist. */
-export async function readAll<T extends z.ZodTypeAny>(schoolId: string, path: string, item: T): Promise<{ items: z.infer<T>[]; truncated: boolean }> {
+export async function readAll<T extends z.ZodTypeAny>(schoolId: string, path: string, item: T, filters?: Record<string, string>): Promise<{ items: z.infer<T>[]; truncated: boolean }> {
   const items: z.infer<T>[] = [];
   let cursor: string | null = null;
   for (let page = 0; page < 10; page++) {
-    const result: Page<z.infer<T>> = await readPage(schoolId, path, item, cursor);
+    const result: Page<z.infer<T>> = await readPage(schoolId, path, item, cursor, filters);
     items.push(...result.items);
     cursor = result.nextCursor;
     if (!cursor) return { items, truncated: false };

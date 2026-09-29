@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
-  classifyFailure, commandHeaders, createCommand, instantToSchoolTime, isEmail, parseCents, parseMetadata,
-  profilePolicyProblem, receiptMatches, schoolTimeToInstant, toMetadata, type ProfileRule,
+  classifyFailure, commandHeaders, commandMessage, commandSpecs, createCommand, instantToSchoolTime, isEmail, latestPermit, matchesSearch, normalizeSearch,
+  parseCents, parseMetadata, permitBody, permitProblem, permitState, profilePolicyProblem, receiptMatches, schoolTimeToInstant, toMetadata,
+  trainingTransitions, transitionProblem, type PermitDraft, type ProfileRule,
 } from '../client/command-core.js';
 
 const schoolId = randomUUID();
@@ -29,18 +30,30 @@ describe('Commande de gestion : même demande jusqu’à confirmation', () => {
       [503, 'INVITATION_DELIVERY_UNAVAILABLE']] as const) {
       expect(classifyFailure(status, code, true)).toEqual({ type: 'uncertain', code, needsLogin: false });
     }
-    expect(classifyFailure(401, 'SESSION_EXPIRED', true)).toEqual({ type: 'uncertain', code: 'SESSION_EXPIRED', needsLogin: true });
+    // Session lost while the school was answering: the command may have been committed.
+    expect(classifyFailure(401, 'SESSION_LOST_RESULT_UNKNOWN', true)).toEqual({ type: 'uncertain', code: 'SESSION_LOST_RESULT_UNKNOWN', needsLogin: true });
     expect(classifyFailure(403, 'CSRF_REJECTED', true).type).toBe('uncertain');
   });
 
-  test('un refus métier libère seulement un premier envoi ; après incertitude il ne prouve rien', () => {
-    for (const [status, code] of [[412, 'VERSION_CONFLICT'], [409, 'LAST_ADMIN'], [409, 'OFFERING_NOT_READY'], [401, 'REAUTH_REQUIRED'], [422, 'PROFILE_POLICY_RULE_INVALID']] as const) {
-      expect(classifyFailure(status, code, true)).toEqual({ type: 'rejected', code });
-      expect(classifyFailure(status, code, false)).toEqual({ type: 'review', code });
+  test('tout refus 4xx avec un code est définitif sur un premier envoi ; après incertitude il ne prouve rien', () => {
+    for (const [status, code] of [[412, 'VERSION_CONFLICT'], [409, 'LAST_ADMIN'], [409, 'OFFERING_NOT_READY'], [422, 'PROFILE_POLICY_RULE_INVALID'],
+      [409, 'INVITATION_DELIVERY_UNAVAILABLE'], [403, 'SETUP_ACCESS_REQUIRED'], [404, 'NOT_FOUND'], [422, 'UN_CODE_QUE_LE_CLIENT_NE_CONNAIT_PAS']] as const) {
+      expect(classifyFailure(status, code, true), code).toEqual({ type: 'rejected', code, needsLogin: false });
+      expect(classifyFailure(status, code, false), code).toEqual({ type: 'review', code, needsLogin: false });
     }
-    expect(classifyFailure(409, 'IDEMPOTENCY_MISMATCH', true)).toEqual({ type: 'review', code: 'IDEMPOTENCY_MISMATCH' });
-    expect(classifyFailure(403, 'SETUP_ACCESS_REQUIRED', true).type).toBe('review');
-    expect(classifyFailure(404, 'NOT_FOUND', true).type).toBe('review');
+  });
+
+  test('une session perdue ou une réauthentification demandée est un refus qui propose de se reconnecter', () => {
+    for (const code of ['SESSION_EXPIRED', 'REAUTH_REQUIRED']) {
+      expect(classifyFailure(401, code, true)).toEqual({ type: 'rejected', code, needsLogin: true });
+      expect(classifyFailure(401, code, false)).toEqual({ type: 'review', code, needsLogin: true });
+    }
+  });
+
+  test('un refus illisible ou une clé déjà utilisée ne prouvent rien, même au premier envoi', () => {
+    for (const [status, code] of [[409, 'IDEMPOTENCY_MISMATCH'], [400, 'REQUEST_FAILED'], [400, 'API_UNAVAILABLE'], [408, 'TIMEOUT']] as const) {
+      expect(classifyFailure(status, code, true), code).toEqual({ type: 'review', code, needsLogin: false });
+    }
   });
 
   test('reçu AP72 : opération, type, ressource et version postérieure doivent correspondre', () => {
@@ -69,6 +82,127 @@ describe('Commande de gestion : même demande jusqu’à confirmation', () => {
     expect(parseMetadata({ ...JSON.parse(stored), kind: 'deleteSchool' })).toBeNull();
     expect(parseMetadata({ ...JSON.parse(stored), operationId: 'x' })).toBeNull();
     expect(parseMetadata({ ...JSON.parse(stored), kind: 'revokeInvitation' })).toBeNull();
+  });
+});
+
+describe('Invitation par code élève', () => {
+  const offeringId = randomUUID(), instructorMembershipId = randomUUID();
+  const create = () => createCommand({ schoolId, kind: 'createInvitation', path: 'invitations', resourceVersion: 0,
+    body: { delivery: 'CODE', roles: ['LEARNER'], training: { offeringId, instructorMembershipId } } });
+
+  test('la création part de zéro, sans If-Match, avec l’operationId dans le corps et en Idempotency-Key', () => {
+    const command = create();
+    expect(command.body).toEqual({ delivery: 'CODE', roles: ['LEARNER'], training: { offeringId, instructorMembershipId }, operationId: command.operationId });
+    const headers = commandHeaders(command, 'csrf');
+    expect(headers['Idempotency-Key']).toBe(command.operationId);
+    expect(headers['If-Match']).toBeUndefined();
+    expect(commandSpecs.createInvitation).toMatchObject({ method: 'POST', expectedStatus: 201, target: 'created' });
+  });
+
+  test('un nouveau code exige la version de l’invitation (If-Match) et répond 200', () => {
+    const invitation = randomUUID();
+    const renew = createCommand({ schoolId, kind: 'resendInvitation', path: `invitations/${invitation}/resend`, ifMatch: 3, resourceId: invitation, resourceVersion: 3, body: {} });
+    expect(commandHeaders(renew, 'csrf')['If-Match']).toBe('"3"');
+    expect(commandSpecs.resendInvitation).toMatchObject({ method: 'POST', expectedStatus: 200, target: 'resource' });
+    const receipt = { operationId: renew.operationId, commandType: 'RESEND_INVITATION', resourceType: 'Invitation', resourceId: invitation,
+      committedAt: '2026-09-29T08:00:00Z', resourceVersion: 4 };
+    expect(receiptMatches(renew, receipt)).toBe(true);
+    expect(receiptMatches(renew, { ...receipt, resourceVersion: 3 })).toBe(false);
+    expect(() => createCommand({ schoolId, kind: 'resendInvitation', path: 'invitations/x/resend', body: {}, resourceVersion: 3 })).toThrow();
+  });
+
+  test('offre ou moniteur refusés : un premier envoi est libéré pour correction, un renvoi doit être vérifié', () => {
+    for (const code of ['INVITATION_TRAINING_INVALID', 'INVITATION_CODE_INVALID'] as const) {
+      expect(classifyFailure(422, code, true)).toEqual({ type: 'rejected', code, needsLogin: false });
+      expect(classifyFailure(422, code, false)).toEqual({ type: 'review', code, needsLogin: false });
+      expect(commandMessage(code)).not.toBe(commandMessage('CODE_INCONNU'));
+    }
+    expect(commandMessage('INVITATION_TRAINING_INVALID')).toBe('Choisissez une offre ouverte et un moniteur actif.');
+    expect(classifyFailure(503, 'INVITATION_DELIVERY_UNAVAILABLE', true).type).toBe('uncertain');
+  });
+
+  test('le journal d’une demande ne garde ni l’offre, ni le moniteur, ni aucun code', () => {
+    const stored = JSON.stringify(toMetadata(create()));
+    expect(stored).not.toContain(offeringId);
+    expect(stored).not.toContain(instructorMembershipId);
+    expect(stored).not.toContain('CODE');
+    expect(stored).not.toContain('training');
+    expect(parseMetadata({ ...JSON.parse(stored), code: 'K7Q4-MX2P' })).toBeNull();
+    expect(parseMetadata({ ...JSON.parse(stored), training: { offeringId } })).toBeNull();
+  });
+});
+
+describe('Dossier de l’élève : formation, permis, archivage, accès', () => {
+  const training = randomUUID();
+
+  test('une formation active peut être suspendue, terminée ou annulée ; une formation close ne change plus', () => {
+    expect(trainingTransitions('ACTIVE').map(item => item.target)).toEqual(['PAUSED', 'COMPLETED', 'CANCELLED']);
+    expect(trainingTransitions('PAUSED').map(item => item.target)).toEqual(['ACTIVE', 'COMPLETED', 'CANCELLED']);
+    expect(trainingTransitions('COMPLETED')).toEqual([]);
+    expect(trainingTransitions('CANCELLED')).toEqual([]);
+    const cancel = trainingTransitions('ACTIVE').find(item => item.target === 'CANCELLED')!;
+    expect(transitionProblem(cancel, '   ')).not.toBeNull();
+    expect(transitionProblem(cancel, 'L’élève a déménagé.')).toBeNull();
+    expect(transitionProblem(trainingTransitions('ACTIVE')[0]!, '')).toBeNull();
+    expect(transitionProblem(cancel, 'x'.repeat(1001))).not.toBeNull();
+  });
+
+  test('les nouvelles commandes visent la bonne ressource avec If-Match et ne se rejouent que sur reçu concordant', () => {
+    const assignment = randomUUID(), learner = randomUUID(), member = randomUUID();
+    for (const [kind, path, id, type, resource] of [
+      ['transitionTraining', `trainings/${training}/transition`, training, 'TRANSITION_TRAINING', 'Training'],
+      ['endAssignment', `trainings/${training}/assignments/${assignment}/end`, assignment, 'END_ASSIGNMENT', 'Assignment'],
+      ['archiveLearner', `learners/${learner}/archive`, learner, 'ARCHIVE_LEARNER', 'Learner'],
+      ['deactivateMember', `members/${member}/deactivate`, member, 'DEACTIVATE_MEMBER', 'Member'],
+    ] as const) {
+      const command = createCommand({ schoolId, kind, path, ifMatch: 4, resourceId: id, resourceVersion: 4, body: { reason: 'Motif' } });
+      expect(commandHeaders(command, 'csrf')['If-Match']).toBe('"4"');
+      const receipt = { operationId: command.operationId, commandType: type, resourceType: resource, resourceId: id, committedAt: '2026-09-29T08:00:00Z', resourceVersion: 5 };
+      expect(receiptMatches(command, receipt), kind).toBe(true);
+      expect(receiptMatches(command, { ...receipt, resourceId: randomUUID() }), kind).toBe(false);
+      expect(() => createCommand({ schoolId, kind, path, body: {}, resourceVersion: 4 }), kind).toThrow();
+    }
+    const modules = createCommand({ schoolId, kind: 'updateModules', path: 'modules', ifMatch: 9, resourceVersion: 9, body: { gpsEnabled: false } });
+    expect(commandSpecs.updateModules.method).toBe('PUT');
+    expect(receiptMatches(modules, { operationId: modules.operationId, commandType: 'UPDATE_SCHOOL_MODULES', resourceType: 'School', resourceId: schoolId,
+      committedAt: '2026-09-29T08:00:00Z', resourceVersion: 10 })).toBe(true);
+    const permit = createCommand({ schoolId, kind: 'recordPermitCheck', path: `trainings/${training}/permit-checks`, ifMatch: 3, resourceVersion: 0,
+      body: permitBody({ physicalSeen: true, validUntil: '', decision: 'APPROVED', reason: '' }, 'B') });
+    expect(commandHeaders(permit, 'csrf')['If-Match']).toBe('"3"');
+    expect(commandSpecs.recordPermitCheck).toMatchObject({ target: 'created', expectedStatus: 200 });
+  });
+
+  test('contrôle du permis : original vu et date en vigueur pour approuver, motif pour refuser', () => {
+    const draft = (change: Partial<PermitDraft>): PermitDraft => ({ physicalSeen: true, validUntil: '2031-05-04', decision: 'APPROVED', reason: '', ...change });
+    const today = '2026-09-29';
+    expect(permitProblem(draft({}), today)).toBeNull();
+    expect(permitProblem(draft({ validUntil: '' }), today)).toBeNull();
+    expect(permitProblem(draft({ physicalSeen: false }), today)).not.toBeNull();
+    expect(permitProblem(draft({ validUntil: '2026-09-28' }), today)).not.toBeNull();
+    expect(permitProblem(draft({ validUntil: '2026-09-29' }), today)).toBeNull();
+    expect(permitProblem(draft({ validUntil: '2026-02-30' }), today)).not.toBeNull();
+    expect(permitProblem(draft({ decision: 'REJECTED', physicalSeen: false }), today)).not.toBeNull();
+    expect(permitProblem(draft({ decision: 'REJECTED', physicalSeen: false, reason: 'Permis provisoire' }), today)).toBeNull();
+    expect(permitBody(draft({ validUntil: '' }), 'B')).toEqual({ documentId: null, physicalSeen: true, categoryCode: 'B', validUntil: null, decision: 'APPROVED', reason: null });
+  });
+
+  test('l’état du permis est celui de la dernière décision de la catégorie', () => {
+    expect(permitState(undefined)).toBe('none');
+    expect(permitState({ decision: 'APPROVED', isExpired: false })).toBe('valid');
+    expect(permitState({ decision: 'APPROVED', isExpired: true })).toBe('expired');
+    expect(permitState({ decision: 'REJECTED', isExpired: false })).toBe('rejected');
+    const history = [{ categoryCode: 'B', n: 1 }, { categoryCode: 'A', n: 2 }, { categoryCode: 'B', n: 3 }];
+    expect(latestPermit(history, 'B')?.n).toBe(3);
+    expect(latestPermit(history, 'C')).toBeUndefined();
+  });
+
+  test('recherche insensible à la casse et aux accents', () => {
+    expect(normalizeSearch('  Éloïse ')).toBe('eloise');
+    expect(matchesSearch(['Éloïse Müller', 'eloise@example.test'], 'eloi')).toBe(true);
+    expect(matchesSearch(['Éloïse Müller', null], 'muller')).toBe(true);
+    expect(matchesSearch(['Éloïse Müller', 'eloise@example.test'], 'EXAMPLE')).toBe(true);
+    expect(matchesSearch(['Éloïse Müller'], 'zoe')).toBe(false);
+    expect(matchesSearch(['Éloïse'], '   ')).toBe(true);
   });
 });
 

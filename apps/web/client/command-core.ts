@@ -13,7 +13,8 @@ export type CommandKind =
   | 'createProfilePolicy' | 'publishProfilePolicy'
   | 'createOffering' | 'createCurriculum' | 'createCatalogPolicy' | 'updateMember'
   | 'createCommercialTerms' | 'createServiceProduct'
-  | 'createTraining' | 'createAssignment'
+  | 'createTraining' | 'createAssignment' | 'transitionTraining' | 'endAssignment' | 'archiveLearner' | 'deactivateMember'
+  | 'updateModules' | 'recordPermitCheck'
   | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
 
@@ -32,8 +33,8 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   saveSetup: { operationType: 'SAVE_SCHOOL_SETUP', resourceType: 'SchoolSetup', target: 'school', method: 'PATCH', expectedStatus: 200, label: 'Enregistrement de l’avancement' },
   activate: { operationType: 'ACTIVATE_SCHOOL', resourceType: 'School', target: 'school', method: 'POST', expectedStatus: 200, label: 'Activation de l’école' },
   saveDataPolicy: { operationType: 'ADOPT_SCHOOL_DATA_POLICY', resourceType: 'SchoolDataPolicy', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Adoption des textes d’information' },
-  createInvitation: { operationType: 'CREATE_INVITATION', resourceType: 'Invitation', target: 'created', method: 'POST', expectedStatus: 201, label: 'Envoi d’une invitation' },
-  resendInvitation: { operationType: 'RESEND_INVITATION', resourceType: 'Invitation', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Renvoi d’une invitation' },
+  createInvitation: { operationType: 'CREATE_INVITATION', resourceType: 'Invitation', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une invitation' },
+  resendInvitation: { operationType: 'RESEND_INVITATION', resourceType: 'Invitation', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Renouvellement d’une invitation' },
   revokeInvitation: { operationType: 'REVOKE_INVITATION', resourceType: 'Invitation', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Révocation d’une invitation' },
   createProfilePolicy: { operationType: 'CREATE_PROFILE_FIELD_POLICY', resourceType: 'ProfileFieldPolicy', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une version des champs du profil' },
   publishProfilePolicy: { operationType: 'PUBLISH_PROFILE_FIELD_POLICY', resourceType: 'ProfileFieldPolicy', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Publication des champs du profil' },
@@ -45,6 +46,12 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   createServiceProduct: { operationType: 'CREATE_SERVICE_PRODUCT', resourceType: 'ServiceProductVersion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une prestation' },
   createTraining: { operationType: 'CREATE_TRAINING', resourceType: 'Training', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ouverture d’une formation' },
   createAssignment: { operationType: 'CREATE_ASSIGNMENT', resourceType: 'Assignment', target: 'created', method: 'POST', expectedStatus: 201, label: 'Affectation d’un moniteur' },
+  transitionTraining: { operationType: 'TRANSITION_TRAINING', resourceType: 'Training', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Changement d’état d’une formation' },
+  endAssignment: { operationType: 'END_ASSIGNMENT', resourceType: 'Assignment', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Fin d’une affectation' },
+  archiveLearner: { operationType: 'ARCHIVE_LEARNER', resourceType: 'Learner', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Archivage d’un dossier élève' },
+  deactivateMember: { operationType: 'DEACTIVATE_MEMBER', resourceType: 'Member', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait de l’accès d’un membre' },
+  updateModules: { operationType: 'UPDATE_SCHOOL_MODULES', resourceType: 'School', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Modification des modules de l’école' },
+  recordPermitCheck: { operationType: 'RECORD_PERMIT_CHECK', resourceType: 'PermitCheck', target: 'created', method: 'POST', expectedStatus: 200, label: 'Contrôle du permis' },
   createAvailabilityRule: { operationType: 'CREATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ajout d’une disponibilité' },
   updateAvailabilityRule: { operationType: 'UPDATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'PUT', expectedStatus: 200, label: 'Modification d’une disponibilité' },
   removeAvailabilityRule: { operationType: 'REMOVE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une disponibilité' },
@@ -134,36 +141,30 @@ export function receiptMatches(command: CommandMetadata, receipt: OperationRecei
 }
 
 /**
- * Codes that the API returns only after refusing the command before any effect.
- * A fresh first emission refused with one of them may be released for correction.
+ * A refusal the API sends only after rolling the command back (any 4xx carrying a problem code) proves that
+ * this emission had no effect. These codes say nothing about it: an unreadable refusal, a key reused for other
+ * content (an earlier emission may exist).
  */
-const businessRefusals = new Set([
-  'INVALID_REQUEST', 'VERSION_CONFLICT', 'PRECONDITION_REQUIRED', 'REAUTH_REQUIRED', 'PAYLOAD_TOO_LARGE',
-  'SETUP_INCOMPLETE', 'CONFIG_IMPACT_REVIEW_REQUIRED', 'MODULE_NOT_READY', 'POLICY_REVIEW_REQUIRED',
-  'SCHOOL_ALREADY_ACTIVE', 'SCHOOL_ARCHIVED', 'SETUP_NOT_INITIALIZED', 'INVALID_TIME_ZONE', 'SCHOOL_NOT_ACTIVE',
-  'LAST_ADMIN', 'MEMBER_RELATIONS_REQUIRE_REVIEW', 'OFFERING_NOT_READY', 'OFFERING_CATEGORY_CHANGED',
-  'ALREADY_MEMBER', 'INVITATION_ALREADY_PENDING', 'INVITATION_USED', 'INVITATION_REVOKED', 'INVITATION_ROLE_FORBIDDEN',
-  'PROFILE_POLICY_RULE_INVALID', 'PROFILE_POLICY_ALREADY_PUBLISHED', 'PROFILE_POLICY_DATE_CONFLICT',
-  'INVALID_INTERVAL', 'INVALID_SERVICE_PRODUCT', 'COMMERCIAL_TERMS_NOT_APPROVED', 'SITE_SETUP_REQUIRED',
-  'ACTIVE_TRAINING_EXISTS', 'LEARNER_NOT_ACTIVE', 'LEARNER_ARCHIVED', 'TRAINING_NOT_ACTIVE', 'INSTRUCTOR_REQUIRED',
-  'ASSIGNMENT_CONFLICT', 'EXISTING_BOOKINGS',
-]);
+const undecidedRefusals = new Set(['REQUEST_FAILED', 'API_UNAVAILABLE', 'IDEMPOTENCY_MISMATCH', 'INVALID_RESPONSE']);
 
 export type CommandOutcome =
   /** Refused before any effect on a fresh first emission: release it, reload, let the person correct. */
-  | { readonly type: 'rejected'; readonly code: string }
-  /** Result unknown (lost response, 5xx, session lost): keep the same request, verify or resend it. */
+  | { readonly type: 'rejected'; readonly code: string; readonly needsLogin: boolean }
+  /** Result unknown (lost response, 5xx, session lost while the school was answering): keep the same request, verify or resend it. */
   | { readonly type: 'uncertain'; readonly code: string; readonly needsLogin: boolean }
   /** A refusal that does not disprove a previous emission: keep it, verify with AP72 only. */
-  | { readonly type: 'review'; readonly code: string };
+  | { readonly type: 'review'; readonly code: string; readonly needsLogin: boolean };
 
 export function classifyFailure(status: number, code: string, firstAttempt: boolean): CommandOutcome {
   if (status === 0 || status === 429 || status >= 500) return { type: 'uncertain', code, needsLogin: false };
-  if (status === 401 && code !== 'REAUTH_REQUIRED') return { type: 'uncertain', code, needsLogin: true };
+  // The session ended while the school was answering: the command may have been committed.
+  if (code === 'SESSION_LOST_RESULT_UNKNOWN') return { type: 'uncertain', code, needsLogin: true };
   // Rejected by the BFF itself, before the API: the same request can be sent again after refresh.
   if (code === 'CSRF_REJECTED') return { type: 'uncertain', code, needsLogin: false };
-  if (businessRefusals.has(code)) return firstAttempt ? { type: 'rejected', code } : { type: 'review', code };
-  return { type: 'review', code };
+  const needsLogin = status === 401;
+  const definitive = status >= 400 && status < 500 && status !== 408 && !undecidedRefusals.has(code);
+  if (definitive) return firstAttempt ? { type: 'rejected', code, needsLogin } : { type: 'review', code, needsLogin };
+  return { type: 'review', code, needsLogin };
 }
 
 export function commandMessage(code: string): string {
@@ -172,7 +173,8 @@ export function commandMessage(code: string): string {
     SERVICE_UNAVAILABLE: 'La réponse n’a pas été reçue. Vérifiez le résultat auprès de l’école avant de continuer.',
     API_UNAVAILABLE: 'L’école est momentanément inaccessible. Votre demande reste conservée jusqu’à vérification.',
     INVALID_RESPONSE: 'La réponse de l’école n’a pas pu être vérifiée. La modification n’est pas confirmée.',
-    SESSION_EXPIRED: 'Votre connexion a expiré. Reconnectez-vous, puis vérifiez le résultat de la demande.',
+    SESSION_EXPIRED: 'Votre connexion a expiré. Reconnectez-vous puis refaites la demande : rien n’a été modifié.',
+    SESSION_LOST_RESULT_UNKNOWN: 'Votre connexion a expiré pendant l’envoi. Reconnectez-vous, puis vérifiez le résultat de la demande.',
     CSRF_REJECTED: 'La session de cette page a changé. La demande n’a pas été transmise : renvoyez la même demande.',
     REAUTH_REQUIRED: 'Reconnectez-vous avec le même compte pour confirmer ce changement d’accès. Rien n’a été modifié.',
     INVALID_REQUEST: 'L’école a refusé ces informations. Vérifiez la saisie avant de confirmer à nouveau.',
@@ -198,7 +200,9 @@ export function commandMessage(code: string): string {
     INVITATION_USED: 'Cette invitation a déjà été utilisée.',
     INVITATION_REVOKED: 'Cette invitation a déjà été révoquée.',
     INVITATION_ROLE_FORBIDDEN: 'Vos accès ne permettent pas d’inviter avec ce rôle.',
-    INVITATION_DELIVERY_UNAVAILABLE: 'L’envoi des invitations n’est pas disponible. Le résultat reste à vérifier : ne créez pas de seconde invitation.',
+    INVITATION_DELIVERY_UNAVAILABLE: 'L’envoi par e-mail n’est pas disponible. Aucune invitation n’a été créée : utilisez un code élève.',
+    INVITATION_TRAINING_INVALID: 'Choisissez une offre ouverte et un moniteur actif.',
+    INVITATION_CODE_INVALID: 'Ce code n’est plus valable. Créez-en un nouveau.',
     PROFILE_POLICY_RULE_INVALID: 'Vérifiez les champs, leur utilité et le moment où ils sont demandés.',
     PROFILE_POLICY_ALREADY_PUBLISHED: 'Cette version est déjà publiée.',
     PROFILE_POLICY_DATE_CONFLICT: 'Une version publiée utilise déjà cette date d’effet.',
@@ -354,4 +358,56 @@ export function profilePolicyProblem(rules: readonly ProfileRule[]): string | nu
   if (!rules.some(rule => rule.field === 'firstName') || !rules.some(rule => rule.field === 'lastName')) return 'Le prénom et le nom sont toujours demandés.';
   for (const rule of rules) { const problem = profileRuleProblem(rule); if (problem) return problem; }
   return null;
+}
+
+/* ---------- Dossier de l'élève : formation, permis, recherche ---------- */
+
+export type TrainingStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+export interface TrainingTransition { readonly target: TrainingStatus; readonly label: string; readonly reasonRequired: boolean; readonly danger: boolean }
+const transitions: Readonly<Record<'pause' | 'resume' | 'complete' | 'cancel', TrainingTransition>> = {
+  pause: { target: 'PAUSED', label: 'Mettre en pause', reasonRequired: false, danger: false },
+  resume: { target: 'ACTIVE', label: 'Reprendre', reasonRequired: false, danger: false },
+  complete: { target: 'COMPLETED', label: 'Terminer', reasonRequired: false, danger: false },
+  cancel: { target: 'CANCELLED', label: 'Annuler la formation', reasonRequired: true, danger: true },
+};
+/** Changes of state a training in this state may take; a completed or cancelled training is closed. */
+export function trainingTransitions(status: TrainingStatus): readonly TrainingTransition[] {
+  if (status === 'ACTIVE') return [transitions.pause, transitions.complete, transitions.cancel];
+  if (status === 'PAUSED') return [transitions.resume, transitions.complete, transitions.cancel];
+  return [];
+}
+export function transitionProblem(transition: TrainingTransition, reason: string): string | null {
+  if (characters(reason) > 1000) return '1 000 caractères au plus.';
+  return transition.reasonRequired && !filled(reason, 1000) ? 'Indiquez le motif (1 000 caractères au plus).' : null;
+}
+
+export interface PermitDraft { physicalSeen: boolean; validUntil: string; decision: 'APPROVED' | 'REJECTED'; reason: string }
+/** Same rules as the API (AP30): an approval needs the original seen and a date still in force; a refusal needs a reason. */
+export function permitProblem(draft: PermitDraft, today: string): string | null {
+  if (draft.validUntil !== '' && !isCivilDate(draft.validUntil)) return 'Indiquez une date valide.';
+  if (characters(draft.reason) > 2000) return '2 000 caractères au plus.';
+  if (draft.decision === 'REJECTED') return filled(draft.reason, 2000) ? null : 'Indiquez le motif du refus.';
+  if (!draft.physicalSeen) return 'Attestez avoir vu l’original du permis.';
+  if (draft.validUntil !== '' && draft.validUntil < today) return 'Cette date est dépassée : le permis n’est plus valable.';
+  return null;
+}
+export function permitBody(draft: PermitDraft, categoryCode: string): Record<string, unknown> {
+  return { documentId: null, physicalSeen: draft.physicalSeen, categoryCode, validUntil: draft.validUntil === '' ? null : draft.validUntil,
+    decision: draft.decision, reason: draft.reason.trim() === '' ? null : draft.reason.trim() };
+}
+export type PermitState = 'none' | 'valid' | 'expired' | 'rejected';
+export function permitState(latest: { decision: 'APPROVED' | 'REJECTED'; isExpired: boolean } | undefined): PermitState {
+  if (!latest) return 'none';
+  return latest.decision === 'REJECTED' ? 'rejected' : latest.isExpired ? 'expired' : 'valid';
+}
+/** The history is in recording order: the last decision of the category is the current one. */
+export function latestPermit<T extends { categoryCode: string }>(history: readonly T[], categoryCode: string): T | undefined {
+  return [...history].reverse().find(item => item.categoryCode === categoryCode);
+}
+
+/** Lower case without accents, so « eleve » finds « Élève ». */
+export const normalizeSearch = (value: string): string => value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('fr').trim();
+export function matchesSearch(fields: readonly (string | null | undefined)[], query: string): boolean {
+  const wanted = normalizeSearch(query);
+  return wanted === '' || fields.some(field => field != null && normalizeSearch(field).includes(wanted));
 }

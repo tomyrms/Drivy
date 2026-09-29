@@ -27,11 +27,12 @@ async function harness(schoolGateway: SchoolGateway) {
   apps.push(app);
   let cookie = ''; let csrf = '';
   const cookieFrom = (set: unknown) => (Array.isArray(set) ? set[0] : set)?.toString().split(';')[0] ?? '';
-  cookie = cookieFrom((await app.inject({ url: '/app/bff/session' })).headers['set-cookie']);
-  csrf = (await app.inject({ url: '/app/bff/session', headers: { cookie } })).json().csrfToken;
+  // A visitor only reads the anonymous value; the login POST is what creates the session.
+  csrf = (await app.inject({ url: '/app/bff/session' })).json().csrfToken;
   const login = async (returnTo?: string) => {
     const started = await app.inject({ method: 'POST', url: '/app/bff/login', payload: returnTo ? { returnTo } : {}, headers: { cookie, origin: config.origin, 'x-csrf-token': csrf } });
     if (started.statusCode !== 200) return started;
+    cookie = cookieFrom(started.headers['set-cookie']);
     const state = store.get(cookie.split('=')[1])!.login!.state;
     const callback = await app.inject({ url: `/app/bff/callback?code=one&state=${state}`, headers: { cookie } });
     cookie = cookieFrom(callback.headers['set-cookie']);
@@ -55,8 +56,29 @@ describe('Liste blanche des routes de gestion', () => {
     expect(matchSchoolRoute('PUT', `/schools/${school}/availability-rules/${school}`, '')?.route.ifMatch).toBe(true);
     expect(matchSchoolRoute('GET', `/schools/${school}/trainings`, `?learnerId=${school}`)?.query).toBe(`?learnerId=${school}`);
     expect(matchSchoolRoute('GET', `/schools/${school}/closures`, '?from=2026-09-28T00:00:00Z')?.query).toBe('?from=2026-09-28T00%3A00%3A00Z');
+    // Dossier de l'élève, équipe, module GPS, permis, agenda et progression (lecture seule pour ces trois derniers).
+    const training = randomUUID(), assignment = randomUUID();
+    for (const [method, path, ifMatch] of [
+      ['POST', `/schools/${school}/members/${school}/deactivate`, true], ['POST', `/schools/${school}/learners/${school}/archive`, true],
+      ['POST', `/schools/${school}/trainings/${training}/transition`, true], ['POST', `/schools/${school}/trainings/${training}/assignments/${assignment}/end`, true],
+      ['PUT', `/schools/${school}/modules`, true], ['POST', `/schools/${school}/trainings/${training}/permit-checks`, true],
+      ['GET', `/schools/${school}/trainings/${training}/permit-checks`, undefined], ['GET', `/schools/${school}/lessons/${school}/reports`, undefined],
+      ['GET', `/schools/${school}/trainings/${training}/progress`, undefined],
+    ] as const) {
+      const match = matchSchoolRoute(method, path, '');
+      expect(match?.path, `${method} ${path}`).toBe(`/v1${path}`);
+      expect(match?.route.ifMatch === true, `${method} ${path}`).toBe(ifMatch === true);
+    }
+    expect(matchSchoolRoute('GET', `/schools/${school}/lessons`, `?from=2026-09-28T00:00:00Z&to=2026-10-05T00:00:00Z&instructorMembershipId=${school}&trainingId=${training}&limit=100`)?.query)
+      .toBe(`?from=2026-09-28T00%3A00%3A00Z&to=2026-10-05T00%3A00%3A00Z&instructorMembershipId=${school}&trainingId=${training}&limit=100`);
     for (const [method, path, search] of [
-      ['GET', `/schools/${school}/lessons`, ''],
+      ['GET', `/schools/${school}/lessons`, '?trainingId=1'],
+      ['GET', `/schools/${school}/lessons`, '?status=PLANNED'],
+      ['POST', `/schools/${school}/lessons/${school}/cancel`, ''],
+      ['GET', `/schools/${school}/lessons/${school}`, ''],
+      ['PATCH', `/schools/${school}/members/${school}/deactivate`, ''],
+      ['POST', `/schools/${school}/trainings/${training}/assignments/${assignment}/remove`, ''],
+      ['GET', `/schools/${school}/report-drafts`, ''],
       ['GET', `/schools/${school}/trainings`, '?q=1'],
       ['DELETE', `/schools/${school}`, ''],
       ['PATCH', `/schools/${school}/offerings`, ''],
@@ -78,7 +100,7 @@ describe('Liste blanche des routes de gestion', () => {
   test('un chemin hors liste ne consomme jamais le jeton de la session', async () => {
     const gateway = vi.fn<SchoolGateway>(async () => ({ status: 200, body: envelope({}) }));
     const h = await harness(gateway); await h.login();
-    for (const url of [`/app/bff/schools/${school}/lessons`, `/app/bff/schools/${school}/report-drafts`, `/app/bff/schools/x/setup`,
+    for (const url of [`/app/bff/schools/${school}/lessons/${school}`, `/app/bff/schools/${school}/report-drafts`, `/app/bff/schools/x/setup`,
       `/app/bff/schools/${school}/offerings?q=1`, `/app/bff/schools/${school}/captures`]) {
       expect((await h.get(url)).statusCode, url).toBe(404);
     }
@@ -197,6 +219,18 @@ describe('Écritures de gestion', () => {
     expect((await h.get('/app/bff/session')).json().authenticated).toBe(false);
   });
 
+  test('une session perdue pendant qu’une écriture est en cours n’est pas un refus : le résultat est inconnu', async () => {
+    let clear = () => {};
+    const gateway = vi.fn<SchoolGateway>(async () => { clear(); return { status: 200, body: envelope({ id: school, version: 4 }) }; });
+    const h = await harness(gateway); await h.login(); clear = () => h.store.clear();
+    const write = await h.write('PATCH', `/app/bff/schools/${school}`, body, { 'idempotency-key': operationId, 'if-match': '"3"' });
+    expect(write.statusCode).toBe(401); expect(write.json().code).toBe('SESSION_LOST_RESULT_UNKNOWN');
+    expect(write.json().title).toBe('Reconnectez-vous pour continuer.');
+    // Une lecture n’a rien à vérifier : la session perdue reste une session expirée.
+    const h2 = await harness(vi.fn<SchoolGateway>(async () => { h2.store.clear(); return { status: 200, body: envelope({}) }; })); await h2.login();
+    expect((await h2.get(`/app/bff/schools/${school}/offerings`)).json().code).toBe('SESSION_EXPIRED');
+  });
+
   test('une réponse amont perdue devient 503 : le navigateur garde la même demande', async () => {
     const gateway = vi.fn<SchoolGateway>(async () => { throw new Error('connexion interrompue après commit'); });
     const h = await harness(gateway); await h.login();
@@ -240,7 +274,7 @@ test('échange HTTP réel : méthode, Bearer, Idempotency-Key, If-Match et ETag,
     expect(result).toMatchObject({ status: 200, etag: '"8"' }); expect(seen).toBe(true);
     expect((await gateway({ method: 'GET', path: `/v1/schools/${school}/setup`, query: '' }, access)).etag).toBeUndefined();
     await expect(gateway({ method: 'GET', path: `/v1/schools/${school}/readiness`, query: '' }, access)).rejects.toThrow();
-    await expect(gateway({ method: 'GET', path: `/v1/schools/${school}/lessons`, query: '' }, access)).rejects.toThrow();
+    await expect(gateway({ method: 'GET', path: `/v1/schools/${school}/report-drafts`, query: '' }, access)).rejects.toThrow();
     await expect(gateway({ method: 'GET', path: '/v1/me', query: '' }, access)).rejects.toThrow();
     await expect(gateway({ method: 'POST', path: `/v1/schools/${school}/offerings`, query: '', body: {} }, access)).rejects.toThrow();
   } finally { await api.close(); }

@@ -496,6 +496,24 @@ select, textarea { font: inherit; color: inherit; }
 .detail-placeholder { display: flex; gap: var(--space-s); align-items: flex-start; padding: var(--space-l); border: 1px dashed var(--border); border-radius: var(--radius-content); }
 .competency-list { margin: 0; padding-left: 1.25rem; display: grid; gap: var(--space-s); }
 .competency-list.compact { gap: var(--space-xxs); }
+/* Agenda : navigation de semaine et jours */
+.week-nav { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; }
+.week-label { font: var(--type-headline); min-inline-size: 12rem; text-align: center; }
+.flip { display: inline-grid; transform: scaleX(-1); }
+.agenda-day { display: grid; gap: var(--space-xs); }
+.row-list li.muted-row { color: var(--muted); }
+.row-list li > .badge { align-self: center; }
+/* Dossier de l'élève : permis, progression, bilans */
+.row-meta.with-badge { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
+.follow-up { display: grid; gap: var(--space-s); }
+.report-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-xs); }
+.report-row { display: grid; gap: var(--space-xs); justify-items: start; }
+.report-body { display: grid; gap: var(--space-xxs); padding-left: var(--space-s); border-left: 2px solid var(--border); }
+.report-body h4 { margin: 0; font: var(--type-caption); color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.row-list li .row-text > .disclosure { justify-self: stretch; }
+/* Single-use code: shown large once, with its copy actions (the code is never stored by the page). */
+.code-panel { display: grid; gap: var(--space-s); padding: var(--space-m); border: 1px solid var(--border); border-radius: var(--radius-content); background: var(--surface); min-width: 0; }
+.code-display { font: 700 clamp(1.75rem, 1.4rem + 1.5vw, 2.25rem) / 1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; user-select: all; overflow-wrap: anywhere; }
 
 /* Review dialog: opaque, one primary action, never a glass effect over a form. */
 .confirm-dialog {
