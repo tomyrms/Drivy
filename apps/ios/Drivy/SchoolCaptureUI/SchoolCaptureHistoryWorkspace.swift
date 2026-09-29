@@ -160,25 +160,16 @@ import Observation
         }
     }
 
-    private struct ProjectionResult: Sendable {
-        let id: UUID
-        let result: Result<SchoolCaptureSession, any Error>
-    }
     private static func projections(_ ids: [UUID], client: SchoolCaptureClient,
                                      schoolID: UUID) async -> [UUID: Result<SchoolCaptureSession, any Error>] {
-        await withTaskGroup(of: ProjectionResult.self) { group in
-            for id in ids {
-                group.addTask { @MainActor in
-                    do {
-                        let capture = try await client.capture(schoolID: schoolID, captureID: id)
-                        return ProjectionResult(id: id, result: .success(capture))
-                    } catch { return ProjectionResult(id: id, result: .failure(error)) }
-                }
-            }
-            var results: [UUID: Result<SchoolCaptureSession, any Error>] = [:]
-            for await answer in group { results[answer.id] = answer.result }
-            return results
+        // Le client est isolé MainActor. Le compilateur Apple 26.6 refuse sa capture
+        // dans un enfant TaskGroup ; garder ces lectures sur le même acteur.
+        var results: [UUID: Result<SchoolCaptureSession, any Error>] = [:]
+        for id in ids {
+            do { results[id] = .success(try await client.capture(schoolID: schoolID, captureID: id)) }
+            catch { results[id] = .failure(error) }
         }
+        return results
     }
 
     func invalidate() {

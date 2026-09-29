@@ -69,7 +69,9 @@ final class SchoolCaptureSessionController {
     func prepareLiveObservations(client: SchoolObservationClient) {
         guard let active = context, active.scope == permittedScope, let lessonID,
               client.baseURL.absoluteString == active.scope.apiBaseURL else { return }
-        if liveObservations?.scope == active.scope, liveObservations?.lessonID == lessonID { return }
+        if liveObservations?.scope == active.scope, liveObservations?.lessonID == lessonID {
+            liveObservations?.refreshPending(); return
+        }
         liveObservations?.stop()
         liveObservations = SchoolLiveObservationRecorder(scope: active.scope, lessonID: lessonID, client: client)
     }

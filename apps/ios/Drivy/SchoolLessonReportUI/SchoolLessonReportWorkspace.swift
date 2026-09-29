@@ -85,11 +85,11 @@ import Observation
     }
     /// Situation proposée quand une compétence reçoit un niveau.
     var defaultObservationContext: String { lesson.map(SchoolLessonHubRules.observationContext(for:)) ?? "Leçon" }
-    /// La situation reprend ce qui a été noté pour cette compétence pendant la leçon, sinon le jour et le lieu.
+    /// Le jour et le lieu donnent le contexte. Le texte d'une observation reste attaché à son propre
+    /// réglage de confidentialité et n'est jamais recopié automatiquement dans le bilan partagé.
     func setObservationLevel(_ level: String, for competencyID: UUID) {
-        let linked = sharing == nil ? nil : lessonObservations.last { $0.competencyId == competencyID && !$0.isMarker && !isPrivate($0) }?.text
         observations = SchoolLessonHubRules.observations(observations, setting: level, for: competencyID,
-            context: SchoolLessonHubRules.situation(linked) ?? defaultObservationContext)
+            context: defaultObservationContext)
     }
     /// Horaires proposés au constat : ceux du trajet s’il existe, sinon l’horaire prévu, jamais dans le futur.
     func completionTimes(now: Date = Date()) -> (start: Date, end: Date) {

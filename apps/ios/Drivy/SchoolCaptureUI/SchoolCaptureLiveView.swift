@@ -295,6 +295,8 @@ struct SchoolCaptureLiveView: View {
                         .font(.subheadline).foregroundStyle(DrivyTheme.warning)
                     if recorder.canRetry {
                         Button("Renvoyer le repère") { Task { await recorder.retry() } }
+                    } else {
+                        Button("Actualiser") { recorder.refreshPending() }
                     }
                 } else if let error = recorder.errorMessage {
                     DrivyInlineMessage(text: error, tone: .warning)

@@ -82,6 +82,12 @@ enum SchoolLiveTile: CaseIterable, Identifiable, Sendable {
     /// dans la file chiffrée et se vérifie depuis les observations de la leçon.
     func stop() { stopped = true }
 
+    func refreshPending() {
+        guard !stopped, !isSending else { return }
+        do { pending = try outbox.pending(for: scope); if pending == nil { errorMessage = nil } }
+        catch { errorMessage = "Le stockage protégé n’a pas pu être relu." }
+    }
+
     var canRetry: Bool {
         !stopped && !isSending && pending?.kind == .createObservation && pending?.routeResourceID == lessonID
     }

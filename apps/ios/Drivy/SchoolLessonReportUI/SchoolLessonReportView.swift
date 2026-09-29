@@ -481,7 +481,7 @@ private struct SchoolLessonReportContent: View {
         } header: { Text("Bilan") }
         if !model.competencies.isEmpty {
             Section {
-                // Un niveau choisi suffit : la situation est proposée (observation liée, sinon jour et lieu), modifiable.
+                // Un niveau choisi suffit : le jour et le lieu sont proposés comme situation, modifiable.
                 ForEach(model.competencies) { competency in
                     Picker(competency.label, selection: levelBinding(competency.id)) {
                         Text("Non observé").tag("")
