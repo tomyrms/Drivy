@@ -16,6 +16,7 @@ import { InvitationsSection, TeamSection } from './people';
 import { LearnersSection } from './learners';
 import { AvailabilitySection } from './availability';
 import { AgendaSection } from './agenda';
+import { TripsSection } from './trips';
 
 const navigation: readonly { group: string; items: readonly { key: SectionKey; label: string; symbol: SymbolKind }[] }[] = [
   { group: 'École', items: [
@@ -37,6 +38,7 @@ const navigation: readonly { group: string; items: readonly { key: SectionKey; l
   ] },
   { group: 'Planning', items: [
     { key: 'agenda', label: 'Agenda', symbol: 'list' },
+    { key: 'trajets', label: 'Trajets', symbol: 'layers' },
     { key: 'disponibilites', label: 'Disponibilités', symbol: 'clock' },
   ] },
 ];
@@ -221,6 +223,7 @@ function Section({ section }: { section: SectionKey }): ReactNode {
     case 'invitations': return <InvitationsSection />;
     case 'eleves': return <LearnersSection />;
     case 'agenda': return <AgendaSection />;
+    case 'trajets': return <TripsSection />;
     case 'disponibilites': return <AvailabilitySection />;
   }
 }

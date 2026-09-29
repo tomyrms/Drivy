@@ -88,6 +88,13 @@ describe('limite des codes refusés', () => {
     for (let i = 0; i < 50; i++) limiter.fail(AttemptLimiter.key('i', `s${i}`));
     expect(limiter.size).toBe(50);now = 2000;limiter.sweep();expect(limiter.size).toBe(0);
   });
+  it('réserve les tentatives simultanées avant le travail et libère les réussites sans pénalité', () => {
+    const limiter=new AttemptLimiter(2,1000,()=>0),one=limiter.begin(key),two=limiter.begin(key);
+    expect(()=>limiter.begin(key)).toThrowError(expect.objectContaining({status:429}));
+    one(false);const three=limiter.begin(key);two(true);three(true);
+    expect(()=>limiter.begin(key)).toThrowError(expect.objectContaining({status:429}));
+    one(false);expect(()=>limiter.begin(key)).toThrow();
+  });
 });
 
 describe('contrat d’extension des invitations', () => {

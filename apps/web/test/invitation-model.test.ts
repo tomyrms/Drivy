@@ -127,4 +127,14 @@ describe('Invitation : libellés', () => {
     expect(message).toContain('6 oct. 2026, 10:00');
     expect(message).not.toContain('\n');
   });
+
+  test('un code multi-permis restitue les deux formations et un seul libellé du moniteur', () => {
+    const secondId = randomUUID();
+    const invitation = invitationSchema.parse(codeInvitation({ trainings: [
+      { offeringId, instructorMembershipId: instructorId },
+      { offeringId: secondId, instructorMembershipId: instructorId },
+    ] }));
+    expect(invitationLabel(invitation, [...offerings, { ...offerings[0]!, id: secondId, offeringKey: 'a', categoryCode: 'A' }], members))
+      .toBe('Code élève · Permis B · Permis A · Luc Martin');
+  });
 });

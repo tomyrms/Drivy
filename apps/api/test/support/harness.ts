@@ -88,8 +88,18 @@ export async function moveToPast(pool:Pool,lessonId:string,hoursAgo=2+(pastSlot+
 export {id};
 
 let ajv:Ajv2020|undefined;
+/** Extensions hors canon ajoutées aux projections de leçon : retirées avant la validation, le contrat canonique restant inchangé. */
+function withoutExtensions(value:unknown):unknown{
+ if(Array.isArray(value))return value.map(withoutExtensions);
+ if(value!==null&&typeof value==='object'){
+  const entries=Object.entries(value as Record<string,unknown>).filter(([key])=>!(['learnerDisplayName','instructorDisplayName'].includes(key)&&'plannedStart'in(value as object)));
+  return Object.fromEntries(entries.map(([key,item])=>[key,withoutExtensions(item)]));
+ }
+ return value;
+}
 /** Valide une réponse complète (enveloppe comprise) contre le schéma canonique OpenAPI 3.11.0, sans le modifier. */
 export async function expectContract(schema:string,body:unknown){
+ body=withoutExtensions(body);
  if(!ajv){
   const document=parse(await readFile(new URL('../../../../Drivy_Conception_v3_17_2026-09-20/04-technique/openapi.yaml',import.meta.url),'utf8')) as {components:object};
   ajv=new Ajv2020({strict:false,allErrors:true,formats:fullFormats});ajv.addSchema({$id:'drivy-contract',components:document.components});

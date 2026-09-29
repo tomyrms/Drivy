@@ -28,23 +28,25 @@ export async function cataloguePermission(db:PoolClient,schoolId:string){
 export async function instructorPermission(db:PoolClient,schoolId:string,instructorId:string){
  if(!(await db.query<{ok:boolean}>('SELECT drivy.lesson_instructor_manage($1,$2) AS ok',[schoolId,instructorId])).rows[0]?.ok)throw forbidden();
 }
-export async function ensureOpen(db:PoolClient,schoolId:string,instructorId:string,start:string,end:string,timeZone:string,buffer:number){
+/** Le créneau doit tenir dans une ouverture du moniteur et ne croiser aucune fermeture. Le tampon entre deux leçons est déjà
+ * tenu par la contrainte d'exclusion des occupations : il ne prolonge jamais l'intervalle contrôlé ici. */
+export async function ensureOpen(db:PoolClient,schoolId:string,instructorId:string,start:string,end:string,timeZone:string){
  const result=await db.query<{same_day:boolean;ordered:boolean;opened:boolean;closed:boolean}>(`WITH bounds AS (
- SELECT $3::timestamptz AS starts,$4::timestamptz+make_interval(mins=>$6) AS ends), local AS (
+ SELECT $3::timestamptz AS starts,$4::timestamptz AS ends), local AS (
  SELECT *,starts AT TIME ZONE $5 AS local_start,ends AT TIME ZONE $5 AS local_end FROM bounds)
  SELECT b.local_start::date=b.local_end::date AS same_day,b.local_end>b.local_start AS ordered,
  EXISTS(SELECT 1 FROM drivy.availability_rule a WHERE a.school_id=$1 AND a.instructor_membership_id=$2 AND a.removed_at IS NULL
  AND extract(isodow FROM b.local_start)::int=ANY(a.weekdays) AND a.valid_from<=b.local_start::date AND (a.valid_until IS NULL OR a.valid_until>=b.local_start::date)
  AND a.local_start<=b.local_start::time AND a.local_end>=b.local_end::time) AS opened,
  EXISTS(SELECT 1 FROM drivy.closure c WHERE c.school_id=$1 AND c.instructor_membership_id=$2 AND c.removed_at IS NULL
- AND tstzrange(c.starts_at,c.ends_at,'[)')&&tstzrange(b.starts,b.ends,'[)')) AS closed FROM local b`,[schoolId,instructorId,start,end,timeZone,buffer]);
+ AND tstzrange(c.starts_at,c.ends_at,'[)')&&tstzrange(b.starts,b.ends,'[)')) AS closed FROM local b`,[schoolId,instructorId,start,end,timeZone]);
  const value=result.rows[0]!;
- if(!value.same_day||!value.ordered)throw new ApiError(422,'INVALID_INTERVAL','Le trajet et son tampon doivent tenir dans une journée locale.');
+ if(!value.same_day||!value.ordered)throw new ApiError(422,'INVALID_INTERVAL','La leçon doit tenir dans une journée locale.');
  if(!value.opened||value.closed)throw new ApiError(409,'SLOT_UNAVAILABLE','Ce créneau ne fait pas partie des disponibilités du moniteur.');
 }
 const columns={
  'commercial-terms':`id,school_id AS "schoolId",version,label,terms_text AS "termsText",to_char(valid_from,'YYYY-MM-DD') AS "validFrom",to_char(valid_until,'YYYY-MM-DD') AS "validUntil",approved,approval_reason AS "approvalReason",approved_by AS "approvedByMembershipId",approved_at AS "approvedAt"`,
- 'service-products':`id,school_id AS "schoolId",version,product_key AS "productKey",label,type,category_code AS "categoryCode",site_id AS "siteId",duration_minutes AS "durationMinutes",unit_label AS "unitLabel",unit_price_cents AS "unitPriceCents",to_char(valid_from,'YYYY-MM-DD') AS "validFrom",to_char(valid_until,'YYYY-MM-DD') AS "validUntil",terms_version_id AS "termsVersionId",enabled`,
+ 'service-products':`id,school_id AS "schoolId",version,product_key AS "productKey",label,type,category_code AS "categoryCode",site_id AS "siteId",duration_minutes AS "durationMinutes",unit_label AS "unitLabel",unit_price_cents AS "unitPriceCents",to_char(valid_from,'YYYY-MM-DD') AS "validFrom",to_char(valid_until,'YYYY-MM-DD') AS "validUntil",terms_version_id AS "termsVersionId",enabled,drivy.service_product_current(id) AS "current"`,
  'availability-rules':`id,school_id AS "schoolId",version,instructor_membership_id AS "instructorMembershipId",weekdays,to_char(local_start,'HH24:MI') AS "localStart",to_char(local_end,'HH24:MI') AS "localEnd",to_char(valid_from,'YYYY-MM-DD') AS "validFrom",to_char(valid_until,'YYYY-MM-DD') AS "validUntil"`,
  'closures':`id,school_id AS "schoolId",version,instructor_membership_id AS "instructorMembershipId",starts_at AS "startsAt",ends_at AS "endsAt",reason`
 };
@@ -62,7 +64,8 @@ export function registerLessonSetup(app:FastifyInstance,options:{pool:Pool;verif
  };
  for(const name of Object.keys(tables) as (keyof typeof tables)[])app.get(`${base}/${name}`,async r=>{
   const schedule=name==='availability-rules'||name==='closures';
-  const query=(schedule?z.object({...pagination,instructorMembershipId:id.optional(),...(name==='closures'?{from:z.iso.datetime({offset:true}).optional(),to:z.iso.datetime({offset:true}).optional()}:{})}).strict():z.object(pagination).strict()).parse(r.query);
+  const query=(schedule?z.object({...pagination,instructorMembershipId:id.optional(),...(name==='closures'?{from:z.iso.datetime({offset:true}).optional(),to:z.iso.datetime({offset:true}).optional()}:{})}).strict()
+   :name==='service-products'?z.object({...pagination,current:z.enum(['true','false']).transform(value=>value==='true').optional()}).strict():z.object(pagination).strict()).parse(r.query);
   const schoolId=schoolID(r),identity=await options.verifyToken(r.headers.authorization);
   return envelope(await withActor(options.pool,identity,schoolId,async(db,actor,member)=>{
    if(!member)throw forbidden();if(schedule&&!member.roles.some(role=>['ADMIN','INSTRUCTOR'].includes(role)))throw forbidden();
@@ -73,6 +76,7 @@ export function registerLessonSetup(app:FastifyInstance,options:{pool:Pool;verif
    if('instructorMembershipId'in query&&query.instructorMembershipId)where.push(`x.instructor_membership_id=${bind(query.instructorMembershipId)}`);
    if('from'in query&&query.from)where.push(`x.ends_at>${bind(query.from)}::timestamptz`);
    if('to'in query&&query.to)where.push(`x.starts_at<${bind(query.to)}::timestamptz`);
+   if('current'in query&&query.current!==undefined)where.push(`drivy.service_product_current(x.id)=${bind(query.current)}`);
    if(position)where.push(`(x.created_at,x.id)>(${bind(position.createdAt)}::timestamptz,${bind(position.id)}::uuid)`);
    const rows=(await db.query<Row>(`SELECT ${columns[name]},${stamp('x')} FROM drivy.${tables[name]} x WHERE ${where.join(' AND ')} ORDER BY x.created_at,x.id LIMIT ${bind(query.limit+1)}`,values)).rows;
    const last=rows.length>query.limit?rows[query.limit-1]:undefined;
@@ -96,9 +100,11 @@ export function registerLessonSetup(app:FastifyInstance,options:{pool:Pool;verif
    const terms=(await db.query<{approved:boolean}>(`SELECT approved FROM drivy.commercial_terms_version WHERE school_id=$1 AND id=$2`,[school.id,body.termsVersionId])).rows[0];
    if(!terms||(body.enabled&&!terms.approved))throw new ApiError(422,'COMMERCIAL_TERMS_NOT_APPROVED','Sélectionnez des conditions commerciales approuvées.');
    const row=(await db.query<Row>(`INSERT INTO drivy.service_product_version(id,school_id,version,product_key,label,type,category_code,site_id,duration_minutes,unit_label,unit_price_cents,valid_from,valid_until,terms_version_id,enabled)
-    VALUES($1,$2,(SELECT coalesce(max(version),0)+1 FROM drivy.service_product_version WHERE school_id=$2 AND product_key=$3),$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING ${columns['service-products']}`,
+    VALUES($1,$2,(SELECT coalesce(max(version),0)+1 FROM drivy.service_product_version WHERE school_id=$2 AND product_key=$3),$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
     [randomUUID(),school.id,body.productKey,body.label,body.type,body.categoryCode,body.siteId,body.durationMinutes,body.unitLabel,body.unitPriceCents,body.validFrom,body.validUntil,body.termsVersionId,body.enabled])).rows[0]!;
-   return {data:row,action:'ServiceProductCreated',resourceType:'ServiceProductVersion',changedFields:['label','durationMinutes','unitPriceCents','termsVersionId','enabled']};
+   // Relecture : une fonction STABLE ne voit pas, dans RETURNING, la ligne que la même instruction vient d'insérer.
+   const stored=(await db.query<Row>(`SELECT ${columns['service-products']} FROM drivy.service_product_version WHERE school_id=$1 AND id=$2`,[school.id,row.id])).rows[0]!;
+   return {data:stored,action:'ServiceProductCreated',resourceType:'ServiceProductVersion',changedFields:['label','durationMinutes','unitPriceCents','termsVersionId','enabled']};
   },cataloguePermission);reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,r);
  });
  app.post(`${base}/availability-rules`,async(r,reply)=>{
@@ -113,7 +119,7 @@ export function registerLessonSetup(app:FastifyInstance,options:{pool:Pool;verif
   const body=closureCommand.parse(r.body);if(Date.parse(body.endsAt)<=Date.parse(body.startsAt))throw new ApiError(422,'INVALID_INTERVAL','La fermeture doit avoir une durée positive.');
   const data=await created(r,body,'CREATE_CLOSURE',async(db,_actor,school)=>{
    const overlap=await db.query(`SELECT 1 FROM drivy.lesson WHERE school_id=$1 AND instructor_membership_id=$2 AND status='PLANNED'
-    AND tstzrange(planned_start,planned_end+make_interval(mins=>buffer_minutes_snapshot),'[)')&&tstzrange($3::timestamptz,$4::timestamptz,'[)') LIMIT 1`,[school.id,body.instructorMembershipId,body.startsAt,body.endsAt]);
+    AND tstzrange(planned_start,planned_end,'[)')&&tstzrange($3::timestamptz,$4::timestamptz,'[)') LIMIT 1`,[school.id,body.instructorMembershipId,body.startsAt,body.endsAt]);
    if(overlap.rowCount)throw new ApiError(409,'EXISTING_BOOKINGS','Des rendez-vous doivent être traités avant cette fermeture.');
    const row=(await db.query<Row>(`INSERT INTO drivy.closure(id,school_id,instructor_membership_id,starts_at,ends_at,reason) VALUES($1,$2,$3,$4,$5,$6) RETURNING ${columns.closures}`,
     [randomUUID(),school.id,body.instructorMembershipId,body.startsAt,body.endsAt,body.reason??null])).rows[0]!;
@@ -151,6 +157,6 @@ export function registerLessonSetup(app:FastifyInstance,options:{pool:Pool;verif
  });
 }
 async function checkBookings(db:PoolClient,schoolId:string,instructorId:string){
- const rows=(await db.query<{planned_start:Date;planned_end:Date;time_zone:string;buffer_minutes_snapshot:number}>(`SELECT planned_start,planned_end,time_zone,buffer_minutes_snapshot FROM drivy.lesson WHERE school_id=$1 AND instructor_membership_id=$2 AND status='PLANNED' AND planned_end>now()`,[schoolId,instructorId])).rows;
- for(const row of rows)try{await ensureOpen(db,schoolId,instructorId,row.planned_start.toISOString(),row.planned_end.toISOString(),row.time_zone,row.buffer_minutes_snapshot);}catch{throw new ApiError(409,'EXISTING_BOOKINGS','Des rendez-vous doivent être traités avant de modifier ces ouvertures.');}
+ const rows=(await db.query<{planned_start:Date;planned_end:Date;time_zone:string}>(`SELECT planned_start,planned_end,time_zone FROM drivy.lesson WHERE school_id=$1 AND instructor_membership_id=$2 AND status='PLANNED' AND planned_end>now()`,[schoolId,instructorId])).rows;
+ for(const row of rows)try{await ensureOpen(db,schoolId,instructorId,row.planned_start.toISOString(),row.planned_end.toISOString(),row.time_zone);}catch{throw new ApiError(409,'EXISTING_BOOKINGS','Des rendez-vous doivent être traités avant de modifier ces ouvertures.');}
 }

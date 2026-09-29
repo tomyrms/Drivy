@@ -30,7 +30,7 @@ async function permitRow(db:PoolClient,schoolId:string,permitId:string){
  const row=(await db.query<PermitRow>(`SELECT ${columns} FROM drivy.permit_check c JOIN drivy.school s ON s.id=c.school_id WHERE c.school_id=$1 AND c.id=$2`,[schoolId,permitId])).rows[0];
  if(!row)throw notFound();return row;
 }
-const reviewRequired=()=>new ApiError(403,'PERMIT_REVIEW_REQUIRED','Le contrôle du permis exige l’habilitation permit_review sur cette formation.');
+const reviewRequired=()=>new ApiError(403,'PERMIT_REVIEW_REQUIRED','Le contrôle du permis est réservé à l’administration et au moniteur affecté à cette formation.');
 function guards(schoolId:string,trainingId:string):CommandGuards<Permit>{return {
  additionalPersons:async db=>{
   const training=await visibleTraining(db,schoolId,trainingId);

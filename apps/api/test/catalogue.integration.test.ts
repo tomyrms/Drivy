@@ -10,14 +10,14 @@ const url=process.env.TEST_DATABASE_URL;if(!url || new URL(url).pathname!=='/dri
 const pool=new Pool({connectionString:url});const issuer='https://identity.test.invalid';const path=`/v1/schools/${id.schoolA}`;
 let app:ReturnType<typeof buildApp>;let keys:Awaited<ReturnType<typeof generateKeyPair>>;
 beforeAll(async()=>{
- // Cette recette bornée ne prend pas les migrations suivantes encore écrites par une autre tranche.
+ // Toutes les migrations : l'affectation automatique du moniteur créateur s'appuie sur la politique de la migration 016.
  await pool.query('DROP SCHEMA IF EXISTS drivy CASCADE');await pool.query('DROP TABLE IF EXISTS public.drivy_migrations');
  for(const role of ['drivy_test_migrator','drivy_app','drivy_invitation_mailer'])await pool.query(`DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOINHERIT; END IF; END $$`);
  await pool.query('GRANT CREATE ON DATABASE drivy_test TO drivy_test_migrator');await pool.query('GRANT USAGE,CREATE ON SCHEMA public TO drivy_test_migrator');
  await pool.query('GRANT drivy_app,drivy_invitation_mailer TO drivy_test_migrator WITH ADMIN OPTION');
  const migration=new Pool({connectionString:url,options:'-c role=drivy_test_migrator'});
  try {await migration.query('CREATE TABLE public.drivy_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())');
-  for(const name of (await readdir(new URL('../migrations/',import.meta.url))).filter(n=>/^00[1-5]_.*\.sql$/.test(n)).sort()){
+  for(const name of (await readdir(new URL('../migrations/',import.meta.url))).filter(n=>/^[0-9]{3}_.*\.sql$/.test(n)).sort()){
    const sql=await readFile(new URL(`../migrations/${name}`,import.meta.url),'utf8');const db=await migration.connect();
    try{await db.query('BEGIN');await db.query(sql);await db.query('INSERT INTO public.drivy_migrations(name,sha256) VALUES($1,$2)',[name,createHash('sha256').update(sql).digest('hex')]);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
    if(name.startsWith('001_'))await seedFixtures(pool,issuer);
@@ -52,7 +52,10 @@ it('catalogue réel approuvé → formation → affectation, avec héritage et r
  expect((await call('GET',`${path}/trainings/${trainingId}`)).statusCode).toBe(200);
  const otherOffer=await call('POST',`${path}/offerings`,{...offerBody,operationId:randomUUID(),offeringKey:'instructor-test'});expect(otherOffer.statusCode,otherOffer.body).toBe(201);
  const instructorCreated=await call('POST',`${path}/trainings`,{operationId:randomUUID(),learnerId:id.aliceLearner,offeringId:otherOffer.json().data.id},undefined,'demo-instructor');expect(instructorCreated.statusCode,instructorCreated.body).toBe(201);
- expect((await call('GET',`${path}/trainings/${instructorCreated.json().data.id}`,undefined,undefined,'demo-instructor')).statusCode).toBe(404);
+ // Le moniteur qui crée une formation en devient le moniteur affecté : il la voit aussitôt (même transaction).
+ expect((await call('GET',`${path}/trainings/${instructorCreated.json().data.id}`,undefined,undefined,'demo-instructor')).statusCode).toBe(200);
+ const assigned=(await call('GET',`${path}/trainings/${instructorCreated.json().data.id}/assignments`,undefined,undefined,'demo-instructor')).json().data.items;
+ expect(assigned).toHaveLength(1);expect(assigned[0]).toMatchObject({instructorMembershipId:id.instructorMember,validUntil:null});
 });
 it('rôles : auth_time signé requis, dernier ADMIN et relations protégés',async()=>{
  const body={operationId:randomUUID(),roles:['ADMIN','INSTRUCTOR'],grants:[],reason:'Activer explicitement le rôle enseignant.'};

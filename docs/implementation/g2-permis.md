@@ -9,7 +9,7 @@ Tranche du 25 septembre 2026 (plan P0-3). Références : [R07](../../Drivy_Conce
 - **Aucune durée inventée** : `validUntil` est la date lue sur la pièce, ou `null` si aucune date n’est saisie. Le serveur ne calcule jamais d’échéance. `isExpired` est dérivé de `validUntil` et de la date locale de l’école ; ce n’est pas un statut stocké. Approuver une pièce déjà échue est refusé (`422 PERMIT_EXPIRED`).
 - **Pièce déposée non disponible** : `documentId` non nul reçoit `409 DOCUMENT_NOT_READY` tant que le circuit F09 n’existe pas ; une contrainte SQL (`permit_document_not_ready`) garantit la même chose en base.
 - **Historique append-only** : chaque décision est une ligne immuable ; la décision courante est la plus récente (`reviewed_at`, puis ordre d’insertion). Un rejet ultérieur remplace une approbation sans l’effacer.
-- **Habilitation** : grant explicite `permit_review` **et** (ADMIN, ou INSTRUCTOR actuellement affecté à la formation). Sans grant : `403 PERMIT_REVIEW_REQUIRED` (code du dossier F03). Hors périmètre : 404. Lecture AP29 : ADMIN, élève sur sa formation, moniteur affecté habilité.
+- **Habilitation** (simplification du 29 septembre 2026, migration 017) : ADMIN, ou INSTRUCTOR actuellement affecté à la formation. Le grant `permit_review` n’est plus une étape de configuration. Hors habilitation : `403 PERMIT_REVIEW_REQUIRED` ; hors périmètre : 404. Lecture AP29 : ADMIN, élève sur sa formation, moniteur affecté.
 - **If-Match** vise la version de la **formation** (description AP30) ; la décision incrémente `training.version` dans le même commit. Deux décisions concurrentes sur la même version : une seule réussit, l’autre reçoit `412 VERSION_CONFLICT`.
 
 ## Effet sur les leçons et le constat

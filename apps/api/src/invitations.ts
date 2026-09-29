@@ -18,12 +18,14 @@ const acceptBody=tokenBody.extend(operation);
 const trainingIntent=z.object({offeringId:z.uuid(),instructorMembershipId:z.uuid()}).strict();
 // Extension du 28 septembre 2026 : `delivery` vaut EMAIL par défaut (clients existants inchangés). CODE : pas d'adresse, rôle Élève seul, formation obligatoire.
 const createBody=z.object({...operation,email:z.email().max(254).optional(),delivery:z.enum(['EMAIL','CODE']).default('EMAIL'),
-  roles:z.array(z.enum(['ADMIN','INSTRUCTOR','LEARNER'])).min(1).max(3).refine(value=>new Set(value).size===value.length),training:trainingIntent.optional()}).strict()
+  roles:z.array(z.enum(['ADMIN','INSTRUCTOR','LEARNER'])).min(1).max(3).refine(value=>new Set(value).size===value.length),training:trainingIntent.optional(),
+  trainings:z.array(trainingIntent).min(1).max(16).refine(value=>new Set(value.map(item=>item.offeringId)).size===value.length).optional()}).strict()
   .superRefine((value,ctx)=>{
+    if(value.training && value.trainings) ctx.addIssue({code:'custom',path:['trainings'],message:'Choisissez une seule liste de formations.'});
     if(value.delivery==='EMAIL'){if(value.email===undefined) ctx.addIssue({code:'custom',path:['email'],message:'Une invitation par e-mail exige une adresse.'});return;}
     if(value.email!==undefined) ctx.addIssue({code:'custom',path:['email'],message:'Une invitation par code ne porte pas d’adresse.'});
     if(value.roles.length!==1 || value.roles[0]!=='LEARNER') ctx.addIssue({code:'custom',path:['roles'],message:'Une invitation par code ne porte que le rôle Élève.'});
-    if(!value.training) ctx.addIssue({code:'custom',path:['training'],message:'Une invitation par code porte la formation et le moniteur.'});
+    if(!value.training && !value.trainings) ctx.addIssue({code:'custom',path:['trainings'],message:'Choisissez au moins un permis et son moniteur.'});
   });
 const codeBody=z.object({code:z.string().min(1).max(64)}).strict();
 const codeAcceptBody=codeBody.extend(operation);
@@ -36,13 +38,16 @@ interface InvitationRow {
   id:string;school_id:string;email:string|null;delivery:'EMAIL'|'CODE';roles:string[];token_hash:string;status:'PENDING'|'ACCEPTED'|'REVOKED';version:number;
   expires_at:Date;inviter_membership_id:string;inviter_person_id:string;accepted_by_person_id:string|null;notice_version:number;_createdAt?:string;
   training_offering_id:string|null;training_instructor_membership_id:string|null;
+  additional_training_intents:z.infer<typeof trainingIntent>[];
 }
+const invitedTrainings=(row:InvitationRow):z.infer<typeof trainingIntent>[]=>row.training_offering_id && row.training_instructor_membership_id
+  ?[{offeringId:row.training_offering_id,instructorMembershipId:row.training_instructor_membership_id},...(row.additional_training_intents ?? [])]:[];
 function projection(row:InvitationRow) {
   // Une invitation par code n'a pas d'adresse. Le code lui-même n'est jamais dans la projection : il n'existe que dans la réponse qui l'a généré.
   let maskedEmail:string|null=null;
   if(row.email!==null) {const [local,domain]=row.email.split('@');maskedEmail=`${[...(local ?? '')][0] ?? '*'}***@${domain}`;}
   return {id:row.id,schoolId:row.school_id,version:row.version,maskedEmail,roles:row.roles,
-    status:row.status==='PENDING' && row.expires_at.getTime()<=Date.now()?'EXPIRED':row.status,expiresAt:row.expires_at.toISOString(),delivery:row.delivery};
+    status:row.status==='PENDING' && row.expires_at.getTime()<=Date.now()?'EXPIRED':row.status,expiresAt:row.expires_at.toISOString(),delivery:row.delivery,trainings:invitedTrainings(row)};
 }
 /**
  * Sans transport d'e-mail, la création par e-mail est un refus définitif (409), jamais un 503 : un 5xx est une incertitude pour les clients,
@@ -104,7 +109,8 @@ async function trainingIntentValid(db:PoolClient,schoolId:string,actor:CommandAc
   if(!actor.roles.includes('ADMIN') && training.instructorMembershipId!==actor.membershipId) throw invalid();
   const offering=(await db.query<{ready:boolean}>('SELECT drivy.catalogue_offering_ready($1) AS ready FROM drivy.offering_version WHERE school_id=$2 AND id=$1',[training.offeringId,schoolId])).rows[0];
   if(!offering?.ready) throw invalid();
-  const instructor=(await db.query<{roles:string[];status:string}>('SELECT roles,status FROM drivy.membership WHERE school_id=$1 AND id=$2',[schoolId,training.instructorMembershipId])).rows[0];
+  const instructor=(await db.query<{roles:string[];status:string}>(`SELECT m.roles,m.status FROM drivy.membership m JOIN drivy.person p ON p.id=m.person_id
+    WHERE m.school_id=$1 AND m.id=$2 AND p.status='ACTIVE'`,[schoolId,training.instructorMembershipId])).rows[0];
   if(!instructor || instructor.status!=='ACTIVE' || !instructor.roles.includes('INSTRUCTOR')) throw invalid();
 }
 
@@ -121,12 +127,14 @@ async function openInvitedTraining(db:PoolClient,schoolId:string,personId:string
   if(!readyId) return false;
   const offering=(await db.query<{offering_key:string}>('SELECT offering_key FROM drivy.offering_version WHERE school_id=$1 AND id=$2',[schoolId,readyId])).rows[0];
   if(!offering) return false;
-  if((await db.query("SELECT 1 FROM drivy.training WHERE school_id=$1 AND learner_id=$2 AND offering_key=$3 AND status IN('ACTIVE','PAUSED')",[schoolId,learner.id,offering.offering_key])).rowCount) return true;
-  const trainingId=randomUUID();
-  await db.query(`INSERT INTO drivy.training(id,school_id,learner_id,offering_id,offering_key,status,started_on) VALUES($1,$2,$3,$4,$5,'ACTIVE',current_date)`,
+  const existing=(await db.query<{id:string}>("SELECT id FROM drivy.training WHERE school_id=$1 AND learner_id=$2 AND offering_key=$3 AND status IN('ACTIVE','PAUSED')",[schoolId,learner.id,offering.offering_key])).rows[0];
+  const trainingId=existing?.id ?? randomUUID();
+  if(!existing) await db.query(`INSERT INTO drivy.training(id,school_id,learner_id,offering_id,offering_key,status,started_on) VALUES($1,$2,$3,$4,$5,'ACTIVE',current_date)`,
     [trainingId,schoolId,learner.id,readyId,offering.offering_key]);
-  await db.query('INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES($1,$2,$3,$4,statement_timestamp())',
-    [randomUUID(),schoolId,trainingId,instructorMembershipId]);
+  if(!(await db.query(`SELECT 1 FROM drivy.instructor_assignment WHERE school_id=$1 AND training_id=$2 AND instructor_membership_id=$3
+    AND valid_from<=statement_timestamp() AND (valid_until IS NULL OR valid_until>statement_timestamp())`,[schoolId,trainingId,instructorMembershipId])).rowCount)
+    await db.query('INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES($1,$2,$3,$4,statement_timestamp())',
+      [randomUUID(),schoolId,trainingId,instructorMembershipId]);
   return true;
 }
 /** Réponse d'acceptation : le contexte canonique, plus `trainingOpened:false` seulement quand la formation portée par l'invitation n'a pas pu s'ouvrir. */
@@ -141,13 +149,14 @@ async function accept(pool:Pool,identity:Identity,body:z.infer<typeof acceptBody
     await db.query("SELECT set_config('app.person_id',$1,true)",[personId]);
     const initial=await target(db);usable(initial,personId);
     await db.query("SELECT set_config('app.school_id',$1,true)",[initial.school_id]);
-    const persons=await db.query<{id:string;status:string}>('SELECT id,status FROM drivy.person WHERE id=ANY($1::uuid[]) ORDER BY id FOR SHARE',[[personId,initial.inviter_person_id]]);
+    const persons=await db.query<{id:string;status:string}>(`SELECT id,status FROM drivy.person
+      WHERE id=ANY($1::uuid[]) OR id IN(SELECT person_id FROM drivy.invitation_training_staff()) ORDER BY id FOR SHARE`,[[personId,initial.inviter_person_id]]);
     if(linked && !persons.rows.some(p=>p.id===personId && p.status==='ACTIVE')) throw forbidden();
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`${personId}:${body.operationId.toLowerCase()}`]);
     const school=(await db.query<SchoolRow>(`SELECT ${schoolColumns} FROM drivy.school WHERE id=$1 FOR UPDATE`,[initial.school_id])).rows[0];
     if(!school) throw notFound();activeSchool(school);
     const members=await db.query<{id:string;person_id:string;roles:string[];grants:string[];status:string;version:number}>(`SELECT id,person_id,roles,grants,status,version FROM drivy.membership
-      WHERE school_id=$1 AND (person_id=$2 OR id=$3) ORDER BY id FOR UPDATE`,[school.id,personId,initial.inviter_membership_id]);
+      WHERE school_id=$1 AND (person_id=$2 OR id=$3 OR id=ANY($4::uuid[])) ORDER BY id FOR UPDATE`,[school.id,personId,initial.inviter_membership_id,invitedTrainings(initial).map(t=>t.instructorMembershipId)]);
     const invitation=(await db.query<InvitationRow>('SELECT * FROM drivy.invitation WHERE id=$1 FOR UPDATE',[initial.id])).rows[0];
     if(!invitation || invitation.token_hash!==digest(body.token) || invitation.email!==identity.verifiedEmail)
       throw new ApiError(403,'INVITATION_IDENTITY_MISMATCH','Le lien ne correspond pas à cette identité vérifiée, ou n’est plus utilisable.');
@@ -185,8 +194,11 @@ async function accept(pool:Pool,identity:Identity,body:z.infer<typeof acceptBody
       }
       await db.query("UPDATE drivy.invitation SET status='ACCEPTED',accepted_by_person_id=$2,version=version+1 WHERE id=$1",[invitation.id,personId]);
       await cancelInvitationMail(db,invitation.id);
-      if(invitation.training_offering_id && invitation.training_instructor_membership_id)
-        trainingOpened=await openInvitedTraining(db,school.id,personId,invitation.training_offering_id,invitation.training_instructor_membership_id);
+      for(const training of invitedTrainings(invitation)) {
+        const instructor=members.rows.find(m=>m.id===training.instructorMembershipId);
+        const active=instructor?.status==='ACTIVE' && instructor.roles.includes('INSTRUCTOR') && persons.rows.some(p=>p.id===instructor.person_id && p.status==='ACTIVE');
+        if(!active || !await openInvitedTraining(db,school.id,personId,training.offeringId,training.instructorMembershipId)) trainingOpened=false;
+      }
     }
     const current=await memberContext(db,school,personId),result=acceptedContext(current.data,trainingOpened);
     if(!known) await recordCommand(db,{personId,membershipId:current.data.membershipId,roles:current.data.roles},school.id,'ACCEPT_INVITATION',body.operationId,hash,
@@ -213,9 +225,13 @@ async function previewCode(pool:Pool,hashed:string) {
       WHERE m.id=$1 AND m.status='ACTIVE' AND p.status='ACTIVE'`,[invitation.inviter_membership_id])).rows[0];
     if(!inviter) throw invalidCode();
     try {allowedRoles(inviter.roles,invitation.roles);} catch {throw invalidCode();}
-    const category=invitation.training_offering_id?(await db.query<{category:string|null}>('SELECT drivy.invitation_code_category($1) AS category',[invitation.training_offering_id])).rows[0]?.category ?? null:null;
+    const categories:string[]=[];
+    for(const training of invitedTrainings(invitation)) {
+      const category=(await db.query<{category:string|null}>('SELECT drivy.invitation_code_category($1) AS category',[training.offeringId])).rows[0]?.category;
+      if(category && !categories.includes(category)) categories.push(category);
+    }
     await db.query('COMMIT');
-    return {schoolName:school.name,roles:invitation.roles,trainingCategoryCode:category,expiresAt:invitation.expires_at.toISOString()};
+    return {schoolName:school.name,roles:invitation.roles,trainingCategoryCode:categories[0] ?? null,trainingCategoryCodes:categories,expiresAt:invitation.expires_at.toISOString()};
   } catch(error) {await db.query('ROLLBACK');throw error;} finally {db.release();}
 }
 /** Comme l'acceptation par jeton (mêmes verrous, mêmes écritures, même preuve), sans adresse vérifiée : le code prouve l'invitation. */
@@ -236,13 +252,14 @@ async function acceptCode(pool:Pool,identity:Identity,body:z.infer<typeof codeAc
     };
     const initial=codeUsable((await db.query<InvitationRow>("SELECT * FROM drivy.invitation WHERE token_hash=current_setting('app.invitation_code_hash') AND delivery='CODE'")).rows[0]);
     await db.query("SELECT set_config('app.school_id',$1,true)",[initial.school_id]);
-    const persons=await db.query<{id:string;status:string}>('SELECT id,status FROM drivy.person WHERE id=ANY($1::uuid[]) ORDER BY id FOR SHARE',[[personId,initial.inviter_person_id]]);
+    const persons=await db.query<{id:string;status:string}>(`SELECT id,status FROM drivy.person
+      WHERE id=ANY($1::uuid[]) OR id IN(SELECT person_id FROM drivy.invitation_training_staff()) ORDER BY id FOR SHARE`,[[personId,initial.inviter_person_id]]);
     if(linked && !persons.rows.some(p=>p.id===personId && p.status==='ACTIVE')) throw forbidden();
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`${personId}:${body.operationId.toLowerCase()}`]);
     const school=(await db.query<SchoolRow>(`SELECT ${schoolColumns} FROM drivy.school WHERE id=$1 FOR UPDATE`,[initial.school_id])).rows[0];
-    if(!school) throw notFound();activeSchool(school);
+    if(!school || school.status!=='ACTIVE') throw invalidCode();
     const members=await db.query<{id:string;person_id:string;roles:string[];grants:string[];status:string;version:number}>(`SELECT id,person_id,roles,grants,status,version FROM drivy.membership
-      WHERE school_id=$1 AND (person_id=$2 OR id=$3) ORDER BY id FOR UPDATE`,[school.id,personId,initial.inviter_membership_id]);
+      WHERE school_id=$1 AND (person_id=$2 OR id=$3 OR id=ANY($4::uuid[])) ORDER BY id FOR UPDATE`,[school.id,personId,initial.inviter_membership_id,invitedTrainings(initial).map(t=>t.instructorMembershipId)]);
     // Relecture sous verrou : un renvoi ou une révocation concurrents invalident l'ancien code.
     const invitation=codeUsable((await db.query<InvitationRow>('SELECT * FROM drivy.invitation WHERE id=$1 FOR UPDATE',[initial.id])).rows[0]);
     const hash=commandHash(command,null);
@@ -255,6 +272,11 @@ async function acceptCode(pool:Pool,identity:Identity,body:z.infer<typeof codeAc
       const inviter=members.rows.find(m=>m.id===invitation.inviter_membership_id);
       if(!inviter || inviter.status!=='ACTIVE' || !persons.rows.some(p=>p.id===invitation.inviter_person_id && p.status==='ACTIVE')) throw invalidCode();
       try {allowedRoles(inviter.roles,invitation.roles);} catch {throw invalidCode();}
+      for(const training of invitedTrainings(invitation)) {
+        const instructor=members.rows.find(m=>m.id===training.instructorMembershipId);
+        if(!instructor || instructor.status!=='ACTIVE' || !instructor.roles.includes('INSTRUCTOR')
+          || !persons.rows.some(p=>p.id===instructor.person_id && p.status==='ACTIVE')) throw invalidCode();
+      }
       // L'adresse n'est retenue que si le fournisseur d'identité l'a vérifiée ; sinon le dossier n'en a pas.
       const email=identity.verifiedEmail ?? null;
       if(!linked) {
@@ -275,7 +297,9 @@ async function acceptCode(pool:Pool,identity:Identity,body:z.infer<typeof codeAc
       if(!learner) await db.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,contact_email,profile_readiness)
         SELECT $1,$2,id,display_name,$3,'MINIMAL' FROM drivy.person WHERE id=$4`,[randomUUID(),school.id,email,personId]);
       await db.query("UPDATE drivy.invitation SET status='ACCEPTED',accepted_by_person_id=$2,version=version+1 WHERE id=$1",[invitation.id,personId]);
-      trainingOpened=await openInvitedTraining(db,school.id,personId,invitation.training_offering_id!,invitation.training_instructor_membership_id!);
+      for(const training of invitedTrainings(invitation)) {
+        if(!await openInvitedTraining(db,school.id,personId,training.offeringId,training.instructorMembershipId)) throw invalidCode();
+      }
     }
     const current=await memberContext(db,school,personId),result=acceptedContext(current.data,trainingOpened);
     if(!known) await recordCommand(db,{personId,membershipId:current.data.membershipId,roles:current.data.roles},school.id,'ACCEPT_INVITATION',body.operationId,hash,
@@ -291,11 +315,11 @@ export function registerInvitations(app:FastifyInstance,options:{pool:Pool;verif
   const codeDigest=invitationCodeHasher(options.cursorSecret,options.invitationCodeSecret);
   // Chaque code refusé (aperçu ou acceptation) compte pour l'identité OIDC qui l'a essayé ; l'accès est coupé au-delà de la limite.
   const guarded=async<T>(identity:Identity,work:()=>Promise<T>):Promise<T>=>{
-    const key=AttemptLimiter.key(identity.issuer,identity.subject);attempts.check(key);
+    const key=AttemptLimiter.key(identity.issuer,identity.subject);const finish=attempts.begin(key);let failed=false;
     try {return await work();} catch(error) {
-      if(error instanceof ApiError && error.code==='INVITATION_CODE_INVALID') {attempts.fail(key);if(attempts.size>1000) attempts.sweep();}
+      failed=error instanceof ApiError && error.code==='INVITATION_CODE_INVALID';
       throw error;
-    }
+    } finally {finish(failed);if(attempts.size>1000) attempts.sweep();}
   };const envelope=(data:unknown,request:FastifyRequest)=>({data,requestId:request.id,serverTime:new Date().toISOString()});
   app.post('/v1/invitations/preview',async request=>{empty.parse(request.query);const body=tokenBody.parse(request.body);
     return envelope(await preview(options.pool,await options.verifyToken(request.headers.authorization),body.token),request);});
@@ -349,11 +373,12 @@ export function registerInvitations(app:FastifyInstance,options:{pool:Pool;verif
       }
       const notice=(await db.query('SELECT version FROM drivy.school_data_policy WHERE school_id=$1 AND approved_at IS NOT NULL ORDER BY version DESC LIMIT 1',[school.id])).rows[0];
       if(!notice) throw new ApiError(409,'POLICY_REVIEW_REQUIRED','La notice de l’école doit être approuvée avant une invitation.');
-      if(body.training) await trainingIntentValid(db,school.id,actor,body.roles,body.training);
+      const trainings=body.trainings ?? (body.training?[body.training]:[]);
+      for(const training of trainings) await trainingIntentValid(db,school.id,actor,body.roles,training);
       const id=randomUUID();const token=body.delivery==='CODE'?generateInvitationCode():randomBytes(32).toString('base64url');
-      const row=(await db.query<InvitationRow>(`INSERT INTO drivy.invitation(id,school_id,email,roles,token_hash,expires_at,inviter_membership_id,inviter_person_id,notice_version,training_offering_id,training_instructor_membership_id,delivery)
-        VALUES($1,$2,$3,$4,$5,now()+interval '7 days',$6,$7,$8,$9,$10,$11) RETURNING *`,[id,school.id,body.email,body.roles,body.delivery==='CODE'?codeDigest(token):digest(token),actor.membershipId,actor.personId,notice.version,
-        body.training?.offeringId ?? null,body.training?.instructorMembershipId ?? null,body.delivery])).rows[0]!;
+      const row=(await db.query<InvitationRow>(`INSERT INTO drivy.invitation(id,school_id,email,roles,token_hash,expires_at,inviter_membership_id,inviter_person_id,notice_version,training_offering_id,training_instructor_membership_id,delivery,additional_training_intents)
+        VALUES($1,$2,$3,$4,$5,now()+interval '7 days',$6,$7,$8,$9,$10,$11,$12) RETURNING *`,[id,school.id,body.email,body.roles,body.delivery==='CODE'?codeDigest(token):digest(token),actor.membershipId,actor.personId,notice.version,
+        trainings[0]?.offeringId ?? null,trainings[0]?.instructorMembershipId ?? null,body.delivery,JSON.stringify(trainings.slice(1))])).rows[0]!;
       if(body.delivery==='CODE') issuedCode=token;
       else await queueInvitationMail(db,mail!,school.id,id,row.version,{email:body.email!,token,roles:body.roles,schoolName:school.name});
       return {data:projection(row),action:'InvitationCreated',resourceType:'Invitation',resourceId:id,changedFields:body.delivery==='CODE'?['delivery','roles','status']:['email','roles','status']};

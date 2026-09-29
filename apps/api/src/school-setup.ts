@@ -2,7 +2,7 @@ import {authorizeCaptureObservationOperation} from './capture-observations.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { authorizePlanningOperation } from './lessons.js';
+import { authorizePlanningOperation, schoolPlanningBlockers } from './lessons.js';
 import { authorizeReportOperation } from './lesson-reports.js';
 import { authorizeCaptureOperation } from './captures.js';
 import { authorizePermitOperation } from './permits.js';
@@ -50,12 +50,14 @@ async function readiness(db:PoolClient,school:SchoolRow) {
   if (school.status==='ARCHIVED') blockers.push(blocker('SCHOOL_ARCHIVED','Cette école est archivée.'));
   const workspaceBlockers=[...blockers];
   if (school.status!=='ACTIVE') workspaceBlockers.push(blocker('SCHOOL_NOT_ACTIVE','Activez l’école après vérification de sa configuration.'));
+  // La planification est calculée à partir des données réelles de l'école (offre, moniteur, ouvertures, prestation, politique).
   // Les autres verticales ne sont pas livrées : aucune aptitude n'est déduite d'un module coché.
   const later = (capability:string,code:string,message:string)=>({capability,ready:false,blockers:[...workspaceBlockers,blocker(code,message)]});
+  const planningBlockers=[...workspaceBlockers,...await schoolPlanningBlockers(db,school.id)];
   return {schoolId:school.id,configurationVersion:school.configurationVersion,computedAt:new Date().toISOString(),
     activationReady:blockers.length===0,activationBlockers:blockers,capabilities:[
       {capability:'CAN_USE_WORKSPACE',ready:workspaceBlockers.length===0,blockers:workspaceBlockers},
-      later('CAN_PLAN_LESSON','LESSON_SETUP_REQUIRED','La configuration des offres, moniteurs et disponibilités sera nécessaire à la planification.'),
+      {capability:'CAN_PLAN_LESSON',ready:planningBlockers.length===0,blockers:planningBlockers},
       later('CAN_CAPTURE',school.modules.gpsEnabled?'DEVICE_REQUIRED':'GPS_MODULE_DISABLED',school.modules.gpsEnabled?'Le dispositif de capture scolaire reste à qualifier.':'Le GPS scolaire est désactivé.'),
       later('CAN_PUBLISH_COURSE','COURSE_SETUP_REQUIRED','La configuration et le profil des cours collectifs restent à qualifier.')
     ]};

@@ -51,7 +51,13 @@ describe('Liste blanche des routes de gestion', () => {
   test('ne relaie que les couples méthode + chemin déclarés', () => {
     expect(matchSchoolRoute('GET', `/schools/${school}`, '')?.path).toBe(`/v1/schools/${school}`);
     expect(matchSchoolRoute('PATCH', `/schools/${school}/members/${school}`, '')?.route.ifMatch).toBe(true);
+    expect(matchSchoolRoute('GET', `/schools/${school}/learners`, '?status=ALL')?.query).toBe('?status=ALL');
+    expect(matchSchoolRoute('GET', `/schools/${school}/learners`, '?status=ARCHIVED')?.query).toBe('?status=ARCHIVED');
+    expect(matchSchoolRoute('GET', `/schools/${school}/learners`, '?status=INVALID')).toBeUndefined();
+    expect(matchSchoolRoute('GET', `/schools/${school}/trainings`, '?status=ALL')).toBeUndefined();
     expect(matchSchoolRoute('GET', `/schools/${school}/offerings`, '?limit=100&cursor=abc_-1')?.query).toBe('?limit=100&cursor=abc_-1');
+    expect(matchSchoolRoute('GET', `/schools/${school}/captures`, '?limit=100&cursor=abc_-1')?.query).toBe('?limit=100&cursor=abc_-1');
+    expect(matchSchoolRoute('POST', `/schools/${school}/captures`, '')).toBeUndefined();
     // Élèves et disponibilités (décision du 28 septembre 2026) : écritures versionnées et filtres explicites.
     expect(matchSchoolRoute('PUT', `/schools/${school}/availability-rules/${school}`, '')?.route.ifMatch).toBe(true);
     expect(matchSchoolRoute('GET', `/schools/${school}/trainings`, `?learnerId=${school}`)?.query).toBe(`?learnerId=${school}`);
@@ -60,6 +66,7 @@ describe('Liste blanche des routes de gestion', () => {
     const training = randomUUID(), assignment = randomUUID();
     for (const [method, path, ifMatch] of [
       ['POST', `/schools/${school}/members/${school}/deactivate`, true], ['POST', `/schools/${school}/learners/${school}/archive`, true],
+      ['POST', `/schools/${school}/learners/${school}/restore`, true],
       ['POST', `/schools/${school}/trainings/${training}/transition`, true], ['POST', `/schools/${school}/trainings/${training}/assignments/${assignment}/end`, true],
       ['PUT', `/schools/${school}/modules`, true], ['POST', `/schools/${school}/trainings/${training}/permit-checks`, true],
       ['GET', `/schools/${school}/trainings/${training}/permit-checks`, undefined], ['GET', `/schools/${school}/lessons/${school}/reports`, undefined],
@@ -101,7 +108,7 @@ describe('Liste blanche des routes de gestion', () => {
     const gateway = vi.fn<SchoolGateway>(async () => ({ status: 200, body: envelope({}) }));
     const h = await harness(gateway); await h.login();
     for (const url of [`/app/bff/schools/${school}/lessons/${school}`, `/app/bff/schools/${school}/report-drafts`, `/app/bff/schools/x/setup`,
-      `/app/bff/schools/${school}/offerings?q=1`, `/app/bff/schools/${school}/captures`]) {
+      `/app/bff/schools/${school}/offerings?q=1`, `/app/bff/schools/${school}/captures/${school}/replay`]) {
       expect((await h.get(url)).statusCode, url).toBe(404);
     }
     expect((await h.app.inject({ method: 'DELETE', url: `/app/bff/schools/${school}`, headers: { cookie: h.cookie() } })).statusCode).toBe(404);
@@ -188,7 +195,7 @@ describe('Écritures de gestion', () => {
   test('un corps au-delà de la limite de la route est refusé', async () => {
     const gateway = vi.fn<SchoolGateway>(async () => ({ status: 200, body: envelope({}) }));
     const h = await harness(gateway); await h.login();
-    const response = await h.write('POST', `/app/bff/schools/${school}/invitations`, { operationId, email: `${'a'.repeat(3000)}@example.test`, roles: ['LEARNER'] },
+    const response = await h.write('POST', `/app/bff/schools/${school}/invitations`, { operationId, email: `${'a'.repeat(9000)}@example.test`, roles: ['LEARNER'] },
       { 'idempotency-key': operationId });
     expect(response.statusCode).toBe(413);
     expect(gateway).not.toHaveBeenCalled();

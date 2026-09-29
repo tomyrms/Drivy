@@ -12,6 +12,7 @@ export const invitationSchema = z.object({
   code: z.string().min(1).max(24).optional(),
   /** Offer and instructor a CODE invitation opens a formation with; absent or null for an EMAIL invitation. */
   training: z.object({ offeringId: id, instructorMembershipId: id }).nullable().optional(),
+  trainings: z.array(z.object({ offeringId: id, instructorMembershipId: id })).max(16).optional(),
   roles: z.array(z.enum(['ADMIN', 'INSTRUCTOR', 'LEARNER'])).min(1).max(3),
   status: z.enum(['PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED']), expiresAt: z.string().datetime({ offset: true }),
 });
@@ -69,12 +70,19 @@ export function defaultInstructorId(membershipId: string, instructors: readonly 
 }
 
 /** « Code élève · Permis B · Moniteur » for a code invitation, the masked address otherwise. */
-export function invitationLabel(invitation: Pick<Invitation, 'delivery' | 'maskedEmail' | 'training'>,
+export function invitationLabel(invitation: Pick<Invitation, 'delivery' | 'maskedEmail' | 'training' | 'trainings'>,
   offerings: readonly OfferingLike[], members: readonly MemberLike[]): string {
   if (invitation.delivery !== 'CODE') return invitation.maskedEmail ?? 'Invitation';
-  const offering = invitation.training ? offerings.find(item => item.id === invitation.training!.offeringId) : undefined;
-  const instructor = invitation.training ? members.find(item => item.id === invitation.training!.instructorMembershipId) : undefined;
-  const parts = ['Code élève', offering ? offeringLabel(offering, offerings) : null, instructor ? instructor.displayName : null];
+  const trainings = invitation.trainings ?? (invitation.training ? [invitation.training] : []);
+  const labels = trainings.flatMap(training => {
+    const offering = offerings.find(item => item.id === training.offeringId);
+    return offering ? [offeringLabel(offering, offerings)] : [];
+  });
+  const instructors = trainings.flatMap(training => {
+    const member = members.find(item => item.id === training.instructorMembershipId);
+    return member ? [member.displayName] : [];
+  });
+  const parts = ['Code élève', ...new Set(labels), ...new Set(instructors)];
   return parts.filter((part): part is string => part !== null).join(' · ');
 }
 

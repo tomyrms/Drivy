@@ -7,6 +7,7 @@ import { ApiError } from './errors.js';
  */
 export class AttemptLimiter {
   private readonly failures = new Map<string, number[]>();
+  private readonly pending = new Map<string, number>();
   constructor(private readonly max = 10, private readonly windowMs = 15 * 60_000, private readonly now: () => number = Date.now) {}
   private recent(key: string): number[] {
     const limit = this.now() - this.windowMs;
@@ -17,7 +18,18 @@ export class AttemptLimiter {
   static key(issuer: string, subject: string) { return JSON.stringify([issuer, subject]); }
   /** Refuse (429) tant que la limite d'échecs récents est atteinte ; ne consomme rien. */
   check(key: string) {
-    if (this.recent(key).length >= this.max) throw new ApiError(429, 'INVITATION_CODE_ATTEMPTS', 'Trop de codes refusés. Réessayez dans quelques minutes.');
+    if (this.recent(key).length + (this.pending.get(key) ?? 0) >= this.max) throw new ApiError(429, 'INVITATION_CODE_ATTEMPTS', 'Trop de codes refusés. Réessayez dans quelques minutes.');
+  }
+  /** Réserve une tentative avant toute attente réseau : une rafale parallèle ne contourne pas la limite. */
+  begin(key: string): (failed: boolean) => void {
+    this.check(key);this.pending.set(key, (this.pending.get(key) ?? 0) + 1);
+    let finished = false;
+    return failed => {
+      if (finished) return;finished = true;
+      const left = (this.pending.get(key) ?? 1) - 1;
+      if (left) this.pending.set(key, left);else this.pending.delete(key);
+      if (failed) this.fail(key);
+    };
   }
   fail(key: string) { this.failures.set(key, [...this.recent(key), this.now()]); }
   /** Purge les identités dont tous les échecs sont sortis de la fenêtre (appelé de temps en temps pour borner la mémoire). */

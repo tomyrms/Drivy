@@ -2,13 +2,14 @@ import {randomUUID} from 'node:crypto';
 import type {FastifyInstance,FastifyRequest} from 'fastify';
 import type {Pool,PoolClient} from 'pg';
 import {z} from 'zod';
-import type {TokenVerifier,Identity} from './auth.js';
+import type {TokenVerifier} from './auth.js';
 import {withActor,type Actor,type Membership} from './database.js';
 import {schoolCommand,checkIdempotency,checkVersion,requireVersion,schoolColumns,type CommandGuards,type SchoolRow} from './commands.js';
 import {ApiError,forbidden,notFound} from './errors.js';
 import {Cursors} from './cursor.js';
 import {getTraining} from './queries.js';
 import {recordSettings} from './school-setup.js';
+import {reauthAge,reauthenticate} from './reauth.js';
 
 const empty=z.object({}).strict();const operation={operationId:z.uuid()};
 const text=(max:number)=>z.string().trim().refine(value=>[...value].length>0 && [...value].length<=max);
@@ -19,18 +20,17 @@ const curriculumBody=z.object({...operation,categoryCode:category,approved:z.boo
 const webURL=z.url().max(2048).refine(value=>{const url=new URL(value);return ['https:','http:'].includes(url.protocol) && !url.username && !url.password;});
 const policyBody=z.object({...operation,categoryCode:category,procedureText:text(4000),cancellationPolicyText:text(4000),sourceUrls:z.array(webURL).max(30),approved:z.boolean(),approvalReason:text(1000)}).strict();
 const offeringBody=z.object({...operation,offeringKey:text(80),categoryCode:category,curriculumVersionId:z.uuid(),policyVersionId:z.uuid(),enabled:z.boolean(),defaultDurationMinutes:z.number().int().min(1).max(480),defaultPriceCents:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)}).strict();
-const trainingBody=z.object({...operation,learnerId:z.uuid(),offeringId:z.uuid(),startedOn:z.iso.date().nullable().optional()}).strict();
+const trainingBody=z.object({...operation,learnerId:z.uuid(),offeringId:z.uuid(),startedOn:z.iso.date().nullable().optional(),assignCreator:z.boolean().optional()}).strict();
 const assignmentBody=z.object({...operation,instructorMembershipId:z.uuid(),validFrom:z.iso.datetime({offset:true}),validUntil:z.iso.datetime({offset:true}).nullable().optional()}).strict().refine(v=>!v.validUntil || Date.parse(v.validUntil)>Date.parse(v.validFrom));
 const pagination=z.object({limit:z.coerce.number().int().min(1).max(100).default(50),cursor:z.string().max(6000).optional()}).strict();
-const memberColumns=`m.id,m.school_id AS "schoolId",m.version,m.person_id AS "personId",p.display_name AS "displayName",m.status,m.roles,m.grants,m.access_epoch AS "accessEpoch"`;
-const assignmentColumns=`id,school_id AS "schoolId",version,training_id AS "trainingId",instructor_membership_id AS "instructorMembershipId",valid_from AS "validFrom",valid_until AS "validUntil"`;
+export const memberColumns=`m.id,m.school_id AS "schoolId",m.version,m.person_id AS "personId",p.display_name AS "displayName",m.status,m.roles,m.grants,m.access_epoch AS "accessEpoch"`;
+export const assignmentColumns=`id,school_id AS "schoolId",version,training_id AS "trainingId",instructor_membership_id AS "instructorMembershipId",valid_from AS "validFrom",valid_until AS "validUntil"`;
 const offeringColumns=`id,school_id AS "schoolId",version,offering_key AS "offeringKey",category_code AS "categoryCode",curriculum_version_id AS "curriculumVersionId",policy_version_id AS "policyVersionId",enabled,default_duration_minutes AS "defaultDurationMinutes",default_price_cents AS "defaultPriceCents"`;
 const policyColumns=`id,school_id AS "schoolId",version,category_code AS "categoryCode",procedure_text AS "procedureText",cancellation_policy_text AS "cancellationPolicyText",source_urls AS "sourceUrls",approved,approved_at AS "approvedAt"`;
 const curriculumColumns=`id,school_id AS "schoolId",version,category_code AS "categoryCode",revision,approved`;
 type Row=Record<string,unknown>&{id:string;version:number};
 function currentSchool(school:SchoolRow){if(school.status!=='ACTIVE')throw new ApiError(409,'SCHOOL_NOT_ACTIVE','Cette école doit être active.');}
-function reauthenticate(identity:Identity,age:number){if(identity.authenticatedAt===undefined || identity.authenticatedAt>Math.floor(Date.now()/1000)+5 || Math.floor(Date.now()/1000)-identity.authenticatedAt>age)throw new ApiError(401,'REAUTH_REQUIRED','Reconnectez-vous pour confirmer ce changement d’accès.');}
-async function member(db:PoolClient,schoolId:string,memberId:string){const row=(await db.query<Row>(`SELECT ${memberColumns} FROM drivy.membership m JOIN drivy.person p ON p.id=m.person_id WHERE m.school_id=$1 AND m.id=$2`,[schoolId,memberId])).rows[0];if(!row)throw notFound();return row;}
+export async function member(db:PoolClient,schoolId:string,memberId:string){const row=(await db.query<Row>(`SELECT ${memberColumns} FROM drivy.membership m JOIN drivy.person p ON p.id=m.person_id WHERE m.school_id=$1 AND m.id=$2`,[schoolId,memberId])).rows[0];if(!row)throw notFound();return row;}
 async function curriculum(db:PoolClient,row:Row){return {...row,competencies:(await db.query(`SELECT id,school_id AS "schoolId",version,curriculum_version_id AS "curriculumVersionId",stable_key AS key,label,description,sort_order AS "sortOrder" FROM drivy.competency_definition WHERE curriculum_version_id=$1 ORDER BY sort_order,id`,[row.id])).rows};}
 const offering=(row:Row)=>({...row,defaultPriceCents:Number(row.defaultPriceCents)});
 async function configurationChanged(db:PoolClient,schoolId:string,memberId:string){const school=(await db.query<SchoolRow>(`UPDATE drivy.school SET version=version+1,configuration_version=configuration_version+1 WHERE id=$1 RETURNING ${schoolColumns}`,[schoolId])).rows[0]!;await recordSettings(db,school,memberId);}
@@ -40,7 +40,7 @@ async function learnerTarget(db:PoolClient,schoolId:string,learnerId:string){
  if(!row)throw notFound();return row;
 }
 export function registerCatalogue(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string;reauthMaxAgeSeconds?:number}){
- const age=z.number().int().min(30).max(900).parse(options.reauthMaxAgeSeconds ?? 300);const cursors=new Cursors(options.cursorSecret);
+ const age=reauthAge(options.reauthMaxAgeSeconds);const cursors=new Cursors(options.cursorSecret);
  const envelope=(data:unknown,request:FastifyRequest)=>({data,requestId:request.id,serverTime:new Date().toISOString()});
  const params=(r:FastifyRequest)=>z.object({schoolId:z.uuid(),membershipId:z.uuid().optional(),trainingId:z.uuid().optional()}).parse(r.params);
  const read=async(r:FastifyRequest,work:(db:PoolClient,a:Actor,m:Membership,s:string)=>Promise<unknown>)=>{
@@ -99,17 +99,21 @@ export function registerCatalogue(app:FastifyInstance,options:{pool:Pool;verifyT
  app.post('/v1/schools/:schoolId/trainings',async(request,reply)=>{
   empty.parse(request.query);const body=trainingBody.parse(request.body);checkIdempotency(request.headers['idempotency-key'],body.operationId);const {schoolId}=params(request);
   const guards:CommandGuards<Row>={additionalPersons:async db=>[(await learnerTarget(db,schoolId,body.learnerId)).person_id],authorize:async db=>{await learnerTarget(db,schoolId,body.learnerId);}};
-  const data=await schoolCommand(options.pool,await options.verifyToken(request.headers.authorization),schoolId,'CREATE_TRAINING',body,null,async(db,_actor,school)=>{
+  const data=await schoolCommand(options.pool,await options.verifyToken(request.headers.authorization),schoolId,'CREATE_TRAINING',body,null,async(db,actor,school)=>{
    currentSchool(school);if((await learnerTarget(db,schoolId,body.learnerId)).archived_at)throw new ApiError(409,'LEARNER_ARCHIVED','Ce dossier est archivé.');
    if(!(await db.query<{active:boolean}>('SELECT drivy.catalogue_learner_active($1) AS active',[body.learnerId])).rows[0]?.active)throw new ApiError(409,'LEARNER_NOT_ACTIVE','L’appartenance élève doit être active.');
    const offer=(await db.query<{offering_key:string;category_code:string}>(`SELECT o.offering_key,o.category_code FROM drivy.offering_version o JOIN drivy.curriculum_version c ON c.id=o.curriculum_version_id
     JOIN drivy.school_policy_version p ON p.id=o.policy_version_id WHERE o.school_id=$1 AND o.id=$2 AND o.enabled AND c.approved AND p.approved
     AND drivy.catalogue_offering_ready(o.id)`,[schoolId,body.offeringId])).rows[0];
    if(!offer)throw new ApiError(409,'OFFERING_NOT_READY','Cette offre doit être active, approuvée et correspondre à sa version actuelle.');
+   // Un moniteur qui crée une formation en devient le moniteur affecté (dans la même transaction) : sans cela il ne la verrait pas.
+   const assignCreator=body.assignCreator ?? actor.roles.includes('INSTRUCTOR');
+   if(assignCreator && !actor.roles.includes('INSTRUCTOR'))throw new ApiError(422,'INSTRUCTOR_REQUIRED','Seul un moniteur peut s’affecter à cette formation.');
    if((await db.query("SELECT id FROM drivy.training WHERE school_id=$1 AND learner_id=$2 AND offering_key=$3 AND status IN('ACTIVE','PAUSED')",[schoolId,body.learnerId,offer.offering_key])).rowCount)throw new ApiError(409,'ACTIVE_TRAINING_EXISTS','Une formation de cette offre est déjà active ou en pause.');
    const row=(await db.query<Row>(`INSERT INTO drivy.training(id,school_id,learner_id,offering_id,offering_key,status,started_on) VALUES($1,$2,$3,$4,$5,'ACTIVE',$6)
     RETURNING id,school_id AS "schoolId",version,learner_id AS "learnerId",offering_id AS "offeringId",status,to_char(started_on,'YYYY-MM-DD') AS "startedOn",NULL AS "closedOn"`,[randomUUID(),schoolId,body.learnerId,body.offeringId,offer.offering_key,body.startedOn ?? null])).rows[0]!;
-   return {data:{...row,categoryCode:offer.category_code},resourceType:'Training',resourceId:row.id,action:'TrainingCreated',changedFields:['learnerId','offeringId','status','startedOn']};
+   if(assignCreator)await db.query('INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES($1,$2,$3,$4,now())',[randomUUID(),schoolId,row.id,actor.membershipId]);
+   return {data:{...row,categoryCode:offer.category_code},resourceType:'Training',resourceId:row.id,action:'TrainingCreated',changedFields:['learnerId','offeringId','status','startedOn',...(assignCreator?['assignment']:[])]};
   },['ADMIN','INSTRUCTOR'],guards);reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,request);
  });
  app.post('/v1/schools/:schoolId/trainings/:trainingId/assignments',async(request,reply)=>{
@@ -135,7 +139,7 @@ export function registerCatalogue(app:FastifyInstance,options:{pool:Pool;verifyT
   const data=await schoolCommand(options.pool,identity,schoolId,'UPDATE_MEMBER',command,expected,async(db,_actor,school)=>{
    currentSchool(school);const old=await member(db,schoolId,membershipId!);checkVersion(old.version,expected);const oldRoles=old.roles as string[];
    if(oldRoles.includes('ADMIN') && !body.roles.includes('ADMIN') && (await db.query("SELECT m.id FROM drivy.membership m JOIN drivy.person p ON p.id=m.person_id WHERE m.school_id=$1 AND m.status='ACTIVE' AND p.status='ACTIVE' AND 'ADMIN'=ANY(m.roles)",[schoolId])).rowCount!<=1)throw new ApiError(409,'LAST_ADMIN','Conservez au moins un administrateur actif.');
-   if(oldRoles.includes('INSTRUCTOR') && !body.roles.includes('INSTRUCTOR') && (await db.query('SELECT id FROM drivy.instructor_assignment WHERE school_id=$1 AND instructor_membership_id=$2 AND (valid_until IS NULL OR valid_until>now())',[schoolId,membershipId])).rowCount)throw new ApiError(409,'MEMBER_RELATIONS_REQUIRE_REVIEW','Traitez les affectations de ce moniteur avant de retirer son rôle.');
+   if(oldRoles.includes('INSTRUCTOR') && !body.roles.includes('INSTRUCTOR') && (await db.query('SELECT id FROM drivy.instructor_assignment WHERE school_id=$1 AND instructor_membership_id=$2 AND (valid_until IS NULL OR (valid_until>now() AND valid_until>valid_from))',[schoolId,membershipId])).rowCount)throw new ApiError(409,'MEMBER_RELATIONS_REQUIRE_REVIEW','Traitez les affectations de ce moniteur avant de retirer son rôle.');
    if(oldRoles.includes('LEARNER') && !body.roles.includes('LEARNER') && (await db.query('SELECT id FROM drivy.learner_profile WHERE school_id=$1 AND person_id=$2 AND archived_at IS NULL',[schoolId,old.personId])).rowCount)throw new ApiError(409,'MEMBER_RELATIONS_REQUIRE_REVIEW','Traitez le dossier élève avant de retirer son rôle.');
    await db.query('UPDATE drivy.membership SET roles=$2,grants=$3,version=version+1,access_epoch=access_epoch+1 WHERE id=$1',[membershipId,body.roles,body.grants]);
    if(body.roles.includes('LEARNER') && !oldRoles.includes('LEARNER'))await db.query('INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name) VALUES($1,$2,$3,$4) ON CONFLICT(school_id,person_id) DO NOTHING',[randomUUID(),schoolId,old.personId,old.displayName]);

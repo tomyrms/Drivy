@@ -6,7 +6,7 @@ import { errorMessage, RequestFailure } from '../protocol';
 import type { Member, Me } from '../protocol';
 import type { School } from '../school-api';
 
-export const sectionKeys = ['apercu', 'configuration', 'champs-profil', 'offres', 'referentiels', 'procedures', 'prestations', 'conditions', 'equipe', 'invitations', 'eleves', 'agenda', 'disponibilites'] as const;
+export const sectionKeys = ['apercu', 'configuration', 'champs-profil', 'offres', 'referentiels', 'procedures', 'prestations', 'conditions', 'equipe', 'invitations', 'eleves', 'agenda', 'trajets', 'disponibilites'] as const;
 export type SectionKey = typeof sectionKeys[number];
 
 export interface ConsoleContextValue {
@@ -52,7 +52,9 @@ export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[]): 
     const current = ++generation.current;
     setState(previous => ({ status: 'loading', data: previous.data, error: null }));
     run().then(data => { if (current === generation.current) setState({ status: 'ready', data, error: null }); },
-      error => { if (current === generation.current) setState(previous => ({ status: 'error', data: previous.data, error: readError(error) })); });
+      error => { if (current === generation.current) setState(previous => ({ status: 'error',
+        data: error instanceof RequestFailure && [401, 403, 404].includes(error.status ?? 0) ? undefined : previous.data,
+        error: readError(error) })); });
   }, [run]);
   useEffect(() => { reload(); return () => { generation.current++; }; }, [reload]);
   return { ...state, reload };

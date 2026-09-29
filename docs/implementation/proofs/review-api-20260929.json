@@ -1,0 +1,36 @@
+{
+  "date": "2026-09-29",
+  "scope": "API intégrée dans le checkout principal, migrations 001 à 018",
+  "environment": {
+    "host": "homelab",
+    "node": "24.21.0",
+    "postgresql": "16.14",
+    "encoding": "UTF8",
+    "database": "drivy_test",
+    "isolation": "instance PostgreSQL de recette distincte ; aucune donnée de production",
+    "smtpTestSink": "Mailpit 1.31.2 temporaire, loopback, données synthétiques"
+  },
+  "checks": [
+    {"command": "npm test", "result": "PASS", "files": 17, "tests": 208},
+    {
+      "command": "vitest run test/capture-trips.integration.test.ts test/corrections.integration.test.ts test/lesson-reports.integration.test.ts test/lesson-outcomes.integration.test.ts test/capture-observations.integration.test.ts test/g1c.integration.test.ts",
+      "result": "PASS",
+      "files": 6,
+      "tests": 98,
+      "scope": "Après correction de captureSummary et du contrôle du compte du moniteur invité"
+    },
+    {"command": "npm run typecheck", "result": "PASS", "host": "poste de développement"},
+    {"command": "npm run build", "result": "PASS", "host": "poste de développement"},
+    {"command": "git diff --check", "result": "PASS", "scope": "fichiers API et documentation concernés"}
+  ],
+  "verified": [
+    "ADMIN lit tous les trajets de son école sans accéder aux autres écoles ni aux observations privées",
+    "Code multi-permis B et A, acceptation atomique, moniteur affecté, formation existante réutilisée",
+    "Code non consommé si une formation ou le moniteur prévu n’est plus disponible",
+    "Double acceptation, remplacement et révocation du code, aucun code en clair dans les preuves",
+    "Rafale de 30 requêtes : 10 refus de codes puis 20 limitations 429",
+    "Archivage et restauration du dossier, retrait d’accès, transitions de formation et affectation future annulée sans accès ultérieur",
+    "Leçon immédiate, permis, tarifs courants, notes, bilan et partage avec l’élève"
+  ],
+  "notClaimed": ["déploiement de cette révision", "qualification GPS physique", "autonomie", "VoiceOver sur appareil", "installation IPA"]
+}

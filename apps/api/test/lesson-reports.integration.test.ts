@@ -1,13 +1,14 @@
 import {randomUUID} from 'node:crypto';
 import {afterAll,beforeAll,describe,expect,it} from 'vitest';
 import type {Pool} from 'pg';
-import {expectContract,freshDatabase,harness,prepareCommercial,prepareSchool,lessonBody,id,type Call} from './support/harness.js';
+import {expectContract,freshDatabase,harness,prepareCommercial,prepareSchool,lessonBody,moveToPast,id,type Call} from './support/harness.js';
 
 let pool:Pool,call:Call,app:Awaited<ReturnType<typeof harness>>['app'],school:Awaited<ReturnType<typeof prepareSchool>>,commercial:Awaited<ReturnType<typeof prepareCommercial>>;
 let day=1;
 beforeAll(async()=>{pool=await freshDatabase();({call,app}=await harness(pool));school=await prepareSchool(pool);commercial=await prepareCommercial(call);});
 afterAll(async()=>{await app?.close();await pool?.end();});
-async function plan(){const r=await call('POST','/lessons',lessonBody(commercial,school.policy,day++));expect(r.statusCode,r.body).toBe(201);return r.json().data;}
+// Le constat n'est possible qu'à partir de 15 minutes avant le début prévu (LESSON_NOT_STARTED) : la leçon est ramenée dans le passé.
+async function plan(){const r=await call('POST','/lessons',lessonBody(commercial,school.policy,day++));expect(r.statusCode,r.body).toBe(201);await moveToPast(pool,r.json().data.id);return r.json().data;}
 const audits=async(operationId:string)=>(await pool.query('SELECT count(*)::int AS n FROM drivy.audit_event WHERE operation_id=$1',[operationId])).rows[0].n;
 const completeBody=(extra:Record<string,unknown>={})=>({operationId:randomUUID(),actualStart:new Date(Date.now()-3_600_000).toISOString(),actualEnd:new Date(Date.now()-600_000).toISOString(),workedOn:'Travail',observationText:'Constat',nextStep:'Suite',anomalyReason:'Permis non contrôlé (recette)',...extra});
 

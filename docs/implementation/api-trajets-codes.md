@@ -1,6 +1,6 @@
 # Trajets de l’école, invitation par code et ancrage serveur
 
-Décisions du porteur du 28 septembre 2026 ([décisions](decisions-2026-09-28.md)). Le contrat OpenAPI canonique 3.11.0 n’est pas modifié : tout ce qui suit est une extension. Migrations **014** et **015**.
+Décisions du porteur des 28 et 29 septembre 2026 ([décisions](decisions-2026-09-28.md)). Le contrat OpenAPI canonique 3.11.0 n’est pas modifié : tout ce qui suit est une extension. Migrations **014**, **015** et **018**.
 
 ## Trajets visibles par l’administration (migration 014)
 
@@ -38,9 +38,9 @@ Schéma : `invitation.email` devient nullable ; `delivery` (`EMAIL` par défaut,
 
 ### Création — `POST /v1/schools/{schoolId}/invitations`
 
-Corps : `{operationId, delivery?: "EMAIL"|"CODE", email?, roles, training?}`. `delivery` vaut `EMAIL` par défaut : les clients existants ne changent pas. Pour `CODE` : pas d’`email`, `roles: ["LEARNER"]`, `training: {offeringId, instructorMembershipId}` obligatoire ; mêmes règles que 013 (le moniteur ne nomme que lui-même, l’administrateur tout moniteur actif, offre prête, `INVITATION_TRAINING_INVALID` sinon). Une forme incohérente répond 400 `INVALID_REQUEST`. Aucun e-mail n’est mis en file : la création réussit sans SMTP.
+Corps : `{operationId, delivery?: "EMAIL"|"CODE", email?, roles, trainings?: [{offeringId, instructorMembershipId}]}`. `delivery` vaut `EMAIL` par défaut. `training: {offeringId, instructorMembershipId}` reste accepté pour les anciens clients ; les deux formes ensemble sont refusées. Pour `CODE` : pas d’`email`, `roles: ["LEARNER"]`, de 1 à 16 offres distinctes obligatoires. Le moniteur ne nomme que lui-même ; l’administrateur choisit un moniteur actif dont le compte reste actif. Toutes les offres doivent être prêtes (`INVITATION_TRAINING_INVALID` sinon). Une forme incohérente répond 400 `INVALID_REQUEST`. Aucun e-mail n’est mis en file : la création réussit sans SMTP.
 
-Réponse 201 `InvitationEnvelope` étendu : `{id, schoolId, version, maskedEmail, roles, status, expiresAt, delivery, code?}`. `maskedEmail` est `null` pour un code. `code` (`XXXX-XXXX`) figure **seulement** dans la réponse qui l’a généré (création, renvoi) ; il n’entre ni dans l’opération stockée ni dans une liste. Un rejeu idempotent rend l’invitation **sans** `code` (l’app propose « Nouveau code »). Le schéma canonique `Invitation` est fermé : les tests valident ces réponses contre `contracts/invitation-delivery.json`.
+Réponse 201 `InvitationEnvelope` étendu : `{id, schoolId, version, maskedEmail, roles, status, expiresAt, delivery, trainings, code?}`. `trainings` contient les couples offre/moniteur de l’invitation (liste vide pour une invitation sans formation). `maskedEmail` est `null` pour un code. `code` (`XXXX-XXXX`) figure **seulement** dans la réponse qui l’a généré (création, renvoi) ; il n’entre ni dans l’opération stockée ni dans une liste. Un rejeu idempotent rend l’invitation **sans** `code` (l’app propose « Nouveau code »). Une ancienne preuve d’opération peut ne pas porter `trainings`. Le schéma canonique `Invitation` est fermé : les tests valident ces réponses contre `contracts/invitation-delivery.json`.
 
 ### Renvoi et révocation
 
@@ -48,7 +48,7 @@ Réponse 201 `InvitationEnvelope` étendu : `{id, schoolId, version, maskedEmail
 
 ### Aperçu — `POST /v1/invitations/code/preview`
 
-Corps `{code}` ; connexion requise (toute identité, même sans compte Drivy ni adresse vérifiée). Réponse `{data:{schoolName, roles, trainingCategoryCode: string|null, expiresAt}}`. Toute autre issue : **404 `INVITATION_CODE_INVALID`**, identique pour code inconnu, expiré, utilisé, révoqué, émetteur sans droit ou école inactive.
+Corps `{code}` ; connexion requise (toute identité, même sans compte Drivy ni adresse vérifiée). Réponse `{data:{schoolName, roles, trainingCategoryCode: string|null, trainingCategoryCodes: string[], expiresAt}}`. Le champ singulier conserve la première catégorie pour les anciens clients ; le tableau contient les catégories distinctes. Toute autre issue : **404 `INVITATION_CODE_INVALID`**, identique pour code inconnu, expiré, utilisé, révoqué, émetteur sans droit ou école inactive.
 
 ### Acceptation — `POST /v1/invitations/code/accept`
 
@@ -56,7 +56,7 @@ Corps `{operationId, code}`, `Idempotency-Key = operationId`. Même transaction 
 
 ### Frein
 
-Limiteur en mémoire par identité OIDC (émetteur + sujet), commun à l’aperçu et à l’acceptation : 10 codes refusés (`INVITATION_CODE_INVALID`) sur 15 minutes glissantes, puis **429 `INVITATION_CODE_ATTEMPTS`**, même avec un bon code, jusqu’à la sortie de la fenêtre. Un seul processus API : le compteur ne survit pas à un redémarrage ni ne se partage entre instances.
+Limiteur en mémoire par identité OIDC (émetteur + sujet), commun à l’aperçu et à l’acceptation : 10 codes refusés (`INVITATION_CODE_INVALID`) sur 15 minutes glissantes, puis **429 `INVITATION_CODE_ATTEMPTS`**, même avec un bon code, jusqu’à la sortie de la fenêtre. Une tentative est réservée avant toute attente réseau : les requêtes simultanées comptent dans la limite, puis les succès libèrent leur réservation. Un seul processus API : le compteur ne survit pas à un redémarrage ni ne se partage entre instances.
 
 ## Refus définitif sans transport e-mail
 
@@ -66,7 +66,9 @@ Sans configuration SMTP, créer ou renvoyer une invitation **par e-mail** répon
 
 ## Formation d’une invitation acceptée
 
-L’offre d’une invitation a pu être republiée depuis son envoi. À l’acceptation (jeton ou code), la formation s’ouvre sur la **dernière version prête** de la même `offering_key` (`drivy.invitation_ready_offering`, qui s’appuie sur `catalogue_offering_ready`) ; la politique d’insertion de formation (013) accepte toute version de l’offre invitée. Si aucune version n’est prête, l’adhésion est acceptée et la réponse porte **`trainingOpened: false`** (champ absent dans le cas normal) ; l’audit `InvitationAccepted` ajoute `trainingNotOpened` aux champs modifiés ; un rejeu de la même opération rend la même annonce. Un élève qui suit déjà l’offre n’est pas signalé.
+L’offre d’une invitation a pu être republiée depuis son envoi. À l’acceptation, chaque formation s’ouvre sur la **dernière version prête** de la même `offering_key`. Une formation active ou en pause déjà présente est réutilisée ; le moniteur prévu lui est affecté sans doublon. Pour un code, tous les moniteurs et leurs comptes sont relus sous verrou et toutes les formations doivent être rattachées : offre ou moniteur indisponible ⇒ **404 `INVITATION_CODE_INVALID`**, rollback de l’ensemble et code encore en attente. Un rejeu par le même compte restitue l’acceptation sans recréer de formation. Le flux e-mail historique conserve `trainingOpened:false` lorsqu’une formation ne peut plus s’ouvrir.
+
+La migration 018 conserve les colonnes du premier choix et embarque les choix supplémentaires dans `additional_training_intents`, avec vérification SQL du format, des références dans la même école et de l’unicité. Les politiques d’acceptation ne permettent que les formations et moniteurs de l’invitation désignée.
 
 ## Ancrage serveur des observations (F3)
 

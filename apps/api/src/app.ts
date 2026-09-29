@@ -22,6 +22,7 @@ import { registerHealth } from './health.js';
 import { registerPermits } from './permits.js';
 import { registerLessonOutcomes } from './lesson-outcomes.js';
 import { registerSharing } from './sharing.js';
+import { registerAdministration } from './administration.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
 const schoolParams = z.object({ schoolId: z.uuid() });
@@ -41,6 +42,15 @@ export function lowercaseIds(value: unknown): unknown {
   return value;
 }
 
+/** Erreurs de transport client : un JSON invalide ne doit pas créer une commande incertaine à rejouer. */
+export function clientError(error: unknown): ApiError | undefined {
+  const status = typeof error === 'object' && error !== null && 'statusCode' in error ? error.statusCode : undefined;
+  if (typeof status !== 'number' || !Number.isInteger(status) || status < 400 || status > 499) return undefined;
+  if (status === 413) return new ApiError(413, 'PAYLOAD_TOO_LARGE', 'Le contenu envoyé est trop volumineux.');
+  if (status === 415) return new ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Le format du contenu n’est pas pris en charge.');
+  return new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
+}
+
 export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig }) {
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384 });
   const cursors = new Cursors(options.cursorSecret);
@@ -55,8 +65,8 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   app.setErrorHandler((error, request, reply) => {
     const known = error instanceof ApiError ? error : error instanceof ZodError
       ? new ApiError(400, 'INVALID_REQUEST', 'Paramètres invalides.')
-      : new ApiError(503, 'SERVICE_UNAVAILABLE', 'Service temporairement indisponible.');
-    if (!(error instanceof ApiError) && !(error instanceof ZodError)) request.log.error({ requestId: request.id }, 'Échec de traitement API');
+      : clientError(error) ?? new ApiError(503, 'SERVICE_UNAVAILABLE', 'Service temporairement indisponible.');
+    if (known.status >= 500) request.log.error({ requestId: request.id }, 'Échec de traitement API');
     if (known.status === 401) reply.header('WWW-Authenticate','Bearer');
     return reply.status(known.status).type('application/problem+json').send({
       type: `urn:drivy:problem:${known.code.toLowerCase()}`, title: known.message,
@@ -150,5 +160,6 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerCaptures(app,options);
   registerCaptureObservations(app,options);
   registerSharing(app,options);
+  registerAdministration(app,options);
   return app;
 }

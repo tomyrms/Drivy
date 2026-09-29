@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { commandMessage, createCommand, filled, isEmail } from '../command-core';
+import { commandMessage, createCommand, filled, isEmail, matchesSearch } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { roleLabel, type Role } from '../protocol';
 import {
@@ -28,42 +28,52 @@ const grants: readonly { value: string; label: string }[] = [
 const grantLabel = (value: string) => grants.find(item => item.value === value)?.label ?? 'Autorisation inconnue';
 const rolesText = (values: readonly Role[]) => values.length ? values.map(roleLabel).join(' · ') : 'Aucun rôle';
 const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every(item => b.includes(item));
+const isStaff = (member: { roles: readonly Role[] }) => member.roles.includes('ADMIN') || member.roles.includes('INSTRUCTOR');
 const memberStatus = (status: string): { label: string; tone: Tone } => status === 'ACTIVE' ? { label: 'Actif', tone: 'success' } : { label: 'Accès inactif', tone: 'neutral' };
 
 /* ---------------------------------------------------------------- Équipe et accès */
 
 export function TeamSection() {
-  const { schoolId, membership, navigate } = useConsole();
+  const { schoolId, school, membership, navigate } = useConsole();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner();
   const loaded = useLoad(() => readAll(schoolId, 'members', memberSchema), [schoolId, revision]);
   const [filter, setFilter] = useState('');
+  const [showLearners, setShowLearners] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [draftRoles, setDraftRoles] = useState<Role[]>([]);
   const [draftGrants, setDraftGrants] = useState<string[]>([]);
   const [reason, setReason] = useState('');
   const [showErrors, setShowErrors] = useState(false);
-  const [reviewing, setReviewing] = useState(false);
+  const [dialog, setDialog] = useState<'access' | 'deactivate' | null>(null);
+  const [deactivateReason, setDeactivateReason] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
   const members = useMemo(() => [...(loaded.data?.items ?? [])].sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr')), [loaded.data]);
-  const visible = members.filter(item => item.displayName.toLocaleLowerCase('fr').includes(filter.trim().toLocaleLowerCase('fr')));
+  const visible = members.filter(item => (showLearners || isStaff(item)) && matchesSearch([item.displayName], filter));
   const current = members.find(item => item.id === selected) ?? null;
   useEffect(() => {
     if (!current) return;
-    setDraftRoles([...current.roles]); setDraftGrants([...current.grants]); setReason(''); setShowErrors(false);
+    setDraftRoles([...current.roles]); setDraftGrants([...current.grants]); setReason(''); setDeactivateReason(''); setShowErrors(false); setDialog(null);
   }, [current?.id, current?.version]);
   const self = current?.id === membership.membershipId;
   const changed = !!current && (!sameSet(current.roles, draftRoles) || !sameSet(current.grants, draftGrants));
   const loseAdmin = self && current?.roles.includes('ADMIN') && !draftRoles.includes('ADMIN');
   const problem = !changed ? null : draftRoles.length === 0 ? 'Gardez au moins un rôle.' : !filled(reason, 1000) ? 'Indiquez le motif du changement (1 000 caractères au plus).' : null;
-  const canWrite = !runner.pending && !runner.busy;
+  const canWrite = school.status === 'ACTIVE' && current?.status === 'ACTIVE' && loaded.status === 'ready' && !runner.pending && !runner.busy;
+  const deactivateProblem = filled(deactivateReason, 1000) ? null : 'Indiquez le motif du retrait (1 000 caractères au plus).';
 
   async function confirm() {
-    if (!current || problem || !changed) return;
-    const command = createCommand({ schoolId, kind: 'updateMember', path: `members/${current.id}`, ifMatch: current.version, resourceId: current.id,
-      resourceVersion: current.version, body: { roles: roles.map(item => item.value).filter(value => draftRoles.includes(value)), grants: grants.map(item => item.value).filter(value => draftGrants.includes(value)), reason: reason.trim() } });
-    await runner.run(command, `Les accès de ${current.displayName} sont modifiés.`);
-    setReviewing(false);
+    if (!current || !canWrite) return;
+    if (dialog === 'access' && !problem && changed) {
+      const command = createCommand({ schoolId, kind: 'updateMember', path: `members/${current.id}`, ifMatch: current.version, resourceId: current.id,
+        resourceVersion: current.version, body: { roles: roles.map(item => item.value).filter(value => draftRoles.includes(value)), grants: grants.map(item => item.value).filter(value => draftGrants.includes(value)), reason: reason.trim() } });
+      await runner.run(command, `Les accès de ${current.displayName} sont modifiés.`);
+    } else if (dialog === 'deactivate' && !deactivateProblem && !self) {
+      const command = createCommand({ schoolId, kind: 'deactivateMember', path: `members/${current.id}/deactivate`, ifMatch: current.version, resourceId: current.id,
+        resourceVersion: current.version, body: { reason: deactivateReason.trim() } });
+      await runner.run(command, `${current.displayName} n’a plus accès à l’école.`);
+    }
+    setDialog(null);
   }
   const toggle = <T extends string,>(list: T[], value: T, on: boolean) => on ? [...list, value] : list.filter(item => item !== value);
 
@@ -76,7 +86,10 @@ export function TeamSection() {
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture de l’équipe…">{data => <SplitView
         list={<>
-          <div className="list-toolbar"><TextField label="Rechercher un membre" value={filter} onChange={setFilter} placeholder="Nom" /></div>
+          <div className="list-toolbar">
+            <TextField label="Rechercher un membre" value={filter} onChange={setFilter} placeholder="Nom" />
+            <CheckField label="Afficher les élèves" checked={showLearners} onChange={setShowLearners} />
+          </div>
           {visible.length === 0 ? <EmptyState symbol="users" title={members.length ? 'Aucun membre trouvé' : 'Aucun membre'} message={members.length ? 'Modifiez la recherche.' : 'Invitez les personnes de votre école.'} />
           : <table className="data-table">
             <caption className="visually-hidden">Membres de l’école{data.truncated ? ' (liste partielle)' : ''}</caption>
@@ -92,8 +105,10 @@ export function TeamSection() {
         detail={current ? <DetailPanel focusKey={current.id} title={current.displayName} meta={self ? 'Votre propre accès' : rolesText(current.roles)}
             badge={<StatusBadge tone={memberStatus(current.status).tone} symbol={current.status === 'ACTIVE' ? 'check' : 'dot'}>{memberStatus(current.status).label}</StatusBadge>}
             actions={<>
-              <button type="button" className="button primary" disabled={!canWrite || !changed} onClick={() => { setShowErrors(true); if (!problem) { setAcknowledged(false); setReviewing(true); } }}>Relire le changement</button>
+              <button type="button" className="button primary" disabled={!canWrite || !changed} onClick={() => { setShowErrors(true); if (!problem) { setAcknowledged(false); setDialog('access'); } }}>Relire le changement</button>
               {changed && <button type="button" className="button quiet" onClick={() => { setDraftRoles([...current.roles]); setDraftGrants([...current.grants]); setReason(''); }}>Annuler les modifications</button>}
+              {current.status === 'ACTIVE' && !self && <button type="button" className="button quiet danger" disabled={!canWrite}
+                onClick={() => { runner.clearOutcome(); setAcknowledged(false); setDialog('deactivate'); }}>Retirer l’accès…</button>}
             </>}>
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
               <fieldset className="fieldset">
@@ -114,16 +129,20 @@ export function TeamSection() {
           </DetailPanel>
           : <Placeholder>Choisissez un membre pour consulter ou modifier ses accès.</Placeholder>} />}
       </LoadState>
-      {current && <ConfirmDialog open={reviewing} busy={runner.busy} onCancel={() => setReviewing(false)} onConfirm={() => void confirm()}
-        title="Modifier les accès" confirmLabel="Confirmer le changement d’accès"
-        {...(loseAdmin ? { acknowledgement: 'Je comprends que je ne pourrai plus administrer cette école.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
+      {current && <ConfirmDialog open={dialog !== null} busy={runner.busy} onCancel={() => setDialog(null)} onConfirm={() => void confirm()}
+        title={dialog === 'deactivate' ? 'Retirer l’accès' : 'Modifier les accès'}
+        confirmLabel={dialog === 'deactivate' ? 'Retirer l’accès' : 'Confirmer le changement d’accès'}
+        disabledReason={!canWrite ? 'Actualisez les accès avant de confirmer.' : dialog === 'deactivate' ? deactivateProblem : problem}
+        {...(dialog === 'deactivate' ? { acknowledgement: 'Je comprends que cette personne ne pourra plus accéder à l’école.', acknowledged, onAcknowledge: setAcknowledged }
+          : loseAdmin ? { acknowledgement: 'Je comprends que je ne pourrai plus administrer cette école.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
         <p className="dialog-lead">{current.displayName}</p>
-        <Facts items={[
+        {dialog === 'deactivate' ? <TextArea label="Motif du retrait" required rows={3} maxLength={1000} value={deactivateReason} onChange={setDeactivateReason} disabled={runner.busy} />
+          : <Facts items={[
           ['Rôles actuels', rolesText(current.roles)], ['Rôles demandés', rolesText(roles.map(item => item.value).filter(value => draftRoles.includes(value)))],
           ['Autorisations ajoutées', draftGrants.filter(item => !current.grants.includes(item)).map(grantLabel).join(', ') || 'Aucune'],
           ['Autorisations retirées', current.grants.filter(item => !draftGrants.includes(item)).map(grantLabel).join(', ') || 'Aucune'],
           ['Motif', reason.trim()],
-        ]} />
+        ]} />}
         <p className="caption">Les accès de cette personne changent dès la confirmation par l’école.</p>
       </ConfirmDialog>}
     </div>
@@ -182,7 +201,7 @@ export function InvitationsSection() {
   const [creating, setCreating] = useState<CreateMode | null>(null);
   const [email, setEmail] = useState('');
   const [invitedRoles, setInvitedRoles] = useState<Role[]>(['LEARNER']);
-  const [offeringId, setOfferingId] = useState('');
+  const [offeringIds, setOfferingIds] = useState<string[]>([]);
   const [instructorId, setInstructorId] = useState('');
   const [revokeReason, setRevokeReason] = useState('');
   const [showErrors, setShowErrors] = useState(false);
@@ -200,17 +219,18 @@ export function InvitationsSection() {
   const canWrite = active && !runner.pending && !runner.busy;
   const emailProblem = isEmail(email.trim()) ? null : 'Indiquez l’adresse e-mail de la personne invitée.';
   const rolesProblem = invitedRoles.length ? null : 'Choisissez au moins un rôle.';
-  const trainingProblem = offeringId && instructorId ? null : commandMessage('INVITATION_TRAINING_INVALID');
+  const trainingProblem = offeringIds.length > 0 && offeringIds.length <= 16
+    && offeringIds.every(id => offerings.some(item => item.id === id))
+    && instructors.some(item => item.id === instructorId) ? null : commandMessage('INVITATION_TRAINING_INVALID');
   const actionable = current && (current.status === 'PENDING' || current.status === 'EXPIRED');
-  const chosenOffering = offerings.find(item => item.id === offeringId);
   const chosenInstructor = instructors.find(item => item.id === instructorId);
 
   const label = (item: Invitation) => invitationLabel(item, data?.offerings ?? [], data?.members ?? []);
   const expiryOf = (value: string) => formatDateTime(value, school.timeZone);
   function openCode() {
     runner.clearOutcome(); setSelected(null); setShowErrors(false); setCodeMissing(false);
-    setOfferingId(offerings.length === 1 ? offerings[0]!.id : '');
-    setInstructorId(defaultInstructorId(membership.membershipId, instructors));
+    setOfferingIds(offerings.length === 1 ? [offerings[0]!.id] : []);
+    setInstructorId(defaultInstructorId(membership.membershipId, instructors) || (instructors.length === 1 ? instructors[0]!.id : ''));
     setCreating('code');
   }
   function openEmail() {
@@ -224,23 +244,24 @@ export function InvitationsSection() {
     return invitation?.id ?? null;
   }
 
-  async function confirm() {
-    if (dialog === 'create' && creating === 'code' && !trainingProblem) {
+  async function confirm(action: Dialog = dialog) {
+    if (!canWrite) return;
+    if (action === 'create' && creating === 'code' && !trainingProblem) {
       const command = createCommand({ schoolId, kind: 'createInvitation', path: 'invitations', resourceVersion: 0,
-        body: { delivery: 'CODE', roles: ['LEARNER'], training: { offeringId, instructorMembershipId: instructorId } } });
-      const result = await runner.run(command, 'Le code est créé ; il est valable 7 jours.');
+        body: { delivery: 'CODE', roles: ['LEARNER'], trainings: offeringIds.map(offeringId => ({ offeringId, instructorMembershipId: instructorId })) } });
+      const result = await runner.run(command, 'Code créé.');
       if (result.status === 'confirmed') {
         const created = result.via === 'response' ? showIssued(result.body) : null;
         if (created) setSelected(created);
         else setCodeMissing(true);
         setCreating(null);
       }
-    } else if (dialog === 'create' && creating === 'email' && !emailProblem && !rolesProblem) {
+    } else if (action === 'create' && creating === 'email' && !emailProblem && !rolesProblem) {
       const command = createCommand({ schoolId, kind: 'createInvitation', path: 'invitations', resourceVersion: 0,
         body: { email: email.trim(), roles: [...invitedRoles].sort() } });
       const result = await runner.run(command, 'L’invitation est créée. Le message part vers l’adresse indiquée ; le lien est valable 7 jours.');
       if (result.status === 'confirmed') { setCreating(null); setEmail(''); setInvitedRoles(['LEARNER']); }
-    } else if (dialog === 'resend' && current && actionable) {
+    } else if (action === 'resend' && current && actionable) {
       const code = current.delivery === 'CODE';
       const result = await runner.run(createCommand({ schoolId, kind: 'resendInvitation', path: `invitations/${current.id}/resend`, ifMatch: current.version,
         resourceId: current.id, resourceVersion: current.version, body: {} }),
@@ -248,7 +269,7 @@ export function InvitationsSection() {
       if (result.status === 'confirmed' && code) {
         if (result.via === 'response') showIssued(result.body, current.id); else { setIssuedCode(null); setCodeMissing(true); }
       }
-    } else if (dialog === 'revoke' && current && actionable && filled(revokeReason, 1000)) {
+    } else if (action === 'revoke' && current && actionable && filled(revokeReason, 1000)) {
       const result = await runner.run(createCommand({ schoolId, kind: 'revokeInvitation', path: `invitations/${current.id}/revoke`, ifMatch: current.version,
         resourceId: current.id, resourceVersion: current.version, body: { reason: revokeReason.trim() } }), 'L’invitation est révoquée : elle ne permet plus de rejoindre l’école.');
       if (result.status === 'confirmed') { setRevokeReason(''); setIssuedCode(null); setCodeMissing(false); }
@@ -266,7 +287,7 @@ export function InvitationsSection() {
       {!active && <Notice tone="info" title="Invitations disponibles après l’activation" live={false}
         actions={<button type="button" className="button secondary" onClick={() => navigate('configuration')}>Ouvrir la configuration</button>}>
         <p>L’école doit être active, avec ses textes d’information adoptés, avant d’inviter des personnes.</p></Notice>}
-      <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
+      <OutcomeNotice outcome={issuedCode && runner.outcome?.tone === 'success' ? null : runner.outcome} onDismiss={runner.clearOutcome} />
       {codeMissing && <Notice tone="warning" title="Code non affiché"><p>La réponse de l’école ne permet pas d’afficher le code. « Nouveau code » en crée un autre.</p></Notice>}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des invitations…">{() => <SplitView
@@ -283,12 +304,14 @@ export function InvitationsSection() {
           </table>}
         detail={creating === 'code' ? <DetailPanel focusKey="create-code" title="Code élève"
             actions={<>
-              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (!trainingProblem) { setAcknowledged(false); setDialog('create'); } }}>Relire avant de créer</button>
+              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (!trainingProblem) void confirm('create'); }}>Créer le code</button>
               <button type="button" className="button quiet" onClick={() => setCreating(null)} disabled={runner.busy}>Annuler</button>
             </>}>
-            <form className="form-grid" onSubmit={event => { event.preventDefault(); setShowErrors(true); if (!trainingProblem && canWrite) { setAcknowledged(false); setDialog('create'); } }}>
-              <SelectField label="Offre" value={offeringId} placeholder="Choisir une offre" disabled={!canWrite} onChange={setOfferingId}
-                options={offerings.map(item => ({ value: item.id, label: offeringLabel(item, offerings) }))} />
+            <form className="form-grid" onSubmit={event => { event.preventDefault(); setShowErrors(true); if (!trainingProblem) void confirm('create'); }}>
+              <fieldset className="fieldset"><legend>Permis</legend>
+                {offerings.map(item => <CheckField key={item.id} label={offeringLabel(item, offerings)} checked={offeringIds.includes(item.id)}
+                  disabled={!canWrite} onChange={on => setOfferingIds(ids => on ? [...ids, item.id] : ids.filter(id => id !== item.id))} />)}
+              </fieldset>
               <SelectField label="Moniteur" value={instructorId} placeholder="Choisir un moniteur" disabled={!canWrite} onChange={setInstructorId}
                 options={instructors.map(item => ({ value: item.id, label: item.displayName }))} />
               {showErrors && trainingProblem && <p className="field-error"><Symbol kind="alert" bare />{trainingProblem}</p>}
@@ -325,13 +348,12 @@ export function InvitationsSection() {
             {current.delivery === 'CODE' && issuedCode?.invitationId === current.id && <div className="code-panel">
               <p className="code-display">{issuedCode.code}</p>
               <p className="caption">Valable jusqu’au {expiryOf(issuedCode.expiresAt)}.</p>
-              <p className="policy-copy">{invitationCodeMessage(issuedCode.code, expiryOf(issuedCode.expiresAt), school.name)}</p>
               <div className="button-row compact">
                 <CopyButton value={issuedCode.code} label="Copier le code" />
                 <CopyButton value={invitationCodeMessage(issuedCode.code, expiryOf(issuedCode.expiresAt), school.name)} label="Copier le message" />
               </div>
             </div>}
-            <Facts items={[['Expiration', formatDateTime(current.expiresAt, school.timeZone)], ['Rôles', rolesText(current.roles)], ['Version', String(current.version)]]} />
+            {issuedCode?.invitationId !== current.id && <Facts items={[["Expiration", formatDateTime(current.expiresAt, school.timeZone)]]} />}
             {!actionable && <p className="caption">{current.status === 'ACCEPTED' ? 'La personne a rejoint l’école : gérez ses accès dans Équipe et accès.' : 'Cette invitation ne peut plus être utilisée. Créez-en une nouvelle si nécessaire.'}</p>}
           </DetailPanel>
           : <Placeholder>Choisissez une invitation pour la renvoyer ou la révoquer.</Placeholder>} />}
@@ -342,7 +364,7 @@ export function InvitationsSection() {
         disabledReason={dialog === 'revoke' && !filled(revokeReason, 1000) ? 'Indiquez le motif de la révocation.' : null}
         {...(dialog === 'create' ? { acknowledgement: creating === 'code' ? 'J’ai vérifié l’offre et le moniteur choisis.' : 'J’ai vérifié l’adresse et les rôles proposés.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
         {dialog === 'create' && creating === 'code' && <>
-          <p className="dialog-lead">Code élève{chosenOffering ? ` · ${offeringLabel(chosenOffering, offerings)}` : ''}</p>
+          <p className="dialog-lead">Code élève · {offerings.filter(item => offeringIds.includes(item.id)).map(item => offeringLabel(item, offerings)).join(', ')}</p>
           <Facts items={[['Moniteur', chosenInstructor?.displayName ?? '—'], ['École', school.name], ['Validité du code', '7 jours, à usage unique']]} />
         </>}
         {dialog === 'create' && creating === 'email' && <>

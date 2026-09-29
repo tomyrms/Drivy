@@ -13,7 +13,7 @@ export type CommandKind =
   | 'createProfilePolicy' | 'publishProfilePolicy'
   | 'createOffering' | 'createCurriculum' | 'createCatalogPolicy' | 'updateMember'
   | 'createCommercialTerms' | 'createServiceProduct'
-  | 'createTraining' | 'createAssignment' | 'transitionTraining' | 'endAssignment' | 'archiveLearner' | 'deactivateMember'
+  | 'createTraining' | 'createAssignment' | 'transitionTraining' | 'endAssignment' | 'archiveLearner' | 'restoreLearner' | 'deactivateMember'
   | 'updateModules' | 'recordPermitCheck'
   | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
@@ -49,6 +49,7 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   transitionTraining: { operationType: 'TRANSITION_TRAINING', resourceType: 'Training', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Changement d’état d’une formation' },
   endAssignment: { operationType: 'END_ASSIGNMENT', resourceType: 'Assignment', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Fin d’une affectation' },
   archiveLearner: { operationType: 'ARCHIVE_LEARNER', resourceType: 'Learner', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Archivage d’un dossier élève' },
+  restoreLearner: { operationType: 'RESTORE_LEARNER', resourceType: 'Learner', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Restauration d’un dossier élève' },
   deactivateMember: { operationType: 'DEACTIVATE_MEMBER', resourceType: 'Member', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait de l’accès d’un membre' },
   updateModules: { operationType: 'UPDATE_SCHOOL_MODULES', resourceType: 'School', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Modification des modules de l’école' },
   recordPermitCheck: { operationType: 'RECORD_PERMIT_CHECK', resourceType: 'PermitCheck', target: 'created', method: 'POST', expectedStatus: 200, label: 'Contrôle du permis' },
@@ -192,6 +193,15 @@ export function commandMessage(code: string): string {
     INVALID_TIME_ZONE: 'Le fuseau horaire de l’école est invalide.',
     SCHOOL_NOT_ACTIVE: 'Cette école doit être active avant cette modification.',
     LAST_ADMIN: 'L’école doit conserver au moins un membre de l’administration.',
+    CANNOT_DEACTIVATE_SELF: 'Un autre administrateur doit retirer votre accès à cette école.',
+    MEMBER_ALREADY_DEACTIVATED: 'Cet accès est déjà retiré. Actualisez l’équipe.',
+    ASSIGNMENT_ALREADY_ENDED: 'Cette affectation est déjà terminée. Actualisez le dossier.',
+    LEARNER_ALREADY_ARCHIVED: 'Ce dossier est déjà archivé. Retrouvez-le dans les dossiers archivés.',
+    LEARNER_NOT_ARCHIVED: 'Ce dossier est déjà actif. Actualisez la liste.',
+    LEARNER_HAS_OPEN_TRAININGS: 'Terminez ou annulez les formations de cet élève avant d’archiver son dossier.',
+    TRAINING_HAS_PLANNED_LESSONS: 'Annulez ou terminez les leçons prévues de cette formation avant de la clore.',
+    TRAINING_STATUS_UNCHANGED: 'La formation est déjà dans cet état. Actualisez le dossier.',
+    TRAINING_TRANSITION_INVALID: 'Cet état ne peut plus être choisi. Actualisez le dossier.',
     MEMBER_RELATIONS_REQUIRE_REVIEW: 'Les affectations ou le dossier de cette personne doivent être traités avant de retirer ce rôle.',
     OFFERING_NOT_READY: 'Le référentiel et la procédure de cette catégorie doivent être approuvés pour activer l’offre.',
     OFFERING_CATEGORY_CHANGED: 'Une offre conserve sa catégorie. Utilisez une nouvelle référence pour une autre catégorie.',
@@ -364,17 +374,36 @@ export function profilePolicyProblem(rules: readonly ProfileRule[]): string | nu
 
 export type TrainingStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
 export interface TrainingTransition { readonly target: TrainingStatus; readonly label: string; readonly reasonRequired: boolean; readonly danger: boolean }
-const transitions: Readonly<Record<'pause' | 'resume' | 'complete' | 'cancel', TrainingTransition>> = {
-  pause: { target: 'PAUSED', label: 'Mettre en pause', reasonRequired: false, danger: false },
-  resume: { target: 'ACTIVE', label: 'Reprendre', reasonRequired: false, danger: false },
-  complete: { target: 'COMPLETED', label: 'Terminer', reasonRequired: false, danger: false },
+const transitions: Readonly<Record<'pause' | 'resume' | 'reopen' | 'complete' | 'cancel', TrainingTransition>> = {
+  pause: { target: 'PAUSED', label: 'Mettre en pause', reasonRequired: true, danger: false },
+  resume: { target: 'ACTIVE', label: 'Reprendre', reasonRequired: true, danger: false },
+  reopen: { target: 'ACTIVE', label: 'Rouvrir la formation', reasonRequired: true, danger: false },
+  complete: { target: 'COMPLETED', label: 'Terminer', reasonRequired: true, danger: false },
   cancel: { target: 'CANCELLED', label: 'Annuler la formation', reasonRequired: true, danger: true },
 };
-/** Changes of state a training in this state may take; a completed or cancelled training is closed. */
+/** Changes allowed by the existing administration API; every transition carries its audit reason. */
 export function trainingTransitions(status: TrainingStatus): readonly TrainingTransition[] {
   if (status === 'ACTIVE') return [transitions.pause, transitions.complete, transitions.cancel];
   if (status === 'PAUSED') return [transitions.resume, transitions.complete, transitions.cancel];
-  return [];
+  return [transitions.reopen];
+}
+
+/** A new catalogue revision does not make a second active training for the same offering possible. */
+/** A future assignment cancelled before its start has an empty interval, so it is already ended. */
+export function assignmentIsOpen(assignment: { validFrom: string; validUntil: string | null }, now = Date.now()): boolean {
+  if (assignment.validUntil === null) return true;
+  const end = Date.parse(assignment.validUntil);
+  return end > now && end > Date.parse(assignment.validFrom);
+}
+
+export function availableTrainingOfferings<T extends { id: string; offeringKey: string }>(
+  ready: readonly T[], all: readonly { id: string; offeringKey: string }[],
+  trainings: readonly { offeringId: string; status: TrainingStatus }[],
+): T[] {
+  const active = trainings.filter(training => training.status === 'ACTIVE' || training.status === 'PAUSED');
+  const keys = new Set(active.map(training => all.find(offering => offering.id === training.offeringId)?.offeringKey).filter(Boolean));
+  const ids = new Set(active.map(training => training.offeringId));
+  return ready.filter(offering => !ids.has(offering.id) && !keys.has(offering.offeringKey));
 }
 export function transitionProblem(transition: TrainingTransition, reason: string): string | null {
   if (characters(reason) > 1000) return '1 000 caractères au plus.';

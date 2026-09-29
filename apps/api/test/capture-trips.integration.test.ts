@@ -52,6 +52,7 @@ describe('liste des trajets (extension GET /captures)',()=>{
   await complete(trip1.lesson);
   try{
    const alice=await list('demo-alice');expect(ids(alice)).toEqual([trip1.capture.id]);
+   expect((await h.call('GET',`/lessons/${trip1.lesson}`,undefined,undefined,'demo-alice')).json().data.captureSummary).toMatchObject({hasCapture:true,syncState:'SYNCED'});
    // Le nom du moniteur vient de la fonction dédiée : l'élève ne lit pas la fiche personne de son moniteur.
    expect(alice.json().data.items[0]).toMatchObject({learnerName:'Alice Exemple',instructorName:'Alex Moniteur'});
    expect(ids(await list('demo-bob'))).toEqual([]);
@@ -59,6 +60,7 @@ describe('liste des trajets (extension GET /captures)',()=>{
    // Trajet masqué par le moniteur : l'élève ne le liste plus ; l'administration le garde.
    await pool.query('UPDATE drivy.lesson SET capture_hidden=true WHERE id=$1',[trip1.lesson]);
    expect(ids(await list('demo-alice'))).toEqual([]);expect(ids(await list('demo-admin'))).toContain(trip1.capture.id);
+   expect((await h.call('GET',`/lessons/${trip1.lesson}`,undefined,undefined,'demo-alice')).json().data.captureSummary.hasCapture).toBe(false);
    await pool.query('UPDATE drivy.lesson SET capture_hidden=false WHERE id=$1',[trip1.lesson]);
    expect(ids(await list('demo-alice'))).toEqual([trip1.capture.id]);
   }finally{await reopen(trip1.lesson);}
@@ -83,6 +85,7 @@ describe('liste des trajets (extension GET /captures)',()=>{
 describe('lecture d’un trajet par l’administration',()=>{
  it('l’administrateur lit le trajet et son replay, en lecture seule',async()=>{
   const read=await h.call('GET',`/captures/${trip1.capture.id}`,undefined,undefined,'demo-admin');expect(read.statusCode,read.body).toBe(200);
+  expect((await h.call('GET',`/lessons/${trip1.lesson}`,undefined,undefined,'demo-admin')).json().data.captureSummary).toMatchObject({hasCapture:true,syncState:'SYNCED'});
   expect(read.json().data).toMatchObject({id:trip1.capture.id,learnerId:id.aliceLearner,instructorMembershipId:id.instructorMember,syncState:'SYNCED'});
   const replay=await h.call('GET',`/captures/${trip1.capture.id}/replay?limit=10`,undefined,undefined,'demo-admin');expect(replay.statusCode,replay.body).toBe(200);
   expect(replay.json().data.segments[0].points).toHaveLength(3);expect(replay.json().data.quality).toBe('SYNCED');

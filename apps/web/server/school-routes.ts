@@ -4,7 +4,7 @@
  * Anything else is refused before an access token is ever used: this is not an open proxy.
  */
 export type SchoolMethod = 'GET' | 'POST' | 'PATCH' | 'PUT';
-type QueryKey = 'limit' | 'cursor' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to';
+type QueryKey = 'limit' | 'cursor' | 'status' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to';
 export interface SchoolRoute {
   readonly method: SchoolMethod;
   /** Literal segments after the school identifier; ':id' stands for one UUID. */
@@ -30,7 +30,7 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'GET', segments: ['members'], query: list },
   { method: 'PATCH', segments: ['members', ':id'], ifMatch: true, bodyLimit: 8_192 },
   { method: 'GET', segments: ['invitations'], query: list },
-  { method: 'POST', segments: ['invitations'], bodyLimit: 2_048 },
+  { method: 'POST', segments: ['invitations'], bodyLimit: 8_192 },
   { method: 'POST', segments: ['invitations', ':id', 'resend'], ifMatch: true, bodyLimit: 1_024 },
   { method: 'POST', segments: ['invitations', ':id', 'revoke'], ifMatch: true, bodyLimit: 8_192 },
   { method: 'GET', segments: ['offerings'], query: list },
@@ -47,7 +47,7 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'POST', segments: ['profile-field-policies'], ifMatch: true, bodyLimit: 32_768 },
   { method: 'POST', segments: ['profile-field-policies', ':id', 'publish'], ifMatch: true, bodyLimit: 1_024 },
   // Élèves et formations : l'administration ouvre la formation et affecte le moniteur depuis le web.
-  { method: 'GET', segments: ['learners'], query: list },
+  { method: 'GET', segments: ['learners'], query: [...list, 'status'] },
   { method: 'GET', segments: ['learners', ':id'] },
   { method: 'GET', segments: ['trainings'], query: [...list, 'learnerId'] },
   { method: 'GET', segments: ['trainings', ':id'] },
@@ -65,6 +65,7 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   // Dossier de l'élève, équipe et module GPS (contrats de la branche claude/api-corrections ; noms de champs à confirmer).
   { method: 'POST', segments: ['members', ':id', 'deactivate'], ifMatch: true, bodyLimit: 8_192 },
   { method: 'POST', segments: ['learners', ':id', 'archive'], ifMatch: true, bodyLimit: 8_192 },
+  { method: 'POST', segments: ['learners', ':id', 'restore'], ifMatch: true, bodyLimit: 8_192 },
   { method: 'POST', segments: ['trainings', ':id', 'transition'], ifMatch: true, bodyLimit: 8_192 },
   { method: 'POST', segments: ['trainings', ':id', 'assignments', ':id', 'end'], ifMatch: true, bodyLimit: 2_048 },
   { method: 'PUT', segments: ['modules'], ifMatch: true, bodyLimit: 2_048 },
@@ -73,6 +74,7 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'POST', segments: ['trainings', ':id', 'permit-checks'], ifMatch: true, bodyLimit: 8_192 },
   // Lectures seules : agenda de l'école, progression et bilans publiés.
   { method: 'GET', segments: ['lessons'], query: [...list, 'from', 'to', 'trainingId', 'instructorMembershipId'] },
+  { method: 'GET', segments: ['captures'], query: list },
   { method: 'GET', segments: ['lessons', ':id', 'reports'], query: list },
   { method: 'GET', segments: ['trainings', ':id', 'progress'] },
 ];
@@ -83,6 +85,7 @@ const queryRules: Record<QueryKey, RegExp> = {
   cursor: /^[A-Za-z0-9_-]{1,6000}$/,
   noticeVersionId: uuid,
   learnerId: uuid,
+  status: /^(?:ACTIVE|ARCHIVED|ALL)$/,
   trainingId: uuid,
   instructorMembershipId: uuid,
   from: /^\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:\d{2})$/,

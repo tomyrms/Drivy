@@ -10,6 +10,7 @@ beforeAll(async()=>{pool=await freshDatabase();({call,app}=await harness(pool));
 afterAll(async()=>{await app?.close();await pool?.end();});
 async function plan(){const r=await call('POST','/lessons',lessonBody(commercial,school.policy,day++));expect(r.statusCode,r.body).toBe(201);return r.json().data;}
 async function complete(lesson:{id:string;version:number},extra:Record<string,unknown>={}){
+ await moveToPast(pool,lesson.id);// le constat d'une leçon à venir est refusé (LESSON_NOT_STARTED)
  const r=await call('POST',`/lessons/${lesson.id}/complete`,{operationId:randomUUID(),actualStart:new Date(Date.now()-3_600_000).toISOString(),actualEnd:new Date(Date.now()-600_000).toISOString(),workedOn:'Travail',observationText:'Constat',nextStep:'Suite',anomalyReason:'Permis non contrôlé (recette)',...extra},lesson.version);
  expect(r.statusCode,r.body).toBe(200);return r.json().data;
 }
@@ -44,15 +45,15 @@ describe('AP29/AP30 contrôle du permis',()=>{
   const route=`/trainings/${id.aliceTraining}/permit-checks`;
   expect((await call('GET',route,undefined,null,'demo-admin')).json().data).toEqual({items:[],nextCursor:null});
   expect((await call('GET',route,undefined,null,'demo-alice')).statusCode).toBe(200);
-  expect((await call('GET',route)).statusCode).toBe(404);// moniteur sans permit_review
+  expect((await call('GET',route)).statusCode).toBe(200);// moniteur affecté : lecture sans habilitation particulière
+  expect((await call('GET',route,undefined,null,'demo-other-instructor')).statusCode).toBe(404);// moniteur non affecté
   expect((await call('GET',route,undefined,null,'demo-bob')).statusCode).toBe(404);
   expect((await call('GET',`/v1/schools/${id.schoolB}/trainings/${id.aliceTraining}/permit-checks`,undefined,null,'demo-foreign')).statusCode).toBe(404);
   const training=async()=>(await call('GET',`/trainings/${id.aliceTraining}`,undefined,null,'demo-admin')).json().data.version as number;
   const body={operationId:randomUUID(),physicalSeen:true,categoryCode:'B',validUntil:null,decision:'APPROVED',reason:null,documentId:null};
-  expect((await call('POST',route,body,await training(),'demo-admin')).json().code).toBe('PERMIT_REVIEW_REQUIRED');
-  expect((await call('POST',route,{...body,operationId:randomUUID()},await training())).json().code).toBe('PERMIT_REVIEW_REQUIRED');
+  // Aucune habilitation permit_review n'est requise : l'ADMIN et le moniteur affecté contrôlent ; les autres non.
+  expect((await call('POST',route,{...body,operationId:randomUUID()},await training(),'demo-other-instructor')).statusCode).toBe(404);
   expect((await call('POST',route,{...body,operationId:randomUUID()},await training(),'demo-alice')).json().code).toBe('SETUP_ACCESS_REQUIRED');
-  await pool.query(`UPDATE drivy.membership SET grants='{CONFIGURE_CATALOG,permit_review}' WHERE id=$1`,[id.adminMember]);
   const version=await training();
   expect((await call('POST',route,{...body,operationId:randomUUID()},null,'demo-admin')).statusCode).toBe(428);
   expect((await call('POST',route,{...body,operationId:randomUUID()},version+5,'demo-admin')).json().code).toBe('VERSION_CONFLICT');
@@ -73,8 +74,7 @@ describe('AP29/AP30 contrôle du permis',()=>{
   // R07 : l'avertissement devient calculé ; le constat n'exige plus d'anomalie.
   expect((await lessonNow(lesson.id)).permitWarning).toBe(false);expect((await lessonNow(lesson.id,'demo-alice')).permitWarning).toBe(false);
   const done=await complete(lesson,{anomalyReason:null});expect(done.lesson.permitWarning).toBe(false);expect(done.lesson.status).toBe('COMPLETED');
-  // Moniteur affecté habilité : un rejet motivé remplace la décision courante sans effacer l'historique.
-  await pool.query(`UPDATE drivy.membership SET grants='{permit_review}' WHERE id=$1`,[id.instructorMember]);
+  // Moniteur affecté (sans habilitation) : un rejet motivé remplace la décision courante sans effacer l'historique.
   const rejected=await call('POST',route,{operationId:randomUUID(),physicalSeen:true,categoryCode:'B',decision:'REJECTED',reason:'Original illisible'},await training());
   expect(rejected.statusCode,rejected.body).toBe(200);expect(rejected.json().data.reviewerMembershipId).toBe(id.instructorMember);
   const next=await plan();expect(next.permitWarning).toBe(true);
@@ -84,7 +84,7 @@ describe('AP29/AP30 contrôle du permis',()=>{
   expect((await call('POST',route,{operationId:randomUUID(),physicalSeen:true,categoryCode:'B',validUntil:soon,decision:'APPROVED'},await training(),'demo-admin')).statusCode).toBe(200);
   expect((await lessonNow(next.id)).permitWarning).toBe(true);
   expect((await call('GET',route,undefined,null,'demo-admin')).json().data.items.map((c:{decision:string})=>c.decision)).toEqual(['APPROVED','REJECTED','APPROVED']);
-  // Affectation retirée : l'habilitation du moniteur ne suffit plus.
+  // Affectation retirée : le moniteur ne contrôle plus.
   await pool.query(`UPDATE drivy.instructor_assignment SET valid_until=now()-interval '1 second' WHERE id=$1`,[id.assignment]);
   try{expect((await call('POST',route,{operationId:randomUUID(),physicalSeen:true,categoryCode:'B',decision:'APPROVED'},await training())).statusCode).toBe(404);}
   finally{await pool.query('UPDATE drivy.instructor_assignment SET valid_until=NULL WHERE id=$1',[id.assignment]);}

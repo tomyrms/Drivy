@@ -16,6 +16,10 @@
         "status": {"enum": ["PENDING", "ACCEPTED", "REVOKED", "EXPIRED"]},
         "expiresAt": {"type": "string", "format": "date-time"},
         "delivery": {"enum": ["EMAIL", "CODE"]},
+        "trainings": {"type": "array", "maxItems": 16, "items": {
+          "type": "object", "additionalProperties": false, "required": ["offeringId", "instructorMembershipId"],
+          "properties": {"offeringId": {"type": "string", "format": "uuid"}, "instructorMembershipId": {"type": "string", "format": "uuid"}}
+        }},
         "code": {"type": "string", "pattern": "^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$"}
       },
       "allOf": [

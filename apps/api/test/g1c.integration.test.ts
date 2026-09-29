@@ -437,7 +437,7 @@ describe('Invitation par code · sans e-mail',()=>{
   it('aperçu : toute identité connectée, même sans compte ni adresse vérifiée ; rien n’est créé',async()=>{
     const invitation=await issue();const before=await counts();const subject=fresh();
     const shown=await preview(invitation.code,subject);expect(shown.statusCode,shown.body).toBe(200);
-    expect(Object.keys(shown.json().data).sort()).toEqual(['expiresAt','roles','schoolName','trainingCategoryCode']);
+    expect(Object.keys(shown.json().data).sort()).toEqual(['expiresAt','roles','schoolName','trainingCategoryCode','trainingCategoryCodes']);
     expect(shown.json().data).toMatchObject({schoolName:'Auto-école Horizon · Démonstration',roles:['LEARNER'],trainingCategoryCode:'B'});
     expect(Date.parse(shown.json().data.expiresAt)).toBeGreaterThan(Date.now());
     // Saisie tolérante : minuscules, sans tiret, espaces.
@@ -458,7 +458,7 @@ describe('Invitation par code · sans e-mail',()=>{
     }
     await pool.query("UPDATE drivy.membership SET status='ACTIVE' WHERE id=$1",[id.instructorMember]);
     const live=await issue();await pool.query("UPDATE drivy.school SET status='DRAFT' WHERE id=$1",[id.schoolA]);
-    expect((await preview(live.code)).json().code).toBe('INVITATION_CODE_INVALID');
+    for(const use of [preview,acceptCode]) expect((await use(live.code)).json().code).toBe('INVITATION_CODE_INVALID');
     expect(await counts()).toMatchObject({persons:6,members:7,learners:3});
   });
   it('acceptation sans adresse vérifiée : personne, adhésion, dossier, formation et affectation, atomiquement',async()=>{
@@ -548,6 +548,61 @@ describe('Invitation par code · sans e-mail',()=>{
     expect((await preview(invitation.code,fresh())).statusCode).toBe(200);
     // La limite se compte par émetteur ET sujet : le même sujet d'un autre émetteur n'est pas concerné (voir le test unitaire du limiteur).
   });
+  it('une rafale parallèle ne dépasse pas dix tentatives refusées pour la même identité',async()=>{
+    const subject=fresh();const results=await Promise.all(Array.from({length:30},(_,i)=>i%2?preview('CODE-FAUX',subject):acceptCode('CODE-FAUX',subject)));
+    expect(results.filter(r=>r.statusCode===404)).toHaveLength(10);expect(results.filter(r=>r.statusCode===429)).toHaveLength(20);
+    const invitation=await issue();expect((await preview(invitation.code,subject)).statusCode).toBe(429);
+    expect((await acceptCode(invitation.code,fresh())).statusCode).toBe(201);
+  });
+  it('plusieurs permis : un code ouvre toutes les formations et affectations, sans doublon au rejeu',async()=>{
+    const offeringA=randomUUID(),policyA=randomUUID(),curriculumA=randomUUID();
+    await pool.query(`INSERT INTO drivy.school_policy_version(id,school_id,category_code,version,procedure_text,cancellation_policy_text,source_urls,approved,approval_reason,created_by,approved_at)
+      SELECT $1,school_id,'A',1,procedure_text,cancellation_policy_text,source_urls,approved,approval_reason,created_by,approved_at FROM drivy.school_policy_version WHERE school_id=$2 LIMIT 1`,[policyA,id.schoolA]);
+    await pool.query(`INSERT INTO drivy.curriculum_version(id,school_id,category_code,revision,approved,approval_reason,created_by,approved_at)
+      SELECT $1,school_id,'A',1,approved,approval_reason,created_by,approved_at FROM drivy.curriculum_version WHERE school_id=$2 LIMIT 1`,[curriculumA,id.schoolA]);
+    await pool.query(`INSERT INTO drivy.offering_version(id,school_id,offering_key,category_code,version,enabled,curriculum_version_id,policy_version_id,default_duration_minutes,default_price_cents)
+      VALUES($1,$2,'category-a','A',1,true,$3,$4,50,9000)`,[offeringA,id.schoolA,curriculumA,policyA]);
+    const trainings=[trainingFor(),{offeringId:offeringA,instructorMembershipId:id.otherInstructorMember}];
+    const {response}=await create('demo-admin',{training:undefined,trainings});expect(response.statusCode,response.body).toBe(201);
+    expect(response.json().data.trainings).toEqual(trainings);conforms('InvitationEnvelope',response.json());
+    const {code}=response.json().data as {code:string};expect((await preview(code)).json().data.trainingCategoryCodes).toEqual(['B','A']);
+    const subject=fresh(),operationId=randomUUID(),before=await counts();
+    await pool.query('UPDATE drivy.offering_version SET enabled=false WHERE id=$1',[offeringA]);
+    expect((await acceptCode(code,subject,operationId)).json().code).toBe('INVITATION_CODE_INVALID');expect(await counts()).toEqual(before);
+    await pool.query('UPDATE drivy.offering_version SET enabled=true WHERE id=$1',[offeringA]);
+    const accepted=await acceptCode(code,subject,operationId);expect(accepted.statusCode,accepted.body).toBe(201);
+    expect(await trainingsOf(subject)).toEqual(expect.arrayContaining([
+      {status:'ACTIVE',offering_id:id.offeringA,instructor_membership_id:id.instructorMember},
+      {status:'ACTIVE',offering_id:offeringA,instructor_membership_id:id.otherInstructorMember}]));
+    expect(await trainingsOf(subject)).toHaveLength(2);
+    expect((await acceptCode(code,subject,operationId)).json().data).toEqual(accepted.json().data);expect(await trainingsOf(subject)).toHaveLength(2);
+    for(const extra of [{trainings:[]},{trainings:[trainingFor(),trainingFor()]},{training:trainingFor(),trainings:[trainingFor()]}])
+      expect((await create('demo-admin',{training:undefined,...extra})).response.statusCode).toBe(400);
+    expect((await create('demo-instructor',{training:undefined,trainings})).response.json().code).toBe('INVITATION_TRAINING_INVALID');
+  });
+  it('une formation existante reçoit le moniteur prévu, sans seconde formation ni affectation en double',async()=>{
+    const {response}=await create('demo-admin',{training:trainingFor(id.otherInstructorMember)});expect(response.statusCode,response.body).toBe(201);
+    const code=response.json().data.code as string,operationId=randomUUID();
+    const accepted=await acceptCode(code,'demo-alice',operationId);expect(accepted.statusCode,accepted.body).toBe(201);
+    expect((await pool.query('SELECT count(*)::int n FROM drivy.training WHERE learner_id=$1',[id.aliceLearner])).rows[0].n).toBe(1);
+    expect((await pool.query('SELECT count(*)::int n FROM drivy.instructor_assignment WHERE training_id=$1 AND instructor_membership_id=$2',[id.aliceTraining,id.otherInstructorMember])).rows[0].n).toBe(1);
+    expect((await acceptCode(code,'demo-alice',operationId)).statusCode).toBe(201);
+    expect((await pool.query('SELECT count(*)::int n FROM drivy.instructor_assignment WHERE training_id=$1 AND instructor_membership_id=$2',[id.aliceTraining,id.otherInstructorMember])).rows[0].n).toBe(1);
+  });
+  it('un moniteur prévu devenu inactif refuse le code sans consommer ni créer un dossier',async()=>{
+    const {response}=await create('demo-admin',{training:trainingFor(id.otherInstructorMember)});expect(response.statusCode,response.body).toBe(201);
+    const code=response.json().data.code as string,before=await counts(),subject=fresh();
+    await pool.query("UPDATE drivy.membership SET status='REVOKED' WHERE id=$1",[id.otherInstructorMember]);
+    const refused=await acceptCode(code,subject);expect(refused.statusCode,refused.body).toBe(404);expect(await counts()).toEqual(before);
+    expect((await pool.query('SELECT status FROM drivy.invitation WHERE id=$1',[response.json().data.id])).rows[0].status).toBe('PENDING');
+    await pool.query("UPDATE drivy.membership SET status='ACTIVE' WHERE id=$1",[id.otherInstructorMember]);
+    const person=(await pool.query('SELECT person_id FROM drivy.membership WHERE id=$1',[id.otherInstructorMember])).rows[0].person_id as string;
+    await pool.query("UPDATE drivy.person SET status='SUSPENDED' WHERE id=$1",[person]);
+    expect((await create('demo-admin',{training:trainingFor(id.otherInstructorMember)})).response.json().code).toBe('INVITATION_TRAINING_INVALID');
+    expect((await acceptCode(code,subject)).statusCode).toBe(404);expect(await counts()).toEqual(before);
+    await pool.query("UPDATE drivy.person SET status='ACTIVE' WHERE id=$1",[person]);
+    expect((await acceptCode(code,subject)).statusCode).toBe(201);
+  });
   it('un jeton d’e-mail n’ouvre pas les routes de code, ni un code la route des jetons',async()=>{
     const email=await invite('cross@example.invalid');const code=await issue();
     expect((await preview(email.token)).json().code).toBe('INVITATION_CODE_INVALID');
@@ -600,7 +655,8 @@ describe('Invitation avec formation · offre republiée depuis l’envoi',()=>{
     const listed=await call('GET',`/v1/schools/${id.schoolA}/trainings`,undefined,undefined,'demo-instructor');
     expect(listed.json().data.items.some((t:{offeringId:string})=>t.offeringId===next)).toBe(true);
   });
-  it.each(['CODE','EMAIL'] as const)('%s : sans version prête, l’adhésion est acceptée et l’absence de formation est annoncée, jamais ignorée',async mode=>{
+  it('EMAIL : sans version prête, l’adhésion est acceptée et l’absence de formation est annoncée',async()=>{
+    const mode='EMAIL';
     const acceptInvitation=await invitation(mode);await pool.query('UPDATE drivy.offering_version SET enabled=false WHERE id=$1',[id.offeringA]);
     const subject=fresh();const operationId=randomUUID();const before=await counts();
     const response=await acceptInvitation(subject,operationId);expect(response.statusCode,response.body).toBe(201);
@@ -610,6 +666,15 @@ describe('Invitation avec formation · offre republiée depuis l’envoi',()=>{
     expect((await pool.query("SELECT changed_fields FROM drivy.audit_event WHERE operation_id=$1",[operationId])).rows[0].changed_fields).toContain('trainingNotOpened');
     // Un rejeu de la même opération rend la même annonce.
     const replay=await acceptInvitation(subject,operationId);expect(replay.statusCode).toBe(201);expect(replay.json().data).toEqual(response.json().data);
+  });
+  it('CODE : sans version prête, aucun rattachement ni consommation ; le même code fonctionne après réouverture',async()=>{
+    const acceptInvitation=await invitation('CODE');await pool.query('UPDATE drivy.offering_version SET enabled=false WHERE id=$1',[id.offeringA]);
+    const subject=fresh(),operationId=randomUUID(),before=await counts();
+    const response=await acceptInvitation(subject,operationId);expect(response.statusCode,response.body).toBe(404);expect(response.json().code).toBe('INVITATION_CODE_INVALID');
+    expect(await counts()).toEqual(before);expect(await trainingsOf(subject)).toEqual([]);
+    expect((await pool.query('SELECT status FROM drivy.invitation')).rows[0].status).toBe('PENDING');
+    await pool.query('UPDATE drivy.offering_version SET enabled=true WHERE id=$1',[id.offeringA]);
+    expect((await acceptInvitation(subject,operationId)).statusCode).toBe(201);expect(await trainingsOf(subject)).toHaveLength(1);
   });
   it('une formation déjà suivie sur cette offre n’est pas dupliquée et n’est pas une anomalie',async()=>{
     const acceptInvitation=await invitation('CODE');const next=await publishNewVersion();

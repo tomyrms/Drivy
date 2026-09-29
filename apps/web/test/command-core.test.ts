@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
-  classifyFailure, commandHeaders, commandMessage, commandSpecs, createCommand, instantToSchoolTime, isEmail, latestPermit, matchesSearch, normalizeSearch,
+  assignmentIsOpen, availableTrainingOfferings, classifyFailure, commandHeaders, commandMessage, commandSpecs, createCommand, instantToSchoolTime, isEmail, latestPermit, matchesSearch, normalizeSearch,
   parseCents, parseMetadata, permitBody, permitProblem, permitState, profilePolicyProblem, receiptMatches, schoolTimeToInstant, toMetadata,
   trainingTransitions, transitionProblem, type PermitDraft, type ProfileRule,
 } from '../client/command-core.js';
@@ -138,12 +138,17 @@ describe('Dossier de l’élève : formation, permis, archivage, accès', () => 
   test('une formation active peut être suspendue, terminée ou annulée ; une formation close ne change plus', () => {
     expect(trainingTransitions('ACTIVE').map(item => item.target)).toEqual(['PAUSED', 'COMPLETED', 'CANCELLED']);
     expect(trainingTransitions('PAUSED').map(item => item.target)).toEqual(['ACTIVE', 'COMPLETED', 'CANCELLED']);
-    expect(trainingTransitions('COMPLETED')).toEqual([]);
-    expect(trainingTransitions('CANCELLED')).toEqual([]);
+    expect(trainingTransitions('COMPLETED').map(item => item.target)).toEqual(['ACTIVE']);
+    expect(trainingTransitions('CANCELLED').map(item => item.target)).toEqual(['ACTIVE']);
     const cancel = trainingTransitions('ACTIVE').find(item => item.target === 'CANCELLED')!;
     expect(transitionProblem(cancel, '   ')).not.toBeNull();
     expect(transitionProblem(cancel, 'L’élève a déménagé.')).toBeNull();
-    expect(transitionProblem(trainingTransitions('ACTIVE')[0]!, '')).toBeNull();
+    for (const status of ['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'] as const) {
+      for (const transition of trainingTransitions(status)) {
+        expect(transitionProblem(transition, '')).not.toBeNull();
+        expect(transitionProblem(transition, 'Demande de l’élève.')).toBeNull();
+      }
+    }
     expect(transitionProblem(cancel, 'x'.repeat(1001))).not.toBeNull();
   });
 
@@ -153,6 +158,7 @@ describe('Dossier de l’élève : formation, permis, archivage, accès', () => 
       ['transitionTraining', `trainings/${training}/transition`, training, 'TRANSITION_TRAINING', 'Training'],
       ['endAssignment', `trainings/${training}/assignments/${assignment}/end`, assignment, 'END_ASSIGNMENT', 'Assignment'],
       ['archiveLearner', `learners/${learner}/archive`, learner, 'ARCHIVE_LEARNER', 'Learner'],
+      ['restoreLearner', `learners/${learner}/restore`, learner, 'RESTORE_LEARNER', 'Learner'],
       ['deactivateMember', `members/${member}/deactivate`, member, 'DEACTIVATE_MEMBER', 'Member'],
     ] as const) {
       const command = createCommand({ schoolId, kind, path, ifMatch: 4, resourceId: id, resourceVersion: 4, body: { reason: 'Motif' } });
@@ -170,6 +176,30 @@ describe('Dossier de l’élève : formation, permis, archivage, accès', () => 
       body: permitBody({ physicalSeen: true, validUntil: '', decision: 'APPROVED', reason: '' }, 'B') });
     expect(commandHeaders(permit, 'csrf')['If-Match']).toBe('"3"');
     expect(commandSpecs.recordPermitCheck).toMatchObject({ target: 'created', expectedStatus: 200 });
+  });
+
+  test('une affectation annulée avant son début est déjà terminée', () => {
+    const now = Date.parse('2026-09-29T10:00:00Z');
+    const past = '2026-09-28T10:00:00Z', future = '2026-09-30T10:00:00Z';
+    expect(assignmentIsOpen({ validFrom: past, validUntil: null }, now)).toBe(true);
+    expect(assignmentIsOpen({ validFrom: future, validUntil: null }, now)).toBe(true);
+    expect(assignmentIsOpen({ validFrom: past, validUntil: future }, now)).toBe(true);
+    expect(assignmentIsOpen({ validFrom: past, validUntil: '2026-09-29T10:00:00Z' }, now)).toBe(false);
+    expect(assignmentIsOpen({ validFrom: future, validUntil: future }, now)).toBe(false);
+  });
+
+  test('une nouvelle version de l’offre ne propose pas une seconde formation active ou en pause', () => {
+    const oldB = { id: randomUUID(), offeringKey: 'b-standard' };
+    const newB = { id: randomUUID(), offeringKey: 'b-standard' };
+    const a = { id: randomUUID(), offeringKey: 'a-standard' };
+    const ready = [newB, a], all = [oldB, newB, a];
+    for (const status of ['ACTIVE', 'PAUSED'] as const) {
+      expect(availableTrainingOfferings(ready, all, [{ offeringId: oldB.id, status }])).toEqual([a]);
+    }
+    for (const status of ['COMPLETED', 'CANCELLED'] as const) {
+      expect(availableTrainingOfferings(ready, all, [{ offeringId: oldB.id, status }])).toEqual(ready);
+    }
+    expect(availableTrainingOfferings(ready, [], [{ offeringId: newB.id, status: 'ACTIVE' }])).toEqual([a]);
   });
 
   test('contrôle du permis : original vu et date en vigueur pour approuver, motif pour refuser', () => {
