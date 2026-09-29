@@ -2,7 +2,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
 export type Principal = { subject: string; displayName: string; email?: string; emailVerified: boolean };
 export type Tokens = { accessToken: string; refreshToken?: string; expiresAt: number; principal: Principal };
-export type LoginTransaction = { state: string; nonce: string; verifier: string; expiresAt: number };
+export type LoginTransaction = { state: string; nonce: string; verifier: string; expiresAt: number; returnTo?: string };
 export type InvitationState = {
   token: string; operationId: string; confirmation?: { id: string; invitationId: string; digest: string };
   accepting?: boolean; submitted?: boolean; uncertain?: boolean; accepted?: boolean;

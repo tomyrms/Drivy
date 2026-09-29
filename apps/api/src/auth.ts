@@ -2,7 +2,7 @@ import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import type { Config } from './config.js';
 import { ApiError } from './errors.js';
 
-export interface Identity { issuer: string; subject: string; verifiedEmail?: string; displayName?: string }
+export interface Identity { issuer: string; subject: string; verifiedEmail?: string; displayName?: string; authenticatedAt?: number }
 export type TokenVerifier = (authorization: string | undefined) => Promise<Identity>;
 export function createTokenVerifier(config: Pick<Config, 'OIDC_ISSUER' | 'OIDC_AUDIENCE' | 'OIDC_JWKS_URL'>,
   resolver: JWTVerifyGetKey = createRemoteJWKSet(new URL(config.OIDC_JWKS_URL))): TokenVerifier {
@@ -18,7 +18,8 @@ export function createTokenVerifier(config: Pick<Config, 'OIDC_ISSUER' | 'OIDC_A
       const email = typeof payload.email === 'string' ? payload.email.trim().normalize('NFC').toLowerCase() : undefined;
       const verifiedEmail = payload.email_verified === true && email && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : undefined;
       const displayName = typeof payload.name === 'string' && payload.name.trim() && [...payload.name.trim()].length <= 200 ? payload.name.trim() : undefined;
-      return { issuer: payload.iss, subject: payload.sub, ...(verifiedEmail ? {verifiedEmail} : {}), ...(displayName ? {displayName} : {}) };
+      const authenticatedAt=typeof payload.auth_time==='number' && Number.isSafeInteger(payload.auth_time) && payload.auth_time>=0 && payload.auth_time<=Math.floor(Date.now()/1000)+5?payload.auth_time:undefined;
+      return { issuer: payload.iss, subject: payload.sub, ...(verifiedEmail ? {verifiedEmail} : {}), ...(displayName ? {displayName} : {}),...(authenticatedAt!==undefined?{authenticatedAt}:{}) };
     } catch {
       throw new ApiError(401, 'INVALID_SESSION', 'Session invalide ou expirée.');
     }

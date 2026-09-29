@@ -7,6 +7,9 @@ const schema = z.object({
   OIDC_AUDIENCE: z.string().min(1),
   OIDC_JWKS_URL: z.url(),
   CURSOR_SECRET: z.string().min(32),
+  // Facultatif : clé propre aux codes d'invitation. Sans elle, la clé se dérive de CURSOR_SECRET (HKDF, étiquette dédiée).
+  INVITATION_CODE_SECRET: z.string().min(32).optional(),
+  REAUTH_MAX_AGE_SECONDS:z.coerce.number().int().min(30).max(900).default(300),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   HOST: z.string().default('127.0.0.1')
 });

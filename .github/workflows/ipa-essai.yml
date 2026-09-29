@@ -1,7 +1,7 @@
 name: IPA d'essai · iLoader
 on:
   push:
-    branches: [master, 'codex/**']
+    branches: [master, 'codex/**', 'claude/**']
     paths:
       - '.github/workflows/ipa-essai.yml'
       - 'apps/ios/Drivy/**'

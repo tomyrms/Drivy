@@ -1,6 +1,6 @@
 # Drivy web et session BFF
 
-Client React/TypeScript distinct du client Swift ; serveur Fastify avec session de même origine. Cette tranche sert la connexion, la liste des écoles du compte et la lecture/acceptation d’une invitation. Le web de gestion complet reste à construire.
+Client React/TypeScript distinct du client Swift ; serveur Fastify avec session de même origine. Il sert la connexion, la liste des écoles du compte, la lecture/acceptation d’une invitation et le **web de gestion** de l’administration (`/app/gestion/{schoolId}/…`).
 
 ## Développement local
 
@@ -39,8 +39,53 @@ Variables obligatoires : `WEB_ORIGIN` (origine HTTPS sans chemin), `API_BASE_URL
 
 Les sessions sont en mémoire d’un **seul processus**, bornées à 10 000, avec 10 minutes d’inactivité anonyme, 30 minutes authentifiée et 2 heures absolues. Un redémarrage déconnecte les navigateurs. Pas de promesse multi-instance ni de continuité du brouillon après fermeture ; aucune donnée scolaire ou refresh token dans localStorage, IndexedDB ou service worker. Les droits restent relus par l’API à chaque opération.
 
+## Web de gestion (administration)
+
+Les activités d’ordinateur de l’administrateur quittent l’iPhone pour une console de bureau : navigation latérale (repliée en barre horizontale sous 64 rem), liste + panneau de détail, formulaires à libellés permanents, relecture dans une boîte de dialogue native avant toute écriture. Les tokens sont ceux de `client/styles.css` (même système que `DrivyTheme.swift`, clair/sombre, contraste accru, couleurs forcées).
+
+| Écran (chemin) | Lectures | Écritures (commande, If-Match) |
+|---|---|---|
+| Vue d’ensemble (`/app/gestion/{id}`) | école, readiness, data-policy, listes du catalogue et des champs | — (prochaines étapes calculées, une seule action primaire) |
+| Configuration (`configuration`) | école, setup, data-policy, readiness | `PATCH /` coordonnées (version école) · `PUT data-policy` adoption (version politique) · `PATCH setup` avancement (version setup) · `POST activate` (version école + `expectedConfigurationVersion`) |
+| Champs du profil (`champs-profil`) | profile-field-policies, data-policy (+ notice liée `?noticeVersionId=`) | `POST profile-field-policies` (If-Match version école) · `POST …/{id}/publish` (version politique) |
+| Offres (`offres`) | offerings, curricula, policy-versions | `POST offerings` (nouvelle version, désactivée sauf activation cochée) |
+| Référentiels (`referentiels`), Procédures (`procedures`) | curricula / policy-versions | `POST curricula` / `POST policy-versions` : révision immuable, approbation cochée + motif + accusé de relecture |
+| Prestations et tarifs (`prestations`), Conditions commerciales (`conditions`) | service-products / commercial-terms | `POST service-products` / `POST commercial-terms` (autorisation `CONFIGURE_CATALOG`) |
+| Équipe et accès (`equipe`) | members | `PATCH members/{id}` rôles, autorisations, motif (version membre ; `REAUTH_REQUIRED` → reconnexion) |
+| Invitations (`invitations`) | invitations | `POST invitations` · `POST …/{id}/resend` · `POST …/{id}/revoke` (version invitation) |
+
+Rien n’est approuvé implicitement : approbation et activation sont décochées par défaut, et « Approuver… » sur un brouillon crée une nouvelle version identique approuvée (les versions existantes ne sont jamais réécrites). Les droits affichés viennent de `/v1/me` (rôle Administration requis pour ouvrir la console, `CONFIGURE_CATALOG` pour le commercial) ; ils masquent ou désactivent seulement, l’API reste l’autorité.
+
+**Commandes et reprise AP72.** Chaque écriture reçoit un `operationId` envoyé aussi comme `Idempotency-Key` ; l’If-Match porte la version affichée (`"n"`). Aucun succès n’est affiché avant une réponse 200/201 vérifiée (école, version postérieure). Règles (`client/command-core.ts`, reprises de `SchoolCommandOutbox.swift`) :
+
+- réponse perdue, 429, 5xx, session expirée, CSRF périmé : la demande reste **incertaine** ; le panneau « Résultat à vérifier » (sur tous les écrans) propose « Vérifier auprès de l’école » (`GET operations/{operationId}`, reçu comparé : opération, type, ressource, version) puis « Renvoyer la même demande » (mêmes corps, clé et If-Match) ;
+- refus métier explicite (412, 400, 409/422 connus, `REAUTH_REQUIRED`) sur le **premier** envoi : libérée, saisie conservée, rechargement proposé ; après une incertitude, le même refus ne prouve rien et la demande reste à vérifier ;
+- une seule demande en attente par école ; les autres écritures sont désactivées avec leur raison.
+
+La demande complète vit en mémoire de la page. `sessionStorage` (onglet courant) garde seulement ses identifiants (`operationId`, école, type, ressource, version, date), jamais le contenu saisi : après un rechargement ou une reconnexion, le résultat peut encore être vérifié ; si l’école ne l’a pas enregistré, la modification est à refaire. « Arrêter le suivi » n’est proposé qu’avec un avertissement (contenu perdu, refus lors d’une reprise, ou reçu absent). La déconnexion efface ce suivi.
+
+### Routes BFF de gestion
+
+`GET|POST|PATCH|PUT /app/bff/schools/{schoolId}/…` n’est **pas** un proxy ouvert : `server/school-routes.ts` déclare chaque couple méthode + chemin (UUID stricts, aucun segment vide/encodé/`..`, requête limitée à `limit`, `cursor` ou `noticeVersionId` selon la route, sans doublon). Tout autre chemin répond 404 sans utiliser le jeton ; `server/upstream.ts` revérifie la liste avant l’appel.
+
+| Méthode | Chemin sous `/v1/schools/{schoolId}` | If-Match |
+|---|---|---|
+| GET | ``, `setup`, `readiness`, `data-policy`, `operations/{id}`, `members`, `invitations`, `offerings`, `curricula`, `policy-versions`, `commercial-terms`, `service-products`, `profile-field-policies` | — |
+| PATCH | ``, `setup`, `members/{id}` | requis |
+| PUT | `data-policy` | requis |
+| POST | `activate`, `invitations/{id}/resend`, `invitations/{id}/revoke`, `profile-field-policies`, `profile-field-policies/{id}/publish` | requis |
+| POST | `invitations`, `offerings`, `curricula`, `policy-versions`, `commercial-terms`, `service-products` | refusé |
+
+Lectures : session requise. Écritures : Origin exacte, `X-CSRF-Token`, `Content-Type: application/json`, corps objet sous la limite de la route, `Idempotency-Key` UUID égal à `operationId` du corps, If-Match fort `"n"` exigé (428) ou refusé selon la route. Seuls `Authorization`, `Accept`, `Content-Type`, `Idempotency-Key` et `If-Match` partent vers l’API, sans cookie ni redirection ; l’ETag fort de l’API est renvoyé, les réponses restent `no-store`, les erreurs ne gardent que le code. Un 401 `REAUTH_REQUIRED` conserve la session (reconnexion demandée) ; tout autre 401 amont la détruit. `POST /app/bff/login {returnTo?}` accepte un retour vers `/app/gestion/…` seulement. Le serveur statique sert `/app/gestion` et `/app/gestion/*`.
+
+### Reste à qualifier ou à construire
+
+- Pas de test navigateur automatisé en CI : la console a été relue par captures Chromium locales sur un faux BFF synthétique (clair, sombre, 390 px). Aucun essai avec l’API et Keycloak réels, ni lecteur d’écran réel.
+- Non couverts ici : disponibilités et fermetures des moniteurs, dossiers élèves, formations et affectations, profil administratif d’un élève, logo et modules.
+- Les listes chargent au plus 1 000 éléments (10 pages) ; au-delà, la liste est signalée partielle.
+
 ## Preuves de cette tranche
 
-Tests BFF : cookie/CSRF, state et rotation, expiration, déconnexion pendant refresh, refresh concurrent, absence de jetons dans les réponses, changement d’invitation/notice entre onglets, reprise après réponse perdue et reprise sans droits mis en cache. Deux tests HTTP vérifient le header d’idempotence AP04 et le refus des redirections amont. `check-web.ts` exerce Edge, Keycloak, BFF et PostgreSQL réels, avec le bouton React et l’école synthétique affichée. Ce contrôle de connexion ne qualifie ni l’email d’invitation complet, ni un déploiement web public, ni un appareil Apple.
+Tests BFF : liste blanche de gestion, CSRF et propagation Idempotency-Key/If-Match/ETag (`test/school-bff.test.ts`, dont un échange HTTP réel), règles de commande et reprise AP72 (`test/command-core.test.ts`), cookie/CSRF, state et rotation, expiration, déconnexion pendant refresh, refresh concurrent, absence de jetons dans les réponses, changement d’invitation/notice entre onglets, reprise après réponse perdue et reprise sans droits mis en cache. Deux tests HTTP vérifient le header d’idempotence AP04 et le refus des redirections amont. `check-web.ts` exerce Edge, Keycloak, BFF et PostgreSQL réels, avec le bouton React et l’école synthétique affichée. Ce contrôle de connexion ne qualifie ni l’email d’invitation complet, ni un déploiement web public, ni un appareil Apple.
 
 Sources de bibliothèques : [openid-client](https://github.com/panva/openid-client), [cookie Fastify](https://github.com/fastify/fastify-cookie), [Vite](https://vite.dev/guide/).

@@ -19,8 +19,10 @@ final class SchoolInvitationWorkspace: Identifiable {
     private(set) var errorMessage: String?
     private(set) var successMessage: String?
     private(set) var accessFailure: SchoolInvitationFailure?
+    private(set) var offerings: [SchoolOffering] = []
     var email = ""
     var selectedRoles: Set<SchoolInvitationRole> = [.learner]
+    var selectedOfferingID: UUID?
     var selectedID: UUID?
 
     @ObservationIgnored private let api: any SchoolInvitationAPI
@@ -51,12 +53,15 @@ final class SchoolInvitationWorkspace: Identifiable {
     }
     var canVerifyPending: Bool { pending != nil && !isBusy && !isLoading && !isInvalidated }
     var draftIsValid: Bool { valid(email: email, roles: selectedRoles) }
+    /// Un moniteur invite l'élève dans sa formation et s'y affecte lui-même.
+    var carriesTraining: Bool { roles.contains("INSTRUCTOR") && selectedRoles == [.learner] }
+    var selectedOffering: SchoolOffering? { offerings.first { $0.id == selectedOfferingID } }
     var selectedInvitation: SchoolInvitation? { invitations.first { $0.id == selectedID } }
 
     func invalidate() {
         generation = UUID(); pageRequest = UUID(); isInvalidated = true
-        school = nil; invitations = []; nextCursor = nil; selectedID = nil; pending = nil
-        email = ""; selectedRoles = [.learner]; errorMessage = nil; successMessage = nil
+        school = nil; invitations = []; nextCursor = nil; selectedID = nil; pending = nil; offerings = []
+        email = ""; selectedRoles = [.learner]; selectedOfferingID = nil; errorMessage = nil; successMessage = nil
         isLoading = false; isLoadingMore = false; isBusy = false; storageAccessible = false
     }
 
@@ -90,6 +95,13 @@ final class SchoolInvitationWorkspace: Identifiable {
             try validate(page)
             invitations = page.items; nextCursor = page.nextCursor; seenCursors = []
             if !invitations.contains(where: { $0.id == selectedID }) { selectedID = nil }
+            if roles.contains("INSTRUCTOR") {
+                // Sans offre lisible, l'invitation reste possible ; la formation s'ouvre alors depuis le web.
+                let offerings = (try? await api.trainingOfferings(schoolID: scope.schoolID)) ?? []
+                guard request == generation else { return }
+                self.offerings = offerings
+                if !offerings.contains(where: { $0.id == selectedOfferingID }) { selectedOfferingID = offerings.count == 1 ? offerings[0].id : nil }
+            }
             hasLoaded = true; needsReload = false; isLoading = false
             errorMessage = storageError ?? (receiptRefused
                 ? "Vos droits ne permettent pas de vérifier cette demande. Sa référence reste conservée." : nil)
@@ -130,11 +142,13 @@ final class SchoolInvitationWorkspace: Identifiable {
     }
 
     @discardableResult
-    func inviteAfterConfirmation(email: String, roles: Set<SchoolInvitationRole>) async -> Bool {
+    func inviteAfterConfirmation(email: String, roles: Set<SchoolInvitationRole>, offeringID: UUID? = nil) async -> Bool {
         guard mayEdit, valid(email: email, roles: roles) else { return false }
         let id = UUID()
+        let training = roles == [.learner] && self.roles.contains("INSTRUCTOR") && offerings.contains(where: { $0.id == offeringID })
+            ? offeringID.map { SchoolInvitationTraining(offeringId: $0, instructorMembershipId: scope.membershipID) } : nil
         let command = SchoolInviteCommand(operationId: id, email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-            roles: SchoolInvitationRole.allCases.filter { roles.contains($0) })
+            roles: SchoolInvitationRole.allCases.filter { roles.contains($0) }, training: training)
         let confirmed = await prepare(command, id: id, kind: .createInvitation, resource: nil, version: 0)
         if confirmed && !isInvalidated { self.email = ""; selectedRoles = [.learner] }
         return confirmed

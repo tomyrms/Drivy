@@ -15,6 +15,10 @@ handle @drivyRefonteSensitive {
         handle /refonte {
             redir /refonte/ 308
         }
+        # Santé interne de l'API (/health/live, /health/ready) : jamais publique.
+        handle /refonte/health* {
+            respond "Not found" 404
+        }
         handle_path /refonte/* {
             reverse_proxy 192.168.1.153:3001
         }

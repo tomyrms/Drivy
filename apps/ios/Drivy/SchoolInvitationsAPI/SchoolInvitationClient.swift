@@ -6,11 +6,41 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
     private let tokenSource: any AccessTokenSource
     private let transport: any SchoolHTTPTransport
     private let reader: DrivyAPIClient
+    private let catalog: SchoolCatalogClient
 
     init(baseURL: URL, tokenSource: any AccessTokenSource,
          transport: any SchoolHTTPTransport = SchoolURLSessionTransport()) {
         self.baseURL = baseURL; self.tokenSource = tokenSource; self.transport = transport
         reader = DrivyAPIClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport)
+        catalog = SchoolCatalogClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport)
+    }
+
+    func trainingOfferings(schoolID: UUID) async throws -> [SchoolOffering] {
+        do {
+            let offerings = try await collect { try await self.catalog.offerings(schoolID: schoolID, cursor: $0) }
+            let curricula = try await collect { try await self.catalog.curricula(schoolID: schoolID, cursor: $0) }
+            let policies = try await collect { try await self.catalog.policies(schoolID: schoolID, cursor: $0) }
+            let approvedCurricula = Set(curricula.filter(\.approved).map(\.id))
+            let approvedPolicies = Set(policies.filter(\.approved).map(\.id))
+            return Dictionary(grouping: offerings, by: \.offeringKey).values.compactMap { $0.max { $0.version < $1.version } }
+                .filter { $0.schoolId == schoolID && $0.enabled && approvedCurricula.contains($0.curriculumVersionId)
+                    && approvedPolicies.contains($0.policyVersionId) }
+                .sorted { ($0.categoryCode, $0.offeringKey) < ($1.categoryCode, $1.offeringKey) }
+        } catch SchoolCatalogFailure.unauthorized { throw SchoolInvitationFailure.unauthorized }
+        catch SchoolCatalogFailure.forbidden { throw SchoolInvitationFailure.forbidden }
+        catch { throw SchoolInvitationFailure.unavailable }
+    }
+
+    private func collect<Value: SchoolCatalogRecord>(_ fetch: (String?) async throws -> SchoolPage<Value>) async throws -> [Value] {
+        var values: [Value] = []
+        var cursor: String?
+        var seen = Set<String>()
+        repeat {
+            let page = try await fetch(cursor)
+            values.append(contentsOf: page.items); cursor = page.nextCursor
+            if let cursor, !seen.insert(cursor).inserted || values.count > 10_000 { throw SchoolInvitationFailure.invalidResponse }
+        } while cursor != nil
+        return values
     }
 
     func school(id: UUID) async throws -> SchoolDetails {
@@ -124,9 +154,11 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
                 }
             case 412 where problem?.code == "VERSION_CONFLICT": throw SchoolInvitationFailure.conflict
             case 400 where problem?.code == "INVALID_REQUEST": throw SchoolInvitationFailure.rejected
+            case 422 where problem?.code == "INVITATION_TRAINING_INVALID": throw SchoolInvitationFailure.trainingInvalid
             case 400 where problem?.code == "INVALID_CURSOR": throw SchoolInvitationFailure.invalidCursor
             case 428 where problem?.code == "PRECONDITION_REQUIRED": throw SchoolInvitationFailure.rejected
             case 404 where path.first == "operations": throw SchoolInvitationFailure.operationUnknown
+            case 503 where problem?.code == "INVITATION_DELIVERY_UNAVAILABLE": throw SchoolInvitationFailure.deliveryUnavailable
             case 429, 500...599: throw SchoolInvitationFailure.unavailable
             default: throw SchoolInvitationFailure.invalidResponse
             }

@@ -1,3 +1,4 @@
+import {registerCaptureObservations} from './capture-observations.js';
 import { randomUUID } from 'node:crypto';
 import Fastify, { LogController, type FastifyReply, type FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
@@ -9,7 +10,18 @@ import { Cursors } from './cursor.js';
 import { getLearner, getTraining, listLearners, listTrainings } from './queries.js';
 import { registerSchoolSetup } from './school-setup.js';
 import { registerInvitations } from './invitations.js';
+import { registerProfiles } from './profiles.js';
+import { registerCatalogue } from './catalogue.js';
+import { registerLessons } from './lessons.js';
+import { registerLessonSetup } from './lesson-setup.js';
+import { registerLessonReports } from './lesson-reports.js';
 import type { InvitationMailConfig } from './invitation-mail.js';
+import { registerCaptures } from './captures.js';
+import type { CaptureConfig } from './capture-crypto.js';
+import { registerHealth } from './health.js';
+import { registerPermits } from './permits.js';
+import { registerLessonOutcomes } from './lesson-outcomes.js';
+import { registerSharing } from './sharing.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
 const schoolParams = z.object({ schoolId: z.uuid() });
@@ -21,10 +33,25 @@ const learnerQuery = z.object({ ...pagination, q: z.string().max(200).optional()
 const trainingQuery = z.object({ ...pagination, learnerId: z.uuid().optional() }).strict();
 const emptyQuery = z.object({}).strict();
 
-export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig }) {
+const uuidText = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function lowercaseIds(value: unknown): unknown {
+  if (typeof value === 'string') return uuidText.test(value) ? value.toLowerCase() : value;
+  if (Array.isArray(value)) return value.map(lowercaseIds);
+  if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, lowercaseIds(item)]));
+  return value;
+}
+
+export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig }) {
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384 });
   const cursors = new Cursors(options.cursorSecret);
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options','nosniff'); });
+  // Un UUID se lit sans tenir compte de la casse (RFC 9562) : l'app iOS écrit en majuscules, PostgreSQL rend des minuscules.
+  // Normaliser à l'entrée évite qu'une comparaison JavaScript refuse un identifiant pourtant identique.
+  app.addHook('preValidation', async request => {
+    request.params = lowercaseIds(request.params) as typeof request.params;
+    request.query = lowercaseIds(request.query) as typeof request.query;
+    if (request.body !== undefined) request.body = lowercaseIds(request.body);
+  });
   app.setErrorHandler((error, request, reply) => {
     const known = error instanceof ApiError ? error : error instanceof ZodError
       ? new ApiError(400, 'INVALID_REQUEST', 'Paramètres invalides.')
@@ -110,7 +137,18 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
     });
     versionHeader(data, reply); return envelope(data, request);
   });
+  registerHealth(app,options);
+  registerPermits(app,options);
+  registerLessonOutcomes(app,options);
   registerSchoolSetup(app,options);
   registerInvitations(app,options);
+  registerProfiles(app,options);
+  registerCatalogue(app,options);
+  registerLessonSetup(app,options);
+  registerLessons(app,options);
+  registerLessonReports(app,options);
+  registerCaptures(app,options);
+  registerCaptureObservations(app,options);
+  registerSharing(app,options);
   return app;
 }

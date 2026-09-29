@@ -128,7 +128,8 @@ final class SchoolWorkspace {
 
     /// Immediate equivalent used for explicit retry and deterministic tests.
     func searchLearners(_ text: String) async {
-        beginSearch(text)
+        let sameQuery = text.trimmingCharacters(in: .whitespacesAndNewlines) == normalizedQuery
+        beginSearch(text, preservingSelection: sameQuery)
         guard let schoolID = membership?.schoolId else { return }
         await fetchLearners(schoolID: schoolID, query: normalizedQuery, scope: schoolScope, request: searchRequest)
     }
@@ -159,6 +160,7 @@ final class SchoolWorkspace {
     }
 
     func selectLearner(_ id: UUID?) {
+        guard selectedLearnerID != id else { return }
         clearLearner()
         selectedLearnerID = id
     }
@@ -166,14 +168,12 @@ final class SchoolWorkspace {
     func loadSelectedLearner() async {
         guard let schoolID = membership?.schoolId, let id = selectedLearnerID else { return }
         let scope = schoolScope
-        clearLearner()
-        selectedLearnerID = id
+        learnerRequest = UUID()
         let request = learnerRequest
-        learner = nil
-        trainings = []
-        nextTrainingsCursor = nil
+        trainingsRequest = UUID()
+        isLoadingTrainings = false
+        isLoadingMoreTrainings = false
         learnerError = nil
-        trainingsError = nil
         isLoadingLearner = true
         do {
             let result = try await api.learner(schoolID: schoolID, id: id)
@@ -185,6 +185,10 @@ final class SchoolWorkspace {
         } catch {
             guard scope == schoolScope, request == learnerRequest else { return }
             isLoadingLearner = false
+            if error as? SchoolAPIError == .notFound {
+                clearLearner()
+                selectedLearnerID = id
+            }
             if !invalidateAccess(for: error) { learnerError = message(for: error) }
         }
     }
@@ -195,16 +199,13 @@ final class SchoolWorkspace {
         let request = learnerRequest
         trainingsRequest = UUID()
         let pageRequest = trainingsRequest
-        trainingRequest = UUID()
-        selectedTrainingID = nil
-        training = nil
+        // Refreshing the list must not close a formation already open in the dossier.
+        // Its independent detail request remains bound to its selection and schoolScope.
         trainings = []
         trainingCursors = []
         nextTrainingsCursor = nil
         trainingsError = nil
-        trainingError = nil
         isLoadingMoreTrainings = false
-        isLoadingTraining = false
         isLoadingTrainings = true
         do {
             let page = try await api.trainings(schoolID: schoolID, learnerID: learnerID, cursor: nil)
@@ -278,18 +279,18 @@ final class SchoolWorkspace {
 
     private var normalizedQuery: String { searchText.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    private func beginSearch(_ text: String) {
+    private func beginSearch(_ text: String, preservingSelection: Bool = false) {
         debounceTask?.cancel()
         debounceTask = nil
         searchRequest = UUID()
         searchText = text
-        learners = []
+        if !preservingSelection { learners = [] }
         nextLearnersCursor = nil
         learnerCursors = []
         learnersError = nil
         isSearching = membership != nil
         isLoadingMoreLearners = false
-        clearLearner()
+        if !preservingSelection { clearLearner() }
     }
 
     private func fetchLearners(schoolID: UUID, query: String, scope: UUID, request: UUID) async {
@@ -298,6 +299,7 @@ final class SchoolWorkspace {
             let page = try await api.learners(schoolID: schoolID, query: query, cursor: nil)
             guard scope == schoolScope, request == searchRequest else { return }
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
+            learners = []
             Self.merge(page.items, into: &learners)
             nextLearnersCursor = page.nextCursor
             isSearching = false

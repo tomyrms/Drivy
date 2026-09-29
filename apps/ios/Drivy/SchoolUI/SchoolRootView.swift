@@ -1,66 +1,73 @@
 import SwiftUI
 import UIKit
 
+/// La donnée qui ouvre la feuille est aussi celle que reçoit son contenu.
+/// Une intention ne peut donc pas présenter une feuille sans son modèle initial.
+private struct SchoolWorkspaceSheet<Model: AnyObject>: Identifiable {
+    let id = UUID()
+    let model: Model
+}
+
+/// Ce que le compte ouvre une fois sa feuille fermée : une seule feuille à la fois.
+private enum AccountFollowUp { case join, invitations, profile, captureHistory }
+
 struct SchoolRootView: View {
     let configuration: AppConfiguration?
     @Bindable var identity: IdentitySession
     let workspace: SchoolWorkspace?
-    let localController: SessionController
     @State private var showsAccount = false
-    @State private var showsLocalTrials = false
-    @State private var opensTrialsAfterAccount = false
-    @State private var opensConfigurationAfterAccount = false
-    @State private var showsSchoolConfiguration = false
-    @State private var schoolConfiguration: SchoolConfigurationWorkspace?
-    @State private var opensInvitationsAfterAccount = false
-    @State private var showsInvitations = false
-    @State private var invitations: SchoolInvitationWorkspace?
+    @State private var afterAccount: AccountFollowUp?
     @State private var presenter: UIViewController?
+    // Les modèles restent disponibles jusqu’à onDismiss pour la réconciliation ;
+    // la présentation, elle, est pilotée par un item complet.
+    @State private var invitations: SchoolInvitationWorkspace?
+    @State private var invitationsRoute: SchoolWorkspaceSheet<SchoolInvitationWorkspace>?
+    @State private var inviteRoute: SchoolWorkspaceSheet<SchoolInvitationWorkspace>?
+    @State private var profileWorkspace: SchoolProfileWorkspace?
+    @State private var profileRoute: SchoolWorkspaceSheet<SchoolProfileWorkspace>?
+    @State private var joinWorkspace: SchoolJoinWorkspace?
+    @State private var joinRoute: SchoolWorkspaceSheet<SchoolJoinWorkspace>?
+    @State private var history: SchoolCaptureHistoryWorkspace?
+    @State private var historyRoute: SchoolWorkspaceSheet<SchoolCaptureHistoryWorkspace>?
+    @State private var joinMembershipToOpen: SchoolMembership?
+    @State private var pendingJoinLink: String?
+    @State private var selectedHomeTab: SchoolHomeTab = .session
+    @State private var captureController = SchoolCaptureSessionController()
+    /// The profile sheet shows the guided welcome only when it was opened for it.
+    @State private var onboardingWorkspaceID: UUID?
+    /// Memberships already offered the welcome during this launch: « Plus tard » never loops.
+    @State private var offeredOnboarding: Set<UUID> = []
+
+    private var presentsSheet: Bool {
+        joinRoute != nil || invitationsRoute != nil || inviteRoute != nil || profileRoute != nil || historyRoute != nil
+    }
 
     var body: some View {
-        accountPresentation
-            .sheet(isPresented: $showsInvitations, onDismiss: invitationsDismissed) {
-                invitationsSheet
-            }
-            .sheet(isPresented: $showsSchoolConfiguration, onDismiss: configurationDismissed) {
-                configurationSheet
-            }
-            .fullScreenCover(isPresented: $showsLocalTrials) {
-                localTrialsCover
-            }
+        presentations
+            .task(id: onboardingOfferKey) { await offerOnboardingIfNeeded() }
     }
+
+    // MARK: Contenu
 
     @ViewBuilder
     private var rootContent: some View {
         if identity.isAuthenticated, let workspace {
-            authenticatedContent(workspace)
+            if workspace.person != nil {
+                SchoolHomeView(workspace: workspace, openAccount: { showsAccount = true },
+                    inviteLearner: inviteAction, openProfile: profileAction, agendaClient: homeAgendaClient,
+                    trainingClient: homeTrainingClient, captureController: captureController,
+                    selectedTab: $selectedHomeTab)
+            } else {
+                NavigationStack {
+                    accountLanding(workspace)
+                        .navigationTitle("Drivy")
+                        .toolbar { DrivyAccountToolbarItem(openAccount: { showsAccount = true }) }
+                }
+            }
         } else {
             NavigationStack {
                 signInLanding
                     .navigationTitle("Drivy")
-                    .toolbar { accountToolbar }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func authenticatedContent(_ workspace: SchoolWorkspace) -> some View {
-        if workspace.person != nil, workspace.membership != nil {
-            if let school = workspace.school, school.status != "ACTIVE" {
-                NavigationStack {
-                    SchoolPreparationLanding(school: school, mayConfigure: canConfigureSchool, configure: openConfiguration)
-                        .navigationTitle("Mon école")
-                        .toolbar { accountToolbar }
-                }
-            } else {
-                SchoolBrowserView(workspace: workspace, openAccount: showAccount,
-                    openInvitations: invitationsAction)
-            }
-        } else {
-            NavigationStack {
-                accountLanding(workspace)
-                    .navigationTitle("Mon école")
-                    .toolbar { accountToolbar }
             }
         }
     }
@@ -72,13 +79,23 @@ struct SchoolRootView: View {
         .background(SignInPresenter { presenter = $0 }.frame(width: 0, height: 0))
         .task(id: identity.isAuthenticated) {
             if identity.isAuthenticated { await workspace?.loadAccount() }
-            else { workspace?.reset() }
+            else { captureController.setScope(nil); workspace?.reset() }
+            updateCaptureScope()
         }
         .onChange(of: identity.isAuthenticated) { _, authenticated in
-            if !authenticated { closeConfiguration(); closeInvitations(); workspace?.reset() }
+            if !authenticated {
+                captureController.setScope(nil)
+                closeAll(); selectedHomeTab = .session; workspace?.reset()
+            } else if pendingJoinLink != nil { openJoin() }
         }
         .onChange(of: workspace?.membership?.membershipId) { _, _ in
             if workspace?.isLoadingAccount != true { verifyPresentedScopes() }
+        }
+        .onChange(of: workspace?.membership?.accessEpoch) { _, _ in
+            if workspace?.isLoadingAccount != true { verifyPresentedScopes() }
+        }
+        .onChange(of: workspace?.person?.personId) { _, _ in
+            if workspace?.isLoadingAccount != true { updateCaptureScope() }
         }
         .onChange(of: workspace?.isLoadingAccount) { _, loading in
             if loading == false { verifyPresentedScopes() }
@@ -86,198 +103,333 @@ struct SchoolRootView: View {
         .onChange(of: workspace?.isLoadingSchool) { _, loading in
             if loading == false && workspace?.isLoadingAccount != true { verifyPresentedScopes() }
         }
+        .onChange(of: workspace?.school?.status) { _, status in
+            if status == "ARCHIVED" { captureController.setScope(nil) }
+        }
+        .onOpenURL { receiveInvitation($0) }
     }
 
-    private var accountPresentation: some View {
+    // MARK: Feuilles
+
+    private var accountLayer: some View {
         observedContent.sheet(isPresented: $showsAccount, onDismiss: accountDismissed) {
-            SchoolAccountView(identity: identity, workspace: workspace, localController: localController,
-                openLocalTrials: openTrialsFromAccount, configureSchool: accountConfigurationAction,
-                openInvitations: accountInvitationsAction, signOut: signOut)
+            SchoolAccountView(identity: identity, workspace: workspace, manageURL: manageURL,
+                openProfile: followUp(.profile, when: ownProfileLearner != nil),
+                openCaptureHistory: followUp(.captureHistory, when: canOpenCaptureHistory),
+                openInvitations: followUp(.invitations, when: canManageInvitations),
+                openJoinSchool: followUp(.join, when: configuration != nil && identity.isAuthenticated),
+                signOut: signOut)
         }
     }
 
-    @ViewBuilder
-    private var invitationsSheet: some View {
-        if let invitations {
-            SchoolInvitationsView(model: invitations)
+    private var joinLayer: some View {
+        accountLayer.sheet(item: $joinRoute, onDismiss: joinDismissed) { route in
+            SchoolJoinView(model: route.model, openSchool: { membership in
+                joinMembershipToOpen = membership; joinRoute = nil
+            })
+        }
+    }
+
+    private var invitationLayer: some View {
+        joinLayer
+            .sheet(item: $invitationsRoute, onDismiss: invitationsDismissed) { route in
+                invitationSheet(SchoolInvitationsView(model: route.model), model: route.model)
+            }
+            .sheet(item: $inviteRoute, onDismiss: invitationsDismissed) { route in
+                invitationSheet(InvitationCreationView(model: route.model, learnerOnly: true), model: route.model)
+            }
+    }
+
+    private var profileLayer: some View {
+        invitationLayer.sheet(item: $profileRoute, onDismiss: profileDismissed) { route in
+            profileContent(route.model)
                 .disabled(isCheckingSchoolAccess)
                 .overlay { accessCheckOverlay }
-                .onChange(of: invitations.accessFailure) { _, failure in
-                    if let failure {
-                        closeInvitations()
-                        workspace?.rejectCurrentAccess(requiresAuthentication: failure == .unauthorized)
-                    }
+                .onChange(of: route.model.accessFailure) { _, failure in
+                    if failure != nil { closeProfile(); Task { await workspace?.loadAccount() } }
                 }
         }
     }
 
-    @ViewBuilder
-    private var configurationSheet: some View {
-        if let schoolConfiguration {
-            SchoolConfigurationView(model: schoolConfiguration, openSchool: { showsSchoolConfiguration = false })
-                .disabled(isCheckingSchoolAccess)
-                .overlay { accessCheckOverlay }
-                .onChange(of: schoolConfiguration.accessFailure) { _, failure in
-                    if let failure {
-                        closeConfiguration()
-                        workspace?.rejectCurrentAccess(requiresAuthentication: failure == .unauthorized)
-                    }
-                }
+    private var presentations: some View {
+        profileLayer.sheet(item: $historyRoute, onDismiss: { history?.invalidate(); history = nil }) { route in
+            if let workspace { SchoolCaptureHistoryView(model: route.model, workspace: workspace) }
         }
+    }
+
+    private func invitationSheet<Content: View>(_ content: Content, model: SchoolInvitationWorkspace) -> some View {
+        content
+            .disabled(isCheckingSchoolAccess)
+            .overlay { accessCheckOverlay }
+            .onChange(of: model.accessFailure) { _, failure in
+                if let failure {
+                    closeInvitations()
+                    workspace?.rejectCurrentAccess(requiresAuthentication: failure == .unauthorized)
+                }
+            }
+    }
+
+    @ViewBuilder private func profileContent(_ model: SchoolProfileWorkspace) -> some View {
+        if model.id == onboardingWorkspaceID { SchoolOnboardingView(model: model, trainings: workspace?.trainings ?? []) }
+        else { SchoolProfileView(model: model) }
     }
 
     @ViewBuilder
     private var accessCheckOverlay: some View {
         if isCheckingSchoolAccess {
-            DrivyTheme.canvas.ignoresSafeArea().overlay { ProgressView("Vérification de vos accès…") }
+            DrivyTheme.canvas.ignoresSafeArea().overlay { ProgressView() }
         }
     }
 
-    private var localTrialsCover: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button { showsLocalTrials = false } label: {
-                    Label("Retour à Drivy", systemImage: "chevron.left")
-                        .frame(minHeight: 44)
-                }
-                Spacer()
-                Text("Essais locaux")
-                    .font(.footnote)
-                    .foregroundStyle(DrivyTheme.muted)
-            }
-            .padding(.horizontal, 16)
-            .background(DrivyTheme.surface)
-            QualificationRootView(controller: localController)
-                .task { await localController.load() }
-        }
-        .tint(DrivyTheme.accent)
-        .background(DrivyTheme.surface)
-    }
+    // MARK: Compte
 
-    private var invitationsAction: (() -> Void)? {
-        guard canManageInvitations else { return nil }
-        let action: () -> Void = { openInvitations() }
-        return action
-    }
-
-    private var accountConfigurationAction: (() -> Void)? {
-        guard canConfigureSchool else { return nil }
-        let action: () -> Void = { openConfigurationFromAccount() }
-        return action
-    }
-
-    private var accountInvitationsAction: (() -> Void)? {
-        guard canManageInvitations else { return nil }
-        let action: () -> Void = { openInvitationsFromAccount() }
-        return action
-    }
-
-    private func showAccount() { showsAccount = true }
-
-    private func openTrialsFromAccount() {
-        opensTrialsAfterAccount = true
-        showsAccount = false
-    }
-
-    private func openConfigurationFromAccount() {
-        opensConfigurationAfterAccount = true
-        showsAccount = false
-    }
-
-    private func openInvitationsFromAccount() {
-        opensInvitationsAfterAccount = true
-        showsAccount = false
+    private func follow(_ action: AccountFollowUp) { afterAccount = action; showsAccount = false }
+    private func followUp(_ action: AccountFollowUp, when enabled: Bool) -> (() -> Void)? {
+        guard enabled else { return nil }
+        return { follow(action) }
     }
 
     private func accountDismissed() {
-        if opensTrialsAfterAccount {
-            opensTrialsAfterAccount = false
-            showsLocalTrials = true
+        guard let action = afterAccount else { return }
+        afterAccount = nil
+        switch action {
+        case .join: openJoin()
+        case .invitations: openInvitations(creation: false)
+        case .profile: if let learner = ownProfileLearner { openProfile(learner) }
+        case .captureHistory: openCaptureHistory()
         }
-        if opensConfigurationAfterAccount {
-            opensConfigurationAfterAccount = false
-            openConfiguration()
+    }
+
+    /// La gestion de l’école est réservée à l’administration, sur le portail web.
+    private var manageURL: URL? {
+        guard let configuration, let membership = workspace?.membership, membership.roles.contains("ADMIN") else { return nil }
+        return configuration.managementURL(schoolID: membership.schoolId)
+    }
+
+    private var ownProfileLearner: SchoolLearner? {
+        guard let person = workspace?.person, workspace?.membership?.roles.contains("LEARNER") == true else { return nil }
+        return workspace?.learners.first { $0.personId == person.personId }
+    }
+
+    // MARK: Rejoindre une école
+
+    private func openJoin() {
+        guard identity.isAuthenticated, let configuration else { return }
+        joinWorkspace?.invalidate()
+        let model = SchoolJoinWorkspace(client: SchoolJoinClient(configuration: configuration, tokenSource: identity), link: pendingJoinLink)
+        joinWorkspace = model
+        pendingJoinLink = nil; joinRoute = SchoolWorkspaceSheet(model: model)
+    }
+    private func closeJoin() { joinWorkspace?.invalidate(); joinRoute = nil; joinMembershipToOpen = nil }
+    private func receiveInvitation(_ url: URL) {
+        guard let configuration,
+              (try? SchoolJoinClient.token(from: url.absoluteString, configuration: configuration)) != nil else { return }
+        // An open sheet may already contain an uncertain intention. A new link never replaces it.
+        guard joinRoute == nil else { return }
+        pendingJoinLink = url.absoluteString
+        if identity.isAuthenticated {
+            guard !presentsSheet else { return }
+            if showsAccount { follow(.join) } else { openJoin() }
         }
-        if opensInvitationsAfterAccount {
-            opensInvitationsAfterAccount = false
-            openInvitations()
+    }
+    private func joinDismissed() {
+        let membership = joinMembershipToOpen
+        let principal = joinWorkspace?.record?.principal
+        let client = joinWorkspace?.client
+        joinMembershipToOpen = nil; joinWorkspace?.invalidate(); joinWorkspace = nil
+        guard let membership, let principal, let client, identity.isAuthenticated, let workspace else { return }
+        Task {
+            guard (try? await client.principal()) == principal, identity.isAuthenticated else { return }
+            await workspace.loadAccount()
+            guard (try? await client.principal()) == principal, identity.isAuthenticated,
+                  let current = workspace.person?.memberships.first(where: {
+                      $0.schoolId == membership.schoolId && $0.membershipId == membership.membershipId
+                  }) else { return }
+            await workspace.selectSchool(current)
+            if workspace.membership?.membershipId == current.membershipId { selectedHomeTab = .session }
         }
+    }
+
+    // MARK: Invitations
+
+    private var canManageInvitations: Bool {
+        configuration != nil && workspace?.school?.status == "ACTIVE"
+            && (workspace?.membership?.roles.contains("ADMIN") == true || workspace?.membership?.roles.contains("INSTRUCTOR") == true)
+    }
+
+    private var inviteAction: (() -> Void)? {
+        canManageInvitations ? { openInvitations(creation: true) } : nil
+    }
+
+    private func openInvitations(creation: Bool) {
+        guard canManageInvitations, let configuration, let person = workspace?.person,
+              let membership = workspace?.membership else { return }
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch,
+            apiBaseURL: configuration.apiBaseURL.absoluteString)
+        let model = SchoolInvitationWorkspace(scope: scope, roles: membership.roles,
+            api: SchoolInvitationClient(baseURL: configuration.apiBaseURL, tokenSource: identity))
+        invitations = model
+        if creation { inviteRoute = SchoolWorkspaceSheet(model: model) }
+        else { invitationsRoute = SchoolWorkspaceSheet(model: model) }
+    }
+
+    private func closeInvitations() {
+        invitations?.invalidate()
+        invitationsRoute = nil; inviteRoute = nil
     }
 
     private func invitationsDismissed() {
-        invitations?.invalidate()
-        invitations = nil
-    }
-
-    private func configurationDismissed() {
-        schoolConfiguration?.invalidate()
-        schoolConfiguration = nil
-        if identity.isAuthenticated, workspace?.person != nil {
-            Task { await workspace?.loadAccount() }
+        let invited = invitations?.successMessage != nil
+        invitations?.invalidate(); invitations = nil
+        // L’élève invité apparaît dans la liste après son acceptation ; on relit la liste.
+        if invited, identity.isAuthenticated, workspace?.school?.status == "ACTIVE" {
+            Task { await workspace?.searchLearners(workspace?.searchText ?? "") }
         }
     }
 
-    @ToolbarContentBuilder
-    private var accountToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Button { showsAccount = true } label: {
-                Label("Compte", systemImage: "person.crop.circle")
-            }
-            .accessibilityIdentifier("school-account")
+    // MARK: Profil et accueil
+
+    private var onboardingOfferKey: String {
+        "\(workspace?.membership?.membershipId.uuidString ?? ""):\(workspace?.learners.isEmpty == false)"
+    }
+
+    /// First access: open the guided welcome once when the school says it is not finished.
+    /// Staff with the ADMIN role only are not forced into it.
+    private func offerOnboardingIfNeeded() async {
+        guard identity.isAuthenticated, let configuration, let person = workspace?.person,
+              let membership = workspace?.membership, !offeredOnboarding.contains(membership.membershipId),
+              membership.roles.contains("LEARNER") || membership.roles.contains("INSTRUCTOR"),
+              !presentsSheet else { return }
+        let isLearner = membership.roles.contains("LEARNER")
+        if isLearner && workspace?.learners.isEmpty != false { return }
+        offeredOnboarding.insert(membership.membershipId)
+        let kind: SchoolOnboardingKind = isLearner ? .student : .staff
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
+        let api = SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
+        guard await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: kind),
+              workspace?.membership?.membershipId == membership.membershipId, !presentsSheet else { return }
+        openOnboarding()
+    }
+
+    private var profileAction: ((SchoolLearner) -> Void)? {
+        guard configuration != nil, workspace?.membership != nil else { return nil }
+        return { learner in openProfile(learner) }
+    }
+    private func makeProfileWorkspace(learner: SchoolLearner? = nil, onboardingOnly: Bool = false) -> SchoolProfileWorkspace? {
+        guard let configuration, let person = workspace?.person, let membership = workspace?.membership else { return nil }
+        if let learner, learner.schoolId != membership.schoolId { return nil }
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
+        var targetLearner = learner
+        if targetLearner == nil, onboardingOnly, membership.roles.contains("LEARNER") {
+            targetLearner = workspace?.learners.first { $0.personId == person.personId }
+        }
+        let isOwn = targetLearner?.personId == person.personId && membership.roles.contains("LEARNER")
+        let kind: SchoolOnboardingKind?
+        if isOwn { kind = .student }
+        else if onboardingOnly { kind = membership.roles.contains("LEARNER") ? .student : .staff }
+        else { kind = nil }
+        return SchoolProfileWorkspace(scope: scope, roles: membership.roles, learnerID: targetLearner?.id,
+            isOwnProfile: isOwn, onboardingKind: kind,
+            api: SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity))
+    }
+    private func openProfile(_ learner: SchoolLearner) {
+        guard let model = makeProfileWorkspace(learner: learner) else { return }
+        onboardingWorkspaceID = nil
+        profileWorkspace = model; profileRoute = SchoolWorkspaceSheet(model: model)
+    }
+    private func openOnboarding() {
+        guard let model = makeProfileWorkspace(onboardingOnly: true) else { return }
+        onboardingWorkspaceID = model.id
+        profileWorkspace = model; profileRoute = SchoolWorkspaceSheet(model: model)
+    }
+    private func closeProfile() { profileWorkspace?.invalidate(); profileRoute = nil }
+    private func profileDismissed() {
+        profileWorkspace?.invalidate(); profileWorkspace = nil; onboardingWorkspaceID = nil
+        if identity.isAuthenticated, workspace?.selectedLearnerID != nil {
+            Task { await workspace?.loadSelectedLearner() }
         }
     }
+
+    // MARK: Trajets de l’appareil
+
+    private var homeAgendaClient: SchoolAgendaClient? {
+        guard let configuration else { return nil }
+        return SchoolAgendaClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
+    }
+
+    private var homeTrainingClient: SchoolTrainingClient? {
+        guard let configuration else { return nil }
+        return SchoolTrainingClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
+    }
+
+    private var canOpenCaptureHistory: Bool {
+        configuration != nil && workspace?.membership?.roles.contains("INSTRUCTOR") == true && workspace?.school?.status != "ARCHIVED"
+    }
+
+    private func openCaptureHistory() {
+        guard canOpenCaptureHistory, let agendaClient = homeAgendaClient, let person = workspace?.person,
+              let membership = workspace?.membership else { return }
+        let model = SchoolCaptureHistoryWorkspace(scope: agendaClient.scope(person: person, membership: membership),
+            client: agendaClient.captureClient, owner: captureController)
+        history = model; historyRoute = SchoolWorkspaceSheet(model: model)
+    }
+
+    // MARK: Connexion
 
     private var signInLanding: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                Image(systemName: "steeringwheel")
-                    .font(.largeTitle)
-                    .foregroundStyle(DrivyTheme.accent)
-                    .padding(20)
-                    .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 24))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Retrouvez votre école.")
-                        .font(.largeTitle.weight(.bold))
-                    Text("Connectez-vous pour accéder aux dossiers et aux formations qui vous sont autorisés.")
-                        .font(.title3)
-                        .foregroundStyle(DrivyTheme.muted)
-                }
+            VStack(alignment: .leading, spacing: DrivySpacing.xl) {
+                DrivyRouteGlyph()
+                    .frame(height: 120)
+                    .padding(DrivySpacing.l)
+                    .background(DrivyTheme.canvas, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous)
+                            .strokeBorder(DrivyTheme.border, lineWidth: 0.5)
+                    }
+                Text("Vos leçons, vos trajets, votre école.")
+                    .font(.drivyScreenTitle)
+                    .fixedSize(horizontal: false, vertical: true)
                 if configuration == nil {
-                    Label("La connexion scolaire n’est pas encore activée dans cette version.", systemImage: "info.circle")
-                        .font(.subheadline)
-                        .foregroundStyle(DrivyTheme.muted)
+                    DrivyInlineMessage(text: "La connexion n’est pas activée dans cette version.", tone: .neutral)
                         .accessibilityIdentifier("school-not-configured")
-                } else {
-                    Button(action: signIn) {
-                        Label(identity.isWorking ? "Connexion en cours…" : "Se connecter", systemImage: "person.crop.circle")
-                    }
-                    .buttonStyle(DrivyPrimaryButtonStyle())
-                    .disabled(identity.isWorking || presenter == nil)
-                    .accessibilityIdentifier("school-sign-in")
-                    if let error = identity.errorMessage {
-                        SchoolErrorNotice(message: error)
+                } else if let error = identity.errorMessage {
+                    SchoolErrorNotice(message: error)
+                }
+            }
+            .drivyPageContent()
+        }
+        .background(DrivyTheme.surface)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if configuration != nil {
+                Button(action: signIn) {
+                    if identity.isWorking {
+                        DrivyBusyLabel(title: "Se connecter", busyTitle: "Connexion…", isBusy: true)
+                    } else {
+                        Label("Se connecter", systemImage: "person.crop.circle")
                     }
                 }
-                Divider()
-                localTrialsEntry
+                .buttonStyle(DrivyPrimaryButtonStyle())
+                .disabled(identity.isWorking || presenter == nil)
+                .accessibilityIdentifier("school-sign-in")
+                .padding(.horizontal, DrivySpacing.l)
+                .padding(.vertical, DrivySpacing.s)
+                .frame(maxWidth: 600)
+                .frame(maxWidth: .infinity)
+                .background(DrivyTheme.surface)
+                .overlay(alignment: .top) { Divider().overlay(DrivyTheme.border) }
             }
-            .padding(24)
-            .frame(maxWidth: 600, alignment: .leading)
-            .frame(maxWidth: .infinity)
         }
-        .background(DrivyTheme.canvas)
     }
 
     @ViewBuilder
     private func accountLanding(_ workspace: SchoolWorkspace) -> some View {
-        if workspace.isLoadingAccount {
-            ProgressView("Chargement de vos écoles…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(DrivyTheme.canvas)
-        } else if let error = workspace.accountError {
+        if let error = workspace.accountError {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     SchoolErrorNotice(message: error)
                     if workspace.requiresAuthentication {
                         Button("Se reconnecter") {
@@ -289,44 +441,17 @@ struct SchoolRootView: View {
                         }
                         .buttonStyle(DrivyPrimaryButtonStyle())
                     } else {
-                        Button("Actualiser mes écoles") { Task { await workspace.loadAccount() } }
+                        Button("Réessayer") { Task { await workspace.loadAccount() } }
                             .buttonStyle(DrivyPrimaryButtonStyle())
                     }
-                    localTrialsEntry
                 }
-                .padding(24)
-                .frame(maxWidth: 600)
-                .frame(maxWidth: .infinity)
+                .drivyPageContent()
             }
-            .background(DrivyTheme.canvas)
-        } else if let person = workspace.person, person.memberships.isEmpty {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    ContentUnavailableView("Aucune école pour le moment", systemImage: "building.2", description: Text("Votre compte est connecté. Demandez à votre école de vous donner accès à votre dossier."))
-                    Button("Actualiser mes écoles") { Task { await workspace.loadAccount() } }
-                        .buttonStyle(DrivySecondaryButtonStyle())
-                    localTrialsEntry
-                }
-                .padding(24)
-                .frame(maxWidth: 640)
-                .frame(maxWidth: .infinity)
-            }
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
         } else {
-            SchoolChooserView(workspace: workspace)
-        }
-    }
-
-    private var localTrialsEntry: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button { showsLocalTrials = true } label: {
-                Label(localController.isCapturing ? "Revenir à l’essai en cours" : "Essais locaux", systemImage: "map")
-                    .frame(minHeight: 48)
-            }
-            .accessibilityIdentifier("open-local-trials")
-            Text("Un espace personnel pour essayer la carte et les observations, séparé des dossiers de l’école.")
-                .font(.footnote)
-                .foregroundStyle(DrivyTheme.muted)
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(DrivyTheme.canvas)
         }
     }
 
@@ -336,143 +461,124 @@ struct SchoolRootView: View {
     }
 
     private func signOut() {
-        closeConfiguration()
-        closeInvitations()
+        captureController.setScope(nil)
+        pendingJoinLink = nil
+        closeAll()
         workspace?.reset()
         showsAccount = false
         Task { await identity.signOut() }
     }
 
-    private var canConfigureSchool: Bool {
-        configuration != nil && workspace?.membership?.roles.contains("ADMIN") == true
-            && workspace?.school != nil && workspace?.school?.status != "ARCHIVED"
+    private func closeAll() {
+        closeJoin(); closeInvitations(); closeProfile()
+        history?.invalidate(); historyRoute = nil
     }
+
+    // MARK: Portée
 
     private var isCheckingSchoolAccess: Bool {
         workspace?.isLoadingAccount == true || workspace?.isLoadingSchool == true
     }
 
-    private var canManageInvitations: Bool {
-        configuration != nil && workspace?.school?.status == "ACTIVE"
-            && (workspace?.membership?.roles.contains("ADMIN") == true || workspace?.membership?.roles.contains("INSTRUCTOR") == true)
-    }
-
-    private func openInvitations() {
-        guard canManageInvitations, let configuration, let person = workspace?.person,
-              let membership = workspace?.membership else { return }
-        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
-            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch,
-            apiBaseURL: configuration.apiBaseURL.absoluteString)
-        invitations = SchoolInvitationWorkspace(scope: scope, roles: membership.roles,
-            api: SchoolInvitationClient(baseURL: configuration.apiBaseURL, tokenSource: identity))
-        showsInvitations = true
-    }
-
-    private func closeInvitations() {
-        invitations?.invalidate()
-        showsInvitations = false
-    }
-
     private func verifyPresentedScopes() {
-        verifyConfigurationScope()
-        guard let model = invitations else { return }
-        guard canManageInvitations, let person = workspace?.person, let membership = workspace?.membership,
-              model.scope.personID == person.personId, model.scope.schoolID == membership.schoolId,
-              model.scope.membershipID == membership.membershipId, model.scope.accessEpoch == membership.accessEpoch else {
-            closeInvitations()
-            return
+        updateCaptureScope()
+        let person = workspace?.person, membership = workspace?.membership
+        func current(_ scope: SchoolCommandScope) -> Bool {
+            scope.personID == person?.personId && scope.schoolID == membership?.schoolId
+                && scope.membershipID == membership?.membershipId && scope.accessEpoch == membership?.accessEpoch
+        }
+        if let model = profileWorkspace, !current(model.scope) { closeProfile() }
+        if let model = invitations, !canManageInvitations || !current(model.scope) { closeInvitations() }
+        if let model = history, !canOpenCaptureHistory || !current(model.scope) {
+            model.invalidate(); historyRoute = nil
         }
     }
 
-    private func openConfiguration() {
-        guard canConfigureSchool, let configuration, let person = workspace?.person,
-              let membership = workspace?.membership else { return }
-        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+    private func updateCaptureScope() {
+        guard identity.isAuthenticated, workspace?.school?.status != "ARCHIVED", let configuration,
+              let person = workspace?.person, let membership = workspace?.membership else {
+            captureController.setScope(nil)
+            return
+        }
+        // La recharge conserve la même portée. Changer d'école, de compte ou
+        // d'epoch ferme immédiatement la source de l'ancienne séance.
+        captureController.setScope(SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
             membershipID: membership.membershipId, accessEpoch: membership.accessEpoch,
-            apiBaseURL: configuration.apiBaseURL.absoluteString)
-        schoolConfiguration = SchoolConfigurationWorkspace(scope: scope,
-            api: SchoolConfigurationClient(baseURL: configuration.apiBaseURL, tokenSource: identity))
-        showsSchoolConfiguration = true
-    }
-
-    private func verifyConfigurationScope() {
-        guard let model = schoolConfiguration else { return }
-        guard configuration != nil, let person = workspace?.person, let membership = workspace?.membership,
-              membership.roles.contains("ADMIN"), workspace?.school?.status != "ARCHIVED",
-              model.scope.personID == person.personId, model.scope.schoolID == membership.schoolId,
-              model.scope.membershipID == membership.membershipId, model.scope.accessEpoch == membership.accessEpoch else {
-            closeConfiguration()
-            return
-        }
-    }
-
-    private func closeConfiguration() {
-        schoolConfiguration?.invalidate()
-        showsSchoolConfiguration = false
+            apiBaseURL: configuration.apiBaseURL.absoluteString))
     }
 }
 
+/// Le compte : peu de lignes, chacune une action. La gestion de l’école ouvre le portail web.
 private struct SchoolAccountView: View {
     @Bindable var identity: IdentitySession
     let workspace: SchoolWorkspace?
-    let localController: SessionController
-    let openLocalTrials: () -> Void
-    let configureSchool: (() -> Void)?
+    let manageURL: URL?
+    let openProfile: (() -> Void)?
+    let openCaptureHistory: (() -> Void)?
     let openInvitations: (() -> Void)?
+    let openJoinSchool: (() -> Void)?
     let signOut: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @Environment(AppLock.self) private var appLock: AppLock?
+
+    private var hasSeveralSchools: Bool { (workspace?.person?.memberships.count ?? 0) > 1 }
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("Votre compte") {
-                    if let person = workspace?.person {
-                        Text(person.displayName).font(.headline)
-                    } else {
-                        Text(identity.isAuthenticated ? "Compte connecté" : "Aucun compte connecté")
-                    }
-                    if let membership = workspace?.membership {
-                        LabeledContent("École", value: membership.schoolName)
-                        Text(SchoolPresentation.roles(membership.roles))
-                            .foregroundStyle(DrivyTheme.muted)
-                        if let workspace, (workspace.person?.memberships.count ?? 0) > 1 {
-                            Button("Changer d’école") {
-                                workspace.leaveSchool()
-                                dismiss()
-                            }
-                            .accessibilityIdentifier("school-change-school")
-                        }
-                    }
+            ScrollView {
+                VStack(alignment: .leading, spacing: DrivySpacing.xl) {
+                    accountHeading
                     if identity.isAuthenticated {
-                        if let openInvitations {
-                            Button(action: openInvitations) { Label("Invitations", systemImage: "envelope") }
-                                .accessibilityIdentifier("open-school-invitations")
+                        if openProfile != nil || openCaptureHistory != nil || openInvitations != nil || manageURL != nil {
+                            DrivyRowGroup {
+                                if let openProfile {
+                                    DrivyNavigationRow(title: "Mon profil", symbol: "person.text.rectangle", action: openProfile)
+                                        .accessibilityIdentifier("open-my-profile")
+                                }
+                                if let openCaptureHistory {
+                                    DrivyNavigationRow(title: "Trajets de cet appareil", symbol: "point.topleft.down.to.point.bottomright.curvepath",
+                                        action: openCaptureHistory)
+                                }
+                                if let openInvitations {
+                                    DrivyNavigationRow(title: "Invitations", symbol: "envelope", action: openInvitations)
+                                        .accessibilityIdentifier("open-school-invitations")
+                                }
+                                if let manageURL {
+                                    DrivyNavigationRow(title: "Gérer l’école", detail: "Sur le web", symbol: "globe",
+                                        action: { openURL(manageURL) })
+                                        .accessibilityIdentifier("open-school-management")
+                                }
+                            }
                         }
-                        if let configureSchool {
-                            Button("Préparer mon école", action: configureSchool)
-                                .accessibilityIdentifier("open-school-configuration")
+                        DrivyRowGroup {
+                            if let workspace, hasSeveralSchools {
+                                DrivyNavigationRow(title: "Changer d’école", detail: workspace.membership?.schoolName,
+                                    symbol: "arrow.left.arrow.right", action: {
+                                        workspace.leaveSchool()
+                                        dismiss()
+                                    })
+                                    .accessibilityIdentifier("school-change-school")
+                            }
+                            if let openJoinSchool {
+                                DrivyNavigationRow(title: "Rejoindre une école", symbol: "envelope.open", action: openJoinSchool)
+                                    .accessibilityIdentifier("open-join-school")
+                            }
+                            if let appLock, let biometry = appLock.biometryName {
+                                Toggle(isOn: Binding(get: { appLock.isEnabled }, set: { appLock.setEnabled($0) })) {
+                                    Label("Ouvrir avec \(biometry)", systemImage: biometry == "Touch ID" ? "touchid" : "faceid")
+                                }
+                                .frame(minHeight: 44)
+                                .accessibilityIdentifier("app-lock-toggle")
+                            }
                         }
-                        Button("Actualiser mes accès") {
-                            dismiss()
-                            Task { await workspace?.loadAccount() }
-                        }
-                        Button("Se déconnecter", role: .destructive, action: signOut)
+                        DrivyDestructiveRow(title: "Se déconnecter", symbol: "rectangle.portrait.and.arrow.right", action: signOut)
                             .accessibilityIdentifier("school-sign-out")
                     }
                 }
-                Section {
-                    Button(action: openLocalTrials) {
-                        Label(localController.isCapturing ? "Revenir à l’essai en cours" : "Essais locaux", systemImage: "map")
-                    }
-                    .accessibilityIdentifier("open-local-trials")
-                } footer: {
-                    Text("Les essais locaux restent sur cet appareil. Ils ne sont pas des leçons de votre école.")
-                }
-                Section("Confidentialité") {
-                    Text("Cet espace affiche les données autorisées par votre école. Les données scolaires affichées sont retirées à la déconnexion ou au changement d’école.")
-                        .font(.subheadline)
-                }
+                .drivyPageContent()
             }
+            .background(DrivyTheme.surface)
             .navigationTitle("Compte")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -482,6 +588,24 @@ private struct SchoolAccountView: View {
             }
         }
         .tint(DrivyTheme.accent)
+    }
+
+    private var accountHeading: some View {
+        HStack(spacing: DrivySpacing.m) {
+            DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: 60)
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(workspace?.person?.displayName ?? (identity.isAuthenticated ? "Compte connecté" : "Aucun compte connecté"))
+                    .font(.drivyTitle)
+                    .foregroundStyle(DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let membership = workspace?.membership {
+                    Text("\(membership.schoolName) · \(SchoolPresentation.roles(membership.roles))")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

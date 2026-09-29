@@ -16,6 +16,24 @@ struct SchoolInvitationWorkspaceTests {
         #expect(model.mayEdit)
     }
 
+    @Test func instructorInvitesALearnerIntoTheOnlyOpenTrainingAndAssignsHimself() async throws {
+        let api = InvitationAPIStub()
+        let offering = SchoolOffering(id: UUID(), schoolId: ConfigurationFixture.schoolID, version: 1, offeringKey: "B",
+            categoryCode: "B", curriculumVersionId: UUID(), policyVersionId: UUID(), enabled: true,
+            defaultDurationMinutes: 50, defaultPriceCents: 9000)
+        api.offeringValues = [offering]
+        let model = InvitationFixture.workspace(api: api, roles: ["INSTRUCTOR"])
+        await model.load()
+        #expect(model.carriesTraining && model.selectedOfferingID == offering.id)
+        #expect(await model.inviteAfterConfirmation(email: "eleve@example.invalid", roles: [.learner], offeringID: offering.id))
+        let body = try JSONDecoder().decode(SchoolInviteCommand.self, from: try #require(api.commands.last).body)
+        #expect(body.training == SchoolInvitationTraining(offeringId: offering.id, instructorMembershipId: ConfigurationFixture.membershipID))
+        // Une offre absente de la liste lue n'est jamais envoyée.
+        #expect(await model.inviteAfterConfirmation(email: "autre@example.invalid", roles: [.learner], offeringID: UUID()))
+        let other = try JSONDecoder().decode(SchoolInviteCommand.self, from: try #require(api.commands.last).body)
+        #expect(other.training == nil)
+    }
+
     @Test func inactiveSchoolOrLearnerRoleCannotManageInvitations() async {
         let api = InvitationAPIStub()
         api.schoolValue = ConfigurationFixture.school()
@@ -300,7 +318,9 @@ final class InvitationAPIStub: SchoolInvitationAPI {
     var receipt: SchoolOperationReceipt?
     var listHandler: ((String?) async throws -> SchoolPage<SchoolInvitation>)?
     var sendHandler: ((PendingSchoolCommand) async throws -> SchoolInvitation)?
+    var offeringValues: [SchoolOffering] = []
     func school(id: UUID) async throws -> SchoolDetails { schoolValue }
+    func trainingOfferings(schoolID: UUID) async throws -> [SchoolOffering] { offeringValues }
     func invitations(schoolID: UUID, cursor: String?) async throws -> SchoolPage<SchoolInvitation> {
         queries.append(cursor)
         if let listHandler { return try await listHandler(cursor) }

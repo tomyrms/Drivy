@@ -55,10 +55,17 @@ struct SchoolInvitation: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+/// Une invitation d'élève peut porter sa formation : elle s'ouvre, avec son moniteur, à l'acceptation.
+struct SchoolInvitationTraining: Codable, Sendable, Equatable {
+    let offeringId: UUID
+    let instructorMembershipId: UUID
+}
+
 struct SchoolInviteCommand: Codable, Sendable, Equatable {
     let operationId: UUID
     let email: String
     let roles: [SchoolInvitationRole]
+    var training: SchoolInvitationTraining? = nil
 }
 
 struct SchoolResendInvitationCommand: Codable, Sendable, Equatable {
@@ -72,12 +79,14 @@ struct SchoolRevokeInvitationCommand: Codable, Sendable, Equatable {
 
 enum SchoolInvitationFailure: Error, LocalizedError, Equatable {
     case unauthorized, forbidden, schoolInactive, policyRequired, alreadyMember, alreadyInvited, invitationUsed, invitationRevoked
-    case conflict, rejected, invalidCursor, unavailable, invalidResponse, pendingCommand, operationUnknown
+    case conflict, rejected, invalidCursor, unavailable, deliveryUnavailable, invalidResponse, pendingCommand, operationUnknown
+    case trainingInvalid
 
     // Only a brand-new UUID's first response may release a rejected command.
     var permitsCorrectionOfFreshRequest: Bool {
         switch self {
-        case .schoolInactive, .policyRequired, .alreadyMember, .alreadyInvited, .invitationUsed, .invitationRevoked, .conflict, .rejected: true
+        case .schoolInactive, .policyRequired, .alreadyMember, .alreadyInvited, .invitationUsed, .invitationRevoked, .conflict, .rejected,
+             .trainingInvalid: true
         default: false
         }
     }
@@ -95,9 +104,11 @@ enum SchoolInvitationFailure: Error, LocalizedError, Equatable {
         case .rejected: "La demande a été refusée. Vérifiez l’adresse, les rôles ou le motif."
         case .invalidCursor: "La liste a changé. Actualisez-la pour continuer."
         case .unavailable: "Connexion indisponible ou réponse non reçue. Aucune confirmation ne peut être donnée."
+        case .deliveryUnavailable: "L’envoi des invitations n’est pas encore configuré. Votre demande reste conservée jusqu’à vérification de son résultat."
         case .invalidResponse: "La réponse n’a pas pu être vérifiée. Le résultat n’est pas confirmé."
         case .pendingCommand: "Une demande attend sa confirmation. Vérifiez son résultat avant une autre action."
         case .operationUnknown: "Le résultat n’a pas encore pu être établi. La demande reste conservée sur cet appareil."
+        case .trainingInvalid: "Cette formation n’est plus ouverte. Choisissez-en une autre."
         }
     }
 }
@@ -108,4 +119,6 @@ protocol SchoolInvitationAPI: AnyObject {
     func invitations(schoolID: UUID, cursor: String?) async throws -> SchoolPage<SchoolInvitation>
     func operation(schoolID: UUID, id: UUID) async throws -> SchoolOperationReceipt
     func send(_ command: PendingSchoolCommand) async throws -> SchoolInvitation
+    /// Offres ouvertes : dernière version active, référentiel et procédure adoptés.
+    func trainingOfferings(schoolID: UUID) async throws -> [SchoolOffering]
 }
