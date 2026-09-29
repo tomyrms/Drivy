@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
-  activeInstructors, defaultInstructorId, invitationCodeMessage, invitationLabel, invitationSchema, issuedCodeOf, openOfferings,
+  activeInstructors, defaultInstructorId, invitationCodeMessage, invitationLabel, invitationSchema, issuedCodeOf, offeringLabel, openOfferings,
   parseInvitationResponse, type Invitation,
 } from '../client/invitation-model.js';
 
@@ -76,6 +76,15 @@ describe('Invitation : choix de l’offre et du moniteur', () => {
     const open = openOfferings([oldB, disabledNow, newB, enabledBefore, other]);
     expect(open.map(item => item.id)).toEqual([other.id, newB.id]);
     expect(openOfferings([])).toEqual([]);
+  });
+
+  test('deux offres d’une même catégorie se distinguent par leur référence, pas leurs versions', () => {
+    const standard = offer('b-standard', 2, true), intensive = offer('b-intensif', 1, true), moped = offer('am-standard', 1, true, 'AM');
+    const open = openOfferings([offer('b-standard', 1, true), standard, intensive, moped]);
+    expect(offeringLabel(moped, open)).toBe('Permis AM');
+    expect(offeringLabel(standard, open)).toBe('Permis B · b-standard');
+    expect(offeringLabel(intensive, open)).toBe('Permis B · b-intensif');
+    expect(offeringLabel(standard, [offer('b-standard', 1, true), standard])).toBe('Permis B');
   });
 
   test('moniteurs : membres actifs avec le rôle Moniteur, par ordre alphabétique français', () => {

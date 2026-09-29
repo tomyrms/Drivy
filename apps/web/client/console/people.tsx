@@ -3,7 +3,7 @@ import { commandMessage, createCommand, filled, isEmail } from '../command-core'
 import { useCommandSnapshot } from '../command-store';
 import { roleLabel, type Role } from '../protocol';
 import {
-  activeInstructors, defaultInstructorId, invitationCodeMessage, invitationLabel, invitationSchema, issuedCodeOf, openOfferings, parseInvitationResponse,
+  activeInstructors, defaultInstructorId, invitationCodeMessage, invitationLabel, invitationSchema, issuedCodeOf, offeringLabel, openOfferings, parseInvitationResponse,
   type Invitation,
 } from '../invitation-model';
 import { memberSchema, offeringSchema, readAll } from '../school-api';
@@ -288,7 +288,7 @@ export function InvitationsSection() {
             </>}>
             <form className="form-grid" onSubmit={event => { event.preventDefault(); setShowErrors(true); if (!trainingProblem && canWrite) { setAcknowledged(false); setDialog('create'); } }}>
               <SelectField label="Offre" value={offeringId} placeholder="Choisir une offre" disabled={!canWrite} onChange={setOfferingId}
-                options={offerings.map(item => ({ value: item.id, label: `Permis ${item.categoryCode}` }))} />
+                options={offerings.map(item => ({ value: item.id, label: offeringLabel(item, offerings) }))} />
               <SelectField label="Moniteur" value={instructorId} placeholder="Choisir un moniteur" disabled={!canWrite} onChange={setInstructorId}
                 options={instructors.map(item => ({ value: item.id, label: item.displayName }))} />
               {showErrors && trainingProblem && <p className="field-error"><Symbol kind="alert" bare />{trainingProblem}</p>}
@@ -342,7 +342,7 @@ export function InvitationsSection() {
         disabledReason={dialog === 'revoke' && !filled(revokeReason, 1000) ? 'Indiquez le motif de la révocation.' : null}
         {...(dialog === 'create' ? { acknowledgement: creating === 'code' ? 'J’ai vérifié l’offre et le moniteur choisis.' : 'J’ai vérifié l’adresse et les rôles proposés.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
         {dialog === 'create' && creating === 'code' && <>
-          <p className="dialog-lead">Code élève{chosenOffering ? ` · Permis ${chosenOffering.categoryCode}` : ''}</p>
+          <p className="dialog-lead">Code élève{chosenOffering ? ` · ${offeringLabel(chosenOffering, offerings)}` : ''}</p>
           <Facts items={[['Moniteur', chosenInstructor?.displayName ?? '—'], ['École', school.name], ['Validité du code', '7 jours, à usage unique']]} />
         </>}
         {dialog === 'create' && creating === 'email' && <>

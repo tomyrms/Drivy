@@ -52,6 +52,12 @@ export function openOfferings<T extends OfferingLike>(offerings: readonly T[]): 
     .sort((a, b) => a.categoryCode.localeCompare(b.categoryCode, 'fr') || a.offeringKey.localeCompare(b.offeringKey, 'fr'));
 }
 
+/** « Permis B », followed by the offer reference when several offers of the same category exist. */
+export function offeringLabel(offering: OfferingLike, offerings: readonly OfferingLike[]): string {
+  const keys = new Set(offerings.filter(item => item.categoryCode === offering.categoryCode).map(item => item.offeringKey));
+  return keys.size > 1 ? `Permis ${offering.categoryCode} · ${offering.offeringKey}` : `Permis ${offering.categoryCode}`;
+}
+
 export function activeInstructors<T extends MemberLike>(members: readonly T[]): T[] {
   return members.filter(member => member.status === 'ACTIVE' && member.roles.includes('INSTRUCTOR'))
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr'));
@@ -68,7 +74,7 @@ export function invitationLabel(invitation: Pick<Invitation, 'delivery' | 'maske
   if (invitation.delivery !== 'CODE') return invitation.maskedEmail ?? 'Invitation';
   const offering = invitation.training ? offerings.find(item => item.id === invitation.training!.offeringId) : undefined;
   const instructor = invitation.training ? members.find(item => item.id === invitation.training!.instructorMembershipId) : undefined;
-  const parts = ['Code élève', offering ? `Permis ${offering.categoryCode}` : null, instructor ? instructor.displayName : null];
+  const parts = ['Code élève', offering ? offeringLabel(offering, offerings) : null, instructor ? instructor.displayName : null];
   return parts.filter((part): part is string => part !== null).join(' · ');
 }
 

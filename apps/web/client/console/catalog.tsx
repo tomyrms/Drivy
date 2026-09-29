@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { centsToInput, createCommand, filled, formatCents, isHttpURL, parseCents } from '../command-core';
+import { createCommand, filled, isHttpURL } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { catalogPolicySchema, curriculumSchema, offeringSchema, readAll, type CatalogPolicy, type Curriculum, type Offering } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime, formatDuration } from '../ui';
@@ -266,7 +266,7 @@ export function ProceduresSection() {
 
 /* ---------------------------------------------------------------- Offres */
 
-type OfferingDraft = { offeringKey: string; categoryCode: string; curriculumVersionId: string; policyVersionId: string; enabled: boolean; duration: string; price: string; basedOn: Offering | null };
+type OfferingDraft = { offeringKey: string; categoryCode: string; curriculumVersionId: string; policyVersionId: string; enabled: boolean; duration: string; basedOn: Offering | null };
 
 export function OfferingsSection() {
   const { schoolId, navigate } = useConsole();
@@ -309,7 +309,6 @@ export function OfferingsSection() {
       curriculum: curriculumOptions.some(item => item.id === draft.curriculumVersionId) ? null : 'Choisissez un référentiel de cette catégorie.',
       policy: policyOptions.some(item => item.id === draft.policyVersionId) ? null : 'Choisissez une procédure de cette catégorie.',
       duration: /^\d{1,3}$/.test(draft.duration) && duration >= 1 && duration <= 480 ? null : 'Durée en minutes, de 1 à 480.',
-      price: parseCents(draft.price) === null ? 'Indiquez un prix valide en CHF, par exemple 95 ou 95.50.' : null,
       enabled: draft.enabled && !refsApproved ? 'Une offre activée exige un référentiel et une procédure approuvés.' : null,
     };
     return { ...result, valid: Object.values(result).every(value => value === null) };
@@ -318,14 +317,15 @@ export function OfferingsSection() {
   function edit(from: Offering | null) {
     runner.clearOutcome(); setShowErrors(false);
     setDraft({ offeringKey: from?.offeringKey ?? '', categoryCode: from?.categoryCode ?? '', curriculumVersionId: from?.curriculumVersionId ?? '',
-      policyVersionId: from?.policyVersionId ?? '', enabled: false, duration: from ? String(from.defaultDurationMinutes) : '45',
-      price: from ? centsToInput(from.defaultPriceCents) : '', basedOn: from });
+      policyVersionId: from?.policyVersionId ?? '', enabled: from?.enabled ?? false, duration: from ? String(from.defaultDurationMinutes) : '45', basedOn: from });
   }
   async function confirm() {
     if (!draft || !problems?.valid) return;
     const command = createCommand({ schoolId, kind: 'createOffering', path: 'offerings', resourceVersion: 0, body: {
       offeringKey: draft.offeringKey.trim(), categoryCode: draft.categoryCode.trim(), curriculumVersionId: draft.curriculumVersionId,
-      policyVersionId: draft.policyVersionId, enabled: draft.enabled, defaultDurationMinutes: Number(draft.duration), defaultPriceCents: parseCents(draft.price)! } });
+      policyVersionId: draft.policyVersionId, enabled: draft.enabled, defaultDurationMinutes: Number(draft.duration),
+      // Les tarifs vivent dans les prestations : l'offre garde le prix par défaut de sa version d'origine.
+      defaultPriceCents: draft.basedOn?.defaultPriceCents ?? 0 } });
     const result = await runner.run(command, draft.enabled ? 'La version de l’offre est créée et activée.' : 'La version de l’offre est créée, désactivée.');
     setReviewing(false);
     if (result.status === 'confirmed') { setDraft(null); setSelected(null); }
@@ -344,12 +344,12 @@ export function OfferingsSection() {
           {rows.length === 0 ? <EmptyState symbol="layers" title="Aucune offre" message="Créez une offre à partir d’un référentiel et d’une procédure de la même catégorie." />
           : <table className="data-table">
             <caption className="visually-hidden">Offres de l’école</caption>
-            <thead><tr><th scope="col">Offre</th><th scope="col">Cat.</th><th scope="col" className="numeric">Version</th><th scope="col" className="numeric">Durée</th><th scope="col" className="numeric">Prix</th><th scope="col">État</th></tr></thead>
+            <thead><tr><th scope="col">Offre</th><th scope="col">Cat.</th><th scope="col" className="numeric">Version</th><th scope="col" className="numeric">Durée</th><th scope="col">État</th></tr></thead>
             <tbody>{rows.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
               <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>{item.offeringKey}</RowButton>
                 {latest.get(item.offeringKey)?.id !== item.id && <span className="caption"> · ancienne version</span>}</th>
               <td>{item.categoryCode}</td><td className="numeric">{item.version}</td>
-              <td className="numeric">{formatDuration(item.defaultDurationMinutes)}</td><td className="numeric">{formatCents(item.defaultPriceCents)}</td><td>{offerState(item)}</td>
+              <td className="numeric">{formatDuration(item.defaultDurationMinutes)}</td><td>{offerState(item)}</td>
             </tr>)}</tbody>
           </table>}
         </>}
@@ -376,10 +376,7 @@ export function OfferingsSection() {
               <SelectField label="Procédure" value={draft.policyVersionId} placeholder="Choisir une procédure" disabled={!canWrite || !category}
                 options={policyOptions.map(item => ({ value: item.id, label: `Version ${item.version} · ${item.approved ? 'approuvée' : 'brouillon'}` }))}
                 onChange={policyVersionId => update({ policyVersionId })} error={showErrors ? problems.policy : null} />
-              <div className="form-row">
-                <TextField label="Durée par défaut (minutes)" value={draft.duration} inputMode="numeric" disabled={!canWrite} onChange={duration => update({ duration })} error={showErrors ? problems.duration : null} />
-                <TextField label="Prix par défaut (CHF)" value={draft.price} inputMode="decimal" disabled={!canWrite} onChange={price => update({ price })} error={showErrors ? problems.price : null} />
-              </div>
+              <TextField label="Durée par défaut (minutes)" value={draft.duration} inputMode="numeric" disabled={!canWrite} onChange={duration => update({ duration })} error={showErrors ? problems.duration : null} />
               <CheckField label="Activer cette version de l’offre" checked={draft.enabled} onChange={enabled => update({ enabled })} disabled={!canWrite}
                 description="Une offre activée permet d’ouvrir de nouvelles formations. Elle exige un référentiel et une procédure approuvés." />
               {problems.enabled && <p className="field-error"><Symbol kind="alert" bare />{problems.enabled}</p>}
@@ -391,7 +388,6 @@ export function OfferingsSection() {
               ['Référentiel', curriculum(current.curriculumVersionId) ? <>Révision {curriculum(current.curriculumVersionId)!.revision} {approvalBadge(curriculum(current.curriculumVersionId)!.approved)}</> : 'Non disponible'],
               ['Procédure', policy(current.policyVersionId) ? <>Version {policy(current.policyVersionId)!.version} {approvalBadge(policy(current.policyVersionId)!.approved, true)}</> : 'Non disponible'],
               ['Durée par défaut', formatDuration(current.defaultDurationMinutes)],
-              ['Prix par défaut', formatCents(current.defaultPriceCents)],
             ]} />
             {latest.get(current.offeringKey)?.id !== current.id && <p className="caption">Une version plus récente de cette offre existe.</p>}
             <p className="caption">Une nouvelle version ne modifie pas les formations déjà ouvertes. Elle est créée désactivée tant que vous ne cochez pas l’activation.</p>
@@ -407,9 +403,10 @@ export function OfferingsSection() {
           ['Référentiel', `Révision ${curriculum(draft.curriculumVersionId)?.revision ?? '?'} · ${curriculum(draft.curriculumVersionId)?.approved ? 'approuvée' : 'brouillon'}`],
           ['Procédure', `Version ${policy(draft.policyVersionId)?.version ?? '?'} · ${policy(draft.policyVersionId)?.approved ? 'approuvée' : 'brouillon'}`],
           ['Durée par défaut', formatDuration(Number(draft.duration))],
-          ['Prix par défaut', parseCents(draft.price) !== null ? formatCents(parseCents(draft.price)!) : '—'],
           ['État', draft.enabled ? 'Activée' : 'Désactivée'],
         ]} />
+        {draft.basedOn?.enabled && !draft.enabled && <Notice tone="warning" title="Cette version ferme l’offre" live={false}>
+          <p>La version {draft.basedOn.version} est activée : aucune nouvelle formation ne pourra s’ouvrir avec cette offre tant qu’une version activée n’existe pas.</p></Notice>}
       </ConfirmDialog>}
     </div>
   );

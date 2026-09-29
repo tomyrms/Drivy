@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { createCommand, isCivilDate } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
-import { activeInstructors, openOfferings } from '../invitation-model';
+import { activeInstructors, offeringLabel, openOfferings } from '../invitation-model';
 import { assignmentSchema, learnerSchema, memberSchema, offeringSchema, readAll, trainingSchema, type Training } from '../school-api';
 import { EmptyState, SelectField, StatusBadge, Symbol, TextField, formatCivilDate } from '../ui';
 import { useCommandRunner, useConsole, useLoad } from './context';
@@ -93,7 +93,7 @@ export function LearnersSection() {
           <form className="form-grid" onSubmit={event => { event.preventDefault(); void openTraining(); }}>
             <div className="form-row">
               <SelectField label="Nouvelle formation" value={offeringId} disabled={!canWrite} placeholder="Choisir une offre" onChange={setOfferingId}
-                options={offerings.map(item => ({ value: item.id, label: `Permis ${item.categoryCode}` }))} />
+                options={offerings.map(item => ({ value: item.id, label: offeringLabel(item, offerings) }))} />
               <TextField label="Début" type="date" value={startedOn} disabled={!canWrite} onChange={setStartedOn} />
             </div>
             <button type="submit" className="button primary" disabled={!canWrite || !offeringId || !isCivilDate(startedOn)}>Ouvrir la formation</button>
