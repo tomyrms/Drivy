@@ -199,8 +199,6 @@ struct SchoolCaptureReplayView: View {
             } else if let error = model.errorMessage {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     SchoolErrorNotice(message: error, retry: { Task { await model.load() } })
-                    Text("Le trajet reste privé et n’est pas modifié par cette lecture.")
-                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
                 }
                 .padding(DrivySpacing.m)
                 .frame(maxWidth: DrivyMapLayout.accessibleMaxWidth)
@@ -213,9 +211,8 @@ struct SchoolCaptureReplayView: View {
         let day = model.startsAt?.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(Locale(identifier: "fr_CH")))
         let suffix = day.map { " · \($0)" } ?? ""
         switch model.quality ?? "" {
-        case "SYNCED": return DrivyMapStatus(title: "Complet · privé\(suffix)", symbol: "lock")
-        case "PARTIAL": return DrivyMapStatus(title: "Partiel · lacunes visibles\(suffix)", symbol: "exclamationmark.circle", tone: .warning)
-        default: return DrivyMapStatus(title: "Privé\(suffix)", symbol: "lock")
+        case "PARTIAL": return DrivyMapStatus(title: "Partiel\(suffix)", symbol: "exclamationmark.circle", tone: .warning)
+        default: return DrivyMapStatus(title: day ?? "Trajet", symbol: "point.topleft.down.to.point.bottomright.curvepath")
         }
     }
 
@@ -352,7 +349,7 @@ struct SchoolCaptureReplayView: View {
 
     private func meta(_ item: SchoolReplayTimeline.Item) -> String {
         let time = item.offset.map { DrivyReplayScrubber.clock($0) } ?? "Heure non renseignée"
-        return "\(time) · \(item.coordinate == nil ? "Sans position" : "Sur le trajet") · Privé"
+        return "\(time) · \(item.coordinate == nil ? "Sans position" : "Sur le trajet")"
     }
 
     @ViewBuilder
@@ -458,8 +455,7 @@ struct SchoolCaptureReplayView: View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
             DrivySectionHeader(title: DrivySeanceText.observations(timeline.items.count))
             if timeline.items.isEmpty {
-                DrivyEmptyState(title: "Aucune observation",
-                    message: "Aucune observation privée n’est rattachée à ce trajet.", symbol: "text.bubble")
+                DrivyEmptyState(title: "Aucune observation", symbol: "text.bubble")
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(timeline.items) { item in
@@ -497,10 +493,6 @@ struct SchoolCaptureReplayView: View {
                     }
                 }
             }
-            Label("Observations privées : aucune n’est publiée par cette lecture.", systemImage: "lock")
-                .font(.footnote)
-                .foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
