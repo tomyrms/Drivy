@@ -151,7 +151,7 @@ private struct SchoolTrainingContent: View {
             if model.lessonsLoaded && model.lessons.isEmpty && !model.isLoading {
                 DrivyEmptyState(title: "Aucune leçon", symbol: "calendar")
             }
-            if !model.upcomingLessons.isEmpty { lessonGroup("À venir", values: model.upcomingLessons) }
+            if !model.upcomingLessons.isEmpty { lessonGroup("Prévues", values: model.upcomingLessons) }
             if !model.pastLessons.isEmpty { lessonGroup("Passées", values: model.pastLessons) }
             moreLessons
         }

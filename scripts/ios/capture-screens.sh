@@ -10,7 +10,7 @@ read -r -a screens <<< "${DRIVY_VISUAL_SCREENS:-home-tabs agenda learners learne
 read -r -a devices <<< "${DRIVY_VISUAL_DEVICES:-iPhone iPad}"
 read -r -a appearances <<< "${DRIVY_VISUAL_APPEARANCES:-light dark}"
 for screen in "${screens[@]}"; do
-  [[ "$screen" =~ ^(dossier|progression|home-tabs|agenda|learners|learner|lesson|lesson-planned|invitation-code|design-system)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
+  [[ "$screen" =~ ^(dossier|progression|home-tabs|agenda|learners|learner|lesson|lesson-planned|invitation-code|trips|replay|design-system)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
 done
 for kind in "${devices[@]}"; do
   [[ "$kind" == iPhone || "$kind" == iPad ]] || { echo 'Appareil de capture inconnu.' >&2; exit 1; }
@@ -36,7 +36,7 @@ print(candidates[0]["udid"])
     for screen in "${screens[@]}"; do
       xcrun simctl terminate "$device_id" ch.drivy.qualification 2>/dev/null || true
       SIMCTL_CHILD_DRIVY_VISUAL_SCREEN="$screen" xcrun simctl launch "$device_id" ch.drivy.qualification
-      sleep 5
+      sleep 10
       xcrun simctl io "$device_id" screenshot "artifacts/ios/${kind}-${screen}-${appearance}-synthetic.png"
     done
   done

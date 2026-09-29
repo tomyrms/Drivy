@@ -5,7 +5,7 @@ import SwiftUI
 /// No production credentials, persistent school store or network transport is created.
 struct SchoolVisualReview: View {
     /// Shell screens routed here directly by DrivyApp, with the real tab bar.
-    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner"]
+    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner", "trips"]
 
     let screen: String
     @State private var context: SchoolVisualContext?
@@ -13,7 +13,8 @@ struct SchoolVisualReview: View {
     @Environment(\.dynamicTypeSize) private var systemTextSize
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
+          Group {
             if let context {
                 switch screen {
                 case "lesson", "lesson-planned":
@@ -35,6 +36,10 @@ struct SchoolVisualReview: View {
                             learner: context.learner, trainingID: SchoolVisualData.trainingID, section: .progress)
                             .navigationTitle("Progression")
                     }
+                case "trips":
+                    SchoolVisualShell(context: context, tab: .trips)
+                case "replay":
+                    SchoolCaptureReplayView(model: context.replay, learnerName: "Trajet synthétique")
                 case "home-tabs":
                     SchoolVisualShell(context: context, tab: .session)
                 case "agenda":
@@ -50,11 +55,10 @@ struct SchoolVisualReview: View {
             } else if let error {
                 ContentUnavailableView("Rendu indisponible", systemImage: "exclamationmark.triangle", description: Text(error))
             } else { ProgressView("Préparation du rendu…") }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+          }
             // The tab shell shows its real tab bar: no banner over it.
             if !Self.shellScreens.contains(screen) {
-                Text("Rendu de contrôle · données fictives")
+                Text(screen == "replay" ? "Rendu de contrôle · coordonnées synthétiques" : "Rendu de contrôle · données fictives")
                     .font(.caption2).foregroundStyle(DrivyTheme.muted)
                     .padding(.vertical, 5).frame(maxWidth: .infinity).background(DrivyTheme.surface)
             }
@@ -102,6 +106,7 @@ private struct SchoolVisualShell: View {
     let client: SchoolTrainingClient
     let agenda: SchoolAgendaClient
     let learner: SchoolLearner
+    let replay: SchoolCaptureReplayWorkspace
 }
 
 @MainActor private enum SchoolVisualData {
@@ -116,6 +121,7 @@ private struct SchoolVisualShell: View {
     static let lessonID = identifier(9)
     static let revisionID = identifier(10)
     static let plannedLessonID = identifier(13)
+    static let captureID = identifier(70)
     static let time = "2026-09-24T10:00:00Z"
 
     static func prepare() async throws -> SchoolVisualContext {
@@ -127,10 +133,12 @@ private struct SchoolVisualShell: View {
         let agenda = SchoolAgendaClient(baseURL: baseURL, tokenSource: token, transport: transport)
         let workspace = SchoolWorkspace(api: client.reader)
         await workspace.loadAccount()
-        guard workspace.membership != nil, workspace.school != nil else { throw SchoolAPIError.invalidResponse }
+        guard let person = workspace.person, let membership = workspace.membership, workspace.school != nil else { throw SchoolAPIError.invalidResponse }
         let learner: SchoolLearner = try decode(learnerObject)
+        let replay = SchoolCaptureReplayWorkspace(scope: agenda.scope(person: person, membership: membership),
+            client: agenda.captureClient, captureID: captureID)
         return SchoolVisualContext(workspace: workspace, client: client, agenda: agenda,
-            learner: learner)
+            learner: learner, replay: replay)
     }
 
     private static func identifier(_ value: Int) -> UUID {
@@ -216,6 +224,69 @@ private struct SchoolVisualShell: View {
         }
     }
 
+    /// Deliberately geometric paths around 0° / 0° in the ocean, generated here.
+    /// These DEBUG-only coordinates do not represent a learner, road or GPS recording.
+    private static func syntheticCapture(_ id: UUID) -> [String: Any] {
+        ["id": id.uuidString, "schoolId": schoolID.uuidString, "version": 1,
+         "lessonId": lessonID.uuidString, "learnerId": learnerID.uuidString,
+         "instructorMembershipId": membershipID.uuidString, "deviceId": identifier(73).uuidString,
+         "choiceId": identifier(74).uuidString, "deviceAssessmentId": identifier(75).uuidString,
+         "authorizedAt": "2026-09-21T07:00:00Z", "expiresAt": "2026-09-21T10:00:00Z",
+         "stoppedAt": "2026-09-21T07:02:20Z", "cutoffAt": "2026-09-21T07:02:20Z",
+         "uploadDeadline": "2026-09-22T10:00:00Z", "captureState": "STOPPED",
+         "syncState": "SYNCED", "publicationState": "PRIVATE"]
+    }
+
+    private static func syntheticTrips() -> [[String: Any]] {
+        [captureID, identifier(71), identifier(72)].enumerated().map { index, id in
+            var capture = syntheticCapture(id)
+            capture["learnerName"] = ["Camille Exemple", "Léa Exemple", "Noah Exemple"][index]
+            capture["instructorName"] = "Moniteur Exemple"
+            capture["lessonPlannedStart"] = "2026-09-21T07:00:00Z"
+            capture["lessonTimeZone"] = "Europe/Zurich"
+            if index == 1 { capture["syncState"] = "PARTIAL" }
+            if index == 2 { capture["publicationState"] = "DELETED" }
+            return capture
+        }
+    }
+
+    private static func syntheticReplay() -> [String: Any] {
+        let origin = SchoolLesson.date("2026-09-21T07:00:00Z")!
+        let iso = ISO8601DateFormatter()
+        let segments: [[String: Any]] = (0..<2).map { segmentIndex in
+            let points: [[String: Any]] = (0..<7).map { index in
+                let seconds = segmentIndex * 80 + index * 10
+                return ["sequence": index, "elapsedMs": seconds * 1000,
+                    "capturedAt": iso.string(from: origin.addingTimeInterval(Double(seconds))),
+                    "latitude": Double(segmentIndex) * 0.004 + Double(index) * 0.0004,
+                    "longitude": Double(index) * 0.0007,
+                    "accuracyMeters": 5.0]
+            }
+            return ["segmentId": identifier(76 + segmentIndex).uuidString, "segmentIndex": segmentIndex,
+                "points": points, "hasGapBefore": segmentIndex > 0, "qualityLabel": "AVAILABLE",
+                "continuesFromPreviousPage": false, "continuesOnNextPage": false]
+        }
+        let observations: [[String: Any]] = (0..<3).map { index in
+            let segment = index == 2 ? 1 : 0
+            let sequence = index == 1 ? 5 : 2
+            let seconds = segment * 80 + sequence * 10
+            var observation: [String: Any] = ["id": identifier(80 + index).uuidString, "schoolId": schoolID.uuidString,
+                "version": 1, "lessonId": lessonID.uuidString, "trainingId": trainingID.uuidString,
+                "captureId": captureID.uuidString, "segmentId": identifier(76 + segment).uuidString,
+                "pointSequence": sequence, "competencyId": identifier(30).uuidString,
+                "text": ["Contrôle latéral · exemple", "Moment à revoir · exemple", "Bonne anticipation · exemple"][index],
+                "origin": "LIVE", "observedAt": iso.string(from: origin.addingTimeInterval(Double(seconds))),
+                "eventKind": index == 1 ? "MARKER" : "QUALIFIED",
+                "eventStatus": index == 0 ? "ATTENTION" : "POSITIVE",
+                "authorMembershipId": membershipID.uuidString]
+            if index == 1 { observation["competencyId"] = NSNull(); observation["eventStatus"] = NSNull() }
+            return observation
+        }
+        return ["captureId": captureID.uuidString, "quality": "SYNCED", "publicationState": "PRIVATE",
+            "segments": segments, "observations": observations, "nextCursor": NSNull(),
+            "generatedAt": time, "reportRevisionId": NSNull(), "geometrySnapshotId": NSNull()]
+    }
+
     private static func responses() throws -> [String: Data] {
         let null = NSNull()
         let root = "/v1/schools/\(schoolID.uuidString)"
@@ -295,6 +366,9 @@ private struct SchoolVisualShell: View {
             "\(root)/report-revisions/\(revisionID.uuidString)": revision,
             "\(root)/lessons/\(lessonID.uuidString)/reports": page([revision])
         ]
+        objects["\(root)/captures"] = page(syntheticTrips())
+        objects["\(root)/captures/\(captureID.uuidString)"] = syntheticCapture(captureID)
+        objects["\(root)/captures/\(captureID.uuidString)/replay"] = syntheticReplay()
         var draft = revision
         draft["id"] = identifier(60).uuidString
         draft["basePublicationVersion"] = 1

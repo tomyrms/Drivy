@@ -177,6 +177,8 @@ private struct SchoolLessonReportContent: View {
             }
         }
         .scrollContentBackground(.hidden)
+        .frame(maxWidth: 820)
+        .frame(maxWidth: .infinity)
         .background(DrivyTheme.canvas)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let bar { plannedBarView(bar) }
