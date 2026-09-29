@@ -41,6 +41,14 @@ struct SchoolHomeView: View {
         .onChange(of: captureController?.isCollecting) { wasCollecting, isCollecting in
             if wasCollecting != true && isCollecting == true { selectedTab = .session }
         }
+        .onChange(of: selectedTab) { previous, _ in
+            // A trip the school has confirmed (complete or partial) is over: leaving the live
+            // view closes it, so « Aujourd’hui » shows the day again instead of the ended trip.
+            if previous == .session, let captureController, captureController.state == .saved,
+               let result = captureController.finalizedSyncState, result == .synced || result == .partial {
+                captureController.closeSaved()
+            }
+        }
     }
 
     private func resetScope() {
@@ -86,6 +94,7 @@ struct SchoolHomeView: View {
             Group {
                 if let captureController, captureController.captureID != nil {
                     SchoolCaptureLiveView(controller: captureController, learnerName: captureLearnerName,
+                        closeSaved: { captureController.closeSaved() },
                         returnToLesson: { selectedTab = .agenda })
                 } else {
                     SchoolTodayView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
