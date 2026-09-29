@@ -26,14 +26,18 @@ private actor InvitationTransport: SchoolHTTPTransport {
 
 @MainActor
 struct SchoolInvitationClientTests {
-    @Test func unconfiguredDeliveryHasSpecificMessageAndCannotReleaseAnUncertainCommand() async throws {
-        let transport = InvitationTransport(Data("{\"code\":\"INVITATION_DELIVERY_UNAVAILABLE\"}".utf8),
-            status: 503, mediaType: "application/problem+json")
-        let client = SchoolInvitationClient(baseURL: URL(string: "https://api.example.invalid")!, tokenSource: InvitationToken(), transport: transport)
+    @Test func unavailableDeliveryIsADefinitiveRefusalThatPointsToCodes() async throws {
         let command = try InvitationFixture.command()
-        await #expect(throws: SchoolInvitationFailure.deliveryUnavailable) { try await client.send(command) }
-        #expect(!SchoolInvitationFailure.deliveryUnavailable.permitsCorrectionOfFreshRequest)
-        #expect(SchoolInvitationFailure.deliveryUnavailable.localizedDescription.contains("n’est pas encore configuré"))
+        for status in [409, 503] {
+            let transport = InvitationTransport(Data("{\"code\":\"INVITATION_DELIVERY_UNAVAILABLE\"}".utf8),
+                status: status, mediaType: "application/problem+json")
+            let client = SchoolInvitationClient(baseURL: URL(string: "https://api.example.invalid")!, tokenSource: InvitationToken(), transport: transport)
+            await #expect(throws: SchoolInvitationFailure.deliveryUnavailable) { try await client.send(command) }
+        }
+        #expect(SchoolInvitationFailure.deliveryUnavailable.permitsCorrectionOfFreshRequest)
+        #expect(SchoolInvitationFailure.deliveryUnavailable.provesNotCommitted)
+        #expect(!SchoolInvitationFailure.conflict.provesNotCommitted)
+        #expect(SchoolInvitationFailure.deliveryUnavailable.localizedDescription.contains("avec un code"))
     }
     private let base = URL(string: "https://api.example.invalid")!
     private let school = ConfigurationFixture.schoolID

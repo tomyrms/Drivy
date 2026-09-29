@@ -155,10 +155,13 @@ enum SchoolInvitationFailure: Error, LocalizedError, Equatable {
     var permitsCorrectionOfFreshRequest: Bool {
         switch self {
         case .schoolInactive, .policyRequired, .alreadyMember, .alreadyInvited, .invitationUsed, .invitationRevoked, .conflict, .rejected,
-             .trainingInvalid: true
+             .trainingInvalid, .deliveryUnavailable: true
         default: false
         }
     }
+    /// A refusal that proves the command never took effect, even for a resent operation: the
+    /// school answers a replay of a committed operation with its stored result, before this check.
+    var provesNotCommitted: Bool { self == .deliveryUnavailable }
     var errorDescription: String? {
         switch self {
         case .unauthorized: "Votre session a expiré. Connectez-vous à nouveau."
@@ -173,7 +176,7 @@ enum SchoolInvitationFailure: Error, LocalizedError, Equatable {
         case .rejected: "La demande a été refusée. Vérifiez l’adresse, les rôles ou le motif."
         case .invalidCursor: "La liste a changé. Actualisez-la pour continuer."
         case .unavailable: "Connexion indisponible ou réponse non reçue. Aucune confirmation ne peut être donnée."
-        case .deliveryUnavailable: "L’envoi des invitations n’est pas encore configuré. Votre demande reste conservée jusqu’à vérification de son résultat."
+        case .deliveryUnavailable: "L’invitation par e-mail n’est pas disponible. Invitez l’élève avec un code."
         case .invalidResponse: "La réponse n’a pas pu être vérifiée. Le résultat n’est pas confirmé."
         case .pendingCommand: "Une demande attend sa confirmation. Vérifiez son résultat avant une autre action."
         case .operationUnknown: "Le résultat n’a pas encore pu être établi. La demande reste conservée sur cet appareil."

@@ -314,7 +314,9 @@ final class SchoolInvitationWorkspace: Identifiable {
             return true
         } catch {
             if let failure = error as? SchoolInvitationFailure, failure.permitsCorrectionOfFreshRequest {
-                if firstAttempt {
+                // A resent command is kept for review, unless the refusal proves it never took effect
+                // (an e-mail invitation without delivery must not block the school's other requests).
+                if firstAttempt || failure.provesNotCommitted {
                     do { try outbox.remove(command) }
                     catch {
                         guard request == generation else { return false }

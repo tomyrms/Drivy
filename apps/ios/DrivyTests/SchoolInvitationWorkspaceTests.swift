@@ -109,6 +109,30 @@ struct SchoolInvitationWorkspaceTests {
         #expect(api.commands.count == 3)
     }
 
+    @Test func anEmailInvitationWithoutDeliveryNoLongerBlocksTheSchoolOnceResent() async throws {
+        let id = UUID()
+        let stuck = PendingSchoolCommand(id: id, scope: ConfigurationFixture.scope(), kind: .createInvitation, resourceVersion: 0,
+            createdAt: Date(), body: try JSONEncoder().encode(SchoolInviteCommand(operationId: id, email: "eleve@example.invalid", roles: [.learner])))
+        let outbox = ConfigurationOutboxStub(value: stuck)
+        let api = InvitationAPIStub()
+        api.sendFailure = .deliveryUnavailable
+        let model = InvitationFixture.workspace(api: api, outbox: outbox)
+        await model.load()
+        #expect(model.pending == stuck && !model.mayEdit)
+        await model.retryPending()
+        #expect(api.commands == [stuck])
+        #expect(outbox.value == nil && model.pending == nil)
+        #expect(model.errorMessage == SchoolInvitationFailure.deliveryUnavailable.localizedDescription)
+        // Other refusals of a resent command still keep it for review.
+        api.sendFailure = .unavailable
+        await model.load()
+        #expect(await model.createCode() == false)
+        let uncertain = try #require(outbox.value)
+        api.sendFailure = .conflict
+        await model.retryPending()
+        #expect(outbox.value == uncertain && model.pendingRequiresReview)
+    }
+
     @Test func resendAndRevocationPreserveReviewedTargetVersionAndReason() async throws {
         let api = InvitationAPIStub()
         let original = InvitationFixture.invitation(status: .expired)

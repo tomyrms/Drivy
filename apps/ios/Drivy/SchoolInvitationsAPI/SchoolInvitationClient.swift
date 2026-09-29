@@ -153,6 +153,7 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
                 case "INVITATION_ALREADY_PENDING": throw SchoolInvitationFailure.alreadyInvited
                 case "INVITATION_USED": throw SchoolInvitationFailure.invitationUsed
                 case "INVITATION_REVOKED": throw SchoolInvitationFailure.invitationRevoked
+                case "INVITATION_DELIVERY_UNAVAILABLE": throw SchoolInvitationFailure.deliveryUnavailable
                 default: throw SchoolInvitationFailure.pendingCommand
                 }
             case 412 where problem?.code == "VERSION_CONFLICT": throw SchoolInvitationFailure.conflict
