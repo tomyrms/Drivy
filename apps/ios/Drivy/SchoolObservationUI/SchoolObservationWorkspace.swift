@@ -89,7 +89,13 @@ struct SchoolObservationEditor: Identifiable {
     }
     func liveRecorder() -> SchoolLiveObservationRecorder? {
         guard canAdd, lesson?.status == "PLANNED" else { return nil }
-        return SchoolLiveObservationRecorder(scope: scope, lessonID: lessonID, client: client, outbox: outbox)
+        return SchoolLiveObservationRecorder(scope: scope, lessonID: lessonID, client: client, outbox: outbox,
+            onSettlement: { [weak self] in
+                guard let self, !self.accessRevoked else { return }
+                // onDismiss peut avoir fini sa lecture avant la réponse d’envoi. Cette lecture
+                // crée une nouvelle génération ; aucune réponse antérieure ne peut la remplacer.
+                await self.load()
+            })
     }
     func timeLabel(_ value: String?) -> String? {
         guard let value, let date = SchoolLesson.date(value) else { return nil }

@@ -98,11 +98,87 @@ import Testing
         #expect(timeline.items.first?.coordinate == nil && timeline.items.first?.offset == 660)
     }
 
+    @Test func lateConfirmationRefreshesTheNoGPSWorkspaceAfterItsSheetClosed() async throws {
+        let transport = DelayedLiveObservationTransport(), outbox = ConfigurationOutboxStub()
+        let client = SchoolObservationClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+            tokenSource: HubToken(), transport: transport)
+        let workspace = SchoolObservationWorkspace(scope: ConfigurationFixture.scope(), lessonID: HubFixture.lessonID,
+            client: client, outbox: outbox)
+        await workspace.load()
+        let recorder = try #require(workspace.liveRecorder())
+        #expect(recorder.markMoment(at: HubFixture.date("2026-09-28T12:11:00Z")))
+        let command = try #require(outbox.value)
+        // Lecture déclenchée par onDismiss, avant la confirmation du POST.
+        await workspace.load()
+        #expect(workspace.pending == command && !workspace.canAdd)
+        await transport.releasePost()
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while (workspace.pending != nil || workspace.isLoading || workspace.observations.isEmpty), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(workspace.pending == nil && workspace.canAdd && workspace.observations.count == 1)
+        #expect(outbox.value == nil && outbox.removals == [command])
+        #expect(await transport.operations() == [command.id])
+        #expect(recorder.confirmed == 1)
+    }
+
+    @Test func lateConfirmationCannotReopenAnInvalidatedObservationWorkspace() async throws {
+        let transport = DelayedLiveObservationTransport(), outbox = ConfigurationOutboxStub()
+        let client = SchoolObservationClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+            tokenSource: HubToken(), transport: transport)
+        let workspace = SchoolObservationWorkspace(scope: ConfigurationFixture.scope(), lessonID: HubFixture.lessonID,
+            client: client, outbox: outbox)
+        await workspace.load()
+        let recorder = try #require(workspace.liveRecorder())
+        #expect(recorder.markMoment())
+        await workspace.load()
+        workspace.invalidate()
+        await transport.releasePost()
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while recorder.confirmed == 0, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(recorder.confirmed == 1 && outbox.value == nil)
+        #expect(workspace.accessRevoked && !workspace.loaded && !workspace.canAdd && workspace.lesson == nil && workspace.observations.isEmpty)
+    }
+
     private func recorder(outbox: ConfigurationOutboxStub) -> SchoolLiveObservationRecorder {
         let client = SchoolObservationClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
             tokenSource: HubToken(), transport: LiveObservationTransport())
         return SchoolLiveObservationRecorder(scope: ConfigurationFixture.scope(), lessonID: HubFixture.lessonID,
             client: client, outbox: outbox)
+    }
+}
+
+/// Maintient la réponse POST en attente pendant la relecture déclenchée par la fermeture de la feuille.
+private actor DelayedLiveObservationTransport: SchoolHTTPTransport {
+    private let fallback = LiveObservationTransport()
+    private var release: CheckedContinuation<Void, Never>?
+    private var released = false
+    private var observations: [SchoolObservation] = []
+    private var sentOperations: [UUID] = []
+
+    func operations() -> [UUID] { sentOperations }
+    func releasePost() { released = true; release?.resume(); release = nil }
+
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        guard let url = request.url, url.lastPathComponent == "geo-observations" else { return try await fallback.send(request) }
+        func response(_ value: some Encodable) throws -> SchoolHTTPResponse {
+            let data = try JSONSerialization.jsonObject(with: JSONEncoder().encode(value))
+            return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["data": data,
+                "requestId": UUID().uuidString, "serverTime": "2026-09-28T12:15:00Z"]), status: 200, url: url, contentType: "application/json")
+        }
+        if request.httpMethod == "POST" {
+            let body = try JSONDecoder().decode(SchoolObservationBody.self, from: request.httpBody ?? Data())
+            sentOperations.append(body.operationId)
+            if !released { await withCheckedContinuation { release = $0 } }
+            let observation = SchoolObservation(id: body.operationId, schoolId: HubFixture.schoolID, version: 1,
+                lessonId: HubFixture.lessonID, trainingId: HubFixture.trainingID, draftId: nil,
+                captureId: nil, segmentId: nil, pointSequence: nil, competencyId: body.competencyId,
+                text: body.text, origin: body.origin, observedAt: body.observedAt, eventKind: body.eventKind,
+                eventStatus: body.eventStatus, authorMembershipId: ConfigurationFixture.membershipID)
+            observations.append(observation)
+            return try response(observation)
+        }
+        return try response(SchoolPage(items: observations, nextCursor: nil))
     }
 }
 

@@ -47,11 +47,14 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     var canRecord: Bool { !stopped && !isSending && pending == nil }
     @ObservationIgnored private let client: SchoolObservationClient
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
+    @ObservationIgnored private let onSettlement: (@MainActor () async -> Void)?
     @ObservationIgnored private var stopped = false
 
     init(scope: SchoolCommandScope, lessonID: UUID, client: SchoolObservationClient,
-         outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
+         outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(),
+         onSettlement: (@MainActor () async -> Void)? = nil) {
         self.scope = scope; self.lessonID = lessonID; self.client = client; self.outbox = outbox
+        self.onSettlement = onSettlement
         do { pending = try outbox.pending(for: scope) }
         catch { stopped = true; errorMessage = "Le stockage protégé est indisponible. Aucune observation n’a été ajoutée." }
     }
@@ -120,20 +123,23 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     func retry() async {
         guard canRetry, let command = pending else { return }
         isSending = true
-        defer { isSending = false }
         do {
             try outbox.save(command)
             _ = try await client.send(command)
             try outbox.remove(command)
-            guard !stopped else { return }
-            pending = nil; confirmed += 1; errorMessage = nil
+            if !stopped { pending = nil; confirmed += 1; errorMessage = nil }
         } catch {
-            guard !stopped else { return }
-            // Même un refus conserve le geste pour une relecture explicite depuis la leçon.
-            errorMessage = "Observation conservée sur cet appareil. Son envoi reste à confirmer."
-            if error as? SchoolObservationFailure == .unauthorized || error as? SchoolObservationFailure == .forbidden {
-                stop(); errorMessage = "Votre accès a changé. L’observation reste conservée dans le compte d’origine."
+            if !stopped {
+                // Même un refus conserve le geste pour une relecture explicite depuis la leçon.
+                errorMessage = "Observation conservée sur cet appareil. Son envoi reste à confirmer."
+                if error as? SchoolObservationFailure == .unauthorized || error as? SchoolObservationFailure == .forbidden {
+                    stop(); errorMessage = "Votre accès a changé. L’observation reste conservée dans le compte d’origine."
+                }
             }
         }
+        isSending = false
+        // La feuille peut déjà être fermée : avertir son propriétaire après le résultat réseau,
+        // sans confondre la sauvegarde du geste et la confirmation de l’école.
+        await onSettlement?()
     }
 }
