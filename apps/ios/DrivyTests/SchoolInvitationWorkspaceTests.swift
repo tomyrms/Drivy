@@ -343,12 +343,18 @@ final class InvitationAPIStub: SchoolInvitationAPI {
     var listHandler: ((String?) async throws -> SchoolPage<SchoolInvitation>)?
     var sendHandler: ((PendingSchoolCommand) async throws -> SchoolInvitation)?
     var offeringValues: [SchoolOffering] = []
+    var offeringFailure: SchoolInvitationFailure?
+    var instructorValues: [SchoolInvitationInstructor] = []
     /// Code handed back when a code invitation is created (nil: a replayed answer, without code).
     var creationCode: String? = "K7Q4MX2P"
     /// Code handed back when a code invitation is renewed.
     var renewalCode: String? = "M3N4P5Q6"
     func school(id: UUID) async throws -> SchoolDetails { schoolValue }
-    func trainingOfferings(schoolID: UUID) async throws -> [SchoolOffering] { offeringValues }
+    func trainingOfferings(schoolID: UUID) async throws -> [SchoolOffering] {
+        if let offeringFailure { throw offeringFailure }
+        return offeringValues
+    }
+    func instructors(schoolID: UUID) async throws -> [SchoolInvitationInstructor] { instructorValues }
     func invitations(schoolID: UUID, cursor: String?) async throws -> SchoolPage<SchoolInvitation> {
         queries.append(cursor)
         if let listHandler { return try await listHandler(cursor) }

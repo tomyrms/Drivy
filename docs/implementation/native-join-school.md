@@ -1,6 +1,16 @@
 # Rejoindre une école dans l’application
 
-L’entrée **Compte → Rejoindre une école**, disponible sans école ni Person déjà liée, ouvre le parcours natif. L’écran d’un compte connecté non encore lié propose également **J’ai une invitation**. Il faut utiliser le compte OIDC correspondant à l’adresse destinataire vérifiée par le serveur.
+## Code élève — parcours courant
+
+**J’ai un code** est disponible dès la connexion et pour un compte sans école. Avant la saisie, l’application utilise la connexion OIDC existante : le code n’authentifie pas le compte et ne demande pas l’adresse d’invitation. L’aperçu montre l’école et les permis associés ; **Rejoindre** réalise le rattachement et les formations en une commande.
+
+Le code normalisé et l’UUID de commande sont conservés au Trousseau avant émission, puis relus avant chaque renvoi. Une réponse perdue se vérifie avec les mêmes octets et la même opération. Une école portant le même nom n’est jamais utilisée comme preuve de réussite. Un refus reçu lors d’un renvoi conserve l’intention incertaine ; seul un premier refus métier explicite libère la saisie. La réussite efface le code du journal et **Ouvrir mon école** relit les accès courants.
+
+Les tests Swift couvrent les permis multiples, le code invalide, la limitation des tentatives, la réponse perdue, le refus après réponse perdue et un Trousseau illisible avant renvoi. L’exécution Apple est suivie dans `STATUS.md`.
+
+## Lien d’invitation existant
+
+L’entrée **J’ai un lien d’invitation**, depuis la saisie du code, ouvre le parcours historique ci-dessous. Pour ce lien uniquement, le compte OIDC doit correspondre à l’adresse destinataire vérifiée par le serveur.
 
 ## Parcours
 

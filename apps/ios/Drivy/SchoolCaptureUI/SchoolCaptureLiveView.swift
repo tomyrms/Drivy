@@ -8,6 +8,8 @@ struct SchoolCaptureLiveView: View {
     let learnerName: String
     var closeSaved: (() -> Void)? = nil
     var returnToLesson: (() -> Void)? = nil
+    var openLesson: ((UUID, Bool) -> Void)? = nil
+    var observationClient: SchoolObservationClient? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var resetCameraID = UUID()
@@ -58,6 +60,9 @@ struct SchoolCaptureLiveView: View {
         .tint(DrivyTheme.accent)
         .toolbar(.hidden, for: .navigationBar)
         .interactiveDismissDisabled(controller.isTransferring)
+        .task(id: controller.captureID) {
+            if let observationClient { controller.prepareLiveObservations(client: observationClient) }
+        }
         .confirmationDialog(confirmation?.title ?? "Confirmer", isPresented: confirmsAction, titleVisibility: .visible, presenting: confirmation) { request in
             switch request {
             case .stop:
@@ -77,7 +82,7 @@ struct SchoolCaptureLiveView: View {
             case .stop:
                 Text("Les positions déjà enregistrées seront conservées. La leçon continue sans GPS.")
             case .allowPartial:
-                Text("Le trajet pourra être clôturé avec les seules positions confirmées par l’école. Les lacunes resteront visibles. Il ne sera pas publié dans un bilan.")
+                Text("Le trajet sera conservé avec les positions confirmées par l’école. Les lacunes resteront visibles.")
             }
         }
         .onChange(of: controller.captureID) { _, _ in
@@ -220,11 +225,7 @@ struct SchoolCaptureLiveView: View {
                     .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if controller.state == .saved && controller.finalizedSyncState == nil {
-                Text("Envoyez les positions, puis vérifiez le trajet complet. Il reste privé jusqu’à sa publication dans un bilan.")
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else if controller.state == .paused && controller.pointCount > 0 {
+            if controller.state == .paused && controller.pointCount > 0 {
                 Text("Aucune position n’est enregistrée pendant la pause.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -274,7 +275,33 @@ struct SchoolCaptureLiveView: View {
     /// Pause or resume is the only command of the dock while collecting; the stop
     /// stays in the top bar, away from it, and is always confirmed.
     private var collectingActions: some View {
-        pauseResumeButton
+        VStack(spacing: DrivySpacing.s) {
+            if let recorder = controller.liveObservations {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DrivySpacing.s) {
+                    ForEach(SchoolLiveTile.allCases) { tile in
+                        Button { recorder.record(tile) } label: {
+                            Label(tile.title, systemImage: tile.symbol)
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!recorder.canRecord)
+                        .accessibilityIdentifier("capture-observation-\(tile.id)")
+                    }
+                }
+                if recorder.isSending { ProgressView("Enregistrement du repère…") }
+                else if recorder.pending != nil {
+                    Text(recorder.errorMessage ?? "Une demande reste à confirmer.")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                    if recorder.canRetry {
+                        Button("Renvoyer le repère") { Task { await recorder.retry() } }
+                    }
+                } else if let error = recorder.errorMessage {
+                    DrivyInlineMessage(text: error, tone: .warning)
+                }
+            }
+            pauseResumeButton
+        }
     }
 
     @ViewBuilder private var pauseResumeButton: some View {
@@ -301,6 +328,10 @@ struct SchoolCaptureLiveView: View {
 
     private var savedActions: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            if let lessonID = controller.lessonID, let openLesson {
+                Button("Terminer la leçon", systemImage: "checkmark.circle") { openLesson(lessonID, true) }
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+            }
             if let state = controller.finalizedSyncState {
                 finalizationResult(state)
                 Button("Retour à la leçon") { close() }
@@ -335,10 +366,10 @@ struct SchoolCaptureLiveView: View {
         switch state {
         case .synced:
             resultLabel("Trajet synchronisé", symbol: "checkmark.circle.fill", tone: .success,
-                message: "Les positions ont été confirmées par l’école. Le trajet reste privé.")
+                message: nil)
         case .partial:
             resultLabel("Trajet partiel", symbol: "exclamationmark.circle.fill", tone: .warning,
-                message: "Le trajet est conservé avec des lacunes. Il reste privé.")
+                message: "Le trajet est conservé avec des lacunes.")
         case .rejected:
             resultLabel("Trajet refusé par l’école", symbol: "exclamationmark.triangle.fill", tone: .warning, message: nil)
         case .uploading:
@@ -398,6 +429,7 @@ struct SchoolCaptureLiveView: View {
 
     private func close() {
         guard !controller.isTransferring else { return }
+        if let lessonID = controller.lessonID, let openLesson { openLesson(lessonID, false); return }
         if controller.state == .saved { closeSaved?() }
         if let returnToLesson { returnToLesson() }
         else { dismiss() }

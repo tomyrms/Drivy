@@ -35,12 +35,16 @@ struct SchoolCodePreview: Codable, Equatable, Sendable {
     let roles: [String]
     let trainingCategoryCode: String?
     let expiresAt: String
+    var trainingCategoryCodes: [String]? = nil
+
+    var categories: [String] { trainingCategoryCodes ?? trainingCategoryCode.map { [$0] } ?? [] }
 
     var isValid: Bool {
         !schoolName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && schoolName.unicodeScalars.count <= 300
             && !roles.isEmpty && Set(roles).count == roles.count
-            && roles.allSatisfy({ ["ADMIN", "INSTRUCTOR", "LEARNER"].contains($0) })
+            && roles == ["LEARNER"]
             && (trainingCategoryCode.map { !$0.isEmpty && $0.unicodeScalars.count <= 20 } ?? true)
+            && categories.count <= 16 && categories.allSatisfy({ !$0.isEmpty && $0.unicodeScalars.count <= 20 })
             && SchoolLesson.date(expiresAt) != nil
     }
 }

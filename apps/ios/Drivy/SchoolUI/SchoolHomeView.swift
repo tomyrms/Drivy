@@ -18,6 +18,7 @@ struct SchoolHomeView: View {
     @State private var choosesSchool = false
     @State private var dossierPlanningModel: SchoolPlanningWorkspace?
     @State private var chosenTrainingID: UUID?
+    @State private var captureLesson: CaptureLessonRoute?
 
     var body: some View {
         Group {
@@ -36,6 +37,16 @@ struct SchoolHomeView: View {
             SchoolChooserSheet(workspace: workspace, close: { choosesSchool = false })
         }
         .sheet(item: $dossierPlanningModel) { model in SchoolPlanningView(model: model) }
+        .sheet(item: $captureLesson) { route in
+            if let agendaClient {
+                NavigationStack {
+                    SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace,
+                        lessonID: route.id, learnerName: route.learnerName, opensCompletion: route.completing)
+                }
+                .tint(DrivyTheme.accent)
+                .environment(captureController)
+            }
+        }
         .onChange(of: workspace.membership?.membershipId) { _, _ in resetScope() }
         .onChange(of: workspace.membership?.accessEpoch) { _, _ in resetScope() }
         .onChange(of: captureController?.isCollecting) { wasCollecting, isCollecting in
@@ -52,7 +63,7 @@ struct SchoolHomeView: View {
     }
 
     private func resetScope() {
-        dossierPlanningModel?.invalidate(); dossierPlanningModel = nil; chosenTrainingID = nil
+        dossierPlanningModel?.invalidate(); dossierPlanningModel = nil; chosenTrainingID = nil; captureLesson = nil
     }
 
     // MARK: Moniteur
@@ -95,7 +106,9 @@ struct SchoolHomeView: View {
                 if let captureController, captureController.captureID != nil {
                     SchoolCaptureLiveView(controller: captureController, learnerName: captureLearnerName,
                         closeSaved: { captureController.closeSaved() },
-                        returnToLesson: { selectedTab = .agenda })
+                        openLesson: { lessonID, completing in
+                            captureLesson = CaptureLessonRoute(id: lessonID, learnerName: captureLearnerName, completing: completing)
+                        }, observationClient: agendaClient?.observationClient)
                 } else {
                     SchoolTodayView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
                         .navigationTitle("Aujourd’hui")
@@ -229,4 +242,10 @@ struct SchoolHomeView: View {
         }
         DrivyAccountToolbarItem(openAccount: openAccount)
     }
+}
+
+private struct CaptureLessonRoute: Identifiable {
+    let id: UUID
+    let learnerName: String
+    let completing: Bool
 }

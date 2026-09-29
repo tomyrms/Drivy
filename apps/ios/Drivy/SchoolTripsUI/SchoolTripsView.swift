@@ -33,6 +33,9 @@ struct SchoolTripsView: View {
             // Coming back to the tab after a lesson shows the trip that just ended.
             if let loadedAt = model?.loadedAt, Date().timeIntervalSince(loadedAt) > 30 { Task { await refresh() } }
         }
+        .onChange(of: captureController?.finalizedSyncState) { _, state in
+            if state == .synced || state == .partial { Task { await refresh() } }
+        }
         .fullScreenCover(item: $replay) { route in
             SchoolCaptureReplayView(model: route.model, learnerName: route.learnerName)
         }
@@ -86,10 +89,11 @@ private struct SchoolTripsList: View {
     let refresh: () async -> Void
 
     private var hasUploads: Bool { !(uploads?.pendingUploads.isEmpty ?? true) }
+    private var hasUploadError: Bool { uploads?.errorMessage != nil }
 
     var body: some View {
         List {
-            if let uploads, hasUploads {
+            if let uploads, hasUploads || hasUploadError {
                 SchoolCaptureUploadsSection(model: uploads, learnerName: learnerName,
                     onChange: { Task { await model.load() } })
             }
@@ -120,7 +124,7 @@ private struct SchoolTripsList: View {
         .scrollContentBackground(.hidden)
         .background(DrivyTheme.canvas)
         .overlay {
-            if model.isEmpty && !hasUploads {
+            if model.isEmpty && !hasUploads && !hasUploadError {
                 ContentUnavailableView("Aucun trajet", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
             }
         }

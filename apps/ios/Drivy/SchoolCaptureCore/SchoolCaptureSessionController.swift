@@ -19,6 +19,7 @@ final class SchoolCaptureSessionController {
     private(set) var transferMessage: String?
     private(set) var isTransferring = false
     private(set) var finalizedSyncState: SchoolCaptureSession.SyncState?
+    private(set) var liveObservations: SchoolLiveObservationRecorder?
 
     @ObservationIgnored private var permittedScope: SchoolCommandScope?
     @ObservationIgnored private var context: Context?
@@ -65,6 +66,13 @@ final class SchoolCaptureSessionController {
     var canRetrySaving: Bool { state == .failed && context != nil }
     var learnerID: UUID? { context?.session.serverCapture.learnerId }
     var canPrepareCapture: Bool { captureID == nil || state == .saved }
+    func prepareLiveObservations(client: SchoolObservationClient) {
+        guard let active = context, active.scope == permittedScope, let lessonID,
+              client.baseURL.absoluteString == active.scope.apiBaseURL else { return }
+        if liveObservations?.scope == active.scope, liveObservations?.lessonID == lessonID { return }
+        liveObservations?.stop()
+        liveObservations = SchoolLiveObservationRecorder(scope: active.scope, lessonID: lessonID, client: client)
+    }
     var elapsedSeconds: TimeInterval {
         guard let beginning else { return 0 }
         return max(0, SchoolCaptureLocationTime.seconds(beginning.duration(to: endedAt ?? .now)))
@@ -117,6 +125,7 @@ final class SchoolCaptureSessionController {
 
     func closeSaved() {
         guard state == .saved else { return }
+        liveObservations?.stop(); liveObservations = nil
         context?.source.onEvent = nil
         context = nil; generation = UUID()
         state = .idle; captureID = nil; lessonID = nil; segments = []
@@ -129,6 +138,7 @@ final class SchoolCaptureSessionController {
     /// feuille est présentée. Les mesures de l'ancien contexte disparaissent aussitôt.
     func setScope(_ scope: SchoolCommandScope?) {
         guard permittedScope != scope else { return }
+        liveObservations?.stop(); liveObservations = nil
         permittedScope = scope
         let old = context
         let boundary = old?.stopBoundary()
@@ -174,6 +184,7 @@ final class SchoolCaptureSessionController {
                 authorization: authorization, receivedAt: receivedAt)
             throw error
         }
+        liveObservations?.stop(); liveObservations = nil
         let request = UUID(); generation = request
         let local = SchoolCaptureLocalCoordinator(store: transfer.store, scope: transfer.scope,
             stopLocalCollector: { _ = source.stop() })

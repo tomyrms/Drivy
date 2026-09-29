@@ -299,17 +299,41 @@ struct InvitationCreationView: View {
                         symbol: "steeringwheel")
                 }
             }
-            if model.carriesTraining && !model.offerings.isEmpty {
+            if model.lacksInstructor {
                 Section {
-                    Picker("Formation", selection: $model.selectedOfferingID) {
-                        if model.selectedOfferingID == nil { Text("Choisir").tag(nil as UUID?) }
-                        ForEach(model.offerings) { offering in
-                            Text(offeringLabel(offering)).tag(Optional(offering.id))
-                        }
+                    DrivyEmptyState(title: "Aucun moniteur actif", message: "Ajoutez un moniteur sur le web pour inviter un élève.",
+                        symbol: "person.crop.circle")
+                }
+            }
+            if model.carriesTraining && !model.offerings.isEmpty {
+                Section("Permis") {
+                    ForEach(model.offerings) { offering in
+                        Toggle(offeringLabel(offering), isOn: Binding(
+                            get: { model.selectedOfferingIDs.contains(offering.id) },
+                            set: { selected in
+                                if selected { model.selectedOfferingIDs.insert(offering.id) }
+                                else { model.selectedOfferingIDs.remove(offering.id) }
+                            }))
+                            .disabled(!model.selectedOfferingIDs.contains(offering.id) && model.selectedOfferingIDs.count >= 16)
+                            .accessibilityIdentifier("invitation-training-\(offering.id.uuidString)")
                     }
-                    .accessibilityIdentifier("invitation-training")
                 }
                 .disabled(!model.mayEdit)
+            }
+            if model.roles.contains("ADMIN"), !model.instructors.isEmpty {
+                Section {
+                    Picker("Moniteur", selection: $model.selectedInstructorID) {
+                        if model.selectedInstructorID == nil { Text("Choisir").tag(nil as UUID?) }
+                        ForEach(model.instructors) { instructor in
+                            Text(instructor.displayName).tag(Optional(instructor.id))
+                        }
+                    }
+                    .accessibilityIdentifier("invitation-instructor")
+                }
+                .disabled(!model.mayEdit)
+            }
+            if let error = model.creationOptionsError {
+                Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
             }
             if let error = model.errorMessage { Section { SchoolErrorNotice(message: error) } }
             if let pending = model.pending {
@@ -324,7 +348,7 @@ struct InvitationCreationView: View {
         .safeAreaInset(edge: .bottom) {
             if model.codeRecovery == nil {
                 DrivyFormActionBar(hint: hint) {
-                    Button { Task { await model.createCode(offeringID: model.selectedOfferingID) } } label: {
+                    Button { Task { await model.createCode() } } label: {
                         DrivyBusyLabel(title: "Créer le code", busyTitle: "Création…", isBusy: model.isBusy)
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle())
@@ -336,8 +360,10 @@ struct InvitationCreationView: View {
     }
 
     private var hint: String? {
-        guard model.mayEdit, model.carriesTraining, !model.offerings.isEmpty, model.selectedOffering == nil else { return nil }
-        return "Choisissez la formation."
+        guard model.mayEdit, model.creationOptionsError == nil else { return nil }
+        if !model.offerings.isEmpty && model.selectedOfferingIDs.isEmpty { return "Choisissez au moins un permis." }
+        if !model.instructors.isEmpty && model.selectedInstructorID == nil { return "Choisissez le moniteur." }
+        return nil
     }
 
     private func offeringLabel(_ offering: SchoolOffering) -> String {
@@ -403,7 +429,7 @@ struct InvitationCodeResultView: View {
 
     static func message(code: String, schoolName: String?) -> String {
         let school = schoolName.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 } ?? "mon auto-école"
-        return "Rejoins \(school) sur Drivy : ouvre l’app, crée ton compte puis saisis le code \(code)."
+        return "Rejoins \(school) sur Drivy : ouvre l’app, touche « J’ai un code », connecte-toi puis saisis \(code)."
     }
 
     /// « Valable 7 jours »; under a day, the hour it stops working.

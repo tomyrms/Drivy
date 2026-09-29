@@ -2,8 +2,7 @@ import Foundation
 import Security
 
 /// Intention to join a school with a code, kept before it is sent. The answer of an uncertain
-/// request is found again by sending the same bytes under the same operation (idempotent), or,
-/// when the code no longer answers, by reading the schools the account belongs to now.
+/// request is found again by sending the same bytes under the same operation (idempotent).
 struct SchoolCodeJoinRecord: Codable, Equatable, Sendable {
     let version: Int
     let principal: SchoolJoinPrincipal
@@ -12,7 +11,7 @@ struct SchoolCodeJoinRecord: Codable, Equatable, Sendable {
     let createdAt: Date
     /// `{operationId, code}`; erased once the school confirmed the membership.
     let body: Data?
-    /// Schools of the account before the request: a new one with the previewed name proves it went through.
+    /// Legacy journal field kept to read an already stored pending intention.
     let knownSchoolIDs: [UUID]
     let membership: SchoolMembership?
 
@@ -28,12 +27,6 @@ struct SchoolCodeJoinRecord: Codable, Equatable, Sendable {
     func confirmed(by membership: SchoolMembership) -> SchoolCodeJoinRecord {
         SchoolCodeJoinRecord(version: version, principal: principal, operationID: operationID, preview: preview,
             createdAt: createdAt, body: nil, knownSchoolIDs: knownSchoolIDs, membership: membership)
-    }
-
-    /// The membership this request created, found among the account’s current schools.
-    func joined(among memberships: [SchoolMembership]) -> SchoolMembership? {
-        let new = memberships.filter { !knownSchoolIDs.contains($0.schoolId) && $0.schoolName == preview.schoolName }
-        return new.count == 1 ? new[0] : nil
     }
 
     var isValid: Bool {

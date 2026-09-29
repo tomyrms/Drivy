@@ -181,6 +181,42 @@ struct SchoolLessonHubTests {
         await model.load()
         #expect(model.lesson != nil && !model.mayRecordPermit)
     }
+
+    @Test func changedServerPreparationDoesNotEraseOrSilentlyRebaseLocalEdits() async {
+        let server = HubServer(), outbox = ConfigurationOutboxStub()
+        let model = HubFixture.workspace(server: server, outbox: outbox)
+        await model.load()
+        model.administrativeNote = "Saisie privée non enregistrée"
+        await server.setPreparation(note: "Modification depuis un autre appareil", version: 2)
+        await model.load()
+        #expect(model.administrativeNote == "Saisie privée non enregistrée")
+        #expect(model.preparation?.version == 1 && model.needsReload && !model.canMutate)
+        #expect(model.hasLocalEdits && model.retainedEditsText.contains("Saisie privée"))
+        #expect(!(await model.savePreparation()) && outbox.saves.isEmpty)
+        await model.load(discardingEdits: true)
+        #expect(model.administrativeNote == "Modification depuis un autre appareil")
+        #expect(model.preparation?.version == 2 && model.canMutate && !model.hasLocalEdits)
+    }
+
+    @Test func failedPreparationReadKeepsLocalEditsUntilRetry() async {
+        let server = HubServer()
+        let model = HubFixture.workspace(server: server, outbox: ConfigurationOutboxStub())
+        await model.load()
+        model.administrativeNote = "À conserver"
+        await server.setPreparation(status: 503)
+        await model.load()
+        #expect(model.administrativeNote == "À conserver" && model.hasLocalEdits && !model.canMutate)
+        await server.setPreparation()
+        await model.load()
+        #expect(model.administrativeNote == "À conserver" && model.canMutate && model.hasLocalEdits)
+    }
+
+    @Test func refreshRecognizesOwnSaveButNeverRebasesConcurrentEdits() {
+        #expect(SchoolLessonRefreshPolicy.decide(previous: "avant", edited: "saisie", received: "saisie", discardingEdits: false) == .replace)
+        #expect(SchoolLessonRefreshPolicy.decide(previous: "avant", edited: "saisie", received: "avant", discardingEdits: false) == .keepEdits)
+        #expect(SchoolLessonRefreshPolicy.decide(previous: "avant", edited: "saisie", received: nil, discardingEdits: false) == .conflict)
+        #expect(SchoolLessonRefreshPolicy.decide(previous: "avant", edited: "saisie", received: "autre", discardingEdits: false) == .conflict)
+    }
 }
 
 // MARK: Données de test
@@ -237,9 +273,15 @@ actor HubServer: SchoolHTTPTransport {
     private var trainingVersion = 3
     private var operation: UUID?
     private var recorded: [URLRequest] = []
+    private var preparationNote: String?
+    private var preparationVersion = 1
+    private var preparationStatus = 200
 
     init(permitStatus: Int = 200, grants: [String] = ["permit_review"]) { self.permitStatus = permitStatus; self.grants = grants }
     func requests() -> [URLRequest] { recorded }
+    func setPreparation(note: String? = nil, version: Int = 1, status: Int = 200) {
+        preparationNote = note; preparationVersion = version; preparationStatus = status
+    }
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         recorded.append(request)
@@ -283,8 +325,9 @@ actor HubServer: SchoolHTTPTransport {
                 "offeringId": UUID().uuidString, "version": trainingVersion, "categoryCode": "B", "status": "ACTIVE", "startedOn": NSNull(), "closedOn": NSNull()])
         }
         if parts.suffix(3) == ["lessons", lesson, "preparation"] {
+            if preparationStatus != 200 { return problem(preparationStatus, "UNAVAILABLE") }
             return ok(["id": UUID(uuidString: "70000000-0000-4000-8000-000000000001")!.uuidString, "schoolId": HubFixture.schoolID.uuidString,
-                "lessonId": HubFixture.lessonID.uuidString, "version": 1, "goals": [] as [Any], "administrativeCheckNote": NSNull(), "plannedWaypoints": [] as [Any]])
+                "lessonId": HubFixture.lessonID.uuidString, "version": preparationVersion, "goals": [] as [Any], "administrativeCheckNote": preparationNote as Any? ?? NSNull(), "plannedWaypoints": [] as [Any]])
         }
         if parts.suffix(3) == ["lessons", lesson, "reports"] { return ok(["items": [] as [Any], "nextCursor": NSNull()]) }
         if parts.suffix(3) == ["lessons", lesson, "captures"] { return ok(["items": [] as [Any]]) }

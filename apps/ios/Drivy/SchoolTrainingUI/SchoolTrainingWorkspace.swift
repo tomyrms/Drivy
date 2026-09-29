@@ -135,7 +135,7 @@ import Observation
             return (current, false)
         }
         // Un écran encore ouvert garde son propre modèle : il n’est pas invalidé ici.
-        let value =SchoolTrainingWorkspace(scope: scope, membership: membership, learnerID: learnerID, trainingID: trainingID, client: client)
+        let value = SchoolTrainingWorkspace(scope: scope, membership: membership, learnerID: learnerID, trainingID: trainingID, client: client)
         current = value
         return (value, true)
     }

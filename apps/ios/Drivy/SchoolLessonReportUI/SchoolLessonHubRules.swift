@@ -121,46 +121,12 @@ enum SchoolLessonHubRules {
         return String(String.UnicodeScalarView(text.unicodeScalars.prefix(500)))
     }
 
-    /// Niveau suggéré par le constat noté pendant la leçon ; le moniteur le relit avant d’enregistrer.
-    static func suggestedLevel(for status: String?) -> String? {
-        switch status {
-        case "POSITIVE": "INDEPENDENT"
-        case "ATTENTION": "GUIDED"
-        case "TO_REWORK": "DISCOVERING"
-        default: nil
-        }
-    }
-
-    /// Une suggestion par compétence du référentiel : la plus récente observation qualifiée, avec son texte pour situation.
-    static func suggestedLevels(from observations: [SchoolObservation], competencies: Set<UUID>, excluding: Set<UUID>) -> [SchoolReportObservation] {
-        var latest: [UUID: SchoolObservation] = [:], order: [UUID] = []
-        for observation in observations.sorted(by: { ($0.observedAt ?? "") < ($1.observedAt ?? "") }) {
-            guard let competency = observation.competencyId, competencies.contains(competency), !excluding.contains(competency),
-                  suggestedLevel(for: observation.eventStatus) != nil else { continue }
-            if latest[competency] == nil { order.append(competency) }
-            latest[competency] = observation
-        }
-        return order.compactMap { competency in
-            guard let observation = latest[competency], let level = suggestedLevel(for: observation.eventStatus) else { return nil }
-            return SchoolReportObservation(competencyId: competency, level: level, context: situation(observation.text) ?? "Leçon")
-        }
-    }
-
-    /// Bilan de départ envoyé avec le constat : les objectifs enregistrés, puis ce qui a été noté pendant la leçon.
-    /// Tout reste modifiable ; ces éléments sont déjà visibles par l’élève (objectifs, observations non gardées).
+    /// Les observations restent des éléments distincts : les recopier dans le texte partagé rendrait
+    /// leur action « Pour moi » inopérante sur cette copie. Les objectifs alimentent seulement le travail réalisé.
     static func completionReport(goals: [SchoolLessonGoal], observations: [SchoolObservation],
                                  competencies: [SchoolCatalogCompetency]) -> (workedOn: String, observationText: String) {
         let worked = goals.map { $0.label.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: "\n")
-        let lines = observations.sorted(by: { ($0.observedAt ?? "") < ($1.observedAt ?? "") }).compactMap { observation -> String? in
-            let text = observation.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            let statusLabel = Self.status(of: observation)?.label
-            let competency = observation.competencyId.flatMap { id in competencies.first { $0.id == id }?.label }
-            let head = [statusLabel, competency].compactMap { $0 }.joined(separator: " · ")
-            if head.isEmpty { return observation.isMarker || text.isEmpty ? nil : text }
-            if text.isEmpty || text == statusLabel || text == competency { return head }
-            return "\(head) : \(text)"
-        }
-        return (limited(worked, 4_000), limited(lines.joined(separator: "\n"), 4_000))
+        return (limited(worked, 4_000), "")
     }
     private static func limited(_ text: String, _ count: Int) -> String {
         String(String.UnicodeScalarView(text.unicodeScalars.prefix(count)))
@@ -184,5 +150,18 @@ enum SchoolLessonHubRules {
         formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = TimeZone(identifier: zone) ?? .current
         formatter.setLocalizedDateFormatFromTemplate(template)
         return formatter.string(from: date)
+    }
+}
+
+/// Une relecture ne perd jamais la saisie ni ne la rebascule silencieusement sur une version concurrente.
+/// Un contenu confirmé égal à la saisie est l'acquittement de notre enregistrement.
+enum SchoolLessonRefreshPolicy: Equatable {
+    case replace, keepEdits, conflict
+
+    static func decide<Value: Equatable>(previous: Value?, edited: Value, received: Value?, discardingEdits: Bool) -> Self {
+        guard !discardingEdits, let previous, previous != edited else { return .replace }
+        if received == edited { return .replace }
+        if received == previous { return .keepEdits }
+        return .conflict
     }
 }

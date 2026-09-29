@@ -13,6 +13,7 @@ struct SchoolLessonReportView: View {
     var opensCompletion = false
     /// Élève : le souhait se modifie sur la prochaine leçon seulement ; `nil` quand l’appelant ne le sait pas.
     var isNextPlanned: Bool? = nil
+    var outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()
     @State private var model: SchoolLessonReportWorkspace?
     @Environment(\.dismiss) private var dismiss
     @State private var confirmsDiscard = false
@@ -60,7 +61,7 @@ struct SchoolLessonReportView: View {
             model?.invalidate(); model = nil
             guard let person = schoolWorkspace.person, let membership = schoolWorkspace.membership else { return }
             let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId, membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: client.baseURL.absoluteString)
-            let value = SchoolLessonReportWorkspace(scope: scope, membership: membership, lessonID: lessonID, client: client)
+            let value = SchoolLessonReportWorkspace(scope: scope, membership: membership, lessonID: lessonID, client: client, outbox: outbox)
             model = value; await value.load()
         }
     }
@@ -137,10 +138,13 @@ private struct SchoolLessonReportContent: View {
                 SchoolCaptureLiveView(controller: capture, learnerName: learnerName, openLesson: { _, completing in
                     showsLive = false
                     if completing { showComplete = true }
-                })
+                }, observationClient: agenda.observationClient)
             }
         }
         .onChange(of: captureStatus) { _, status in if status != .collecting && status != .stopped { showsLive = false } }
+        .onChange(of: showsLive) { _, visible in
+            if !visible { Task { await model.refreshObservations() } }
+        }
         .onChange(of: model.lesson?.status) { _, _ in openCompletionIfAsked() }
         .onAppear { openCompletionIfAsked() }
     }
@@ -149,6 +153,9 @@ private struct SchoolLessonReportContent: View {
         let bar = plannedBar(now: now)
         return Form {
             headerSection
+            if model.needsReload && model.hasLocalEdits {
+                Section("Saisie conservée") { Text(model.retainedEditsText).textSelection(.enabled) }
+            }
             if model.pending != nil { pendingSection }
             if isCompleted, readsLesson, !model.track.isEmpty { trackSection }
             if isCompleted, readsLesson { observationsSection }
@@ -464,12 +471,6 @@ private struct SchoolLessonReportContent: View {
         } header: { Text("Bilan") }
         if !model.competencies.isEmpty {
             Section {
-                let suggestions = model.suggestedObservations
-                if !suggestions.isEmpty {
-                    Button("Reprendre les niveaux notés (\(suggestions.count))", systemImage: "wand.and.stars") { model.applySuggestedLevels() }
-                        .disabled(!model.canMutate)
-                        .accessibilityIdentifier("lesson-apply-suggested-levels")
-                }
                 // Un niveau choisi suffit : la situation est proposée (observation liée, sinon jour et lieu), modifiable.
                 ForEach(model.competencies) { competency in
                     Picker(competency.label, selection: levelBinding(competency.id)) {

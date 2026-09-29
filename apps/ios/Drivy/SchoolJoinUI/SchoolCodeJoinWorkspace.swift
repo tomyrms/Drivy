@@ -74,10 +74,7 @@ import Observation
         isBusy = true; errorMessage = nil
         let record: SchoolCodeJoinRecord
         do {
-            // The schools of the account before sending: how a lost answer can be recognised later.
-            let known = try await client.memberships(principal: principal).map(\.schoolId)
-            guard current(request) else { return }
-            record = try SchoolCodeJoinRecord.make(principal: principal, preview: shown, code: code, knownSchoolIDs: known)
+            record = try SchoolCodeJoinRecord.make(principal: principal, preview: shown, code: code, knownSchoolIDs: [])
             try store.save(record)
             self.record = record; isBusy = false
         } catch {
@@ -111,20 +108,17 @@ import Observation
         let request = generation
         isBusy = true; errorMessage = nil
         do {
+            // Recheck the exact encrypted intention before every transmission, including a retry.
+            guard try store.load(for: record.principal) == record else { throw SchoolJoinFailure.storage }
             let answer = try await client.acceptCode(record)
             confirm(record, membership: answer.membership, request: request)
             if current(request) { trainingNotOpened = answer.trainingNotOpened }
         } catch let failure as SchoolJoinFailure where failure.permitsFreshCorrection {
             if !firstAttempt {
-                // The code no longer answers. If the first request went through, the school is
-                // now one of the account’s: that is the confirmation.
-                let memberships: [SchoolMembership]
-                do { memberships = try await client.memberships(principal: record.principal) }
-                catch { finish(error, request); return }
-                if let joined = record.joined(among: memberships) {
-                    confirm(record, membership: joined, request: request)
-                    return
-                }
+                // A school with the same name is not proof that this operation succeeded.
+                // The server must replay this operation; keep its reference while uncertain.
+                finish(SchoolJoinFailure.unknown, request)
+                return
             }
             // Refused and not joined: the intention is over.
             guard current(request) else { return }

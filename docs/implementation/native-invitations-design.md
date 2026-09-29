@@ -2,7 +2,15 @@
 
 ## Périmètre
 
-Vues `SchoolJoinView` et `SchoolInvitationsView` seulement. Références : E02, E16, J20–J22, R98, scénarios T175 et T190 ; types et gardes des deux workspaces relus. Aucun contrat, rôle, stockage ou traitement du lien n’est modifié.
+Vues d’invitation et d’entrée dans l’école. Références : E02, E16, J20–J22, R98, scénarios T175 et T190 ; extension actuelle [trajets et codes](api-trajets-codes.md). Les liens historiques restent acceptés ; aucun transport e-mail n’est ajouté.
+
+## Codes élèves — reprise du 29 septembre 2026
+
+L’action **Inviter un élève** ouvre directement les permis (1 à 16 offres) et, pour un administrateur, le moniteur actif. Une seule offre ou un seul moniteur est présélectionné ; un administrateur qui enseigne retrouve sa propre affectation. Le moniteur sans rôle ADMIN s’affecte lui-même. **Créer le code** enregistre une seule invitation `trainings`, puis montre le code à copier ou partager avec la feuille iOS. Les formations seront créées ou retrouvées à l’acceptation. Une erreur de chargement des options propose Réessayer et ne prétend plus qu’aucune formation n’existe.
+
+Le code reste en mémoire seulement. Le corps de la commande de création est conservé dans l’outbox chiffrée avant envoi. Si une réponse perdue est confirmée par reçu, le code secret n’est pas reconstitué : **Nouveau code** renouvelle l’invitation existante et invalide le précédent. La liste ne conserve jamais le code.
+
+Les tests Swift couvrent la sélection multiple, l’affectation ADMIN/moniteur, le défaut issu du contexte, le chargement impossible et la reprise d’une réponse sans code. Leur exécution Apple est suivie dans `STATUS.md`.
 
 ## Rejoindre
 
@@ -14,7 +22,7 @@ Une commande principale en bas suit l’état réel : consulter, accepter, véri
 
 La liste utilise les couleurs natives de sélection ; elle ne force plus du texte blanc sans garantir son fond. Les états restent textuels. La fiche présente adresse masquée, rôles et échéance, sans panneau décoratif. Une invitation révoquée ne propose plus dans son explication un renvoi inaccessible.
 
-La création garde une relecture portant les valeurs exactes. Cette feuille reste ouverte pendant l’écriture ; une erreur, l’actualisation requise et la vérification d’une demande incertaine s’effectuent sur place. Elle se ferme après confirmation durable, y compris après vérification ou renvoi de la demande conservée. La création ne prétend toujours pas que l’e-mail a été reçu.
+La création du code utilise les choix visibles sans feuille de confirmation supplémentaire. La feuille reste ouverte pendant l’écriture, puis présente Copier et Partager. Une erreur, l’actualisation requise et la vérification d’une demande incertaine s’effectuent sur place. Les invitations par e-mail existantes restent lisibles ; leur renvoi conserve son erreur explicite si aucun transport n’est configuré.
 
 La révocation conserve son motif et sa confirmation destructrice distincte. Une réponse incertaine expose les mêmes commandes de vérification sur cet écran. Les fermetures sont désactivées pendant l’envoi ; aucun accord ni rôle n’est ajouté automatiquement par la présentation.
 

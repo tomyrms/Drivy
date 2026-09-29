@@ -116,7 +116,7 @@ struct SchoolCodeJoinView: View {
 
     private func details(_ preview: SchoolCodePreview) -> String {
         var parts = [SchoolPresentation.roles(preview.roles)]
-        if let category = preview.trainingCategoryCode { parts.append("Permis \(category)") }
+        if !preview.categories.isEmpty { parts.append("Permis \(Array(Set(preview.categories)).sorted().joined(separator: ", "))") }
         return parts.joined(separator: " · ")
     }
 

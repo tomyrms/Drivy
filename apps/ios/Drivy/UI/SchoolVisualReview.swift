@@ -16,6 +16,19 @@ struct SchoolVisualReview: View {
         Group {
             if let context {
                 switch screen {
+                case "lesson", "lesson-planned":
+                    NavigationStack {
+                        SchoolLessonReportView(client: context.agenda.reportClient, schoolWorkspace: context.workspace,
+                            lessonID: screen == "lesson" ? SchoolVisualData.lessonID : SchoolVisualData.plannedLessonID,
+                            learnerName: context.learner.displayName, outbox: SchoolVisualOutbox())
+                    }
+                case "invitation-code":
+                    NavigationStack {
+                        InvitationCodeResultView(issued: SchoolIssuedInvitationCode(invitationID: SchoolVisualData.lessonID,
+                            code: "EXEM-PLE1", expiresAt: "2026-10-06T10:00:00Z"), schoolName: "École Exemple",
+                            now: SchoolLesson.date("2026-09-29T10:00:00Z")!)
+                            .navigationTitle("Inviter un élève")
+                    }
                 case "progression":
                     NavigationStack {
                         SchoolTrainingScreen(client: context.client, workspace: context.workspace,
@@ -102,6 +115,7 @@ private struct SchoolVisualShell: View {
     static let policyID = identifier(8)
     static let lessonID = identifier(9)
     static let revisionID = identifier(10)
+    static let plannedLessonID = identifier(13)
     static let time = "2026-09-24T10:00:00Z"
 
     static func prepare() async throws -> SchoolVisualContext {
@@ -268,7 +282,7 @@ private struct SchoolVisualShell: View {
         let progress: [String: Any] = ["trainingId": trainingID.uuidString, "items": [progressItem],
             "unobservedCompetencyIds": [identifier(31).uuidString, identifier(32).uuidString], "computedAt": time]
         let agendaKey = "\(root)/lessons" + SchoolVisualTransport.agendaSuffix
-        let objects: [String: Any] = [
+        var objects: [String: Any] = [
             "/v1/me": person, root: school,
             "\(root)/learners": page(learnerObjects), "\(root)/learners/\(learnerID.uuidString)": learnerObject,
             "\(root)/trainings": page([training]), "\(root)/trainings/\(trainingID.uuidString)": training,
@@ -281,6 +295,26 @@ private struct SchoolVisualShell: View {
             "\(root)/report-revisions/\(revisionID.uuidString)": revision,
             "\(root)/lessons/\(lessonID.uuidString)/reports": page([revision])
         ]
+        var draft = revision
+        draft["id"] = identifier(60).uuidString
+        draft["basePublicationVersion"] = 1
+        draft["geoObservationIds"] = [] as [Any]
+        objects["\(root)/lessons/\(lessonID.uuidString)/report-drafts"] = page([draft])
+        objects["\(root)/lessons/\(lessonID.uuidString)/sharing"] = ["lessonId": lessonID.uuidString,
+            "schoolId": schoolID.uuidString, "version": 1, "reportPrivate": false, "captureHidden": false,
+            "privateObservationIds": [] as [Any]]
+        objects["\(root)/trainings/\(trainingID.uuidString)/wish"] = ["id": identifier(61).uuidString,
+            "schoolId": schoolID.uuidString, "trainingId": trainingID.uuidString, "version": 1, "lessonId": null,
+            "text": "Revoir les priorités à droite."]
+        for id in [lessonID, plannedLessonID] {
+            objects["\(root)/lessons/\(id.uuidString)/preparation"] = ["id": identifier(id == lessonID ? 62 : 63).uuidString,
+                "schoolId": schoolID.uuidString, "lessonId": id.uuidString, "version": 1,
+                "goals": [["label": "Anticiper les intersections", "competencyId": identifier(30).uuidString, "context": null]],
+                "administrativeCheckNote": null, "plannedWaypoints": [] as [Any]]
+            objects["\(root)/lessons/\(id.uuidString)/geo-observations"] = page([])
+            objects["\(root)/lessons/\(id.uuidString)/captures"] = ["items": [] as [Any]]
+        }
+        objects["\(root)/lessons/\(plannedLessonID.uuidString)/reports"] = page([])
         return try objects.mapValues { object in
             try JSONSerialization.data(withJSONObject: ["data": object, "requestId": identifier(99).uuidString, "serverTime": time])
         }
@@ -308,6 +342,12 @@ private struct SchoolVisualTransport: SchoolHTTPTransport {
 
 @MainActor private final class SchoolVisualToken: AccessTokenSource {
     func accessToken() async throws -> String { "visual-fixture-only" }
+}
+
+@MainActor private final class SchoolVisualOutbox: SchoolCommandOutbox {
+    func pending(for scope: SchoolCommandScope) throws -> PendingSchoolCommand? { nil }
+    func save(_ command: PendingSchoolCommand) throws { throw SchoolConfigurationFailure.storage }
+    func remove(_ command: PendingSchoolCommand) throws { throw SchoolConfigurationFailure.storage }
 }
 
 #endif

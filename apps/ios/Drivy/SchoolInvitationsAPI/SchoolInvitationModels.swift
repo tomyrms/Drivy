@@ -42,6 +42,7 @@ struct SchoolInvitation: Codable, Sendable, Equatable, Identifiable {
     var code: String? = nil
     /// Training carried by a learner invitation, when the server projects it.
     var training: SchoolInvitationTraining? = nil
+    var trainings: [SchoolInvitationTraining]? = nil
     var trainingCategoryCode: String? = nil
 
     var roleLabel: String { roles.map(\.label).joined(separator: ", ") }
@@ -83,6 +84,7 @@ extension SchoolInvitation {
         delivery = try values.decodeIfPresent(SchoolInvitationDelivery.self, forKey: .delivery) ?? .email
         code = try values.decodeIfPresent(String.self, forKey: .code)
         training = try values.decodeIfPresent(SchoolInvitationTraining.self, forKey: .training)
+        trainings = try values.decodeIfPresent([SchoolInvitationTraining].self, forKey: .trainings)
         trainingCategoryCode = try values.decodeIfPresent(String.self, forKey: .trainingCategoryCode)
     }
 }
@@ -135,6 +137,12 @@ struct SchoolInviteCommand: Codable, Sendable, Equatable {
     var delivery: SchoolInvitationDelivery? = nil
     let roles: [SchoolInvitationRole]
     var training: SchoolInvitationTraining? = nil
+    var trainings: [SchoolInvitationTraining]? = nil
+}
+
+struct SchoolInvitationInstructor: Equatable, Identifiable, Sendable {
+    let id: UUID
+    let displayName: String
 }
 
 struct SchoolResendInvitationCommand: Codable, Sendable, Equatable {
@@ -193,4 +201,5 @@ protocol SchoolInvitationAPI: AnyObject {
     func send(_ command: PendingSchoolCommand) async throws -> SchoolInvitation
     /// Offres ouvertes : dernière version active, référentiel et procédure adoptés.
     func trainingOfferings(schoolID: UUID) async throws -> [SchoolOffering]
+    func instructors(schoolID: UUID) async throws -> [SchoolInvitationInstructor]
 }

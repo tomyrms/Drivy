@@ -36,7 +36,7 @@ import Observation
             let page = try await client.captures(schoolID: scope.schoolID, limit: pageSize, scope: scope)
             guard current(request) else { return }
             trips = page.items; nextCursor = page.nextCursor; seenCursors = []
-            hasLoaded = true; loadedAt = Date()
+            hasLoaded = true; loadedAt = Date(); accessRevoked = false
         } catch {
             guard current(request) else { return }
             fail(error)
@@ -51,7 +51,8 @@ import Observation
         do {
             let page = try await client.captures(schoolID: scope.schoolID, cursor: cursor, limit: pageSize, scope: scope)
             guard current(request), nextCursor == cursor else { return }
-            guard page.nextCursor.map({ !seenCursors.contains($0) }) ?? true else { throw SchoolCaptureFailure.changed }
+            guard page.nextCursor != cursor,
+                  page.nextCursor.map({ !seenCursors.contains($0) }) ?? true else { throw SchoolCaptureFailure.changed }
             seenCursors.insert(cursor)
             for trip in page.items {
                 // A trip seen twice keeps its latest projection, never an older version.

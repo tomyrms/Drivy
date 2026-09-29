@@ -35,6 +35,7 @@ struct SchoolRootView: View {
     @State private var opensLinkAfterCode = false
     @State private var joinMembershipToOpen: SchoolMembership?
     @State private var pendingJoinLink: String?
+    @State private var joinsByCodeAfterSignIn = false
     @State private var selectedHomeTab: SchoolHomeTab = .session
     @State private var captureController = SchoolCaptureSessionController()
     /// The profile sheet shows the guided welcome only when it was opened for it.
@@ -96,6 +97,7 @@ struct SchoolRootView: View {
                 captureController.setScope(nil)
                 closeAll(); selectedHomeTab = .session; workspace?.reset()
             } else if pendingJoinLink != nil { openJoin() }
+            else if joinsByCodeAfterSignIn { joinsByCodeAfterSignIn = false; openCodeJoin() }
         }
         .onChange(of: workspace?.membership?.membershipId) { _, _ in
             if workspace?.isLoadingAccount != true { verifyPresentedScopes() }
@@ -203,7 +205,8 @@ struct SchoolRootView: View {
         guard let action = afterAccount else { return }
         afterAccount = nil
         switch action {
-        case .join: openCodeJoin()
+        case .join:
+            if pendingJoinLink != nil { openJoin() } else { openCodeJoin() }
         case .invitations: openInvitations(creation: false)
         case .profile: if let learner = ownProfileLearner { openProfile(learner) }
         }
@@ -292,9 +295,8 @@ struct SchoolRootView: View {
             && (workspace?.membership?.roles.contains("ADMIN") == true || workspace?.membership?.roles.contains("INSTRUCTOR") == true)
     }
 
-    /// A code always carries the inviting instructor's training: only an instructor invites from the app.
     private var inviteAction: (() -> Void)? {
-        canManageInvitations && workspace?.membership?.roles.contains("INSTRUCTOR") == true ? { openInvitations(creation: true) } : nil
+        canManageInvitations ? { openInvitations(creation: true) } : nil
     }
 
     private func openInvitations(creation: Bool) {
@@ -426,16 +428,24 @@ struct SchoolRootView: View {
         .background(DrivyTheme.surface)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if configuration != nil {
-                Button(action: signIn) {
-                    if identity.isWorking {
-                        DrivyBusyLabel(title: "Se connecter", busyTitle: "Connexion…", isBusy: true)
-                    } else {
-                        Label("Se connecter", systemImage: "person.crop.circle")
+                VStack(spacing: DrivySpacing.s) {
+                    Button(action: signIn) {
+                        if identity.isWorking {
+                            DrivyBusyLabel(title: "Se connecter", busyTitle: "Connexion…", isBusy: true)
+                        } else {
+                            Label("Se connecter", systemImage: "person.crop.circle")
+                        }
                     }
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .accessibilityIdentifier("school-sign-in")
+                    Button {
+                        joinsByCodeAfterSignIn = true
+                        signIn()
+                    } label: { Label("J’ai un code", systemImage: "number") }
+                    .buttonStyle(DrivySecondaryButtonStyle())
+                    .accessibilityIdentifier("school-sign-in-with-code")
                 }
-                .buttonStyle(DrivyPrimaryButtonStyle())
                 .disabled(identity.isWorking || presenter == nil)
-                .accessibilityIdentifier("school-sign-in")
                 .padding(.horizontal, DrivySpacing.l)
                 .padding(.vertical, DrivySpacing.s)
                 .frame(maxWidth: 600)
@@ -487,6 +497,7 @@ struct SchoolRootView: View {
     private func signOut() {
         captureController.setScope(nil)
         pendingJoinLink = nil
+        joinsByCodeAfterSignIn = false
         closeAll()
         workspace?.reset()
         showsAccount = false

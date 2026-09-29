@@ -36,11 +36,15 @@ final class SchoolInvitationWorkspace: Identifiable {
     private(set) var successMessage: String?
     private(set) var accessFailure: SchoolInvitationFailure?
     private(set) var offerings: [SchoolOffering] = []
+    private(set) var instructors: [SchoolInvitationInstructor] = []
+    private(set) var creationOptionsError: String?
     private(set) var issuedCode: SchoolIssuedInvitationCode?
     private(set) var codeRecovery: SchoolCodeRecovery?
     var email = ""
     var selectedRoles: Set<SchoolInvitationRole> = [.learner]
     var selectedOfferingID: UUID?
+    var selectedOfferingIDs: Set<UUID> = []
+    var selectedInstructorID: UUID?
     var selectedID: UUID?
 
     @ObservationIgnored private let api: any SchoolInvitationAPI
@@ -72,21 +76,26 @@ final class SchoolInvitationWorkspace: Identifiable {
     var canVerifyPending: Bool { pending != nil && !isBusy && !isLoading && !isInvalidated }
     var draftIsValid: Bool { valid(email: email, roles: selectedRoles) }
     /// Un moniteur invite l'élève dans sa formation et s'y affecte lui-même.
-    var carriesTraining: Bool { roles.contains("INSTRUCTOR") && selectedRoles == [.learner] }
+    var carriesTraining: Bool { canCreateCode && selectedRoles == [.learner] }
     var selectedOffering: SchoolOffering? { offerings.first { $0.id == selectedOfferingID } }
     var selectedInvitation: SchoolInvitation? { invitations.first { $0.id == selectedID } }
-    /// Only an instructor creates a code from the app: it always carries one of his open trainings,
-    /// with himself as instructor (the school requires both for a code).
-    var canCreateCode: Bool { roles.contains("INSTRUCTOR") && allowedRoles.contains(.learner) }
-    var codeDraftIsValid: Bool { canCreateCode && carriesTraining && selectedOffering != nil }
+    var canCreateCode: Bool { allowedRoles.contains(.learner) }
+    var selectedOfferings: [SchoolOffering] { offerings.filter { selectedOfferingIDs.contains($0.id) } }
+    var codeDraftIsValid: Bool {
+        canCreateCode && carriesTraining && creationOptionsError == nil && !selectedOfferingIDs.isEmpty
+            && selectedOfferingIDs.count <= 16 && selectedOfferings.count == selectedOfferingIDs.count
+            && (roles.contains("ADMIN") ? instructors.contains { $0.id == selectedInstructorID }
+                : selectedInstructorID == scope.membershipID)
+    }
     /// Loaded, but no training is open for a code yet.
-    var lacksOpenTraining: Bool { hasLoaded && canCreateCode && offerings.isEmpty }
+    var lacksOpenTraining: Bool { hasLoaded && canCreateCode && creationOptionsError == nil && offerings.isEmpty }
+    var lacksInstructor: Bool { hasLoaded && roles.contains("ADMIN") && creationOptionsError == nil && instructors.isEmpty }
     /// « Permis B » for a code invitation, when the training is known.
     func trainingLabel(_ invitation: SchoolInvitation) -> String? {
-        if let code = invitation.trainingCategoryCode { return "Permis \(code)" }
-        guard let offeringID = invitation.training?.offeringId,
-              let offering = offerings.first(where: { $0.id == offeringID }) else { return nil }
-        return "Permis \(offering.categoryCode)"
+        let trainingIDs = Set((invitation.trainings ?? invitation.training.map { [$0] } ?? []).map(\.offeringId))
+        let categories = Set(offerings.filter { trainingIDs.contains($0.id) }.map(\.categoryCode)).sorted()
+        if !categories.isEmpty { return "Permis \(categories.joined(separator: ", "))" }
+        return invitation.trainingCategoryCode.map { "Permis \($0)" }
     }
 
     func dismissIssuedCode() { issuedCode = nil }
@@ -94,7 +103,8 @@ final class SchoolInvitationWorkspace: Identifiable {
     func invalidate() {
         generation = UUID(); pageRequest = UUID(); isInvalidated = true
         issuedCode = nil; codeRecovery = nil
-        school = nil; invitations = []; nextCursor = nil; selectedID = nil; pending = nil; offerings = []
+        school = nil; invitations = []; nextCursor = nil; selectedID = nil; pending = nil; offerings = []; instructors = []
+        selectedOfferingIDs = []; selectedInstructorID = nil; creationOptionsError = nil
         email = ""; selectedRoles = [.learner]; selectedOfferingID = nil; errorMessage = nil; successMessage = nil
         isLoading = false; isLoadingMore = false; isBusy = false; storageAccessible = false
     }
@@ -129,12 +139,30 @@ final class SchoolInvitationWorkspace: Identifiable {
             try validate(page)
             invitations = page.items.map(\.withoutCode); nextCursor = page.nextCursor; seenCursors = []
             if !invitations.contains(where: { $0.id == selectedID }) { selectedID = nil }
-            if roles.contains("INSTRUCTOR") {
-                // Sans offre lisible, l'invitation reste possible ; la formation s'ouvre alors depuis le web.
-                let offerings = (try? await api.trainingOfferings(schoolID: scope.schoolID)) ?? []
-                guard request == generation else { return }
-                self.offerings = offerings
-                if !offerings.contains(where: { $0.id == selectedOfferingID }) { selectedOfferingID = offerings.count == 1 ? offerings[0].id : nil }
+            if canCreateCode {
+                creationOptionsError = nil
+                do {
+                    let offerings = try await api.trainingOfferings(schoolID: scope.schoolID)
+                    guard request == generation else { return }
+                    self.offerings = offerings
+                    if !offerings.contains(where: { $0.id == selectedOfferingID }) { selectedOfferingID = offerings.count == 1 ? offerings[0].id : nil }
+                    selectedOfferingIDs.formIntersection(Set(offerings.map(\.id)))
+                    if selectedOfferingIDs.isEmpty, offerings.count == 1 { selectedOfferingIDs = [offerings[0].id] }
+                    if roles.contains("ADMIN") {
+                        let instructors = try await api.instructors(schoolID: scope.schoolID)
+                        guard request == generation else { return }
+                        self.instructors = instructors
+                        if !instructors.contains(where: { $0.id == selectedInstructorID }) {
+                            selectedInstructorID = instructors.first { $0.id == scope.membershipID }?.id
+                                ?? (instructors.count == 1 ? instructors[0].id : nil)
+                        }
+                    } else { selectedInstructorID = scope.membershipID }
+                } catch {
+                    guard request == generation else { return }
+                    offerings = []; instructors = []; selectedOfferingIDs = []; selectedOfferingID = nil; selectedInstructorID = nil
+                    if error as? SchoolInvitationFailure == .unauthorized || error as? SchoolInvitationFailure == .forbidden { throw error }
+                    creationOptionsError = "Les permis et moniteurs n’ont pas pu être chargés. Réessayez."
+                }
             }
             hasLoaded = true; needsReload = false; isLoading = false
             errorMessage = storageError ?? (receiptRefused
@@ -188,15 +216,15 @@ final class SchoolInvitationWorkspace: Identifiable {
         return confirmed
     }
 
-    /// Single-use code for a learner, carrying the instructor’s training when one is open.
+    /// Single-use code for a learner, carrying every selected training and its instructor.
     /// Same outbox as every invitation command: stored encrypted before it is sent.
     @discardableResult
-    func createCode(offeringID: UUID?) async -> Bool {
-        guard mayEdit, codeDraftIsValid, let offeringID, offerings.contains(where: { $0.id == offeringID }) else { return false }
+    func createCode() async -> Bool {
+        guard mayEdit, codeDraftIsValid, let instructorID = selectedInstructorID else { return false }
         let id = UUID()
-        let training = SchoolInvitationTraining(offeringId: offeringID, instructorMembershipId: scope.membershipID)
+        let trainings = selectedOfferings.map { SchoolInvitationTraining(offeringId: $0.id, instructorMembershipId: instructorID) }
         issuedCode = nil; codeRecovery = nil
-        let command = SchoolInviteCommand(operationId: id, delivery: .code, roles: [.learner], training: training)
+        let command = SchoolInviteCommand(operationId: id, delivery: .code, roles: [.learner], trainings: trainings)
         return await prepare(command, id: id, kind: .createInvitation, resource: nil, version: 0)
     }
 

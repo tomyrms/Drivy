@@ -77,11 +77,16 @@ import Observation
     }
     /// Saisie non enregistrée : bilan, objectifs ou souhait.
     var hasLocalEdits: Bool { draftChanged || preparationChanged || wishChanged }
+    var retainedEditsText: String {
+        ([workedOn, observationText, nextStep] + goals.map(\.label) + [administrativeNote, wishText]
+            + observations.map { "\($0.levelLabel) : \($0.context)" })
+            .filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
     /// Situation proposée quand une compétence reçoit un niveau.
     var defaultObservationContext: String { lesson.map(SchoolLessonHubRules.observationContext(for:)) ?? "Leçon" }
     /// La situation reprend ce qui a été noté pour cette compétence pendant la leçon, sinon le jour et le lieu.
     func setObservationLevel(_ level: String, for competencyID: UUID) {
-        let linked = lessonObservations.last { $0.competencyId == competencyID && !$0.isMarker && !isPrivate($0) }?.text
+        let linked = sharing == nil ? nil : lessonObservations.last { $0.competencyId == competencyID && !$0.isMarker && !isPrivate($0) }?.text
         observations = SchoolLessonHubRules.observations(observations, setting: level, for: competencyID,
             context: SchoolLessonHubRules.situation(linked) ?? defaultObservationContext)
     }
@@ -105,13 +110,6 @@ import Observation
         guard let lesson, lesson.status == "PLANNED", let end = lesson.endsAt, end <= now else { return false }
         return isAuthor || membership.roles.contains("ADMIN")
     }
-    /// Niveaux suggérés par les observations qualifiées de la leçon (la plus récente par compétence),
-    /// pour les compétences pas encore notées dans le bilan.
-    var suggestedObservations: [SchoolReportObservation] {
-        SchoolLessonHubRules.suggestedLevels(from: lessonObservations.filter { !isPrivate($0) },
-            competencies: Set(competencies.map(\.id)), excluding: Set(observations.map(\.id)))
-    }
-    func applySuggestedLevels() { observations.append(contentsOf: suggestedObservations) }
     /// Position enregistrée d’une observation ancrée, si le trajet visible la contient.
     func anchor(of observation: SchoolObservation) -> SchoolCapturePoint? {
         guard let segment = observation.segmentId, let sequence = observation.pointSequence else { return nil }
@@ -158,8 +156,27 @@ import Observation
         training = nil; captures = []; permitRecorded = false; permitReviewDenied = false
         isLoading = false; isBusy = false; storageAccessible = false; revisionsError = nil
     }
-    /// Relit la leçon. Une saisie non enregistrée est conservée tant que sa ressource n’a pas changé
-    /// sur le serveur (retour d’une feuille, partage, contrôle du permis) ; « Recharger » l’abandonne.
+    private struct DraftContent: Equatable {
+        let id: UUID
+        let workedOn: String, observationText: String, nextStep: String
+        let observations: [SchoolReportObservation]
+        init(_ value: SchoolReportDraft) {
+            id = value.id; workedOn = value.workedOn; observationText = value.observationText
+            nextStep = value.nextStep; observations = value.observations
+        }
+        init(id: UUID, workedOn: String, observationText: String, nextStep: String, observations: [SchoolReportObservation]) {
+            self.id = id; self.workedOn = workedOn; self.observationText = observationText
+            self.nextStep = nextStep; self.observations = observations
+        }
+    }
+    private struct PreparationContent: Equatable {
+        let goals: [SchoolLessonGoal]
+        let note: String
+        init(_ value: SchoolLessonPreparation) { goals = value.goals; note = value.administrativeCheckNote ?? "" }
+        init(goals: [SchoolLessonGoal], note: String) { self.goals = goals; self.note = note }
+    }
+    /// La saisie survit aussi à une panne secondaire ou une modification concurrente. Dans ce dernier
+    /// cas, la version ancienne reste attachée au texte et toute écriture attend une relecture explicite.
     func load(discardingEdits: Bool = false) async {
         guard !invalidated, !isBusy else { return }
         generation = UUID(); let request = generation
@@ -235,22 +252,26 @@ import Observation
                 }
             }
             guard request == generation, !invalidated else { return }
-            // Une saisie en cours survit à la relecture tant que le contenu enregistré n’a pas changé sur le serveur
-            // (une version peut avancer sans changer le texte, par exemple au partage du bilan).
-            let keepsDraft = !discardingEdits && draftChanged && draftsRead.value?.first.map { value in
-                value.id == draft?.id && value.workedOn == draft?.workedOn && value.observationText == draft?.observationText
-                    && value.nextStep == draft?.nextStep && value.observations == draft?.observations } == true
-            let keepsPreparation = !discardingEdits && preparationChanged && preparationRead.value.map { value in
-                value.id == preparation?.id && value.goals == preparation?.goals && value.administrativeCheckNote == preparation?.administrativeCheckNote } == true
-            let keepsWish = !discardingEdits && wishChanged
-                && wishRead.value.map { $0.id == wish?.id && $0.text == wish?.text } == true
-            self.lesson = lesson; preparation = preparationRead.value; wish = wishRead.value
+            let draftPolicy = SchoolLessonRefreshPolicy.decide(previous: draft.map(DraftContent.init),
+                edited: DraftContent(id: draft?.id ?? UUID(), workedOn: workedOn, observationText: observationText,
+                    nextStep: nextStep, observations: observations), received: draftsRead.value?.first.map(DraftContent.init),
+                discardingEdits: discardingEdits || !author)
+            let preparationPolicy = SchoolLessonRefreshPolicy.decide(previous: preparation.map(PreparationContent.init),
+                edited: PreparationContent(goals: goals, note: administrativeNote), received: preparationRead.value.map(PreparationContent.init),
+                discardingEdits: discardingEdits || !author)
+            let wishPolicy = SchoolLessonRefreshPolicy.decide(previous: wish?.text, edited: wishText,
+                received: wishRead.value?.text, discardingEdits: discardingEdits || !isOwn)
+            let conflict = draftPolicy == .conflict || preparationPolicy == .conflict || wishPolicy == .conflict
+            self.lesson = lesson
+            if preparationPolicy != .conflict { preparation = preparationRead.value }
+            if wishPolicy != .conflict { wish = wishRead.value }
             revisions = revisionsRead.value ?? []; revisionsError = revisionsRead.message
-            draft = draftsRead.value?.first; isOwnLearner = isOwn
+            if draftPolicy != .conflict { draft = draftsRead.value?.first }
+            isOwnLearner = isOwn
             training = trainingRead.value
-            if !keepsPreparation { goals = preparation?.goals ?? []; administrativeNote = preparation?.administrativeCheckNote ?? "" }
-            if !keepsWish { wishText = wish?.text ?? "" }
-            if !keepsDraft {
+            if preparationPolicy == .replace { goals = preparation?.goals ?? []; administrativeNote = preparation?.administrativeCheckNote ?? "" }
+            if wishPolicy == .replace { wishText = wish?.text ?? "" }
+            if draftPolicy == .replace {
                 workedOn = draft?.workedOn ?? ""; observationText = draft?.observationText ?? ""; nextStep = draft?.nextStep ?? ""
                 observations = draft?.observations ?? []
             }
@@ -262,7 +283,10 @@ import Observation
             let notes = [wishRead.message, preparationRead.message, draftsRead.message,
                          observationsRead.message, trackRead.message, sharingRead.message, curriculumRead.message].compactMap { $0 }
             information = notes.isEmpty ? nil : notes.joined(separator: "\n\n")
-            isLoading = false; needsReload = false
+            isLoading = false; needsReload = conflict
+            if conflict {
+                errorMessage = "Votre saisie est conservée. Le contenu enregistré a changé ou n’a pas pu être relu. Copiez votre texte si nécessaire, puis actualisez avant d’enregistrer."
+            }
             if author && lesson.status == "PLANNED" { await refreshCaptures() }
         } catch { guard request == generation, !invalidated else { return }; isLoading = false; fail(error) }
     }
@@ -289,10 +313,10 @@ import Observation
             return (nil, unavailable)
         }
     }
-    func savePreparation() async {
-        guard let preparation, canMutate, isAuthor, preparationValid else { return }
+    @discardableResult func savePreparation() async -> Bool {
+        guard let preparation, canMutate, isAuthor, preparationValid else { return false }
         let operation = UUID()
-        _ = await prepare(SchoolSavePreparation(operationId: operation, goals: goals, administrativeCheckNote: administrativeNote), id: operation, kind: .savePreparation, version: preparation.version, resourceID: preparation.id, routeID: lessonID)
+        return await prepare(SchoolSavePreparation(operationId: operation, goals: goals, administrativeCheckNote: administrativeNote), id: operation, kind: .savePreparation, version: preparation.version, resourceID: preparation.id, routeID: lessonID)
     }
     func saveWish() async {
         guard let wish, canMutate, isOwnLearner, wishText.unicodeScalars.count <= 500 else { return }
@@ -303,6 +327,10 @@ import Observation
     var completionNeedsReason: Bool { lesson?.permitWarning ?? true }
     func complete(start: Date, end: Date, reason: String, localCaptureStopped: Bool) async -> Bool {
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Terminer depuis des objectifs en cours de saisie ne doit ni les perdre ni clôturer sur leur ancienne version.
+        if preparationChanged {
+            guard preparationValid, await savePreparation(), !preparationChanged else { return false }
+        }
         guard let lesson, canMutate, isAuthor, lesson.status == "PLANNED", localCaptureStopped, end > start,
               end <= Date().addingTimeInterval(300), !completionNeedsReason || !trimmed.isEmpty, reason.unicodeScalars.count <= 1_000 else { return false }
         let operation = UUID(), iso = ISO8601DateFormatter()

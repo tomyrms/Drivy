@@ -70,15 +70,16 @@ struct SchoolInvitationCodeTests {
         let outbox = ConfigurationOutboxStub()
         let model = InvitationFixture.workspace(api: api, roles: ["INSTRUCTOR"], outbox: outbox)
         await model.load()
-        #expect(model.selectedOfferingID == offering.id && model.codeDraftIsValid)
-        #expect(await model.createCode(offeringID: model.selectedOfferingID))
+        #expect(model.selectedOfferingIDs == [offering.id] && model.codeDraftIsValid)
+        #expect(await model.createCode())
         let command = try #require(api.commands.last)
         #expect(command.kind == .createInvitation && command.resourceVersion == 0)
         // Stored encrypted before sending, released once confirmed.
         #expect(outbox.saves.first == command && outbox.value == nil)
         let body = try JSONDecoder().decode(SchoolInviteCommand.self, from: command.body)
         #expect(body.delivery == .code && body.email == nil && body.roles == [.learner])
-        #expect(body.training == SchoolInvitationTraining(offeringId: offering.id, instructorMembershipId: ConfigurationFixture.membershipID))
+        #expect(body.training == nil)
+        #expect(body.trainings == [SchoolInvitationTraining(offeringId: offering.id, instructorMembershipId: ConfigurationFixture.membershipID)])
         let raw = try #require(String(data: command.body, encoding: .utf8))
         #expect(raw.contains("\"delivery\":\"CODE\"") && !raw.contains("email"))
         #expect(model.issuedCode?.code == "K7Q4-MX2P")
@@ -89,31 +90,65 @@ struct SchoolInvitationCodeTests {
         #expect(model.issuedCode == nil)
     }
 
-    @Test func withSeveralTrainingsTheInstructorMustChooseOne() async {
+    @Test func severalSelectedTrainingsAreSentInOneInvitationWithTheCurrentInstructor() async throws {
         let api = InvitationAPIStub()
         api.offeringValues = [Self.offering("B"), Self.offering("A")]
         let model = InvitationFixture.workspace(api: api, roles: ["INSTRUCTOR"])
         await model.load()
-        #expect(model.selectedOfferingID == nil && !model.codeDraftIsValid)
-        #expect(await model.createCode(offeringID: nil) == false)
-        #expect(await model.createCode(offeringID: UUID()) == false)
+        #expect(model.selectedOfferingIDs.isEmpty && !model.codeDraftIsValid)
+        #expect(await model.createCode() == false)
+        model.selectedOfferingIDs = [UUID()]
+        #expect(await model.createCode() == false)
         #expect(api.commands.isEmpty)
-        model.selectedOfferingID = api.offeringValues[1].id
-        #expect(await model.createCode(offeringID: model.selectedOfferingID))
+        model.selectedOfferingIDs = Set(api.offeringValues.map(\.id))
+        #expect(await model.createCode())
+        let body = try JSONDecoder().decode(SchoolInviteCommand.self, from: try #require(api.commands.last).body)
+        #expect(body.trainings?.count == 2)
+        #expect(body.trainings?.allSatisfy { $0.instructorMembershipId == ConfigurationFixture.membershipID } == true)
     }
 
-    @Test func aCodeAlwaysCarriesATrainingSoOnlyAnInstructorCreatesOne() async {
+    @Test func anAdministratorChoosesAnActiveInstructorAndCannotSendAnUnknownOne() async throws {
         let api = InvitationAPIStub()
         api.offeringValues = [Self.offering()]
+        api.instructorValues = [.init(id: UUID(), displayName: "Moniteur exemple"), .init(id: UUID(), displayName: "Autre moniteur exemple")]
         let admin = InvitationFixture.workspace(api: api, roles: ["ADMIN"])
         await admin.load()
-        #expect(!admin.canCreateCode && !admin.codeDraftIsValid)
-        #expect(await admin.createCode(offeringID: api.offeringValues[0].id) == false)
+        #expect(admin.canCreateCode && !admin.codeDraftIsValid)
+        #expect(await admin.createCode() == false)
+        admin.selectedInstructorID = UUID()
+        #expect(await admin.createCode() == false)
+        admin.selectedInstructorID = api.instructorValues[1].id
+        #expect(await admin.createCode())
+        let body = try JSONDecoder().decode(SchoolInviteCommand.self, from: try #require(api.commands.last).body)
+        #expect(body.trainings?.first?.instructorMembershipId == api.instructorValues[1].id)
+    }
+
+    @Test func missingTrainingAndFailedLoadingAreDifferentAndCannotGenerateCode() async {
+        let api = InvitationAPIStub()
         api.offeringValues = []
         let instructor = InvitationFixture.workspace(api: api, roles: ["INSTRUCTOR"])
         await instructor.load()
         #expect(instructor.lacksOpenTraining && !instructor.codeDraftIsValid)
+        api.offeringFailure = .unavailable
+        await instructor.load()
+        #expect(!instructor.lacksOpenTraining && instructor.creationOptionsError != nil)
+        #expect(await instructor.createCode() == false)
         #expect(api.commands.isEmpty)
+    }
+
+    @Test func anInstructorCannotAssignSomeoneElseAndAnAdminInstructorDefaultsToHimself() async {
+        let api = InvitationAPIStub()
+        api.offeringValues = [Self.offering()]
+        let instructor = InvitationFixture.workspace(api: api, roles: ["INSTRUCTOR"])
+        await instructor.load()
+        instructor.selectedInstructorID = UUID()
+        #expect(!instructor.codeDraftIsValid)
+        #expect(await instructor.createCode() == false)
+        api.instructorValues = [.init(id: UUID(), displayName: "Autre exemple"),
+            .init(id: ConfigurationFixture.membershipID, displayName: "Moniteur connecté")]
+        let admin = InvitationFixture.workspace(api: api, roles: ["ADMIN", "INSTRUCTOR"])
+        await admin.load()
+        #expect(admin.selectedInstructorID == ConfigurationFixture.membershipID && admin.codeDraftIsValid)
     }
 
     @Test func aReplayedCreationWithoutCodeOffersANewCodeThroughResend() async throws {
@@ -122,7 +157,7 @@ struct SchoolInvitationCodeTests {
         api.offeringValues = [Self.offering()]
         let model = InvitationFixture.workspace(api: api, roles: ["INSTRUCTOR"])
         await model.load()
-        #expect(await model.createCode(offeringID: model.selectedOfferingID))
+        #expect(await model.createCode())
         #expect(model.issuedCode == nil)
         let recovery = try #require(model.codeRecovery)
         #expect(await model.renewRecoveredCode())
@@ -216,6 +251,54 @@ struct SchoolInvitationCodeTests {
         #expect(accepts[0].value(forHTTPHeaderField: "Idempotency-Key") == accepts[1].value(forHTTPHeaderField: "Idempotency-Key"))
     }
 
+    @Test func aRefusedRetryKeepsTheUncertainOperationAndNeverInfersSuccessFromASchoolName() async throws {
+        let transport = CodeJoinTransport()
+        await transport.setAcceptFailure(true)
+        let store = CodeJoinStoreStub()
+        let model = SchoolCodeJoinWorkspace(client: CodeJoinFixture.client(transport), store: store)
+        await model.load()
+        model.code = "K7Q4-MX2P"
+        await model.inspect()
+        await model.accept()
+        let pending = try #require(store.record)
+        await transport.setAcceptFailure(false)
+        await transport.setAcceptProblem(404, code: "INVITATION_CODE_INVALID")
+        await model.verify()
+        #expect(model.isPending && !model.isConfirmed && store.record == pending)
+        #expect(model.errorMessage == SchoolJoinFailure.unknown.codeMessage)
+        #expect(await transport.recorded().filter { $0.url?.path == "/v1/me" }.isEmpty)
+    }
+
+    @Test func aPendingCodeCannotBeResentIfItsEncryptedRecordCannotBeRead() async throws {
+        let transport = CodeJoinTransport()
+        await transport.setAcceptFailure(true)
+        let store = CodeJoinStoreStub()
+        let model = SchoolCodeJoinWorkspace(client: CodeJoinFixture.client(transport), store: store)
+        await model.load()
+        model.code = "K7Q4-MX2P"
+        await model.inspect()
+        await model.accept()
+        store.failRead = true
+        await model.verify()
+        #expect(model.isPending && model.errorMessage == SchoolJoinFailure.storage.codeMessage)
+        #expect(await transport.recorded().filter { $0.url?.path == "/v1/invitations/code/accept" }.count == 1)
+    }
+
+    @Test func theCodePreviewListsAllPermitCategoriesAndReadsLegacyResponses() throws {
+        let data = Data("""
+        {"schoolName":"École exemple","roles":["LEARNER"],"trainingCategoryCode":"B",
+         "trainingCategoryCodes":["B","A"],"expiresAt":"2026-10-06T10:00:00Z"}
+        """.utf8)
+        let preview = try JSONDecoder().decode(SchoolCodePreview.self, from: data)
+        #expect(preview.isValid && preview.categories == ["B", "A"])
+        let legacy = SchoolCodePreview(schoolName: "École exemple", roles: ["LEARNER"],
+            trainingCategoryCode: "B", expiresAt: "2026-10-06T10:00:00Z")
+        #expect(legacy.isValid && legacy.categories == ["B"])
+        let staff = SchoolCodePreview(schoolName: "École exemple", roles: ["ADMIN"],
+            trainingCategoryCode: "B", expiresAt: "2026-10-06T10:00:00Z")
+        #expect(!staff.isValid)
+    }
+
     @Test func aTrainingTheSchoolCouldNotOpenIsAnnounced() async throws {
         let transport = CodeJoinTransport()
         await transport.setTrainingOpened(false)
@@ -267,7 +350,11 @@ final class CodeJoinToken: AccessTokenSource {
 @MainActor
 final class CodeJoinStoreStub: SchoolCodeJoinStore {
     var record: SchoolCodeJoinRecord?
-    func load(for principal: SchoolJoinPrincipal) throws -> SchoolCodeJoinRecord? { record?.principal == principal ? record : nil }
+    var failRead = false
+    func load(for principal: SchoolJoinPrincipal) throws -> SchoolCodeJoinRecord? {
+        if failRead { throw SchoolJoinFailure.storage }
+        return record?.principal == principal ? record : nil
+    }
     func save(_ record: SchoolCodeJoinRecord) throws {
         if let existing = self.record, existing.operationID != record.operationID, existing.membership == nil { throw SchoolJoinFailure.pending }
         self.record = record
@@ -280,10 +367,12 @@ actor CodeJoinTransport: SchoolHTTPTransport {
     private var acceptFails = false
     private var trainingOpened: Bool?
     private var previewProblem: (status: Int, code: String)?
+    private var acceptProblem: (status: Int, code: String)?
 
     func setAcceptFailure(_ value: Bool) { acceptFails = value }
     func setTrainingOpened(_ value: Bool?) { trainingOpened = value }
     func setPreviewProblem(_ status: Int, code: String) { previewProblem = (status, code) }
+    func setAcceptProblem(_ status: Int, code: String) { acceptProblem = (status, code) }
     func recorded() -> [URLRequest] { requests }
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
@@ -299,6 +388,7 @@ actor CodeJoinTransport: SchoolHTTPTransport {
             return problem(url, status: 403, code: "IDENTITY_NOT_LINKED")
         case "/v1/invitations/code/accept":
             if acceptFails { throw URLError(.networkConnectionLost) }
+            if let acceptProblem { return problem(url, status: acceptProblem.status, code: acceptProblem.code) }
             var member: [String: Any] = ["membershipId": CodeJoinFixture.membershipID.uuidString,
                 "schoolId": CodeJoinFixture.schoolID.uuidString, "schoolName": "Luc auto école", "roles": ["LEARNER"],
                 "grants": [String](), "accessEpoch": 1]

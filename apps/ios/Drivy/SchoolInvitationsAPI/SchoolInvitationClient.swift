@@ -31,6 +31,24 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
         catch { throw SchoolInvitationFailure.unavailable }
     }
 
+    func instructors(schoolID: UUID) async throws -> [SchoolInvitationInstructor] {
+        let members: [SchoolMember] = try await collect { cursor in
+            var query = [URLQueryItem(name: "limit", value: "100")]
+            if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+            let page: SchoolPage<SchoolMember> = try await self.request(schoolID: schoolID, path: ["members"], query: query)
+            guard page.items.count <= 100,
+                  page.items.allSatisfy({ $0.schoolId == schoolID && $0.version > 0 }),
+                  page.nextCursor.map({ !$0.isEmpty && $0.utf8.count <= 6000 }) ?? true else {
+                throw SchoolInvitationFailure.invalidResponse
+            }
+            return page
+        }
+        guard Set(members.map(\.id)).count == members.count else { throw SchoolInvitationFailure.invalidResponse }
+        return members.filter { $0.status == "ACTIVE" && $0.roles.contains("INSTRUCTOR") }
+            .map { SchoolInvitationInstructor(id: $0.id, displayName: $0.displayName) }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
     private func collect<Value: SchoolCatalogRecord>(_ fetch: (String?) async throws -> SchoolPage<Value>) async throws -> [Value] {
         var values: [Value] = []
         var cursor: String?
@@ -38,7 +56,8 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
         repeat {
             let page = try await fetch(cursor)
             values.append(contentsOf: page.items); cursor = page.nextCursor
-            if let cursor, !seen.insert(cursor).inserted || values.count > 10_000 { throw SchoolInvitationFailure.invalidResponse }
+            guard values.count <= 10_000 else { throw SchoolInvitationFailure.invalidResponse }
+            if let cursor, !seen.insert(cursor).inserted { throw SchoolInvitationFailure.invalidResponse }
         } while cursor != nil
         return values
     }
@@ -188,7 +207,9 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
             return !(invitation.maskedEmail ?? "").isEmpty && invitation.code == nil
         case .code:
             // Its code, when present, has the published format.
-            return invitation.code.map { SchoolInvitationCode.normalized($0) != nil } ?? true
+            return invitation.maskedEmail == nil && invitation.roles == [.learner]
+                && (invitation.trainings.map { !$0.isEmpty && $0.count <= 16 && Set($0.map(\.offeringId)).count == $0.count } ?? true)
+                && (invitation.code.map { SchoolInvitationCode.normalized($0) != nil } ?? true)
         }
     }
     private struct Envelope<Value: Decodable>: Decodable { let data: Value; let requestId: String; let serverTime: String }
