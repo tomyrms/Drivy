@@ -21,7 +21,7 @@ Le [schéma du preview](../../apps/api/contracts/g1c-invitation-preview.json) es
 
 Un nouveau compte OIDC doit être inscrit et son adresse vérifiée auprès de l'IdP avant acceptation. L'API ne crée pas de compte fournisseur et ne transforme jamais une adresse déclarée en adresse vérifiée. Le profil élève reste MINIMAL et l'étape PROFILE reste à compléter ; les noms légaux ne sont pas déduits du nom d'affichage. L'état ACCEPTED est visible pour l'émetteur et l'ADMIN dans AP10 et l'événement est audité ; le centre de notifications F11 et le reste de F21 restent des verticales distinctes.
 
-Erreurs métier : `INVITATION_ALREADY_PENDING`, `ALREADY_MEMBER`, `INVITATION_ROLE_FORBIDDEN`, `INVITATION_USED`, `INVITATION_REVOKED`, `INVITATION_EXPIRED`, `INVITATION_IDENTITY_MISMATCH`, `SCHOOL_NOT_ACTIVE`, `VERSION_CONFLICT`, `INVALID_REQUEST`, `PRECONDITION_REQUIRED`. `IDEMPOTENCY_MISMATCH` reste non résolu côté client. Un 4xx après une demande incertaine n'autorise jamais son oubli. L'absence de transport configuré répond `503 INVITATION_DELIVERY_UNAVAILABLE`.
+Erreurs métier : `INVITATION_ALREADY_PENDING`, `ALREADY_MEMBER`, `INVITATION_ROLE_FORBIDDEN`, `INVITATION_USED`, `INVITATION_REVOKED`, `INVITATION_EXPIRED`, `INVITATION_IDENTITY_MISMATCH`, `SCHOOL_NOT_ACTIVE`, `VERSION_CONFLICT`, `INVALID_REQUEST`, `PRECONDITION_REQUIRED`. `IDEMPOTENCY_MISMATCH` reste non résolu côté client. Un 4xx après une demande incertaine n'autorise jamais son oubli. L'absence de transport configuré répondait `503 INVITATION_DELIVERY_UNAVAILABLE` ; depuis le 29 septembre 2026 elle répond un refus définitif `409` de même code, sans effet ni rejeu (voir [trajets, codes et ancrage](api-trajets-codes.md)).
 
 ## Transport et exploitation
 
