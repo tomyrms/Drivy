@@ -190,8 +190,7 @@ private struct SchoolLearnerRow: View {
     let isSelected: Bool
 
     var body: some View {
-        DrivyEntityRow(title: learner.displayName, meta: learner.contactEmail,
-            leading: .avatar(learner.displayName), badge: badge, isSelected: isSelected)
+        DrivyEntityRow(title: learner.displayName, leading: .avatar(learner.displayName), badge: badge, isSelected: isSelected)
     }
 
     /// Seul ce qui demande une action reste en badge.
@@ -233,7 +232,69 @@ private struct SchoolLearnerDetailView: View {
     @State private var presentedTraining: TrainingPresentation?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    /// A learner with one training: its lessons and progression are the dossier itself.
+    private var singleTraining: SchoolTraining? {
+        guard trainingClient != nil, !workspace.isLoadingTrainings, workspace.trainingsError == nil,
+              workspace.nextTrainingsCursor == nil, workspace.trainings.count == 1,
+              let training = workspace.trainings.first, training.learnerId == workspace.learner?.id else { return nil }
+        return training
+    }
+
     var body: some View {
+        Group {
+            if let learner = workspace.learner, let training = singleTraining, let trainingClient {
+                SchoolTrainingScreen(client: trainingClient, workspace: workspace, learner: learner, trainingID: training.id)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        if let openPlanning, learner.archivedAt == nil {
+                            DrivyStickyActionBar { planButton(learner, openPlanning: openPlanning) }
+                        }
+                    }
+                    .toolbar {
+                        if openProfile != nil || learner.contactEmail != nil || learner.contactPhone != nil {
+                            ToolbarItem(placement: .topBarTrailing) { dossierMenu(learner) }
+                        }
+                    }
+            } else {
+                dossier
+            }
+        }
+        .background(DrivyTheme.surface)
+        .navigationTitle("Dossier")
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: workspace.selectedLearnerID) { await workspace.loadSelectedLearner() }
+        .sheet(item: $presentedTraining, onDismiss: { workspace.selectTraining(nil) }) { presentation in
+            SchoolTrainingView(client: presentation.client, workspace: workspace,
+                learner: presentation.learner, trainingID: presentation.trainingID)
+        }
+    }
+
+    private func planButton(_ learner: SchoolLearner, openPlanning: @escaping (SchoolLearner) -> Void) -> some View {
+        Button { openPlanning(learner) } label: { Label("Planifier une leçon", systemImage: "calendar.badge.plus") }
+            .buttonStyle(DrivyPrimaryButtonStyle()).accessibilityIdentifier("learner-plan-lesson")
+    }
+
+    /// Profile and contacts of a single-training dossier, whose page is the training itself.
+    private func dossierMenu(_ learner: SchoolLearner) -> some View {
+        Menu {
+            if let openProfile {
+                Button { openProfile(learner) } label: {
+                    Label(learner.profileReadiness == "ACTION_REQUIRED" ? "Profil · à vérifier" : "Profil", systemImage: "person.text.rectangle")
+                }
+            }
+            if let phone = learner.contactPhone {
+                if let url = SchoolContactLinks.call(phone) { Link(destination: url) { Label("Appeler", systemImage: "phone") } }
+                if let url = SchoolContactLinks.message(phone) { Link(destination: url) { Label("Envoyer un message", systemImage: "message") } }
+            }
+            if let email = learner.contactEmail, let url = SchoolContactLinks.mail(email) {
+                Link(destination: url) { Label("Envoyer un e-mail", systemImage: "envelope") }
+            }
+        } label: {
+            Label("Profil et coordonnées", systemImage: learner.profileReadiness == "ACTION_REQUIRED" ? "exclamationmark.circle" : "ellipsis.circle")
+        }
+        .accessibilityIdentifier("learner-dossier-menu")
+    }
+
+    private var dossier: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.xl) {
                 if workspace.isLoadingLearner {
@@ -243,10 +304,7 @@ private struct SchoolLearnerDetailView: View {
                 } else if let learner = workspace.learner {
                     VStack(alignment: .leading, spacing: DrivySpacing.l) {
                         learnerHeading(learner)
-                        if let openPlanning, learner.archivedAt == nil {
-                            Button { openPlanning(learner) } label: { Label("Planifier une leçon", systemImage: "calendar.badge.plus") }
-                                .buttonStyle(DrivyPrimaryButtonStyle()).accessibilityIdentifier("learner-plan-lesson")
-                        }
+                        if let openPlanning, learner.archivedAt == nil { planButton(learner, openPlanning: openPlanning) }
                     }
                     trainings
                     if let openProfile {
@@ -260,21 +318,19 @@ private struct SchoolLearnerDetailView: View {
                     }
                     if learner.contactEmail != nil || learner.contactPhone != nil {
                         DrivyRowGroup(title: "Coordonnées") {
-                            if let email = learner.contactEmail { DrivyContactRow(title: "E-mail", value: email, symbol: "envelope") }
-                            if let phone = learner.contactPhone { DrivyContactRow(title: "Téléphone", value: phone, symbol: "phone") }
+                            if let email = learner.contactEmail {
+                                SchoolContactActionRow(title: "E-mail", value: email, symbol: "envelope",
+                                    actions: SchoolContactActionRow.actions(email: email, name: learner.displayName))
+                            }
+                            if let phone = learner.contactPhone {
+                                SchoolContactActionRow(title: "Téléphone", value: phone, symbol: "phone",
+                                    actions: SchoolContactActionRow.actions(phone: phone, name: learner.displayName))
+                            }
                         }
                     }
                 }
             }
             .drivyPageContent()
-        }
-        .background(DrivyTheme.surface)
-        .navigationTitle("Dossier")
-        .navigationBarTitleDisplayMode(.inline)
-        .task(id: workspace.selectedLearnerID) { await workspace.loadSelectedLearner() }
-        .sheet(item: $presentedTraining, onDismiss: { workspace.selectTraining(nil) }) { presentation in
-            SchoolTrainingView(client: presentation.client, workspace: workspace,
-                learner: presentation.learner, trainingID: presentation.trainingID)
         }
     }
 
@@ -332,6 +388,68 @@ private struct SchoolLearnerDetailView: View {
                 .disabled(workspace.isLoadingMoreTrainings)
             }
         }
+    }
+}
+
+/// Contact value with its actions (call, message, e-mail) as 44 pt round buttons.
+private struct SchoolContactActionRow: View {
+    struct Action: Identifiable {
+        let label: String
+        let symbol: String
+        let url: URL
+        var id: String { url.absoluteString }
+    }
+    let title: String
+    let value: String
+    let symbol: String
+    let actions: [Action]
+
+    static func actions(email: String, name: String) -> [Action] {
+        guard let url = SchoolContactLinks.mail(email) else { return [] }
+        return [Action(label: "Envoyer un e-mail à \(name)", symbol: "envelope.fill", url: url)]
+    }
+    static func actions(phone: String, name: String) -> [Action] {
+        var result: [Action] = []
+        if let url = SchoolContactLinks.message(phone) { result.append(Action(label: "Envoyer un message à \(name)", symbol: "message.fill", url: url)) }
+        if let url = SchoolContactLinks.call(phone) { result.append(Action(label: "Appeler \(name)", symbol: "phone.fill", url: url)) }
+        return result
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: DrivySpacing.s) {
+            DrivyContactRow(title: title, value: value, symbol: symbol)
+            ForEach(actions) { action in
+                Link(destination: action.url) {
+                    Image(systemName: action.symbol)
+                        .font(.body.weight(.semibold))
+                        .frame(width: 44, height: 44)
+                        .background(DrivyTheme.accentSoft, in: Circle())
+                        .contentShape(Circle())
+                }
+                .foregroundStyle(DrivyTheme.accent)
+                .accessibilityLabel(action.label)
+            }
+        }
+    }
+}
+
+/// `tel:`, `sms:` and `mailto:` links built from what the school recorded, never guessed.
+enum SchoolContactLinks {
+    private static func dialable(_ phone: String) -> String? {
+        let characters = phone.filter { ($0.isASCII && $0.isNumber) || $0 == "+" }
+        let value = String(characters.prefix(1)) + characters.dropFirst().filter { $0 != "+" }
+        return value.filter(\.isNumber).count >= 3 ? value : nil
+    }
+    static func call(_ phone: String) -> URL? { dialable(phone).flatMap { URL(string: "tel:\($0)") } }
+    static func message(_ phone: String) -> URL? { dialable(phone).flatMap { URL(string: "sms:\($0)") } }
+    static func mail(_ address: String) -> URL? {
+        let value = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = value.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2, parts.allSatisfy({ !$0.isEmpty }), !value.contains(where: \.isWhitespace) else { return nil }
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = value
+        return components.url
     }
 }
 
