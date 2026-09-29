@@ -27,7 +27,7 @@ struct SchoolSignInLanding: View {
                     SchoolErrorNotice(message: errorMessage)
                 }
             }
-            .drivyPageContent()
+            .drivyPageContent(maxWidth: 600)
         }
         .background(DrivyTheme.surface)
         .safeAreaInset(edge: .bottom, spacing: 0) {

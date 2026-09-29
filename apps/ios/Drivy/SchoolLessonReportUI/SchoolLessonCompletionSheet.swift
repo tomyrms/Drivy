@@ -86,10 +86,14 @@ struct SchoolLessonTariffSheet: View {
         NavigationStack {
             Form {
                 if let lesson = model.lesson {
-                    LabeledContent("Prix convenu", value: SchoolCatalogFormatting.price(lesson.priceCentsSnapshot))
+                    LabeledContent("Prix convenu") {
+                        Text(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot)).foregroundStyle(DrivyTheme.muted)
+                    }
                 }
                 if let account = model.account {
-                    LabeledContent("À payer", value: SchoolCatalogFormatting.price(account.balanceCents))
+                    LabeledContent("À payer") {
+                        Text(SchoolCatalogFormatting.price(account.balanceCents)).foregroundStyle(DrivyTheme.muted)
+                    }
                 }
             }
             .scrollContentBackground(.hidden)

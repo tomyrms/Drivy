@@ -46,46 +46,52 @@ struct SchoolAgendaView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                weekHeader
-                dayPicker
-                dayHeading
-                if isAdmin && isInstructor {
-                    Toggle("Toute l’école", isOn: $wholeSchool)
-                        .font(.subheadline.weight(.semibold))
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("agenda-whole-school")
-                }
-                if workspace.membership == nil {
-                    ContentUnavailableView("Choisissez votre école", systemImage: "building.2", description: Text("Votre agenda s’affiche une fois l’école choisie."))
-                } else if isLoading || (loadedScope != scopeKey && error == nil) {
-                    ProgressView("Chargement de l’agenda…").frame(maxWidth: .infinity, minHeight: 160)
-                } else if let error {
-                    SchoolErrorNotice(message: error, retry: { Task { await loadWeek() } })
-                } else if dailyLessons.isEmpty {
-                    DrivyEmptyState(title: "Aucune leçon ce jour", message: "",
-                        symbol: "calendar", actionTitle: mayPlan ? "Planifier" : "Voir le jour suivant") {
-                        if mayPlan { planningModel = newPlanningModel() }
-                        else if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
-                    }
-                } else {
-                    LazyVStack(spacing: 0) {
-                        ForEach(dailyLessons) { lesson in
-                            Button { selectedLesson = lesson } label: { lessonRow(lesson) }
-                                .buttonStyle(DrivyRowButtonStyle())
-                            Divider().overlay(DrivyTheme.border)
+        GeometryReader { geometry in
+            // La semaine garde ses commandes pendant que la liste défile. Les deux
+            // colonnes ne sont proposées qu’avec 340 pt de calendrier et 520 pt de liste.
+            if geometry.size.width >= 1000 && !typeSize.isAccessibilitySize {
+                HStack(alignment: .top, spacing: DrivySpacing.xl) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                            weekHeader
+                            dayPicker
+                            schoolFilter
                         }
+                        .padding(DrivySpacing.l)
                     }
+                    .frame(width: 388)
+                    .background(DrivyTheme.canvas)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                            dayHeading
+                            dayContent
+                        }
+                        .padding(.vertical, DrivySpacing.l)
+                        .padding(.trailing, DrivySpacing.xl)
+                    }
+                    .frame(maxWidth: 820)
+                    .refreshable { await loadWeek(keepingCurrent: true) }
                 }
+                .frame(maxWidth: 1248, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .center)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                        weekHeader
+                        dayPicker
+                        dayHeading
+                        schoolFilter
+                        dayContent
+                    }
+                    .drivyPageContent(maxWidth: 800)
+                }
+                .refreshable { await loadWeek(keepingCurrent: true) }
             }
-            .drivyPageContent(maxWidth: 800)
         }
         .background(DrivyTheme.surface)
         .navigationTitle("Agenda")
         .navigationBarTitleDisplayMode(.large)
         .task(id: scopeKey) { selectedLesson = nil; await loadWeek() }
-        .refreshable { await loadWeek(keepingCurrent: true) }
         // Une ligne ouvre directement l’écran de la leçon ; l’agenda se relit sans s’effacer à la fermeture
         // (leçon terminée, déplacée ou annulée).
         .sheet(item: $selectedLesson, onDismiss: { Task { await loadWeek(keepingCurrent: true) } }) { lesson in
@@ -98,6 +104,39 @@ struct SchoolAgendaView: View {
         .sheet(item: $planningModel, onDismiss: { Task { await loadWeek(keepingCurrent: true) } }) { model in SchoolPlanningView(model: model) }
         .onChange(of: identityScope) { _, _ in
             planningModel?.invalidate(); planningModel = nil; selectedLesson = nil
+        }
+    }
+
+    @ViewBuilder private var schoolFilter: some View {
+        if isAdmin && isInstructor {
+            Toggle("Toute l’école", isOn: $wholeSchool)
+                .font(.subheadline.weight(.semibold))
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("agenda-whole-school")
+        }
+    }
+
+    @ViewBuilder private var dayContent: some View {
+        if workspace.membership == nil {
+            ContentUnavailableView("Choisissez votre école", systemImage: "building.2", description: Text("Votre agenda s’affiche une fois l’école choisie."))
+        } else if isLoading || (loadedScope != scopeKey && error == nil) {
+            ProgressView("Chargement de l’agenda…").frame(maxWidth: .infinity, minHeight: 160)
+        } else if let error {
+            SchoolErrorNotice(message: error, retry: { Task { await loadWeek() } })
+        } else if dailyLessons.isEmpty {
+            DrivyEmptyState(title: "Aucune leçon ce jour", message: "",
+                symbol: "calendar", actionTitle: mayPlan ? "Planifier" : "Voir le jour suivant") {
+                if mayPlan { planningModel = newPlanningModel() }
+                else if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
+            }
+        } else {
+            LazyVStack(spacing: 0) {
+                ForEach(dailyLessons) { lesson in
+                    Button { selectedLesson = lesson } label: { lessonRow(lesson) }
+                        .buttonStyle(DrivyRowButtonStyle())
+                    Divider().overlay(DrivyTheme.border)
+                }
+            }
         }
     }
 

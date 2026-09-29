@@ -12,6 +12,7 @@ struct SchoolCaptureLiveView: View {
     var observationClient: SchoolObservationClient? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var resetCameraID = UUID()
     @State private var followsPosition = true
     @State private var observationMoment: ObservationMoment?
@@ -55,9 +56,6 @@ struct SchoolCaptureLiveView: View {
         .task(id: controller.captureID) {
             if let observationClient { controller.prepareLiveObservations(client: observationClient) }
             await controller.liveObservations?.loadCompetencies()
-        }
-        .sheet(item: $observationMoment) { moment in
-            SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant)
         }
         .onChange(of: controller.captureID) { _, _ in
             observationMoment = nil
@@ -254,6 +252,12 @@ struct SchoolCaptureLiveView: View {
                 .buttonStyle(DrivyPrimaryButtonStyle())
                 .disabled(!recorder.canRecord || isFinishing)
                 .accessibilityIdentifier("capture-signal-observation")
+                .popover(item: $observationMoment, attachmentAnchor: .rect(.bounds)) { moment in
+                    SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant)
+                        .frame(width: horizontalSizeClass == .regular ? 480 : nil,
+                               height: horizontalSizeClass == .regular ? 560 : nil)
+                        .presentationCompactAdaptation(.sheet)
+                }
                 if recorder.isSending { ProgressView("Envoi de l’observation…") }
                 else if recorder.pending != nil {
                     DrivyInlineMessage(text: recorder.errorMessage ?? "Une observation attend son envoi.", tone: .warning)

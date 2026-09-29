@@ -8,6 +8,7 @@ struct SchoolTodayView: View {
     @Bindable var workspace: SchoolWorkspace
     let agendaClient: SchoolAgendaClient?
     let captureController: SchoolCaptureSessionController?
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var lessons: [SchoolLesson] = []
     @State private var loadedKey: String?
     @State private var isLoading = false
@@ -18,6 +19,7 @@ struct SchoolTodayView: View {
     @State private var lastStartNow: SchoolStartNowWorkspace?
     @State private var opened: OpenedLesson?
     @State private var showsDay = false
+    @State private var cardHeight: CGFloat = 0
     @State private var camera: MapCameraPosition = .userLocation(fallback: .region(JourneyMapRegion.overview))
 
     private struct OpenedLesson: Identifiable {
@@ -42,12 +44,30 @@ struct SchoolTodayView: View {
 
     var body: some View {
         TimelineView(.everyMinute) { context in
-            Map(position: $camera) { UserAnnotation() }
-                .mapStyle(.standard(pointsOfInterest: .excludingAll))
-                .mapControls { MapUserLocationButton() }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    card(now: context.date).padding(DrivySpacing.m).frame(maxWidth: 600)
+            GeometryReader { geometry in
+                // 380 pt pour la leçon et au moins 580 pt de carte ; une fenêtre étroite
+                // conserve le panneau du bas, indépendamment du modèle d’iPad.
+                if geometry.size.width >= 960 && !typeSize.isAccessibilitySize {
+                    map
+                        .safeAreaInset(edge: .leading, spacing: 0) {
+                            ScrollView {
+                                card(now: context.date).padding(DrivySpacing.m)
+                            }
+                            .frame(width: 380)
+                            .background(DrivyTheme.canvas)
+                        }
+                } else {
+                    map.safeAreaInset(edge: .bottom, spacing: 0) {
+                        ScrollView {
+                            card(now: context.date).padding(DrivySpacing.m)
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
+                        }
+                        .scrollBounceBehavior(.basedOnSize)
+                        .frame(maxWidth: 600)
+                        .frame(height: min(cardHeight > 0 ? cardHeight : geometry.size.height * 0.66, geometry.size.height * 0.66))
+                    }
                 }
+            }
         }
         .task(id: scopeKey) { await load() }
         .onChange(of: scopeKey) { _, _ in
@@ -74,6 +94,12 @@ struct SchoolTodayView: View {
                 .environment(captureController)
             }
         }
+    }
+
+    private var map: some View {
+        Map(position: $camera) { UserAnnotation() }
+            .mapStyle(.standard(pointsOfInterest: .excludingAll))
+            .mapControls { MapUserLocationButton() }
     }
 
     @ViewBuilder private func card(now: Date) -> some View {

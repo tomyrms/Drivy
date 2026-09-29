@@ -20,6 +20,10 @@ on:
         description: Apparences à capturer, séparées par des espaces
         type: string
         default: 'light dark'
+      visual_orientations:
+        description: 'Vide : portrait simctl existant ; sinon portrait et/ou landscape via XCUITest'
+        type: string
+        default: ''
       visual_large_text:
         description: Vérifier les grandes tailles de texte d’accessibilité
         type: boolean
@@ -27,7 +31,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only }}-${{ inputs.visual_screens }}-${{ inputs.visual_devices }}-${{ inputs.visual_large_text }}
+  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only }}-${{ inputs.visual_screens }}-${{ inputs.visual_devices }}-${{ inputs.visual_large_text }}-${{ inputs.visual_orientations }}
   cancel-in-progress: false
 jobs:
   apple:
@@ -69,10 +73,12 @@ jobs:
         shell: bash
         env:
           VISUAL_ONLY: ${{ inputs.visual_only }}
+          VISUAL_ORIENTATIONS: ${{ inputs.visual_orientations }}
+          VISUAL_SCREENS: ${{ inputs.visual_screens }}
         run: |
           set -euo pipefail
           action=build-for-testing
-          if [[ "$VISUAL_ONLY" == true ]]; then action=build; fi
+          if [[ "$VISUAL_ONLY" == true && -z "$VISUAL_ORIENTATIONS" && ! " $VISUAL_SCREENS " =~ [[:space:]](live-signal|signal-status)[[:space:]] ]]; then action=build; fi
           xcodebuild "$action" \
             -project apps/ios/Drivy.xcodeproj -scheme Drivy \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
@@ -101,6 +107,7 @@ jobs:
           DRIVY_VISUAL_SCREENS: ${{ inputs.visual_screens }}
           DRIVY_VISUAL_DEVICES: ${{ inputs.visual_devices }}
           DRIVY_VISUAL_APPEARANCES: ${{ inputs.visual_appearances }}
+          DRIVY_VISUAL_ORIENTATIONS: ${{ inputs.visual_orientations }}
           DRIVY_VISUAL_LARGE_TEXT: ${{ inputs.visual_large_text && '1' || '0' }}
         run: bash scripts/ios/capture-screens.sh
       - name: Construire l'IPA pour iLoader
@@ -144,6 +151,7 @@ jobs:
             artifacts/ios/*.xcresult
             artifacts/ios/test-reports/
             artifacts/ios/*.png
+            artifacts/ios/visual-orientation-*.json
             artifacts/ios/*-build.log
             artifacts/ios/*-test.log
             artifacts/ios/Package.resolved
@@ -159,7 +167,7 @@ jobs:
       # JPEG et imprimées en base64 à la fin du journal, lisible par l'API des
       # journaux quand le téléchargement des artefacts est impossible.
       - name: Captures en base64 pour la revue
-        if: always() && inputs.visual_only == true
+        if: always() && inputs.visual_only == true && inputs.visual_orientations == '' && !contains(inputs.visual_screens, 'live-signal') && !contains(inputs.visual_screens, 'signal-status')
         shell: bash
         env:
           DRIVY_VISUAL_SCREENS: ${{ inputs.visual_screens }}

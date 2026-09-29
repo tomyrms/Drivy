@@ -45,6 +45,26 @@ import XCTest
         XCTAssertTrue(app.staticTexts["field-lesson-closed"].waitForExistence(timeout: 10), app.debugDescription)
     }
 
+    func testLiveSignalCanGoBackCancelAndReopenWithoutRecording() {
+        let app = launch("live")
+        let signal = app.buttons["capture-signal-observation"]
+        XCTAssertTrue(signal.waitForExistence(timeout: 20), app.debugDescription)
+        signal.tap()
+        let priority = app.buttons["live-observation-theme-Priorité à droite"]
+        XCTAssertTrue(priority.waitForExistence(timeout: 10), app.debugDescription)
+        priority.tap()
+        XCTAssertTrue(app.buttons["live-observation-status-ATTENTION"].waitForExistence(timeout: 5))
+        app.buttons["live-observation-back"].tap()
+        XCTAssertTrue(priority.waitForExistence(timeout: 5))
+        app.buttons["live-observation-close"].tap()
+        XCTAssertTrue(priority.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(signal.isEnabled)
+        signal.tap()
+        XCTAssertTrue(priority.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["live-observation-status-ATTENTION"].exists)
+        capture(app, name: "live-signal-reopened")
+    }
+
     private func launch(_ screen: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = screen

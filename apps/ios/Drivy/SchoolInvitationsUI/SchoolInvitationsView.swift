@@ -6,6 +6,7 @@ struct SchoolInvitationsView: View {
     @Bindable var model: SchoolInvitationWorkspace
     @Environment(\.dismiss) private var dismiss
     @State private var showsCreation = false
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     /// A code renewed from the detail opens here; the creation sheet shows its own.
     private var issuedCode: Binding<SchoolIssuedInvitationCode?> {
@@ -13,7 +14,7 @@ struct SchoolInvitationsView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: $model.selectedID) {
                 if let pending = model.pending { InvitationPendingSection(model: model, pending: pending) }
                 if model.pending == nil, model.codeRecovery != nil, !showsCreation {
@@ -68,7 +69,7 @@ struct SchoolInvitationsView: View {
                     }
                 }
             }
-            .navigationSplitViewColumnWidth(min: 300, ideal: 380, max: 460)
+            .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 380)
         } detail: {
             if let invitation = model.selectedInvitation {
                 InvitationDetailView(model: model, invitation: invitation)
@@ -78,6 +79,8 @@ struct SchoolInvitationsView: View {
                     .background(DrivyTheme.surface)
             }
         }
+        .navigationSplitViewStyle(.balanced)
+        .presentationSizing(.page)
         .tint(DrivyTheme.accent)
         .interactiveDismissDisabled(model.isBusy)
         .task { await model.load() }

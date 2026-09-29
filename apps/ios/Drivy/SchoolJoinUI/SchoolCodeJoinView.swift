@@ -177,6 +177,9 @@ struct SchoolCodeJoinView: View {
             }
         }
         .buttonStyle(DrivyPrimaryButtonStyle())
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
+        .background(DrivyTheme.surface)
     }
 }
 

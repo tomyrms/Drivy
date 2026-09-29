@@ -55,6 +55,8 @@ struct SchoolProfileView: View {
                         ForEach(policy.fields) { rule in
                             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                                 Text(rule.field.label).font(.subheadline.weight(.semibold))
+                                Text(rule.requirement == .optional ? "Facultatif" : "\(rule.requirement.label) · \(rule.stage.label)")
+                                    .font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                                 Text(rule.explanation).font(.footnote).fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -64,6 +66,8 @@ struct SchoolProfileView: View {
             if let notice = model.notice, notice.status == "APPROVED" { noticeSection(notice) }
         }
         .scrollContentBackground(.hidden)
+        .frame(maxWidth: 720)
+        .frame(maxWidth: .infinity)
         .background(DrivyTheme.canvas)
         .safeAreaInset(edge: .bottom) {
             if model.profile != nil, !model.editableFields.isEmpty {
@@ -151,12 +155,6 @@ struct SchoolProfileView: View {
         .disabled(!model.canMutate)
     }
     @ViewBuilder private func fieldExplanation(_ field: SchoolProfileField) -> some View {
-        if let rule = model.applicablePolicy?.fields.first(where: { $0.field == field }) {
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text(rule.requirement == .optional ? "Facultatif" : "\(rule.requirement.label) · \(rule.stage.label)").font(.caption.weight(.semibold))
-            }
-            .foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
-        }
         if model.hasEdits, model.editableFields.contains(field),
            !model.draft.isValid(allowed: [field], timeZone: model.school?.timeZone ?? "Europe/Zurich") {
             Label(fieldError(field), systemImage: "exclamationmark.triangle.fill")

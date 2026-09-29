@@ -18,6 +18,7 @@ struct SchoolTrainingView: View {
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
         }
         .tint(DrivyTheme.accent)
+        .presentationSizing(.page)
     }
 }
 
@@ -90,23 +91,54 @@ private struct SchoolTrainingContent: View {
     private var section: SchoolTrainingSection { fixedSection ?? chosenSection }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                if fixedSection == nil { heading }
-                if model.isLoading && model.training == nil { ProgressView().frame(maxWidth: .infinity, minHeight: 100) }
-                if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
-                if model.training != nil {
-                    if fixedSection == nil && model.hasPedagogicalRole { sectionPicker }
-                    switch section {
-                    case .lessons: lessons
-                    case .progress: progress
+        GeometryReader { geometry in
+            // Dans un grand détail, les leçons et leur progression restent visibles ensemble.
+            // Le sélecteur est conservé quand chaque colonne n’aurait plus 460 pt de lecture.
+            if geometry.size.width >= 1040 && fixedSection == nil && model.hasPedagogicalRole
+                && model.training != nil && !dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                    heading
+                    if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
+                    HStack(alignment: .top, spacing: DrivySpacing.xl) {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                                DrivySectionHeader(title: "Leçons")
+                                lessons
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .refreshable { await model.load(keepingCurrent: true) }
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                                DrivySectionHeader(title: "Progression")
+                                progress
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .refreshable { await model.loadProgress() }
                     }
                 }
+                .drivyPageContent(maxWidth: 1200)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                        if fixedSection == nil { heading }
+                        if model.isLoading && model.training == nil { ProgressView().frame(maxWidth: .infinity, minHeight: 100) }
+                        if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
+                        if model.training != nil {
+                            if fixedSection == nil && model.hasPedagogicalRole { sectionPicker }
+                            switch section {
+                            case .lessons: lessons
+                            case .progress: progress
+                            }
+                        }
+                    }
+                    .drivyPageContent()
+                }
+                .refreshable { await model.load(keepingCurrent: true) }
             }
-            .drivyPageContent()
         }
         .background(DrivyTheme.surface)
-        .refreshable { await model.load(keepingCurrent: true) }
         .accessibilityIdentifier("training-dossier")
         .sheet(item: $opened, onDismiss: { Task { await model.load(keepingCurrent: true) } }) { lesson in
             NavigationStack {

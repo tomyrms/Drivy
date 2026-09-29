@@ -101,7 +101,9 @@ struct AppLockView: View {
                     .foregroundStyle(DrivyTheme.text)
                 if let error = lock.errorMessage { SchoolErrorNotice(message: error) }
             }
-            .drivyPageContent()
+            .frame(maxWidth: .infinity)
+            .multilineTextAlignment(.center)
+            .drivyPageContent(maxWidth: 600)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(DrivyTheme.surface)

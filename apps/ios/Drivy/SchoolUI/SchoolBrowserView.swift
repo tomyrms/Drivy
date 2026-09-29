@@ -9,9 +9,10 @@ struct SchoolBrowserView: View {
     var openProfile: ((SchoolLearner) -> Void)? = nil
     var openPlanning: ((SchoolLearner) -> Void)? = nil
     var trainingClient: SchoolTrainingClient? = nil
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             searchableMaster
             .background(DrivyTheme.canvas)
             .navigationTitle("Élèves")
@@ -29,7 +30,7 @@ struct SchoolBrowserView: View {
                 }
                 DrivyAccountToolbarItem(openAccount: openAccount)
             }
-            .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 440)
+            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 360)
         } detail: {
             if workspace.selectedLearnerID != nil {
                 SchoolLearnerDetailView(workspace: workspace, openProfile: openProfile, openPlanning: openPlanning, trainingClient: trainingClient)
@@ -37,6 +38,7 @@ struct SchoolBrowserView: View {
                 SchoolOverviewView(workspace: workspace)
             }
         }
+        .navigationSplitViewStyle(.balanced)
         .tint(DrivyTheme.accent)
     }
 

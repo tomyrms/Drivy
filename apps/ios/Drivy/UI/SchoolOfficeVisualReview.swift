@@ -17,7 +17,7 @@ struct SchoolOfficeVisualReview: View {
                 switch screen {
                 case "planning": SchoolPlanningView(model: models.planning)
                 case "invitation-create": InvitationCreationView(model: models.invitations)
-                case "invitations": SchoolInvitationsView(model: models.invitations)
+                case "invitations", "invitation-detail": SchoolInvitationsView(model: models.invitations)
                 case "lesson-tariff": SchoolLessonTariffSheet(model: models.tariff)
                 default:
                     NavigationStack {
@@ -84,7 +84,9 @@ struct SchoolOfficeVisualReview: View {
             planning.productID = SchoolOfficeVisualData.productID
             planning.meetingPoint = "Gare · lieu fictif"
             await planning.loadAvailability()
-        case "invitations", "invitation-create": await invitations.load()
+        case "invitations", "invitation-create", "invitation-detail":
+            await invitations.load()
+            if screen == "invitation-detail" { invitations.selectedID = invitations.invitations.first?.id }
         case "lesson-tariff": await tariff.load()
         default: break
         }

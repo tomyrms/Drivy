@@ -56,8 +56,13 @@ struct SchoolPlanningView: View {
                     if model.trainings.isEmpty { formNote("Aucune formation active. L’administration peut en ouvrir une depuis le dossier de cet élève.") }
                 }
             } else {
-                LabeledContent("Élève", value: model.learners.first(where: { $0.id == model.learnerID })?.displayName ?? "Dossier de la leçon")
-                if let training = model.selectedTraining { LabeledContent("Formation", value: "Permis \(training.categoryCode)") }
+                LabeledContent("Élève") {
+                    Text(model.learners.first(where: { $0.id == model.learnerID })?.displayName ?? "Dossier de la leçon")
+                        .foregroundStyle(DrivyTheme.muted)
+                }
+                if let training = model.selectedTraining {
+                    LabeledContent("Formation") { Text("Permis \(training.categoryCode)").foregroundStyle(DrivyTheme.muted) }
+                }
             }
         }
         if model.trainingID != nil {
@@ -67,8 +72,8 @@ struct SchoolPlanningView: View {
                     Toggle("Changer la durée ou la prestation", isOn: $model.changesCommercialTerms)
                         .disabled(!model.canMutate)
                     if !model.changesCommercialTerms, let lesson = model.originalLesson {
-                        LabeledContent("Durée conservée") { Text("\(lesson.durationMinutes) min").monospacedDigit() }
-                        LabeledContent("Prix conservé") { Text(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot)).monospacedDigit() }
+                        LabeledContent("Durée conservée") { Text("\(lesson.durationMinutes) min").monospacedDigit().foregroundStyle(DrivyTheme.muted) }
+                        LabeledContent("Prix conservé") { Text(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot)).monospacedDigit().foregroundStyle(DrivyTheme.muted) }
                     }
                 } header: { Text("Durée et prix") }
                 footer: { Text("Un changement de prestation demande une nouvelle lecture des conditions et un motif.") }
@@ -131,8 +136,8 @@ struct SchoolPlanningView: View {
             if let product = model.selectedProduct {
                 Stepper("Quantité : \(model.quantity)", value: $model.quantity, in: 1...100)
                     .onChange(of: model.quantity) { _, _ in model.termsAccepted = false }
-                LabeledContent("Durée") { Text("\(model.duration) min").monospacedDigit() }
-                if let price = model.selectedPrice { LabeledContent("Prix convenu") { Text(SchoolCatalogFormatting.price(price)).monospacedDigit() } }
+                LabeledContent("Durée") { Text("\(model.duration) min").monospacedDigit().foregroundStyle(DrivyTheme.muted) }
+                if let price = model.selectedPrice { LabeledContent("Prix convenu") { Text(SchoolCatalogFormatting.price(price)).monospacedDigit().foregroundStyle(DrivyTheme.muted) } }
                 Text("\(product.unitLabel) · \(SchoolCatalogFormatting.price(product.unitPriceCents)) l’unité").font(.footnote.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
                 if let terms = model.selectedTerms {
                     DisclosureGroup("Conditions · \(terms.label)") {
@@ -155,7 +160,7 @@ struct SchoolPlanningView: View {
     private var reviewFields: some View {
         Section {
             if model.duration > 0 {
-                LabeledContent("Fin prévue") { Text(SchoolPlanningFormat.instant(model.endsAt, zone: model.timeZone)).monospacedDigit() }
+                LabeledContent("Fin prévue") { Text(SchoolPlanningFormat.instant(model.endsAt, zone: model.timeZone)).monospacedDigit().foregroundStyle(DrivyTheme.muted) }
             }
             if model.originalLesson != nil {
                 TextField(model.changesCommercialTerms ? "Motif du changement" : "Motif facultatif", text: $model.reason, axis: .vertical).lineLimit(2...4)

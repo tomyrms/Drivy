@@ -43,6 +43,7 @@ struct SchoolLessonReportView: View {
         }
         .navigationTitle("Leçon")
         .navigationBarTitleDisplayMode(.inline)
+        .presentationSizing(.page)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Fermer") {
@@ -84,6 +85,7 @@ private struct SchoolLessonReportContent: View {
     /// Contrôleur de séance de l’app ; absent, rien de ce qui dépend du GPS de l’appareil n’est proposé.
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var lessonSheet: LessonSheet?
     @State private var replay: SchoolTripReplayRoute?
     @State private var isFinishing = false
@@ -179,24 +181,34 @@ private struct SchoolLessonReportContent: View {
 
     private func form(now: Date) -> some View {
         let bar = plannedBar(now: now)
-        return Form {
-            headerSection
-            if model.needsReload && model.hasLocalEdits {
-                Section("Saisie conservée") { Text(model.retainedEditsText).textSelection(.enabled) }
+        return GeometryReader { geometry in
+            // Le contexte reste à portée pendant la rédaction. La saisie vit dans le modèle,
+            // au-dessus de ce changement de composition et des rotations de la fenêtre.
+            if geometry.size.width >= 900 && hasCompletedReport && !typeSize.isAccessibilitySize {
+                HStack(spacing: 0) {
+                    Form { lessonContext }
+                        .scrollContentBackground(.hidden)
+                        .frame(width: 380)
+                    Form { completedReport }
+                        .scrollContentBackground(.hidden)
+                        .frame(maxWidth: .infinity)
+                }
+                .frame(maxWidth: 1248)
+                .frame(maxWidth: .infinity)
+            } else {
+                Form {
+                    lessonContext
+                    completedReport
+                    if isPlanned, model.isAuthor { goalsEditor(savesInline: !isGoalsBar(bar)) }
+                    if isPlanned, model.isOwnLearner, let goals = model.preparation?.goals, !goals.isEmpty { goalsReader(goals) }
+                    if isPlanned, model.isAuthor { observationsSection }
+                    if let wish = model.wish, showsWish(wish) { wishSection(wish) }
+                }
+                .scrollContentBackground(.hidden)
+                .frame(maxWidth: 820)
+                .frame(maxWidth: .infinity)
             }
-            if model.pending != nil { pendingSection }
-            if isCompleted, readsLesson, !model.captures.isEmpty || !model.track.isEmpty { trackSection }
-            if isCompleted, model.isAuthor || model.isOwnLearner { observationsSection }
-            if model.isAuthor, isCompleted, model.draft != nil { reportEditor }
-            if !model.isAuthor, model.canReadSharedReport, isCompleted { sharedReportSection }
-            if isPlanned, model.isAuthor { goalsEditor(savesInline: !isGoalsBar(bar)) }
-            if isPlanned, model.isOwnLearner, let goals = model.preparation?.goals, !goals.isEmpty { goalsReader(goals) }
-            if isPlanned, model.isAuthor { observationsSection }
-            if let wish = model.wish, showsWish(wish) { wishSection(wish) }
         }
-        .scrollContentBackground(.hidden)
-        .frame(maxWidth: 820)
-        .frame(maxWidth: .infinity)
         .background(DrivyTheme.canvas)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let bar { plannedBarView(bar) }
@@ -211,6 +223,25 @@ private struct SchoolLessonReportContent: View {
             }
             ToolbarItem(placement: .topBarTrailing) { lessonMenu(now: now) }
         }
+    }
+
+    private var hasCompletedReport: Bool {
+        isCompleted && ((model.isAuthor && model.draft != nil) || (!model.isAuthor && model.canReadSharedReport))
+    }
+
+    @ViewBuilder private var lessonContext: some View {
+        headerSection
+        if model.needsReload && model.hasLocalEdits {
+            Section("Saisie conservée") { Text(model.retainedEditsText).textSelection(.enabled) }
+        }
+        if model.pending != nil { pendingSection }
+        if isCompleted, readsLesson, !model.captures.isEmpty || !model.track.isEmpty { trackSection }
+        if isCompleted, model.isAuthor || model.isOwnLearner { observationsSection }
+    }
+
+    @ViewBuilder private var completedReport: some View {
+        if model.isAuthor, isCompleted, model.draft != nil { reportEditor }
+        if !model.isAuthor, model.canReadSharedReport, isCompleted { sharedReportSection }
     }
 
     private func isGoalsBar(_ bar: PlannedBar?) -> Bool {

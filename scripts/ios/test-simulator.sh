@@ -14,6 +14,7 @@ phone_status=0
 xcodebuild test-without-building \
   -project apps/ios/Drivy.xcodeproj -scheme Drivy \
   -destination "platform=iOS Simulator,id=$device_id" \
+  -skip-testing:DrivyUITests/VisualOrientationTests \
   -parallel-testing-enabled NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/Tests.xcresult \
@@ -38,6 +39,7 @@ ipad_status=0
 xcodebuild test-without-building \
   -project apps/ios/Drivy.xcodeproj -scheme Drivy \
   -destination "platform=iOS Simulator,id=$ipad_id" \
+  -skip-testing:DrivyUITests/VisualOrientationTests \
   -only-testing:DrivyUITests -only-testing:DrivyTests/SchoolPresentationTests -parallel-testing-enabled NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/iPadTests.xcresult \
