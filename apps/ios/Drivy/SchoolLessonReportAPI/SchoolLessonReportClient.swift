@@ -57,15 +57,6 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         guard values.allSatisfy({ $0.lessonId == lessonID && $0.sequence > 0 && SchoolLesson.date($0.publishedAt) != nil && valid($0.observations) }) else { throw SchoolReportFailure.invalidResponse }
         return values.sorted { $0.sequence > $1.sequence }
     }
-    func account(schoolID: UUID, lessonID: UUID) async throws -> SchoolLessonAccount {
-        let value: SchoolLessonAccount = try await request(schoolID, ["lessons", lessonID.uuidString, "account"])
-        guard value.ownerType == "LESSON", value.ownerId == lessonID, value.lessonId == lessonID, value.version > 0, value.currency == "CHF",
-              [value.plannedPriceCents, value.chargeCents, value.netReceivedCents, value.balanceCents].allSatisfy({ $0 >= 0 && $0 <= 9_007_199_254_740_991 }),
-              value.charges.allSatisfy({ $0.schoolId == schoolID && $0.accountId == value.id && $0.version > 0
-                  && (-9_007_199_254_740_991...9_007_199_254_740_991).contains($0.amountSignedCents)
-                  && ["INITIAL", "ADJUSTMENT", "REVERSAL"].contains($0.kind) }) else { throw SchoolReportFailure.invalidResponse }
-        return value
-    }
     func progress(schoolID: UUID, trainingID: UUID) async throws -> SchoolReportProgress {
         let value: SchoolReportProgress = try await request(schoolID, ["trainings", trainingID.uuidString, "progress"])
         guard value.trainingId == trainingID, SchoolLesson.date(value.computedAt) != nil, Set(value.items.map(\.id)).count == value.items.count,
@@ -83,7 +74,9 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         guard command.scope.apiBaseURL == baseURL.absoluteString, command.matches(value) else { throw SchoolReportFailure.invalidResponse }
         return value
     }
-    func send(_ command: PendingSchoolCommand) async throws {
+    /// Envoie une demande relue dans la file chiffrée. Le partage renvoie l’état confirmé par l’école,
+    /// appliqué sans relire toute la leçon.
+    @discardableResult func send(_ command: PendingSchoolCommand) async throws -> SchoolLessonSharing? {
         guard command.kind.isReport, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,
               let body = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any],
               UUID(uuidString: body["operationId"] as? String ?? "") == command.id else { throw SchoolReportFailure.invalidResponse }
@@ -110,11 +103,23 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         case .recordPermitCheck:
             guard let target = command.routeResourceID else { throw SchoolReportFailure.invalidResponse }
             path = ["trainings", target.uuidString, "permit-checks"]; method = "POST"
+        case .markNoShow:
+            guard let target = command.resourceID else { throw SchoolReportFailure.invalidResponse }
+            path = ["lessons", target.uuidString, "no-show"]; method = "POST"
         default: throw SchoolReportFailure.invalidResponse
         }
-        let _: Acknowledgement = try await request(command.scope.schoolID, path, method: method, command: command)
+        var sharing: SchoolLessonSharing?
+        if command.kind == .updateLessonSharing {
+            let value: SchoolLessonSharing = try await request(command.scope.schoolID, path, method: method, command: command)
+            guard let target = command.resourceID, value.lessonId == target, value.schoolId == command.scope.schoolID,
+                  value.version > command.resourceVersion, value.privateObservationIds.count <= 100 else { throw SchoolReportFailure.uncertain }
+            sharing = value
+        } else {
+            let _: Acknowledgement = try await request(command.scope.schoolID, path, method: method, command: command)
+        }
         // Dès le succès HTTP, tout problème de preuve est une incertitude, jamais un refus frais.
         do { _ = try await receipt(for: command) } catch { throw SchoolReportFailure.uncertain }
+        return sharing
     }
     private func valid(_ values: [SchoolReportObservation]) -> Bool {
         values.count <= 100 && Set(values.map(\.id)).count == values.count
@@ -136,7 +141,7 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
     }
     private struct Acknowledgement: Decodable {}
     private struct Envelope<Value: Decodable>: Decodable { let data: Value; let requestId: UUID; let serverTime: String }
-    private struct Problem: Decodable { let code: String }
+    private struct Problem: Decodable { let code: String; let title: String? }
     private func request<Value: Decodable>(_ schoolID: UUID, _ path: [String], query: [URLQueryItem] = [], method: String = "GET", command: PendingSchoolCommand? = nil) async throws -> Value {
         guard DrivyAPIClient.permits(baseURL) else { throw SchoolReportFailure.invalidResponse }
         var url = baseURL
@@ -162,8 +167,8 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolReportFailure.invalidResponse }
         let type = response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased()
         guard response.status == 200 else {
-            let code = type == "application/problem+json" ? (try? JSONDecoder().decode(Problem.self, from: response.data).code) : nil
-            throw Self.failure(response.status, code, kind: command?.kind)
+            let problem = type == "application/problem+json" ? (try? JSONDecoder().decode(Problem.self, from: response.data)) : nil
+            throw Self.failure(response.status, problem?.code, kind: command?.kind, title: problem?.title)
         }
         guard type == "application/json" else { throw SchoolReportFailure.invalidResponse }
         do {
@@ -172,7 +177,7 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
             return value.data
         } catch { throw SchoolReportFailure.invalidResponse }
     }
-    static func failure(_ status: Int, _ code: String?, kind: SchoolCommandKind? = nil) -> SchoolReportFailure {
+    static func failure(_ status: Int, _ code: String?, kind: SchoolCommandKind? = nil, title: String? = nil) -> SchoolReportFailure {
         // AP30 : sans grant `permit_review` (403) ou sans affectation à la formation (404), seul le contrôle
         // du permis est refusé ; la leçon reste lisible et le motif écrit reste possible.
         if kind == .recordPermitCheck && ((status == 403 && code == "PERMIT_REVIEW_REQUIRED") || status == 404) { return .permitReviewRequired }
@@ -182,6 +187,8 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
             "REPORT_INCOMPLETE": "Complétez le travail réalisé, le constat et la prochaine étape avant de publier.",
             "ANOMALY_REASON_REQUIRED": "Expliquez le constat avec un contrôle de permis non confirmé et les éventuels écarts horaires.",
             "INVALID_ACTUAL_INTERVAL": "La fin réelle doit suivre le début et ne pas être future.",
+            "LESSON_NOT_STARTED": "La leçon n’a pas encore commencé. Terminez-la au plus tôt 15 minutes avant son début.",
+            "LESSON_NOT_ENDED": "Une absence se note après la fin prévue du rendez-vous.",
             "CORRECTION_REASON_REQUIRED": "Expliquez la correction avant de publier une nouvelle version.",
             "CURRICULUM_VERSION_MISMATCH": "Le référentiel de cette formation a changé. Relisez les compétences.",
             "LESSON_CLOSED": "La leçon possède déjà un résultat. Rechargez-la pour retrouver le bilan.",
@@ -197,6 +204,13 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
             "INVALID_REQUEST": "Vérifiez les informations saisies et leurs longueurs."
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }
+        // Tout autre refus 4xx motivé par l’école est définitif : son explication (en français) est affichée.
+        // Un identifiant d’opération déjà utilisé reste une incertitude à vérifier.
+        if (400...499).contains(status), status != 429, let code, code != "IDEMPOTENCY_MISMATCH" {
+            let text = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return .rejected(text.isEmpty || text.count > 300 ? "L’école a refusé cette demande. Vérifiez les informations puis réessayez." : text)
+        }
+        if code == "IDEMPOTENCY_MISMATCH" { return .uncertain }
         return status >= 500 || status == 429 ? .unavailable : .invalidResponse
     }
 }

@@ -13,9 +13,18 @@ struct SchoolAgendaView: View {
     @State private var loadedScope: String?
     @State private var selectedLesson: SchoolLesson?
     @State private var planningModel: SchoolPlanningWorkspace?
+    /// Leçons de la semaine rangées par jour, calculées une fois par lecture.
+    @State private var dayIndex: [Date: [SchoolLesson]] = [:]
+    /// Administration qui enseigne aussi : ses leçons par défaut, toute l’école sur demande.
+    @State private var wholeSchool = false
 
     private var identityScope: String { "\(workspace.person?.id.uuidString ?? ""):\(workspace.membership?.id.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)" }
     private var mayPlan: Bool { workspace.membership?.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) == true && workspace.school?.status == "ACTIVE" }
+    private var isAdmin: Bool { workspace.membership?.roles.contains("ADMIN") == true }
+    private var isInstructor: Bool { workspace.membership?.roles.contains("INSTRUCTOR") == true }
+    /// Un moniteur voit ses leçons ; l’école entière seulement pour l’administration (filtre relu par le serveur).
+    private var instructorFilter: UUID? { isInstructor && !(isAdmin && wholeSchool) ? workspace.membership?.membershipId : nil }
+    private var showsInstructor: Bool { instructorFilter == nil && isAdmin }
 
     private var calendar: Calendar {
         var result = Calendar(identifier: .gregorian)
@@ -28,15 +37,12 @@ struct SchoolAgendaView: View {
     private var weekDays: [Date] { (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: weekStart) } }
     private var dailyLessons: [SchoolLesson] {
         guard loadedScope == scopeKey else { return [] }
-        return lessons.filter { lesson in lesson.startsAt.map { calendar.isDate($0, inSameDayAs: selectedDate) } ?? false }
-            .sorted { $0.plannedStart < $1.plannedStart }
+        return dayIndex[calendar.startOfDay(for: selectedDate)] ?? []
     }
-    private var scopeKey: String { "\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(weekStart.timeIntervalSince1970)" }
+    private var scopeKey: String { "\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(weekStart.timeIntervalSince1970):\(instructorFilter?.uuidString ?? "all")" }
     private var dateTitle: String {
         if calendar.isDateInToday(selectedDate) { return "Aujourd’hui" }
-        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "EEEE d MMMM"
-        return formatter.string(from: selectedDate).capitalizedFirst
+        return SchoolDateFormat.template("EEEEdMMMM", selectedDate, zone: calendar.timeZone.identifier).capitalizedFirst
     }
 
     var body: some View {
@@ -45,6 +51,12 @@ struct SchoolAgendaView: View {
                 weekHeader
                 dayPicker
                 dayHeading
+                if isAdmin && isInstructor {
+                    Toggle("Toute l’école", isOn: $wholeSchool)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("agenda-whole-school")
+                }
                 if workspace.membership == nil {
                     ContentUnavailableView("Choisissez votre école", systemImage: "building.2", description: Text("Votre agenda s’affiche une fois l’école choisie."))
                 } else if isLoading || (loadedScope != scopeKey && error == nil) {
@@ -53,8 +65,9 @@ struct SchoolAgendaView: View {
                     SchoolErrorNotice(message: error, retry: { Task { await loadWeek() } })
                 } else if dailyLessons.isEmpty {
                     DrivyEmptyState(title: "Aucune leçon ce jour", message: "",
-                        symbol: "calendar", actionTitle: "Voir le jour suivant") {
-                        if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
+                        symbol: "calendar", actionTitle: mayPlan ? "Planifier" : "Voir le jour suivant") {
+                        if mayPlan { planningModel = newPlanningModel() }
+                        else if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
                     }
                 } else {
                     LazyVStack(spacing: 0) {
@@ -176,24 +189,25 @@ struct SchoolAgendaView: View {
 
     /// Same row anatomy as the training dossier and the report lists.
     private func lessonRow(_ lesson: SchoolLesson) -> some View {
-        DrivyLessonRow(start: time(lesson.startsAt), end: time(lesson.endsAt), title: learnerName(lesson),
-            details: ["\(lesson.durationMinutes) min", lesson.meetingPoint],
-            badge: lesson.drivyState.rowBadge)
+        var details = ["\(lesson.durationMinutes) min", lesson.meetingPoint]
+        if showsInstructor, let instructor = lesson.providedInstructorName { details.insert(instructor, at: 0) }
+        return DrivyLessonRow(start: time(lesson.startsAt), end: time(lesson.endsAt), title: learnerName(lesson),
+            details: details, badge: lesson.drivyState.rowBadge)
     }
 
-    private func learnerName(_ lesson: SchoolLesson) -> String { workspace.learners.first { $0.id == lesson.learnerId }?.displayName ?? "Leçon de conduite" }
+    /// Nom fourni avec la leçon, sinon celui d’un dossier déjà chargé ; jamais deviné.
+    private func learnerName(_ lesson: SchoolLesson) -> String {
+        lesson.providedLearnerName ?? workspace.learners.first { $0.id == lesson.learnerId }?.displayName ?? "Leçon de conduite"
+    }
     private func time(_ date: Date?) -> String {
         guard let date else { return "—" }
-        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = calendar.timeZone; formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        return SchoolDateFormat.time(date, zone: calendar.timeZone.identifier)
     }
     private func formattedDay(_ date: Date, template: String) -> String {
-        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = calendar.timeZone
-        formatter.setLocalizedDateFormatFromTemplate(template)
-        return formatter.string(from: date)
+        SchoolDateFormat.template(template, date, zone: calendar.timeZone.identifier)
     }
     private func hasLessons(on day: Date) -> Bool {
-        loadedScope == scopeKey && lessons.contains { $0.startsAt.map { calendar.isDate($0, inSameDayAs: day) } ?? false }
+        loadedScope == scopeKey && !(dayIndex[calendar.startOfDay(for: day)] ?? []).isEmpty
     }
     private func moveWeek(_ offset: Int) { if let date = calendar.date(byAdding: .weekOfYear, value: offset, to: selectedDate) { selectedDate = date } }
     private func newPlanningModel() -> SchoolPlanningWorkspace? {
@@ -206,7 +220,7 @@ struct SchoolAgendaView: View {
     @MainActor private func loadWeek(keepingCurrent: Bool = false) async {
         let id = UUID(); requestID = id
         let keeps = keepingCurrent && loadedScope == scopeKey
-        if !keeps { lessons = []; error = nil; loadedScope = nil }
+        if !keeps { lessons = []; dayIndex = [:]; error = nil; loadedScope = nil }
         guard let schoolID = workspace.membership?.schoolId, let end = calendar.date(byAdding: .day, value: 7, to: weekStart) else { isLoading = false; return }
         let start = weekStart, scope = scopeKey
         if !keeps { isLoading = true }
@@ -214,14 +228,17 @@ struct SchoolAgendaView: View {
         do {
             var all: [SchoolLesson] = [], cursor: String?, seen = Set<String>()
             repeat {
-                let page = try await client.lessons(schoolID: schoolID, from: start, to: end, cursor: cursor)
+                let page = try await client.lessons(schoolID: schoolID, from: start, to: end, cursor: cursor, instructorMembershipID: instructorFilter)
                 guard !Task.isCancelled, requestID == id, scopeKey == scope else { return }
                 all.append(contentsOf: page.items); cursor = page.nextCursor
                 if let cursor, !seen.insert(cursor).inserted { throw SchoolAgendaFailure.invalidResponse }
                 if all.count > 10_000 { throw SchoolAgendaFailure.invalidResponse }
             } while cursor != nil
             guard Set(all.map(\.id)).count == all.count else { throw SchoolAgendaFailure.invalidResponse }
+            let calendar = self.calendar
             lessons = all; loadedScope = scope; error = nil
+            dayIndex = Dictionary(grouping: all.filter { $0.startsAt != nil }) { calendar.startOfDay(for: $0.startsAt!) }
+                .mapValues { $0.sorted { $0.plannedStart < $1.plannedStart } }
         } catch {
             guard !Task.isCancelled, requestID == id else { return }
             self.error = (error as? LocalizedError)?.errorDescription ?? "L’agenda n’a pas pu être chargé."

@@ -39,6 +39,33 @@ enum SchoolLessonHubRules {
         return capture == .none && controllerCanPrepare && withinCaptureWindow(lesson, now: now)
     }
 
+    /// Départ possible plus tard (ouverture de la fenêtre), toutes les autres conditions réunies.
+    static func captureOpening(lesson: SchoolLesson, isAuthor: Bool, school: SchoolDetails?,
+                               capture: SchoolLessonCaptureStatus, controllerCanPrepare: Bool, now: Date) -> Date? {
+        guard let start = lesson.startsAt else { return nil }
+        let opening = start.addingTimeInterval(-1_800)
+        guard now < opening, mayStartCapture(lesson: lesson, isAuthor: isAuthor, school: school, capture: capture,
+            controllerCanPrepare: controllerCanPrepare, now: opening) else { return nil }
+        return opening
+    }
+    /// « 13:30 » si l’ouverture tombe aujourd’hui (fuseau de la leçon) ; sinon rien, la date de la leçon suffit.
+    static func openingLabel(_ opening: Date, zone: String, now: Date) -> String? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: zone) ?? .current
+        guard calendar.isDate(opening, inSameDayAs: now) else { return nil }
+        return time(opening, zone: zone)
+    }
+    /// LESSON_NOT_STARTED : le serveur refuse le constat plus de 15 minutes avant le début prévu.
+    static func mayFinish(_ lesson: SchoolLesson, now: Date) -> Bool {
+        guard lesson.status == "PLANNED", let start = lesson.startsAt else { return false }
+        return now >= start.addingTimeInterval(-900)
+    }
+    /// Constat d’une observation : son statut, ou celui du repère posé d’une tuile pendant le trajet.
+    static func status(of observation: SchoolObservation) -> SchoolObservationStatus? {
+        if let status = observation.eventStatus.flatMap(SchoolObservationStatus.init(rawValue:)) { return status }
+        return observation.isMarker ? SchoolObservationStatus(markerText: observation.text) : nil
+    }
+
     static func mayManage(_ roles: [String]) -> Bool { roles.contains("ADMIN") || roles.contains("INSTRUCTOR") }
     static func mayMove(_ lesson: SchoolLesson, roles: [String], now: Date) -> Bool {
         mayManage(roles) && lesson.status == "PLANNED" && (lesson.startsAt.map { $0 > now } ?? false)
@@ -86,6 +113,57 @@ enum SchoolLessonHubRules {
             result.append(SchoolReportObservation(competencyId: competencyID, level: level, context: context))
         }
         return result
+    }
+
+    /// Texte d’une observation repris comme situation d’une compétence (500 caractères au plus).
+    static func situation(_ text: String?) -> String? {
+        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        return String(String.UnicodeScalarView(text.unicodeScalars.prefix(500)))
+    }
+
+    /// Niveau suggéré par le constat noté pendant la leçon ; le moniteur le relit avant d’enregistrer.
+    static func suggestedLevel(for status: String?) -> String? {
+        switch status {
+        case "POSITIVE": "INDEPENDENT"
+        case "ATTENTION": "GUIDED"
+        case "TO_REWORK": "DISCOVERING"
+        default: nil
+        }
+    }
+
+    /// Une suggestion par compétence du référentiel : la plus récente observation qualifiée, avec son texte pour situation.
+    static func suggestedLevels(from observations: [SchoolObservation], competencies: Set<UUID>, excluding: Set<UUID>) -> [SchoolReportObservation] {
+        var latest: [UUID: SchoolObservation] = [:], order: [UUID] = []
+        for observation in observations.sorted(by: { ($0.observedAt ?? "") < ($1.observedAt ?? "") }) {
+            guard let competency = observation.competencyId, competencies.contains(competency), !excluding.contains(competency),
+                  suggestedLevel(for: observation.eventStatus) != nil else { continue }
+            if latest[competency] == nil { order.append(competency) }
+            latest[competency] = observation
+        }
+        return order.compactMap { competency in
+            guard let observation = latest[competency], let level = suggestedLevel(for: observation.eventStatus) else { return nil }
+            return SchoolReportObservation(competencyId: competency, level: level, context: situation(observation.text) ?? "Leçon")
+        }
+    }
+
+    /// Bilan de départ envoyé avec le constat : les objectifs enregistrés, puis ce qui a été noté pendant la leçon.
+    /// Tout reste modifiable ; ces éléments sont déjà visibles par l’élève (objectifs, observations non gardées).
+    static func completionReport(goals: [SchoolLessonGoal], observations: [SchoolObservation],
+                                 competencies: [SchoolCatalogCompetency]) -> (workedOn: String, observationText: String) {
+        let worked = goals.map { $0.label.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: "\n")
+        let lines = observations.sorted(by: { ($0.observedAt ?? "") < ($1.observedAt ?? "") }).compactMap { observation -> String? in
+            let text = observation.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let statusLabel = Self.status(of: observation)?.label
+            let competency = observation.competencyId.flatMap { id in competencies.first { $0.id == id }?.label }
+            let head = [statusLabel, competency].compactMap { $0 }.joined(separator: " · ")
+            if head.isEmpty { return observation.isMarker || text.isEmpty ? nil : text }
+            if text.isEmpty || text == statusLabel || text == competency { return head }
+            return "\(head) : \(text)"
+        }
+        return (limited(worked, 4_000), limited(lines.joined(separator: "\n"), 4_000))
+    }
+    private static func limited(_ text: String, _ count: Int) -> String {
+        String(String.UnicodeScalarView(text.unicodeScalars.prefix(count)))
     }
 
     /// « Lundi 28 septembre · 14:00 – 15:00 », dans le fuseau de la leçon.

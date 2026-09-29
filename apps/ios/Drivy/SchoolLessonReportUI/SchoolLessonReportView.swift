@@ -9,6 +9,10 @@ struct SchoolLessonReportView: View {
     @Bindable var schoolWorkspace: SchoolWorkspace
     let lessonID: UUID
     let learnerName: String
+    /// Ouvre « Terminer » dès que la leçon est lue (« À terminer » d’Aujourd’hui, fin du trajet).
+    var opensCompletion = false
+    /// Élève : le souhait se modifie sur la prochaine leçon seulement ; `nil` quand l’appelant ne le sait pas.
+    var isNextPlanned: Bool? = nil
     @State private var model: SchoolLessonReportWorkspace?
     @Environment(\.dismiss) private var dismiss
     @State private var confirmsDiscard = false
@@ -27,7 +31,8 @@ struct SchoolLessonReportView: View {
     var body: some View {
         Group {
             if let model, matches(model) {
-                SchoolLessonReportContent(model: model, learnerName: learnerName, schoolWorkspace: schoolWorkspace, agenda: client.agenda)
+                SchoolLessonReportContent(model: model, learnerName: learnerName, schoolWorkspace: schoolWorkspace, agenda: client.agenda,
+                    opensCompletion: opensCompletion, isNextPlanned: isNextPlanned)
             } else if schoolWorkspace.membership != nil {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.canvas)
             } else {
@@ -66,10 +71,15 @@ private struct SchoolLessonReportContent: View {
     let learnerName: String
     @Bindable var schoolWorkspace: SchoolWorkspace
     let agenda: SchoolAgendaClient
+    let opensCompletion: Bool
+    let isNextPlanned: Bool?
     /// Contrôleur de séance de l’app ; absent, rien de ce qui dépend du GPS de l’appareil n’est proposé.
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
+    @Environment(\.dismiss) private var dismiss
     @State private var showComplete = false
+    @State private var completionOpened = false
     @State private var showReloadConfirmation = false
+    @State private var confirmsNoShow = false
     @State private var showsLive = false
     @State private var observationRoute: ObservationRoute?
     @State private var capturePreparation: SchoolCapturePreparationWorkspace?
@@ -85,6 +95,13 @@ private struct SchoolLessonReportContent: View {
         let model: SchoolPlanningWorkspace
         let cancelling: Bool
     }
+    /// Barre du bas d’une leçon planifiée du moniteur, selon l’heure et le trajet.
+    private enum PlannedBar: Equatable {
+        case live(finishable: Bool)
+        case start(finishable: Bool)
+        case finish
+        case goals(startsAt: String?)
+    }
 
     private var isCompleted: Bool { model.lesson?.status == "COMPLETED" }
     private var isPlanned: Bool { model.lesson?.status == "PLANNED" }
@@ -93,23 +110,59 @@ private struct SchoolLessonReportContent: View {
     private var captureStatus: SchoolLessonCaptureStatus { SchoolLessonCaptureStatus(controller: capture, lessonID: model.lessonID) }
 
     var body: some View {
-        Form {
+        TimelineView(.everyMinute) { context in
+            form(now: context.date)
+        }
+        .tint(DrivyTheme.accent)
+        .confirmationDialog("Recharger et perdre la saisie ?", isPresented: $showReloadConfirmation, titleVisibility: .visible) {
+            Button("Recharger", role: .destructive) { Task { await model.load(discardingEdits: true) } }
+            Button("Annuler", role: .cancel) {}
+        }
+        .confirmationDialog("L’élève est absent ?", isPresented: $confirmsNoShow, titleVisibility: .visible) {
+            Button("Élève absent", role: .destructive) { Task { _ = await model.markNoShow(reason: "Élève absent au rendez-vous.") } }
+            Button("Annuler", role: .cancel) {}
+        }
+        .sheet(isPresented: $showComplete) { SchoolLessonCompletionSheet(model: model).environment(capture) }
+        .sheet(item: $observationRoute, onDismiss: { Task { await model.load() } }) { route in
+            SchoolObservationEntryView(client: route.client, schoolWorkspace: schoolWorkspace, lessonID: route.lessonID)
+        }
+        .sheet(item: $capturePreparation, onDismiss: { captureSheetClosed() }) { preparation in
+            SchoolCapturePreparationView(model: preparation, schoolWorkspace: schoolWorkspace)
+        }
+        .sheet(item: $planningRoute, onDismiss: { Task { await model.load() } }) { route in
+            SchoolPlanningView(model: route.model, cancelling: route.cancelling)
+        }
+        .navigationDestination(isPresented: $showsLive) {
+            if let capture {
+                SchoolCaptureLiveView(controller: capture, learnerName: learnerName, openLesson: { _, completing in
+                    showsLive = false
+                    if completing { showComplete = true }
+                })
+            }
+        }
+        .onChange(of: captureStatus) { _, status in if status != .collecting && status != .stopped { showsLive = false } }
+        .onChange(of: model.lesson?.status) { _, _ in openCompletionIfAsked() }
+        .onAppear { openCompletionIfAsked() }
+    }
+
+    private func form(now: Date) -> some View {
+        let bar = plannedBar(now: now)
+        return Form {
             headerSection
             if model.pending != nil { pendingSection }
             if isCompleted, readsLesson, !model.track.isEmpty { trackSection }
             if isCompleted, readsLesson { observationsSection }
             if model.isAuthor, isCompleted, model.draft != nil { reportEditor }
             if model.isOwnLearner, isCompleted { sharedReportSection }
-            if isPlanned, model.isAuthor { goalsEditor }
+            if isPlanned, model.isAuthor { goalsEditor(savesInline: !isGoalsBar(bar)) }
             if isPlanned, model.isOwnLearner, let goals = model.preparation?.goals, !goals.isEmpty { goalsReader(goals) }
-            if isPlanned, model.isAuthor { plannedObservationsSection }
-            if let wish = model.wish, model.isOwnLearner || !wish.text.isEmpty { wishSection(wish) }
-            priceSection
+            if isPlanned, model.isAuthor { observationsSection }
+            if let wish = model.wish, showsWish(wish) { wishSection(wish) }
         }
         .scrollContentBackground(.hidden)
         .background(DrivyTheme.canvas)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if model.isAuthor && isPlanned { plannedBar }
+            if let bar { plannedBarView(bar) }
             else if model.isAuthor && isCompleted && model.draft != nil { saveBar }
         }
         .toolbar {
@@ -119,30 +172,32 @@ private struct SchoolLessonReportContent: View {
                 }
                 .disabled(model.isBusy || model.isLoading)
             }
-            ToolbarItem(placement: .topBarTrailing) { lessonMenu }
+            ToolbarItem(placement: .topBarTrailing) { lessonMenu(now: now) }
         }
-        .tint(DrivyTheme.accent)
-        .confirmationDialog("Recharger et perdre la saisie ?", isPresented: $showReloadConfirmation, titleVisibility: .visible) {
-            Button("Recharger", role: .destructive) { Task { await model.load(discardingEdits: true) } }
-            Button("Annuler", role: .cancel) {}
-        }
-        .sheet(isPresented: $showComplete) { SchoolLessonCompletionSheet(model: model).environment(capture) }
-        .sheet(item: $observationRoute, onDismiss: { Task { await model.load() } }) { route in
-            SchoolObservationEntryView(client: route.client, schoolWorkspace: schoolWorkspace, lessonID: route.lessonID)
-        }
-        .sheet(item: $capturePreparation, onDismiss: {
-            // Départ réussi : le trajet en cours s’ouvre directement.
-            if SchoolLessonCaptureStatus(controller: capture, lessonID: model.lessonID) == .collecting { showsLive = true }
-        }) { preparation in
-            SchoolCapturePreparationView(model: preparation, schoolWorkspace: schoolWorkspace)
-        }
-        .sheet(item: $planningRoute, onDismiss: { Task { await model.load() } }) { route in
-            SchoolPlanningView(model: route.model, cancelling: route.cancelling)
-        }
-        .navigationDestination(isPresented: $showsLive) {
-            if let capture { SchoolCaptureLiveView(controller: capture, learnerName: learnerName) }
-        }
-        .onChange(of: captureStatus) { _, status in if status != .collecting && status != .stopped { showsLive = false } }
+    }
+
+    private func isGoalsBar(_ bar: PlannedBar?) -> Bool {
+        if case .goals = bar { return true }
+        return false
+    }
+
+    /// Le souhait de l’élève vaut pour la formation : il se lit (moniteur) ou se modifie (élève) avant une leçon,
+    /// pas sur chaque leçon passée.
+    private func showsWish(_ wish: SchoolLearnerWish) -> Bool {
+        guard isPlanned else { return false }
+        if model.isOwnLearner { return isNextPlanned ?? true }
+        return !wish.text.isEmpty
+    }
+
+    private func openCompletionIfAsked() {
+        guard opensCompletion, !completionOpened, isPlanned, model.isAuthor else { return }
+        completionOpened = true; showComplete = true
+    }
+
+    /// Départ réussi depuis cette feuille : elle se ferme pour laisser le trajet en cours à l’écran.
+    private func captureSheetClosed() {
+        guard captureStatus == .collecting else { return }
+        if model.hasLocalEdits { showsLive = true } else { model.invalidate(); dismiss() }
     }
 
     // MARK: En-tête
@@ -166,10 +221,7 @@ private struct SchoolLessonReportContent: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             // Un badge seulement pour l’inhabituel.
-            if let lesson = model.lesson, ["CANCELLED", "NO_SHOW"].contains(lesson.status) { lesson.drivyState.badge }
-            if let lesson = model.lesson, model.isAuthor, lesson.status == "PLANNED", lesson.permitWarning, !model.permitRecorded {
-                DrivyStatusBadge(title: "Permis à vérifier", symbol: "exclamationmark.triangle", tone: .warning)
-            }
+            if let lesson = model.lesson, lesson.drivyState.isUnusual { lesson.drivyState.badge }
             if model.isLoading || model.isBusy {
                 ProgressView().frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -196,12 +248,16 @@ private struct SchoolLessonReportContent: View {
 
     // MARK: Actions de la leçon
 
-    @ViewBuilder private var lessonMenu: some View {
+    @ViewBuilder private func lessonMenu(now: Date) -> some View {
         if let lesson = model.lesson {
-            let moves = SchoolLessonHubRules.mayMove(lesson, roles: model.membership.roles, now: Date())
+            let moves = SchoolLessonHubRules.mayMove(lesson, roles: model.membership.roles, now: now)
             let cancels = SchoolLessonHubRules.mayCancel(lesson, roles: model.membership.roles)
-            if moves || cancels {
+            let absent = model.mayMarkNoShow(now: now)
+            if moves || cancels || absent {
                 Menu {
+                    if absent {
+                        Button("Élève absent", systemImage: "person.crop.circle.badge.xmark") { confirmsNoShow = true }
+                    }
                     if moves {
                         Button("Déplacer", systemImage: "calendar.badge.clock") { openPlanning(lesson, cancelling: false) }
                     }
@@ -211,30 +267,47 @@ private struct SchoolLessonReportContent: View {
                 } label: {
                     Label("Plus d’actions", systemImage: "ellipsis.circle")
                 }
-                .disabled(model.isBusy || model.isLoading)
+                .disabled(model.isBusy || model.isLoading || !model.canMutate)
                 .accessibilityIdentifier("lesson-more-actions")
             }
         }
     }
 
-    /// Leçon planifiée du moniteur : démarrer le trajet (ou y revenir), puis terminer.
-    private var plannedBar: some View {
-        TimelineView(.everyMinute) { context in
-            DrivyStickyActionBar {
-                if captureStatus == .collecting {
-                    Button { showsLive = true } label: { Label("Trajet en cours", systemImage: "location.fill") }
-                        .buttonStyle(DrivyPrimaryButtonStyle())
-                        .accessibilityHint("Ouvre le trajet")
-                        .accessibilityIdentifier("lesson-live-capture")
-                    completeButton(primary: false)
-                } else if mayStartCapture(now: context.date) {
-                    Button { openCapturePreparation() } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
-                        .buttonStyle(DrivyPrimaryButtonStyle())
-                        .accessibilityIdentifier("lesson-prepare-gps")
-                    completeButton(primary: false)
-                } else {
-                    completeButton(primary: true)
+    /// Leçon planifiée du moniteur : démarrer le trajet (ou y revenir), terminer dès 15 minutes avant le début
+    /// (LESSON_NOT_STARTED côté serveur) ; plus tôt, enregistrer les objectifs.
+    private func plannedBar(now: Date) -> PlannedBar? {
+        guard model.isAuthor, isPlanned, let lesson = model.lesson else { return nil }
+        let finishable = SchoolLessonHubRules.mayFinish(lesson, now: now)
+        if captureStatus == .collecting { return .live(finishable: finishable) }
+        if mayStartCapture(now: now) { return .start(finishable: finishable) }
+        if finishable { return .finish }
+        return .goals(startsAt: captureOpensLater(now: now))
+    }
+
+    @ViewBuilder private func plannedBarView(_ bar: PlannedBar) -> some View {
+        DrivyStickyActionBar {
+            switch bar {
+            case .live(let finishable):
+                Button { showsLive = true } label: { Label("Trajet en cours", systemImage: "location.fill") }
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .accessibilityHint("Ouvre le trajet")
+                    .accessibilityIdentifier("lesson-live-capture")
+                if finishable { completeButton(primary: false) }
+            case .start(let finishable):
+                Button { openCapturePreparation() } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .accessibilityIdentifier("lesson-prepare-gps")
+                if finishable { completeButton(primary: false) }
+            case .finish:
+                completeButton(primary: true)
+            case .goals(let startsAt):
+                if let startsAt { DrivyActionNote(text: "Trajet dès \(startsAt)") }
+                Button { Task { await model.savePreparation() } } label: {
+                    Label("Enregistrer les objectifs", systemImage: "square.and.arrow.down")
                 }
+                .buttonStyle(DrivyPrimaryButtonStyle())
+                .disabled(!model.canMutate || !model.preparationValid || !model.preparationChanged)
+                .accessibilityIdentifier("lesson-save-goals")
             }
         }
     }
@@ -263,6 +336,13 @@ private struct SchoolLessonReportContent: View {
         guard let lesson = model.lesson, let capture else { return false }
         return SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: model.isAuthor, school: schoolWorkspace.school,
             capture: captureStatus, controllerCanPrepare: capture.canPrepareCapture, now: now)
+    }
+    /// « Trajet dès 13:30 » : le départ sera possible plus tard aujourd’hui.
+    private func captureOpensLater(now: Date) -> String? {
+        guard let lesson = model.lesson, let capture,
+              let opening = SchoolLessonHubRules.captureOpening(lesson: lesson, isAuthor: model.isAuthor, school: schoolWorkspace.school,
+                capture: captureStatus, controllerCanPrepare: capture.canPrepareCapture, now: now) else { return nil }
+        return SchoolLessonHubRules.openingLabel(opening, zone: lesson.timeZone, now: now)
     }
 
     private func openCapturePreparation() {
@@ -300,28 +380,14 @@ private struct SchoolLessonReportContent: View {
         } header: { Text("Trajet") }
     }
 
-    private var plannedObservationsSection: some View {
-        Section {
-            Button("Noter une observation", systemImage: "square.and.pencil") { openObservations() }
-                .disabled(model.isBusy || model.isLoading)
-                .accessibilityIdentifier("lesson-private-observations")
-        } header: { Text("Pendant la leçon") }
-    }
-
     private var observationsSection: some View {
         Section {
-            if model.lessonObservations.isEmpty {
+            if model.lessonObservations.isEmpty && isCompleted {
                 Text("Aucune observation.").foregroundStyle(DrivyTheme.muted)
             }
             ForEach(model.lessonObservations) { observation in
                 HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
-                    Circle().fill(color(observation)).frame(width: 10, height: 10).accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Text(observation.text).fixedSize(horizontal: false, vertical: true)
-                        if let label = competencyLabel(observation) {
-                            Text(label).font(.caption).foregroundStyle(DrivyTheme.muted)
-                        }
-                    }
+                    observationContent(observation)
                     Spacer(minLength: 0)
                     if model.isAuthor, model.sharing != nil {
                         let kept = model.isPrivate(observation)
@@ -334,25 +400,48 @@ private struct SchoolLessonReportContent: View {
                         }
                         .buttonStyle(.borderless)
                         .disabled(!model.canMutate)
-                        .accessibilityLabel(kept ? "Gardée pour moi" : "Visible par l’élève")
+                        .accessibilityLabel(kept ? "Pour moi" : "Visible par l’élève")
                         .accessibilityHint(kept ? "Montrer à l’élève" : "Garder pour moi")
                     }
                 }
-                .accessibilityElement(children: .combine)
             }
             if model.isAuthor {
-                Button("Modifier les observations", systemImage: "square.and.pencil") { openObservations() }
+                Button(isPlanned ? "Noter une observation" : "Modifier les observations", systemImage: "square.and.pencil") { openObservations() }
                     .disabled(model.isBusy || model.isLoading)
+                    .accessibilityIdentifier("lesson-private-observations")
             }
         } header: { Text("Pendant la leçon") }
     }
 
+    /// Constat par symbole, libellé et couleur : jamais par la couleur seule.
+    private func observationContent(_ observation: SchoolObservation) -> some View {
+        let status = SchoolLessonHubRules.status(of: observation)
+        return HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+            Image(systemName: status?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble.fill"))
+                .font(.caption.weight(.bold))
+                .foregroundStyle(color(observation))
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                if let status {
+                    Text(status.label).font(.caption.weight(.semibold)).foregroundStyle(color(observation))
+                }
+                if observation.text != status?.label {
+                    Text(observation.text).fixedSize(horizontal: false, vertical: true)
+                }
+                if let label = competencyLabel(observation) {
+                    Text(label).font(.caption).foregroundStyle(DrivyTheme.muted)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     private func color(_ observation: SchoolObservation) -> Color {
-        switch observation.eventStatus ?? "" {
-        case "POSITIVE": DrivyTheme.success
-        case "ATTENTION": DrivyTheme.warning
-        case "TO_REWORK": DrivyTheme.danger
-        default: DrivyTheme.muted
+        switch SchoolLessonHubRules.status(of: observation) {
+        case .positive: DrivyTheme.success
+        case .attention: DrivyTheme.warning
+        case .toWorkOn: DrivyTheme.danger
+        case nil: DrivyTheme.muted
         }
     }
     private func competencyLabel(_ observation: SchoolObservation) -> String? {
@@ -375,7 +464,13 @@ private struct SchoolLessonReportContent: View {
         } header: { Text("Bilan") }
         if !model.competencies.isEmpty {
             Section {
-                // Un niveau choisi suffit : la situation est proposée (jour et lieu), modifiable.
+                let suggestions = model.suggestedObservations
+                if !suggestions.isEmpty {
+                    Button("Reprendre les niveaux notés (\(suggestions.count))", systemImage: "wand.and.stars") { model.applySuggestedLevels() }
+                        .disabled(!model.canMutate)
+                        .accessibilityIdentifier("lesson-apply-suggested-levels")
+                }
+                // Un niveau choisi suffit : la situation est proposée (observation liée, sinon jour et lieu), modifiable.
                 ForEach(model.competencies) { competency in
                     Picker(competency.label, selection: levelBinding(competency.id)) {
                         Text("Non observé").tag("")
@@ -426,39 +521,38 @@ private struct SchoolLessonReportContent: View {
 
     // MARK: Avant la leçon
 
-    private var goalsEditor: some View {
+    private func goalsEditor(savesInline: Bool) -> some View {
         Section {
-            ForEach(model.goals.indices, id: \.self) { index in
+            // Identifiants stables : retirer un objectif ne relit jamais un index disparu.
+            ForEach($model.goals) { $goal in
+                let number = (model.goals.firstIndex { $0.id == goal.id } ?? 0) + 1
                 HStack {
-                    TextField("Objectif \(index + 1)", text: goalBinding(index), axis: .vertical)
-                    Button(role: .destructive) { if model.goals.indices.contains(index) { model.goals.remove(at: index) } } label: {
+                    TextField("Objectif \(number)", text: $goal.label, axis: .vertical)
+                    Button(role: .destructive) { model.goals.removeAll { $0.id == goal.id } } label: {
                         Image(systemName: "minus.circle").frame(minWidth: 44, minHeight: 44)
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel("Retirer l’objectif \(index + 1)")
+                    .accessibilityLabel("Retirer l’objectif \(number)")
                 }
                 .disabled(!model.canMutate)
             }
             if model.goals.count < 3 {
                 Button("Ajouter un objectif", systemImage: "plus") {
-                    model.goals.append(SchoolLessonGoal(label: "", competencyId: nil, context: nil))
+                    model.goals.append(SchoolLessonGoal(label: ""))
                 }
                 .disabled(!model.canMutate)
             }
             TextField("Note pour moi", text: $model.administrativeNote, axis: .vertical).lineLimit(1...4).disabled(!model.canMutate)
-            Button("Enregistrer") { Task { await model.savePreparation() } }
-                .disabled(!model.canMutate || !model.preparationValid || !model.preparationChanged)
+            if savesInline {
+                Button("Enregistrer") { Task { await model.savePreparation() } }
+                    .disabled(!model.canMutate || !model.preparationValid || !model.preparationChanged)
+            }
         } header: { Text("Objectifs") }
-    }
-    /// Un objectif retiré peut encore être relu par son champ pendant la mise à jour : jamais d’index hors limites.
-    private func goalBinding(_ index: Int) -> Binding<String> {
-        Binding(get: { model.goals.indices.contains(index) ? model.goals[index].label : "" },
-                set: { value in if model.goals.indices.contains(index) { model.goals[index].label = value } })
     }
 
     private func goalsReader(_ goals: [SchoolLessonGoal]) -> some View {
         Section {
-            ForEach(goals.indices, id: \.self) { index in Text(goals[index].label) }
+            ForEach(goals) { goal in Text(goal.label) }
         } header: { Text("Objectifs") }
     }
 
@@ -472,18 +566,6 @@ private struct SchoolLessonReportContent: View {
                 Text(wish.text)
             }
         } header: { Text(model.isOwnLearner ? "Mon souhait" : "Souhait de l’élève") }
-    }
-
-    @ViewBuilder private var priceSection: some View {
-        if let account = model.account {
-            Section {
-                LabeledContent("À payer") { Text(SchoolCatalogFormatting.price(account.balanceCents)).monospacedDigit() }
-            }
-        } else if isPlanned, let lesson = model.lesson {
-            Section {
-                LabeledContent("Prix") { Text(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot)).monospacedDigit() }
-            }
-        }
     }
 
     // MARK: Bilan : enregistrement
