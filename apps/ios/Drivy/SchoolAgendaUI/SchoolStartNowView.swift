@@ -31,17 +31,19 @@ struct SchoolStartNowBody: Encodable, Sendable {
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var storageAvailable = false
+    @ObservationIgnored private var invalidated = false
 
     init(scope: SchoolCommandScope, client: SchoolPlanningClient, outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
         self.scope = scope; self.client = client; self.outbox = outbox
     }
 
     var canStart: Bool {
-        !isLoading && !isBusy && storageAvailable && pending == nil && started == nil
+        !invalidated && !isLoading && !isBusy && storageAvailable && pending == nil && started == nil
             && trainingID.map { id in trainings.contains { $0.id == id } } == true && meetingPoint.unicodeScalars.count <= 500
     }
 
     func load() async {
+        guard !invalidated else { return }
         generation = UUID(); let request = generation
         isLoading = true; errorMessage = nil
         do { pending = try outbox.pending(for: scope); storageAvailable = true }
@@ -68,7 +70,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
 
     /// Choisit l’élève ; sa seule formation en cours et son dernier lieu de rendez-vous sont repris.
     func select(_ id: UUID) async {
-        guard learners.contains(where: { $0.id == id }), !isBusy else { return }
+        guard !invalidated, learners.contains(where: { $0.id == id }), !isBusy else { return }
         generation = UUID(); let request = generation
         learnerID = id; trainings = []; trainingID = nil; meetingPoint = ""; errorMessage = nil; isLoading = true
         do {
@@ -119,8 +121,13 @@ struct SchoolStartNowBody: Encodable, Sendable {
 
     /// Reprend la même demande (même identifiant d’opération) après une réponse perdue.
     func retry() async -> SchoolLesson? {
-        guard let pending, pending.kind == .startLessonNow, pending.scope == scope, !isBusy else { return nil }
+        guard !invalidated, let pending, pending.kind == .startLessonNow, pending.scope == scope, !isBusy else { return nil }
         return await send(pending, fresh: false)
+    }
+
+    func invalidate() {
+        invalidated = true; generation = UUID(); learners = []; trainings = []; learnerID = nil; trainingID = nil
+        pending = nil; started = nil; isBusy = false; isLoading = false; storageAvailable = false; meetingPoint = ""
     }
 
     private func send(_ command: PendingSchoolCommand, fresh: Bool) async -> SchoolLesson? {

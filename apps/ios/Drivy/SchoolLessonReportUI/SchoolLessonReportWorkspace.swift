@@ -22,6 +22,7 @@ import Observation
     private(set) var trackAnchors: [String: SchoolCapturePoint] = [:]
     /// Formation de la leçon : catégorie et version exigées par le contrôle du permis (AP30).
     private(set) var training: SchoolTraining?
+    private(set) var account: SchoolLessonAccount?
     /// Trajets de cette leçon connus de l’école (auteur, leçon planifiée) : horaires réels proposés au constat.
     private(set) var captures: [SchoolCaptureSession] = []
     /// Contrôle du permis enregistré depuis cet écran, ou refusé à ce compte par l’école.
@@ -153,7 +154,7 @@ import Observation
         competencies = []; pending = nil; goals = []; administrativeNote = ""; wishText = ""; optimisticSharing = nil
         workedOn = ""; observationText = ""; nextStep = ""; observations = []
         sharing = nil; lessonObservations = []; track = []; trackAnchors = [:]
-        training = nil; captures = []; permitRecorded = false; permitReviewDenied = false
+        training = nil; account = nil; captures = []; permitRecorded = false; permitReviewDenied = false
         isLoading = false; isBusy = false; storageAccessible = false; revisionsError = nil
     }
     private struct DraftContent: Equatable {
@@ -200,6 +201,7 @@ import Observation
             }
             var preparationRead: (value: SchoolLessonPreparation?, message: String?) = (nil, nil)
             var draftsRead: (value: [SchoolReportDraft]?, message: String?) = (nil, nil)
+            var accountRead: (value: SchoolLessonAccount?, message: String?) = (nil, nil)
             // Les objectifs sont partagés avec l’élève ; la note administrative lui reste masquée par le serveur.
             if author || isOwn {
                 preparationRead = try await readSupplement(request: request, unavailable: "Les objectifs n’ont pas pu être chargés.") {
@@ -225,6 +227,9 @@ import Observation
                 }
             }
             if lesson.status == "COMPLETED" && (author || isOwn) {
+                accountRead = try await readSupplement(request: request, unavailable: "Le solde n’a pas pu être chargé.") {
+                    try await self.client.account(schoolID: self.scope.schoolID, lessonID: self.lessonID)
+                }
                 trackRead = try await readSupplement(request: request, unavailable: "Le trajet n’a pas pu être chargé.") {
                     let captures = try await self.client.agenda.captureClient.lessonCaptures(schoolID: self.scope.schoolID, lessonID: self.lessonID)
                     guard let capture = captures.last(where: { $0.syncState == .synced || $0.syncState == .partial }) else { return ([], [], [:]) }
@@ -269,6 +274,7 @@ import Observation
             if draftPolicy != .conflict { draft = draftsRead.value?.first }
             isOwnLearner = isOwn
             training = trainingRead.value
+            account = accountRead.value
             if preparationPolicy == .replace { goals = preparation?.goals ?? []; administrativeNote = preparation?.administrativeCheckNote ?? "" }
             if wishPolicy == .replace { wishText = wish?.text ?? "" }
             if draftPolicy == .replace {
@@ -280,7 +286,7 @@ import Observation
             sharing = sharingRead.value; optimisticSharing = nil
             track = trackRead.value?.segments ?? []; trackAnchors = trackRead.value?.pointsByAnchor ?? [:]
             if lesson.status != "PLANNED" || !author { captures = [] }
-            let notes = [wishRead.message, preparationRead.message, draftsRead.message,
+            let notes = [wishRead.message, preparationRead.message, draftsRead.message, accountRead.message,
                          observationsRead.message, trackRead.message, sharingRead.message, curriculumRead.message].compactMap { $0 }
             information = notes.isEmpty ? nil : notes.joined(separator: "\n\n")
             isLoading = false; needsReload = conflict

@@ -50,6 +50,11 @@ struct SchoolTodayView: View {
                 }
         }
         .task(id: scopeKey) { await load() }
+        .onChange(of: scopeKey) { _, _ in
+            lastStartNow?.invalidate(); lastStartNow = nil; startNow = nil
+            preparation?.invalidate(); preparation = nil
+            planning?.invalidate(); planning = nil; opened = nil
+        }
         .sheet(item: $preparation, onDismiss: { Task { await load() } }) { model in
             SchoolCapturePreparationView(model: model, schoolWorkspace: workspace)
         }

@@ -160,18 +160,23 @@ import Observation
         }
     }
 
+    private struct ProjectionResult: Sendable {
+        let id: UUID
+        let result: Result<SchoolCaptureSession, any Error>
+    }
     private static func projections(_ ids: [UUID], client: SchoolCaptureClient,
                                      schoolID: UUID) async -> [UUID: Result<SchoolCaptureSession, any Error>] {
-        await withTaskGroup(of: (UUID, Result<SchoolCaptureSession, any Error>).self) { group in
+        await withTaskGroup(of: ProjectionResult.self) { group in
             for id in ids {
                 group.addTask { @MainActor in
-                    do { return (id, .success(try await client.capture(schoolID: schoolID, captureID: id))) }
-                    catch { return (id, .failure(error)) }
+                    do {
+                        let capture = try await client.capture(schoolID: schoolID, captureID: id)
+                        return ProjectionResult(id: id, result: .success(capture))
+                    } catch { return ProjectionResult(id: id, result: .failure(error)) }
                 }
             }
             var results: [UUID: Result<SchoolCaptureSession, any Error>] = [:]
-            // No tuple pattern here: the region-based isolation checker rejects it in `for await`.
-            for await answer in group { results[answer.0] = answer.1 }
+            for await answer in group { results[answer.id] = answer.result }
             return results
         }
     }

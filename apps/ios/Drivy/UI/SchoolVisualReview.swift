@@ -303,6 +303,10 @@ private struct SchoolVisualShell: View {
         objects["\(root)/lessons/\(lessonID.uuidString)/sharing"] = ["lessonId": lessonID.uuidString,
             "schoolId": schoolID.uuidString, "version": 1, "reportPrivate": false, "captureHidden": false,
             "privateObservationIds": [] as [Any]]
+        objects["\(root)/lessons/\(lessonID.uuidString)/account"] = ["id": identifier(64).uuidString,
+            "ownerId": lessonID.uuidString, "ownerType": "LESSON", "lessonId": lessonID.uuidString, "version": 1,
+            "currency": "CHF", "plannedPriceCents": 9500, "chargeCents": 9500, "netReceivedCents": 0,
+            "balanceCents": 9500, "charges": [] as [Any]]
         objects["\(root)/trainings/\(trainingID.uuidString)/wish"] = ["id": identifier(61).uuidString,
             "schoolId": schoolID.uuidString, "trainingId": trainingID.uuidString, "version": 1, "lessonId": null,
             "text": "Revoir les priorités à droite."]

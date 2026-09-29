@@ -95,6 +95,22 @@ struct SchoolReportRevision: SchoolCatalogRecord {
         try c.encode(correctionReason, forKey: .correctionReason); try c.encodeNil(forKey: .capturePublication); try c.encode([UUID](), forKey: .textObservations)
     }
 }
+struct SchoolLessonCharge: Codable, Sendable, Equatable, Identifiable {
+    let id: UUID, schoolId: UUID, accountId: UUID
+    let version: Int
+    let kind: String
+    let amountSignedCents: Int64
+    let reason: String?
+}
+struct SchoolLessonAccount: Codable, Sendable, Equatable, Identifiable {
+    let id: UUID, ownerId: UUID
+    let ownerType: String
+    let lessonId: UUID?
+    let version: Int
+    let currency: String
+    let plannedPriceCents: Int64, chargeCents: Int64, netReceivedCents: Int64, balanceCents: Int64
+    let charges: [SchoolLessonCharge]
+}
 struct SchoolReportProgressItem: Codable, Sendable, Equatable, Identifiable {
     let competencyId: UUID, sourceLessonId: UUID, sourceRevisionId: UUID
     let label: String, level: String, context: String, observedAt: String

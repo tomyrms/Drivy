@@ -127,13 +127,17 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         let lesson: SchoolLesson = try await request(command.scope.schoolID, ["lessons", "start-now"], command: command, statuses: [200, 201])
         guard lesson.schoolId == command.scope.schoolID, lesson.trainingId == trainingID, lesson.status == "PLANNED",
               lesson.instructorMembershipId == command.scope.membershipID, lesson.version > 0,
-              let start = lesson.startsAt, let end = lesson.endsAt, end > start,
-              abs(start.timeIntervalSinceNow) < 3_600 else { throw SchoolPlanningFailure.invalidResponse }
+              let start = lesson.startsAt, let end = lesson.endsAt, end > start else { throw SchoolPlanningFailure.invalidResponse }
         return lesson
     }
     private struct MutationAcknowledgement: Decodable { }
     private struct Envelope<Value: Decodable>: Decodable { let data: Value; let requestId: String; let serverTime: String }
     private struct Problem: Decodable { let code: String; let title: String? }
+    @MainActor private final class PinnedToken: AccessTokenSource {
+        let value: String
+        init(_ value: String) { self.value = value }
+        func accessToken() async throws -> String { value }
+    }
     private func request<Value: Decodable>(_ schoolID: UUID, _ path: [String], query: [URLQueryItem] = [], command: PendingSchoolCommand? = nil,
                                           statuses: Set<Int>? = nil) async throws -> Value {
         guard DrivyAPIClient.permits(baseURL) else { throw SchoolPlanningFailure.invalidResponse }
@@ -147,6 +151,13 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         catch IdentityFailure.reauthentication { throw SchoolPlanningFailure.unauthorized }
         catch { throw SchoolPlanningFailure.unavailable }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolPlanningFailure.unauthorized }
+        if let command {
+            let person = try await DrivyAPIClient(baseURL: baseURL, tokenSource: PinnedToken(token), transport: transport).me()
+            guard person.personId == command.scope.personID, person.memberships.contains(where: {
+                $0.membershipId == command.scope.membershipID && $0.schoolId == command.scope.schoolID
+                    && $0.accessEpoch == command.scope.accessEpoch
+            }) else { throw SchoolPlanningFailure.forbidden }
+        }
         try Task.checkCancellation()
         var request = URLRequest(url: target)
         request.httpMethod = command == nil ? "GET" : command?.kind == .updateAvailabilityRule ? "PUT" : "POST"

@@ -69,6 +69,15 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
               Set(value.privateObservationIds).count == value.privateObservationIds.count else { throw SchoolReportFailure.invalidResponse }
         return value
     }
+    func account(schoolID: UUID, lessonID: UUID) async throws -> SchoolLessonAccount {
+        let value: SchoolLessonAccount = try await request(schoolID, ["lessons", lessonID.uuidString, "account"])
+        guard value.ownerType == "LESSON", value.ownerId == lessonID, value.lessonId == lessonID, value.version > 0, value.currency == "CHF",
+              [value.plannedPriceCents, value.chargeCents, value.netReceivedCents, value.balanceCents].allSatisfy({ $0 >= 0 && $0 <= 9_007_199_254_740_991 }),
+              value.charges.allSatisfy({ $0.schoolId == schoolID && $0.accountId == value.id && $0.version > 0
+                  && (-9_007_199_254_740_991...9_007_199_254_740_991).contains($0.amountSignedCents)
+                  && ["INITIAL", "ADJUSTMENT", "REVERSAL"].contains($0.kind) }) else { throw SchoolReportFailure.invalidResponse }
+        return value
+    }
     func receipt(for command: PendingSchoolCommand) async throws -> SchoolOperationReceipt {
         let value: SchoolOperationReceipt = try await request(command.scope.schoolID, ["operations", command.id.uuidString])
         guard command.scope.apiBaseURL == baseURL.absoluteString, command.matches(value) else { throw SchoolReportFailure.invalidResponse }
@@ -142,6 +151,11 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
     private struct Acknowledgement: Decodable {}
     private struct Envelope<Value: Decodable>: Decodable { let data: Value; let requestId: UUID; let serverTime: String }
     private struct Problem: Decodable { let code: String; let title: String? }
+    @MainActor private final class PinnedToken: AccessTokenSource {
+        let value: String
+        init(_ value: String) { self.value = value }
+        func accessToken() async throws -> String { value }
+    }
     private func request<Value: Decodable>(_ schoolID: UUID, _ path: [String], query: [URLQueryItem] = [], method: String = "GET", command: PendingSchoolCommand? = nil) async throws -> Value {
         guard DrivyAPIClient.permits(baseURL) else { throw SchoolReportFailure.invalidResponse }
         var url = baseURL
@@ -152,6 +166,13 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         let token: String
         do { token = try await tokenSource.accessToken() } catch IdentityFailure.reauthentication { throw SchoolReportFailure.unauthorized } catch { throw SchoolReportFailure.unavailable }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolReportFailure.unauthorized }
+        if let command {
+            let person = try await DrivyAPIClient(baseURL: baseURL, tokenSource: PinnedToken(token), transport: transport).me()
+            guard person.personId == command.scope.personID, person.memberships.contains(where: {
+                $0.membershipId == command.scope.membershipID && $0.schoolId == command.scope.schoolID
+                    && $0.accessEpoch == command.scope.accessEpoch
+            }) else { throw SchoolReportFailure.forbidden }
+        }
         try Task.checkCancellation()
         var request = URLRequest(url: target); request.httpMethod = method
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization"); request.setValue("no-store", forHTTPHeaderField: "Cache-Control")

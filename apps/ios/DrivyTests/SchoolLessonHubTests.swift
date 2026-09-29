@@ -217,6 +217,18 @@ struct SchoolLessonHubTests {
         #expect(SchoolLessonRefreshPolicy.decide(previous: "avant", edited: "saisie", received: nil, discardingEdits: false) == .conflict)
         #expect(SchoolLessonRefreshPolicy.decide(previous: "avant", edited: "saisie", received: "autre", discardingEdits: false) == .conflict)
     }
+
+    @Test func changedAccountCannotSendTheOldLessonsPendingMutation() async {
+        let server = HubServer(), outbox = ConfigurationOutboxStub()
+        let model = HubFixture.workspace(server: server, outbox: outbox)
+        await model.load()
+        model.administrativeNote = "Saisie du premier compte"
+        await server.setPersonID(UUID())
+        #expect(!(await model.savePreparation()))
+        #expect(model.lesson == nil && !model.canMutate)
+        #expect(outbox.value?.scope.personID == ConfigurationFixture.personID)
+        #expect(await server.requests().allSatisfy { $0.httpMethod == "GET" })
+    }
 }
 
 // MARK: Données de test
@@ -276,9 +288,13 @@ actor HubServer: SchoolHTTPTransport {
     private var preparationNote: String?
     private var preparationVersion = 1
     private var preparationStatus = 200
+    private var personID = ConfigurationFixture.personID
+    private var startNowAvailable = false
 
     init(permitStatus: Int = 200, grants: [String] = ["permit_review"]) { self.permitStatus = permitStatus; self.grants = grants }
     func requests() -> [URLRequest] { recorded }
+    func setPersonID(_ value: UUID) { personID = value }
+    func enableStartNow() { startNowAvailable = true }
     func setPreparation(note: String? = nil, version: Int = 1, status: Int = 200) {
         preparationNote = note; preparationVersion = version; preparationStatus = status
     }
@@ -295,9 +311,12 @@ actor HubServer: SchoolHTTPTransport {
             SchoolHTTPResponse(data: Data("{\"code\":\"\(code)\",\"title\":\"Refus\"}".utf8), status: status, url: url, contentType: "application/problem+json")
         }
         if parts.last == "me" {
-            return ok(["personId": ConfigurationFixture.personID.uuidString, "version": 1, "displayName": "Moniteur de test", "locale": "fr",
+            return ok(["personId": personID.uuidString, "version": 1, "displayName": "Moniteur de test", "locale": "fr",
                 "memberships": [["membershipId": ConfigurationFixture.membershipID.uuidString, "schoolId": HubFixture.schoolID.uuidString,
                     "schoolName": "École de test", "roles": ["INSTRUCTOR"], "grants": grants, "accessEpoch": 1] as [String: Any]] as [Any]])
+        }
+        if request.httpMethod == "POST", parts.suffix(2) == ["lessons", "start-now"], startNowAvailable {
+            return ok(try JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.lesson())) as? [String: Any] ?? [:])
         }
         if request.httpMethod == "POST", parts.suffix(3) == ["trainings", training, "permit-checks"] {
             if permitStatus != 200 { return problem(permitStatus, permitStatus == 403 ? "PERMIT_REVIEW_REQUIRED" : "NOT_FOUND") }

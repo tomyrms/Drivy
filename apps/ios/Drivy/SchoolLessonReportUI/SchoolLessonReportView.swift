@@ -165,6 +165,16 @@ private struct SchoolLessonReportContent: View {
             if isPlanned, model.isOwnLearner, let goals = model.preparation?.goals, !goals.isEmpty { goalsReader(goals) }
             if isPlanned, model.isAuthor { observationsSection }
             if let wish = model.wish, showsWish(wish) { wishSection(wish) }
+            if let lesson = model.lesson {
+                Section {
+                    DisclosureGroup("Tarif") {
+                        LabeledContent("Prix convenu", value: SchoolCatalogFormatting.price(lesson.priceCentsSnapshot))
+                        if let account = model.account {
+                            LabeledContent("À payer", value: SchoolCatalogFormatting.price(account.balanceCents))
+                        }
+                    }
+                }
+            }
         }
         .scrollContentBackground(.hidden)
         .background(DrivyTheme.canvas)

@@ -48,7 +48,8 @@ struct SchoolTrainingScreen: View {
         .task(id: scopeKey) {
             if let model, matches(model), model.trainingID == trainingID {
                 // Une requête annulée par un changement d’onglet a pu laisser une erreur : relire sans effacer.
-                if model.errorMessage != nil { await model.load(keepingCurrent: true) }
+                if model.errorMessage != nil || !model.lessonsLoaded { await model.load(keepingCurrent: true) }
+                else if model.progress == nil && model.hasPedagogicalRole { await model.loadProgress() }
                 return
             }
             model = nil
@@ -58,7 +59,11 @@ struct SchoolTrainingScreen: View {
             let shared = SchoolTrainingModelCache.model(scope: scope, membership: membership, learnerID: learner.id,
                 trainingID: trainingID, client: client)
             model = shared.model
-            if shared.isNew || shared.model.errorMessage != nil { await shared.model.load(keepingCurrent: !shared.isNew) }
+            if shared.isNew || shared.model.errorMessage != nil || !shared.model.lessonsLoaded {
+                await shared.model.load(keepingCurrent: !shared.isNew)
+            } else if shared.model.progress == nil && shared.model.hasPedagogicalRole {
+                await shared.model.loadProgress()
+            }
         }
         .onChange(of: model?.accessRevoked) { _, revoked in
             if revoked == true { Task { await workspace.loadAccount() } }
