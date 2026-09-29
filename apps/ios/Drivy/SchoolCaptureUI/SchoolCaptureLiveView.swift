@@ -14,24 +14,16 @@ struct SchoolCaptureLiveView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var resetCameraID = UUID()
     @State private var followsPosition = true
-    @State private var confirmation: Confirmation?
+    @State private var observationMoment: ObservationMoment?
+    @State private var isFinishing = false
 
-    private enum Command {
-        case pause, resume, stop, retrySaving, transfer, finalize(allowPartial: Bool)
+    private struct ObservationMoment: Identifiable {
+        let id = UUID()
+        let instant = Date()
+        let recorder: SchoolLiveObservationRecorder
     }
 
-    private enum Confirmation {
-        case stop(UUID), allowPartial(UUID)
-        var captureID: UUID {
-            switch self { case .stop(let id), .allowPartial(let id): id }
-        }
-        var title: String {
-            switch self {
-            case .stop: "Arrêter le GPS ?"
-            case .allowPartial: "Autoriser un trajet partiel ?"
-            }
-        }
-    }
+    private enum Command { case pause, resume, retrySaving }
 
     var body: some View {
         Group {
@@ -59,34 +51,16 @@ struct SchoolCaptureLiveView: View {
         .foregroundStyle(DrivyTheme.text)
         .tint(DrivyTheme.accent)
         .toolbar(.hidden, for: .navigationBar)
-        .interactiveDismissDisabled(controller.isTransferring)
+        .interactiveDismissDisabled(isFinishing)
         .task(id: controller.captureID) {
             if let observationClient { controller.prepareLiveObservations(client: observationClient) }
+            await controller.liveObservations?.loadCompetencies()
         }
-        .confirmationDialog(confirmation?.title ?? "Confirmer", isPresented: confirmsAction, titleVisibility: .visible, presenting: confirmation) { request in
-            switch request {
-            case .stop:
-                Button("Arrêter le GPS", role: .destructive) {
-                    run(.stop, captureID: request.captureID)
-                }
-                .accessibilityIdentifier("school-capture-stop-confirm")
-            case .allowPartial:
-                Button("Autoriser la clôture partielle") {
-                    run(.finalize(allowPartial: true), captureID: request.captureID)
-                }
-                .accessibilityIdentifier("school-capture-partial-confirm")
-            }
-            Button("Annuler", role: .cancel) { }
-        } message: { request in
-            switch request {
-            case .stop:
-                Text("Les positions déjà enregistrées seront conservées. La leçon continue sans GPS.")
-            case .allowPartial:
-                Text("Le trajet sera conservé avec les positions confirmées par l’école. Les lacunes resteront visibles.")
-            }
+        .sheet(item: $observationMoment) { moment in
+            SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant)
         }
         .onChange(of: controller.captureID) { _, _ in
-            confirmation = nil
+            observationMoment = nil
             resetCameraID = UUID()
             followsPosition = true
         }
@@ -173,10 +147,11 @@ struct SchoolCaptureLiveView: View {
     }
 
     private var placeholderMessage: String {
-        switch controller.state {
-        case .preparing, .recording: "Le tracé apparaît dès la première position sauvegardée. La leçon continue normalement."
+        if let message = controller.locationMessage { return message }
+        return switch controller.state {
+        case .preparing, .recording: "Recherche du signal GPS…"
         case .paused: "Aucune position n’est enregistrée pendant la pause."
-        default: "La leçon continue sans trajet GPS."
+        default: "Le GPS n’a enregistré aucune position pendant cette leçon."
         }
     }
 
@@ -191,12 +166,12 @@ struct SchoolCaptureLiveView: View {
                 status: status,
                 leading: .close(label: "Revenir à la leçon",
                     hint: controller.canStop ? "Le GPS conserve son état actuel" : "Fermer le trajet",
-                    isDisabled: controller.isTransferring) { close() },
+                    isDisabled: isFinishing) { close() },
                 floating: floating
             ) {
                 if [SchoolCaptureSessionController.State.recording, .paused, .preparing].contains(controller.state) {
-                    DrivyMapStopButton(label: "Arrêter le GPS", isEnabled: controller.canStop) {
-                        if let id = controller.captureID { confirmation = .stop(id) }
+                    DrivyMapStopButton(label: "Terminer la leçon", isEnabled: controller.canStop && !isFinishing) {
+                        finishLesson()
                     }
                     .accessibilityIdentifier("school-capture-stop")
                 }
@@ -232,6 +207,9 @@ struct SchoolCaptureLiveView: View {
             }
             if let error = controller.errorMessage {
                 DrivyInlineMessage(text: error, tone: .warning)
+            }
+            if controller.pointCount > 0, let message = controller.locationMessage {
+                DrivyInlineMessage(text: message, tone: .warning)
             }
             if let message = controller.transferMessage, controller.finalizedSyncState == nil {
                 DrivyInlineMessage(text: message, tone: .neutral)
@@ -272,29 +250,23 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    /// Pause or resume is the only command of the dock while collecting; the stop
-    /// stays in the top bar, away from it, and is always confirmed.
     private var collectingActions: some View {
         VStack(spacing: DrivySpacing.s) {
             if let recorder = controller.liveObservations {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DrivySpacing.s) {
-                    ForEach(SchoolLiveTile.allCases) { tile in
-                        Button { recorder.record(tile) } label: {
-                            Label(tile.title, systemImage: tile.symbol)
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(!recorder.canRecord)
-                        .accessibilityIdentifier("capture-observation-\(tile.id)")
-                    }
+                Button {
+                    observationMoment = ObservationMoment(recorder: recorder)
+                } label: {
+                    Label("Signaler", systemImage: "text.bubble.fill")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                if recorder.isSending { ProgressView("Enregistrement du repère…") }
+                .buttonStyle(DrivyPrimaryButtonStyle())
+                .disabled(!recorder.canRecord || isFinishing)
+                .accessibilityIdentifier("capture-signal-observation")
+                if recorder.isSending { ProgressView("Envoi de l’observation…") }
                 else if recorder.pending != nil {
-                    Text(recorder.errorMessage ?? "Une demande reste à confirmer.")
-                        .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                    DrivyInlineMessage(text: recorder.errorMessage ?? "Une observation attend son envoi.", tone: .warning)
                     if recorder.canRetry {
-                        Button("Renvoyer le repère") { Task { await recorder.retry() } }
+                        Button("Réessayer l’envoi") { Task { await recorder.retry() } }
                     } else {
                         Button("Actualiser") { recorder.refreshPending() }
                     }
@@ -302,7 +274,13 @@ struct SchoolCaptureLiveView: View {
                     DrivyInlineMessage(text: error, tone: .warning)
                 }
             }
-            pauseResumeButton
+            HStack(spacing: DrivySpacing.s) {
+                pauseResumeButton
+                Button("Terminer la leçon", systemImage: "checkmark.circle") { finishLesson() }
+                    .buttonStyle(DrivySecondaryButtonStyle())
+                    .disabled(isFinishing || !controller.canStop)
+                    .accessibilityIdentifier("capture-finish-lesson")
+            }
         }
     }
 
@@ -330,38 +308,28 @@ struct SchoolCaptureLiveView: View {
 
     private var savedActions: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            if let lessonID = controller.lessonID, let openLesson {
-                Button("Terminer la leçon", systemImage: "checkmark.circle") { openLesson(lessonID, true) }
-                    .buttonStyle(DrivyPrimaryButtonStyle())
+            if controller.isTransferring { ProgressView("Enregistrement du trajet…") }
+            if controller.synchronizationNeedsRetry {
+                Button("Réessayer l’envoi du trajet", systemImage: "arrow.clockwise") {
+                    Task { await controller.retrySynchronization() }
+                }.buttonStyle(DrivySecondaryButtonStyle())
             }
-            if let state = controller.finalizedSyncState {
-                finalizationResult(state)
-                Button("Retour à la leçon") { close() }
-                    .buttonStyle(DrivyPrimaryButtonStyle())
-            } else {
-                if controller.isTransferring {
-                    ProgressView("Échange avec l’école…").frame(maxWidth: .infinity)
-                }
-                Button { run(.transfer) } label: {
-                    Label("Envoyer les positions", systemImage: "arrow.up")
-                }
-                .buttonStyle(DrivyPrimaryButtonStyle())
-                .accessibilityIdentifier("school-capture-transfer")
-                Button { run(.finalize(allowPartial: false)) } label: {
-                    Label("Vérifier le trajet complet", systemImage: "checkmark.circle")
-                }
-                .buttonStyle(DrivySecondaryButtonStyle())
-                .accessibilityIdentifier("school-capture-finalize")
-                Button("Autoriser un trajet partiel…") {
-                    if let id = controller.captureID { confirmation = .allowPartial(id) }
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(DrivyTheme.accent)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .accessibilityIdentifier("school-capture-allow-partial")
-            }
+            if let state = controller.finalizedSyncState { finalizationResult(state) }
+            Button("Terminer la leçon", systemImage: "checkmark.circle") { finishLesson() }
+                .buttonStyle(DrivyPrimaryButtonStyle()).disabled(isFinishing)
         }
-        .disabled(controller.isTransferring)
+    }
+
+    private func finishLesson() {
+        guard !isFinishing, let lessonID = controller.lessonID else { return }
+        isFinishing = true
+        Task { @MainActor in
+            let saved = await controller.stopAndSynchronize()
+            isFinishing = false
+            guard saved else { return }
+            if let openLesson { openLesson(lessonID, true) }
+            else { close() }
+        }
     }
 
     @ViewBuilder private func finalizationResult(_ state: SchoolCaptureSession.SyncState) -> some View {
@@ -402,10 +370,6 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    private var confirmsAction: Binding<Bool> {
-        Binding(get: { confirmation != nil }, set: { if !$0 { confirmation = nil } })
-    }
-
     /// Same state vocabulary as the personal journey (« GPS actif », « En attente de position »).
     private var status: DrivyMapStatus {
         switch controller.state {
@@ -430,7 +394,7 @@ struct SchoolCaptureLiveView: View {
     }
 
     private func close() {
-        guard !controller.isTransferring else { return }
+        guard !isFinishing else { return }
         if let lessonID = controller.lessonID, let openLesson { openLesson(lessonID, false); return }
         if controller.state == .saved { closeSaved?() }
         if let returnToLesson { returnToLesson() }
@@ -444,10 +408,7 @@ struct SchoolCaptureLiveView: View {
             switch command {
             case .pause: await controller.pause()
             case .resume: await controller.resume()
-            case .stop: await controller.stop()
             case .retrySaving: await controller.retrySaving()
-            case .transfer: await controller.transfer()
-            case .finalize(let allowPartial): await controller.finalize(allowPartial: allowPartial)
             }
         }
     }

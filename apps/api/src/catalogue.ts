@@ -10,6 +10,7 @@ import {Cursors} from './cursor.js';
 import {getTraining} from './queries.js';
 import {recordSettings} from './school-setup.js';
 import {reauthAge,reauthenticate} from './reauth.js';
+import {competencyLabel} from './competency-label.js';
 
 const empty=z.object({}).strict();const operation={operationId:z.uuid()};
 const text=(max:number)=>z.string().trim().refine(value=>[...value].length>0 && [...value].length<=max);
@@ -31,7 +32,7 @@ const curriculumColumns=`id,school_id AS "schoolId",version,category_code AS "ca
 type Row=Record<string,unknown>&{id:string;version:number};
 function currentSchool(school:SchoolRow){if(school.status!=='ACTIVE')throw new ApiError(409,'SCHOOL_NOT_ACTIVE','Cette école doit être active.');}
 export async function member(db:PoolClient,schoolId:string,memberId:string){const row=(await db.query<Row>(`SELECT ${memberColumns} FROM drivy.membership m JOIN drivy.person p ON p.id=m.person_id WHERE m.school_id=$1 AND m.id=$2`,[schoolId,memberId])).rows[0];if(!row)throw notFound();return row;}
-async function curriculum(db:PoolClient,row:Row){return {...row,competencies:(await db.query(`SELECT id,school_id AS "schoolId",version,curriculum_version_id AS "curriculumVersionId",stable_key AS key,label,description,sort_order AS "sortOrder" FROM drivy.competency_definition WHERE curriculum_version_id=$1 ORDER BY sort_order,id`,[row.id])).rows};}
+async function curriculum(db:PoolClient,row:Row){return {...row,competencies:(await db.query(`SELECT id,school_id AS "schoolId",version,curriculum_version_id AS "curriculumVersionId",stable_key AS key,label,description,sort_order AS "sortOrder" FROM drivy.competency_definition WHERE curriculum_version_id=$1 ORDER BY sort_order,id`,[row.id])).rows.map(c=>({...c,label:competencyLabel(c.label)}))};}
 const offering=(row:Row)=>({...row,defaultPriceCents:Number(row.defaultPriceCents)});
 async function configurationChanged(db:PoolClient,schoolId:string,memberId:string){const school=(await db.query<SchoolRow>(`UPDATE drivy.school SET version=version+1,configuration_version=configuration_version+1 WHERE id=$1 RETURNING ${schoolColumns}`,[schoolId])).rows[0]!;await recordSettings(db,school,memberId);}
 async function learnerTarget(db:PoolClient,schoolId:string,learnerId:string){

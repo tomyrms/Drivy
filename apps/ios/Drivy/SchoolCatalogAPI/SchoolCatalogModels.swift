@@ -26,6 +26,10 @@ struct SchoolCatalogCompetency: SchoolCatalogRecord {
     let label: String
     let description: String
     let sortOrder: Int
+
+    var displayLabel: String {
+        label == "Anticipation et partage de la route" ? "Anticipation" : label
+    }
 }
 struct SchoolCurriculum: SchoolCatalogRecord {
     let id: UUID

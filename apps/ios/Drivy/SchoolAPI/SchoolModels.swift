@@ -66,6 +66,8 @@ struct SchoolTraining: Codable, Sendable, Equatable, Identifiable {
     // Dates civiles, jamais interprétées comme des instants UTC.
     let startedOn: String?
     let closedOn: String?
+    /// Projection indicative de l’école ; le démarrage recontrôle toujours l’affectation.
+    var startNowBlockerCode: String? = nil
 }
 
 struct SchoolPage<Item: Codable & Sendable & Equatable>: Codable, Sendable, Equatable {

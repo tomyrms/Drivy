@@ -224,7 +224,7 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonCreated',changedFields:['plannedStart','plannedEnd','instructorMembershipId','meetingPoint','commercialSelection']};
   });reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,r);
  });
- /** Extension : le moniteur affecté démarre une leçon maintenant. Le serveur fixe le début (minute courante), la durée de l'offre,
+ /** Extension : le moniteur affecté démarre une leçon maintenant. Le serveur fixe le début exact, la durée de l'offre,
   * la prestation en vigueur au prix du catalogue, la procédure de la formation, le moniteur (l'appelant) et un tampon nul.
   * Les ouvertures du moniteur ne s'appliquent pas à lui-même ; les occupations (exclusion PostgreSQL) et tous les droits restent contrôlés. */
  app.post(`${base}/lessons/start-now`,async(r,reply)=>{
@@ -238,7 +238,7 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
   let data:Lesson;
   try{
    data=await schoolCommand<Lesson>(options.pool,identity,schoolId,'START_LESSON_NOW',body,null,async(db,actor,school)=>{
-    const start=new Date(Math.floor(Date.now()/60_000)*60_000);
+    const start=new Date();
     const offer=(await db.query<{default_duration_minutes:number|null}>(`SELECT o.default_duration_minutes FROM drivy.training t JOIN drivy.offering_version o ON o.school_id=t.school_id AND o.id=t.offering_id WHERE t.school_id=$1 AND t.id=$2`,[school.id,body.trainingId])).rows[0];
     if(!offer)throw notFound();if(!offer.default_duration_minutes)throw new ApiError(422,'OFFERING_NOT_READY','L’offre doit indiquer la durée d’une leçon.');
     const minutes=offer.default_duration_minutes,end=new Date(start.getTime()+minutes*60_000),startIso=start.toISOString(),endIso=end.toISOString();

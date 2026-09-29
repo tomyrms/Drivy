@@ -36,6 +36,8 @@ import Observation
     private(set) var revisionsError: String?
     private(set) var information: String?
     private(set) var confirmation: String?
+    /// Vrai uniquement après le reçu de sauvegarde de ce bilan et le retrait durable de sa demande.
+    private(set) var reportSaveConfirmed = false
     private(set) var pendingReviewed = false
     private(set) var needsReload = true
     var goals: [SchoolLessonGoal] = []
@@ -56,6 +58,9 @@ import Observation
         self.scope = scope; self.membership = membership; self.lessonID = lessonID; self.client = client; self.outbox = outbox
     }
     var isAuthor: Bool { membership.roles.contains("INSTRUCTOR") && lesson?.instructorMembershipId == membership.membershipId }
+    var canReadLessonContent: Bool { isAuthor || isOwnLearner || membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") }
+    var canReadSharedReport: Bool { isAuthor || isOwnLearner || membership.roles.contains("INSTRUCTOR") }
+    var replayableCaptures: [SchoolCaptureSession] { captures.filter(SchoolTripsWorkspace.isReplayable) }
     var canMutate: Bool { !invalidated && !isLoading && !isBusy && !needsReload && storageAccessible && pending == nil }
     var validTexts: Bool { [workedOn, observationText, nextStep].allSatisfy { $0.unicodeScalars.count <= 4_000 } }
     var preparationValid: Bool {
@@ -155,7 +160,7 @@ import Observation
         workedOn = ""; observationText = ""; nextStep = ""; observations = []
         sharing = nil; lessonObservations = []; track = []; trackAnchors = [:]
         training = nil; account = nil; captures = []; permitRecorded = false; permitReviewDenied = false
-        isLoading = false; isBusy = false; storageAccessible = false; revisionsError = nil
+        isLoading = false; isBusy = false; storageAccessible = false; revisionsError = nil; reportSaveConfirmed = false
     }
     private struct DraftContent: Equatable {
         let id: UUID
@@ -193,11 +198,18 @@ import Observation
             let learner = try await client.reader.learner(schoolID: scope.schoolID, id: lesson.learnerId)
             let isOwn = current.roles.contains("LEARNER") && learner.personId == scope.personID
             let author = current.roles.contains("INSTRUCTOR") && lesson.instructorMembershipId == current.membershipId
-            let wishRead = try await readSupplement(request: request, unavailable: "Le souhait de l’élève n’a pas pu être chargé.") {
-                try await self.client.wish(schoolID: self.scope.schoolID, trainingID: lesson.trainingId)
+            let readsContent = author || isOwn || current.roles.contains("ADMIN") || current.roles.contains("INSTRUCTOR")
+            var wishRead: (value: SchoolLearnerWish?, message: String?) = (nil, nil)
+            if author || isOwn {
+                wishRead = try await readSupplement(request: request, unavailable: "Le souhait de l’élève n’a pas pu être chargé.") {
+                    try await self.client.wish(schoolID: self.scope.schoolID, trainingID: lesson.trainingId)
+                }
             }
-            let revisionsRead = try await readSupplement(request: request, unavailable: "Les bilans partagés n’ont pas pu être chargés. Actualisez pour les retrouver.") {
-                try await self.client.revisions(schoolID: self.scope.schoolID, lessonID: self.lessonID)
+            var revisionsRead: (value: [SchoolReportRevision]?, message: String?) = (nil, nil)
+            if author || isOwn || current.roles.contains("INSTRUCTOR") {
+                revisionsRead = try await readSupplement(request: request, unavailable: "Les bilans partagés n’ont pas pu être chargés. Actualisez pour les retrouver.") {
+                    try await self.client.revisions(schoolID: self.scope.schoolID, lessonID: self.lessonID)
+                }
             }
             var preparationRead: (value: SchoolLessonPreparation?, message: String?) = (nil, nil)
             var draftsRead: (value: [SchoolReportDraft]?, message: String?) = (nil, nil)
@@ -218,6 +230,7 @@ import Observation
                 }
             }
             var observationsRead: (value: [SchoolObservation]?, message: String?) = (nil, nil)
+            var capturesRead: (value: [SchoolCaptureSession]?, message: String?) = (nil, nil)
             var trackRead: (value: (segments: [[SchoolCapturePoint]], observations: [SchoolPrivateGeoObservation], pointsByAnchor: [String: SchoolCapturePoint])?, message: String?) = (nil, nil)
             var sharingRead: (value: SchoolLessonSharing?, message: String?) = (nil, nil)
             // Leçon planifiée : le moniteur retrouve ce qu’il a noté pendant le trajet (et le constat le reprend).
@@ -226,14 +239,17 @@ import Observation
                     try await self.client.agenda.observationClient.observations(scope: self.scope, lessonID: self.lessonID, trainingID: lesson.trainingId, authorOnly: author)
                 }
             }
-            if lesson.status == "COMPLETED" && (author || isOwn) {
+            if lesson.status == "COMPLETED" && readsContent {
                 accountRead = try await readSupplement(request: request, unavailable: "Le solde n’a pas pu être chargé.") {
                     try await self.client.account(schoolID: self.scope.schoolID, lessonID: self.lessonID)
                 }
-                trackRead = try await readSupplement(request: request, unavailable: "Le trajet n’a pas pu être chargé.") {
-                    let captures = try await self.client.agenda.captureClient.lessonCaptures(schoolID: self.scope.schoolID, lessonID: self.lessonID)
-                    guard let capture = captures.last(where: { $0.syncState == .synced || $0.syncState == .partial }) else { return ([], [], [:]) }
-                    return try await self.client.agenda.captureClient.replayTrack(schoolID: self.scope.schoolID, captureID: capture.id)
+                capturesRead = try await readSupplement(request: request, unavailable: "Les trajets n’ont pas pu être chargés. Actualisez pour ouvrir le replay.") {
+                    try await self.client.agenda.captureClient.lessonCaptures(schoolID: self.scope.schoolID, lessonID: self.lessonID)
+                }
+                if let capture = capturesRead.value?.last(where: { SchoolTripsWorkspace.isReplayable($0) }) {
+                    trackRead = try await readSupplement(request: request, unavailable: "L’aperçu du trajet n’a pas pu être chargé. Vous pouvez ouvrir le replay pour réessayer.") {
+                        try await self.client.agenda.captureClient.replayTrack(schoolID: self.scope.schoolID, captureID: capture.id)
+                    }
                 }
                 if author {
                     sharingRead = try await readSupplement(request: request, unavailable: "Le réglage du partage n’a pas pu être chargé.") {
@@ -285,9 +301,10 @@ import Observation
             lessonObservations = (observationsRead.value ?? []).sorted { ($0.observedAt ?? "") < ($1.observedAt ?? "") }
             sharing = sharingRead.value; optimisticSharing = nil
             track = trackRead.value?.segments ?? []; trackAnchors = trackRead.value?.pointsByAnchor ?? [:]
-            if lesson.status != "PLANNED" || !author { captures = [] }
+            if lesson.status == "COMPLETED" { captures = capturesRead.value ?? [] }
+            else if !author { captures = [] }
             let notes = [wishRead.message, preparationRead.message, draftsRead.message, accountRead.message,
-                         observationsRead.message, trackRead.message, sharingRead.message, curriculumRead.message].compactMap { $0 }
+                         observationsRead.message, capturesRead.message, trackRead.message, sharingRead.message, curriculumRead.message].compactMap { $0 }
             information = notes.isEmpty ? nil : notes.joined(separator: "\n\n")
             isLoading = false; needsReload = conflict
             if conflict {
@@ -372,10 +389,10 @@ import Observation
         if recorded { permitRecorded = true }
         return recorded
     }
-    func saveDraft() async {
-        guard let draft, canMutate, isAuthor, validTexts, observationsValid else { return }
+    @discardableResult func saveDraft() async -> Bool {
+        guard let draft, canMutate, isAuthor, validTexts, observationsValid else { return false }
         let operation = UUID()
-        _ = await prepare(SchoolSaveReport(operationId: operation, workedOn: workedOn, observationText: observationText, nextStep: nextStep, observations: observations), id: operation, kind: .saveReportDraft, version: draft.version, resourceID: draft.id)
+        return await prepare(SchoolSaveReport(operationId: operation, workedOn: workedOn, observationText: observationText, nextStep: nextStep, observations: observations), id: operation, kind: .saveReportDraft, version: draft.version, resourceID: draft.id)
     }
     /// Garder pour soi le bilan, le trajet ou certaines observations ; tout le reste est vu par l’élève.
     func updateSharing(reportPrivate: Bool? = nil, captureHidden: Bool? = nil, observation: UUID? = nil, observationPrivate: Bool = false) async {
@@ -401,6 +418,7 @@ import Observation
             try outbox.remove(pending)
             guard request == generation, !invalidated else { return }
             self.pending = nil; isBusy = false; confirmation = "L’école confirme l’enregistrement de la demande."
+            if confirmsThisReport(pending) { reportSaveConfirmed = true; return }
             await load()
         } catch { guard request == generation, !invalidated else { return }; isBusy = false; fail(error) }
     }
@@ -422,8 +440,9 @@ import Observation
             try outbox.save(command)
             let confirmedSharing = try await client.send(command)
             try outbox.remove(command)
-            guard request == generation, !invalidated else { return true }
+            guard request == generation, !invalidated else { return false }
             pending = nil; isBusy = false
+            if confirmsThisReport(command) { reportSaveConfirmed = true; return true }
             confirmation = command.kind == .updateLessonSharing || command.kind == .recordPermitCheck ? nil : "Enregistré."
             // Partage : l’état confirmé suffit. Seul un bilan passé privé ou rendu visible change le brouillon côté école.
             if command.kind == .updateLessonSharing, let confirmedSharing {
@@ -442,6 +461,9 @@ import Observation
             guard request == generation, !invalidated else { return false }
             isBusy = false; pendingReviewed = false; fail(error); return false
         }
+    }
+    private func confirmsThisReport(_ command: PendingSchoolCommand) -> Bool {
+        command.scope == scope && command.kind == .saveReportDraft && command.resourceID == draft?.id
     }
     private func collect<Value: SchoolCatalogRecord>(_ fetch: (String?) async throws -> SchoolPage<Value>) async throws -> [Value] {
         var values: [Value] = [], cursor: String?, seen = Set<String>()

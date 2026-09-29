@@ -115,6 +115,7 @@ struct SchoolReportProgressItem: Codable, Sendable, Equatable, Identifiable {
     let competencyId: UUID, sourceLessonId: UUID, sourceRevisionId: UUID
     let label: String, level: String, context: String, observedAt: String
     var id: UUID { competencyId }
+    var displayLabel: String { label == "Anticipation et partage de la route" ? "Anticipation" : label }
 }
 struct SchoolReportProgress: Codable, Sendable, Equatable {
     let trainingId: UUID

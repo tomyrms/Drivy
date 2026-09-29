@@ -182,7 +182,7 @@ private struct SchoolTrainingContent: View {
                         Divider().overlay(DrivyTheme.border)
                     }
                     ForEach(model.unobservedCompetencies) { competency in
-                        DrivyCompetencyNote(label: competency.label, level: "Pas encore vu", tone: .neutral)
+                        DrivyCompetencyNote(label: competency.displayLabel, level: "Pas encore vu", tone: .neutral)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, DrivySpacing.m)
                         Divider().overlay(DrivyTheme.border)
                     }
@@ -199,7 +199,8 @@ private struct SchoolTrainingContent: View {
     }
     private func progressRow(_ item: SchoolReportProgressItem) -> some View {
         HStack(alignment: .top, spacing: DrivySpacing.m) {
-            DrivyCompetencyNote(label: item.label, level: SchoolTrainingFormatting.level(item.level), context: item.context,
+            DrivyCompetencyNote(label: model.competencies.first(where: { $0.id == item.id })?.displayLabel ?? item.displayLabel,
+                level: SchoolTrainingFormatting.level(item.level), context: item.context,
                 date: SchoolTrainingFormatting.day(item.observedAt, zone: workspace.school?.timeZone ?? "Europe/Zurich"))
             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                 .padding(.top, DrivySpacing.xxs)

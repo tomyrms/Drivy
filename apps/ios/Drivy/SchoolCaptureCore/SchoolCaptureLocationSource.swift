@@ -66,6 +66,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
     // Diagnostic ponctuel explicite, mémoire seulement. Il ne crée ni point scolaire
     // ni séance vide et ne tourne jamais en parallèle d'un flux scolaire continu.
     func requestDiagnosticSample() throws {
+        guard CLLocationManager.locationServicesEnabled() else { throw SchoolCaptureLocationFailure.servicesDisabled }
         guard permission.permitsLocation else { throw SchoolCaptureLocationFailure.permissionRequired }
         guard UIApplication.shared.applicationState == .active else { throw SchoolCaptureLocationFailure.foregroundRequired }
         if isRunning { onEvent?(.diagnosticChanged); return }
@@ -169,7 +170,9 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         let manager = CLLocationManager()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
-        manager.distanceFilter = segment.policy.distanceFilterMeters
+        // Zéro signifie sans filtre : un premier callback issu du cache peut être
+        // refusé sans devoir attendre ensuite un déplacement de plusieurs mètres.
+        manager.distanceFilter = segment.policy.distanceFilterMeters == 0 ? kCLDistanceFilterNone : segment.policy.distanceFilterMeters
         manager.activityType = .automotiveNavigation
         manager.pausesLocationUpdatesAutomatically = false
         manager.allowsBackgroundLocationUpdates = segment.policy.allowsBackground
@@ -179,6 +182,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         armedWallTime = Date(); lastElapsedMs = nil; lastMappedMeasurement = nil; lastStorageCheck = now
         armDeadline(segment)
         armGap(segment, lastMeasurement: now)
+        onEvent?(.signalChanged(.acquiring))
         manager.startUpdatingLocation()
     }
 
@@ -253,8 +257,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
             guard elapsed >= 0, elapsed <= 10_800 else { discard(1); continue }
             let elapsedMs = Int((elapsed * 1000).rounded())
             guard lastElapsedMs.map({ elapsedMs > $0 }) ?? true else { discard(1); continue }
-            let previousElapsed = lastElapsedMs.map { Double($0) / 1000 } ?? armedWallTime.timeIntervalSince(segment.wallStartedAt)
-            if elapsed - previousElapsed > segment.policy.signalGapSeconds {
+            if segment.policy.requiresNewSegment(previousElapsedMs: lastElapsedMs, nextElapsedMs: elapsedMs) {
                 if !admitted.isEmpty { onEvent?(.measurements(handle: handle, values: admitted)) }
                 discard(1)
                 interrupt(.signalLost)
@@ -270,6 +273,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         }
         guard !admitted.isEmpty else { return }
         if let lastMeasurementInstant { armGap(segment, lastMeasurement: lastMeasurementInstant) }
+        onEvent?(.signalChanged(.receiving))
         onEvent?(.measurements(handle: handle, values: admitted))
     }
 
@@ -277,7 +281,13 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         if manager === permissionManager { diagnosticRequested = false; lastDiagnostic = nil; onEvent?(.diagnosticChanged); return }
         guard manager === self.manager else { return }
         let code = (error as? CLError)?.code
-        interrupt(code == .denied ? .permissionLost : (code == .locationUnknown ? .signalLost : .deviceFailure))
+        // Core Location peut ne pas avoir de fix pour l'instant. Arrêter ici
+        // empêchait la première position, et toute récupération du signal.
+        if code == .locationUnknown {
+            onEvent?(.signalChanged(.temporarilyUnavailable))
+            return
+        }
+        interrupt(code == .denied ? .permissionLost : .deviceFailure)
     }
 
     func locationManagerDidPauseLocationUpdates(_ manager: CLLocationManager) {
@@ -304,13 +314,19 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         gapTask?.cancel()
         let generation = UUID()
         gapGeneration = generation
-        let deadline = min(lastMeasurement.advanced(by: .seconds(segment.policy.signalGapSeconds)), segment.lease.collectionDeadline)
+        let delay = lastElapsedMs == nil ? min(15, segment.policy.signalGapSeconds) : segment.policy.signalGapSeconds
+        let deadline = min(lastMeasurement.advanced(by: .seconds(delay)), segment.lease.collectionDeadline)
         gapTask = Task { [weak self] in
             do { try await ContinuousClock().sleep(until: deadline, tolerance: .zero) }
             catch { return }
             guard !Task.isCancelled, let self, self.segment?.id == segment.id,
                   self.gapGeneration == generation else { return }
-            self.interrupt(segment.lease.permitsCollection() ? .signalLost : .expired)
+            if !segment.lease.permitsCollection() { self.interrupt(.expired) }
+            else {
+                // Un silence du capteur ne prouve pas une fin de trajet, notamment
+                // à l'arrêt. Le manager reste actif, sans générer de point.
+                self.onEvent?(.signalChanged(.waitingForPosition))
+            }
         }
     }
 
@@ -321,6 +337,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
     }
 
     private func requirePermission(_ policy: SchoolCaptureLocationPolicy) throws {
+        guard CLLocationManager.locationServicesEnabled() else { throw SchoolCaptureLocationFailure.servicesDisabled }
         guard permission.permitsLocation,
               !policy.requiresPreciseLocation || permissionManager.accuracyAuthorization == .fullAccuracy else {
             throw SchoolCaptureLocationFailure.permissionRequired

@@ -9,18 +9,19 @@ import {ApiError,notFound} from './errors.js';
 import {Cursors} from './cursor.js';
 import {getLesson,lessonColumns,lessonProjection,type LessonRow} from './lessons.js';
 import {attachLiveObservations,draftObservationIDs} from './capture-observations.js';
+import {competencyLabel} from './competency-label.js';
 
 const id=z.uuid(),empty=z.object({}).strict(),date=z.iso.datetime({offset:true});
 const text=(max:number)=>z.string().refine(value=>[...value].length<=max,`Le texte dépasse ${max} caractères.`);
 const goal=z.object({label:text(500).refine(v=>v.trim().length>0),competencyId:id.nullable().optional(),context:text(500).optional()}).strict();
 const waypoint=z.object({id,label:text(120).refine(v=>v.trim().length>0),latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),note:text(500).nullable()}).strict();
-const observation=z.object({competencyId:id,level:z.enum(['DISCOVERING','GUIDED','INDEPENDENT']),context:text(500).refine(v=>v.trim().length>0)}).strict();
+const observation=z.object({competencyId:id,level:z.enum(['DISCOVERING','GUIDED','INDEPENDENT']),context:text(500).default('')}).strict();
 const unique=(values:string[])=>new Set(values).size===values.length;
 const observations=z.array(observation).max(100).refine(values=>unique(values.map(v=>v.competencyId)),'Une seule observation par compétence.');
 const preparationCommand=z.object({operationId:id,goals:z.array(goal).max(3),administrativeCheckNote:text(4000).nullable().optional(),plannedWaypoints:z.array(waypoint).max(20).refine(v=>unique(v.map(w=>w.id))).optional()}).strict();
 const wishCommand=z.object({operationId:id,text:text(500),lessonId:id.nullable().optional()}).strict();
 const completeCommand=z.object({operationId:id,actualStart:date,actualEnd:date,workedOn:text(4000).optional(),observationText:text(4000).optional(),nextStep:text(4000).optional(),anomalyReason:text(1000).nullable().optional()}).strict();
-const saveCommand=z.object({operationId:id,workedOn:text(4000),observationText:text(4000),nextStep:text(4000),observations,attachmentIds:z.array(id).max(10).refine(unique)}).strict();
+const saveCommand=z.object({operationId:id,workedOn:text(4000).default(''),observationText:text(4000).default(''),nextStep:text(4000).default(''),observations:observations.default([]),attachmentIds:z.array(id).max(10).refine(unique).default([])}).strict();
 const reference=z.object({observationId:id,version:z.number().int().positive()}).strict();
 const capture=z.object({captureId:id,selectedObservationIds:z.array(id).max(100).refine(unique),expectedCaptureVersion:z.number().int().positive(),observationVersions:z.array(reference).max(100)}).strict();
 const publishCommand=z.object({operationId:id,expectedPublicationVersion:z.number().int().min(0),excludePendingAttachmentIds:z.array(id).max(10).refine(unique).optional(),correctionReason:text(1000).nullable().optional(),captureSelection:capture.nullable(),textObservationSelection:z.array(reference).max(100)}).strict();
@@ -194,7 +195,6 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
    const initial=await draft(db,school.id,draftId),lesson=await getLesson(db,school.id,initial.lesson_id,true),old=await draft(db,school.id,draftId,true);checkVersion(old.version,expected);
    if(lesson.status!=='COMPLETED')throw new ApiError(409,'LESSON_NOT_COMPLETED','Seule une leçon réalisée peut avoir un bilan publié.');
    if(body.expectedPublicationVersion!==lesson.publication_version||old.base_publication_version!==lesson.publication_version)throw new ApiError(409,'PUBLICATION_VERSION_CONFLICT','La publication a changé. Relisez la version courante.');
-   if(!old.worked_on.trim()||!old.observation_text.trim()||!old.next_step.trim())throw new ApiError(422,'REPORT_INCOMPLETE','Renseignez le travail réalisé, le constat et la prochaine étape avant publication.');
    if(lesson.publication_version>0&&!body.correctionReason?.trim())throw new ApiError(422,'CORRECTION_REASON_REQUIRED','Précisez le motif de cette nouvelle révision.');
    if(body.captureSelection!==null||body.textObservationSelection.length)throw new ApiError(409,'OBSERVATION_PUBLICATION_NOT_READY','Les annotations et captures doivent être qualifiées par leur protocole avant publication. Publiez le bilan textuel sans sélection.');
    if(body.excludePendingAttachmentIds?.length)throw new ApiError(422,'ATTACHMENT_SELECTION_INVALID','Aucune pièce ne fait partie de ce brouillon.');
@@ -230,7 +230,7 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
    const definitions=(await db.query<{id:string}>(`SELECT c.id FROM drivy.competency_definition c JOIN drivy.offering_version o ON o.school_id=c.school_id AND o.curriculum_version_id=c.curriculum_version_id
     JOIN drivy.training t ON t.school_id=o.school_id AND t.offering_id=o.id WHERE t.school_id=$1 AND t.id=$2 ORDER BY c.sort_order,c.id`,[schoolId,trainingId])).rows;
    const observed=new Set(rows.map(row=>row.competency_id));
-   return {trainingId,items:rows.map(row=>({competencyId:row.competency_id,label:row.label,level:row.level,context:row.context,observedAt:row.observed_at.toISOString(),sourceLessonId:row.source_lesson_id,sourceRevisionId:row.source_revision_id})),unobservedCompetencyIds:definitions.filter(row=>!observed.has(row.id)).map(row=>row.id),computedAt:new Date().toISOString()};
+   return {trainingId,items:rows.map(row=>({competencyId:row.competency_id,label:competencyLabel(row.label),level:row.level,context:row.context,observedAt:row.observed_at.toISOString(),sourceLessonId:row.source_lesson_id,sourceRevisionId:row.source_revision_id})),unobservedCompetencyIds:definitions.filter(row=>!observed.has(row.id)).map(row=>row.id),computedAt:new Date().toISOString()};
   });return envelope(value,r);
  });
 }

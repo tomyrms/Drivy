@@ -1,10 +1,11 @@
 import Foundation
 
 enum SchoolCaptureLocationFailure: Error, LocalizedError {
-    case permissionRequired, invalidContext, invalidPolicy, alreadyRunning, foregroundRequired, insufficientStorage, diagnosticUnavailable
+    case permissionRequired, servicesDisabled, invalidContext, invalidPolicy, alreadyRunning, foregroundRequired, insufficientStorage, diagnosticUnavailable
     var errorDescription: String? {
         switch self {
         case .permissionRequired: "La permission de localisation requise n’est pas disponible. La leçon reste accessible sans GPS."
+        case .servicesDisabled: "Activez le service de localisation dans Réglages > Confidentialité et sécurité > Service de localisation."
         case .invalidContext: "Le contexte de capture doit être vérifié avant de démarrer."
         case .invalidPolicy: "Les paramètres du collecteur ne sont pas valides."
         case .alreadyRunning: "Le collecteur doit être arrêté avant un nouveau départ."
@@ -40,7 +41,7 @@ struct SchoolCaptureLocationPolicy: Sendable {
 
     init(maximumCallbackAgeSeconds: TimeInterval = 120, maximumClockDriftSeconds: TimeInterval = 1,
          signalGapSeconds: TimeInterval = 60, minimumFreeBytes: Int64 = 256 * 1024 * 1024,
-         requiresPreciseLocation: Bool = true, allowsBackground: Bool = true, distanceFilterMeters: Double = 3) throws {
+         requiresPreciseLocation: Bool = true, allowsBackground: Bool = true, distanceFilterMeters: Double = 0) throws {
         guard maximumCallbackAgeSeconds.isFinite, (1...300).contains(maximumCallbackAgeSeconds),
               maximumClockDriftSeconds.isFinite, (0.05...5).contains(maximumClockDriftSeconds),
               signalGapSeconds.isFinite, (5...300).contains(signalGapSeconds),
@@ -53,6 +54,12 @@ struct SchoolCaptureLocationPolicy: Sendable {
         self.requiresPreciseLocation = requiresPreciseLocation
         self.allowsBackground = allowsBackground
         self.distanceFilterMeters = distanceFilterMeters
+    }
+
+    /// Une première acquisition lente n'est pas une rupture entre deux mesures.
+    func requiresNewSegment(previousElapsedMs: Int?, nextElapsedMs: Int) -> Bool {
+        guard let previousElapsedMs else { return false }
+        return Double(nextElapsedMs - previousElapsedMs) / 1000 > signalGapSeconds
     }
 }
 
@@ -116,10 +123,35 @@ enum SchoolCaptureLocationInterruption: Sendable {
         default: .deviceError
         }
     }
+    var message: String {
+        switch self {
+        case .permissionLost: "La localisation est désactivée. Vérifiez l’autorisation de Drivy dans Réglages."
+        case .precisionReduced: "La position précise a été désactivée. Réactivez-la dans les réglages de localisation de Drivy."
+        case .expired: "L’autorisation GPS est arrivée à sa fin. Les positions enregistrées sont conservées."
+        case .scopeChanged: "Le compte ou les droits de l’école ont changé. L’enregistrement GPS est arrêté."
+        case .signalLost: "Le signal GPS revient. L’enregistrement reprend dans un nouveau segment."
+        case .clockChanged: "L’heure de l’appareil a changé. Le GPS est arrêté pour préserver l’heure des positions."
+        case .systemPaused: "iOS a interrompu la localisation. Les positions enregistrées sont conservées."
+        case .deviceFailure: "iOS n’a pas pu poursuivre la localisation. Les positions enregistrées sont conservées."
+        case .storageLow: "L’espace disponible est insuffisant. Le GPS est arrêté ; libérez de l’espace sur l’appareil."
+        }
+    }
+}
+
+enum SchoolCaptureLocationSignal: Sendable, Equatable {
+    case acquiring, receiving, waitingForPosition, temporarilyUnavailable
+    var message: String? {
+        switch self {
+        case .acquiring, .receiving: nil
+        case .waitingForPosition: "Aucune position récente reçue. La recherche GPS continue ; placez l’iPhone près d’une vitre ou à découvert."
+        case .temporarilyUnavailable: "Le signal GPS est momentanément indisponible. La recherche continue."
+        }
+    }
 }
 
 enum SchoolCaptureLocationEvent: Sendable {
     case diagnosticChanged
+    case signalChanged(SchoolCaptureLocationSignal)
     case measurements(handle: SchoolCaptureSegmentHandle, values: [SchoolCaptureMeasurement])
     case interrupted(SchoolCaptureLocationInterruption, SchoolCaptureLocationStop)
 }

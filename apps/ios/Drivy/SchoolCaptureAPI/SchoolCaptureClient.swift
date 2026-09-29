@@ -18,8 +18,8 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         case .rejected(let message): message
         case .finalizationRefused(let code):
             code == "CAPTURE_INCOMPLETE"
-                ? "Des positions manquent. Envoyez les données restantes ou choisissez explicitement un trajet partiel."
-                : "Le trajet a changé pendant l’envoi. Relisez son état puis confirmez à nouveau."
+                ? "La synchronisation est incomplète. Réessayez lorsque la connexion est disponible."
+                : "Le trajet a changé pendant la synchronisation. Réessayez."
         }
     }
 }
@@ -335,7 +335,7 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         "CAPTURE_DISABLED": "Le GPS scolaire n’est pas activé. La leçon reste disponible sans GPS.",
         "CAPTURE_START_WINDOW": "Le GPS peut démarrer à proximité de l’horaire prévu de cette leçon.",
         "CAPTURE_ALREADY_ACTIVE": "Un trajet est déjà ouvert pour cette leçon, ce moniteur ou cet appareil.",
-        "CAPTURE_INCOMPLETE": "Certains lots attendent leur transfert. Réessayez avant de confirmer un trajet partiel.",
+        "CAPTURE_INCOMPLETE": "La synchronisation est incomplète. Réessayez lorsque la connexion est disponible.",
         "CAPTURE_MANIFEST_MISMATCH": "Les lots et le manifeste ne correspondent pas. Les données locales restent conservées.",
         "CHUNK_HASH_MISMATCH": "Le contenu du lot ne correspond pas à son empreinte. Le transfert est interrompu.",
         "CHUNK_CUTOFF_REJECTED": "Ce lot dépasse la fin de collecte autorisée et ne peut pas être envoyé.",

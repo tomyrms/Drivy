@@ -88,11 +88,11 @@ export async function moveToPast(pool:Pool,lessonId:string,hoursAgo=2+(pastSlot+
 export {id};
 
 let ajv:Ajv2020|undefined;
-/** Extensions hors canon ajoutées aux projections de leçon : retirées avant la validation, le contrat canonique restant inchangé. */
-function withoutExtensions(value:unknown):unknown{
+/** Extensions hors canon de leçon/formation : retirées avant validation, puis vérifiées par leurs tests ciblés. */
+export function withoutExtensions(value:unknown):unknown{
  if(Array.isArray(value))return value.map(withoutExtensions);
  if(value!==null&&typeof value==='object'){
-  const entries=Object.entries(value as Record<string,unknown>).filter(([key])=>!(['learnerDisplayName','instructorDisplayName'].includes(key)&&'plannedStart'in(value as object)));
+  const entries=Object.entries(value as Record<string,unknown>).filter(([key])=>!(['learnerDisplayName','instructorDisplayName'].includes(key)&&'plannedStart'in(value as object))&&!(key==='startNowBlockerCode'&&'offeringId'in(value as object)));
   return Object.fromEntries(entries.map(([key,item])=>[key,withoutExtensions(item)]));
  }
  return value;

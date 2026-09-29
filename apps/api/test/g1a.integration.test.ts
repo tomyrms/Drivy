@@ -11,6 +11,7 @@ import { createTokenVerifier } from '../src/auth.js';
 import { withActor } from '../src/database.js';
 import { migrate } from '../scripts/migrations.js';
 import { fixtureIds as id, seedFixtures } from '../scripts/fixtures.js';
+import { withoutExtensions } from './support/harness.js';
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url || new URL(url).pathname !== '/drivy_test') {
@@ -46,6 +47,7 @@ async function get(path: string, subject = 'demo-instructor') {
   return app.inject({ method:'GET',url:path,headers:{ authorization:`Bearer ${token}` } });
 }
 function conforms(name: string, data: unknown) {
+  data=withoutExtensions(data);
   const validate = validators.get(name);
   if (!validate) throw new Error(`Validateur absent ${name}`);
   expect(validate(data),JSON.stringify(validate.errors)).toBe(true);
@@ -73,7 +75,7 @@ describe('G1A · contrats exacts OpenAPI 3.11', () => {
       }
       const fixture = JSON.parse(await readFile(file, 'utf8')) as { data:unknown };
       conforms(schema, fixture);
-      expect(fixture.data).toEqual(body.data);
+      expect(withoutExtensions(fixture.data)).toEqual(withoutExtensions(body.data));
     }
   });
   it('identifie issuer/subject et liste uniquement les appartenances de la personne', async () => {

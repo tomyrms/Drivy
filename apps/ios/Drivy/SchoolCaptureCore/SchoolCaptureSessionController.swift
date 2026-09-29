@@ -1,9 +1,15 @@
 import Foundation
+import Network
 import Observation
 
 struct SchoolCaptureMapSegment: Identifiable {
     let id: UUID
     var measurements: [SchoolCaptureMeasurement]
+}
+
+struct SchoolCaptureLessonTimes {
+    let startedAt: String
+    let stoppedAt: String
 }
 
 /// Propriétaire de la séance au niveau de l'application, hors des feuilles SwiftUI.
@@ -16,8 +22,12 @@ final class SchoolCaptureSessionController {
     private(set) var lessonID: UUID?
     private(set) var segments: [SchoolCaptureMapSegment] = []
     private(set) var errorMessage: String?
+    private(set) var locationMessage: String?
     private(set) var transferMessage: String?
     private(set) var isTransferring = false
+    private(set) var synchronizationNeedsRetry = false
+    private(set) var pendingSynchronizationCount = 0
+    private(set) var pendingSynchronizationError: String?
     private(set) var finalizedSyncState: SchoolCaptureSession.SyncState?
     private(set) var liveObservations: SchoolLiveObservationRecorder?
 
@@ -28,6 +38,18 @@ final class SchoolCaptureSessionController {
     @ObservationIgnored private var endedAt: ContinuousClock.Instant?
     @ObservationIgnored private var sharedJournal: SQLCipherSchoolCaptureStore?
     @ObservationIgnored private var openingJournal: Task<SQLCipherSchoolCaptureStore, Error>?
+    @ObservationIgnored private var backgroundTransfers: [UUID: Context] = [:]
+    @ObservationIgnored private var recoveryTransfers: [UUID: RecoveryTransfer] = [:]
+    @ObservationIgnored private var synchronizationFailures: [UUID: String] = [:]
+    @ObservationIgnored private var synchronizationClient: SchoolCaptureClient?
+    @ObservationIgnored private var networkMonitor: NWPathMonitor?
+    @ObservationIgnored private var networkAvailable: Bool?
+    @ObservationIgnored private var checkingPendingSynchronizations = false
+
+    private struct RecoveryTransfer {
+        let coordinator: SchoolCaptureTransferCoordinator
+        let task: Task<Void, Never>
+    }
 
     @MainActor private final class Context {
         let scope: SchoolCommandScope
@@ -41,6 +63,10 @@ final class SchoolCaptureSessionController {
         let policy: SchoolCaptureLocationPolicy
         var handle: SchoolCaptureSegmentHandle?
         var terminalRequested = false
+        var finishingTask: Task<Bool, Never>?
+        var synchronizationTask: Task<Void, Never>?
+        var startedAt: String?
+        var durableStoppedAt: String?
 
         init(scope: SchoolCommandScope, source: any SchoolCaptureLocationProviding, local: SchoolCaptureLocalCoordinator,
              transfer: SchoolCaptureTransferCoordinator, session: SchoolCaptureStoredSession,
@@ -57,6 +83,8 @@ final class SchoolCaptureSessionController {
             return SchoolCaptureLocationTime.timestamp(clock.serverTime.addingTimeInterval(max(0, elapsed)))
         }
     }
+
+    init(store: SQLCipherSchoolCaptureStore? = nil) { sharedJournal = store }
 
     var pointCount: Int { segments.reduce(0) { $0 + $1.measurements.count } }
     var isCollecting: Bool { state == .recording }
@@ -131,15 +159,36 @@ final class SchoolCaptureSessionController {
         context?.source.onEvent = nil
         context = nil; generation = UUID()
         state = .idle; captureID = nil; lessonID = nil; segments = []
-        errorMessage = nil; transferMessage = nil; isTransferring = false
+        errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false
         finalizedSyncState = nil
         beginning = nil; endedAt = nil
+    }
+
+    func closeLessonFlow(lessonID: UUID) {
+        guard self.lessonID == lessonID else { return }
+        closeSaved()
+    }
+
+    func lessonTimes(lessonID: UUID) -> SchoolCaptureLessonTimes? {
+        guard self.lessonID == lessonID, state == .saved, let active = context,
+              let startedAt = active.startedAt, let stoppedAt = active.durableStoppedAt else { return nil }
+        return .init(startedAt: startedAt, stoppedAt: stoppedAt)
     }
 
     /// Appelé par la racine sur toute modification réelle des accès, même si une
     /// feuille est présentée. Les mesures de l'ancien contexte disparaissent aussitôt.
     func setScope(_ scope: SchoolCommandScope?) {
         guard permittedScope != scope else { return }
+        for active in backgroundTransfers.values {
+            active.synchronizationTask?.cancel()
+            active.transfer.invalidate()
+        }
+        backgroundTransfers.removeAll()
+        for transfer in recoveryTransfers.values {
+            transfer.task.cancel(); transfer.coordinator.invalidate()
+        }
+        recoveryTransfers.removeAll(); synchronizationFailures.removeAll()
+        synchronizationClient = nil; pendingSynchronizationCount = 0; pendingSynchronizationError = nil
         liveObservations?.stop(); liveObservations = nil
         permittedScope = scope
         let old = context
@@ -152,7 +201,7 @@ final class SchoolCaptureSessionController {
         generation = UUID()
         old?.transfer.invalidate()
         state = .idle; captureID = nil; lessonID = nil; segments = []
-        errorMessage = nil; transferMessage = nil; isTransferring = false; beginning = nil; endedAt = nil
+        errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false; beginning = nil; endedAt = nil
         finalizedSyncState = nil
         if let old, let boundary {
             Task {
@@ -197,7 +246,7 @@ final class SchoolCaptureSessionController {
         context = active
         captureID = session.id; lessonID = session.serverCapture.lessonId
         segments = []; beginning = nil; endedAt = nil; state = .preparing
-        errorMessage = nil; transferMessage = nil; isTransferring = false
+        errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false
         finalizedSyncState = nil
         source.updateScope(transfer.scope)
         source.onEvent = { [weak self] event in self?.receive(event, request: request) }
@@ -258,6 +307,142 @@ final class SchoolCaptureSessionController {
         active.terminalRequested = true
         active.local.halt()
         await finish(active, request: request, boundary: boundary, reason: reason)
+    }
+
+    /// La fin de leçon attend seulement le scellement durable local. Le transfert
+    /// continue au niveau de l'app, même si le trajet ou la feuille sont fermés.
+    @discardableResult
+    func stopAndSynchronize() async -> Bool {
+        guard let active = context, active.scope == permittedScope else { return captureID == nil }
+        let request = generation
+        if state != .saved {
+            let boundary = active.stopBoundary()
+            active.terminalRequested = true
+            active.local.halt()
+            guard await finish(active, request: request, boundary: boundary, reason: .lessonEnded) else { return false }
+        }
+        guard generation == request, state == .saved else { return false }
+        scheduleSynchronization(active)
+        return true
+    }
+
+    func finishForLesson(lessonID: UUID) async -> Bool {
+        guard self.lessonID == lessonID else { return true }
+        return await stopAndSynchronize()
+    }
+
+    func retrySynchronization() async {
+        guard let active = context, state == .saved, active.scope == permittedScope else { return }
+        scheduleSynchronization(active)
+        await active.synchronizationTask?.value
+    }
+
+    /// Appelée à l'ouverture du compte et au retour au premier plan. Le journal
+    /// récupéré ne rouvre jamais un collecteur ; seules ses captures scellées partent.
+    func resumePendingSynchronizations(client: SchoolCaptureClient, scope: SchoolCommandScope) async {
+        guard permittedScope == scope, client.baseURL.absoluteString == scope.apiBaseURL else { return }
+        synchronizationClient = client
+        installNetworkMonitor()
+        guard !checkingPendingSynchronizations else { return }
+        checkingPendingSynchronizations = true
+        defer { checkingPendingSynchronizations = false }
+        do {
+            let store = try await journal()
+            let sessions = try await store.sessions(scope: scope)
+            let finalizations = try await store.acknowledgedFinalizations(scope: scope)
+            guard permittedScope == scope else { return }
+            let pending = sessions.filter { $0.manifest != nil && $0.stopOperationID != nil && finalizations[$0.id] == nil }
+            pendingSynchronizationCount = pending.count
+            for session in pending {
+                guard permittedScope == scope else { return }
+                guard backgroundTransfers[session.id] == nil, recoveryTransfers[session.id] == nil else { continue }
+                if let active = context, active.session.id == session.id, state == .saved {
+                    scheduleSynchronization(active)
+                    continue
+                }
+                let transfer = SchoolCaptureTransferCoordinator(scope: scope, client: client, store: store, stopCollection: { _ in })
+                let task = Task { [self] in
+                    defer { recoveryTransfers.removeValue(forKey: session.id) }
+                    do {
+                        _ = try await transfer.synchronizeStoppedCapture(captureID: session.id)
+                        guard permittedScope == scope else { return }
+                        synchronizationFinished(session.id)
+                    } catch {
+                        guard permittedScope == scope else { return }
+                        synchronizationFailed(session.id, error: error)
+                    }
+                }
+                recoveryTransfers[session.id] = RecoveryTransfer(coordinator: transfer, task: task)
+            }
+        } catch {
+            guard permittedScope == scope else { return }
+            pendingSynchronizationError = message(error)
+        }
+    }
+
+    func retryPendingSynchronizations() async {
+        guard let client = synchronizationClient, let scope = permittedScope else { return }
+        await resumePendingSynchronizations(client: client, scope: scope)
+    }
+
+    private func installNetworkMonitor() {
+        guard networkMonitor == nil else { return }
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let available = path.status == .satisfied
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let becameAvailable = available && self.networkAvailable != true
+                self.networkAvailable = available
+                if becameAvailable { await self.retryPendingSynchronizations() }
+            }
+        }
+        networkMonitor = monitor
+        monitor.start(queue: DispatchQueue(label: "ch.drivy.capture-connectivity"))
+    }
+
+    private func synchronizationFinished(_ id: UUID) {
+        synchronizationFailures.removeValue(forKey: id)
+        pendingSynchronizationCount = max(0, pendingSynchronizationCount - 1)
+        pendingSynchronizationError = synchronizationFailures.values.first
+    }
+
+    private func synchronizationFailed(_ id: UUID, error: Error) {
+        synchronizationFailures[id] = "Le trajet reste sur cet appareil. \(message(error))"
+        pendingSynchronizationCount = max(pendingSynchronizationCount, synchronizationFailures.count)
+        pendingSynchronizationError = synchronizationFailures.values.first
+    }
+
+    private func scheduleSynchronization(_ active: Context) {
+        guard active.scope == permittedScope, active.synchronizationTask == nil else { return }
+        guard recoveryTransfers[active.session.id] == nil else { return }
+        if context === active, finalizedSyncState != nil { return }
+        let id = active.session.id
+        backgroundTransfers[id] = active
+        if context === active {
+            isTransferring = true; synchronizationNeedsRetry = false; transferMessage = nil
+        }
+        active.synchronizationTask = Task { [self] in
+            defer {
+                active.synchronizationTask = nil
+                if backgroundTransfers[id] === active { backgroundTransfers.removeValue(forKey: id) }
+                if context === active { isTransferring = false }
+            }
+            do {
+                let result = try await active.transfer.synchronizeStoppedCapture(captureID: id)
+                guard permittedScope == active.scope else { return }
+                synchronizationFinished(id)
+                guard context === active else { return }
+                finalizedSyncState = result.syncState
+                transferMessage = result.syncState == .synced ? "Trajet synchronisé." : "Le trajet reçu par l’école est partiel."
+            } catch {
+                guard permittedScope == active.scope else { return }
+                synchronizationFailed(id, error: error)
+                guard context === active else { return }
+                synchronizationNeedsRetry = true
+                transferMessage = "Le trajet est conservé sur cet appareil. \(message(error))"
+            }
+        }
     }
 
     func transfer() async {
@@ -321,6 +506,7 @@ final class SchoolCaptureSessionController {
               !active.terminalRequested else { throw SchoolCaptureStorageFailure.closed }
         active.handle = handle
         try active.source.start(segment: prepared, handle: handle)
+        if active.startedAt == nil { active.startedAt = prepared.startedAt }
         if beginning == nil { beginning = .now }
         segments.append(SchoolCaptureMapSegment(id: handle.segmentID, measurements: []))
         state = .recording
@@ -330,6 +516,7 @@ final class SchoolCaptureSessionController {
         guard generation == request, let active = context else { return }
         switch event {
         case .diagnosticChanged: break
+        case .signalChanged(let signal): locationMessage = signal.message
         case .measurements(let handle, let values):
             guard state == .recording, active.handle == handle else { return }
             do {
@@ -345,10 +532,35 @@ final class SchoolCaptureSessionController {
             } catch { failCollector(active, request: request, error: error) }
         case .interrupted(let reason, let stop):
             guard state == .recording || state == .paused || state == .preparing else { return }
+            if reason == .signalLost {
+                recoverSignal(active, request: request, stop: stop)
+                return
+            }
             active.terminalRequested = true; active.local.halt()
             state = .stopping
-            errorMessage = reason == .expired ? "L’autorisation GPS est arrivée à sa fin. La leçon peut continuer sans GPS." : "Le GPS est arrêté. Les mesures déjà écrites restent conservées."
+            locationMessage = nil
+            errorMessage = reason.message
             Task { await finish(active, request: request, boundary: stop.stoppedAt, reason: reason.stopReason) }
+        }
+    }
+
+    /// Une vraie lacune sépare les segments. La même autorisation encore valide
+    /// permet la reprise locale, y compris hors réseau ; ce n'est pas un nouveau départ.
+    private func recoverSignal(_ active: Context, request: UUID, stop: SchoolCaptureLocationStop) {
+        guard let handle = active.handle, !active.terminalRequested else { return }
+        state = .stopping
+        locationMessage = SchoolCaptureLocationInterruption.signalLost.message
+        Task {
+            do {
+                try await active.local.pause(handle: handle, endedAt: stop.stoppedAt, reason: .signalLost)
+                guard generation == request, permittedScope == active.scope, !active.terminalRequested else { return }
+                active.handle = nil; state = .preparing
+                try await openSegment(active, request: request, reason: .resume)
+            } catch {
+                guard generation == request, !active.terminalRequested else { return }
+                errorMessage = message(error)
+                await finish(active, request: request, boundary: active.stopBoundary(), reason: .deviceError)
+            }
         }
     }
 
@@ -367,19 +579,35 @@ final class SchoolCaptureSessionController {
         Task { await finish(active, request: request, boundary: boundary, reason: .deviceError) }
     }
 
-    private func finish(_ active: Context, request: UUID, boundary: String, reason: SchoolCaptureLocalStopReason) async {
+    @discardableResult
+    private func finish(_ active: Context, request: UUID, boundary: String, reason: SchoolCaptureLocalStopReason) async -> Bool {
+        if let task = active.finishingTask { return await task.value }
+        let task = Task { await finishOnce(active, request: request, boundary: boundary, reason: reason) }
+        active.finishingTask = task
+        let saved = await task.value
+        if !saved { active.finishingTask = nil }
+        return saved
+    }
+
+    private func finishOnce(_ active: Context, request: UUID, boundary: String, reason: SchoolCaptureLocalStopReason) async -> Bool {
         active.terminalRequested = true
         if generation == request {
             state = .stopping
             if endedAt == nil { endedAt = min(.now, active.lease.collectionDeadline) }
         }
         do {
-            _ = try await active.local.stop(captureID: active.session.id, stoppedAt: boundary, reason: reason)
-            guard generation == request else { return }
+            let command = try await active.local.stop(captureID: active.session.id, stoppedAt: boundary, reason: reason)
+            let saved = try JSONDecoder().decode(SchoolStopCaptureBody.self, from: command.body)
+            guard generation == request else { return false }
+            active.durableStoppedAt = saved.stoppedAt
             active.handle = nil; state = .saved
+            locationMessage = nil
+            scheduleSynchronization(active)
+            return true
         } catch {
-            guard generation == request else { return }
+            guard generation == request else { return false }
             state = .failed; errorMessage = "Le GPS est arrêté. \(message(error))"
+            return false
         }
     }
 

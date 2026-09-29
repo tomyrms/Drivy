@@ -119,3 +119,21 @@ describe('lecture d’un trajet par l’administration',()=>{
   }finally{await reopen(trip1.lesson);}
  });
 });
+
+describe('fin de leçon indépendante du transfert GPS',()=>{
+ it('termine une seule fois avec bilan vide puis reçoit et partage le trajet en arrière-plan',async()=>{
+  const trip=await h.startTrip({instructorSubject:'demo-instructor',instructorMember:id.instructorMember,learnerSubject:'demo-alice',learnerId:id.aliceLearner,learnerPerson:id.alice,trainingId:id.aliceTraining});
+  const pending=await h.call('GET',`/captures/${trip.capture.id}`);expect(pending.json().data).toMatchObject({captureState:'AUTHORIZED',syncState:'LOCAL_ONLY'});
+  // Les trois instants synthétiques doivent précéder la fin réelle, même si leur dépôt arrive après.
+  const lastPoint=h.pointTimes(trip).at[2]!;while(Date.now()<=lastPoint)await new Promise(resolve=>setTimeout(resolve,10));
+  const body={operationId:randomUUID(),actualStart:trip.capture.authorizedAt,actualEnd:new Date().toISOString(),anomalyReason:'Recette synthétique'};
+  const completed=await h.call('POST',`/lessons/${trip.lesson}/complete`,body,1);expect(completed.statusCode,completed.body).toBe(200);
+  expect(completed.json().data.lesson.status).toBe('COMPLETED');expect(completed.json().data.draft).toMatchObject({workedOn:'',observationText:'',nextStep:''});
+  expect((await h.call('POST',`/lessons/${trip.lesson}/complete`,body,1)).json().data).toEqual(completed.json().data);
+  expect((await h.call('GET',`/captures/${trip.capture.id}`,undefined,undefined,'demo-alice')).statusCode).toBe(404);
+  const finalized=await h.uploadStopFinalize(trip);expect(finalized.finalized.syncState).toBe('SYNCED');
+  const visible=await h.call('GET',`/lessons/${trip.lesson}/captures`,undefined,undefined,'demo-alice');expect(visible.statusCode,visible.body).toBe(200);
+  expect(visible.json().data.items.map((c:{id:string})=>c.id)).toEqual([trip.capture.id]);
+  expect((await pool.query('SELECT count(*)::int AS n FROM drivy.charge_entry WHERE operation_id=$1',[body.operationId])).rows[0].n).toBe(1);
+ });
+});

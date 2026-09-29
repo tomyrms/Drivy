@@ -106,10 +106,16 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
                      notice: notice, previousChoice: choice, status: status, source: source)
     }
 
+    /// Le bouton exprime le choix et le journalise en une seule action.
+    func choose(_ status: SchoolRecordingChoice.Status) async -> Bool {
+        guard let value = review(status) else { return false }
+        return await confirm(value, acknowledged: true)
+    }
+
     func confirm(_ review: SchoolRecordingChoiceReview, acknowledged: Bool) async -> Bool {
         guard mayChoose, acknowledged, review.lessonID == lessonID, review.learnerID == learner?.id,
               review.status != .unknown, let store else { return false }
-        if review.status == .refused { onRefusalConfirmed(review.learnerID, review.lessonID) }
+        if review.status == .refused { onRefusalConfirmed(review.learnerID, review.previousChoice?.lessonId) }
         let request = generation; isBusy = true; errorMessage = nil; confirmation = nil
         do {
             // A freshly displayed notice and source are required before the FIRST send.
@@ -120,7 +126,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             guard context.learner.id == review.learnerID, context.source == review.source,
                   sameNotice(context.notice, review.notice), context.choice == review.previousChoice else {
                 isBusy = false
-                errorMessage = "La notice ou le choix a changé. Relisez les informations avant une nouvelle confirmation."
+                errorMessage = "Les informations de l’école ou le choix ont changé. Consultez leur version actuelle, puis choisissez à nouveau."
                 return false
             }
             guard !(review.status == .allowed && verbalAgreementIsProtected) else { throw SchoolCaptureFailure.forbidden }
@@ -128,7 +134,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             guard request == generation, !invalidated else { return false }
             guard relatedPending.isEmpty, !hasOldScope else { throw SchoolCaptureStorageFailure.uncertainCommand }
             let operationID = UUID()
-            let body = SchoolRecordingChoiceBody(operationId: operationID, lessonId: lessonID,
+            let body = SchoolRecordingChoiceBody(operationId: operationID, lessonId: review.previousChoice?.lessonId,
                 status: review.status, noticeVersionId: review.notice.noticeVersionId, source: review.source)
             let command = try SchoolCapturePendingMutation.make(id: operationID, scope: scope,
                 kind: .recordChoice, targetID: review.learnerID, body: body)

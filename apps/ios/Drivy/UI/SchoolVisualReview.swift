@@ -17,6 +17,8 @@ struct SchoolVisualReview: View {
           Group {
             if let context {
                 switch screen {
+                case "gps-choice", "signal", "observations", "capture-preparation":
+                    SchoolFieldVisualReview(screen: screen, context: context)
                 case "lesson", "lesson-planned":
                     NavigationStack {
                         SchoolLessonReportView(client: context.agenda.reportClient, schoolWorkspace: context.workspace,
@@ -76,7 +78,7 @@ struct SchoolVisualReview: View {
 
 /// The real school shell (SchoolHomeView and its tab bar). Actions are inert:
 /// the capture only renders the first frame of each tab.
-private struct SchoolVisualShell: View {
+struct SchoolVisualShell: View {
     let context: SchoolVisualContext
     /// Selected after the list appears, as a tap would, so a compact split view pushes the dossier.
     let learnerID: UUID?
@@ -101,7 +103,7 @@ private struct SchoolVisualShell: View {
     }
 }
 
-@MainActor private struct SchoolVisualContext {
+@MainActor struct SchoolVisualContext {
     let workspace: SchoolWorkspace
     let client: SchoolTrainingClient
     let agenda: SchoolAgendaClient
@@ -109,7 +111,7 @@ private struct SchoolVisualShell: View {
     let replay: SchoolCaptureReplayWorkspace
 }
 
-@MainActor private enum SchoolVisualData {
+@MainActor enum SchoolVisualData {
     static let schoolID = identifier(1)
     static let personID = identifier(2)
     static let membershipID = identifier(3)
@@ -214,9 +216,11 @@ private struct SchoolVisualShell: View {
 
     private static var competencyObjects: [[String: Any]] {
         [
-            ("Priorités", "Observer et aborder les intersections.", "priorities"),
+            ("Priorités", "Priorité de droite, signalisation et céder le passage.", "priorites"),
             ("Stationnement", "Choisir les repères et contrôler l’environnement.", "parking"),
-            ("Autoroute", "Préparer l’insertion et adapter les distances.", "motorway")
+            ("Autoroute", "Préparer l’insertion et adapter les distances.", "motorway"),
+            ("Adaptation de la vitesse", "Vitesse adaptée aux limites, à la visibilité et au trafic.", "vitesse"),
+            ("Anticipation", "Préparer les situations de conduite.", "anticipation")
         ].enumerated().map { index, value in
             ["id": identifier(30 + index).uuidString, "schoolId": schoolID.uuidString, "version": 1,
              "curriculumVersionId": curriculumID.uuidString, "key": value.2,
@@ -287,7 +291,7 @@ private struct SchoolVisualShell: View {
             "generatedAt": time, "reportRevisionId": NSNull(), "geometrySnapshotId": NSNull()]
     }
 
-    private static func responses() throws -> [String: Data] {
+    static func responses() throws -> [String: Data] {
         let null = NSNull()
         let root = "/v1/schools/\(schoolID.uuidString)"
         let roles = ["ADMIN", "INSTRUCTOR"]
@@ -366,6 +370,14 @@ private struct SchoolVisualShell: View {
             "\(root)/report-revisions/\(revisionID.uuidString)": revision,
             "\(root)/lessons/\(lessonID.uuidString)/reports": page([revision])
         ]
+        objects["\(root)/recording-notice"] = ["noticeVersionId": identifier(91).uuidString,
+            "noticeText": "Document de contrôle : le trajet sert à revoir la leçon avec l’élève et son moniteur. Les positions ne sont pas publiques.",
+            "retentionText": "Document de contrôle : la durée de conservation et les modalités d’effacement sont fixées par l’école.",
+            "contactEmail": "contact@example.invalid", "approvedAt": time]
+        objects["\(root)/learners/\(learnerID.uuidString)/recording-choice"] = ["id": identifier(92).uuidString,
+            "schoolId": schoolID.uuidString, "version": 1, "learnerId": learnerID.uuidString, "lessonId": null,
+            "status": "UNKNOWN", "noticeVersionId": identifier(91).uuidString, "recordedBy": membershipID.uuidString,
+            "recordedAt": time, "source": "RECORDED_VERBAL"]
         objects["\(root)/captures"] = page(syntheticTrips())
         objects["\(root)/captures/\(captureID.uuidString)"] = syntheticCapture(captureID)
         objects["\(root)/captures/\(captureID.uuidString)/replay"] = syntheticReplay()
@@ -392,6 +404,7 @@ private struct SchoolVisualShell: View {
             objects["\(root)/lessons/\(id.uuidString)/geo-observations"] = page([])
             objects["\(root)/lessons/\(id.uuidString)/captures"] = ["items": [] as [Any]]
         }
+        objects["\(root)/lessons/\(lessonID.uuidString)/captures"] = ["items": [syntheticCapture(captureID)]]
         objects["\(root)/lessons/\(plannedLessonID.uuidString)/reports"] = page([])
         return try objects.mapValues { object in
             try JSONSerialization.data(withJSONObject: ["data": object, "requestId": identifier(99).uuidString, "serverTime": time])
@@ -404,7 +417,7 @@ private struct SchoolVisualShell: View {
     }
 }
 
-private struct SchoolVisualTransport: SchoolHTTPTransport {
+struct SchoolVisualTransport: SchoolHTTPTransport {
     /// Agenda reads (`from`/`to` window) get day-relative lessons; dossier reads keep the fixed history.
     static let agendaSuffix = "?agenda-window"
     let responses: [String: Data]
@@ -418,11 +431,11 @@ private struct SchoolVisualTransport: SchoolHTTPTransport {
     }
 }
 
-@MainActor private final class SchoolVisualToken: AccessTokenSource {
+@MainActor final class SchoolVisualToken: AccessTokenSource {
     func accessToken() async throws -> String { "visual-fixture-only" }
 }
 
-@MainActor private final class SchoolVisualOutbox: SchoolCommandOutbox {
+@MainActor final class SchoolVisualOutbox: SchoolCommandOutbox {
     func pending(for scope: SchoolCommandScope) throws -> PendingSchoolCommand? { nil }
     func save(_ command: PendingSchoolCommand) throws { throw SchoolConfigurationFailure.storage }
     func remove(_ command: PendingSchoolCommand) throws { throw SchoolConfigurationFailure.storage }

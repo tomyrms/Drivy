@@ -51,7 +51,8 @@ struct SchoolStartNowBody: Encodable, Sendable {
         do {
             var all: [SchoolLearner] = [], cursor: String?, seen = Set<String>()
             repeat {
-                let page = try await client.reader.learners(schoolID: scope.schoolID, query: "", cursor: cursor)
+                let page = try await client.reader.learners(schoolID: scope.schoolID, query: "", cursor: cursor,
+                    instructorMembershipID: scope.membershipID)
                 all.append(contentsOf: page.items); cursor = page.nextCursor
                 guard all.count <= 10_000 else { throw SchoolPlanningFailure.invalidResponse }
                 if let cursor, !seen.insert(cursor).inserted { throw SchoolPlanningFailure.invalidResponse }
@@ -59,6 +60,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
             guard request == generation else { return }
             learners = all.filter { $0.archivedAt == nil }
                 .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+            if learners.isEmpty { errorMessage = "Aucun élève ne vous est affecté. Demandez à l’administration de vérifier les affectations." }
             isLoading = false
             if learners.count == 1, let only = learners.first { await select(only.id) }
         } catch {
@@ -77,9 +79,10 @@ struct SchoolStartNowBody: Encodable, Sendable {
             let values: [SchoolTraining] = try await client.records(scope.schoolID, path: ["trainings"],
                 query: [URLQueryItem(name: "learnerId", value: id.uuidString)])
             guard request == generation else { return }
-            trainings = values.filter { $0.learnerId == id && $0.status == "ACTIVE" }
+            let active = values.filter { $0.learnerId == id && $0.status == "ACTIVE" }
+            trainings = active.filter { $0.startNowBlockerCode == nil }
             if trainings.count == 1 { trainingID = trainings.first?.id }
-            if trainings.isEmpty { errorMessage = "Aucune formation en cours pour cet élève." }
+            if trainings.isEmpty { errorMessage = Self.startBlockerMessage(active.first?.startNowBlockerCode) }
             if let training = trainingID {
                 let lessons: [SchoolLesson] = (try? await client.records(scope.schoolID, path: ["lessons"],
                     query: [URLQueryItem(name: "trainingId", value: training.uuidString)])) ?? []
@@ -91,6 +94,17 @@ struct SchoolStartNowBody: Encodable, Sendable {
             guard request == generation else { return }
             isLoading = false
             if !(error is CancellationError) { errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription }
+        }
+    }
+
+    static func startBlockerMessage(_ code: String?) -> String {
+        switch code {
+        case "INSTRUCTOR_NOT_ASSIGNED", "ASSIGNMENT_ENDS_BEFORE_LESSON_END":
+            "Votre affectation ne couvre pas cette leçon. Demandez à l’administration de la vérifier."
+        case "INSTRUCTOR_REQUIRED": "Seul un moniteur peut démarrer une leçon."
+        case "OFFERING_NOT_READY": "La prestation n’est pas prête. Demandez à l’administration de la vérifier."
+        case "SCHOOL_NOT_ACTIVE": "L’école n’est pas active. Contactez son administration."
+        default: "Aucune formation disponible pour démarrer avec cet élève. Demandez à l’administration de vérifier sa formation."
         }
     }
 
@@ -190,7 +204,8 @@ struct SchoolStartNowView: View {
                 .disabled(model.isBusy)
                 if model.isLoading { Section { ProgressView().frame(maxWidth: .infinity) } }
             }
-            .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
+            .scrollContentBackground(.hidden)
+            .frame(maxWidth: 820).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 DrivyStickyActionBar {
                     Button {

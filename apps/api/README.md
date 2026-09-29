@@ -15,6 +15,10 @@ Réponse : `{ "data": ..., "requestId": "...", "serverTime": "..." }`. Pages : `
 
 Les écoles du sélecteur viennent de `me.memberships` ; aucune route supplémentaire de découverte d’école n’est créée. Les listes sont triées par `(created_at, id)` et limitées à 50 objets par défaut, 100 maximum. Le curseur chiffré lie personne, école, epoch d’accès, filtres et taille de page ; il expire après une heure. Les dates purement civiles restent `YYYY-MM-DD`.
 
+Le [contrat de séance après essai terrain](contracts/lesson-field-flow.json) ajoute `Training.startNowBlockerCode` aux lectures de formation. Le départ utilise le filtre élèves `instructorMembershipId` et les formations sans blocage ; un rôle ADMIN ne remplace pas une affectation personnelle. `start-now` fixe le début exact, sans arrondi avant une affectation récente. Ces indications ne remplacent pas les contrôles de la commande.
+
+Le bilan peut rester vide : les trois textes, les appréciations et leur contexte sont facultatifs ; PUT remplace les valeurs omises par des valeurs vides. La migration 019 permet aussi une publication explicite vide. `CompleteLesson` conserve les heures réelles calculées par le client et réalise une seule écriture atomique, même pendant le transfert GPS. Le choix GPS général `lessonId:null` est déjà réutilisable ; les refus personnels et les changements de notice restent contrôlés. Le libellé affiché « Anticipation » conserve les identifiants et versions du référentiel.
+
 ## Configuration ADMIN G1B
 
 Les chemins suivants sont relatifs à `/v1/schools/:schoolId`. Le rôle ADMIN actif est vérifié au serveur ; une école DRAFT permet ces seules commandes de configuration, sans autoriser des mutations scolaires courantes.

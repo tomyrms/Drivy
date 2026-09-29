@@ -1,6 +1,6 @@
 import Foundation
 
-/// Transmission explicite d'intentions déjà durables. Ne crée jamais de collecteur,
+/// Transmission d'intentions déjà durables. Ne crée jamais de collecteur,
 /// de segment ou de points, et ne convertit pas une erreur en nouvelle opération.
 @MainActor
 final class SchoolCaptureTransferCoordinator {
@@ -140,6 +140,17 @@ final class SchoolCaptureTransferCoordinator {
         let request = generation
         do { return try await reconcileCapture(captureID, request: request) }
         catch { closeOnAccessFailure(error); throw error }
+    }
+
+    /// Fin normale : arrêt, lots puis manifeste complet. CompleteLesson peut avoir
+    /// avancé la version en parallèle ; seul son refus explicite autorise une nouvelle
+    /// finalisation. Une réponse perdue conserve toujours l'opération déjà gravée.
+    func synchronizeStoppedCapture(captureID: UUID) async throws -> SchoolCaptureSession {
+        _ = try await transferAvailableData(captureID: captureID)
+        do { return try await finalize(captureID: captureID, allowPartial: false) }
+        catch SchoolCaptureFailure.finalizationRefused(let code) where code == "VERSION_CONFLICT" {
+            return try await finalize(captureID: captureID, allowPartial: false)
+        }
     }
 
     private func sendPersisted(operationID: UUID, request: UUID) async throws -> Result {

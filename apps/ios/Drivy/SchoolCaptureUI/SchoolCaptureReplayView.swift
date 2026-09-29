@@ -36,7 +36,8 @@ struct SchoolReplayTimeline {
         let isMarker: Bool
         let text: String
 
-        var title: String { isMarker ? "Moment à revoir" : (status?.label ?? "Observation") }
+        var title: String { isMarker ? "Moment à revoir" : text }
+        var statusLabel: String { status?.label ?? "Repère" }
         var symbol: String { status?.symbol ?? "bookmark.fill" }
         var tone: DrivyTone { status?.tone ?? .neutral }
     }
@@ -323,11 +324,15 @@ struct SchoolCaptureReplayView: View {
                     .background(item.tone.background, in: Circle())
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    DrivyStatusBadge(title: item.title, symbol: item.symbol, tone: item.tone)
-                    Text(item.text)
-                        .font(.subheadline)
+                    Text(item.title)
+                        .font(.headline)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 3)
                         .fixedSize(horizontal: false, vertical: true)
+                    Label(item.statusLabel, systemImage: item.symbol)
+                        .font(.subheadline).foregroundStyle(item.tone.foreground)
+                    if item.isMarker, item.text != item.title {
+                        Text(item.text).font(.subheadline)
+                    }
                     Text(meta(item))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(DrivyTheme.muted)
@@ -400,7 +405,7 @@ struct SchoolCaptureReplayView: View {
             .fixedSize()
         }
         .buttonStyle(DrivyTileButtonStyle())
-        .accessibilityLabel("\(item.title), \(item.text), \(meta(item))")
+        .accessibilityLabel("\(item.title), \(item.statusLabel), \(meta(item))")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
@@ -471,8 +476,9 @@ struct SchoolCaptureReplayView: View {
                                     .background(item.tone.background, in: Circle())
                                     .accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                                    Text(item.title).font(.headline).foregroundStyle(item.tone == .neutral ? DrivyTheme.text : item.tone.foreground)
-                                    Text(item.text).font(.body).foregroundStyle(DrivyTheme.text)
+                                    Text(item.title).font(.headline).foregroundStyle(DrivyTheme.text)
+                                    Text(item.statusLabel).font(.subheadline).foregroundStyle(item.tone.foreground)
+                                    if item.isMarker, item.text != item.title { Text(item.text).font(.body) }
                                     Text(meta(item)).font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
                                 }
                                 .fixedSize(horizontal: false, vertical: true)
@@ -572,7 +578,7 @@ private struct SchoolReplayMap: View {
                     Annotation(item.title, coordinate: coordinate) {
                         Button { selectedID = item.id } label: { marker(item) }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("\(item.title), \(item.text)")
+                            .accessibilityLabel("\(item.title), \(item.statusLabel)")
                             .accessibilityAddTraits(selectedID == item.id ? [.isSelected] : [])
                     }.annotationTitles(.hidden)
                 }

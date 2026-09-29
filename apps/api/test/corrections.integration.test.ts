@@ -149,7 +149,7 @@ describe('démarrage immédiat d’une leçon (start-now)',()=>{
   expect(lesson).toMatchObject({status:'PLANNED',version:1,trainingId:id.aliceTraining,learnerId:id.aliceLearner,instructorMembershipId:id.instructorMember,meetingPoint:'À préciser',
    priceCentsSnapshot:9000,bufferMinutesSnapshot:0,timeZone:'Europe/Zurich',learnerDisplayName:'Alice Exemple',instructorDisplayName:'Alex Moniteur',
    commercialSelection:{mode:'UNIT_PRICE',serviceProductVersionId:commercial.product.id,quantity:1,entitlementLotId:null,acceptedTermsVersionId:commercial.terms.id}});
-  const start=Date.parse(lesson.plannedStart);expect(start%60_000).toBe(0);expect(start).toBeLessThanOrEqual(Date.now());expect(start).toBeGreaterThan(before-61_000);
+  const start=Date.parse(lesson.plannedStart);expect(start).toBeLessThanOrEqual(Date.now());expect(start).toBeGreaterThanOrEqual(before);
   expect(Date.parse(lesson.plannedEnd)-start).toBe(50*60_000);
   // Rejeu : même réponse, un seul audit, preuve lisible.
   expect((await call('POST','/lessons/start-now',body)).json().data).toEqual(lesson);expect(await audits(body.operationId)).toEqual(['LessonStartedNow']);
