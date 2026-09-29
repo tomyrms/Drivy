@@ -46,6 +46,7 @@ struct SchoolOfficeVisualReview: View {
                 await loaded.prepare(screen: screen)
                 models = loaded
                 if screen == "lesson-finish" { report = OfficeReportRoute(id: SchoolVisualData.plannedLessonID) }
+                if screen == "lesson-modal" { report = OfficeReportRoute(id: SchoolVisualData.lessonID) }
             } catch { self.error = error.localizedDescription }
         }
     }

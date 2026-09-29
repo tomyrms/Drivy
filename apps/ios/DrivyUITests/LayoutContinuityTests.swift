@@ -16,9 +16,16 @@ import UIKit
         XCTAssertTrue(save.waitForExistence(timeout: 20), app.debugDescription)
 
         let field = reportField(in: app)
-        XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
         // Sur une petite fenêtre, la carte précède le formulaire dans le même défilement.
-        for _ in 0..<6 where !field.isHittable { app.swipeUp() }
+        // Chercher aussi les cellules pas encore créées par Form ; le bord droit évite
+        // d’envoyer le geste à MapKit au centre de la carte.
+        for _ in 0..<6 {
+            if field.exists && field.isHittable { break }
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.85))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.25))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(field.exists, app.debugDescription)
         XCTAssertTrue(field.isHittable)
         let original = try XCTUnwrap(field.value as? String)
         field.tap()

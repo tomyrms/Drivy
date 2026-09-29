@@ -16,7 +16,7 @@ if [[ -n "${DRIVY_VISUAL_ORIENTATIONS:-}" || " ${screens[*]} " =~ [[:space:]](li
   use_xctest=1
 fi
 for screen in "${screens[@]}"; do
-  [[ "$screen" =~ ^(dossier|progression|home-tabs|agenda|learners|learner|lesson|lesson-planned|invitation-code|trips|replay|design-system|gps-choice|signal|live-signal|signal-status|observations|capture-preparation|live|live-waiting|planning|invitations|invitation-create|invitation-detail|lesson-finish|lesson-tariff|sign-in|sign-in-error|sign-in-loading|sign-in-unconfigured|account|app-lock|join-code|join-code-preview|join-code-error|join-code-pending|join-code-confirmed|join-link|join-link-preview|profile|profile-error|onboarding-welcome|onboarding-information|onboarding-formation|onboarding-gps|onboarding-review|onboarding-ready)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
+  [[ "$screen" =~ ^(dossier|progression|home-tabs|agenda|learners|learner|lesson|lesson-planned|invitation-code|trips|replay|design-system|gps-choice|signal|live-signal|signal-status|observations|capture-preparation|live|live-waiting|planning|invitations|invitation-create|invitation-detail|lesson-finish|lesson-modal|lesson-tariff|sign-in|sign-in-error|sign-in-loading|sign-in-unconfigured|account|app-lock|join-code|join-code-preview|join-code-error|join-code-pending|join-code-confirmed|join-link|join-link-preview|profile|profile-error|onboarding-welcome|onboarding-information|onboarding-formation|onboarding-gps|onboarding-review|onboarding-ready)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
 done
 for kind in "${devices[@]}"; do
   [[ "$kind" == iPhone || "$kind" == iPad ]] || { echo 'Appareil de capture inconnu.' >&2; exit 1; }

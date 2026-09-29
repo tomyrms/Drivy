@@ -21,7 +21,7 @@ struct SchoolVisualReview: View {
                 switch screen {
                 case "gps-choice", "signal", "observations", "capture-preparation", "live", "live-waiting":
                     SchoolFieldVisualReview(screen: screen, context: context)
-                case "planning", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish":
+                case "planning", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal":
                     SchoolOfficeVisualReview(screen: screen, context: context)
                 case "lesson", "lesson-planned":
                     NavigationStack {
