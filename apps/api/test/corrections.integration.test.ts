@@ -146,7 +146,7 @@ describe('démarrage immédiat d’une leçon (start-now)',()=>{
   const started=await call('POST','/lessons/start-now',body);expect(started.statusCode,started.body).toBe(201);
   await expectContract('LessonEnvelope',started.json());const lesson=started.json().data;
   expect(started.headers.etag).toBe('"1"');
-  expect(lesson).toMatchObject({status:'PLANNED',version:1,trainingId:id.aliceTraining,learnerId:id.aliceLearner,instructorMembershipId:id.instructorMember,meetingPoint:'À préciser',
+  expect(lesson).toMatchObject({status:'PLANNED',version:1,trainingId:id.aliceTraining,learnerId:id.aliceLearner,instructorMembershipId:id.instructorMember,meetingPoint:'',
    priceCentsSnapshot:9000,bufferMinutesSnapshot:0,timeZone:'Europe/Zurich',learnerDisplayName:'Alice Exemple',instructorDisplayName:'Alex Moniteur',
    commercialSelection:{mode:'UNIT_PRICE',serviceProductVersionId:commercial.product.id,quantity:1,entitlementLotId:null,acceptedTermsVersionId:commercial.terms.id}});
   const start=Date.parse(lesson.plannedStart);expect(start).toBeLessThanOrEqual(Date.now());expect(start).toBeGreaterThanOrEqual(before);
@@ -163,7 +163,7 @@ describe('démarrage immédiat d’une leçon (start-now)',()=>{
   expect((await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining},null,'demo-other-instructor')).statusCode).toBe(404);
   expect((await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:randomUUID()})).statusCode).toBe(404);
   expect((await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining},null,'demo-instructor',{'idempotency-key':randomUUID()})).statusCode).toBe(400);
-  expect((await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining,meetingPoint:''})).statusCode).toBe(400);
+  expect((await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining,meetingPoint:123})).statusCode).toBe(400);
   expect((await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining,plannedStart:new Date().toISOString()})).statusCode).toBe(400);
   // Constat immédiat : la leçon a commencé, il n'y a pas d'attente de 15 minutes.
   const done=await call('POST',`/lessons/${lesson.id}/complete`,{operationId:randomUUID(),actualStart:new Date(Date.now()-30_000).toISOString(),actualEnd:new Date().toISOString(),workedOn:'Travail',anomalyReason:'Recette'},lesson.version);

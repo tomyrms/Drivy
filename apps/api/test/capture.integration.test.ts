@@ -14,7 +14,7 @@ await migration.query('CREATE TABLE public.drivy_migrations(name text PRIMARY KE
 for(const name of(await readdir(new URL('../migrations/',import.meta.url))).filter(n=>/^[0-9]{3}_.*\.sql$/.test(n)).sort()){
  const db=await migration.connect(),sql=await readFile(new URL(`../migrations/${name}`,import.meta.url),'utf8');try{await db.query('BEGIN');await db.query(sql);await db.query('INSERT INTO public.drivy_migrations(name,sha256) VALUES($1,$2)',[name,createHash('sha256').update(sql).digest('hex')]);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}if(name.startsWith('001_'))await seedFixtures(pool,issuer);
 }
-const rls=await pool.query("SELECT count(*)::int AS n,count(*) FILTER(WHERE relrowsecurity AND relforcerowsecurity)::int AS forced FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r'");assert.equal(rls.rows[0].n,rls.rows[0].forced);
+const rls=await pool.query("SELECT count(*)::int AS n,count(*) FILTER(WHERE relrowsecurity AND relforcerowsecurity)::int AS forced,array_agg(c.relname ORDER BY c.relname) AS tables FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r'");assert.equal(rls.rows[0].n,rls.rows[0].forced);
 const policy=randomUUID(),notice=randomUUID(),lesson=randomUUID();
 await pool.query(`INSERT INTO drivy.school_policy_version(id,school_id,category_code,version,procedure_text,cancellation_policy_text,source_urls,approved,approval_reason,created_by,approved_at) VALUES($1,$2,'B',1,'Recette uniquement','Recette uniquement','{}',true,'Synthétique',$3,now())`,[policy,id.schoolA,id.adminMember]);
 await pool.query(`INSERT INTO drivy.school_data_policy(school_id,version,notice_text,retention_text,contact_email,approved_by,approved_at,notice_version_id) VALUES($1,2,'Notice synthétique locale','Conservation synthétique locale','capture@example.invalid',$2,now(),$3)`,[id.schoolA,id.adminMember,notice]);
@@ -92,8 +92,7 @@ try{
  const refuse=await call('POST',`/learners/${id.aliceLearner}/recording-choice`,{operationId:randomUUID(),lessonId:lesson,status:'REFUSED',noticeVersionId:notice,source:'SELF'},undefined,'demo-alice');assert.equal(refuse.statusCode,200);
  assert.equal((await call('GET',`/captures/${nextCapture.json().data.capture.id}`)).json().data.captureState,'REVOKED');
  assert.equal((await call('POST',`/learners/${id.aliceLearner}/recording-choice`,{operationId:randomUUID(),lessonId:lesson,status:'ALLOWED',noticeVersionId:notice,source:'RECORDED_VERBAL'})).json().code,'RECORDING_CHOICE_PROTECTED');
- assert.equal(rls.rows[0].forced,44);
+ assert.equal(rls.rows[0].forced,45);assert(rls.rows[0].tables.includes('planning_defaults'));
 }finally{await app.close();await migration.end();await pool.end();}
 
 });
-
