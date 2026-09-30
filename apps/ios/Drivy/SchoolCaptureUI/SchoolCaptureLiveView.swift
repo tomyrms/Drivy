@@ -72,7 +72,7 @@ struct SchoolCaptureLiveView: View {
                 await controller.stopAndSynchronize()
             })
             .onChange(of: model.confirmedCancellationLessonID) { _, id in
-                guard let id else { return }
+                guard let id, id == model.originalLesson?.id, id == controller.lessonID else { return }
                 controller.closeSaved()
                 openLesson?(id, false)
             }
