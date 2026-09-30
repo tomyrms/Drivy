@@ -51,13 +51,15 @@ import Observation
     var observations: [SchoolReportObservation] = []
     @ObservationIgnored private let client: SchoolLessonReportClient
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
+    @ObservationIgnored private let notifications: NotificationCenter
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
     @ObservationIgnored private var storageAccessible = false
 
     init(scope: SchoolCommandScope, membership: SchoolMembership, lessonID: UUID, client: SchoolLessonReportClient,
-         outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
+         outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(), notifications: NotificationCenter = .default) {
         self.scope = scope; self.membership = membership; self.lessonID = lessonID; self.client = client; self.outbox = outbox
+        self.notifications = notifications
     }
     var isAuthor: Bool { membership.roles.contains("INSTRUCTOR") && lesson?.instructorMembershipId == membership.membershipId }
     var canReadLessonContent: Bool { isAuthor || isOwnLearner || membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") }
@@ -438,6 +440,7 @@ import Observation
             try outbox.remove(pending)
             guard request == generation, !invalidated else { return }
             self.pending = nil; isBusy = false; confirmation = "L’école confirme l’enregistrement de la demande."
+            announceConfirmedChange(pending)
             if confirmsThisReport(pending) { reportSaveConfirmed = true; return }
             await load()
         } catch { guard request == generation, !invalidated else { return }; isBusy = false; fail(error) }
@@ -462,6 +465,7 @@ import Observation
             try outbox.remove(command)
             guard request == generation, !invalidated else { return false }
             pending = nil; isBusy = false
+            announceConfirmedChange(command)
             if confirmsThisReport(command) { reportSaveConfirmed = true; return true }
             confirmation = command.kind == .updateLessonSharing || command.kind == .recordPermitCheck ? nil : "Enregistré."
             // Partage : l’état confirmé suffit. Seul un bilan passé privé ou rendu visible change le brouillon côté école.
@@ -484,6 +488,17 @@ import Observation
     }
     private func confirmsThisReport(_ command: PendingSchoolCommand) -> Bool {
         command.scope == scope && command.kind == .saveReportDraft && command.resourceID == draft?.id
+    }
+    private func announceConfirmedChange(_ command: PendingSchoolCommand) {
+        let affectsThisLesson = command.scope == scope && command.resourceID != nil && (
+            command.resourceID == lessonID || command.resourceID == draft?.id
+            || command.resourceID == preparation?.id || command.resourceID == wish?.id)
+        // Une demande récupérée dans la file peut appartenir à une autre leçon. Sans cible prouvée,
+        // les écrans relisent leurs données autorisées au lieu de publier l'identité de l'écran courant.
+        let change = affectsThisLesson ? lesson.map {
+            SchoolLessonChange(schoolID: scope.schoolID, trainingID: $0.trainingId, lessonID: lessonID)
+        } : nil
+        notifications.post(name: .drivyLessonsDidChange, object: change)
     }
     private func collect<Value: SchoolCatalogRecord>(_ fetch: (String?) async throws -> SchoolPage<Value>) async throws -> [Value] {
         var values: [Value] = [], cursor: String?, seen = Set<String>()

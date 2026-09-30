@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import '../client/styles.css';
+import reviewStyles from '../client/styles.css?raw';
 import { ConsoleContext, type ConsoleContextValue } from '../client/console/context';
 import { InvitationsSection, TeamSection } from '../client/console/people';
 import { LearnersSection } from '../client/console/learners';
@@ -9,6 +10,7 @@ import { AvailabilitySection } from '../client/console/availability';
 import { ConfigurationSection } from '../client/console/configuration';
 import { ProfileFieldsSection } from '../client/console/profile-fields';
 import { OverviewSection } from '../client/console/overview';
+import { ManagementConsole } from '../client/console/Console';
 
 const uuid = () => crypto.randomUUID();
 const schoolId = uuid(), meId = uuid(), lucId = uuid(), marieId = uuid(), offerB = uuid(), offerBOld = uuid(), offerA = uuid();
@@ -49,7 +51,11 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
   const method = init?.method ?? 'GET'; const body = init?.body ? JSON.parse(String(init.body)) : null;
   await new Promise(resolve => setTimeout(resolve, 120));
   if (method === 'GET') {
+    if (url.pathname.endsWith('/bff/session')) return reply(200, { authenticated: true, csrfToken: 'synthetic-review', invitationPending: false, user: { displayName: 'Luc Martin', emailVerified: true } }, url.href);
+    if (url.pathname.endsWith('/bff/me')) return reply(200, { data: { ...value.me, memberships: [value.membership] } }, url.href);
     if (path === '') return reply(200, envelope(value.school), url.href);
+    if (path === 'readiness') return reply(200, envelope({ schoolId, configurationVersion: 1, computedAt: stamp, activationReady: true, activationBlockers: [], capabilities: ['CAN_USE_WORKSPACE', 'CAN_PLAN_LESSON', 'CAN_CAPTURE'].map(capability => ({ capability, ready: true, blockers: [] })) }), url.href);
+    if (path === 'data-policy') return reply(200, envelope({ schoolId, version: 1, status: 'APPROVED', noticeText: 'Texte synthétique de revue.', retentionText: 'Politique synthétique de revue.', contactEmail: 'ecole@example.test', approvedAt: stamp }), url.href);
     if (/^trainings\/[^/]+\/assignments$/.test(path)) return reply(200, envelope({ items: db.assignments, nextCursor: null }), url.href);
     if (/^trainings\/[^/]+\/permit-checks$/.test(path)) return reply(200, envelope({ items: db.permits, nextCursor: null }), url.href);
     if (/^trainings\/[^/]+\/progress$/.test(path)) return reply(200, envelope({ trainingId: trainingA, computedAt: stamp, unobservedCompetencyIds: [comp2], items: [{ competencyId: comp1, label: 'Démarrer et s’arrêter', level: 'GUIDED', context: 'Parking', observedAt: stamp, sourceLessonId: lessonDone, sourceRevisionId: uuid() }] }), url.href);
@@ -84,7 +90,18 @@ const value: ConsoleContextValue = {
   canConfigureCatalog: true, reloadSchool: async () => {}, csrf: () => 'csrf', refreshCsrf: async () => 'csrf', navigate: section => log.push(`navigate ${section}`), login: options => log.push(`login ${JSON.stringify(options ?? {})}`),
 };
 const page = new URLSearchParams(location.search).get('page');
+// Visual review only: apply the actual light tokens independently of the host OS.
+if (new URLSearchParams(location.search).get('scheme') === 'light') {
+  const theme = document.createElement('style');
+  theme.textContent = reviewStyles.match(/:root\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  document.head.append(theme);
+}
 const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, config: ConfigurationSection, profile: ProfileFieldsSection, overview: OverviewSection };
 const Page = pages[page ?? ''] ?? InvitationsSection;
+const shell = new URLSearchParams(location.search).get('shell') === '1';
+if (shell) {
+  const sections: Record<string, string> = { overview: '', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', config: 'configuration', profile: 'champs-profil' };
+  window.history.replaceState(null, '', `/app/gestion/${schoolId}/${sections[page ?? 'overview'] ?? 'invitations'}`);
+}
 createRoot(document.getElementById('root')!).render(
-  <ConsoleContext.Provider value={value}><div className="console-shell"><main className="console-main"><Page /></main></div></ConsoleContext.Provider>);
+  shell ? <ManagementConsole /> : <ConsoleContext.Provider value={value}><div className="console-shell"><main className="console-main"><Page /></main></div></ConsoleContext.Provider>);

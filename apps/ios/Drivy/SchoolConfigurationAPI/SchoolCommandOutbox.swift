@@ -25,6 +25,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
     case createObservation, updateObservation, removeObservation
     case recordPermitCheck, markNoShow
     case startLessonNow
+    case savePlanningDefaults
 
     var isObservation: Bool {
         switch self {
@@ -37,7 +38,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         switch self {
         case .createLesson, .moveLesson, .cancelLesson, .createCommercialTerms, .createServiceProduct,
              .createAvailabilityRule, .updateAvailabilityRule, .createClosure, .removeAvailabilityRule, .removeClosure,
-             .startLessonNow: true
+             .startLessonNow, .savePlanningDefaults: true
         default: false
         }
     }
@@ -114,6 +115,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .recordPermitCheck: "RECORD_PERMIT_CHECK"
         case .markNoShow: "MARK_NO_SHOW"
         case .startLessonNow: "START_LESSON_NOW"
+        case .savePlanningDefaults: "SAVE_PLANNING_DEFAULTS"
         }
     }
 
@@ -144,6 +146,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .updateLessonSharing: "LessonSharing"
         case .createObservation, .updateObservation, .removeObservation: "GeoObservation"
         case .recordPermitCheck: "PermitCheck"
+        case .savePlanningDefaults: "PlanningDefaults"
         }
     }
 }
@@ -172,6 +175,8 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
     var hasValidTarget: Bool {
         if !kind.isProfile && !kind.isCatalog && !kind.isPlanning && !kind.isReport && !kind.isObservation && (routeResourceID != nil || expectedVersion != nil) { return false }
         switch kind {
+        case .savePlanningDefaults:
+            return resourceVersion > 0 && resourceID == scope.membershipID && routeResourceID == nil && expectedVersion == nil
         case .createObservation:
             return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
         case .updateObservation, .removeObservation:

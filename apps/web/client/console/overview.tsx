@@ -67,29 +67,46 @@ export function OverviewSection() {
   const next = steps.find(step => step.state === 'todo' || (step.state === 'blocked' && step.section === 'configuration'));
   const status = schoolStatus(school.status);
   const failures = data ? Object.values(data).filter(result => !result.ok).length : 0;
+  const remaining = steps.filter(step => step.state !== 'done');
+  const completed = steps.filter(step => step.state === 'done');
+  const destinations = [
+    { section: 'agenda' as const, title: 'Ouvrir l’agenda', symbol: 'calendar' as const },
+    { section: 'eleves' as const, title: 'Consulter les élèves', symbol: 'users' as const },
+    { section: 'trajets' as const, title: 'Revoir les trajets', symbol: 'route' as const },
+  ];
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Vue d’ensemble" title={school.name} actions={<StatusBadge tone={status.tone} symbol={school.status === 'ACTIVE' ? 'check' : 'clock'}>{status.label}</StatusBadge>} />
+      <SectionHeading title="Vue d’ensemble" actions={school.status !== 'ACTIVE' && <StatusBadge tone={status.tone} symbol="clock">{status.label}</StatusBadge>} />
+      <nav className="workspace-links" aria-label="Travail quotidien">
+        {destinations.map(item => <a key={item.section} className="workspace-link" href={`/app/gestion/${schoolId}/${item.section}`}
+          onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(item.section); }}>
+          <Symbol kind={item.symbol} /><strong>{item.title}</strong><Symbol kind="back" bare />
+        </a>)}
+      </nav>
       <div className="overview-grid">
         <section className="panel" aria-labelledby="steps-title">
           <div className="panel-head">
-            <h2 id="steps-title" className="section-title">Prochaines étapes</h2>
+            <h2 id="steps-title" className="section-title">Préparation de l’école</h2>
             <button type="button" className="button quiet" onClick={loaded.reload} disabled={loaded.status === 'loading'}><Symbol kind="refresh" bare />Actualiser</button>
           </div>
           {loaded.status === 'loading' && !data && <p className="loading" role="status"><span className="spinner" aria-hidden="true" />Vérification de la préparation de l’école…</p>}
           {failures > 0 && <Notice tone="warning" title="Certaines informations sont indisponibles" live={false}>
             <p>{failures === 1 ? 'Une lecture' : `${failures} lectures`} n’a pas abouti : l’état correspondant est marqué « À vérifier ».</p></Notice>}
           <ol className="step-list">
-            {steps.map(step => <li key={step.title} className={`step ${step.state}`}>
+            {remaining.map(step => <li key={step.title} className={`step ${step.state}`}>
               <StepBadge state={step.state} />
               <div className="row-text">
                 <h3 className="row-title">{step.title}</h3>
-                <p className="row-meta">{step.detail}</p>
+                {step.state === 'blocked' && <p className="row-meta">{step.detail}</p>}
               </div>
-              {step.state !== 'done' && <button type="button" className={next === step ? 'button primary' : 'button quiet'} onClick={() => navigate(step.section)}>{step.action}</button>}
+              <button type="button" className={next === step ? 'button primary' : 'button quiet'} onClick={() => navigate(step.section)}>{step.action}</button>
             </li>)}
           </ol>
+          {completed.length > 0 && <details className="completed-steps">
+            <summary>{completed.length} {completed.length === 1 ? 'étape terminée' : 'étapes terminées'}</summary>
+            <ul>{completed.map(step => <li key={step.title}><Symbol kind="check" bare /><span>{step.title}</span></li>)}</ul>
+          </details>}
         </section>
         <div className="section-stack">
           <section className="panel" aria-labelledby="school-facts">
@@ -99,14 +116,14 @@ export function OverviewSection() {
               ['Téléphone', school.contactPhone || 'Non renseigné'],
               ['Fuseau horaire', school.timeZone],
             ]} />
-            <button type="button" className="button quiet" onClick={() => navigate('configuration')}><Symbol kind="edit" bare />Modifier dans Configuration</button>
+            <button type="button" className="button quiet" onClick={() => navigate('configuration')}><Symbol kind="edit" bare />Modifier les coordonnées</button>
           </section>
           {data?.readiness?.ok && <section className="panel" aria-labelledby="capabilities-title">
             <h2 id="capabilities-title" className="section-title">Fonctions de l’école</h2>
-            <ul className="plain-list">{data.readiness.value.capabilities.map(capability => <li key={capability.capability}>
-              <StatusBadge tone={capability.ready ? 'success' : 'neutral'} symbol={capability.ready ? 'check' : 'dot'}>{capability.ready ? 'Disponible' : 'À configurer'}</StatusBadge>
-              <span className="row-title">{capabilityTitle(capability.capability)}</span>
-              {!capability.ready && capability.blockers[0] && <span className="row-meta">{capability.blockers[capability.blockers.length - 1]!.message}</span>}
+            <ul className="plain-list capability-list">{data.readiness.value.capabilities.map(capability => <li key={capability.capability}>
+              <span className={`step-state${capability.ready ? '' : ' warning'}`}><Symbol kind={capability.ready ? 'check' : 'alert'} bare /><span className="visually-hidden">{capability.ready ? 'Disponible' : 'À configurer'}</span></span>
+              <div className="row-text"><span className="row-title">{capabilityTitle(capability.capability)}</span>
+              {!capability.ready && capability.blockers[0] && <span className="row-meta">{capability.blockers[capability.blockers.length - 1]!.message}</span>}</div>
             </li>)}</ul>
           </section>}
         </div>
@@ -116,10 +133,9 @@ export function OverviewSection() {
 }
 
 function StepBadge({ state }: { state: StepState }) {
-  switch (state) {
-    case 'done': return <StatusBadge tone="success" symbol="check">Fait</StatusBadge>;
-    case 'todo': return <StatusBadge tone="accent" symbol="dot">À faire</StatusBadge>;
-    case 'blocked': return <StatusBadge tone="warning" symbol="alert">Prérequis</StatusBadge>;
-    case 'unknown': return <StatusBadge tone="neutral" symbol="info">À vérifier</StatusBadge>;
-  }
+  const label = { done: 'Terminé', todo: 'À faire', blocked: 'Prérequis', unknown: 'À vérifier' }[state];
+  return <span className={`step-state${state === 'blocked' ? ' warning' : ''}`}>
+    <Symbol kind={state === 'done' ? 'check' : state === 'blocked' ? 'alert' : state === 'unknown' ? 'info' : 'dot'} bare />
+    <span className="visually-hidden">{label}</span>
+  </span>;
 }

@@ -14,6 +14,7 @@ struct SchoolPlanningInstructor: Identifiable {
     private(set) var roles: [String] = []
     private(set) var grants: [String] = []
     private(set) var school: SchoolDetails?
+    private(set) var defaults: SchoolPlanningDefaults?
     private(set) var learners: [SchoolLearner] = []
     private(set) var trainings: [SchoolTraining] = []
     private(set) var offerings: [SchoolOffering] = []
@@ -52,7 +53,9 @@ struct SchoolPlanningInstructor: Identifiable {
         }
     }
     var productID: UUID?
-    var startsAt: Date
+    var startsAt: Date {
+        didSet { if startsAt != oldValue { refreshProductSelection(); termsAccepted = false; agreementConfirmed = false } }
+    }
     var meetingPoint = ""
     var bufferMinutes = 10
     var quantity = 1
@@ -91,7 +94,7 @@ struct SchoolPlanningInstructor: Identifiable {
     }
     var availableProducts: [SchoolServiceProduct] {
         let date = SchoolCatalogFormatting.civilDate(startsAt, timeZone: timeZone)
-        return products.filter { $0.enabled && $0.siteId == nil && $0.type == "INDIVIDUAL_LESSON" && $0.categoryCode == selectedTraining?.categoryCode
+        return products.filter { $0.enabled && $0.current != false && $0.siteId == nil && $0.type == "INDIVIDUAL_LESSON" && $0.categoryCode == selectedTraining?.categoryCode
             && ($0.durationMinutes ?? 0) > 0 && $0.validFrom <= date && ($0.validUntil.map { $0 >= date } ?? true) }
     }
     var selectedPrice: Int64? {
@@ -105,7 +108,7 @@ struct SchoolPlanningInstructor: Identifiable {
     }
     var endsAt: Date { startsAt.addingTimeInterval(TimeInterval(duration * 60)) }
     var validBooking: Bool {
-        guard canMutate, trainingID != nil, let instructorID, assignedInstructors.contains(where: { $0.id == instructorID }), !meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        guard canMutate, trainingID != nil, let instructorID, assignedInstructors.contains(where: { $0.id == instructorID }),
               meetingPoint.count <= 500, (1...480).contains(duration), (0...240).contains(bufferMinutes), startsAt > Date() else { return false }
         if let originalLesson {
             guard originalLesson.status == "PLANNED", agreementConfirmed, reason.count <= 1000 else { return false }
@@ -121,7 +124,7 @@ struct SchoolPlanningInstructor: Identifiable {
         invalidated = true; generation = UUID(); selectionGeneration = UUID(); availabilityGeneration = UUID(); clear()
     }
     private func clear() {
-        school = nil; learners = []; trainings = []; offerings = []; policies = []; products = []; terms = []
+        school = nil; defaults = nil; learners = []; trainings = []; offerings = []; policies = []; products = []; terms = []
         instructors = []; assignments = []; clearAvailability(); pending = nil
         storageAvailable = false; needsReload = true; isBusy = false; isLoading = false
     }
@@ -140,6 +143,7 @@ struct SchoolPlanningInstructor: Identifiable {
                   person.personId == scope.personID, membership.schoolId == scope.schoolID, membership.accessEpoch == scope.accessEpoch,
                   membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") else { throw SchoolPlanningFailure.forbidden }
             let school = try await client.reader.school(id: scope.schoolID)
+            let defaults = try await client.defaults(schoolID: scope.schoolID, membershipID: scope.membershipID)
             let refreshedLesson: SchoolLesson?
             if let originalLesson { refreshedLesson = try await client.lesson(schoolID: scope.schoolID, id: originalLesson.id) }
             else { refreshedLesson = nil }
@@ -162,7 +166,7 @@ struct SchoolPlanningInstructor: Identifiable {
                 if let cursor, !seen.insert(cursor).inserted { throw SchoolPlanningFailure.invalidResponse }
             } while cursor != nil
             guard request == generation, !Task.isCancelled else { return }
-            self.school = school; self.roles = membership.roles; self.grants = membership.grants
+            self.school = school; self.defaults = defaults; self.roles = membership.roles; self.grants = membership.grants
             self.offerings = offerings; self.policies = policies; self.products = products; self.terms = terms
             self.instructors = instructors; self.learners = learners.filter { $0.archivedAt == nil }
             originalLesson = refreshedLesson; agreementConfirmed = false
@@ -182,6 +186,7 @@ struct SchoolPlanningInstructor: Identifiable {
             guard request == selectionGeneration, !invalidated, !Task.isCancelled else { return }
             self.trainings = trainings.filter { $0.status == "ACTIVE" || $0.id == originalLesson?.trainingId }
             isLoading = false
+            if originalLesson == nil { trainingID = defaults?.trainingID(in: self.trainings) }
             if let trainingID { await selectTraining(trainingID) }
         } catch { guard request == selectionGeneration else { return }; isLoading = false; fail(error) }
     }
@@ -194,8 +199,21 @@ struct SchoolPlanningInstructor: Identifiable {
             let records: [SchoolAssignment] = try await client.records(scope.schoolID, path: ["trainings", id.uuidString, "assignments"])
             guard request == selectionGeneration, !invalidated, !Task.isCancelled else { return }
             assignments = records; isLoading = false
-            if originalLesson == nil { instructorID = roles.contains("ADMIN") ? nil : scope.membershipID }
+            refreshProductSelection()
+            if originalLesson == nil {
+                instructorID = assignedInstructors.contains(where: { $0.id == scope.membershipID }) ? scope.membershipID : nil
+            }
         } catch { guard request == selectionGeneration else { return }; isLoading = false; fail(error) }
+    }
+    private func refreshProductSelection() {
+        let valid = availableProducts.filter { product in
+            let date = SchoolCatalogFormatting.civilDate(startsAt, timeZone: timeZone)
+            return terms.contains { $0.id == product.termsVersionId && $0.approved && $0.validFrom <= date && ($0.validUntil.map { $0 >= date } ?? true) }
+        }
+        if valid.contains(where: { $0.id == productID }) { return }
+        let preferred = valid.filter { $0.productKey == defaults?.serviceProductKey }
+        productID = preferred.count == 1 ? preferred.first?.id : valid.count == 1 ? valid.first?.id : nil
+        termsAccepted = false
     }
     func loadAvailability() async {
         guard let instructorID, !invalidated, !accessRevoked else { clearAvailability(); return }

@@ -4,6 +4,7 @@ import SwiftUI
 struct SchoolLiveObservationSheet: View {
     @Bindable var recorder: SchoolLiveObservationRecorder
     let observedAt: Date
+    var anchor: SchoolLiveObservationAnchor? = nil
     @State private var selected: SchoolLiveObservationTheme?
     @State private var saved = false
     @State private var savedStatus: SchoolObservationStatus?
@@ -115,7 +116,7 @@ struct SchoolLiveObservationSheet: View {
                     .accessibilityIdentifier("live-observation-theme-\(theme.title)")
                 }
                 Button {
-                    if recorder.markMoment(at: observedAt) {
+                    if recorder.markMoment(at: observedAt, anchor: anchor) {
                         withAnimation(motion) { saved = true }
                     }
                 } label: {
@@ -202,7 +203,7 @@ struct SchoolLiveObservationSheet: View {
 
     private func appraisalButton(_ status: SchoolObservationStatus, theme: SchoolLiveObservationTheme) -> some View {
         SchoolAppraisalTile(status: status, tone: tone(status)) {
-            guard recorder.record(theme: theme, status: status, at: observedAt) else { return }
+            guard recorder.record(theme: theme, status: status, at: observedAt, anchor: anchor) else { return }
             withAnimation(motion) { savedStatus = status; saved = true }
         }
         .disabled(!recorder.canRecord || saved)

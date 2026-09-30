@@ -18,6 +18,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
     let client: SchoolPlanningClient
     private(set) var learners: [SchoolLearner] = []
     private(set) var trainings: [SchoolTraining] = []
+    private(set) var defaults: SchoolPlanningDefaults?
     private(set) var learnerID: UUID?
     var trainingID: UUID?
     var meetingPoint = ""
@@ -62,6 +63,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
         do { pending = try outbox.pending(for: scope); storageAvailable = true }
         catch { storageAvailable = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         do {
+            let defaults = try await client.defaults(schoolID: scope.schoolID, membershipID: scope.membershipID)
             var all: [SchoolLearner] = [], cursor: String?, seen = Set<String>()
             repeat {
                 let page = try await client.reader.learners(schoolID: scope.schoolID, query: "", cursor: cursor,
@@ -71,6 +73,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
                 if let cursor, !seen.insert(cursor).inserted { throw SchoolPlanningFailure.invalidResponse }
             } while cursor != nil
             guard request == generation else { return }
+            self.defaults = defaults
             learners = all.filter { $0.archivedAt == nil }
                 .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
             if learners.isEmpty { errorMessage = "Aucun élève ne t’est affecté. Demande à l’administration de vérifier les affectations." }
@@ -95,7 +98,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
             guard request == generation else { return }
             let active = values.filter { $0.learnerId == id && $0.status == "ACTIVE" }
             trainings = active.filter { $0.startNowBlockerCode == nil }
-            if trainings.count == 1 { trainingID = trainings.first?.id }
+            trainingID = defaults?.trainingID(in: trainings)
             if trainings.isEmpty { errorMessage = Self.startBlockerMessage(active.first?.startNowBlockerCode) }
             if let training = trainingID {
                 let lessons: [SchoolLesson] = (try? await client.records(scope.schoolID, path: ["lessons"],
@@ -223,7 +226,7 @@ struct SchoolStartNowView: View {
                             ForEach(model.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
                         }
                     }
-                    LabeledContent("Lieu") {
+                    LabeledContent("Lieu (facultatif)") {
                         TextField("Lieu du rendez-vous", text: $model.meetingPoint, axis: .vertical).lineLimit(1...3)
                             .multilineTextAlignment(.trailing)
                     }

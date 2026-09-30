@@ -17,15 +17,13 @@ private extension ObservationStatus {
 /// seconds since the authorization; each fragment stays a separate polyline and the
 /// time between fragments is a gap, never an interpolated route.
 struct SchoolReplayTimeline {
-    struct Fragment: Identifiable {
-        let id: String
-        let coordinates: [CLLocationCoordinate2D]
-    }
+    typealias Fragment = SchoolMapRouteFragment
 
     struct Sample {
         let offset: TimeInterval
         let coordinate: CLLocationCoordinate2D
         let fragmentIndex: Int
+        let heading: Double?
     }
 
     struct Item: Identifiable {
@@ -63,15 +61,24 @@ struct SchoolReplayTimeline {
             guard let first = fragment.points.first, let base = SchoolLesson.date(first.capturedAt) else { continue }
             let baseOffset = base.timeIntervalSince(origin)
             var coordinates: [CLLocationCoordinate2D] = []
+            var course = SchoolMapCourse()
+            var previousOffset: TimeInterval?
+            var part = 0
             coordinates.reserveCapacity(fragment.points.count)
             for point in fragment.points {
                 let coordinate = CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
+                let offset = baseOffset + Double(point.elapsedMs - first.elapsedMs) / 1000
+                if let previousOffset, offset - previousOffset > maxPointAge {
+                    built.append(Fragment(id: "\(fragment.id):\(part)", coordinates: coordinates))
+                    coordinates = []; part += 1
+                }
                 coordinates.append(coordinate)
-                samples.append(Sample(offset: baseOffset + Double(point.elapsedMs - first.elapsedMs) / 1000,
-                                      coordinate: coordinate, fragmentIndex: index))
+                samples.append(Sample(offset: offset, coordinate: coordinate, fragmentIndex: index,
+                    heading: course.receive(coordinate, at: offset, accuracy: point.accuracyMeters)))
                 coordinateByKey["\(fragment.segmentID.uuidString):\(point.sequence)"] = coordinate
+                previousOffset = offset
             }
-            built.append(Fragment(id: fragment.id, coordinates: coordinates))
+            built.append(Fragment(id: "\(fragment.id):\(part)", coordinates: coordinates))
         }
         samples.sort { $0.offset < $1.offset }
         let observationOffsets = observationDates.map { $0.timeIntervalSince(origin) }
@@ -128,6 +135,11 @@ struct SchoolReplayTimeline {
         }
         guard low > 0 else { return nil }
         let candidate = samples[low - 1]
+        // A known interruption is empty, even when the previous point is recent.
+        if low < samples.count, offset > candidate.offset,
+           samples[low].fragmentIndex != candidate.fragmentIndex || samples[low].offset - candidate.offset > maxPointAge {
+            return nil
+        }
         return offset - candidate.offset <= maxPointAge ? candidate : nil
     }
 }
@@ -148,7 +160,7 @@ struct SchoolCaptureReplayView: View {
     @State private var speed = 1
     @State private var selectedID: UUID?
     @State private var resetCameraID = UUID()
-    @State private var followsPosition = false
+    @State private var followsPosition = true
     @State private var showsList = false
 
     private var contentKey: String {
@@ -305,12 +317,12 @@ struct SchoolCaptureReplayView: View {
                     : "Les observations gardent leur heure. Retrouve-les sur la chronologie.")
         } else {
             SchoolReplayMap(timeline: timeline, current: timeline.sample(at: offset), selectedID: $selectedID,
-                resetCameraID: resetCameraID, followsPosition: $followsPosition)
+                resetCameraID: resetCameraID, followsPosition: $followsPosition, onSelect: select)
         }
     }
 
     private func controls(_ timeline: SchoolReplayTimeline, axis: Axis) -> some View {
-        DrivyMapControls(followsPosition: $followsPosition, followLabel: "Suivre la position du replay",
+        DrivyMapControls(followsPosition: $followsPosition, followLabel: "Suivre le replay dans le sens du trajet",
             canFollow: timeline.sample(at: offset) != nil, axis: axis) {
             followsPosition = false
             resetCameraID = UUID()
@@ -579,16 +591,19 @@ private struct SchoolReplayMap: View {
     @Binding var selectedID: UUID?
     let resetCameraID: UUID
     @Binding var followsPosition: Bool
+    let onSelect: (SchoolReplayTimeline.Item) -> Void
     @State private var camera: MapCameraPosition = .automatic
+    @State private var mapHeading = 0.0
+    @State private var followDistance = 650.0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Map(position: $camera) {
             ForEach(timeline.fragments) { fragment in
-                if fragment.coordinates.count > 1 {
-                    MapPolyline(coordinates: fragment.coordinates).stroke(DrivyTheme.routeHalo, lineWidth: 11)
-                    MapPolyline(coordinates: fragment.coordinates).stroke(DrivyTheme.route, lineWidth: 6)
-                } else if let coordinate = fragment.coordinates.first {
+                if fragment.line.pointCount > 1 {
+                    MapPolyline(fragment.line).stroke(DrivyTheme.routeHalo, lineWidth: 11)
+                    MapPolyline(fragment.line).stroke(DrivyTheme.route, lineWidth: 6)
+                } else if let coordinate = fragment.firstCoordinate {
                     Annotation("Position enregistrée", coordinate: coordinate) {
                         Circle().fill(DrivyTheme.route).frame(width: 8, height: 8)
                     }.annotationTitles(.hidden)
@@ -597,7 +612,7 @@ private struct SchoolReplayMap: View {
             ForEach(timeline.items.filter { $0.coordinate != nil }) { item in
                 if let coordinate = item.coordinate {
                     Annotation(item.title, coordinate: coordinate) {
-                        Button { selectedID = item.id } label: { marker(item) }
+                        Button { onSelect(item) } label: { marker(item) }
                             .buttonStyle(.plain)
                             .accessibilityLabel("\(item.title), \(item.statusLabel)")
                             .accessibilityAddTraits(selectedID == item.id ? [.isSelected] : [])
@@ -606,16 +621,17 @@ private struct SchoolReplayMap: View {
             }
             if let current {
                 Annotation("Position enregistrée", coordinate: current.coordinate) {
-                    Circle().fill(DrivyTheme.route).frame(width: 16, height: 16)
-                        .overlay(Circle().stroke(DrivyTheme.routeHalo, lineWidth: 3)).padding(DrivySpacing.xs)
-                        .background(DrivyTheme.route.opacity(0.18), in: Circle())
-                        .accessibilityLabel("Position enregistrée")
+                    SchoolMapPositionMarker(course: current.heading, mapHeading: mapHeading)
                 }.annotationTitles(.hidden)
             }
         }
         .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .mapControls { }
-        .onAppear { fitRoute() }
+        .onAppear { if followsPosition, current != nil { follow() } else { fitRoute() } }
+        .onMapCameraChange(frequency: .continuous) { context in
+            mapHeading = context.camera.heading
+            if camera.positionedByUser { followDistance = min(2500, max(180, context.camera.distance)) }
+        }
         .onChange(of: camera.positionedByUser) { _, byUser in if byUser { followsPosition = false } }
         .onChange(of: followsPosition) { _, follows in if follows { follow() } }
         .onChange(of: current?.offset) { _, _ in if followsPosition && !camera.positionedByUser { follow() } }
@@ -640,8 +656,10 @@ private struct SchoolReplayMap: View {
 
     private func follow() {
         guard let current else { return }
-        camera = .region(MKCoordinateRegion(center: current.coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.006, longitudeDelta: 0.006)))
+        withAnimation(reduceMotion ? nil : .linear(duration: 0.25)) {
+            camera = .camera(MapCamera(centerCoordinate: current.coordinate, distance: followDistance,
+                heading: current.heading ?? mapHeading, pitch: 0))
+        }
     }
 
     private func fitRoute() {

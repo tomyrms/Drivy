@@ -193,10 +193,10 @@ struct DrivyReportBody: View {
     var compact = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? DrivySpacing.m : DrivySpacing.l) {
+        VStack(alignment: .leading, spacing: compact ? DrivySpacing.s : DrivySpacing.m) {
             if !nextStep.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                Label("Prochaine étape", systemImage: "arrow.forward.circle.fill")
+                Text("Prochaine étape")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(DrivyTheme.accent)
                 Text(nextStep)
@@ -205,9 +205,7 @@ struct DrivyReportBody: View {
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(DrivySpacing.m)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
             .accessibilityElement(children: .combine)
             }
             if !workedOn.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { passage("Travail réalisé", workedOn) }
@@ -251,7 +249,7 @@ struct DrivyCompetencyNote: View {
                 .font(.headline)
                 .foregroundStyle(DrivyTheme.text)
                 .fixedSize(horizontal: false, vertical: true)
-            DrivyStatusBadge(title: level, tone: tone)
+            Text(level).font(.subheadline).foregroundStyle(DrivyTheme.muted)
             if let context, !context.isEmpty {
                 Text(context)
                     .font(.subheadline)
@@ -263,6 +261,53 @@ struct DrivyCompetencyNote: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Même lecture compacte dans la leçon et la liste des observations, sans répéter le statut.
+struct DrivyObservationSummary: View {
+    let observation: SchoolObservation
+    var competency: String? = nil
+    var detail: String? = nil
+    private var status: SchoolObservationStatus? { SchoolLessonHubRules.status(of: observation) }
+    private var color: Color {
+        switch status { case .positive: DrivyTheme.success; case .attention: DrivyTheme.warning;
+        case .toWorkOn: DrivyTheme.danger; case nil: DrivyTheme.muted }
+    }
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+            Image(systemName: status?.symbol ?? (observation.isMarker ? "bookmark" : "text.bubble"))
+                .font(.caption.weight(.semibold)).foregroundStyle(color).frame(width: 16).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(observation.text).font(.subheadline.weight(.medium)).foregroundStyle(DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                let metadata = [status?.label == observation.text ? nil : status?.label, competency, detail]
+                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+                if !metadata.isEmpty {
+                    Text(metadata).font(.caption).foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Trois points communs au bilan et à la progression ; zéro point rempli signifie aucune évaluation.
+struct DrivyCompetencyMeter: View {
+    let level: String
+    static func rank(_ level: String) -> Int {
+        switch level { case "DISCOVERING": 1; case "GUIDED": 2; case "INDEPENDENT": 3; default: 0 }
+    }
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(1...3, id: \.self) { step in
+                Circle().fill(step <= Self.rank(level) ? DrivyTheme.accent : DrivyTheme.border)
+                    .frame(width: 7, height: 7)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 

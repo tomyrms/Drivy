@@ -1,6 +1,20 @@
 import Foundation
 import Observation
 
+struct SchoolLiveObservationAnchor: Equatable {
+    let captureID: UUID
+    let segmentID: UUID
+    let pointSequence: Int
+}
+
+/// A map marker exists only after its command was written to the encrypted outbox.
+/// Coordinates remain in the encrypted capture store, addressed by the measured point.
+struct SchoolLiveMapObservation: Identifiable {
+    let id: UUID
+    let body: SchoolObservationBody
+    var isPending: Bool
+}
+
 /// Les sous-thèmes précisent une compétence existante, sans créer de référentiel parallèle.
 struct SchoolLiveObservationTheme: Identifiable, Equatable {
     let competency: SchoolCatalogCompetency
@@ -43,6 +57,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     private(set) var errorMessage: String?
     private(set) var pending: PendingSchoolCommand?
     private(set) var isSending = false
+    private(set) var mapObservations: [SchoolLiveMapObservation] = []
     var themes: [SchoolLiveObservationTheme] { competencies.flatMap(SchoolLiveObservationTheme.choices) }
     var canRecord: Bool { !stopped && !isSending && pending == nil }
     /// La file chiffrée n’accepte qu’une demande par école : une autre demande en attente (départ de
@@ -54,15 +69,24 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     @ObservationIgnored private let client: SchoolObservationClient
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
     @ObservationIgnored private let onSettlement: (@MainActor () async -> Void)?
+    @ObservationIgnored private let permitsAnchor: (@MainActor (SchoolLiveObservationAnchor) -> Bool)?
+    @ObservationIgnored private let prepareAnchor: (@MainActor (SchoolLiveObservationAnchor) async throws -> Void)?
     @ObservationIgnored private var stopped = false
 
     init(scope: SchoolCommandScope, lessonID: UUID, client: SchoolObservationClient,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(),
+         permitsAnchor: (@MainActor (SchoolLiveObservationAnchor) -> Bool)? = nil,
+         prepareAnchor: (@MainActor (SchoolLiveObservationAnchor) async throws -> Void)? = nil,
          onSettlement: (@MainActor () async -> Void)? = nil) {
         self.scope = scope; self.lessonID = lessonID; self.client = client; self.outbox = outbox
         self.onSettlement = onSettlement
+        self.permitsAnchor = permitsAnchor; self.prepareAnchor = prepareAnchor
         do { pending = try outbox.pending(for: scope) }
         catch { stopped = true; errorMessage = "Le stockage protégé est indisponible. Aucune observation n’a été ajoutée." }
+        if let pending, pending.kind == .createObservation, pending.routeResourceID == lessonID,
+           let body = try? JSONDecoder().decode(SchoolObservationBody.self, from: pending.body) {
+            mapObservations = [.init(id: pending.id, body: body, isPending: true)]
+        }
     }
 
     func loadCompetencies() async {
@@ -86,21 +110,26 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
 
     /// Le thème vient du référentiel reçu, le statut est un choix explicite.
     @discardableResult func record(theme: SchoolLiveObservationTheme, status: SchoolObservationStatus,
-                                   at instant: Date) -> Bool {
+                                   at instant: Date, anchor: SchoolLiveObservationAnchor? = nil) -> Bool {
         guard themes.contains(theme) else { return false }
-        return save(theme: theme, status: status, at: instant)
+        return save(theme: theme, status: status, at: instant, anchor: anchor)
     }
 
-    @discardableResult func markMoment(at instant: Date = Date()) -> Bool {
-        save(theme: nil, status: nil, at: instant)
+    @discardableResult func markMoment(at instant: Date = Date(), anchor: SchoolLiveObservationAnchor? = nil) -> Bool {
+        save(theme: nil, status: nil, at: instant, anchor: anchor)
     }
 
-    private func save(theme: SchoolLiveObservationTheme?, status: SchoolObservationStatus?, at instant: Date) -> Bool {
+    private func save(theme: SchoolLiveObservationTheme?, status: SchoolObservationStatus?, at instant: Date,
+                      anchor: SchoolLiveObservationAnchor?) -> Bool {
         guard canRecord else { return false }
+        if let anchor, permitsAnchor?(anchor) != true {
+            errorMessage = "Le GPS a changé. Ferme puis rouvre Signaler pour enregistrer au bon endroit ou sans position."
+            return false
+        }
         let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let operation = UUID()
-        let value = SchoolObservationBody(operationId: operation, draftId: nil, captureId: nil,
-            segmentId: nil, pointSequence: nil, competencyId: theme?.competency.id,
+        let value = SchoolObservationBody(operationId: operation, draftId: nil, captureId: anchor?.captureID,
+            segmentId: anchor?.segmentID, pointSequence: anchor?.pointSequence, competencyId: theme?.competency.id,
             text: theme?.title ?? "Moment à revoir", origin: "LIVE", observedAt: formatter.string(from: instant),
             eventKind: theme == nil ? "MARKER" : "QUALIFIED", eventStatus: status?.rawValue)
         do {
@@ -108,6 +137,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
                 createdAt: instant, body: try JSONEncoder().encode(value), routeResourceID: lessonID)
             try outbox.save(command)
             pending = command; errorMessage = nil
+            mapObservations.append(.init(id: operation, body: value, isPending: true))
             Task { await retry() }
             return true
         } catch {
@@ -134,9 +164,18 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         isSending = true
         do {
             try outbox.save(command)
+            let body = try JSONDecoder().decode(SchoolObservationBody.self, from: command.body)
+            if let captureID = body.captureId, let segmentID = body.segmentId, let sequence = body.pointSequence {
+                // Make the durable point available before asking the service to anchor it.
+                try await prepareAnchor?(.init(captureID: captureID, segmentID: segmentID, pointSequence: sequence))
+            }
+            guard !stopped else { throw CancellationError() }
             _ = try await client.send(command)
             try outbox.remove(command)
-            if !stopped { pending = nil; confirmed += 1; errorMessage = nil }
+            if !stopped {
+                pending = nil; confirmed += 1; errorMessage = nil
+                if let index = mapObservations.firstIndex(where: { $0.id == command.id }) { mapObservations[index].isPending = false }
+            }
         } catch {
             if !stopped {
                 // Même un refus conserve le geste pour une relecture explicite depuis la leçon.

@@ -86,6 +86,11 @@ struct SchoolAgendaView: View {
         // Réapparition de l’onglet : la semaine affichée reste en place pendant la relecture, et une feuille
         // ouverte n’est jamais refermée par elle. Un changement de semaine ou de filtre repart de zéro (loadedScope).
         .task(id: scopeKey) { await loadWeek(keepingCurrent: true) }
+        .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { notification in
+            if let change = notification.object as? SchoolLessonChange, change.schoolID != workspace.membership?.schoolId { return }
+            // La fermeture de la feuille relira déjà la semaine ; ne pas ajouter de requête concurrente.
+            if selectedLesson == nil && planningModel == nil { Task { await loadWeek(keepingCurrent: true) } }
+        }
         // Une ligne ouvre directement l’écran de la leçon ; l’agenda se relit sans s’effacer à la fermeture
         // (leçon terminée, déplacée ou annulée).
         .sheet(item: $selectedLesson, onDismiss: { Task { await loadWeek(keepingCurrent: true) } }) { lesson in

@@ -14,6 +14,7 @@ import Observation
     private(set) var competencies: [SchoolCatalogCompetency] = []
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
+    private(set) var isLoadingHistory = false
     private(set) var lessonsLoaded = false
     private(set) var errorMessage: String?
     private(set) var progressError: String?
@@ -21,6 +22,8 @@ import Observation
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var progressRequest = UUID()
     @ObservationIgnored private var seenCursors = Set<String>()
+    @ObservationIgnored private var historyRequested = false
+    @ObservationIgnored private var historyTask: Task<Void, Never>?
     @ObservationIgnored private(set) var invalidated = false
 
     init(scope: SchoolCommandScope, membership: SchoolMembership, learnerID: UUID, trainingID: UUID, client: SchoolTrainingClient) {
@@ -41,13 +44,18 @@ import Observation
     /// Retour sur l’écran : le modèle est partagé et gardé en mémoire, donc relu à chaque affichage
     /// (un bilan enregistré ailleurs change la progression). L’affichage courant reste visible jusqu’à la réponse.
     func refreshOnAppear() async { await load(keepingCurrent: true) }
-    func invalidate() { invalidated = true; generation = UUID(); progressRequest = UUID(); clear(); isLoading = false; isLoadingMore = false }
+    func invalidate() {
+        invalidated = true; generation = UUID(); progressRequest = UUID(); cancelHistory()
+        clear(); isLoading = false; isLoadingMore = false
+    }
+    private func cancelHistory() { historyTask?.cancel(); historyTask = nil; isLoadingHistory = false }
     private func clear() { training = nil; lessons = []; nextCursor = nil; progress = nil; competencies = []; seenCursors = []; lessonsLoaded = false }
 
     /// `keepingCurrent` : relecture au retour d’une leçon ; ce qui est affiché reste visible jusqu’à la réponse.
     func load(keepingCurrent: Bool = false) async {
         guard !invalidated else { return }
         generation = UUID(); progressRequest = UUID(); let request = generation
+        cancelHistory()
         isLoading = !keepingCurrent || training == nil; isLoadingMore = false; errorMessage = nil
         if !keepingCurrent { progressError = nil }
         do {
@@ -75,6 +83,7 @@ import Observation
         guard request == generation, !invalidated, !accessRevoked else { return }
         isLoading = false
         if hasPedagogicalRole { await loadProgress(keepingCurrent: keepingCurrent) }
+        if historyRequested { await loadHistory() }
     }
     func loadMore() async {
         guard !invalidated, !accessRevoked, !isLoading, !isLoadingMore, let cursor = nextCursor else { return }
@@ -90,6 +99,34 @@ import Observation
             guard request == generation else { return }
             isLoadingMore = false
             if !(error is CancellationError) { fail(error) }
+        }
+    }
+    /// Les filtres de période portent sur l'historique autorisé complet, jamais sur la seule première page.
+    func loadHistory() async {
+        historyRequested = true
+        guard !isLoading, !invalidated, !accessRevoked else { return }
+        if let historyTask { await historyTask.value; return }
+        let request = generation
+        isLoadingHistory = true
+        // Le choix d'un autre mois ou la fermeture du sélecteur ne doit pas interrompre l'historique partagé.
+        let task = Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            await self.fetchHistory(request: request)
+        }
+        historyTask = task
+        await task.value
+        guard request == generation else { return }
+        historyTask = nil; isLoadingHistory = false
+    }
+    private func fetchHistory(request: UUID) async {
+        while let cursor = nextCursor, request == generation, !invalidated, !accessRevoked, !Task.isCancelled {
+            guard lessons.count < 10_000 else {
+                errorMessage = "L’historique est trop long pour être chargé en une fois. Affiche les autres leçons pour continuer."
+                return
+            }
+            await loadMore()
+            // Une erreur ou une lecture concurrente ne doit pas provoquer une boucle.
+            if nextCursor == cursor || errorMessage != nil { return }
         }
     }
     func loadProgress(keepingCurrent: Bool = false) async {
@@ -123,7 +160,7 @@ import Observation
     private func fail(_ error: Error) {
         errorMessage = SchoolTrainingAccess.message(error)
         if SchoolTrainingAccess.isRevoked(error) {
-            clear(); accessRevoked = true; generation = UUID(); isLoading = false; isLoadingMore = false
+            clear(); accessRevoked = true; generation = UUID(); cancelHistory(); isLoading = false; isLoadingMore = false
         }
     }
 }

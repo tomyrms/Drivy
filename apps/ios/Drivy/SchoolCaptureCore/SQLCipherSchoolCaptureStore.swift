@@ -338,6 +338,18 @@ actor SQLCipherSchoolCaptureStore {
         return admitted
     }
 
+    /// A signal can reference a point before a full upload chunk has accumulated.
+    /// Flush existing measurements without stopping or fabricating a segment boundary.
+    func flushForObservation(captureID: UUID, segmentID: UUID, sequence: Int, scope: SchoolCommandScope) throws {
+        try write {
+            let capture = try session(captureID, scope: scope)
+            guard var segment = try segments(captureID).first(where: { $0.id == segmentID }),
+                  sequence >= 0, sequence < segment.pointCount else { throw SchoolCaptureStorageFailure.invalidMeasurement }
+            try flush(&segment, capture: capture, all: true)
+            try save(segment)
+        }
+    }
+
     func sealSegment(handle: SchoolCaptureSegmentHandle, scope: SchoolCommandScope, endedAt: String,
                      reason: SchoolCaptureManifest.EndReason) throws {
         try write {

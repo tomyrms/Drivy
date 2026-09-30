@@ -308,7 +308,7 @@ struct DrivyMapDock<Content: View>: View {
 /// they stay legible over any background; grouped so the two circles blend.
 struct DrivyMapControls: View {
     @Binding var followsPosition: Bool
-    var followLabel = "Suivre la dernière position enregistrée"
+    var followLabel = "Recentrer dans le sens du trajet"
     var canFollow = true
     var axis: Axis = .vertical
     let showWholeRoute: () -> Void
@@ -320,7 +320,7 @@ struct DrivyMapControls: View {
                 : AnyLayout(HStackLayout(spacing: DrivySpacing.xs))
             layout {
                 Button { followsPosition.toggle() } label: {
-                    Image(systemName: followsPosition ? "location.fill" : "location")
+                    Image(systemName: followsPosition ? "location.north.line.fill" : "location")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(followsPosition ? DrivyTheme.accent : canFollow ? DrivyTheme.text : DrivyTheme.disabledText)
                         .frame(width: 48, height: 48)
@@ -328,6 +328,8 @@ struct DrivyMapControls: View {
                 }
                 .disabled(!canFollow && !followsPosition)
                 .accessibilityLabel(followsPosition ? "Arrêter le suivi de position" : followLabel)
+                .accessibilityValue(followsPosition ? "Suivi avec orientation" : "Carte libre")
+                .accessibilityIdentifier("map-follow-position")
                 .accessibilityAddTraits(followsPosition ? [.isSelected] : [])
                 Button(action: showWholeRoute) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -337,6 +339,7 @@ struct DrivyMapControls: View {
                         .drivyLegibleMapControl(in: Circle())
                 }
                 .accessibilityLabel("Voir tout le trajet")
+                .accessibilityIdentifier("map-show-whole-route")
             }
         }
         .buttonStyle(.plain)

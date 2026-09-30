@@ -47,7 +47,7 @@ import Foundation
         let value: SchoolReportRevision = try await read(schoolID, ["report-revisions", id.uuidString])
         guard value.id == id, value.schoolId == schoolID, value.version > 0, value.sequence > 0,
               SchoolLesson.date(value.publishedAt) != nil, Set(value.observations.map(\.id)).count == value.observations.count,
-              value.observations.allSatisfy({ ["DISCOVERING", "GUIDED", "INDEPENDENT"].contains($0.level) && !$0.context.isEmpty }) else {
+              value.observations.allSatisfy({ ["DISCOVERING", "GUIDED", "INDEPENDENT"].contains($0.level) && $0.context.unicodeScalars.count <= 500 }) else {
             throw SchoolAPIError.invalidResponse
         }
         return value

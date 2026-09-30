@@ -15,6 +15,7 @@ import Testing
         #expect(body.captureId == nil && body.segmentId == nil && body.pointSequence == nil && body.isValid)
         #expect(!model.markMoment(at: instant) && outbox.saves.count == 1)
         #expect(model.confirmed == 0 && !model.canRecord)
+        #expect(model.mapObservations.count == 1 && model.mapObservations.first?.isPending == true)
         model.stop()
     }
 
@@ -52,6 +53,7 @@ import Testing
         let model = recorder(outbox: outbox)
         #expect(!model.markMoment())
         #expect(model.pending == nil && model.confirmed == 0 && outbox.value == nil)
+        #expect(model.mapObservations.isEmpty)
         #expect(model.errorMessage?.contains("n’a pas été enregistré") == true)
     }
 
@@ -62,6 +64,7 @@ import Testing
         let command = try #require(outbox.value)
         let restored = recorder(outbox: outbox)
         #expect(restored.pending == command && restored.canRetry && !restored.canRecord)
+        #expect(restored.mapObservations.first?.id == command.id)
         restored.stop()
         #expect(!restored.canRetry && !restored.markMoment())
         #expect(outbox.value == command)
@@ -169,11 +172,40 @@ import Testing
         #expect(workspace.accessRevoked && !workspace.loaded && !workspace.canAdd && workspace.lesson == nil && workspace.observations.isEmpty)
     }
 
-    private func recorder(outbox: ConfigurationOutboxStub) -> SchoolLiveObservationRecorder {
+    @Test func measuredAnchorIsDurableAndNeverChangesWhenTheConfirmationArrivesLater() throws {
+        let outbox = ConfigurationOutboxStub()
+        let anchor = SchoolLiveObservationAnchor(captureID: UUID(), segmentID: UUID(), pointSequence: 7)
+        let model = recorder(outbox: outbox, permitsAnchor: { $0 == anchor })
+        let instant = HubFixture.date("2026-09-28T12:11:00Z")
+        #expect(model.markMoment(at: instant, anchor: anchor))
+        model.stop()
+        let command = try #require(outbox.value)
+        let body = try JSONDecoder().decode(SchoolObservationBody.self, from: command.body)
+        #expect(body.captureId == anchor.captureID && body.segmentId == anchor.segmentID && body.pointSequence == 7)
+        #expect(body.observedAt.flatMap(SchoolLesson.date) == instant && body.isValid)
+        #expect(model.mapObservations.first?.body.pointSequence == 7)
+        let restored = recorder(outbox: outbox)
+        #expect(restored.mapObservations.first?.body.captureId == anchor.captureID)
+        restored.stop()
+    }
+
+    @Test func revokedAnchorRequiresAnotherExplicitGestureInsteadOfMovingTheMarker() {
+        let outbox = ConfigurationOutboxStub()
+        let model = recorder(outbox: outbox, permitsAnchor: { _ in false })
+        #expect(!model.markMoment(anchor: .init(captureID: UUID(), segmentID: UUID(), pointSequence: 0)))
+        #expect(outbox.value == nil && model.mapObservations.isEmpty)
+        #expect(model.errorMessage != nil)
+        #expect(model.markMoment())
+        #expect(model.mapObservations.first?.body.captureId == nil)
+        model.stop()
+    }
+
+    private func recorder(outbox: ConfigurationOutboxStub,
+                          permitsAnchor: (@MainActor (SchoolLiveObservationAnchor) -> Bool)? = nil) -> SchoolLiveObservationRecorder {
         let client = SchoolObservationClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
             tokenSource: HubToken(), transport: LiveObservationTransport())
         return SchoolLiveObservationRecorder(scope: ConfigurationFixture.scope(), lessonID: HubFixture.lessonID,
-            client: client, outbox: outbox)
+            client: client, outbox: outbox, permitsAnchor: permitsAnchor)
     }
 }
 

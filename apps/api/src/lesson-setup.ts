@@ -7,6 +7,7 @@ import {withActor} from './database.js';
 import {checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandActor,type SchoolRow} from './commands.js';
 import {ApiError,forbidden,notFound} from './errors.js';
 import {Cursors} from './cursor.js';
+import {registerPlanningDefaults} from './planning-defaults.js';
 const id=z.uuid(),text=(max:number)=>z.string().trim().min(1).max(max),op={operationId:id};
 const amount=z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const termsCommand=z.object({...op,label:text(200),termsText:text(20000),validFrom:z.iso.date(),validUntil:z.iso.date().nullable(),approved:z.boolean(),approvalReason:text(1000)}).strict();
@@ -53,6 +54,7 @@ const columns={
 const tables={'commercial-terms':'commercial_terms_version','service-products':'service_product_version','availability-rules':'availability_rule','closures':'closure'} as const;
 const project=(row:Row)=>{const {_createdAt:_,...data}=row;if('unitPriceCents'in data)data.unitPriceCents=Number(data.unitPriceCents);return data;};
 export function registerLessonSetup(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string}){
+ registerPlanningDefaults(app,options);
  const cursors=new Cursors(options.cursorSecret),base='/v1/schools/:schoolId';
  const schoolID=(r:FastifyRequest)=>z.object({schoolId:id}).parse(r.params).schoolId;
  const envelope=(data:unknown,r:FastifyRequest)=>({data,requestId:r.id,serverTime:new Date().toISOString()});

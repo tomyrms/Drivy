@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Loading, Notice, Symbol } from '../ui';
 import { useConsole, type Loaded, type Outcome } from './context';
@@ -57,15 +57,16 @@ export function DetailPanel({ title, meta, badge, children, actions, focusKey }:
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const first = useRef(true);
+  const titleId = useId();
   useEffect(() => {
     if (first.current) { first.current = false; if (focusKey === undefined) return; }
     heading.current?.focus({ preventScroll: false });
   }, [focusKey]);
   return (
-    <section className="detail-panel" aria-labelledby="detail-title">
+    <section className="detail-panel" aria-labelledby={titleId}>
       <div className="detail-head">
         <div className="row-text">
-          <h2 id="detail-title" ref={heading} tabIndex={-1}>{title}</h2>
+          <h2 id={titleId} ref={heading} tabIndex={-1}>{title}</h2>
           {meta && <p className="row-meta">{meta}</p>}
           {badge}
         </div>

@@ -103,7 +103,43 @@ final class SchoolCaptureSessionController {
             liveObservations?.refreshPending(); return
         }
         liveObservations?.stop()
-        liveObservations = SchoolLiveObservationRecorder(scope: active.scope, lessonID: lessonID, client: client)
+        liveObservations = SchoolLiveObservationRecorder(scope: active.scope, lessonID: lessonID, client: client,
+            permitsAnchor: { [weak self] anchor in
+                guard let self else { return false }
+                return self.state == .recording && self.captureID == anchor.captureID
+                    && self.context?.handle?.segmentID == anchor.segmentID
+                    && self.context?.scope == self.permittedScope
+                    && self.context?.lease.permitsCollection() == true
+            }, prepareAnchor: { [weak self] anchor in
+                guard let self, let active = self.context, active.scope == self.permittedScope,
+                      active.session.id == anchor.captureID else { throw SchoolCaptureStorageFailure.closed }
+                try await active.local.store.flushForObservation(captureID: anchor.captureID, segmentID: anchor.segmentID,
+                    sequence: anchor.pointSequence, scope: active.scope)
+                // A stop may already be sending these chunks. Await that attempt first.
+                await active.synchronizationTask?.value
+                _ = try await active.transfer.transferAvailableData(captureID: anchor.captureID)
+            })
+    }
+
+    /// Freeze the last durable point available at the opening gesture. Pause, stale
+    /// fixes and absent fixes produce a temporal observation, never an old position.
+    func observationAnchor(at instant: Date) -> SchoolLiveObservationAnchor? {
+        guard state == .recording, let active = context, active.scope == permittedScope,
+              active.lease.permitsCollection(), let handle = active.handle,
+              let segment = segments.first(where: { $0.id == handle.segmentID }),
+              let sequence = segment.measurements.indices.last, let point = segment.measurements.last,
+              let measured = SchoolLesson.date(point.capturedAt), (0...15).contains(instant.timeIntervalSince(measured)) else { return nil }
+        return .init(captureID: active.session.id, segmentID: segment.id, pointSequence: sequence)
+    }
+
+    func cancellationWorkspace(client: SchoolPlanningClient) async throws -> SchoolPlanningWorkspace {
+        guard let active = context, active.scope == permittedScope,
+              let lessonID, client.baseURL.absoluteString == active.scope.apiBaseURL else { throw SchoolPlanningFailure.forbidden }
+        let lesson = try await client.lesson(schoolID: active.scope.schoolID, id: lessonID)
+        guard active.scope == permittedScope, self.lessonID == lessonID, lesson.status == "PLANNED" else {
+            throw SchoolPlanningFailure.conflict
+        }
+        return SchoolPlanningWorkspace(scope: active.scope, client: client, lesson: lesson)
     }
     var elapsedSeconds: TimeInterval {
         guard let beginning else { return 0 }

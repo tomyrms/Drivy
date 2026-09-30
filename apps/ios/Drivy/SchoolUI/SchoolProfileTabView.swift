@@ -55,5 +55,13 @@ struct SchoolProfileTabView: View {
             }
             .drivyFormRows()
         }
+        if let agendaClient, let person = workspace.person, let membership = workspace.membership,
+           membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") {
+            Section {
+                NavigationLink("Préférences de leçon") {
+                    SchoolPlanningSettingsView(scope: agendaClient.scope(person: person, membership: membership), client: agendaClient.planningClient)
+                }
+            }.drivyFormRows()
+        }
     }
 }

@@ -2,6 +2,32 @@ import SwiftUI
 
 enum SchoolTrainingSection: String, CaseIterable { case lessons = "Leçons", progress = "Progression" }
 
+/// Le calendrier de la leçon fait foi, même près de minuit ou d'un changement d'année UTC.
+struct SchoolLessonPeriod: Equatable {
+    var month = 0
+    var year = 0
+    var isActive: Bool { month != 0 || year != 0 }
+    func includes(_ lesson: SchoolLesson) -> Bool {
+        guard let parts = Self.parts(lesson) else { return !isActive }
+        return (month == 0 || parts.month == month) && (year == 0 || parts.year == year)
+    }
+    static func parts(_ lesson: SchoolLesson) -> DateComponents? {
+        guard let date = lesson.startsAt, let zone = TimeZone(identifier: lesson.timeZone) else { return nil }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
+        return calendar.dateComponents([.year, .month], from: date)
+    }
+    var title: String {
+        var values: [String] = []
+        if (1...12).contains(month) { values.append(Self.monthName(month)) }
+        if year != 0 { values.append(String(year)) }
+        return values.joined(separator: " ")
+    }
+    static func monthName(_ month: Int) -> String {
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH")
+        return formatter.standaloneMonthSymbols[month - 1].capitalizedFirst
+    }
+}
+
 /// La formation ouverte depuis le dossier d’un élève (moniteur).
 struct SchoolTrainingView: View {
     let client: SchoolTrainingClient
@@ -34,6 +60,7 @@ struct SchoolTrainingScreen: View {
     /// La leçon ouverte vit ici, hors du contenu conditionnel et de `.id` : une relecture ou un changement
     /// de portée recrée le contenu, jamais la feuille qui le surplombe.
     @State private var opened: OpenedLesson?
+    @Environment(\.scenePhase) private var scenePhase
 
     private var scopeKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.joined(separator: ",") ?? ""):\(workspace.membership?.grants.joined(separator: ",") ?? ""):\(trainingID)"
@@ -70,8 +97,13 @@ struct SchoolTrainingScreen: View {
             if revoked == true { Task { await workspace.refreshAccount(minimumInterval: 0) } }
         }
         // Une leçon planifiée ailleurs (feuille de planification du dossier) : la liste se relit sans être recréée.
-        .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { notification in
+            if let change = notification.object as? SchoolLessonChange,
+               change.schoolID != workspace.membership?.schoolId || change.trainingID != trainingID { return }
             if let model, matches(model) { Task { await model.refreshOnAppear() } }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, let model, matches(model) { Task { await model.refreshOnAppear() } }
         }
         .sheet(item: $opened, onDismiss: { if let model { Task { await model.load(keepingCurrent: true) } } }) { lesson in
             NavigationStack {
@@ -94,6 +126,13 @@ private struct OpenedLesson: Identifiable { let id: UUID }
 extension Notification.Name {
     /// Une leçon vient d’être créée, déplacée ou annulée hors de l’écran qui la montre.
     static let drivyLessonsDidChange = Notification.Name("drivy.lessonsDidChange")
+}
+
+/// Émis seulement après confirmation durable d'une commande, sans contenu pédagogique ni position.
+struct SchoolLessonChange: Sendable {
+    let schoolID: UUID
+    let trainingID: UUID
+    let lessonID: UUID
 }
 
 /// Filtre de statut des leçons du dossier. Deux ensembles disjoints (à venir, passées) ; « À terminer »
@@ -153,9 +192,13 @@ private struct SchoolTrainingContent: View {
     /// Le tri et le filtre survivent aux changements d’onglet et de dossier pendant la session de la scène.
     @SceneStorage("training.lessons.filter") private var filter: TrainingLessonFilter = .all
     @SceneStorage("training.lessons.order") private var order: TrainingLessonOrder = .chronological
+    @SceneStorage("training.lessons.month") private var selectedMonth = 0
+    @SceneStorage("training.lessons.year") private var selectedYear = 0
+    @State private var showsPeriod = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var section: SchoolTrainingSection { fixedSection ?? chosenSection }
+    private var period: SchoolLessonPeriod { SchoolLessonPeriod(month: selectedMonth, year: selectedYear) }
 
     var body: some View {
         GeometryReader { geometry in
@@ -207,6 +250,10 @@ private struct SchoolTrainingContent: View {
         }
         .background(DrivyTheme.surface)
         .accessibilityIdentifier("training-dossier")
+        .sheet(isPresented: $showsPeriod) { periodPicker }
+        .task(id: "\(selectedMonth):\(selectedYear)") {
+            if period.isActive { await model.loadHistory() }
+        }
     }
     private var heading: some View {
         // Le dossier est celui d’une personne : son nom est le titre, la formation la précise.
@@ -245,15 +292,16 @@ private struct SchoolTrainingContent: View {
         }
     }
     private var lessons: some View {
-        let visible = model.lessons.filter(filter.includes)
+        let visible = model.lessons.filter { filter.includes($0) && period.includes($0) }
         return VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if model.lessonsLoaded && model.lessons.isEmpty && !model.isLoading {
                 DrivyEmptyState(title: "Aucune leçon", symbol: "calendar")
             }
             if !model.lessons.isEmpty { lessonsMenu }
-            if visible.isEmpty && !model.lessons.isEmpty {
-                DrivyEmptyState(title: filter.emptyTitle, symbol: "calendar",
-                    actionTitle: "Tout afficher", action: { filter = .all })
+            if model.isLoadingHistory { DrivyLoadingState(title: "Chargement de l’historique…") }
+            if visible.isEmpty && !model.lessons.isEmpty && !model.isLoadingHistory && (!period.isActive || model.nextCursor == nil) {
+                DrivyEmptyState(title: period.isActive ? "Aucune leçon sur cette période" : filter.emptyTitle, symbol: "calendar",
+                    actionTitle: "Tout afficher", action: { filter = .all; selectedMonth = 0; selectedYear = 0 })
             }
             ForEach(months(of: visible)) { month in monthGroup(month) }
             moreLessons
@@ -274,10 +322,15 @@ private struct SchoolTrainingContent: View {
                 }
                 .pickerStyle(.inline)
             }
+            Section {
+                Button("Période…", systemImage: "calendar") { showsPeriod = true }
+                if period.isActive { Button("Toutes les périodes") { selectedMonth = 0; selectedYear = 0 } }
+            }
         } label: {
             HStack(spacing: DrivySpacing.xs) {
                 Image(systemName: order.symbol).font(.caption.weight(.bold))
                 Text(filter.title)
+                if period.isActive { Text(period.title) }
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold))
             }
             .font(.subheadline.weight(.semibold))
@@ -286,8 +339,39 @@ private struct SchoolTrainingContent: View {
             .contentShape(Rectangle())
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .accessibilityLabel("Afficher : \(filter.title), \(order.title)")
+        .accessibilityLabel("Afficher : \(filter.title), \(period.title), \(order.title)")
         .accessibilityIdentifier("training-lessons-menu")
+    }
+    private var periodPicker: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("Mois", selection: $selectedMonth) {
+                        Text("Tous les mois").tag(0)
+                        ForEach(1...12, id: \.self) { month in Text(SchoolLessonPeriod.monthName(month)).tag(month) }
+                    }
+                    Picker("Année", selection: $selectedYear) {
+                        Text("Toutes les années").tag(0)
+                        ForEach(periodYears, id: \.self) { year in Text(String(year)).tag(year) }
+                    }
+                    .disabled(model.isLoadingHistory)
+                }
+                if model.isLoadingHistory { ProgressView("Chargement de l’historique…") }
+                if let error = model.errorMessage {
+                    SchoolErrorNotice(message: error, retry: { Task { await model.loadHistory() } })
+                }
+                if period.isActive { Button("Toutes les périodes") { selectedMonth = 0; selectedYear = 0 } }
+            }
+            .navigationTitle("Période").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Afficher") { showsPeriod = false } } }
+            .task { await model.loadHistory() }
+        }
+        .presentationDetents([.medium, .large])
+    }
+    private var periodYears: [Int] {
+        var years = Set(model.lessons.compactMap { SchoolLessonPeriod.parts($0)?.year })
+        if selectedYear != 0 { years.insert(selectedYear) }
+        return years.sorted(by: >)
     }
     private func months(of values: [SchoolLesson]) -> [TrainingLessonMonth] {
         switch order {
@@ -353,14 +437,17 @@ private struct SchoolTrainingContent: View {
             if let value = model.progress {
                 if let error = model.progressError { SchoolErrorNotice(message: error, retry: { Task { await model.loadProgress() } }) }
                 DrivyRowGroup {
-                    ForEach(value.items) { item in
+                    ForEach(orderedProgress(value.items)) { item in
                         Button { opened = OpenedLesson(id: item.sourceLessonId) } label: { progressRow(item) }
                             .buttonStyle(DrivyRowButtonStyle())
                             .accessibilityHint("Ouvre la leçon")
                     }
                     ForEach(model.unobservedCompetencies) { competency in
-                        DrivyCompetencyNote(label: competency.displayLabel, level: "Pas encore vu", tone: .neutral)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, DrivySpacing.m)
+                        HStack(spacing: DrivySpacing.m) {
+                            DrivyCompetencyNote(label: competency.displayLabel, level: "Pas encore vu", tone: .neutral)
+                            DrivyCompetencyMeter(level: "")
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, DrivySpacing.s)
                     }
                 }
                 if value.items.isEmpty && value.unobservedCompetencyIds.isEmpty {
@@ -378,15 +465,22 @@ private struct SchoolTrainingContent: View {
             DrivyCompetencyNote(label: model.competencies.first(where: { $0.id == item.id })?.displayLabel ?? item.displayLabel,
                 level: SchoolTrainingFormatting.level(item.level), context: item.context,
                 date: SchoolTrainingFormatting.day(item.observedAt, zone: workspace.school?.timeZone ?? "Europe/Zurich"))
-            SchoolLevelMeter(rank: SchoolProgressStyle.rank(item.level)).padding(.top, DrivySpacing.xs)
+            DrivyCompetencyMeter(level: item.level).padding(.top, DrivySpacing.xs)
             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                 .padding(.top, DrivySpacing.xxs)
                 .accessibilityHidden(true)
         }
-        .padding(.vertical, DrivySpacing.m)
+        .padding(.vertical, DrivySpacing.s)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+    private func orderedProgress(_ items: [SchoolReportProgressItem]) -> [SchoolReportProgressItem] {
+        let ranks = Dictionary(model.competencies.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })
+        return items.sorted {
+            let a = ranks[$0.id] ?? Int.max, b = ranks[$1.id] ?? Int.max
+            return a == b ? $0.displayLabel.localizedStandardCompare($1.displayLabel) == .orderedAscending : a < b
+        }
     }
     @ViewBuilder private var moreLessons: some View {
         if model.nextCursor != nil {
@@ -407,39 +501,6 @@ private struct SchoolTrainingLessonRow: View {
             title: SchoolTrainingFormatting.rowDay(lesson.plannedStart, zone: lesson.timeZone),
             details: [lesson.meetingPoint],
             badge: lesson.drivyState.isUnusual ? lesson.drivyState.badge : nil)
-    }
-}
-
-/// Niveaux de progression : un rang par niveau observé et une teinte neutre puis verte (l’accent reste réservé à l’action), jamais la couleur seule
-/// (le libellé du niveau est toujours écrit à côté). « Pas encore vu » n’est pas un niveau : aucune graduation, aucun total.
-private enum SchoolProgressStyle {
-    static func rank(_ code: String) -> Int {
-        switch code { case "DISCOVERING": 1; case "GUIDED": 2; case "INDEPENDENT": 3; default: 0 }
-    }
-    static func color(rank: Int) -> Color {
-        switch rank {
-        case 1: DrivyTheme.controlBorder
-        case 2: DrivyTheme.muted
-        case 3: DrivyTheme.success
-        default: DrivyTheme.border
-        }
-    }
-}
-
-/// Trois graduations : le niveau observé d’une compétence, lisible sans lire le libellé. Décoratif :
-/// VoiceOver entend le niveau écrit.
-private struct SchoolLevelMeter: View {
-    let rank: Int
-
-    var body: some View {
-        HStack(spacing: DrivySpacing.xxs) {
-            ForEach(1...3, id: \.self) { step in
-                Capsule()
-                    .fill(step <= rank ? SchoolProgressStyle.color(rank: rank) : DrivyTheme.border)
-                    .frame(width: 10, height: 6)
-            }
-        }
-        .accessibilityHidden(true)
     }
 }
 

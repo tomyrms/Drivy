@@ -18,6 +18,20 @@ struct SchoolServiceProduct: SchoolCatalogRecord {
     let validFrom: String, validUntil: String?
     let termsVersionId: UUID
     let enabled: Bool
+    var current: Bool? = nil
+}
+struct SchoolPlanningDefaults: SchoolCatalogRecord {
+    let id: UUID, schoolId: UUID
+    let version: Int
+    let trainingCategoryCode: String?, serviceProductKey: String?
+
+    /// Une préférence choisit seulement une formation existante, sans arbitrer une ambiguïté.
+    func trainingID(in trainings: [SchoolTraining]) -> UUID? {
+        let active = trainings.filter { $0.status == "ACTIVE" }
+        if active.count == 1 { return active.first?.id }
+        let matching = active.filter { $0.categoryCode == trainingCategoryCode }
+        return matching.count == 1 ? matching.first?.id : nil
+    }
 }
 struct SchoolAvailabilityRule: SchoolCatalogRecord {
     let id: UUID, schoolId: UUID
@@ -89,6 +103,11 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
               lesson.startsAt != nil, lesson.endsAt != nil else { throw SchoolPlanningFailure.invalidResponse }
         return lesson
     }
+    func defaults(schoolID: UUID, membershipID: UUID) async throws -> SchoolPlanningDefaults {
+        let result: SchoolPlanningDefaults = try await request(schoolID, ["planning-defaults"])
+        guard result.schoolId == schoolID, result.id == membershipID, result.version > 0 else { throw SchoolPlanningFailure.invalidResponse }
+        return result
+    }
     func send(_ command: PendingSchoolCommand) async throws {
         guard command.kind.isPlanning, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,
               let object = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any],
@@ -96,6 +115,7 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         if command.kind == .startLessonNow { _ = try await startNow(command); return }
         var path: [String]
         switch command.kind {
+        case .savePlanningDefaults: path = ["planning-defaults"]
         case .createLesson: path = ["lessons"]
         case .moveLesson, .cancelLesson:
             guard let id = command.resourceID else { throw SchoolPlanningFailure.invalidResponse }
@@ -165,7 +185,8 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         }
         try Task.checkCancellation()
         var request = URLRequest(url: target)
-        request.httpMethod = command == nil ? "GET" : command?.kind == .updateAvailabilityRule ? "PUT" : "POST"
+        if let command { request.httpMethod = [.updateAvailabilityRule, .savePlanningDefaults].contains(command.kind) ? "PUT" : "POST" }
+        else { request.httpMethod = "GET" }
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json, application/problem+json", forHTTPHeaderField: "Accept")
         request.setValue("no-store", forHTTPHeaderField: "Cache-Control")

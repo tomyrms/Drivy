@@ -175,6 +175,10 @@ actor LessonFinishServer: SchoolHTTPTransport {
         func problem(_ status: Int, _ code: String) -> SchoolHTTPResponse {
             SchoolHTTPResponse(data: Data("{\"code\":\"\(code)\",\"title\":\"Refus\"}".utf8), status: status, url: url, contentType: "application/problem+json")
         }
+        if parts.last == "planning-defaults" {
+            return try ok(["id": ConfigurationFixture.membershipID.uuidString, "schoolId": HubFixture.schoolID.uuidString,
+                "version": 1, "trainingCategoryCode": NSNull(), "serviceProductKey": NSNull()])
+        }
         if parts.last == "me" {
             return try ok(["personId": ConfigurationFixture.personID.uuidString, "version": 1, "displayName": "Compte de test", "locale": "fr",
                 "memberships": [["membershipId": ConfigurationFixture.membershipID.uuidString, "schoolId": HubFixture.schoolID.uuidString,

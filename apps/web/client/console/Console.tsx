@@ -19,8 +19,16 @@ import { AgendaSection } from './agenda';
 import { TripsSection } from './trips';
 
 const navigation: readonly { group: string; items: readonly { key: SectionKey; label: string; symbol: SymbolKind }[] }[] = [
-  { group: 'École', items: [
+  { group: 'Au quotidien', items: [
     { key: 'apercu', label: 'Vue d’ensemble', symbol: 'home' },
+    { key: 'agenda', label: 'Agenda', symbol: 'calendar' },
+    { key: 'eleves', label: 'Élèves', symbol: 'users' },
+    { key: 'trajets', label: 'Trajets', symbol: 'route' },
+  ] },
+  { group: 'Organisation', items: [
+    { key: 'equipe', label: 'Équipe et accès', symbol: 'shield' },
+    { key: 'disponibilites', label: 'Disponibilités', symbol: 'clock' },
+    { key: 'invitations', label: 'Invitations', symbol: 'mail' },
     { key: 'configuration', label: 'Configuration', symbol: 'settings' },
     { key: 'champs-profil', label: 'Champs du profil', symbol: 'list' },
   ] },
@@ -30,16 +38,6 @@ const navigation: readonly { group: string; items: readonly { key: SectionKey; l
     { key: 'procedures', label: 'Procédures', symbol: 'file' },
     { key: 'prestations', label: 'Prestations et tarifs', symbol: 'tag' },
     { key: 'conditions', label: 'Conditions commerciales', symbol: 'receipt' },
-  ] },
-  { group: 'Personnes', items: [
-    { key: 'eleves', label: 'Élèves', symbol: 'users' },
-    { key: 'equipe', label: 'Équipe et accès', symbol: 'shield' },
-    { key: 'invitations', label: 'Invitations', symbol: 'mail' },
-  ] },
-  { group: 'Planning', items: [
-    { key: 'agenda', label: 'Agenda', symbol: 'list' },
-    { key: 'trajets', label: 'Trajets', symbol: 'layers' },
-    { key: 'disponibilites', label: 'Disponibilités', symbol: 'clock' },
   ] },
 ];
 const sectionTitle = (key: SectionKey) => navigation.flatMap(group => group.items).find(item => item.key === key)!.label;
@@ -65,6 +63,8 @@ export function ManagementConsole() {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const navigationButton = useRef<HTMLButtonElement>(null);
   const csrf = useRef('');
   const generation = useRef(0);
   const snapshot = useCommandSnapshot();
@@ -148,6 +148,7 @@ export function ManagementConsole() {
     navigate: (section: SectionKey) => {
       window.history.pushState(null, '', pathFor(state.membership.schoolId, section));
       setRoute({ schoolId: state.membership.schoolId, section });
+      setNavigationOpen(false);
     },
     login: options => { void login(options); },
   }, [state]);
@@ -159,9 +160,11 @@ export function ManagementConsole() {
     <div className="console-shell">
       <a className="skip-link" href="#main">Aller au contenu</a>
       <header className="console-bar">
+        {context && <button ref={navigationButton} type="button" className="button quiet navigation-toggle" aria-controls="school-navigation" aria-expanded={navigationOpen}
+          onClick={() => setNavigationOpen(open => !open)}><Symbol kind="menu" bare /><span>Menu</span></button>}
         <a className="brand" href="/app/" aria-label="Drivy, retour à votre espace">
           <span className="brand-symbol" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="m11 24 5-16 5 16-5-4Z" /></svg></span>
-          <span>Drivy</span><span className="brand-context">Gestion</span>
+          <span>Drivy</span>
         </a>
         {state.status === 'ready' && (adminSchools.length > 1
           ? <label className="school-switch"><span className="visually-hidden">École gérée</span>
@@ -177,19 +180,8 @@ export function ManagementConsole() {
       </header>
 
       <div className="console-body">
-        {context && <nav className="console-nav" aria-label="Gestion de l’école"><div className="nav-inner">
-          {navigation.map(group => <div className="nav-group" key={group.group}>
-            <h2 className="nav-title">{group.group}</h2>
-            <ul>
-              {group.items.map(item => <li key={item.key}>
-                <a href={pathFor(context.schoolId, item.key)} aria-current={route.section === item.key ? 'page' : undefined}
-                  onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); context.navigate(item.key); }}>
-                  <Symbol kind={item.symbol} bare /><span>{item.label}</span>
-                </a>
-              </li>)}
-            </ul>
-          </div>)}
-        </div></nav>}
+        {context && <ConsoleNavigation schoolId={context.schoolId} section={route.section} open={navigationOpen} navigate={context.navigate}
+          onEscape={() => { setNavigationOpen(false); navigationButton.current?.focus(); }} />}
 
         <main id="main" className="console-main" aria-busy={state.status === 'loading'}>
           {state.status === 'loading' && <Loading label="Ouverture de la gestion de l’école…" />}
@@ -207,6 +199,24 @@ export function ManagementConsole() {
       </div>
     </div>
   );
+}
+
+/** The same navigation is used by the live shell and the synthetic visual review. */
+export function ConsoleNavigation({ schoolId, section, open, navigate, onEscape }: {
+  schoolId: string; section: SectionKey; open: boolean; navigate: (section: SectionKey) => void; onEscape: () => void;
+}) {
+  return <nav id="school-navigation" className={`console-nav${open ? ' is-open' : ''}`} aria-label="Gestion de l’école"
+    onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); onEscape(); } }}><div className="nav-inner">
+    {navigation.map(group => <div className="nav-group" key={group.group}>
+      <h2 className="nav-title">{group.group}</h2>
+      <ul>{group.items.map(item => <li key={item.key}>
+        <a href={pathFor(schoolId, item.key)} aria-current={section === item.key ? 'page' : undefined}
+          onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(item.key); }}>
+          <Symbol kind={item.symbol} bare /><span>{item.label}</span>
+        </a>
+      </li>)}</ul>
+    </div>)}
+  </div></nav>;
 }
 
 function Section({ section }: { section: SectionKey }): ReactNode {

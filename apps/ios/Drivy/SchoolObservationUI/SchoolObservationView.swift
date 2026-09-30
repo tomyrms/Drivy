@@ -151,52 +151,21 @@ struct SchoolObservationView: View {
         }
     }
     private func observationRow(_ observation: SchoolObservation) -> some View {
-        let status = observation.eventStatus.flatMap(SchoolObservationStatus.init(rawValue:))
-        let rowTone: DrivyTone = status.map { tone($0) } ?? .neutral
-        let title = observation.eventKind == "QUALIFIED" ? observation.text : (observation.isMarker ? "Moment à revoir" : "Note de relecture")
         let meta = [model.timeLabel(observation.observedAt), observation.hasPosition ? "Sur le trajet" : nil]
             .compactMap { $0 }.joined(separator: " · ")
-        return VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            HStack(alignment: .top, spacing: DrivySpacing.s) {
-                Image(systemName: status?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble.fill"))
-                    .font(.headline)
-                    .foregroundStyle(rowTone.foreground)
-                    .frame(width: 36, height: 36)
-                    .background(rowTone.background, in: Circle())
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    Text(title).font(.headline).foregroundStyle(DrivyTheme.text)
-                    if let status {
-                        Text(status.label).font(.subheadline.weight(.semibold)).foregroundStyle(rowTone.foreground)
-                    }
-                    if observation.eventKind != "QUALIFIED" {
-                        Text(observation.text).font(.body)
-                    }
-                    if !meta.isEmpty {
-                        Text(meta).font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-                    }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
-            }
-            HStack(spacing: DrivySpacing.l) {
-                Button(observation.isMarker ? "Préciser" : "Modifier") {
+        return HStack(alignment: .center, spacing: DrivySpacing.s) {
+            DrivyObservationSummary(observation: observation, detail: meta)
+            Menu {
+                Button(observation.isMarker ? "Préciser" : "Modifier", systemImage: "pencil") {
                     if let editor = model.edit(observation) { route = .edit(editor) }
                 }
-                .foregroundStyle(model.canMutate ? DrivyTheme.accent : DrivyTheme.disabledText)
-                .frame(minHeight: 44).contentShape(Rectangle())
-                .disabled(!model.canMutate)
-                Spacer(minLength: 0)
-                Button("Retirer", role: .destructive) { route = .remove(observation) }
-                    .foregroundStyle(model.canMutate ? DrivyTheme.danger : DrivyTheme.disabledText)
-                    .frame(minHeight: 44).contentShape(Rectangle())
-                    .disabled(!model.canMutate)
+                Button("Retirer", systemImage: "trash", role: .destructive) { route = .remove(observation) }
+            } label: {
+                Image(systemName: "ellipsis").foregroundStyle(DrivyTheme.muted)
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .font(.subheadline.weight(.semibold))
-            // Alignées sur la colonne de texte : les actions se lisent comme celles de cette ligne.
-            .padding(.leading, 36 + DrivySpacing.s)
+            .disabled(!model.canMutate)
+            .accessibilityLabel("Actions pour l’observation : \(observation.text)")
         }
         .padding(.vertical, DrivySpacing.s)
         .accessibilityElement(children: .contain)

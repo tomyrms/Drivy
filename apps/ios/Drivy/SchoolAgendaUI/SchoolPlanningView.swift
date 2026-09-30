@@ -3,8 +3,10 @@ import SwiftUI
 struct SchoolPlanningView: View {
     @Bindable var model: SchoolPlanningWorkspace
     var cancelling = false
+    var beforeCancellation: (@MainActor () async -> Bool)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var confirmsCancellation = false
+    @State private var document: SchoolPlanningDocument?
 
     private var title: String { cancelling ? "Annuler la leçon" : model.originalLesson == nil ? "Planifier une leçon" : "Déplacer la leçon" }
     var body: some View {
@@ -27,8 +29,14 @@ struct SchoolPlanningView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
             }
             .task { if model.school == nil { await model.load() } }
+            .sheet(item: $document) { SchoolPlanningDocumentView(document: $0) }
             .confirmationDialog("Annuler cette leçon ?", isPresented: $confirmsCancellation, titleVisibility: .visible) {
-                Button("Annuler la leçon", role: .destructive) { Task { if await model.cancel() { dismiss() } } }
+                Button("Annuler la leçon", role: .destructive) {
+                    Task {
+                        guard await beforeCancellation?() ?? true else { return }
+                        if await model.cancel() { dismiss() }
+                    }
+                }
                 Button("Conserver la leçon", role: .cancel) { }
             } message: { Text("L’élève et le moniteur n’auront plus ce rendez-vous dans leur planning actif.") }
         }
@@ -81,6 +89,7 @@ struct SchoolPlanningView: View {
             }
             if model.originalLesson == nil || model.changesCommercialTerms { commercialFields }
             reviewFields
+            documentLinks
         }
     }
     private var scheduleFields: some View {
@@ -97,15 +106,16 @@ struct SchoolPlanningView: View {
                 .onChange(of: model.startsAt) { _, _ in model.termsAccepted = false; model.agreementConfirmed = false }
             DatePicker("Heure", selection: $model.startsAt, displayedComponents: .hourAndMinute)
                 .onChange(of: model.startsAt) { _, _ in model.termsAccepted = false; model.agreementConfirmed = false }
-            // Libellé permanent : une fois le lieu repris, la ligne dit encore ce qu’elle contient.
-            LabeledContent("Lieu") {
-                TextField("Lieu du rendez-vous", text: $model.meetingPoint, axis: .vertical).lineLimit(1...3)
-                    .multilineTextAlignment(.trailing)
-            }
-            .onChange(of: model.meetingPoint) { _, _ in model.agreementConfirmed = false }
-            if model.originalLesson == nil {
-                DisclosureGroup("Temps entre deux leçons") {
-                    Stepper("\(model.bufferMinutes) min", value: $model.bufferMinutes, in: 0...240, step: 5)
+            DisclosureGroup("Détails du rendez-vous") {
+                LabeledContent("Lieu (facultatif)") {
+                    TextField("Lieu du rendez-vous", text: $model.meetingPoint, axis: .vertical).lineLimit(1...3)
+                        .multilineTextAlignment(.trailing)
+                }
+                .onChange(of: model.meetingPoint) { _, _ in model.agreementConfirmed = false }
+                if model.originalLesson == nil {
+                    Stepper("Intervalle : \(model.bufferMinutes) min", value: $model.bufferMinutes, in: 0...240, step: 5)
+                        .accessibilityLabel("Temps entre deux leçons")
+                        .accessibilityValue("\(model.bufferMinutes) minutes")
                 }
             }
             if model.instructorID != nil {
@@ -152,25 +162,38 @@ struct SchoolPlanningView: View {
                         Text(SchoolCatalogFormatting.price(product.unitPriceCents)).monospacedDigit().foregroundStyle(DrivyTheme.muted)
                     }
                 }
-                if let terms = model.selectedTerms {
-                    DisclosureGroup("Conditions") {
-                        Text(terms.label).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                        Text(terms.termsText).font(.subheadline).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                        Text(SchoolPlanningFormat.validity(terms.validFrom, until: terms.validUntil)).font(.caption).foregroundStyle(DrivyTheme.muted)
-                    }
+                if model.selectedTerms != nil {
                     Toggle("Prix et conditions acceptés", isOn: $model.termsAccepted)
-                }
-            }
-            if let policy = model.selectedPolicy {
-                DisclosureGroup("Procédure et annulation") {
-                    Text(policy.procedureText).font(.subheadline).textSelection(.enabled)
-                    Divider()
-                    Text(policy.cancellationPolicyText).font(.subheadline).textSelection(.enabled)
                 }
             }
         } header: { Text("Le tarif").drivyFormSectionHeader() }
             .drivyFormRows()
         .disabled(!model.canMutate)
+    }
+    private var documentLinks: some View {
+        Section {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: DrivySpacing.m) { documentButtons }
+                VStack(alignment: .leading, spacing: 0) { documentButtons }
+            }
+            .font(.footnote)
+            .buttonStyle(.plain)
+            .foregroundStyle(DrivyTheme.accent)
+        }
+        .listRowBackground(Color.clear)
+    }
+    @ViewBuilder private var documentButtons: some View {
+        if let terms = model.selectedTerms {
+            Button {
+                document = SchoolPlanningDocument(title: "Conditions tarifaires", text: "\(terms.label)\n\n\(terms.termsText)\n\n\(SchoolPlanningFormat.validity(terms.validFrom, until: terms.validUntil))")
+            } label: { Text("Conditions tarifaires").frame(minHeight: 44).contentShape(Rectangle()) }
+        }
+        if let policy = model.selectedPolicy {
+            Button { document = SchoolPlanningDocument(title: "Procédure", text: policy.procedureText) }
+                label: { Text("Procédure").frame(minHeight: 44).contentShape(Rectangle()) }
+            Button { document = SchoolPlanningDocument(title: "Annulation", text: policy.cancellationPolicyText) }
+                label: { Text("Annulation").frame(minHeight: 44).contentShape(Rectangle()) }
+        }
     }
     private var reviewFields: some View {
         Section {
@@ -239,7 +262,6 @@ struct SchoolPlanningView: View {
         if model.trainingID == nil { return "Choisis sa formation." }
         if model.instructorID == nil { return "Choisis le moniteur pour cette leçon." }
         if model.startsAt <= Date() { return "Choisis un horaire à venir." }
-        if model.meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Indique le lieu de rendez-vous." }
         if model.originalLesson != nil && !model.agreementConfirmed { return "Confirme que le nouvel horaire est convenu." }
         if (model.originalLesson == nil || model.changesCommercialTerms) && model.productID == nil { return "Choisis un tarif pour fixer la durée et le prix." }
         if (model.originalLesson == nil || model.changesCommercialTerms) && !model.termsAccepted { return "Relis puis accepte le prix et les conditions." }
@@ -251,7 +273,7 @@ struct SchoolPlanningView: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                     Text(SchoolPlanningFormat.interval(lesson.plannedStart, lesson.plannedEnd, zone: lesson.timeZone))
                         .font(.headline.monospacedDigit())
-                    Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    if !lesson.meetingPoint.isEmpty { Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
                 }
                 .padding(.vertical, DrivySpacing.xxs)
                 .accessibilityElement(children: .combine)

@@ -11,10 +11,10 @@ import {ensureOpen,instructorPermission} from './lesson-setup.js';
 const id=z.uuid(),date=z.iso.datetime({offset:true}),amount=z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),empty=z.object({}).strict();
 const selection=z.object({mode:z.enum(['UNIT_PRICE','ENTITLEMENT']),serviceProductVersionId:id,quantity:z.number().int().min(1).max(100),entitlementLotId:id.nullable(),acceptedTermsVersionId:id}).strict()
  .refine(v=>v.mode==='UNIT_PRICE'?v.entitlementLotId===null:v.entitlementLotId!==null);
-const interval={plannedStart:date,plannedEnd:date,timeZone:z.string().min(1).max(100),meetingPoint:z.string().trim().min(1).max(500),instructorMembershipId:id};
+const interval={plannedStart:date,plannedEnd:date,timeZone:z.string().min(1).max(100),meetingPoint:z.string().trim().max(500).nullish().transform(value=>value??''),instructorMembershipId:id};
 const createCommand=z.object({operationId:id,trainingId:id,...interval,agreedPriceCents:amount,bufferMinutes:z.number().int().min(0).max(240),policyVersionId:id,commercialSelection:selection}).strict();
 const commercialChange=z.object({commercialSelection:selection,agreedPriceCents:amount,expectedAccountVersion:z.number().int().positive().nullable(),reason:z.string().trim().min(1).max(1000)}).strict();
-const startNowCommand=z.object({operationId:id,trainingId:id,meetingPoint:z.string().trim().min(1).max(500).nullable().optional()}).strict();
+const startNowCommand=z.object({operationId:id,trainingId:id,meetingPoint:z.string().trim().max(500).nullable().optional()}).strict();
 const moveCommand=z.object({operationId:id,...interval,agreementConfirmed:z.literal(true),reason:z.string().max(1000).nullable().optional(),commercialChange:commercialChange.optional()}).strict();
 const cancelCommand=z.object({operationId:id,reasonCode:z.enum(['LEARNER_REQUEST','INSTRUCTOR_UNAVAILABLE','SCHOOL_CLOSURE','OTHER']),comment:z.string().max(1000).nullable().optional()}).strict();
 type Selection=z.infer<typeof selection>;
@@ -101,13 +101,14 @@ async function insertLesson(db:PoolClient,school:SchoolRow,context:TrainingConte
   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING ${lessonColumns}`,[randomUUID(),school.id,value.trainingId,context.learner_id,context.person_id,value.instructorId,value.start,value.end,school.timeZone,value.meetingPoint,value.priceCents,value.bufferMinutes,value.policyVersionId,JSON.stringify(value.selection)])).rows[0]!;
 }
 /** Prestation de leçon en vigueur (dernière version, conditions approuvées) dont la durée divise celle de la séance ; la durée exacte est préférée. */
-async function currentLessonProduct(db:PoolClient,schoolId:string,category:string,minutes:number,start:string,timeZone:string){
+async function currentLessonProduct(db:PoolClient,schoolId:string,category:string,minutes:number,start:string,timeZone:string,membershipId:string){
  const row=(await db.query<{id:string;duration_minutes:number;unit_price_cents:string;terms_version_id:string}>(`SELECT s.id,s.duration_minutes,s.unit_price_cents,s.terms_version_id FROM drivy.service_product_version s
   JOIN drivy.commercial_terms_version t ON t.school_id=s.school_id AND t.id=s.terms_version_id WHERE s.school_id=$1 AND s.type='INDIVIDUAL_LESSON' AND s.enabled AND s.category_code=$2 AND s.site_id IS NULL
   AND drivy.service_product_current(s.id) AND s.duration_minutes IS NOT NULL AND $3::int % s.duration_minutes=0
   AND s.valid_from<=($4::timestamptz AT TIME ZONE $5)::date AND (s.valid_until IS NULL OR s.valid_until>=($4::timestamptz AT TIME ZONE $5)::date) AND t.approved
   AND t.valid_from<=($4::timestamptz AT TIME ZONE $5)::date AND (t.valid_until IS NULL OR t.valid_until>=($4::timestamptz AT TIME ZONE $5)::date)
-  ORDER BY (s.duration_minutes=$3::int) DESC,s.duration_minutes DESC,s.unit_price_cents,s.product_key LIMIT 1`,[schoolId,category,minutes,start,timeZone])).rows[0];
+  ORDER BY coalesce(s.product_key=(SELECT service_product_key FROM drivy.planning_defaults WHERE school_id=$1 AND membership_id=$6),false) DESC,
+   (s.duration_minutes=$3::int) DESC,s.duration_minutes DESC,s.unit_price_cents,s.product_key LIMIT 1`,[schoolId,category,minutes,start,timeZone,membershipId])).rows[0];
  if(!row)throw new ApiError(409,'COMMERCIAL_SETUP_REQUIRED','Préparez une prestation de leçon et ses conditions approuvées pour cette catégorie.');
  return row;
 }
@@ -245,12 +246,12 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
     if(!offer)throw notFound();if(!offer.default_duration_minutes)throw new ApiError(422,'OFFERING_NOT_READY','L’offre doit indiquer la durée d’une leçon.');
     const minutes=offer.default_duration_minutes,end=new Date(start.getTime()+minutes*60_000),startIso=start.toISOString(),endIso=end.toISOString();
     const context=await trainingContext(db,school,body.trainingId,actor.membershipId,startIso,endIso);
-    const product=await currentLessonProduct(db,school.id,context.category_code,minutes,startIso,school.timeZone);
+    const product=await currentLessonProduct(db,school.id,context.category_code,minutes,startIso,school.timeZone,actor.membershipId);
     const quantity=minutes/product.duration_minutes,catalog=BigInt(product.unit_price_cents)*BigInt(quantity);
     if(catalog>BigInt(Number.MAX_SAFE_INTEGER))throw new ApiError(422,'INVALID_AMOUNT','Le montant dépasse la limite acceptée.');
     const selection:Selection={mode:'UNIT_PRICE',serviceProductVersionId:product.id,quantity,entitlementLotId:null,acceptedTermsVersionId:product.terms_version_id};
     await validateCommercial(db,school.id,selection,Number(catalog),context.category_code,minutes,startIso,school.timeZone,false);
-    const row=await insertLesson(db,school,context,{trainingId:body.trainingId,instructorId:actor.membershipId,start:startIso,end:endIso,meetingPoint:body.meetingPoint??'À préciser',priceCents:Number(catalog),bufferMinutes:0,policyVersionId:context.policy_version_id,selection});
+    const row=await insertLesson(db,school,context,{trainingId:body.trainingId,instructorId:actor.membershipId,start:startIso,end:endIso,meetingPoint:body.meetingPoint??'',priceCents:Number(catalog),bufferMinutes:0,policyVersionId:context.policy_version_id,selection});
     await occupations(db,row,context.instructor_person_id);await revision(db,row,actor,body.operationId,'Initial booking');await event(db,row,body.operationId,'LessonCreated');
     return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonStartedNow',changedFields:['plannedStart','plannedEnd','instructorMembershipId','meetingPoint','commercialSelection']};
    },['INSTRUCTOR'],guards);
@@ -294,6 +295,10 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
 
 /** AP72 checks the current target without exposing stored command bodies. */
 export async function authorizePlanningOperation(db:PoolClient,schoolId:string,type:string,resourceId:string):Promise<boolean>{
+ if(type==='SAVE_PLANNING_DEFAULTS'){
+  if(!(await db.query('SELECT 1 FROM drivy.planning_defaults WHERE school_id=$1 AND membership_id=$2',[schoolId,resourceId])).rowCount)throw notFound();
+  return true;
+ }
  if(['CREATE_LESSON','START_LESSON_NOW','MOVE_LESSON','CANCEL_LESSON'].includes(type)){
   const row=await getLesson(db,schoolId,resourceId);await access(db,row.training_id,row.instructor_membership_id);return true;
  }

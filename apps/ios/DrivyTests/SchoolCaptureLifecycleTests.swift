@@ -50,6 +50,36 @@ import Testing
         #expect(fixture.controller.lessonTimes(lessonID: fixture.capture.lessonId) != nil)
     }
 
+    @Test func liveObservationUsesOnlyDurableFreshPointsAndFlushesWithoutPausing() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        #expect(fixture.controller.observationAnchor(at: Date()) == nil)
+        try await Task.sleep(for: .milliseconds(5))
+        let measured = try #require(fixture.source.emitPoint())
+        // The callback has queued its transaction; its position is not durable yet.
+        #expect(fixture.controller.observationAnchor(at: measured) == nil)
+        for _ in 0..<300 {
+            if fixture.controller.pointCount == 1 { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let anchor = try #require(fixture.controller.observationAnchor(at: measured.addingTimeInterval(1)))
+        #expect(anchor.captureID == fixture.capture.id && anchor.pointSequence == 0)
+        #expect(fixture.controller.observationAnchor(at: measured.addingTimeInterval(16)) == nil)
+        #expect(fixture.controller.observationAnchor(at: measured.addingTimeInterval(-1)) == nil)
+        try await fixture.store.flushForObservation(captureID: anchor.captureID, segmentID: anchor.segmentID,
+            sequence: anchor.pointSequence, scope: fixture.scope)
+        try await fixture.store.flushForObservation(captureID: anchor.captureID, segmentID: anchor.segmentID,
+            sequence: anchor.pointSequence, scope: fixture.scope)
+        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId)
+        let chunks = queue.filter { $0.mutation.kind == .uploadChunk }
+        #expect(chunks.count == 1)
+        let queued = try #require(chunks.first)
+        let chunk = try JSONDecoder().decode(SchoolCaptureChunkBody.self, from: queued.mutation.body)
+        #expect(chunk.points.count == 1 && chunk.points.first?.sequence == 0)
+        #expect(fixture.controller.isCollecting && fixture.controller.segments.count == 1)
+        await fixture.controller.pause()
+        #expect(fixture.controller.observationAnchor(at: measured.addingTimeInterval(1)) == nil)
+    }
+
     @Test func aSignalGapResumesLocallyInANewSegmentWithoutASecondAuthorization() async throws {
         let fixture = try await CaptureLifecycleFixture.make()
         let count = await fixture.server.requests().count
@@ -245,6 +275,14 @@ import Testing
     }
     func start(segment: SchoolCaptureLocationSegment, handle: SchoolCaptureSegmentHandle) throws {
         self.segment = segment; self.handle = handle; isRunning = true; boundary = nil
+    }
+    func emitPoint() -> Date? {
+        guard isRunning, let segment, let handle else { return nil }
+        let elapsed = max(1, Int(SchoolCaptureLocationTime.seconds(segment.monotonicStartedAt.duration(to: .now)) * 1000))
+        let date = segment.mappedStartedAt.addingTimeInterval(Double(elapsed) / 1000)
+        onEvent?(.measurements(handle: handle, values: [.init(capturedAt: SchoolCaptureLocationTime.timestamp(date),
+            elapsedMs: elapsed, latitude: 47, longitude: 7, accuracyMeters: 5)]))
+        return date
     }
     func stop() -> SchoolCaptureLocationStop? {
         guard isRunning, let segment, let handle else { return boundary }

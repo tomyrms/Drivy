@@ -8,7 +8,6 @@ import { useConsole, useLoad } from './context';
 import { LoadState, SectionHeading } from './layout';
 
 const lessonState: Partial<Record<Lesson['status'], { label: string; tone: Tone; symbol: 'check' | 'ban' | 'alert' }>> = {
-  COMPLETED: { label: 'Réalisée', tone: 'success', symbol: 'check' },
   CANCELLED: { label: 'Annulée', tone: 'neutral', symbol: 'ban' },
   NO_SHOW: { label: 'Absent', tone: 'warning', symbol: 'alert' },
 };

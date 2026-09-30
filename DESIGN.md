@@ -1,7 +1,7 @@
 ---
 version: alpha
-name: Drivy · Cartographie native
-description: Système visuel commun du client Apple (SwiftUI) et du web Drivy, dérivé de la direction A « Cartographie native » et des tokens 3.8. Valeurs du thème clair ; le sombre est dans la section Themes.
+name: Drivy · Web et Apple
+description: Deux directions par surface. Web bureau sobre depuis le 30 septembre 2026 ; Apple Cartographie native conservée. Les tokens structurés de cet en-tête concernent Apple uniquement ; les tokens web figurent dans la section Web.
 colors:
   canvas: "#F7F8FA"
   surface: "#FFFFFF"
@@ -93,11 +93,62 @@ components:
     padding: "{spacing.m}"
 ---
 
-# Drivy · Cartographie native
+# Drivy · Web et Apple
 
-Référence d’application pour tout agent ou développeur qui touche une interface Drivy. Source canonique : `Drivy_Conception_v3_17_2026-09-20/DESIGN/` et `annexes/tokens-proposition.json` ; code : `apps/ios/Drivy/UI/DrivyTheme.swift`, `apps/ios/Drivy/UI/DrivyComponents.swift`, `apps/web/client/styles.css`. Les décisions d’implémentation et les vérifications vivent dans `docs/implementation/design-system.md`.
+La refonte de direction artistique du 30 septembre 2026 concerne **uniquement le web**, y compris son rendu sur téléphone et tablette. L’identité native iPhone/iPad est conservée. Les ajustements fonctionnels ciblés de l’app (carte, bilan, compétences) ne donnent pas mandat pour changer son thème.
 
-**Statut.** Validé par le porteur : la direction A « Cartographie native » (choix accepté) et la passe d’harmonisation du 25 septembre 2026. Encore proposition : les valeurs exactes des tokens 3.8 (« en attente d’acceptation visuelle »), les durées de mouvement, les largeurs de panneau et points de rupture, le nom « Drivy » en police système et le petit signe de trajet (**pas un logo approuvé**). Un changement de token part du JSON canonique, puis `DrivyTheme.swift` et `styles.css` le suivent.
+Le dossier `Drivy_Conception_v3_17_2026-09-20` reste une livraison conservée. Les décisions de cette passe sont dans [web-direction-20260930.md](docs/implementation/web-direction-20260930.md). La référence native détaillée reste ci-dessous et dans [la grille iOS](docs/implementation/DESIGN.md).
+
+## Web · Bureau
+
+Choix utilisateur : « Sobre et précise : listes compactes, carte dominante, peu de cartes décoratives, couleurs discrètes. » Le web organise le travail administratif ; le trajet garde son rôle dans l’app terrain. Une carte n’est pas ajoutée artificiellement à un écran sans données cartographiques.
+
+### Composition
+
+- La navigation commence par Vue d’ensemble, Agenda, Élèves et Trajets. L’organisation de l’école et son catalogue restent accessibles dans les groupes suivants.
+- Desktop : rail de 232 px et zone de travail flexible. La liste et le dossier utilisent deux colonnes quand elles disposent de leur largeur utile. Le dossier a une séparation verticale, sans carte arrondie englobante.
+- Jusqu’à 1024 px : le bouton Menu ouvre les mêmes destinations dans le flux. Il remplace le ruban horizontal de toutes les rubriques. Sélectionner une destination ferme le menu ; Échap depuis la navigation restitue le focus au bouton.
+- Vue d’ensemble : accès directs aux tâches quotidiennes, préparation à terminer, puis coordonnées/fonctions. Les étapes déjà faites sont repliées ; une école active ne porte pas de badge décoratif.
+- Sections de lecture plates, listes alignées et séparateurs discrets. Une couleur de surface sert une sélection, un contrôle ou un message. Les tableaux gardent leurs colonnes comparables ; un tableau large défile dans sa propre région.
+- Les formulaires composés adaptent leurs colonnes à leur conteneur. Un champ à l’intérieur d’un dossier ne dépend pas de la largeur totale de l’écran.
+
+### Tokens web
+
+Source d’exécution : `apps/web/client/styles.css`. Les hexadécimaux sont nommés par rôle, sans deuxième système de couleur. Le thème suit `prefers-color-scheme`.
+
+| Rôle | Clair | Sombre |
+|---|---|---|
+| canvas | `#F7F7F4` | `#151B18` |
+| surface | `#FFFFFF` | `#1D2520` |
+| surface-muted | `#EEEFEB` | `#28322B` |
+| text | `#202925` | `#F1F4EE` |
+| muted | `#5D6861` | `#B4BEB5` |
+| accent | `#285847` | `#9CCBB8` |
+| accent-pressed | `#1D4336` | `#B6DECD` |
+| on-accent | `#FFFFFF` | `#193C2E` |
+| accent-soft | `#E9F0EB` | `#293E32` |
+| border | `#DCE1DA` | `#3C483F` |
+| control-border | `#7D887F` | `#86958A` |
+
+Les couleurs sémantiques succès, alerte et erreur restent dans leurs rôles existants. Une réussite reçoit un texte ou symbole explicite ; l’accent vert n’est pas une preuve de réussite métier.
+
+Police système, titres principaux 28–32 px/650, titres de section 17 px/600, lignes 15 px, métadonnées 14 px. Les champs passent à 16 px sur petit écran ou pointeur tactile pour éviter le zoom de saisie Safari. Heures et montants utilisent les chiffres tabulaires. Les textes utiles restent sélectionnables.
+
+Rayons web : champ 8 px, contenu 12 px, panneau/dialogue 20 px. Les contrôles de gestion gardent au moins 44 px de hauteur. Une seule action primaire par vue ; secondaires neutres, destructives nommées. Les couleurs et rayons web ne doivent pas être recopiés dans `DrivyTheme.swift`.
+
+### Accessibilité et états
+
+Liens pour les destinations, boutons pour les actions, labels permanents, `aria-current` pour la rubrique active, `aria-expanded` et `aria-controls` pour le menu. Chaque panneau de détail possède un identifiant de titre unique. L’indicateur de focus de 3 px, le mouvement réduit et les couleurs forcées restent pris en charge. Les badges peuvent se replier sur plusieurs lignes.
+
+Conserver les refus serveur, les erreurs, la saisie et la demande incertaine. Un succès ne s’affiche qu’après la confirmation durable. Un style compact ne cache jamais une action nécessaire, un prix modifié ou un refus d’accès.
+
+Contrastes mesurés : texte sur surface 14,94:1 clair / 14,14:1 sombre ; secondaire 5,80:1 / 8,20:1 ; action primaire 8,15:1 / 6,74:1. [Mesures](docs/implementation/proofs/web-contrast-20260930.json). La lecture VoiceOver/NVDA, le zoom navigateur à 200 % et les essais physiques restent à qualifier.
+
+## Apple · Cartographie native conservée
+
+**Portée du reste de ce document : client natif Apple.** Les valeurs structurées de l’en-tête et les anciennes correspondances iOS/web ci-dessous décrivent le système natif conservé et l’harmonisation historique du 25 septembre ; elles ne prescrivent plus le thème web. Source native : dossier de conception et `apps/ios/Drivy/UI/DrivyTheme.swift`. Ne pas modifier les tokens du dossier livré pour implémenter une décision récente.
+
+**Statut natif.** Direction A validée, tokens 3.8 conservés. Durées, dimensions de panneaux et comportement physique restent soumis à qualification. Le petit signe de trajet n’est pas un logo approuvé.
 
 ## Overview
 

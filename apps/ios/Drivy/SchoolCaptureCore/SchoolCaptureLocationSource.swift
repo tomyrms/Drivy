@@ -43,6 +43,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
     private var lastDiagnostic: (ageAtReceipt: TimeInterval, accuracy: Double, receivedAt: ContinuousClock.Instant)?
     private var diagnosticRequested = false
     private var startGate = SchoolCaptureLocationStartGate()
+    private var startedBatteryMonitoring = false
     private(set) var discardedCallbackCount = 0
 
     override init() {
@@ -55,6 +56,8 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
             name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(becameActive),
             name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(powerChanged),
+            name: UIDevice.batteryStateDidChangeNotification, object: nil)
     }
 
     var permission: SchoolCaptureLocationPermission { Self.permission(permissionManager.authorizationStatus) }
@@ -176,7 +179,11 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         permissionManager.stopUpdatingLocation()
         let manager = CLLocationManager()
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBest
+        if !UIDevice.current.isBatteryMonitoringEnabled {
+            UIDevice.current.isBatteryMonitoringEnabled = true
+            startedBatteryMonitoring = true
+        }
+        manager.desiredAccuracy = Self.navigationAccuracy(power: UIDevice.current.batteryState)
         // Zéro signifie sans filtre : un premier callback issu du cache peut être
         // refusé sans devoir attendre ensuite un déplacement de plusieurs mètres.
         manager.distanceFilter = segment.policy.distanceFilterMeters == 0 ? kCLDistanceFilterNone : segment.policy.distanceFilterMeters
@@ -201,6 +208,10 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         // Barrière avant tout effet utilisateur : un callback ancien ne voit plus sa
         // source et la minuterie ne peut pas ressusciter sa génération.
         manager = nil; segment = nil; handle = nil; preparedSegmentID = nil; armedWallTime = nil; lastElapsedMs = nil
+        if startedBatteryMonitoring {
+            UIDevice.current.isBatteryMonitoringEnabled = false
+            startedBatteryMonitoring = false
+        }
         diagnosticRequested = false
         permissionManager.stopUpdatingLocation()
         deadlineTask?.cancel(); deadlineTask = nil
@@ -386,6 +397,16 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
     }
 
     private func discard(_ count: Int) { discardedCallbackCount = min(1_000_000, discardedCallbackCount + min(count, 1000)) }
+
+    /// Apple reserves the extra sensors of BestForNavigation for external power.
+    /// On battery, retain Best and the same unfiltered stream of measurements.
+    static func navigationAccuracy(power: UIDevice.BatteryState) -> CLLocationAccuracy {
+        power == .charging || power == .full ? kCLLocationAccuracyBestForNavigation : kCLLocationAccuracyBest
+    }
+
+    @objc private func powerChanged() {
+        manager?.desiredAccuracy = Self.navigationAccuracy(power: UIDevice.current.batteryState)
+    }
 
     @objc private func clockChanged() {
         lastDiagnostic = nil

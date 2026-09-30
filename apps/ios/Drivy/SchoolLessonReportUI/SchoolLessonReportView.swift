@@ -17,6 +17,7 @@ struct SchoolLessonReportView: View {
     @State private var model: SchoolLessonReportWorkspace?
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var confirmsDiscard = false
 
     private var hasUnsavedChanges: Bool { model?.hasLocalEdits ?? false }
@@ -54,6 +55,10 @@ struct SchoolLessonReportView: View {
             }
         }
         .interactiveDismissDisabled(hasUnsavedChanges || model?.isBusy == true)
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, let model, matches(model), !model.isLoading, !model.isBusy else { return }
+            Task { await model.load() }
+        }
         .onChange(of: model?.reportSaveConfirmed) { _, confirmed in
             guard confirmed == true else { return }
             capture?.closeLessonFlow(lessonID: lessonID)
@@ -107,6 +112,7 @@ private struct SchoolLessonReportContent: View {
     @State private var observationRoute: ObservationRoute?
     @State private var capturePreparation: SchoolCapturePreparationWorkspace?
     @State private var planningRoute: PlanningRoute?
+    @State private var expandedCompetencies = Set<UUID>()
 
     private enum LessonSheet: String, Identifiable {
         case permit, tariff
@@ -571,16 +577,21 @@ private struct SchoolLessonReportContent: View {
                     Spacer(minLength: 0)
                     if model.isAuthor, model.sharing != nil {
                         let kept = model.isPrivate(observation)
-                        Button {
-                            Task { await model.updateSharing(observation: observation.id, observationPrivate: !kept) }
+                        Menu {
+                            Button(kept ? "Montrer à l’élève" : "Garder pour moi",
+                                   systemImage: kept ? "person.2" : "person") {
+                                Task { await model.updateSharing(observation: observation.id, observationPrivate: !kept) }
+                            }
                         } label: {
-                            DrivyPrivacyMark(isPrivate: kept)
-                                .frame(minWidth: 44, minHeight: 44)
+                            HStack(spacing: DrivySpacing.xxs) {
+                                if kept { Text("Pour moi").font(.caption).foregroundStyle(DrivyTheme.muted) }
+                                Image(systemName: "ellipsis").font(.body).foregroundStyle(DrivyTheme.muted)
+                            }
+                            .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
                         }
                         .buttonStyle(.borderless)
                         .disabled(!model.canMutate)
-                        .accessibilityLabel(kept ? "Pour moi" : "Visible par l’élève")
-                        .accessibilityHint(kept ? "Montrer à l’élève" : "Garder pour moi")
+                        .accessibilityLabel("Partage de l’observation : \(kept ? "pour moi" : "visible par l’élève")")
                     }
                 }
             }
@@ -595,25 +606,7 @@ private struct SchoolLessonReportContent: View {
 
     /// Constat par symbole, libellé et couleur : jamais par la couleur seule.
     private func observationContent(_ observation: SchoolObservation) -> some View {
-        let status = SchoolLessonHubRules.status(of: observation)
-        return HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
-            Image(systemName: status?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble.fill"))
-                .font(.caption.weight(.bold))
-                .foregroundStyle(color(observation))
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                if let status {
-                    Text(status.label).font(.caption.weight(.semibold)).foregroundStyle(color(observation))
-                }
-                if observation.text != status?.label {
-                    Text(observation.text).fixedSize(horizontal: false, vertical: true)
-                }
-                if let label = competencyLabel(observation) {
-                    Text(label).font(.caption).foregroundStyle(DrivyTheme.muted)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
+        DrivyObservationSummary(observation: observation, competency: competencyLabel(observation))
     }
 
     private func color(_ observation: SchoolObservation) -> Color {
@@ -646,27 +639,43 @@ private struct SchoolLessonReportContent: View {
             Section {
                 // Un niveau choisi suffit : le jour et le lieu sont proposés comme situation, modifiable.
                 ForEach(model.competencies) { competency in
-                    HStack(spacing: DrivySpacing.s) {
-                        Picker(competency.displayLabel, selection: levelBinding(competency.id)) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        Menu {
+                            Picker(competency.displayLabel, selection: levelBinding(competency.id)) {
                             Text(model.unchangedChoiceLabel(for: competency.id)).tag("")
                             Text("En découverte").tag("DISCOVERING")
                             Text("Avec accompagnement").tag("GUIDED")
                             Text("En autonomie").tag("INDEPENDENT")
+                            }
+                            if model.observations.contains(where: { $0.id == competency.id }) {
+                                Button("Retirer l’évaluation de cette leçon", systemImage: "arrow.uturn.backward") {
+                                    model.setObservationLevel("", for: competency.id)
+                                    expandedCompetencies.remove(competency.id)
+                                }
+                                Button("Préciser la situation", systemImage: "text.alignleft") { expandedCompetencies.insert(competency.id) }
+                            }
+                        } label: {
+                            HStack(spacing: DrivySpacing.s) {
+                                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                                    Text(competency.displayLabel).font(.subheadline.weight(.medium)).foregroundStyle(DrivyTheme.text)
+                                    Text(competencyLevelLabel(competency.id)).font(.caption).foregroundStyle(DrivyTheme.muted)
+                                }.frame(maxWidth: .infinity, alignment: .leading)
+                                DrivyCompetencyMeter(level: displayedCompetencyLevel(competency.id))
+                                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(DrivyTheme.muted)
+                            }
+                            .frame(minHeight: 44).contentShape(Rectangle())
                         }
-                        .pickerStyle(.menu)
-                        // Sans niveau, la valeur reste discrète : l’accent est réservé à ce qui est renseigné.
-                        .tint(levelBinding(competency.id).wrappedValue.isEmpty ? DrivyTheme.muted : DrivyTheme.accent)
+                        .buttonStyle(.borderless)
                         .disabled(!model.canMutate)
                         .accessibilityIdentifier("lesson-competency-level-\(competency.id.uuidString)")
                         // Bilan « Pour moi » : le niveau choisi ne compte dans la progression qu’une fois le bilan partagé.
                         if model.levelIsHeldBack(for: competency.id) {
-                            DrivyPrivacyMark(isPrivate: true)
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel("Ne compte pas tant que le bilan est pour toi")
+                            Text("Pour moi").font(.caption).foregroundStyle(DrivyTheme.muted)
+                                .accessibilityLabel("Cette évaluation reste pour toi")
                                 .accessibilityIdentifier("lesson-competency-private-\(competency.id.uuidString)")
                         }
                     }
-                    if model.observations.contains(where: { $0.id == competency.id }) {
+                    if expandedCompetencies.contains(competency.id), model.observations.contains(where: { $0.id == competency.id }) {
                         TextField("Situation", text: contextBinding(competency.id), axis: .vertical)
                             .font(.subheadline)
                             .foregroundStyle(DrivyTheme.muted)
@@ -677,6 +686,15 @@ private struct SchoolLessonReportContent: View {
             } header: { Text("Compétences").drivyFormSectionHeader() }
                 .drivyFormRows()
         }
+    }
+
+    private func displayedCompetencyLevel(_ id: UUID) -> String {
+        model.observations.first(where: { $0.id == id })?.level
+            ?? (model.currentLevels[id]?.sourceLessonId == model.lessonID ? "" : model.currentLevels[id]?.level ?? "")
+    }
+    private func competencyLevelLabel(_ id: UUID) -> String {
+        if let chosen = model.observations.first(where: { $0.id == id }) { return chosen.levelLabel }
+        return model.unchangedChoiceLabel(for: id)
     }
 
     private func levelBinding(_ competencyID: UUID) -> Binding<String> {
