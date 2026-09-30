@@ -117,28 +117,27 @@ struct SchoolCapturePreparationView: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     switch block {
                     case .choice:
-                        Label("Accord de l’élève pour le GPS", systemImage: "person.crop.circle.badge.questionmark").font(.headline)
+                        panelTitle("Accord de l’élève pour le GPS", symbol: "person.crop.circle.badge.questionmark")
                         Button {
                             model.closeDiagnostic()
                             choiceRoute = ChoiceRoute(lessonID: model.lessonID, store: model.store)
                         } label: { Label("Demander l’accord", systemImage: "hand.raised") }
-                            .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.mayOpenChoice)
+                            .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(!model.mayOpenChoice)
                             .accessibilityIdentifier("preparation-open-choice")
                     case .refused:
                         // Un refus est un choix normal : ton neutre, pas de phrase de rappel sous le titre.
-                        Label("L’élève a refusé l’enregistrement du trajet", systemImage: "location.slash").font(.headline)
-                            .fixedSize(horizontal: false, vertical: true)
+                        panelTitle("L’élève a refusé l’enregistrement du trajet", symbol: "location.slash")
                         Button("Modifier l’accord") {
                             model.closeDiagnostic()
                             choiceRoute = ChoiceRoute(lessonID: model.lessonID, store: model.store)
                         }
                         .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.mayOpenChoice)
                     case .permission(let denied):
-                        Label("Autorise la localisation", systemImage: "location.slash").font(.headline)
+                        panelTitle("Autorise la localisation", symbol: "location.slash")
                         if denied {
                             Button("Ouvrir les réglages", systemImage: "gearshape") {
                                 if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-                            }.buttonStyle(DrivyPrimaryButtonStyle())
+                            }.buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                         }
                         retryButton
                     case .failed:
@@ -149,9 +148,19 @@ struct SchoolCapturePreparationView: View {
             .accessibilityIdentifier("capture-quick-start-block")
         } else if model.captureStarted == false && !model.accessRevoked && model.pendingAssessments.isEmpty && model.pendingStarts.isEmpty {
             Button { Task { await start() } } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
-                .buttonStyle(DrivyPrimaryButtonStyle()).disabled(model.isLoading || model.isBusy)
+                .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(model.isLoading || model.isBusy)
                 .accessibilityIdentifier("capture-quick-start")
         }
+    }
+
+    /// Titre d’un panneau d’état : le pictogramme reste en teinte discrète, l’accent est pour l’action.
+    private func panelTitle(_ title: String, symbol: String) -> some View {
+        Label {
+            Text(title).font(.headline).foregroundStyle(DrivyTheme.text)
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(DrivyTheme.muted)
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var retryButton: some View {

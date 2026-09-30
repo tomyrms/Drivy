@@ -52,20 +52,13 @@ struct SchoolAgendaView: View {
             if geometry.size.width >= AgendaLayout.twoColumnBreakpoint && !typeSize.isAccessibilitySize {
                 HStack(alignment: .top, spacing: DrivySpacing.xl) {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                            weekHeader
-                            dayPicker
-                            schoolFilter
-                        }
-                        .padding(DrivySpacing.l)
+                        weekGroup
+                            .padding(DrivySpacing.l)
                     }
                     .frame(width: AgendaLayout.weekColumnWidth)
                     .background(DrivyTheme.canvas)
                     ScrollView {
-                        VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                            dayHeading
-                            dayContent
-                        }
+                        dayGroup
                         .padding(.vertical, DrivySpacing.l)
                         .padding(.trailing, DrivySpacing.xl)
                     }
@@ -77,13 +70,10 @@ struct SchoolAgendaView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                        // Le filtre agit sur toute la semaine : il reste avec elle, pas entre le jour et ses leçons.
-                        weekHeader
-                        dayPicker
-                        schoolFilter
-                        dayHeading
-                        dayContent
+                    // Le filtre agit sur toute la semaine : il reste avec elle, pas entre le jour et ses leçons.
+                    VStack(alignment: .leading, spacing: DrivySpacing.xl) {
+                        weekGroup
+                        dayGroup
                     }
                     .drivyPageContent(maxWidth: AgendaLayout.singleColumnMaxWidth)
                 }
@@ -106,6 +96,23 @@ struct SchoolAgendaView: View {
         .sheet(item: $planningModel, onDismiss: { Task { await loadWeek(keepingCurrent: true) } }) { model in SchoolPlanningView(model: model) }
         .onChange(of: identityScope) { _, _ in
             planningModel?.invalidate(); planningModel = nil; selectedLesson = nil
+        }
+    }
+
+    /// La semaine : mois, jours et filtre serrés ensemble, pour se distinguer nettement de la liste du jour.
+    private var weekGroup: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            weekHeader
+            dayPicker
+            schoolFilter
+        }
+    }
+
+    /// Le jour : son titre colle à ses leçons.
+    private var dayGroup: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            dayHeading
+            dayContent
         }
     }
 

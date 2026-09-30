@@ -20,6 +20,7 @@ struct SchoolSignInLanding: View {
                     hero
                     Text("Tes leçons, tes trajets, ton école.")
                         .font(.drivyScreenTitle)
+                        .lineSpacing(DrivySpacing.xxs)
                         .foregroundStyle(DrivyTheme.text)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
@@ -30,7 +31,8 @@ struct SchoolSignInLanding: View {
                         SchoolErrorNotice(message: errorMessage)
                     }
                 }
-                .padding(.bottom, DrivySpacing.xl)
+                // Centre optique : l’ensemble se tient un peu au-dessus du milieu, loin des boutons.
+                .padding(.bottom, DrivySpacing.xxl)
                 .drivyPageContent(maxWidth: DrivyLayout.narrowColumn)
                 .frame(minHeight: proxy.size.height)
             }
@@ -60,7 +62,8 @@ struct SchoolSignInLanding: View {
         let shape = RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous)
         return DrivyRouteGlyph()
             .frame(height: glyphHeight)
-            .padding(DrivySpacing.l)
+            .padding(.vertical, DrivySpacing.xl)
+            .padding(.horizontal, DrivySpacing.l)
             .frame(maxWidth: .infinity)
             .background(DrivyTheme.accentSoft, in: shape)
             .overlay { shape.strokeBorder(DrivyTheme.border, lineWidth: 0.5) }

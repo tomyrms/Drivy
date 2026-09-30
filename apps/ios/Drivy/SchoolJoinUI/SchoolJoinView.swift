@@ -53,7 +53,8 @@ struct SchoolJoinView: View {
         let error = isEntering ? model.errorMessage : nil
         return VStack(alignment: .leading, spacing: DrivySpacing.s) {
             SchoolJoinFieldBlock(label: "Lien d’invitation", error: error) {
-                TextField("Coller le lien reçu", text: $model.link)
+                TextField("Coller le lien reçu", text: $model.link,
+                          prompt: Text("Coller le lien reçu").foregroundStyle(DrivyTheme.muted))
                     .font(.body)
                     .foregroundStyle(DrivyTheme.text)
                     .keyboardType(.URL).textContentType(.URL)
@@ -121,7 +122,7 @@ struct SchoolJoinView: View {
             facts.append(SchoolJoinFact(symbol: "clock",
                 text: "Valable jusqu’au \(SchoolTrainingFormatting.instant(preview.expiresAt, zone: TimeZone.current.identifier))"))
         }
-        return SchoolJoinSchoolHeader(name: preview.schoolName, facts: facts)
+        return SchoolJoinSchoolHeader(name: preview.schoolName, facts: facts, isConfirmed: model.isConfirmed)
     }
 
     private var pending: some View {
@@ -213,17 +214,20 @@ struct SchoolJoinFact: Identifiable {
 struct SchoolJoinSchoolHeader: View {
     let name: String
     let facts: [SchoolJoinFact]
+    /// Once joined, the mark turns into the success tone: the result is read before the sentence.
+    var isConfirmed = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .title2) private var plate: CGFloat = 56
+    @ScaledMetric(relativeTo: .subheadline) private var factSymbol: CGFloat = 20
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
             if !typeSize.isAccessibilitySize {
-                Image(systemName: "building.2")
-                    .font(.title2)
-                    .foregroundStyle(DrivyTheme.accent)
+                Image(systemName: isConfirmed ? "checkmark" : "building.2")
+                    .font(isConfirmed ? Font.title2.weight(.semibold) : Font.title2)
+                    .foregroundStyle(isConfirmed ? DrivyTheme.success : DrivyTheme.accent)
                     .frame(width: plate, height: plate)
-                    .background(DrivyTheme.accentSoft, in: Circle())
+                    .background(isConfirmed ? DrivyTheme.successSurface : DrivyTheme.accentSoft, in: Circle())
                     .accessibilityHidden(true)
             }
             Text(name)
@@ -233,10 +237,16 @@ struct SchoolJoinSchoolHeader: View {
                 .accessibilityAddTraits(.isHeader)
             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                 ForEach(facts) { fact in
-                    Label(fact.text, systemImage: fact.symbol)
-                        .font(fact.isEmphasized ? .subheadline.weight(.semibold) : .subheadline)
-                        .foregroundStyle(fact.isEmphasized ? DrivyTheme.text : DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // One symbol column: the texts of the facts start on the same vertical line.
+                    HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
+                        Image(systemName: fact.symbol)
+                            .frame(width: factSymbol)
+                            .accessibilityHidden(true)
+                        Text(fact.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .font(fact.isEmphasized ? .subheadline.weight(.semibold) : .subheadline)
+                    .foregroundStyle(fact.isEmphasized ? DrivyTheme.text : DrivyTheme.muted)
                 }
             }
         }
@@ -259,9 +269,20 @@ struct SchoolJoinTextLink: View {
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SchoolJoinTextLinkStyle())
         .foregroundStyle(isBusy ? DrivyTheme.disabledText : DrivyTheme.accent)
         .disabled(isBusy)
+    }
+}
+
+/// Retour d’appui de l’action texte : même échelle que les boutons, ancrée au bord du texte.
+private struct SchoolJoinTextLinkStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? DrivyPress.scale : 1, anchor: .leading)
+            .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }
 }
 
@@ -281,7 +302,7 @@ struct SchoolJoinFieldBlock<Field: View>: View {
             field
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.footnote)
+                    .font(.subheadline)
                     .foregroundStyle(DrivyTheme.danger)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityElement(children: .ignore)
@@ -305,7 +326,7 @@ private struct SchoolJoinFieldChrome: ViewModifier {
         content
             .padding(.horizontal, DrivySpacing.m)
             .frame(minHeight: minHeight)
-            .background(DrivyTheme.canvas, in: shape)
+            .background(hasError ? DrivyTheme.dangerSurface : DrivyTheme.canvas, in: shape)
             .overlay {
                 shape.strokeBorder(hasError ? DrivyTheme.danger : (isFocused ? DrivyTheme.accent : DrivyTheme.controlBorder),
                                    lineWidth: hasError || isFocused ? 2 : 1)

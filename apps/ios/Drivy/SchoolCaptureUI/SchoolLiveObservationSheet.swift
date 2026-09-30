@@ -44,7 +44,7 @@ struct SchoolLiveObservationSheet: View {
         .foregroundStyle(DrivyTheme.text)
         .background(DrivyTheme.surface)
         .tint(DrivyTheme.accent)
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(560), .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(584), .large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(DrivyRadius.mapPanel + DrivySpacing.xs)
         .presentationBackground(DrivyTheme.surface)
@@ -96,22 +96,35 @@ struct SchoolLiveObservationSheet: View {
     private var themes: some View {
         VStack(spacing: DrivySpacing.l) {
             if recorder.isLoadingCompetencies { DrivyLoadingState(title: "Chargement des thèmes…") }
+            // Grille de tuiles égales, sans orpheline : « Marquer un moment » est la dernière tuile, au même
+            // rang que les thèmes (même cible, même geste), et tout tient dans la feuille sans défiler.
             LazyVGrid(columns: dynamicTypeSize.isAccessibilitySize
                       ? [GridItem(.flexible())]
                       : Array(repeating: GridItem(.flexible(), spacing: DrivySpacing.s), count: 3),
-                      spacing: DrivySpacing.m) {
+                      spacing: DrivySpacing.s) {
                 ForEach(recorder.themes) { theme in
                     Button {
                         withAnimation(motion) { selected = theme }
                         selectionFocused = true
                     } label: {
-                        themeChoice(theme)
+                        tileLabel(theme.title) { emblem(theme, size: 64) }
                     }
                     .buttonStyle(DrivyTileButtonStyle())
                     .disabled(!recorder.canRecord)
                     .accessibilityLabel(theme.title)
                     .accessibilityIdentifier("live-observation-theme-\(theme.title)")
                 }
+                Button {
+                    if recorder.markMoment(at: observedAt) {
+                        withAnimation(motion) { saved = true }
+                    }
+                } label: {
+                    tileLabel("Marquer un moment") { SchoolMarkerEmblem(size: 64) }
+                }
+                .buttonStyle(DrivyTileButtonStyle())
+                .disabled(!recorder.canRecord)
+                .accessibilityLabel("Marquer un moment")
+                .accessibilityIdentifier("live-observation-marker")
             }
             if let message = recorder.competenciesMessage {
                 // Avertissement, pas une erreur : « Marquer un moment » reste disponible.
@@ -119,38 +132,34 @@ struct SchoolLiveObservationSheet: View {
                 Button("Réessayer", systemImage: "arrow.clockwise") { Task { await recorder.loadCompetencies() } }
                     .buttonStyle(DrivySecondaryButtonStyle())
             }
-            Button {
-                if recorder.markMoment(at: observedAt) {
-                    withAnimation(motion) { saved = true }
-                }
-            } label: {
-                Label("Marquer un moment", systemImage: "bookmark")
-            }
-            .buttonStyle(DrivySecondaryButtonStyle())
-            .disabled(!recorder.canRecord)
-            .accessibilityIdentifier("live-observation-marker")
         }
     }
 
-    @ViewBuilder private func themeChoice(_ theme: SchoolLiveObservationTheme) -> some View {
+    /// Tuile pleine : le choix se lit comme un bouton, et la cible dépasse largement 44 pt. Un mot long
+    /// (« Stationnement ») se réduit un peu plutôt que de se couper en deux.
+    @ViewBuilder private func tileLabel<Emblem: View>(_ title: String,
+                                                      @ViewBuilder emblem: () -> Emblem) -> some View {
+        let mark = emblem()
+        let shape = RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs, style: .continuous)
         if dynamicTypeSize.isAccessibilitySize {
             HStack(spacing: DrivySpacing.m) {
-                emblem(theme, size: 64)
-                Text(theme.title).font(.headline).multilineTextAlignment(.leading)
+                mark
+                Text(title).font(.headline).multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").font(.body.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
             }
             .padding(DrivySpacing.s)
             .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
             .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.xxs))
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs, style: .continuous))
+            .contentShape(shape)
         } else {
-            // Tuile pleine : le thème se lit comme un bouton, et la cible dépasse largement 44 pt.
             VStack(spacing: DrivySpacing.xs) {
-                emblem(theme, size: 64)
-                Text(theme.title)
+                mark
+                Text(title)
                     .font(.subheadline.weight(.semibold))
                     .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(minHeight: 38, alignment: .top)
             }
@@ -158,7 +167,7 @@ struct SchoolLiveObservationSheet: View {
             .padding(.horizontal, DrivySpacing.xxs)
             .frame(maxWidth: .infinity, minHeight: 128, alignment: .top)
             .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.xxs))
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs, style: .continuous))
+            .contentShape(shape)
         }
     }
 
@@ -251,6 +260,7 @@ private struct SchoolAppraisalTile: View {
     var body: some View {
         let stacked = dynamicTypeSize.isAccessibilitySize
         let shape = RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs, style: .continuous)
+        let badge: CGFloat = stacked ? 64 : 76
         Button(action: action) {
             let layout = stacked
                 ? AnyLayout(HStackLayout(spacing: DrivySpacing.m))
@@ -259,7 +269,7 @@ private struct SchoolAppraisalTile: View {
                 Image(systemName: status.symbol)
                     .font(.title.weight(.heavy))
                     .foregroundStyle(tone.background)
-                    .frame(width: 64, height: 64)
+                    .frame(width: badge, height: badge)
                     .background(tone.foreground, in: Circle())
                     .accessibilityHidden(true)
                 Text(status.label)
@@ -271,7 +281,7 @@ private struct SchoolAppraisalTile: View {
             }
             .padding(.vertical, DrivySpacing.m)
             .padding(.horizontal, DrivySpacing.xs)
-            .frame(maxWidth: .infinity, minHeight: 136)
+            .frame(maxWidth: .infinity, minHeight: stacked ? 96 : 168)
             .background(tone.background, in: shape)
             .overlay { shape.strokeBorder(tone.foreground.opacity(contrast == .increased ? 1 : 0.45), lineWidth: contrast == .increased ? 2 : 1) }
             .contentShape(shape)

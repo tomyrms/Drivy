@@ -207,18 +207,18 @@ struct SchoolOnboardingView: View {
                 }
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     if model.roles.contains("INSTRUCTOR") {
-                        DrivyGuidedFact(symbol: "calendar", text: "Tes leçons apparaissent dans l’agenda dès que l’école les planifie.")
+                        SchoolOnboardingPoint(symbol: "calendar", text: "Tes leçons apparaissent dans l’agenda dès que l’école les planifie.")
                     }
                     if model.roles.contains("ADMIN") {
-                        DrivyGuidedFact(symbol: "desktopcomputer", text: "Gère l’école depuis l’espace web.")
+                        SchoolOnboardingPoint(symbol: "desktopcomputer", text: "Gère l’école depuis l’espace web.")
                     }
                 }
             } else {
                 stepTitle("Ta formation")
-                if ownTrainings.isEmpty {
-                    DrivyEmptyState(title: "\(schoolName) va ouvrir ta formation", symbol: "car")
-                } else {
-                    DrivyRowGroup {
+                DrivyRowGroup {
+                    if ownTrainings.isEmpty {
+                        DrivyEntityRow(title: "\(schoolName) va ouvrir ta formation", leading: .symbol("car"))
+                    } else {
                         ForEach(ownTrainings) { training in
                             DrivyEntityRow(title: "Permis \(training.categoryCode)",
                                 meta: training.startedOn.map { "Depuis le \(SchoolPresentation.civilDate($0))" },
@@ -226,9 +226,9 @@ struct SchoolOnboardingView: View {
                                 badge: training.status == "ACTIVE" ? nil : DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status), tone: .neutral))
                         }
                     }
-                }
-                if let email = model.school?.contactEmail, !email.isEmpty {
-                    DrivyContactRow(title: "Contact de l’école", value: email, symbol: "envelope")
+                    if let email = model.school?.contactEmail, !email.isEmpty {
+                        DrivyEntityRow(title: "Contact de l’école", meta: email, leading: .symbol("envelope"))
+                    }
                 }
             }
         }
@@ -242,15 +242,15 @@ struct SchoolOnboardingView: View {
             } else if isStaff {
                 stepTitle("GPS pendant les leçons")
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                    DrivyGuidedFact(symbol: "hand.raised", text: "Enregistre le trajet avec l’accord de l’élève. Son choix reste modifiable.")
-                    DrivyGuidedFact(symbol: "location", text: "Autorise la position sur cet appareil maintenant ou au début d’une leçon.")
+                    SchoolOnboardingPoint(symbol: "hand.raised", text: "Enregistre le trajet avec l’accord de l’élève. Son choix reste modifiable.")
+                    SchoolOnboardingPoint(symbol: "location", text: "Autorise la position sur cet appareil maintenant ou au début d’une leçon.")
                 }
                 locationStatus
             } else {
                 stepTitle("GPS pendant les leçons")
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                    DrivyGuidedFact(symbol: "location", text: "L’appareil du moniteur enregistre le trajet, avec ton accord.")
-                    DrivyGuidedFact(symbol: "hand.raised", text: "Tu peux refuser ou modifier ton choix. La leçon reste possible sans trajet.")
+                    SchoolOnboardingPoint(symbol: "location", text: "L’appareil du moniteur enregistre le trajet, avec ton accord.")
+                    SchoolOnboardingPoint(symbol: "hand.raised", text: "Tu peux refuser ou modifier ton choix. La leçon reste possible sans trajet.")
                 }
             }
         }
@@ -275,7 +275,7 @@ struct SchoolOnboardingView: View {
                 if let success = model.successMessage, !model.hasEdits {
                     DrivyInlineMessage(text: success)
                 }
-                DrivyGuidedFact(symbol: "calendar", text: isStaff ? "Tes leçons apparaissent dans l’agenda dès que l’école les planifie."
+                SchoolOnboardingPoint(symbol: "calendar", text: isStaff ? "Tes leçons apparaissent dans l’agenda dès que l’école les planifie."
                     : "Tes leçons et tes bilans apparaissent dans Drivy dès que l’école les prépare.")
             }
         } else if !blockers.isEmpty {
@@ -283,7 +283,7 @@ struct SchoolOnboardingView: View {
                 hero(symbol: "list.bullet.clipboard", title: "Il reste à compléter")
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     ForEach(Array(blockers.enumerated()), id: \.offset) { _, blocker in
-                        DrivyGuidedFact(symbol: "circle", text: blockerText(blocker))
+                        SchoolOnboardingPoint(symbol: "circle", text: blockerText(blocker))
                     }
                 }
             }
@@ -301,7 +301,7 @@ struct SchoolOnboardingView: View {
                             DrivyKeyValueRow(title: "Formation", value: ownTrainings.map { "Permis \($0.categoryCode)" }.joined(separator: ", "))
                         }
                         if gpsEnabled {
-                            DrivyKeyValueRow(title: "GPS pendant les leçons", value: gpsSummary)
+                            DrivyKeyValueRow(title: "GPS", value: gpsSummary)
                         }
                     }
                 }
@@ -634,5 +634,34 @@ private struct SchoolOnboardingHero: View {
                 .accessibilityAddTraits(.isHeader)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Un point explicatif d’un écran de l’accueil : pastille de symbole (même langage que les lignes de
+/// l’écran d’ouverture), puis la phrase. La pastille disparaît aux tailles d’accessibilité.
+private struct SchoolOnboardingPoint: View {
+    let symbol: String
+    let text: String
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .body) private var plate: CGFloat = 44
+
+    var body: some View {
+        HStack(alignment: .center, spacing: DrivySpacing.s) {
+            if !typeSize.isAccessibilitySize {
+                Image(systemName: symbol)
+                    .font(.body)
+                    .foregroundStyle(DrivyTheme.muted)
+                    .frame(width: plate, height: plate)
+                    .background(DrivyTheme.surfaceMuted, in: Circle())
+                    .accessibilityHidden(true)
+            }
+            Text(text)
+                .font(.body)
+                .foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minHeight: 56, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }

@@ -89,7 +89,7 @@ struct SchoolBrowserView: View {
                     SchoolLearnerRow(learner: learner, isSelected: workspace.selectedLearnerID == learner.id)
                 }
                 .accessibilityIdentifier("school-learner-\(learner.id.uuidString)")
-                .listRowInsets(EdgeInsets(top: DrivySpacing.xxs, leading: DrivySpacing.l, bottom: DrivySpacing.xxs, trailing: DrivySpacing.m))
+                .listRowInsets(EdgeInsets(top: DrivySpacing.xxs, leading: DrivySpacing.m, bottom: DrivySpacing.xxs, trailing: DrivySpacing.m))
                 .listRowSeparatorTint(DrivyTheme.border)
                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
                 .drivyFormRows(isSelected: workspace.selectedLearnerID == learner.id)

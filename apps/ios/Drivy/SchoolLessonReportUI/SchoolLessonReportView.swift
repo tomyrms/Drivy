@@ -40,7 +40,7 @@ struct SchoolLessonReportView: View {
                     .foregroundStyle(DrivyTheme.muted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.canvas)
             } else {
-                ContentUnavailableView("Choisissez votre école", systemImage: "building.2")
+                ContentUnavailableView("Choisis ton école", systemImage: "building.2")
             }
         }
         .navigationTitle("Leçon")
@@ -60,8 +60,8 @@ struct SchoolLessonReportView: View {
             model?.invalidate()
             dismiss()
         }
-        .confirmationDialog("Fermer sans enregistrer ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
-            Button("Fermer sans enregistrer", role: .destructive) { model?.invalidate(); dismiss() }
+        .confirmationDialog("Quitter sans enregistrer ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+            Button("Quitter sans enregistrer", role: .destructive) { model?.invalidate(); dismiss() }
             Button("Continuer", role: .cancel) { }
         }
         .task(id: scopeKey) {
@@ -201,6 +201,8 @@ private struct SchoolLessonReportContent: View {
                         .frame(width: LessonLayout.contextColumnWidth)
                     Form { completedReport }
                         .scrollContentBackground(.hidden)
+                        // Le bilan démarre à la hauteur du nom de l’élève, pas au bord de la barre.
+                        .contentMargins(.top, DrivySpacing.m, for: .scrollContent)
                         .frame(maxWidth: .infinity)
                 }
                 .frame(maxWidth: LessonLayout.splitMaxWidth)
@@ -291,7 +293,7 @@ private struct SchoolLessonReportContent: View {
         isFinishing = true; finishError = nil
         defer { isFinishing = false }
         if let capture, !(await capture.finishForLesson(lessonID: model.lessonID)) {
-            finishError = capture.errorMessage ?? "Le trajet n’a pas pu être enregistré. Réessayez pour terminer la leçon."
+            finishError = capture.errorMessage ?? "Le trajet n’a pas pu être enregistré. Réessaie pour terminer la leçon."
             return false
         }
         if model.completionNeedsReason && reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -317,7 +319,7 @@ private struct SchoolLessonReportContent: View {
 
     private var headerSection: some View {
         Section {
-            HStack(alignment: .center, spacing: DrivySpacing.m) {
+            HStack(alignment: .top, spacing: DrivySpacing.m) {
                 DrivyAvatar(name: learnerName, size: 56)
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     Text(learnerName).font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
@@ -384,7 +386,7 @@ private struct SchoolLessonReportContent: View {
             : nil
         return Section {
             DrivyPendingRequest(
-                message: "La demande est conservée sur cet appareil. Vérifiez son résultat avant une nouvelle action.",
+                message: "La demande est conservée sur cet appareil. Vérifie son résultat avant une nouvelle action.",
                 verify: { Task { await model.verifyPending() } }, canVerify: idle,
                 retry: retry, canRetry: idle
             ) {
@@ -645,12 +647,14 @@ private struct SchoolLessonReportContent: View {
                 // Un niveau choisi suffit : le jour et le lieu sont proposés comme situation, modifiable.
                 ForEach(model.competencies) { competency in
                     Picker(competency.displayLabel, selection: levelBinding(competency.id)) {
-                        Text("Non observé").tag("")
+                        Text("Pas encore vu").tag("")
                         Text("En découverte").tag("DISCOVERING")
                         Text("Avec accompagnement").tag("GUIDED")
                         Text("En autonomie").tag("INDEPENDENT")
                     }
                     .pickerStyle(.menu)
+                    // Sans niveau, la valeur reste discrète : l’accent est réservé à ce qui est renseigné.
+                    .tint(levelBinding(competency.id).wrappedValue.isEmpty ? DrivyTheme.muted : DrivyTheme.accent)
                     .disabled(!model.canMutate)
                     if model.observations.contains(where: { $0.id == competency.id }) {
                         TextField("Situation", text: contextBinding(competency.id), axis: .vertical)
@@ -688,7 +692,7 @@ private struct SchoolLessonReportContent: View {
                 .drivyFormRows()
         } else if model.revisionsError == nil, !model.isLoading {
             Section {
-                Text("Votre moniteur n’a pas encore écrit le bilan.").foregroundStyle(DrivyTheme.muted)
+                Text("Ton moniteur n’a pas encore écrit le bilan.").foregroundStyle(DrivyTheme.muted)
             } header: { Text("Bilan") }
                 .drivyFormRows()
         }
@@ -718,11 +722,13 @@ private struct SchoolLessonReportContent: View {
                 .disabled(!model.canMutate)
             }
             // Jamais montrée à l’élève : le cadenas le dit sans texte.
-            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+            HStack(alignment: .center, spacing: DrivySpacing.s) {
                 DrivyPrivacyMark(isPrivate: true).accessibilityHidden(true)
+                    .frame(width: DrivySpacing.l)
                 TextField("Note pour moi", text: $model.administrativeNote, axis: .vertical).lineLimit(1...4).disabled(!model.canMutate)
             }
-            if savesInline {
+            // Le bouton n’apparaît qu’avec une modification : désactivé, il n’était qu’un texte fantôme.
+            if savesInline && model.preparationChanged {
                 Button("Enregistrer les objectifs") { Task { await model.savePreparation() } }
                     .disabled(!model.canMutate || !model.preparationValid || !model.preparationChanged)
             }
@@ -755,7 +761,7 @@ private struct SchoolLessonReportContent: View {
     private var saveBar: some View {
         DrivyStickyActionBar {
             if !model.validTexts { DrivyActionNote(text: "Un texte dépasse 4 000 caractères.", isError: true) }
-            else if !model.observationsValid { DrivyActionNote(text: "Vérifiez les niveaux et limitez chaque situation à 500 caractères.", isError: true) }
+            else if !model.observationsValid { DrivyActionNote(text: "Vérifie les niveaux et limite chaque situation à 500 caractères.", isError: true) }
             Button { Task { await model.saveDraft() } } label: { Label("Enregistrer le bilan", systemImage: "square.and.arrow.down") }
                 .buttonStyle(DrivyPrimaryButtonStyle())
                 .disabled(!model.canMutate || !model.validTexts || !model.observationsValid)

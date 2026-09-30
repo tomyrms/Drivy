@@ -130,3 +130,24 @@ private struct SchoolEmblemBend: Shape {
         return path
     }
 }
+
+/// Emblème de « Marquer un moment » : même disque et même filet que les thèmes, mais neutre (surfaceMuted,
+/// signet en teinte muted) pour se distinguer d’un thème sans rivaliser avec lui.
+struct SchoolMarkerEmblem: View {
+    var size: CGFloat = 72
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        ZStack {
+            Circle().fill(DrivyTheme.surfaceMuted)
+            Circle().strokeBorder(contrast == .increased ? DrivyTheme.controlBorder : DrivyTheme.border,
+                                  lineWidth: contrast == .increased ? 1 : 0.5)
+            Image(systemName: "bookmark.fill")
+                .font(.system(size: size * 0.42, weight: .semibold))
+                .foregroundStyle(DrivyTheme.muted)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}

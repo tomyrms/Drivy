@@ -64,32 +64,36 @@ struct SchoolCodeJoinView: View {
 
     private var entry: some View {
         let error = fieldError
-        return VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            SchoolJoinFieldBlock(label: "Code d’invitation", error: error, errorIdentifier: "join-code-field-error") {
-                TextField("XXXX-XXXX", text: codeBinding)
-                    .font(.system(size: codeSize, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(DrivyTheme.text)
-                    .multilineTextAlignment(.center)
-                    .textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled()
-                    .keyboardType(.asciiCapable)
-                    .textContentType(.oneTimeCode)
-                    .submitLabel(.go)
-                    .onSubmit { Task { await model.inspect() } }
-                    .focused($fieldFocused)
-                    .schoolJoinFieldChrome(hasError: error != nil, isFocused: fieldFocused, minHeight: 80)
-                    .disabled(model.isBusy)
-                    .accessibilityLabel("Code d’invitation")
-                    .accessibilityHint(error ?? "")
-                    .accessibilityIdentifier("join-code-field")
+        // The field and its paste control form one tight group; the link to the other route stands apart.
+        return VStack(alignment: .leading, spacing: DrivySpacing.l) {
+            VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                SchoolJoinFieldBlock(label: "Code d’invitation", error: error, errorIdentifier: "join-code-field-error") {
+                    TextField("XXXX-XXXX", text: codeBinding,
+                              prompt: Text("XXXX-XXXX").fontWeight(.regular).foregroundStyle(DrivyTheme.muted))
+                        .font(.system(size: codeSize, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(DrivyTheme.text)
+                        .multilineTextAlignment(.center)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        .keyboardType(.asciiCapable)
+                        .textContentType(.oneTimeCode)
+                        .submitLabel(.go)
+                        .onSubmit { Task { await model.inspect() } }
+                        .focused($fieldFocused)
+                        .schoolJoinFieldChrome(hasError: error != nil, isFocused: fieldFocused, minHeight: 80)
+                        .disabled(model.isBusy)
+                        .accessibilityLabel("Code d’invitation")
+                        .accessibilityHint(error ?? "")
+                        .accessibilityIdentifier("join-code-field")
+                }
+                // Same paste control as the invitation link; the field formats what is pasted.
+                PasteButton(payloadType: String.self) { values in
+                    if let value = values.first, value.utf8.count <= 64 { model.code = SchoolInvitationCode.formatted(value) }
+                }
+                .accessibilityLabel("Coller le code")
+                .frame(minHeight: 44)
+                .disabled(model.isBusy)
             }
-            // Same paste control as the invitation link; the field formats what is pasted.
-            PasteButton(payloadType: String.self) { values in
-                if let value = values.first, value.utf8.count <= 64 { model.code = SchoolInvitationCode.formatted(value) }
-            }
-            .accessibilityLabel("Coller le code")
-            .frame(minHeight: 44)
-            .disabled(model.isBusy)
             if let useLink {
                 secondaryLink("J’ai un lien d’invitation", action: useLink)
                     .accessibilityIdentifier("join-use-link")
@@ -107,7 +111,7 @@ struct SchoolCodeJoinView: View {
         var facts = [SchoolJoinFact(symbol: "person.crop.circle", text: SchoolPresentation.roles(preview.roles), isEmphasized: true)]
         if let categories = categories(preview) { facts.append(SchoolJoinFact(symbol: "car", text: categories)) }
         return VStack(alignment: .leading, spacing: DrivySpacing.m) {
-            SchoolJoinSchoolHeader(name: preview.schoolName, facts: facts)
+            SchoolJoinSchoolHeader(name: preview.schoolName, facts: facts, isConfirmed: model.isConfirmed)
             if !model.isConfirmed && !model.isPending {
                 secondaryLink("Saisir un autre code") { model.anotherCode() }
             }

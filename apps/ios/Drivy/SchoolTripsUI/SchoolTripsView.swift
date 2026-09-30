@@ -112,6 +112,8 @@ private struct SchoolTripsList: View {
                 Section {
                     ForEach(day.trips) { trip in
                         SchoolTripRow(trip: trip, instructorName: model.instructorName(trip, viewerRoles: roles), open: open)
+                            // La rangée porte déjà son propre espacement vertical : sans cela, la liste le double.
+                            .listRowInsets(EdgeInsets(top: 0, leading: DrivySpacing.m, bottom: 0, trailing: DrivySpacing.m))
                     }
                 } header: {
                     Text(day.title)

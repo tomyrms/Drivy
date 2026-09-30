@@ -173,6 +173,8 @@ private struct SchoolTrainingContent: View {
             sections.pickerStyle(.menu).frame(minHeight: 48)
         } else {
             sections.pickerStyle(.segmented)
+                .frame(maxWidth: TrainingLayout.pickerMaxWidth)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
     private var sections: some View {
@@ -193,16 +195,12 @@ private struct SchoolTrainingContent: View {
         }
     }
     private func lessonGroup(_ title: String, values: [SchoolLesson]) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-            DrivySectionHeader(title: title)
-            VStack(spacing: 0) {
-                ForEach(values) { lesson in
-                    Button { opened = OpenedLesson(id: lesson.id) } label: { SchoolTrainingLessonRow(lesson: lesson) }
-                        .buttonStyle(DrivyRowButtonStyle())
-                        .disabled(!model.canOpenPedagogicalContent)
-                        .accessibilityIdentifier("training-lesson-\(lesson.id.uuidString)")
-                    Divider().overlay(DrivyTheme.border)
-                }
+        DrivyRowGroup(title: title) {
+            ForEach(values) { lesson in
+                Button { opened = OpenedLesson(id: lesson.id) } label: { SchoolTrainingLessonRow(lesson: lesson) }
+                    .buttonStyle(DrivyRowButtonStyle())
+                    .disabled(!model.canOpenPedagogicalContent)
+                    .accessibilityIdentifier("training-lesson-\(lesson.id.uuidString)")
             }
         }
     }
@@ -210,17 +208,15 @@ private struct SchoolTrainingContent: View {
         VStack(alignment: .leading, spacing: DrivySpacing.m) {
             if let value = model.progress {
                 if let error = model.progressError { SchoolErrorNotice(message: error, retry: { Task { await model.loadProgress() } }) }
-                VStack(spacing: 0) {
+                DrivyRowGroup {
                     ForEach(value.items) { item in
                         Button { opened = OpenedLesson(id: item.sourceLessonId) } label: { progressRow(item) }
                             .buttonStyle(DrivyRowButtonStyle())
                             .accessibilityHint("Ouvre la leçon")
-                        Divider().overlay(DrivyTheme.border)
                     }
                     ForEach(model.unobservedCompetencies) { competency in
                         DrivyCompetencyNote(label: competency.displayLabel, level: "Pas encore vu", tone: .neutral)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, DrivySpacing.m)
-                        Divider().overlay(DrivyTheme.border)
                     }
                 }
                 if value.items.isEmpty && value.unobservedCompetencyIds.isEmpty {
@@ -270,7 +266,7 @@ private struct SchoolTrainingLessonRow: View {
     }
 }
 
-/// Niveaux de progression : un rang par niveau observé et une couleur de jeton, jamais la couleur seule
+/// Niveaux de progression : un rang par niveau observé et une teinte neutre puis verte (l’accent reste réservé à l’action), jamais la couleur seule
 /// (le libellé du niveau est toujours écrit à côté). « Pas encore vu » n’est pas un niveau : aucune graduation, aucun total.
 private enum SchoolProgressStyle {
     static func rank(_ code: String) -> Int {
@@ -279,7 +275,7 @@ private enum SchoolProgressStyle {
     static func color(rank: Int) -> Color {
         switch rank {
         case 1: DrivyTheme.controlBorder
-        case 2: DrivyTheme.route
+        case 2: DrivyTheme.muted
         case 3: DrivyTheme.success
         default: DrivyTheme.border
         }
@@ -307,6 +303,8 @@ private struct SchoolLevelMeter: View {
 private enum TrainingLayout {
     static let twoColumnBreakpoint: CGFloat = 1040
     static let twoColumnMaxWidth: CGFloat = 1200
+    /// Le sélecteur Leçons / Progression ne s’étire pas sur toute la largeur d’un grand détail.
+    static let pickerMaxWidth: CGFloat = 360
 }
 
 enum SchoolTrainingFormatting {

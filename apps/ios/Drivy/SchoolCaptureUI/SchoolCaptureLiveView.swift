@@ -89,8 +89,14 @@ struct SchoolCaptureLiveView: View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: DrivySpacing.m) {
                 heading(floating: false)
-                ScrollView { commandPanel(floating: false) }
-                    .scrollBounceBehavior(.basedOnSize)
+                // Les commandes descendent au bas de la colonne, à portée du pouce, et non collées
+                // au titre ; elles défilent seulement si la colonne est trop basse.
+                Spacer(minLength: 0)
+                ViewThatFits(in: .vertical) {
+                    commandPanel(floating: false)
+                    ScrollView { commandPanel(floating: false) }
+                        .scrollBounceBehavior(.basedOnSize)
+                }
             }
             .padding(DrivySpacing.m)
             .frame(width: DrivyMapLayout.sidebarWidth)
@@ -110,7 +116,7 @@ struct SchoolCaptureLiveView: View {
                         .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                     mapControls(axis: .horizontal).frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                sessionInformation
+                if hasSessionInformation { sessionInformation }
             }
             .padding(DrivySpacing.m)
             .frame(maxWidth: DrivyMapLayout.accessibleMaxWidth)
@@ -178,9 +184,17 @@ struct SchoolCaptureLiveView: View {
 
     private func commandPanel(floating: Bool = true) -> some View {
         DrivyMapDock(floating: floating) {
-            sessionInformation
+            // Pas de bloc vide : sans information, le dock commence directement par l’action.
+            if hasSessionInformation { sessionInformation }
             actions
         }
+    }
+
+    private var hasSessionInformation: Bool {
+        controller.pointCount > 0
+            || [SchoolCaptureSessionController.State.saved, .failed].contains(controller.state)
+            || controller.errorMessage != nil
+            || (controller.transferMessage != nil && controller.finalizedSyncState == nil)
     }
 
     private var sessionInformation: some View {
@@ -230,7 +244,7 @@ struct SchoolCaptureLiveView: View {
                 Button { run(.retrySaving) } label: {
                     Label("Réessayer la sauvegarde", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(DrivyPrimaryButtonStyle())
+                .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                 .accessibilityIdentifier("school-capture-retry-saving")
             }
         case .idle:
@@ -239,64 +253,80 @@ struct SchoolCaptureLiveView: View {
     }
 
     private var collectingActions: some View {
-        VStack(spacing: DrivySpacing.s) {
-            if let recorder = controller.liveObservations {
-                let signal = Button {
-                    observationMoment = ObservationMoment(recorder: recorder)
-                } label: {
-                    Label("Signaler", systemImage: "text.bubble.fill")
-                }
-                // Geste dominant en voiture : variante terrain (texte et cible plus grands).
-                // Une seule action primaire : en pause, « Reprendre » prend l’aplat et Signaler
-                // garde sa taille et sa place en style secondaire.
-                Group {
-                    if controller.state == .paused {
-                        signal.buttonStyle(DrivySecondaryButtonStyle(size: .field))
-                    } else {
-                        signal.buttonStyle(DrivyPrimaryButtonStyle(size: .field))
-                    }
-                }
-                .disabled(!recorder.canRecord || isFinishing)
-                .sensoryFeedback(.impact(weight: .medium), trigger: observationMoment?.id)
-                .accessibilityIdentifier("capture-signal-observation")
-                .popover(item: $observationMoment, attachmentAnchor: .rect(.bounds)) { moment in
-                    SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant)
-                        .frame(width: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.width : nil,
-                               height: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.height : nil)
-                        .presentationCompactAdaptation(.sheet)
-                }
-                if recorder.isSending { DrivyLoadingState(title: "Envoi de l’observation…") }
-                else if recorder.pending != nil {
-                    DrivyInlineMessage(text: recorder.errorMessage ?? "Une observation attend son envoi.", tone: .warning)
-                    if recorder.canRetry {
-                        Button("Réessayer l’envoi", systemImage: "arrow.clockwise") { Task { await recorder.retry() } }
-                            .buttonStyle(DrivySecondaryButtonStyle())
-                    } else {
-                        Button("Actualiser", systemImage: "arrow.clockwise") { recorder.refreshPending() }
-                            .buttonStyle(DrivySecondaryButtonStyle())
-                    }
-                } else if let error = recorder.errorMessage {
-                    DrivyInlineMessage(text: error, tone: .warning)
-                }
-            }
+        let paused = controller.state == .paused
+        return VStack(spacing: DrivySpacing.s) {
+            // Une seule action principale, en grand format terrain : « Signaler » en route,
+            // « Reprendre » en pause. L’autre geste garde sa place en second rang.
+            if paused { resumeButton }
+            else if let recorder = controller.liveObservations { signalButton(recorder, isDominant: true) }
+            if let recorder = controller.liveObservations { observationFeedback(recorder) }
             // Côte à côte quand les deux libellés tiennent sur une ligne ; sinon empilés
             // (colonne iPad de 380 pt, grand texte) plutôt qu’un « Terminer / la leçon » coupé.
             if dynamicTypeSize.isAccessibilitySize {
-                VStack(spacing: DrivySpacing.s) { secondaryCommands(pauseHugsLabel: false) }
+                VStack(spacing: DrivySpacing.s) { secondaryCommands(hugsFirst: false) }
             } else {
-                // En ligne, « Pause » prend sa largeur naturelle et « Terminer la leçon » le reste :
+                // En ligne, le premier geste prend sa largeur naturelle et « Terminer la leçon » le reste :
                 // un partage à 50/50 coupait ce libellé même sur un grand iPhone.
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: DrivySpacing.s) { secondaryCommands(pauseHugsLabel: true) }
-                    VStack(spacing: DrivySpacing.s) { secondaryCommands(pauseHugsLabel: false) }
+                    HStack(spacing: DrivySpacing.s) { secondaryCommands(hugsFirst: true) }
+                    VStack(spacing: DrivySpacing.s) { secondaryCommands(hugsFirst: false) }
                 }
             }
         }
     }
 
-    @ViewBuilder private func secondaryCommands(pauseHugsLabel: Bool) -> some View {
-        pauseResumeButton
-            .fixedSize(horizontal: pauseHugsLabel, vertical: false)
+    /// « Signaler » : dominant en route, secondaire en pause (où « Reprendre » prend l’aplat).
+    @ViewBuilder private func signalButton(_ recorder: SchoolLiveObservationRecorder, isDominant: Bool) -> some View {
+        let signal = Button {
+            observationMoment = ObservationMoment(recorder: recorder)
+        } label: {
+            Label("Signaler", systemImage: "text.bubble.fill")
+        }
+        Group {
+            if isDominant {
+                signal.buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+            } else {
+                signal.buttonStyle(DrivySecondaryButtonStyle())
+            }
+        }
+        .disabled(!recorder.canRecord || isFinishing)
+        .sensoryFeedback(.impact(weight: .medium), trigger: observationMoment?.id)
+        .accessibilityIdentifier("capture-signal-observation")
+        .popover(item: $observationMoment, attachmentAnchor: .rect(.bounds)) { moment in
+            SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant)
+                .frame(width: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.width : nil,
+                       height: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.height : nil)
+                .presentationCompactAdaptation(.sheet)
+        }
+    }
+
+    @ViewBuilder private func observationFeedback(_ recorder: SchoolLiveObservationRecorder) -> some View {
+        if recorder.isSending { DrivyLoadingState(title: "Envoi de l’observation…") }
+        else if recorder.pending != nil {
+            DrivyInlineMessage(text: recorder.errorMessage ?? "Une observation attend son envoi.", tone: .warning)
+            if recorder.canRetry {
+                Button("Réessayer l’envoi", systemImage: "arrow.clockwise") { Task { await recorder.retry() } }
+                    .buttonStyle(DrivySecondaryButtonStyle())
+            } else {
+                Button("Actualiser", systemImage: "arrow.clockwise") { recorder.refreshPending() }
+                    .buttonStyle(DrivySecondaryButtonStyle())
+            }
+        } else if let error = recorder.errorMessage {
+            DrivyInlineMessage(text: error, tone: .warning)
+        }
+    }
+
+    /// Second rang : le geste qui n’est pas dominant (Pause en route, Signaler en pause) et « Terminer la leçon ».
+    @ViewBuilder private func secondaryCommands(hugsFirst: Bool) -> some View {
+        if controller.state == .paused {
+            if let recorder = controller.liveObservations {
+                signalButton(recorder, isDominant: false)
+                    .fixedSize(horizontal: hugsFirst, vertical: false)
+            }
+        } else {
+            pauseButton
+                .fixedSize(horizontal: hugsFirst, vertical: false)
+        }
         Button {
             finishLesson()
         } label: {
@@ -308,26 +338,31 @@ struct SchoolCaptureLiveView: View {
         .accessibilityIdentifier("capture-finish-lesson")
     }
 
-    @ViewBuilder private var pauseResumeButton: some View {
-        let paused = controller.state == .paused
-        let button = Button {
-            run(controller.canPause ? .pause : .resume)
+    private var pauseButton: some View {
+        Button {
+            run(.pause)
         } label: {
-            Label(paused ? "Reprendre" : "Pause", systemImage: paused ? "play.fill" : "pause.fill")
+            Label("Pause", systemImage: "pause.fill")
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
         }
-        // Resuming is the next gesture of a paused journey; pausing stays secondary.
-        if paused {
-            button.buttonStyle(DrivyPrimaryButtonStyle())
-                .disabled(!controller.canPause && !controller.canResume)
-                .accessibilityLabel("Reprendre le GPS")
-                .accessibilityIdentifier("school-capture-pause-resume")
-        } else {
-            button.buttonStyle(DrivySecondaryButtonStyle())
-                .disabled(!controller.canPause && !controller.canResume)
-                .accessibilityLabel("Mettre le GPS en pause")
-                .accessibilityIdentifier("school-capture-pause-resume")
+        .buttonStyle(DrivySecondaryButtonStyle())
+        .disabled(!controller.canPause)
+        .accessibilityLabel("Mettre le GPS en pause")
+        .accessibilityIdentifier("school-capture-pause-resume")
+    }
+
+    /// La reprise est le prochain geste d’un trajet en pause : seule action principale.
+    private var resumeButton: some View {
+        Button {
+            run(.resume)
+        } label: {
+            Label("Reprendre", systemImage: "play.fill")
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
         }
+        .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+        .disabled(!controller.canResume)
+        .accessibilityLabel("Reprendre le GPS")
+        .accessibilityIdentifier("school-capture-pause-resume")
     }
 
     private var savedActions: some View {
@@ -340,7 +375,7 @@ struct SchoolCaptureLiveView: View {
             }
             if let state = controller.finalizedSyncState { finalizationResult(state) }
             Button("Terminer la leçon", systemImage: "checkmark.circle") { finishLesson() }
-                .buttonStyle(DrivyPrimaryButtonStyle()).disabled(isFinishing)
+                .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(isFinishing)
         }
     }
 
@@ -465,7 +500,7 @@ private struct SchoolCaptureLiveMap: View {
                 Annotation("Dernière position enregistrée", coordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude)) {
                     Circle().fill(DrivyTheme.route).frame(width: 20, height: 20)
                         .overlay(Circle().stroke(DrivyTheme.routeHalo, lineWidth: 4))
-                        .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
+                        .shadow(color: DrivyTheme.shadow.opacity(0.3), radius: 3, y: 1)
                         .padding(DrivySpacing.s)
                         .background(DrivyTheme.route.opacity(0.2), in: Circle())
                         .accessibilityLabel("Dernière position enregistrée")

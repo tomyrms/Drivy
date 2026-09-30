@@ -41,7 +41,7 @@ struct SchoolLessonCompletionSheet: View {
                             .accessibilityLabel("Situation du permis")
                             .accessibilityIdentifier("lesson-permit-reason")
                         if reason.unicodeScalars.count > 1_000 {
-                            DrivyActionNote(text: "Raccourcissez le motif à 1 000 caractères.", isError: true)
+                            DrivyActionNote(text: "Raccourcis le motif à 1 000 caractères.", isError: true)
                         }
                     }
                     .drivyFormRows()
@@ -56,7 +56,7 @@ struct SchoolLessonCompletionSheet: View {
                         DrivyActionNote(text: message, isError: true)
                     } else if model.completionNeedsReason && !validReason && !isSubmitting {
                         // Une action indisponible dit pourquoi, au-dessus d’elle.
-                        DrivyActionNote(text: "Indiquez la situation du permis.")
+                        DrivyActionNote(text: "Indique la situation du permis.")
                     }
                     Button {
                         isSubmitting = true
@@ -113,7 +113,7 @@ struct SchoolLessonTariffSheet: View {
             .scrollContentBackground(.hidden)
             .frame(maxWidth: DrivyLayout.formColumn).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .navigationTitle("Tarif").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
         }
         .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .presentationDragIndicator(.visible)
@@ -133,8 +133,8 @@ struct SchoolLessonTariffSheet: View {
                 .monospacedDigit()
                 .foregroundStyle(DrivyTheme.text)
         }
-        .padding(.vertical, DrivySpacing.xxs)
-        .frame(minHeight: 44)
+        .padding(.vertical, emphasized ? DrivySpacing.xs : DrivySpacing.xxs)
+        .frame(minHeight: emphasized ? DrivySpacing.xxl + DrivySpacing.m : 44)
         .accessibilityElement(children: .combine)
     }
 }

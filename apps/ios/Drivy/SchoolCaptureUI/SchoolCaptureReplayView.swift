@@ -325,7 +325,7 @@ struct SchoolCaptureReplayView: View {
             HStack(alignment: .top, spacing: DrivySpacing.s) {
                 // Focus du dock : pastille pleine, comme les tuiles du signalement.
                 Image(systemName: item.symbol)
-                    .font(.headline.weight(.heavy))
+                    .font(.headline.weight(.bold))
                     .foregroundStyle(item.tone == .neutral ? DrivyTheme.text : item.tone.background)
                     .frame(width: 44, height: 44)
                     .background(item.tone == .neutral ? item.tone.background : item.tone.foreground, in: Circle())
@@ -362,7 +362,8 @@ struct SchoolCaptureReplayView: View {
 
     private func meta(_ item: SchoolReplayTimeline.Item) -> String {
         let time = item.offset.map { DrivyReplayScrubber.clock($0) } ?? "Heure non renseignée"
-        return "\(time) · \(item.coordinate == nil ? "Sans position" : "Sur le trajet")"
+        // « Sur le trajet » est le cas normal : seule l’exception s’écrit.
+        return item.coordinate == nil ? "\(time) · Sans position" : time
     }
 
     @ViewBuilder
@@ -381,9 +382,13 @@ struct SchoolCaptureReplayView: View {
                                 .id(item.id)
                         }
                     }
-                    .padding(.vertical, 1)
+                    .padding(.vertical, DrivySpacing.xxs)
                 }
                 .scrollIndicators(.hidden)
+                // Le rail va jusqu’aux bords du dock : les pastilles défilent sans être coupées net
+                // au retrait, et la première reste alignée sur le contenu.
+                .contentMargins(.horizontal, DrivySpacing.m, for: .scrollContent)
+                .padding(.horizontal, -DrivySpacing.m)
                 .onChange(of: selectedID) { _, id in
                     guard let id else { return }
                     withAnimation(DrivyMotion.context(reduceMotion)) { reader.scrollTo(id, anchor: .center) }
@@ -626,7 +631,7 @@ private struct SchoolReplayMap: View {
             .frame(width: selected ? 40 : 26, height: selected ? 40 : 26)
             .background(selected ? DrivyTheme.accent : DrivyTheme.surface, in: Circle())
             .overlay(Circle().strokeBorder(selected ? DrivyTheme.routeHalo : item.tone.foreground, lineWidth: selected ? 3 : 2))
-            .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
+            .shadow(color: DrivyTheme.shadow.opacity(0.25), radius: 3, y: 1)
             .dynamicTypeSize(...DynamicTypeSize.xLarge)
             .animation(DrivyMotion.context(reduceMotion), value: selected)
             .frame(width: 44, height: 44)

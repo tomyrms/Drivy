@@ -192,6 +192,8 @@ struct SchoolObservationView: View {
             }
             .buttonStyle(.plain)
             .font(.subheadline.weight(.semibold))
+            // Alignées sur la colonne de texte : les actions se lisent comme celles de cette ligne.
+            .padding(.leading, 36 + DrivySpacing.s)
         }
         .padding(.vertical, DrivySpacing.s)
         .accessibilityElement(children: .contain)

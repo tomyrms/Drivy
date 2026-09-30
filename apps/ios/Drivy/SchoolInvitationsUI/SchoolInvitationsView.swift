@@ -47,6 +47,8 @@ struct SchoolInvitationsView: View {
                                 isSelected: model.selectedID == invitation.id)
                         }
                         .accessibilityIdentifier("invitation-\(invitation.id.uuidString)")
+                        // Le fond de sélection ne porte pas seul l’état : VoiceOver l’annonce.
+                        .accessibilityAddTraits(model.selectedID == invitation.id ? .isSelected : [])
                         .drivyFormRows(isSelected: model.selectedID == invitation.id)
                     }
                     if model.nextCursor != nil {
@@ -275,16 +277,21 @@ struct InvitationCreationView: View {
     /// Depuis l’onglet Élèves : la liste n’est pas encore chargée, elle se charge ici.
     var learnerOnly = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack {
+            // Le code remplace le formulaire en fondu : même feuille, même contexte.
             Group {
                 if let issued = model.issuedCode {
                     InvitationCodeResultView(issued: issued, schoolName: model.school?.name)
+                        .transition(.opacity)
                 } else {
                     form
+                        .transition(.opacity)
                 }
             }
+            .animation(DrivyMotion.context(reduceMotion), value: model.issuedCode != nil)
             .navigationTitle(model.issuedCode == nil ? "Inviter un élève" : "Code élève")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -440,6 +447,7 @@ struct InvitationCodeResultView: View {
                 VStack(spacing: DrivySpacing.s) {
                     // Un verbe et son objet ; l’aperçu du partage nomme ce qui part.
                     ShareLink(item: Self.message(code: issued.code, schoolName: schoolName),
+                              subject: Text("Code élève"),
                               preview: SharePreview("Code élève")) {
                         Label("Partager le code", systemImage: "square.and.arrow.up")
                     }

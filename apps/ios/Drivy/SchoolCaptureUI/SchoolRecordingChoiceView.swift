@@ -118,18 +118,18 @@ struct SchoolRecordingChoiceView: View {
                 Image(systemName: symbol)
                     .font(.title.weight(.semibold))
                     .foregroundStyle(isEnabled ? DrivyTheme.accent : DrivyTheme.disabledText)
-                    .frame(width: 56, height: 56)
+                    .frame(width: 64, height: 64)
                     .background(isChosen ? DrivyTheme.surface : DrivyTheme.accentSoft, in: Circle())
                     .accessibilityHidden(true)
                 HStack(spacing: DrivySpacing.xs) {
                     Text(title)
-                        .font(.headline)
+                        .font(.title3.weight(.semibold))
                         .foregroundStyle(isEnabled ? DrivyTheme.text : DrivyTheme.disabledText)
                         .fixedSize(horizontal: false, vertical: true)
                     DrivySelectionMark(isSelected: isChosen)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 120)
+            .frame(maxWidth: .infinity, minHeight: 144)
         }
         .buttonStyle(DrivySelectionCardStyle(isSelected: model.choice?.status == status))
         .disabled(!isEnabled)
@@ -150,8 +150,7 @@ struct SchoolRecordingChoiceView: View {
             .accessibilityIdentifier("recording-retention-link")
             .frame(minHeight: 44)
         }
-        .font(.footnote).foregroundStyle(DrivyTheme.accent)
-        .padding(.top, DrivySpacing.l)
+        .font(.subheadline).foregroundStyle(DrivyTheme.accent)
     }
 
     private var pendingRequests: some View {
@@ -162,7 +161,7 @@ struct SchoolRecordingChoiceView: View {
                     Button("Réessayer") {
                         Task { if await model.resend(queued, acknowledged: true) { dismiss() } }
                     }
-                    .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.mayResume(queued))
+                    .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(!model.mayResume(queued))
                 }
             }
         }

@@ -56,6 +56,8 @@ struct SchoolTodayView: View {
                             }
                             .frame(width: DrivyMapLayout.sidebarWidth)
                             .background(DrivyTheme.canvas)
+                            // La colonne a la place : la journée s’y ouvre d’emblée au lieu de laisser un fond vide.
+                            .onAppear { showsDay = true }
                         }
                 } else {
                     let maxHeight = geometry.size.height * TodayLayout.bottomPanelMaxRatio
@@ -168,6 +170,11 @@ struct SchoolTodayView: View {
                         Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    if !stacked {
+                        Spacer(minLength: DrivySpacing.xs)
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                            .foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -181,6 +188,9 @@ struct SchoolTodayView: View {
     @ViewBuilder private func dayList(now: Date, focus: UUID?) -> some View {
         let others = lessons.filter { $0.id != focus }.sorted { $0.plannedStart < $1.plannedStart }
         if !others.isEmpty {
+          VStack(spacing: 0) {
+            // Filet entre la leçon qui compte et le reste du jour : deux groupes, pas une pile.
+            Divider().overlay(DrivyTheme.border)
             DisclosureGroup(isExpanded: $showsDay) {
                 VStack(spacing: 0) {
                     ForEach(others) { lesson in
@@ -194,10 +204,12 @@ struct SchoolTodayView: View {
                     }
                 }
             } label: {
-                Text("Leçons du jour (\(lessons.count))").font(.subheadline.weight(.semibold)).monospacedDigit()
+                (Text("Leçons du jour ") + Text("\(lessons.count)").foregroundStyle(DrivyTheme.muted))
+                    .font(.subheadline.weight(.semibold)).monospacedDigit()
                     .frame(minHeight: 44, alignment: .leading)
             }
             .accessibilityIdentifier("today-day-list")
+          }
         }
     }
 

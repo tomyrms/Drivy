@@ -13,7 +13,7 @@ import XCTest
         app.buttons["Fermer"].tap()
         allow.tap()
         XCTAssertTrue(app.staticTexts["field-choice-saved"].waitForExistence(timeout: 10), app.debugDescription)
-        XCTAssertFalse(allow.exists)
+        XCTAssertTrue(allow.waitForNonExistence(timeout: 5))
     }
 
     func testAnObservationUsesAPreciseThemeAndAnExplicitStatus() {

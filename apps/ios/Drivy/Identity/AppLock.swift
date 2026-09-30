@@ -96,11 +96,13 @@ struct AppLockView: View {
         GeometryReader { proxy in
             ScrollView {
                 VStack(spacing: DrivySpacing.l) {
+                    // Même aplat de marque que l’écran de connexion : le verrou reste dans la famille.
                     Image(systemName: "lock.fill")
-                        .font(.largeTitle)
-                        .foregroundStyle(DrivyTheme.muted)
+                        .font(.largeTitle.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.accent)
                         .frame(width: plate, height: plate)
-                        .background(DrivyTheme.surfaceMuted, in: Circle())
+                        .background(DrivyTheme.accentSoft, in: Circle())
+                        .overlay { Circle().strokeBorder(DrivyTheme.border, lineWidth: 0.5) }
                         .accessibilityHidden(true)
                     Text("Drivy verrouillé")
                         .font(.drivyTitle)
@@ -111,6 +113,7 @@ struct AppLockView: View {
                     if let error = lock.errorMessage { SchoolErrorNotice(message: error) }
                 }
                 .frame(maxWidth: .infinity)
+                .padding(.bottom, DrivySpacing.xxl)
                 .drivyPageContent(maxWidth: DrivyLayout.narrowColumn)
                 .frame(minHeight: proxy.size.height)
             }

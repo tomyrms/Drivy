@@ -51,22 +51,7 @@ struct SchoolProfileView: View {
                 readinessSection
             }
             if let onboarding = model.onboarding, onboarding.status != "COMPLETED" { onboardingSection(onboarding) }
-            if let policy = model.applicablePolicy {
-                Section {
-                    DisclosureGroup("Pourquoi ces informations ?") {
-                        ForEach(policy.fields) { rule in
-                            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                                Text(rule.field.label).font(.subheadline.weight(.semibold))
-                                Text(rule.requirement == .optional ? "Facultatif" : "\(rule.requirement.label) · \(rule.stage.label)")
-                                    .font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                                Text(rule.explanation).font(.footnote).fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                }
-                    .drivyFormRows()
-            }
-            if let notice = model.notice, notice.status == "APPROVED" { noticeSection(notice) }
+            explanationsSection
         }
         .scrollContentBackground(.hidden)
         .frame(maxWidth: DrivyLayout.formColumn)
@@ -247,21 +232,41 @@ struct SchoolProfileView: View {
         } header: { Text("Accueil dans l’école") }
             .drivyFormRows()
     }
-    private func noticeSection(_ notice: SchoolDataPolicy) -> some View {
-        Section {
-            // Same wording and content as the notice sheet of the guided welcome.
-            DisclosureGroup("Comment l’école utilise tes données") {
-                Text(notice.noticeText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                Text(notice.retentionText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                if let email = notice.contactEmail {
-                    DrivyContactRow(title: "Contact pour tes données", value: email, symbol: "envelope")
+    /// Les deux explications (champs demandés, usage des données) forment un seul groupe :
+    /// deux lignes séparées d’un filet plutôt que deux pastilles isolées.
+    @ViewBuilder private var explanationsSection: some View {
+        let policy = model.applicablePolicy
+        let notice = model.notice.flatMap { $0.status == "APPROVED" ? $0 : nil }
+        if policy != nil || notice != nil {
+            Section {
+                if let policy {
+                    DisclosureGroup("Pourquoi ces informations ?") {
+                        ForEach(policy.fields) { rule in
+                            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                                Text(rule.field.label).font(.subheadline.weight(.semibold))
+                                Text(rule.requirement == .optional ? "Facultatif" : "\(rule.requirement.label) · \(rule.stage.label)")
+                                    .font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                                Text(rule.explanation).font(.footnote).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
                 }
-                Text("Version \(notice.version)")
-                    .font(.footnote.monospacedDigit())
-                    .foregroundStyle(DrivyTheme.muted)
+                if let notice {
+                    // Same wording and content as the notice sheet of the guided welcome.
+                    DisclosureGroup("Comment l’école utilise tes données") {
+                        Text(notice.noticeText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        Text(notice.retentionText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        if let email = notice.contactEmail {
+                            DrivyContactRow(title: "Contact pour tes données", value: email, symbol: "envelope")
+                        }
+                        Text("Version \(notice.version)")
+                            .font(.footnote.monospacedDigit())
+                            .foregroundStyle(DrivyTheme.muted)
+                    }
+                }
             }
-        }
             .drivyFormRows()
+        }
     }
 }
 

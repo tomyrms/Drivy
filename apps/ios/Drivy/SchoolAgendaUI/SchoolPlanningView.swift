@@ -192,11 +192,11 @@ struct SchoolPlanningView: View {
                     HStack {
                         Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))")
                         Spacer(minLength: DrivySpacing.s)
-                        if let price = bookingPrice { Text(SchoolCatalogFormatting.price(price)).fontWeight(.semibold).foregroundStyle(DrivyTheme.text) }
+                        if let price = bookingPrice { bookingPriceText(price) }
                     }
                     VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                         Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))")
-                        if let price = bookingPrice { Text(SchoolCatalogFormatting.price(price)).fontWeight(.semibold).foregroundStyle(DrivyTheme.text) }
+                        if let price = bookingPrice { bookingPriceText(price) }
                     }
                 }
                 .font(.subheadline.monospacedDigit())
@@ -218,6 +218,11 @@ struct SchoolPlanningView: View {
             .disabled(!model.validBooking)
             .accessibilityIdentifier("planning-confirm")
         }
+    }
+
+    /// Le prix est le point focal de la barre : plus grand que la durée et l’horaire qui l’accompagnent.
+    private func bookingPriceText(_ price: Int64) -> some View {
+        Text(SchoolCatalogFormatting.price(price)).font(.headline.monospacedDigit()).foregroundStyle(DrivyTheme.text)
     }
 
     private var bookingPrice: Int64? {

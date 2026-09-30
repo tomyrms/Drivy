@@ -559,27 +559,24 @@ struct SchoolAccountView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: DrivySpacing.xl) {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     accountHeading
                     if isAuthenticated {
-                        if openProfile != nil || openInvitations != nil || manageURL != nil {
-                            DrivyRowGroup {
-                                if let openProfile {
-                                    DrivyNavigationRow(title: "Mon profil", symbol: "person.text.rectangle", action: openProfile)
-                                        .accessibilityIdentifier("open-my-profile")
-                                }
-                                if let openInvitations {
-                                    DrivyNavigationRow(title: "Invitations", symbol: "envelope", action: openInvitations)
-                                        .accessibilityIdentifier("open-school-invitations")
-                                }
-                                if let manageURL {
-                                    DrivyNavigationRow(title: "Gérer l’école", detail: "Sur le web", symbol: "globe",
-                                        action: { openURL(manageURL) })
-                                        .accessibilityIdentifier("open-school-management")
-                                }
-                            }
-                        }
+                        // Une seule liste : les séparateurs suivent le même rythme d’un bout à l’autre.
                         DrivyRowGroup {
+                            if let openProfile {
+                                DrivyNavigationRow(title: "Mon profil", symbol: "person.text.rectangle", action: openProfile)
+                                    .accessibilityIdentifier("open-my-profile")
+                            }
+                            if let openInvitations {
+                                DrivyNavigationRow(title: "Invitations", symbol: "envelope", action: openInvitations)
+                                    .accessibilityIdentifier("open-school-invitations")
+                            }
+                            if let manageURL {
+                                DrivyNavigationRow(title: "Gérer l’école", detail: "Sur le web", symbol: "globe",
+                                    action: { openURL(manageURL) })
+                                    .accessibilityIdentifier("open-school-management")
+                            }
                             if let workspace, hasSeveralSchools {
                                 DrivyNavigationRow(title: "Changer d’école", detail: workspace.membership?.schoolName,
                                     symbol: "arrow.left.arrow.right", action: {
@@ -611,9 +608,9 @@ struct SchoolAccountView: View {
                                 .frame(minHeight: 64)
                                 .accessibilityIdentifier("app-lock-toggle")
                             }
+                            DrivyDestructiveRow(title: "Se déconnecter", symbol: "rectangle.portrait.and.arrow.right", action: signOut)
+                                .accessibilityIdentifier("school-sign-out")
                         }
-                        DrivyDestructiveRow(title: "Se déconnecter", symbol: "rectangle.portrait.and.arrow.right", action: signOut)
-                            .accessibilityIdentifier("school-sign-out")
                     }
                 }
                 .drivyPageContent()
