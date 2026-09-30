@@ -223,10 +223,10 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
         {session?.authenticated && <button className="button quiet" type="button" onClick={() => void logout()} disabled={isBusy}>Se déconnecter</button>}
       </header>
 
-      <main id="main" className="main" aria-busy={!loaded}>
+      <main id="main" className={`main${!session?.authenticated ? ' auth-entry' : ''}`} aria-busy={!loaded}>
         <div className="page-heading">
-          <p className="context">{page === 'invitation' ? 'Invitation' : session?.authenticated ? personName : 'Espace école'}</p>
-          <h1 ref={heading} tabIndex={-1}>{page === 'invitation' ? 'Rejoindre une école' : session?.authenticated ? 'Vos écoles' : 'Se connecter à Drivy'}</h1>
+          {page === 'account' && session?.authenticated && <p className="context">{personName}</p>}
+          <h1 id="entry-title" ref={heading} tabIndex={-1}>{page === 'invitation' ? 'Rejoindre une école' : session?.authenticated ? 'Vos écoles' : 'Se connecter à Drivy'}</h1>
         </div>
 
         <div className="feedback" aria-live="polite" aria-atomic="true">
@@ -255,22 +255,18 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
 
         {!loaded && <div className="panel skeleton" aria-hidden="true"><span /><span /><span /></div>}
 
-        {loaded && !session?.authenticated && <section className="panel sign-in" aria-labelledby="sign-in-title">
-          <Symbol kind="account" tile />
-          <h2 id="sign-in-title">{page === 'invitation' ? 'Utilisez le compte invité' : 'Retrouvez votre école'}</h2>
-          <p className="secondary-text">{page === 'invitation'
-            ? 'Utilisez l’adresse à laquelle votre école a envoyé ce lien. Vous pourrez relire les informations avant d’accepter.'
-            : 'Retrouvez les écoles auxquelles vous êtes rattaché.'}</p>
+        {loaded && !session?.authenticated && <section className="sign-in" aria-labelledby="entry-title">
+          {page === 'invitation' && <p className="secondary-text">Utilisez l’adresse à laquelle votre école a envoyé ce lien. Vous pourrez relire les informations avant d’accepter.</p>}
           <button className="button primary" type="button" disabled={isBusy || invitationLink.token !== null || invitationLink.error} onClick={() => void login()}>Se connecter</button>
           {page === 'invitation' && <p className="caption">Si vous fermez cette page avant la fin de la préparation, rouvrez le lien envoyé par votre école.</p>}
         </section>}
 
         {loaded && session?.authenticated && page === 'invitation' && <>
-          <section className="section" aria-labelledby="identity-title">
-            <h2 id="identity-title" className="section-title">Compte utilisé</h2>
+          <section className="section invitation-identity" aria-labelledby="identity-title">
             <div className="identity-row">
               <Symbol kind="account" />
               <div className="row-text">
+                <h2 id="identity-title" className="section-title">Compte utilisé</h2>
                 <strong className="row-title">{personName}</strong>
                 {session.user?.email && <span className="row-meta">{session.user.email}</span>}
                 {!emailVerified && <StatusBadge tone="warning" symbol="alert">Adresse à vérifier</StatusBadge>}
@@ -289,16 +285,14 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
 
           {preview && <section className="panel invitation" aria-labelledby="invitation-school-name">
             <div className="school-heading">
-              <Symbol kind="school" tile />
               <div className="row-text">
-                <span className="row-meta">L’école qui vous invite</span>
                 <h2 id="invitation-school-name">{preview.data.schoolName}</h2>
               </div>
             </div>
             <dl className="invitation-facts">
-              <div><Symbol kind="shield" /><dt>Votre rôle</dt><dd>{preview.data.roles.map(roleLabel).join(' · ')}</dd></div>
-              <div><Symbol kind="mail" /><dt>Invitation envoyée à</dt><dd>{preview.data.maskedEmail}</dd></div>
-              <div><Symbol kind="clock" /><dt>Lien valable jusqu’au</dt><dd><time dateTime={preview.data.expiresAt}>{formatDate(preview.data.expiresAt)}</time></dd></div>
+              <div><dt>Votre rôle</dt><dd>{preview.data.roles.map(roleLabel).join(' · ')}</dd></div>
+              <div><dt>Invitation envoyée à</dt><dd>{preview.data.maskedEmail}</dd></div>
+              <div><dt>Lien valable jusqu’au</dt><dd><time dateTime={preview.data.expiresAt}>{formatDate(preview.data.expiresAt)}</time></dd></div>
             </dl>
             <div className="policy">
               <h3>Vos données dans cette école</h3>

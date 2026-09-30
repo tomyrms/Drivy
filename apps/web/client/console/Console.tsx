@@ -218,7 +218,7 @@ export function SectionNavigation({ schoolId, section, query = {}, navigate }: {
   const link = (destination: SectionKey, label: string, destinationQuery: NavigationQuery = categoryQuery) => <a href={consolePath(schoolId, destination, destinationQuery)}
     onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(destination, destinationQuery); }}>{label}</a>;
   return <div className="section-navigation">
-    {section !== workspace.home && <nav className="breadcrumbs" aria-label="Fil d’Ariane"><ol>
+    {parent !== null && <nav className="breadcrumbs" aria-label="Fil d’Ariane"><ol>
       <li>{section === workspace.home ? <span aria-current="page">{workspace.label}</span> : link(workspace.home, workspace.label)}</li>
       {parent && parent !== workspace.home && <li>{link(parent, sectionTitles[parent])}</li>}
       {section !== workspace.home && <li><span aria-current="page">{sectionTitles[section]}</span></li>}

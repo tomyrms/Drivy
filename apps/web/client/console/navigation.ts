@@ -21,7 +21,7 @@ export const workspaces: readonly Workspace[] = [
     { section: 'formations', label: 'Formations' }, { section: 'prestations', label: 'Tarifs' },
   ] },
   { key: 'settings', label: 'Réglages', symbol: 'settings', home: 'configuration', items: [
-    { section: 'configuration', label: 'École et confidentialité' }, { section: 'champs-profil', label: 'Informations des élèves' },
+    { section: 'configuration', label: 'École' }, { section: 'champs-profil', label: 'Informations élèves' },
     { section: 'apercu', label: 'Préparation' },
   ] },
 ];

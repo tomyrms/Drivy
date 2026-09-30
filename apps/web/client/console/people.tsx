@@ -9,7 +9,8 @@ import {
 import { memberSchema, offeringSchema, readAll } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime, type Tone } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useRouteSelection } from './context';
-import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
+import { DirectoryRow } from './directory';
+import { DetailPanel, LoadState, OutcomeNotice, Placeholder, SectionHeading, SplitView } from './layout';
 
 const roles: readonly { value: Role; explanation: string }[] = [
   { value: 'ADMIN', explanation: 'Gérer l’école, ses membres et les dossiers administratifs.' },
@@ -84,28 +85,23 @@ export function TeamSection() {
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture de l’équipe…">{data => <SplitView mobileDetail={!!selected} onBack={() => setSelected(null)} backLabel="Tous les membres"
         list={<>
-          <div className="list-toolbar">
+          <div className="list-toolbar directory-toolbar">
             <TextField label="Rechercher un membre" value={filter} onChange={setFilter} placeholder="Nom" />
             <CheckField label="Afficher les élèves" checked={showLearners} onChange={setShowLearners} />
             {filter && <button type="button" className="button quiet" onClick={() => setFilter('')}>Effacer la recherche</button>}
           </div>
           {visible.length === 0 ? <EmptyState symbol="users" title={members.length ? 'Aucun membre trouvé' : 'Aucun membre'} message="" />
-          : <table className="data-table">
-            <caption className="visually-hidden">Membres de l’école{data.truncated ? ' (liste partielle)' : ''}</caption>
-            <thead><tr><th scope="col">Membre</th><th scope="col">Rôles</th></tr></thead>
-            <tbody>{visible.map(item => <tr key={item.id} className={item.id === selected ? 'selected' : undefined}>
-              <th scope="row"><RowButton selected={item.id === selected} onSelect={() => setSelected(item.id)}>{item.displayName}</RowButton>
-                {item.id === membership.membershipId && <span className="caption"> · vous</span>}
-                {item.status !== 'ACTIVE' && <span className="caption block"><StatusBadge tone="neutral" symbol="ban">Accès inactif</StatusBadge></span>}</th>
-              <td>{rolesText(item.roles)}</td>
-            </tr>)}</tbody>
-          </table>}
+          : <ul className="directory-list" aria-label={`Membres de l’école${data.truncated ? ' (liste partielle)' : ''}`}>
+            {visible.map(item => <DirectoryRow key={item.id} title={item.displayName} selected={item.id === selected} onSelect={() => setSelected(item.id)}
+              meta={item.id === membership.membershipId ? 'Vous' : undefined} detail={rolesText(item.roles)}
+              badge={item.status !== 'ACTIVE' ? <StatusBadge tone="neutral" symbol="ban">Accès inactif</StatusBadge> : undefined} />)}
+          </ul>}
         </>}
         detail={current ? <DetailPanel focusKey={current.id} title={current.displayName} meta={self ? 'Votre propre accès' : rolesText(current.roles)}
             badge={current.status !== 'ACTIVE' ? <StatusBadge tone="neutral" symbol="ban">Accès inactif</StatusBadge> : undefined}>
-            {current.roles.includes('INSTRUCTOR') && <div className="button-row">
-              <button type="button" className="button secondary" onClick={() => navigate('agenda', { instructor: current.id })}>Voir son planning</button>
-              <button type="button" className="button secondary" onClick={() => navigate('disponibilites', { instructor: current.id, from: 'equipe' })}>Disponibilités et absences</button>
+            {current.roles.includes('INSTRUCTOR') && <div className="detail-links">
+              <button type="button" className="button quiet" onClick={() => navigate('agenda', { instructor: current.id })}><Symbol kind="calendar" bare />Voir le planning</button>
+              <button type="button" className="button quiet" onClick={() => navigate('disponibilites', { instructor: current.id, from: 'equipe' })}>Disponibilités et absences</button>
             </div>}
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
               <fieldset className="fieldset">
@@ -302,16 +298,12 @@ export function InvitationsSection() {
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des invitations…">{() => <SplitView mobileDetail={!!selected || !!creating} onBack={() => { setSelected(null); setCreating(null); }} backLabel="Toutes les invitations"
         list={items.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation" message="" />
-          : <table className="data-table">
-            <caption className="visually-hidden">Invitations de l’école, les plus récentes d’abord</caption>
-            <thead><tr><th scope="col">Invitation</th>{team && <th scope="col">Rôles</th>}<th scope="col">Statut</th><th scope="col">Expire le</th></tr></thead>
-            <tbody>{items.map(item => <tr key={item.id} className={item.id === selected && !creating ? 'selected' : undefined}>
-              <th scope="row"><RowButton selected={item.id === selected && !creating} onSelect={() => { setCreating(null); setCodeMissing(false); setSelected(item.id); }}>{label(item)}</RowButton></th>
-              {team && <td>{rolesText(item.roles)}</td>}
-              <td><InvitationState status={item.status} /></td>
-              <td><time dateTime={item.expiresAt}>{formatDateTime(item.expiresAt, school.timeZone)}</time></td>
-            </tr>)}</tbody>
-          </table>}
+          : <ul className="directory-list" aria-label="Invitations de l’école, les plus récentes d’abord">
+            {items.map(item => <DirectoryRow key={item.id} title={label(item)} selected={item.id === selected && !creating}
+              onSelect={() => { setCreating(null); setCodeMissing(false); setSelected(item.id); }}
+              meta={<>{team && <>{rolesText(item.roles)} · </>}Expire le <time dateTime={item.expiresAt}>{formatDateTime(item.expiresAt, school.timeZone)}</time></>}
+              detail={<InvitationState status={item.status} />} />)}
+          </ul>}
         detail={creating === 'code' ? <DetailPanel focusKey="create-code" title="Code élève">
             <form className="form-grid" onSubmit={event => { event.preventDefault(); setShowErrors(true); if (!trainingProblem) void confirm('create'); }}>
               <fieldset className="fieldset"><legend>Permis</legend>

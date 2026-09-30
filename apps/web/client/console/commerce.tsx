@@ -6,6 +6,7 @@ import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, Stat
 import { useCommandRunner, useConsole, useLoad, useRouteSelection, useSectionDraft } from './context';
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
 import { approvalBadge } from './catalog';
+import { consolePath } from './route';
 
 type ProductType = typeof productTypes[number];
 const typeLabels: Record<ProductType, string> = {
@@ -95,15 +96,15 @@ export function TermsSection() {
             </>}>
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
               <TextField label="Libellé" value={draft.label} maxLength={200} disabled={!canWrite} onChange={label => update({ label })} error={showErrors ? problems.label : null} />
-              <TextArea label="Texte des conditions" rows={10} maxLength={20_000} value={draft.termsText} disabled={!canWrite} onChange={termsText => update({ termsText })} error={showErrors ? problems.text : null} />
+              <TextArea label="Texte des conditions" rows={6} maxLength={20_000} value={draft.termsText} disabled={!canWrite} onChange={termsText => update({ termsText })} error={showErrors ? problems.text : null} />
               <div className="form-row">
                 <TextField label="Valables dès le" type="date" value={draft.validFrom} disabled={!canWrite} onChange={validFrom => update({ validFrom })} error={showErrors ? problems.period : null} />
-                <TextField label="Jusqu’au" type="date" required={false} value={draft.validUntil} disabled={!canWrite} onChange={validUntil => update({ validUntil })} hint="Sans date, les conditions restent valables." />
+                <TextField label="Jusqu’au" type="date" required={false} value={draft.validUntil} disabled={!canWrite} onChange={validUntil => update({ validUntil })} />
               </div>
               <fieldset className="fieldset">
                 <legend>Validation</legend>
                 <CheckField label="Approuver ces conditions" checked={draft.approved} onChange={approved => update({ approved })} disabled={!canWrite}
-                  description="Seules des conditions approuvées permettent d’activer une prestation. Une version existante n’est jamais réécrite." />
+                  description="L’approbation permet d’activer une prestation liée à ces conditions." />
                 <TextArea label="Motif de cette version" rows={2} maxLength={1000} value={draft.approvalReason} disabled={!canWrite}
                   onChange={approvalReason => update({ approvalReason })} error={showErrors ? problems.reason : null} />
               </fieldset>
@@ -207,7 +208,7 @@ export function ProductsSection() {
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des prestations…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
-        list={<><CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} />{rows.length === 0 ? <EmptyState symbol="tag" title="Aucune prestation" message={value.terms.some(item => item.approved)
+        list={<><div className="list-toolbar"><CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} /></div>{rows.length === 0 ? <EmptyState symbol="tag" title="Aucune prestation" message={value.terms.some(item => item.approved)
             ? 'Créez une prestation et rattachez-la aux conditions commerciales approuvées.' : 'Commencez par approuver des conditions commerciales.'}
             action={value.terms.some(item => item.approved) ? undefined : <button type="button" className="button secondary" onClick={() => navigate('conditions', { from: 'prestations', category: routeQuery?.category })}>Ouvrir les conditions commerciales</button>} />
           : <table className="data-table">
@@ -227,12 +228,11 @@ export function ProductsSection() {
               <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
             </>}>
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
-              <div className="form-row">
-                <TextField label="Référence" value={draft.productKey} maxLength={100} disabled={!canWrite || !!draft.basedOn} placeholder="Par exemple lecon-b-45"
-                  onChange={productKey => update({ productKey })} error={showErrors ? problems.key : null} hint={draft.basedOn ? 'Une nouvelle version garde sa référence.' : undefined} />
-                <SelectField label="Type" value={draft.type} disabled={!canWrite} options={productTypes.map(type => ({ value: type, label: typeLabels[type] }))} onChange={type => update({ type })} />
-              </div>
               <TextField label="Libellé" value={draft.label} maxLength={200} disabled={!canWrite} onChange={label => update({ label })} error={showErrors ? problems.label : null} />
+              <div className="form-row">
+                <TextField label="Prix unitaire (CHF)" value={draft.price} inputMode="decimal" disabled={!canWrite} onChange={price => update({ price })} error={showErrors ? problems.price : null} />
+                <TextField label="Unité facturée" value={draft.unitLabel} maxLength={100} disabled={!canWrite} onChange={unitLabel => update({ unitLabel })} error={showErrors ? problems.unit : null} />
+              </div>
               <div className="form-row">
                 <TextField label="Catégorie" required={draft.type === 'INDIVIDUAL_LESSON' ? undefined : false} value={draft.categoryCode} maxLength={30} disabled={!canWrite} placeholder="Par exemple B"
                   onChange={categoryCode => update({ categoryCode })} error={showErrors ? problems.category : null} />
@@ -240,8 +240,9 @@ export function ProductsSection() {
                   onChange={duration => update({ duration })} error={showErrors ? problems.duration : null} />
               </div>
               <div className="form-row">
-                <TextField label="Prix unitaire (CHF)" value={draft.price} inputMode="decimal" disabled={!canWrite} onChange={price => update({ price })} error={showErrors ? problems.price : null} />
-                <TextField label="Unité facturée" value={draft.unitLabel} maxLength={100} disabled={!canWrite} onChange={unitLabel => update({ unitLabel })} error={showErrors ? problems.unit : null} />
+                <SelectField label="Type" value={draft.type} disabled={!canWrite} options={productTypes.map(type => ({ value: type, label: typeLabels[type] }))} onChange={type => update({ type })} />
+                <TextField label="Référence" value={draft.productKey} maxLength={100} disabled={!canWrite || !!draft.basedOn} placeholder="Par exemple lecon-b-45"
+                  onChange={productKey => update({ productKey })} error={showErrors ? problems.key : null} />
               </div>
               <div className="form-row">
                 <TextField label="Valable dès le" type="date" value={draft.validFrom} disabled={!canWrite} onChange={validFrom => update({ validFrom })} error={showErrors ? problems.period : null} />
@@ -259,11 +260,13 @@ export function ProductsSection() {
             actions={canConfigureCatalog ? <button type="button" className="button primary" disabled={!canWrite} onClick={() => edit(current)}><Symbol kind="edit" bare />Nouvelle version</button> : undefined}>
             <div className="price-summary"><p className="price-amount">{formatCents(current.unitPriceCents)}<span> / {current.unitLabel}</span></p><p className="row-meta">{formatDuration(current.durationMinutes)}{current.categoryCode ? ` · Catégorie ${current.categoryCode}` : ''}</p></div>
             <Facts items={[
-              ['Référence', <code key="key">{current.productKey}</code>],
               ['Validité', period(current.validFrom, current.validUntil)],
-              ['Conditions', terms(current.termsVersionId) ? <>{terms(current.termsVersionId)!.label} · v{terms(current.termsVersionId)!.version} {approvalBadge(terms(current.termsVersionId)!.approved, true)}</> : 'Non disponibles'],
+              ['Conditions', terms(current.termsVersionId) ? <><a className="text-link" href={consolePath(schoolId, 'conditions', { selection: current.termsVersionId, category: current.categoryCode ?? undefined, from: 'prestations' })} onClick={event => {
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+                event.preventDefault(); navigate('conditions', { selection: current.termsVersionId, category: current.categoryCode ?? undefined, from: 'prestations' });
+              }}>{terms(current.termsVersionId)!.label} · v{terms(current.termsVersionId)!.version}</a> {approvalBadge(terms(current.termsVersionId)!.approved, true)}</> : 'Non disponibles'],
+              ['Référence', <code key="key">{current.productKey}</code>],
             ]} />
-            <div className="button-row"><button type="button" className="button secondary" onClick={() => navigate('conditions', { selection: current.termsVersionId, category: current.categoryCode ?? undefined, from: 'prestations' })}>Conditions de ce tarif</button></div>
           </DetailPanel>
           : <Placeholder>Choisissez une prestation pour la consulter.</Placeholder>} />}
       </LoadState>

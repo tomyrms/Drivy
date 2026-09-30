@@ -3,7 +3,7 @@ import { civilDateIn } from '../agenda-model';
 import { createCommand, isCivilDate, schoolTimeToInstant } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { availabilitySchema, closureSchema, memberSchema, readAll, type Availability, type Closure } from '../school-api';
-import { CheckField, EmptyState, SelectField, TextField, formatCivilDate, formatDateTime } from '../ui';
+import { CheckField, EmptyState, SelectField, Symbol, TextField, formatCivilDate, formatDateTime } from '../ui';
 import { useCommandRunner, useConsole, useLoad } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 
@@ -84,8 +84,13 @@ export function AvailabilitySection() {
       <LoadState loaded={loaded} label="Lecture des disponibilités…">{() => instructors.length === 0
         ? <EmptyState symbol="users" title="Aucun moniteur" message="Donnez le rôle Moniteur à un membre dans Équipe et accès." />
         : <>
-          {instructors.length > 1 && <SelectField label="Moniteur" value={instructor} onChange={setChosen}
-            options={instructors.map(member => ({ value: member.id, label: member.displayName }))} />}
+          <div className="availability-toolbar">
+            {instructors.length > 1 ? <SelectField label="Moniteur" value={instructor} onChange={setChosen}
+              options={instructors.map(member => ({ value: member.id, label: member.displayName }))} />
+              : <p className="row-title">{instructors.find(member => member.id === instructor)?.displayName ?? 'Moniteur indisponible'}</p>}
+            <button type="button" className="button quiet" onClick={() => navigate('agenda', { instructor })}><Symbol kind="calendar" bare />Voir le planning</button>
+          </div>
+          <div className="availability-grid">
           <section className="panel schedule-section" aria-labelledby="weekly-title">
             <h2 id="weekly-title" className="section-title">Horaires hebdomadaires</h2>
             {rules.length === 0 ? <p className="caption">Aucune disponibilité : aucune leçon ne peut être planifiée.</p>
@@ -135,6 +140,7 @@ export function AvailabilitySection() {
             </form>
             </details>
           </section>
+          </div>
         </>}
       </LoadState>
     </div>

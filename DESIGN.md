@@ -114,6 +114,8 @@ Choix utilisateur : « Sobre et précise : listes compactes, carte dominante, pe
 - Le fil d’Ariane apparaît dans les sous-pages. À la racine d’un espace, la navigation principale, l’onglet courant et le titre suffisent. Les petits contextes qui répétaient le nom de l’espace sont retirés.
 - Les formulaires composés adaptent leurs colonnes à leur conteneur. Un champ à l’intérieur d’un dossier ne dépend pas de la largeur totale de l’écran.
 
+La deuxième passe du 30 septembre ajuste la densité sans changer ces tokens. Le fil d’Ariane est réservé aux destinations hors des onglets locaux. La composition liste/détail dépend du conteneur de travail (46 rem utiles), sans panneau vide avant sélection. Sur petit écran, le détail perd son cadre extérieur pour rendre cette largeur au contenu. Les annuaires emploient une ligne de sélection entière ; horaires et absences peuvent se lire côte à côte ; les réglages associent une colonne de section à leur contenu. Les chiffres, labels permanents et cibles tactiles restent lisibles. [Décisions et preuve](docs/implementation/web-layout-pass2-20260930.md).
+
 ### Tokens web
 
 Source d’exécution : `apps/web/client/styles.css`. Les hexadécimaux sont nommés par rôle, sans deuxième système de couleur. Le thème suit `prefers-color-scheme`.

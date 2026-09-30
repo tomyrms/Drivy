@@ -98,7 +98,7 @@ export function FormationsSection() {
               </div>
             </section>;
           })}</div>}
-        {!routeQuery.category && data.products.some(item => !item.categoryCode) && <section className="formation-group">
+        {!routeQuery.category && data.products.some(item => !item.categoryCode) && <section className="formation-group formation-other">
           <div className="formation-heading"><h2>Autres prestations</h2>{link('prestations', 'Tous les tarifs', {}, 'button quiet')}</div>
           <ul className="formation-prices">{data.products.filter(item => !item.categoryCode).map(priceRow)}</ul>
         </section>}

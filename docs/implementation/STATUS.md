@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 30 septembre 2026 — deuxième passe des layouts web
+
+Les 18 destinations web ont reçu une seconde revue de composition, avec trois agents et une revue indépendante des changements. Les en-têtes sont rapprochés, les fils d’Ariane limités aux véritables sous-pages, les listes/détails adaptés à la largeur du conteneur. Annuaires entièrement cliquables, horaires/absences côte à côte, réglages en sections alignées et entrée simplifiée. Palette et typographie conservées. [Décisions et vérification](web-layout-pass2-20260930.md).
+
+- **104 tests web**, typecheck et build réussis. Revue visuelle à 1200/390 px, contrôles des 18 destinations à 320 px avec textes longs, détails/formulaires et clavier à 834 px sombre. Après correction, aucun débordement mesuré sur les 58 relevés retenus. [Preuve](proofs/web-layout-pass2-20260930.json).
+- Déploiement après nouvelle sauvegarde à terminer. Zoom 200 %, lecteurs d’écran et appareils physiques restent à qualifier.
+
 ## 30 septembre 2026 — finition esthétique et ergonomique de chaque écran web
 
 Le porteur juge l’organisation plus claire mais l’apparence encore trop élémentaire. Passe réalisée, **web uniquement** : palette encre/papier, typographie Source Sans 3 auto-hébergée, contrôles et tableaux retravaillés, hiérarchie des identités, heures et prix, états ordinaires allégés. Deux agents ont partagé composants communs et parcours métier ; l’intégration couvre catalogue, réglages, entrée et revue navigateur. Les cinq espaces de navigation sont conservés. [Décisions et guides](web-craft-20260930.md).

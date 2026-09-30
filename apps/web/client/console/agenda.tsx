@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { civilDateIn, addDays, formatDayHeading, formatTimeRange, formatWeek, groupByDay, weekStart, weekWindow } from '../agenda-model';
 import { useCommandSnapshot } from '../command-store';
 import { activeInstructors } from '../invitation-model';
@@ -36,6 +36,7 @@ export function AgendaSection() {
   const learnerName = (id: string) => data?.learners.find(item => item.id === id)?.displayName ?? 'Élève';
   const memberName = (id: string) => data?.members.find(item => item.id === id)?.displayName ?? 'Moniteur';
   const thisWeek = weekStart(civilDateIn(school.timeZone));
+  const weekLabel = useRef<HTMLSpanElement>(null);
 
   return (
     <div className="section-stack">
@@ -43,9 +44,9 @@ export function AgendaSection() {
       <div className="agenda-toolbar">
         <div className="week-nav" role="group" aria-label="Semaine affichée">
           <button type="button" className="button secondary" aria-label="Semaine précédente" onClick={() => setMonday(addDays(monday, -7))}><Symbol kind="back" bare /></button>
-          <span className="week-label" aria-live="polite">{formatWeek(monday)}</span>
+          <span className="week-label" aria-live="polite" ref={weekLabel} tabIndex={-1}>{formatWeek(monday)}</span>
           <button type="button" className="button secondary" aria-label="Semaine suivante" onClick={() => setMonday(addDays(monday, 7))}><span className="flip"><Symbol kind="back" bare /></span></button>
-          <button type="button" className="button quiet" disabled={monday === thisWeek} onClick={() => setMonday(thisWeek)}>Aujourd’hui</button>
+          {monday !== thisWeek && <button type="button" className="button quiet" onClick={() => { setMonday(thisWeek); window.requestAnimationFrame(() => weekLabel.current?.focus()); }}>Aujourd’hui</button>}
         </div>
         {instructors.length > 1 && <SelectField label="Moniteur" value={instructor} onChange={setInstructor}
           options={[{ value: '', label: 'Tous les moniteurs' }, ...instructors.map(item => ({ value: item.id, label: item.displayName }))]} />}
@@ -53,8 +54,10 @@ export function AgendaSection() {
       <LoadState loaded={loaded} label="Lecture de l’agenda…">{value => <>
         {value.truncated && <Notice tone="warning" title="Semaine partielle" live={false}><p>Trop de leçons pour cette semaine : choisissez un moniteur.</p></Notice>}
         {days.length === 0 ? <EmptyState symbol="clock" title="Aucune leçon cette semaine" message="" />
-          : days.map(day => <section key={day.day} className="agenda-day" aria-labelledby={`day-${day.day}`}>
-            <h2 id={`day-${day.day}`} className="section-title agenda-day-date">{formatDayHeading(day.day)}</h2>
+          : days.map(day => {
+            const [weekday, ...date] = formatDayHeading(day.day).split(' ');
+            return <section key={day.day} className="agenda-day" aria-labelledby={`day-${day.day}`}>
+            <h2 id={`day-${day.day}`} className="section-title agenda-day-date"><span className="agenda-day-name">{weekday}</span>{' '}<time className="agenda-day-number" dateTime={day.day}>{date.join(' ')}</time></h2>
             <ul className="row-list">{day.items.map(lesson => {
               const state = lessonState[lesson.status];
               const [start, end] = formatTimeRange(lesson.plannedStart, lesson.plannedEnd, school.timeZone).split('–');
@@ -74,7 +77,7 @@ export function AgendaSection() {
                 </button>
               </li>;
             })}</ul>
-          </section>)}
+          </section>; })}
       </>}</LoadState>
     </div>
   );

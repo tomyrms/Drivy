@@ -12,8 +12,9 @@ import {
 } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Loading, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatCivilDate } from '../ui';
 import { readError, useCommandRunner, useConsole, useLoad, useRouteSelection } from './context';
+import { DirectoryRow } from './directory';
 import { permitSummary, TrainingFollowUp } from './dossier';
-import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
+import { DetailPanel, LoadState, OutcomeNotice, Placeholder, SectionHeading, SplitView } from './layout';
 
 const statusLabels: Record<Training['status'], string> = { ACTIVE: 'En cours', PAUSED: 'En pause', COMPLETED: 'Terminée', CANCELLED: 'Annulée' };
 const emptyPermit = (): PermitDraft => ({ physicalSeen: false, validUntil: '', decision: 'APPROVED', reason: '' });
@@ -137,23 +138,21 @@ export function LearnersSection() {
       <LoadState loaded={loaded} label="Lecture des élèves…">{value => <SplitView mobileDetail={!!selected} onBack={() => setSelected(null)} backLabel="Tous les élèves"
         list={<>
           {value.truncated && <Notice tone="warning" title="Liste partielle" live={false}><p>L’école compte plus d’élèves que cette page n’en charge : la recherche ne porte que sur ceux affichés.</p></Notice>}
-          <div className="list-toolbar">
+          <div className="list-toolbar directory-toolbar">
             <TextField label="Rechercher un élève" value={search} onChange={setSearch} placeholder="Nom ou e-mail" />
             <SelectField label="Dossiers" value={statusFilter} onChange={setStatusFilter}
               options={[{ value: 'active', label: 'Actifs' }, { value: 'archived', label: 'Archivés' }, { value: 'all', label: 'Tous' }]} />
             {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
           </div>
           {visible.length === 0 ? <EmptyState symbol="users" title={learners.length ? 'Aucun élève trouvé' : 'Aucun élève'} message={learners.length ? '' : 'Créez un code pour inviter un élève.'} />
-            : <table className="data-table">
-              <caption className="visually-hidden">Élèves</caption>
-              <thead><tr><th scope="col">Élève</th><th scope="col">Formation</th></tr></thead>
-              <tbody>{visible.map(learner => <tr key={learner.id} className={learner.id === selected ? 'selected' : undefined}>
-                <th scope="row"><RowButton selected={learner.id === selected} onSelect={() => { runner.clearOutcome(); setOfferingId(''); setSelected(learner.id); }}>{learner.displayName}</RowButton>
-                  {notReady(learner) && <span className="caption block"><StatusBadge tone="warning" symbol="alert">Profil à compléter</StatusBadge></span>}</th>
-                <td>{learner.archivedAt ? <StatusBadge tone="neutral" symbol="file">Archivé</StatusBadge>
-                  : trainingsOf(learner.id).filter(training => training.status === 'ACTIVE').map(category).join(', ') || '—'}</td>
-              </tr>)}</tbody>
-            </table>}
+            : <ul className="directory-list" aria-label="Dossiers élèves">{visible.map(learner => {
+              const categories = trainingsOf(learner.id).filter(training => training.status === 'ACTIVE').map(category).filter(Boolean);
+              return <DirectoryRow key={learner.id} title={learner.displayName} selected={learner.id === selected}
+                onSelect={() => { runner.clearOutcome(); setOfferingId(''); setSelected(learner.id); }}
+                detail={learner.archivedAt ? <StatusBadge tone="neutral" symbol="file">Archivé</StatusBadge>
+                  : categories.length ? `Permis ${[...new Set(categories)].join(', ')}` : <span className="row-meta">Sans formation en cours</span>}
+                badge={notReady(learner) ? <StatusBadge tone="warning" symbol="alert">Profil à compléter</StatusBadge> : undefined} />;
+            })}</ul>}
         </>}
         detail={current ? <DetailPanel focusKey={current.id} title={current.displayName} meta={current.contactEmail ?? undefined}
           badge={current.archivedAt ? <StatusBadge tone="neutral" symbol="file">Archivé</StatusBadge>
@@ -161,7 +160,7 @@ export function LearnersSection() {
           actions={current.archivedAt ? membership.roles.includes('ADMIN') && <button type="button" className="button secondary" disabled={!canWrite}
             onClick={() => ask({ kind: 'restore' })}>Restaurer le dossier</button>
             : canArchive ? <button type="button" className="button quiet danger" disabled={!canEdit} onClick={() => ask({ kind: 'archive' })}>Archiver le dossier…</button> : undefined}>
-          <div className="button-row"><button type="button" className="button secondary" onClick={() => navigate('trajets', { learner: current.id, from: 'eleves', week: routeQuery?.week, instructor: routeQuery?.instructor })}>Trajets de l’élève</button></div>
+          <div className="detail-links"><button type="button" className="button quiet" onClick={() => navigate('trajets', { learner: current.id, from: 'eleves', week: routeQuery?.week, instructor: routeQuery?.instructor })}><Symbol kind="route" bare />Voir les trajets</button></div>
           {dossier.status === 'error' && <Notice tone="error" title="Dossier incomplet" live={false}
             actions={<button type="button" className="button retry" onClick={dossier.reload}><Symbol kind="refresh" bare />Réessayer</button>}><p>{dossier.error ?? readError(null)}</p></Notice>}
           {trainingsOf(current.id).length === 0 && <p className="caption">Aucune formation.</p>}

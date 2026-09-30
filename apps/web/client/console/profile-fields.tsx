@@ -30,10 +30,13 @@ function RulesTable({ rules }: { rules: readonly ProfileRule[] }) {
   return (
     <table className="data-table rules">
       <caption className="visually-hidden">Champs demandés</caption>
-      <thead><tr><th scope="col">Champ</th><th scope="col">Exigence</th><th scope="col">Moment</th><th scope="col">Utilité</th></tr></thead>
+      <thead><tr><th scope="col">Information demandée</th><th scope="col">Quand la demander</th></tr></thead>
       <tbody>{rules.map(rule => <tr key={rule.field}>
-        <th scope="row">{fieldLabels[rule.field]}<span className="caption block">{rule.explanation}</span></th>
-        <td>{requirementLabels[rule.requirement]}</td><td>{stageLabels[rule.stage]}</td><td>{purposeLabels[rule.purposeCode]}</td>
+        <th scope="row">{fieldLabels[rule.field]}
+          <span className="row-meta block">{purposeLabels[rule.purposeCode]}</span>
+          {rule.explanation && <span className="caption block">{rule.explanation}</span>}
+        </th>
+        <td>{requirementLabels[rule.requirement]}{rule.requirement !== 'OPTIONAL' && <span className="row-meta block">{stageLabels[rule.stage]}</span>}</td>
       </tr>)}</tbody>
     </table>
   );
@@ -105,7 +108,7 @@ export function ProfileFieldsSection() {
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des champs du profil…">{() => <>
         {!noticeAdopted && <Notice tone="info" title="Notice de données à adopter" live={false} actions={<button type="button" className="button secondary" onClick={() => navigate('configuration')}>Ouvrir les réglages de l’école</button>}>
-              <p>Adoptez d’abord la notice de données dans Configuration.</p></Notice>}
+              <p>Adoptez d’abord les textes d’information et de conservation dans les réglages de l’école.</p></Notice>}
         <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
           list={items.length === 0 ? <EmptyState symbol="list" title="Aucune version enregistrée" message="Préparez une première version pour indiquer les informations demandées aux élèves." />
             : <table className="data-table">
@@ -132,22 +135,26 @@ export function ProfileFieldsSection() {
                   const locked = isName(field) || field === 'profilePhotoDocumentId';
                   const problem = included ? profileRuleProblem(rule) : null;
                   return <fieldset className="fieldset rule" key={field}>
-                    <legend>{fieldLabels[field]}</legend>
-                    <CheckField label={`Demander « ${fieldLabels[field]} »`} checked={included} disabled={!canWrite || isName(field)}
-                      onChange={on => setDraft({ ...draft, included: on ? [...draft.included, field] : draft.included.filter(item => item !== field) })}
-                      {...(isName(field) ? { description: 'Toujours demandé à l’entrée pour identifier la personne.' } : {})} />
+                    <legend className="visually-hidden">{fieldLabels[field]}</legend>
+                    <div className="rule-header">
+                      {isName(field) ? <h3 className="row-title">{fieldLabels[field]}</h3>
+                        : <CheckField label={`Demander « ${fieldLabels[field]} »`} checked={included} disabled={!canWrite}
+                          onChange={on => setDraft({ ...draft, included: on ? [...draft.included, field] : draft.included.filter(item => item !== field) })} />}
+                    </div>
                     {included && <>
-                      <div className="form-row three">
-                        <SelectField label="Exigence" value={rule.requirement} disabled={!canWrite || locked}
+                      {locked ? <p className="row-meta rule-fixed">{requirementLabels[rule.requirement]}{rule.requirement !== 'OPTIONAL' ? ` · ${stageLabels[rule.stage]}` : ''} · {purposeLabels[rule.purposeCode]}</p> : <div className="form-row">
+                        <SelectField label="Exigence" value={rule.requirement} disabled={!canWrite}
                           options={(['REQUIRED', 'CONDITIONAL', 'OPTIONAL'] as const).map(value => ({ value, label: requirementLabels[value] }))}
                           onChange={requirement => updateRule(field, { requirement, stage: requirement === 'OPTIONAL' ? 'OPTIONAL' : requirement === 'CONDITIONAL' ? 'BEFORE_COURSE' : rule.stage === 'OPTIONAL' || rule.stage === 'JOIN' ? 'BEFORE_LESSON' : rule.stage })} />
-                        <SelectField label="Moment" value={rule.stage} disabled={!canWrite || locked || rule.requirement !== 'REQUIRED'}
+                        <SelectField label="Moment" value={rule.stage} disabled={!canWrite || rule.requirement !== 'REQUIRED'}
                           options={(isName(field) ? ['JOIN'] as const : rule.requirement === 'REQUIRED' ? ['BEFORE_LESSON', 'BEFORE_COURSE'] as const : rule.requirement === 'CONDITIONAL' ? ['BEFORE_COURSE'] as const : ['OPTIONAL'] as const)
                             .map(value => ({ value, label: stageLabels[value] }))}
                           onChange={stage => updateRule(field, { stage })} />
-                        <SelectField label="Utilité" value={rule.purposeCode} disabled={!canWrite || fieldPurposes[field].length === 1}
+                      </div>}
+                      {!locked && (fieldPurposes[field].length > 1
+                        ? <SelectField label="Utilité" value={rule.purposeCode} disabled={!canWrite}
                           options={fieldPurposes[field].map(value => ({ value, label: purposeLabels[value] }))} onChange={purposeCode => updateRule(field, { purposeCode })} />
-                      </div>
+                        : <p className="row-meta rule-fixed">{purposeLabels[rule.purposeCode]}</p>)}
                       <TextArea label="Explication affichée à la personne" rows={2} maxLength={1000} value={rule.explanation} disabled={!canWrite}
                         onChange={explanation => updateRule(field, { explanation })} error={showErrors ? problem : null} />
                     </>}

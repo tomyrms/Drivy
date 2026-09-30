@@ -5,6 +5,7 @@ import { catalogPolicySchema, curriculumSchema, offeringSchema, readAll, type Ca
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime, formatDuration } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useRouteSelection, useSectionDraft } from './context';
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
+import { consolePath } from './route';
 
 export const approvalBadge = (approved: boolean, feminine = false) => approved
   ? <span className="status-text with-symbol"><Symbol kind="check" bare />{feminine ? 'Approuvée' : 'Approuvé'}</span>
@@ -21,9 +22,9 @@ function ApprovalFields({ approved, reason, onApproved, onReason, disabled, subj
     <fieldset className="fieldset">
       <legend>Validation</legend>
       <CheckField label={`Approuver ${subject}`} checked={approved} onChange={onApproved} disabled={disabled}
-        description="Sans approbation, cette version reste un brouillon. Une version existante n’est jamais réécrite." />
+        description="Sans approbation, cette version reste un brouillon." />
       <TextArea label="Motif de cette version" rows={2} maxLength={1000} value={reason} onChange={onReason} disabled={disabled}
-        hint="Conservé avec la version pour expliquer ce changement." error={showErrors && !filled(reason, 1000) ? 'Indiquez le motif de cette version (1 000 caractères au plus).' : null} />
+        error={showErrors && !filled(reason, 1000) ? 'Indiquez le motif de cette version (1 000 caractères au plus).' : null} />
     </fieldset>
   );
 }
@@ -233,11 +234,11 @@ export function ProceduresSection() {
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
               <TextField label="Catégorie" value={draft.categoryCode} maxLength={30} placeholder="Par exemple B" disabled={!canWrite || !!draft.basedOn}
                 onChange={categoryCode => update({ categoryCode })} error={showErrors ? problems.category : null} />
-              <TextArea label="Déroulement de la formation" rows={6} maxLength={4000} value={draft.procedureText} disabled={!canWrite}
+              <TextArea label="Déroulement de la formation" rows={4} maxLength={4000} value={draft.procedureText} disabled={!canWrite}
                 onChange={procedureText => update({ procedureText })} error={showErrors ? problems.procedure : null} />
               <TextArea label="Conditions d’annulation" rows={4} maxLength={4000} value={draft.cancellationPolicyText} disabled={!canWrite}
                 onChange={cancellationPolicyText => update({ cancellationPolicyText })} error={showErrors ? problems.cancellation : null} />
-              <TextArea label="Sources" required={false} rows={3} value={draft.sources} disabled={!canWrite} hint="Une adresse web par ligne, 30 au plus."
+              <TextArea label="Sources" required={false} rows={2} value={draft.sources} disabled={!canWrite} hint="Une adresse web par ligne, 30 au plus."
                 onChange={sources => update({ sources })} error={problems.sources} />
               <ApprovalFields approved={draft.approved} reason={draft.approvalReason} onApproved={approved => update({ approved })} onReason={approvalReason => update({ approvalReason })}
                 disabled={!canWrite} subject="ces textes" showErrors={showErrors} />
@@ -390,18 +391,23 @@ export function OfferingsSection() {
           </DetailPanel>
           : current ? <DetailPanel focusKey={current.id} title={current.offeringKey} meta={`Catégorie ${current.categoryCode} · version ${current.version}`} badge={offerState(current)}
             actions={<button type="button" className="button primary" disabled={!canWrite} onClick={() => edit(current)}><Symbol kind="edit" bare />Nouvelle version</button>}>
-            <div className="button-row">
-              <button type="button" className="button secondary" onClick={() => navigate('referentiels', { selection: current.curriculumVersionId, category: current.categoryCode, from: 'formations' })}>Compétences enseignées</button>
-              <button type="button" className="button secondary" onClick={() => navigate('procedures', { selection: current.policyVersionId, category: current.categoryCode, from: 'formations' })}>Déroulement et annulation</button>
-              <button type="button" className="button secondary" onClick={() => navigate('prestations', { category: current.categoryCode, from: 'formations' })}>Tarifs de cette catégorie</button>
-            </div>
-            <Facts items={[
-              ['Référentiel', curriculum(current.curriculumVersionId) ? <>Révision {curriculum(current.curriculumVersionId)!.revision} {approvalBadge(curriculum(current.curriculumVersionId)!.approved)}</> : 'Non disponible'],
-              ['Procédure', policy(current.policyVersionId) ? <>Version {policy(current.policyVersionId)!.version} {approvalBadge(policy(current.policyVersionId)!.approved, true)}</> : 'Non disponible'],
-              ['Durée par défaut', formatDuration(current.defaultDurationMinutes)],
-            ]} />
+            <Facts items={[["Durée par défaut", formatDuration(current.defaultDurationMinutes)]]} />
+            <ul className="catalog-links">
+              {([
+                { section: 'referentiels', selection: current.curriculumVersionId, title: 'Compétences enseignées',
+                  meta: curriculum(current.curriculumVersionId) ? `Révision ${curriculum(current.curriculumVersionId)!.revision} · ${curriculum(current.curriculumVersionId)!.approved ? 'approuvée' : 'brouillon'}` : 'Non disponibles' },
+                { section: 'procedures', selection: current.policyVersionId, title: 'Déroulement et annulation',
+                  meta: policy(current.policyVersionId) ? `Version ${policy(current.policyVersionId)!.version} · ${policy(current.policyVersionId)!.approved ? 'approuvée' : 'brouillon'}` : 'Non disponible' },
+                { section: 'prestations', title: 'Tarifs de cette catégorie', meta: `Permis ${current.categoryCode}` },
+              ] as const).map(link => {
+                const query = { category: current.categoryCode, from: 'formations' as const, ...('selection' in link ? { selection: link.selection } : {}) };
+                return <li key={link.section}><a href={consolePath(schoolId, link.section, query)} onClick={event => {
+                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+                  event.preventDefault(); navigate(link.section, query);
+                }}><span className="row-text"><span className="row-title">{link.title}</span><span className="row-meta block">{link.meta}</span></span><span className="flip"><Symbol kind="back" bare /></span></a></li>;
+              })}
+            </ul>
             {latest.get(current.offeringKey)?.id !== current.id && <p className="caption">Une version plus récente de cette offre existe.</p>}
-            <p className="caption">Une nouvelle version ne modifie pas les formations déjà ouvertes. Elle est créée désactivée tant que vous ne cochez pas l’activation.</p>
           </DetailPanel>
           : <Placeholder>{value.offerings.length ? 'Choisissez une offre pour la consulter.' : 'Créez une première offre.'}</Placeholder>} />}
       </LoadState>

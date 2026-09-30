@@ -61,6 +61,16 @@ const db: Record<string, any> = {
   'profile-field-policies': [{ id: uuid(), schoolId, version: 1, status: 'PUBLISHED', effectiveFrom: '2026-09-01T00:00:00.000Z', noticeVersionId: noticeId, approvedByMembershipId: lucId,
     fields: ['firstName', 'lastName'].map(field => ({ field, requirement: 'REQUIRED', stage: 'JOIN', purposeCode: 'IDENTIFICATION', explanation: 'Identifier la personne.' })) }],
 };
+if (parameters.get('stress') === '1') {
+  db.learners[0].displayName = 'Éloïse-Marie de Montmollin-Châteauneuf';
+  db.members[1].displayName = 'Marie-Christine Dupré de Villeneuve';
+  db['service-products'][1].label = 'Leçon de perfectionnement et préparation à l’examen pratique';
+  db['commercial-terms'][0].label = 'Conditions de formation, de réservation et d’annulation des leçons';
+  db.curricula[0].competencies[0].label = 'Préparer le véhicule, démarrer en côte et s’arrêter en sécurité';
+  db.captures[0].learnerName = db.learners[0].displayName;
+  db.captures[0].instructorName = db.members[1].displayName;
+  for (let index = 0; index < 18; index++) db.learners.push({ ...db.learners[1], id: uuid(), personId: uuid(), displayName: `Dossier synthétique ${String(index + 1).padStart(2, '0')}` });
+}
 if (reviewState === 'empty') for (const key of Object.keys(db)) db[key] = [];
 const codes = ['K7Q4-MX2P', 'R2ZN-8HTC', 'B9WD-4LEA'];
 const envelope = (data: unknown) => ({ data, requestId: uuid(), serverTime: stamp });
@@ -117,6 +127,10 @@ const value: ConsoleContextValue = {
     modules: { gpsEnabled: true, packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false } },
   canConfigureCatalog: reviewState !== 'readonly', reloadSchool: async () => {}, csrf: () => 'csrf', refreshCsrf: async () => 'csrf', navigate: section => log.push(`navigate ${section}`), login: options => log.push(`login ${JSON.stringify(options ?? {})}`),
 };
+if (parameters.get('stress') === '1') {
+  value.school.name = 'École de conduite de la région du Lac et des Préalpes';
+  value.membership.schoolName = value.school.name;
+}
 // Visual review only: apply the actual light tokens independently of the host OS.
 if (new URLSearchParams(location.search).get('scheme') === 'light') {
   const theme = document.createElement('style');

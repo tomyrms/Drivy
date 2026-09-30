@@ -88,11 +88,12 @@ export function ConfigurationSection() {
         actions={runner.outcome?.code === 'VERSION_CONFLICT' ? <button type="button" className="button secondary" onClick={loaded.reload}>Recharger les informations</button> : undefined} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
 
-      <LoadState loaded={loaded} label="Vérification de l’école…">{data => <div className="config-grid">
-        <section className="panel form-panel" aria-labelledby="identity-title">
-          <div className="panel-head"><h2 id="identity-title" className="section-title">Coordonnées</h2>
+      <LoadState loaded={loaded} label="Vérification de l’école…">{data => <div className="config-sections">
+        <section className="settings-section" aria-labelledby="identity-title">
+          <div className="settings-section-heading"><h2 id="identity-title" className="section-title">Coordonnées</h2>
             {!showIdentity && <button className="button secondary compact" type="button" disabled={!mayEdit} onClick={() => setEditingIdentity(true)}><Symbol kind="edit" bare />Modifier</button>}
           </div>
+          <div className="settings-section-body">
           {!showIdentity && <>
             <h3 className="identity-name">{school.name}</h3>
             <Facts items={[["E-mail", school.contactEmail], ['Téléphone', school.contactPhone ?? 'Non renseigné'], ['Fuseau horaire', school.timeZone]]} />
@@ -110,15 +111,17 @@ export function ConfigurationSection() {
               {(identity.edited || editingIdentity) && <button type="button" className="button quiet" onClick={() => { identity.reset(); setEditingIdentity(false); }}>Annuler</button>}
             </div>
           </form>}
+          </div>
         </section>
 
-        <section className="panel form-panel" aria-labelledby="policy-title">
-          <div className="panel-head">
+        <section className="settings-section" aria-labelledby="policy-title">
+          <div className="settings-section-heading">
             <h2 id="policy-title" className="section-title">Information et conservation</h2>
             {data.policy.status === 'APPROVED' ? <span className="row-meta">Version {data.policy.version}</span>
               : <StatusBadge tone="warning" symbol="file">Textes à préparer</StatusBadge>}
+            {data.policy.approvedAt && <span className="row-meta">Adoptée le {formatDateTime(data.policy.approvedAt, school.timeZone)}</span>}
           </div>
-          {data.policy.approvedAt && <p className="caption">Adoptée le {formatDateTime(data.policy.approvedAt, school.timeZone)}.</p>}
+          <div className="settings-section-body">
           {!showTexts && <>
             <details className="disclosure">
               <summary>Consulter les textes adoptés</summary>
@@ -129,26 +132,27 @@ export function ConfigurationSection() {
             <button type="button" className="button secondary" disabled={!mayEdit} onClick={() => setEditingPolicy(true)}><Symbol kind="edit" bare />Préparer une nouvelle version</button>
           </>}
           {showTexts && textValue && textErrors && <form className="form-grid" onSubmit={event => { event.preventDefault(); if (textsValid && mayEdit) open('policy'); }}>
-            <TextArea label="Information des personnes" rows={8} maxLength={20_000} value={textValue.noticeText} disabled={!mayEdit}
+            <TextArea label="Information des personnes" rows={5} maxLength={20_000} value={textValue.noticeText} disabled={!mayEdit}
               onChange={noticeText => texts.setDraft({ ...textValue, noticeText })} error={texts.edited ? textErrors.noticeText : null} />
-            <TextArea label="Conservation des données" rows={6} maxLength={20_000} value={textValue.retentionText} disabled={!mayEdit}
+            <TextArea label="Conservation des données" rows={5} maxLength={20_000} value={textValue.retentionText} disabled={!mayEdit}
               onChange={retentionText => texts.setDraft({ ...textValue, retentionText })} error={texts.edited ? textErrors.retentionText : null} />
             <TextField label="Contact pour les données" type="email" value={textValue.contactEmail} disabled={!mayEdit}
               onChange={contactEmail => texts.setDraft({ ...textValue, contactEmail })} error={texts.edited ? textErrors.contactEmail : null} />
-            <p className="caption">L’adoption s’effectue après relecture des deux textes. La version précédente reste conservée.</p>
             <div className="button-row compact">
               <button type="submit" className={!identity.edited && (texts.edited || data.policy.status !== 'APPROVED') ? 'button primary' : 'button secondary'} disabled={!mayEdit || !textsValid || (data.policy.status === 'APPROVED' && !texts.edited)}>Relire et adopter les textes</button>
               {(editingPolicy || texts.edited) && data.policy.status === 'APPROVED' &&
                 <button type="button" className="button quiet" onClick={() => { texts.reset(); setEditingPolicy(false); }}>Abandonner cette version</button>}
             </div>
           </form>}
+          </div>
         </section>
 
-        <section className="panel form-panel wide" aria-labelledby="activation-title">
-          <div className="panel-head">
+        <section className="settings-section" aria-labelledby="activation-title">
+          <div className="settings-section-heading">
             <h2 id="activation-title" className="section-title">{school.status === 'ACTIVE' ? 'Fonctionnement' : 'Activation'}</h2>
-            <button type="button" className="button quiet" onClick={loaded.reload} disabled={loaded.status === 'loading'}><Symbol kind="refresh" bare />Actualiser la vérification</button>
+            <button type="button" className="button quiet" onClick={loaded.reload} disabled={loaded.status === 'loading'}><Symbol kind="refresh" bare />Actualiser</button>
           </div>
+          <div className="settings-section-body">
           {school.status === 'DRAFT' && (data.readiness.activationReady
             ? <Notice tone="success" title="Préparation vérifiée" live={false}><p>L’école peut être activée.</p></Notice>
             : <ul className="blocker-list">{data.readiness.activationBlockers.map(item => <li key={item.code}><Symbol kind="dot" bare />{item.message}</li>)}</ul>)}
@@ -161,15 +165,16 @@ export function ConfigurationSection() {
               <span className="row-meta">{capability.ready ? 'Disponible' : 'À configurer'}</span>
             </li>)}</ul>
           </details>
-          <div className="button-row compact">
+          {(school.status === 'DRAFT' || data.setup.status !== 'COMPLETED') && <div className="button-row compact">
             {school.status === 'DRAFT' && <button type="button" className={canActivate ? 'button primary' : 'button secondary'} disabled={!canActivate} onClick={() => open('activation')}>Relire et activer l’école</button>}
             {data.setup.status !== 'COMPLETED' && <button type="button" className="button secondary" onClick={() => void saveProgress()}
               disabled={!mayEdit || identity.edited || texts.edited}>Enregistrer l’avancement</button>}
-          </div>
+          </div>}
           {school.status === 'DRAFT' && !canActivate && <p className="caption">
             {runner.pending ? runner.blockedReason : identity.edited || texts.edited ? 'Confirmez ou abandonnez d’abord les modifications en cours.'
               : 'L’activation devient possible quand les éléments ci-dessus sont complétés.'}</p>}
           {school.status === 'DRAFT' && <p className="caption">L’activation ouvre l’espace de l’école. Les formations et les cours se préparent ensuite.</p>}
+          </div>
         </section>
       </div>}</LoadState>
 

@@ -139,3 +139,15 @@ Le porteur valide le progrès de l’organisation, mais demande de reprendre les
 - [x] Vérifier filtres, retours, formulaires et confirmations au clavier ; consigner les limites d’accessibilité.
 - [x] Exécuter typecheck, tests et build sur le lot final.
 - [x] Déployer sur le homelab après sauvegarde vérifiée et contrôler les fichiers réellement servis : `946476a`, trois services actifs, migrations 001–021 conformes, JavaScript/CSS/police identiques au build local. [Preuve](proofs/deployment-web-craft-20260930.json).
+
+## 11. Deuxième passe des layouts web
+
+- [x] Revoir les 18 destinations et leurs formulaires avec les guides UI Skills et trois agents.
+- [x] Réduire les étages d’en-tête et les espaces inutiles ; préserver lisibilité et cibles tactiles.
+- [x] Adapter la composition liste/détail à la largeur utile ; conserver sélection et retour de focus.
+- [x] Recomposer annuaires, disponibilités, trajets, catalogue, réglages et entrée.
+- [x] Contrôler desktop/mobile, tablette sombre, 320 px, noms longs, états vides/erreur/lecture seule et clavier.
+- [x] Exécuter les 104 tests web, typecheck et build sur le lot final.
+- [ ] Déployer après une nouvelle sauvegarde vérifiée et contrôler les fichiers publics.
+
+[Compte rendu et limites](web-layout-pass2-20260930.md).
