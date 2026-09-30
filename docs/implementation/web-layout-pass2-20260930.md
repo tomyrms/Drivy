@@ -34,4 +34,4 @@ La [preuve de revue](proofs/web-layout-pass2-20260930.json) indexe 65 captures, 
 
 Le banc utilise des réponses synthétiques : il ne qualifie ni une écriture durable ni une vraie session authentifiée. Le zoom à 200 %, les lecteurs d’écran, Safari et les appareils physiques restent non vérifiés. Le client natif et les essais GPS/batterie sont hors de cette passe.
 
-Déploiement du lot final à réaliser après sauvegarde vérifiée ; ses résultats seront ajoutés ici.
+Le lot `e30e4ea` est déployé sur le homelab après une nouvelle sauvegarde PostgreSQL vérifiée. Les trois services sont actifs, leurs chemins d’exécution correspondent à la release et les migrations 001–021 restent conformes. Les fichiers JavaScript, CSS et la police servis en HTTPS sont identiques au build local testé. La [CI sur ce commit](https://github.com/tomyrms/Drivy/actions/runs/36737761024) réussit avec **224 tests API et 104 tests web**. [Preuve de déploiement](proofs/deployment-web-layout-pass2-20260930.json).

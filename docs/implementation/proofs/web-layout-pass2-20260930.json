@@ -947,5 +947,13 @@
       "path": "artifacts/retours-20260930/web-layout-pass2/trips-mobile.jpg",
       "sha256": "cfde7e374fdcacc809b442f3cf1057e99a10fb86cff003d0ac43e51ce31deb7c"
     }
-  ]
+  ],
+  "commit": "e30e4ea196f9af44391cd24208e049fb0f82b0ba",
+  "ci": {
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/36737761024",
+    "conclusion": "success",
+    "apiTestsPassed": 224,
+    "webTestsPassed": 104
+  },
+  "deploymentProof": "docs/implementation/proofs/deployment-web-layout-pass2-20260930.json"
 }

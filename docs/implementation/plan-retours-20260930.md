@@ -148,6 +148,6 @@ Le porteur valide le progrès de l’organisation, mais demande de reprendre les
 - [x] Recomposer annuaires, disponibilités, trajets, catalogue, réglages et entrée.
 - [x] Contrôler desktop/mobile, tablette sombre, 320 px, noms longs, états vides/erreur/lecture seule et clavier.
 - [x] Exécuter les 104 tests web, typecheck et build sur le lot final.
-- [ ] Déployer après une nouvelle sauvegarde vérifiée et contrôler les fichiers publics.
+- [x] Déployer après une nouvelle sauvegarde vérifiée et contrôler les fichiers publics : `e30e4ea`, services actifs, migrations 001–021 conformes, assets HTTPS identiques au build testé. CI : 224 tests API et 104 tests web réussis. [Preuve](proofs/deployment-web-layout-pass2-20260930.json).
 
 [Compte rendu et limites](web-layout-pass2-20260930.md).

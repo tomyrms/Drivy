@@ -5,7 +5,7 @@
 Les 18 destinations web ont reçu une seconde revue de composition, avec trois agents et une revue indépendante des changements. Les en-têtes sont rapprochés, les fils d’Ariane limités aux véritables sous-pages, les listes/détails adaptés à la largeur du conteneur. Annuaires entièrement cliquables, horaires/absences côte à côte, réglages en sections alignées et entrée simplifiée. Palette et typographie conservées. [Décisions et vérification](web-layout-pass2-20260930.md).
 
 - **104 tests web**, typecheck et build réussis. Revue visuelle à 1200/390 px, contrôles des 18 destinations à 320 px avec textes longs, détails/formulaires et clavier à 834 px sombre. Après correction, aucun débordement mesuré sur les 58 relevés retenus. [Preuve](proofs/web-layout-pass2-20260930.json).
-- Déploiement après nouvelle sauvegarde à terminer. Zoom 200 %, lecteurs d’écran et appareils physiques restent à qualifier.
+- **Déployé sur le homelab : `e30e4ea`**, après nouvelle sauvegarde vérifiée. API/web/identité actifs, migrations 001–021 conformes, JavaScript/CSS/police publics identiques au build testé. CI réussie : **224 tests API et 104 tests web**. [Preuve de déploiement](proofs/deployment-web-layout-pass2-20260930.json). Zoom 200 %, lecteurs d’écran et appareils physiques restent à qualifier.
 
 ## 30 septembre 2026 — finition esthétique et ergonomique de chaque écran web
 
