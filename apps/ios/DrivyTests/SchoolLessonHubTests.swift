@@ -30,6 +30,27 @@ struct SchoolLessonHubTests {
         #expect(SchoolLessonHubRules.observations([], setting: "", for: item.competencyId, context: "x").isEmpty)
     }
 
+    @Test func unchangedChoiceOfAnEnteredLevelIsAWayBackNotACurrentLevel() {
+        let lesson = UUID(), other = UUID()
+        let own = SchoolReportProgressItem(competencyId: UUID(), sourceLessonId: lesson, sourceRevisionId: UUID(), label: "Observation",
+            level: "INDEPENDENT", context: "", observedAt: "2026-09-20T10:00:00Z")
+        // Le niveau vient de ce bilan : le retirer ramène au niveau d’avant, pas à celui-ci.
+        #expect(SchoolLessonHubRules.unchangedChoiceLabel(current: own, lessonID: lesson) == "Avant cette leçon")
+        #expect(SchoolLessonHubRules.unchangedChoiceLabel(current: own, lessonID: other) == "Actuel : En autonomie")
+        #expect(SchoolLessonHubRules.unchangedChoiceLabel(current: nil, lessonID: lesson) == "Pas encore vu")
+        // Choisir puis remettre « inchangé » rend exactement le bilan de départ.
+        let competency = UUID(), start = [SchoolReportObservation(competencyId: UUID(), level: "GUIDED", context: "Leçon")]
+        let chosen = SchoolLessonHubRules.observations(start, setting: "INDEPENDENT", for: competency, context: "x")
+        #expect(chosen.count == 2)
+        #expect(SchoolLessonHubRules.observations(chosen, setting: "", for: competency, context: "x") == start)
+    }
+
+    @Test func aLevelInAPrivateReportIsHeldBackFromProgress() {
+        #expect(SchoolLessonHubRules.levelIsHeldBack(chosen: true, reportShared: false))
+        #expect(!SchoolLessonHubRules.levelIsHeldBack(chosen: true, reportShared: true))
+        #expect(!SchoolLessonHubRules.levelIsHeldBack(chosen: false, reportShared: false))
+    }
+
     @Test func startIsOfferedOnlyWhereTheServerWouldAcceptIt() {
         let start = HubFixture.date("2026-09-28T12:00:00Z"), lesson = HubFixture.lesson()
         let school = HubFixture.school(gps: true)

@@ -118,10 +118,16 @@ enum SchoolLessonHubRules {
     /// Choix « inchangé » d’une compétence dans le bilan : la valeur vide n’écrit aucune observation. Quand l’élève a déjà un niveau
     /// issu d’une autre leçon, il est rappelé ici comme point de départ ; il n’est jamais recopié dans le bilan de cette leçon
     /// (« pas encore vu » n’est pas une note, et un niveau non travaillé ce jour-là n’est pas une observation).
-    static func unchangedChoiceLabel(current: SchoolReportProgressItem?) -> String {
+    /// Si le niveau actuel vient de cette leçon même (bilan déjà enregistré), le choix vide le retire : la progression retombe alors
+    /// sur le niveau d’avant, que cet écran ne connaît pas, d’où « Avant cette leçon ».
+    static func unchangedChoiceLabel(current: SchoolReportProgressItem?, lessonID: UUID? = nil) -> String {
         guard let current else { return "Pas encore vu" }
+        if let lessonID, current.sourceLessonId == lessonID { return "Avant cette leçon" }
         return "Actuel : \(current.levelLabel)"
     }
+
+    /// Un niveau écrit dans un bilan gardé pour soi ne compte dans la progression qu’une fois le bilan partagé.
+    static func levelIsHeldBack(chosen: Bool, reportShared: Bool) -> Bool { chosen && !reportShared }
 
     /// Texte d’une observation repris comme situation d’une compétence (500 caractères au plus).
     static func situation(_ text: String?) -> String? {

@@ -91,6 +91,19 @@ import Testing
         #expect(reads.count >= 1)
     }
 
+    @Test func takingBackAChosenLevelLeavesTheReportUntouchedAndSendsNothing() async {
+        let competency = LessonFinishServer.progressCompetency
+        let outbox = ConfigurationOutboxStub()
+        let model = workspace(LessonFinishServer(progressLevel: "GUIDED"), outbox: outbox)
+        await model.load()
+        model.setObservationLevel("INDEPENDENT", for: competency)
+        #expect(model.draftChanged)
+        // Le retour arrière est libre tant que rien n’est enregistré : le bilan redevient identique à celui de l’école.
+        model.setObservationLevel("", for: competency)
+        #expect(!model.draftChanged && model.observations.isEmpty)
+        #expect(outbox.saves.isEmpty && !model.reportSaveConfirmed)
+    }
+
     @Test func aFailedProgressReadNeverBlocksTheReport() async {
         let model = workspace(LessonFinishServer(progressStatus: 503), outbox: ConfigurationOutboxStub())
         await model.load()

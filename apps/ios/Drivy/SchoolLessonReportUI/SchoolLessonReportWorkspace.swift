@@ -95,7 +95,11 @@ import Observation
     }
     /// Libellé du choix « aucun changement » d’une compétence : son niveau actuel, ou « Pas encore vu ».
     func unchangedChoiceLabel(for competencyID: UUID) -> String {
-        SchoolLessonHubRules.unchangedChoiceLabel(current: currentLevels[competencyID])
+        SchoolLessonHubRules.unchangedChoiceLabel(current: currentLevels[competencyID], lessonID: lessonID)
+    }
+    /// Niveau choisi dans un bilan « Pour moi » : il ne compte pas encore dans la progression.
+    func levelIsHeldBack(for competencyID: UUID) -> Bool {
+        SchoolLessonHubRules.levelIsHeldBack(chosen: observations.contains { $0.id == competencyID }, reportShared: reportShared)
     }
     /// Situation proposée quand une compétence reçoit un niveau.
     var defaultObservationContext: String { lesson.map(SchoolLessonHubRules.observationContext(for:)) ?? "Leçon" }

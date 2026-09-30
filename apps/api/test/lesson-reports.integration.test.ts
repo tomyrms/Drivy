@@ -71,11 +71,18 @@ describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)'
    expect(progress.unobservedCompetencyIds,subject).toEqual([]);
   }
   // Un bilan ancien saisi en retard ne remplace pas un niveau plus récent.
-  await finish(180,[{competencyId:school.competency,level:'GUIDED',context:'Rattrapage'}]);
+  const late=await finish(180,[{competencyId:school.competency,level:'GUIDED',context:'Rattrapage'}]);
   expect((await progressOf('demo-admin')).items.find(i=>i.competencyId===school.competency)).toMatchObject({level:'INDEPENDENT',sourceLessonId:second});
   // L'administration ne lit pas la progression d'une formation d'une autre école, ni un élève sans droit.
   expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-bob')).statusCode).toBe(404);
   expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-foreign')).statusCode).toBe(403);
+  // Un bilan passé en privé ne compte plus dans la progression. Les trois leçons sont retirées : la formation partage sa base avec
+  // les tests suivants, qui attendent une progression issue de leur seule leçon.
+  for(const lessonId of [first,second,late]){
+   const hidden=await call('PUT',`/lessons/${lessonId}/sharing`,{operationId:randomUUID(),reportPrivate:true,captureHidden:false,privateObservationIds:[]},1);
+   expect(hidden.statusCode,hidden.body).toBe(200);
+  }
+  for(const subject of ['demo-alice','demo-admin'])expect((await progressOf(subject)).items,subject).toEqual([]);
  });
  it('constat atomique avec charge unique, bilan partagé automatiquement, lecture élève, bilan privé et progression',async()=>{
   const lesson=await plan();const route=`/lessons/${lesson.id}/complete`;
@@ -183,5 +190,52 @@ describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)'
   const r=await call('POST',`/lessons/${lesson.id}/complete`,completeBody(),lesson.version);expect(r.json().code).toBe('ENTITLEMENT_NOT_READY');
   expect((await call('GET',`/lessons/${lesson.id}`)).json().data.status).toBe('PLANNED');
   expect((await pool.query('SELECT count(*)::int AS n FROM drivy.report_draft WHERE lesson_id=$1',[lesson.id])).rows[0].n).toBe(0);
+ });
+ it('retour arrière d’un niveau saisi par erreur : bilan en cours ou bilan passé, révision conservée, progression recalculée',async()=>{
+  const at=(minutes:number)=>new Date(Date.now()-minutes*60_000).toISOString();
+  const finish=async(end:number)=>{
+   const lesson=await plan();
+   const done=await call('POST',`/lessons/${lesson.id}/complete`,completeBody({actualStart:at(end+30),actualEnd:at(end),workedOn:'',observationText:'',nextStep:''}),lesson.version);expect(done.statusCode,done.body).toBe(200);
+   return {lessonId:lesson.id as string,draftRoute:`/report-drafts/${done.json().data.draft.id}`,version:done.json().data.draft.version as number};
+  };
+  const save=async(entry:{draftRoute:string;version:number},workedOn:string,observations:{competencyId:string;level:string;context:string}[])=>{
+   const r=await call('PUT',entry.draftRoute,{operationId:randomUUID(),workedOn,observationText:'',nextStep:'',observations,attachmentIds:[]},entry.version);
+   expect(r.statusCode,r.body).toBe(200);entry.version=r.json().data.version;return r.json().data;
+  };
+  const levelOf=async(subject='demo-alice')=>{
+   const r=await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,subject);expect(r.statusCode,r.body).toBe(200);
+   return (r.json().data.items as {competencyId:string;level:string;sourceLessonId:string}[]).find(i=>i.competencyId===school.competency);
+  };
+  const revisions=async(lessonId:string,subject='demo-alice')=>(await call('GET',`/lessons/${lessonId}/reports`,undefined,null,subject)).json().data.items as {sequence:number;observations:{competencyId:string}[]}[];
+  const older=await finish(120),recent=await finish(60);
+  await save(older,'Travail',[{competencyId:school.competency,level:'GUIDED',context:'Leçon 1'}]);
+  await save(recent,'Travail',[{competencyId:school.competency,level:'INDEPENDENT',context:'Leçon 2'}]);
+  expect(await levelOf()).toMatchObject({level:'INDEPENDENT',sourceLessonId:recent.lessonId});
+  // Bilan en cours : la compétence retirée du bilan, la progression retombe sur le niveau de la leçon précédente.
+  await save(recent,'Travail',[]);
+  expect(await levelOf()).toMatchObject({level:'GUIDED',sourceLessonId:older.lessonId});
+  expect(await levelOf('demo-admin')).toMatchObject({level:'GUIDED',sourceLessonId:older.lessonId});
+  // Aucun effacement silencieux : la révision qui portait l'erreur reste lisible, la nouvelle est motivée.
+  const trace=await revisions(recent.lessonId);
+  expect(trace.map(r=>r.sequence)).toEqual([1,2]);expect(trace[0]!.observations).toHaveLength(1);expect(trace[1]!.observations).toEqual([]);
+  // Bilan passé : le même geste corrige une leçon plus ancienne et plus aucun niveau ne subsiste.
+  await save(older,'Travail',[]);
+  expect(await levelOf()).toBeUndefined();
+  expect((await revisions(older.lessonId)).map(r=>r.sequence)).toEqual([1,2]);
+  // Le niveau peut être ressaisi ensuite, sans doublon.
+  await save(older,'Travail',[{competencyId:school.competency,level:'DISCOVERING',context:'Leçon 1'}]);
+  expect(await levelOf()).toMatchObject({level:'DISCOVERING',sourceLessonId:older.lessonId});
+  // Un bilan entièrement vidé est retiré pour l'élève ; ses révisions restent conservées pour le moniteur.
+  await save(older,'',[]);
+  expect(await levelOf()).toBeUndefined();expect(await revisions(older.lessonId)).toEqual([]);
+  expect(await revisions(older.lessonId,'demo-instructor')).toHaveLength(3);
+  // Droits relus au serveur : ni l'élève ni un autre moniteur ne modifient le bilan.
+  for(const subject of ['demo-alice','demo-other-instructor']){
+   const refused=await call('PUT',recent.draftRoute,{operationId:randomUUID(),workedOn:'x',observationText:'',nextStep:'',observations:[],attachmentIds:[]},recent.version,subject);
+   expect([403,404],subject).toContain(refused.statusCode);
+  }
+  // Nettoyage : la formation est partagée avec les tests suivants.
+  const hidden=await call('PUT',`/lessons/${recent.lessonId}/sharing`,{operationId:randomUUID(),reportPrivate:true,captureHidden:false,privateObservationIds:[]},1);
+  expect(hidden.statusCode,hidden.body).toBe(200);
  });
 });

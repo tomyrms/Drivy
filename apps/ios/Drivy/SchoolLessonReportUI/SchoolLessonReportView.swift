@@ -646,16 +646,26 @@ private struct SchoolLessonReportContent: View {
             Section {
                 // Un niveau choisi suffit : le jour et le lieu sont proposés comme situation, modifiable.
                 ForEach(model.competencies) { competency in
-                    Picker(competency.displayLabel, selection: levelBinding(competency.id)) {
-                        Text(model.unchangedChoiceLabel(for: competency.id)).tag("")
-                        Text("En découverte").tag("DISCOVERING")
-                        Text("Avec accompagnement").tag("GUIDED")
-                        Text("En autonomie").tag("INDEPENDENT")
+                    HStack(spacing: DrivySpacing.s) {
+                        Picker(competency.displayLabel, selection: levelBinding(competency.id)) {
+                            Text(model.unchangedChoiceLabel(for: competency.id)).tag("")
+                            Text("En découverte").tag("DISCOVERING")
+                            Text("Avec accompagnement").tag("GUIDED")
+                            Text("En autonomie").tag("INDEPENDENT")
+                        }
+                        .pickerStyle(.menu)
+                        // Sans niveau, la valeur reste discrète : l’accent est réservé à ce qui est renseigné.
+                        .tint(levelBinding(competency.id).wrappedValue.isEmpty ? DrivyTheme.muted : DrivyTheme.accent)
+                        .disabled(!model.canMutate)
+                        .accessibilityIdentifier("lesson-competency-level-\(competency.id.uuidString)")
+                        // Bilan « Pour moi » : le niveau choisi ne compte dans la progression qu’une fois le bilan partagé.
+                        if model.levelIsHeldBack(for: competency.id) {
+                            DrivyPrivacyMark(isPrivate: true)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel("Ne compte pas tant que le bilan est pour toi")
+                                .accessibilityIdentifier("lesson-competency-private-\(competency.id.uuidString)")
+                        }
                     }
-                    .pickerStyle(.menu)
-                    // Sans niveau, la valeur reste discrète : l’accent est réservé à ce qui est renseigné.
-                    .tint(levelBinding(competency.id).wrappedValue.isEmpty ? DrivyTheme.muted : DrivyTheme.accent)
-                    .disabled(!model.canMutate)
                     if model.observations.contains(where: { $0.id == competency.id }) {
                         TextField("Situation", text: contextBinding(competency.id), axis: .vertical)
                             .font(.subheadline)
