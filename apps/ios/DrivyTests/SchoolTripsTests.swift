@@ -96,9 +96,15 @@ struct SchoolTripsTests {
                      Self.item(3, start: "2026-09-27T09:00:00Z", instructor: colleague)]
         let scope = SchoolCommandScope(personID: UUID(), schoolID: Self.schoolID, membershipID: own, accessEpoch: 1,
             apiBaseURL: Self.base.absoluteString)
+        let transport = TripsTransport(body: tripsEnvelope(["items": items, "nextCursor": NSNull()]),
+            person: tripsPerson(scope))
         let model = SchoolTripsWorkspace(scope: scope, client: SchoolCaptureClient(baseURL: Self.base, tokenSource: TripsToken(),
-            transport: TripsTransport(body: tripsEnvelope(["items": items, "nextCursor": NSNull()]))))
+            transport: transport))
         await model.load()
+        try #require(model.hasLoaded && model.errorMessage == nil)
+        #expect(await transport.recorded().compactMap { $0.url?.path } == [
+            "/v1/me", "/v1/schools/\(Self.schoolID.uuidString)/captures"
+        ])
         let now = try #require(SchoolLesson.date("2026-09-28T12:00:00Z"))
         #expect(model.trips(matching: .all).count == 3)
         #expect(model.trips(matching: .mine).count == 1)
@@ -106,6 +112,28 @@ struct SchoolTripsTests {
         #expect(model.trips(matching: .instructor(UUID())).isEmpty)
         #expect(model.days(filter: .instructor(colleague), now: now).map(\.trips.count) == [1, 1])
         #expect(model.otherInstructors() == [SchoolTripInstructor(id: colleague, name: "Luc Exemple")])
+    }
+
+    @Test func changedAccessClearsLoadedTripsBeforeAnyNewPageIsRequested() async throws {
+        let scope = SchoolCommandScope(personID: UUID(), schoolID: Self.schoolID, membershipID: UUID(), accessEpoch: 1,
+            apiBaseURL: Self.base.absoluteString)
+        let transport = TripsTransport(body: tripsEnvelope([
+            "items": [Self.item(1, start: "2026-09-28T08:00:00Z", instructor: scope.membershipID)],
+            "nextCursor": "next-page"
+        ]), person: tripsPerson(scope))
+        let model = SchoolTripsWorkspace(scope: scope, client: SchoolCaptureClient(baseURL: Self.base, tokenSource: TripsToken(),
+            transport: transport))
+        await model.load()
+        try #require(model.hasLoaded && model.trips.count == 1 && model.nextCursor != nil)
+
+        await transport.replacePerson(tripsPerson(scope, accessEpoch: scope.accessEpoch + 1))
+        await model.loadMore()
+
+        #expect(model.accessRevoked && model.errorMessage != nil)
+        #expect(model.trips.isEmpty && model.nextCursor == nil && !model.isLoadingMore)
+        #expect(await transport.recorded().compactMap { $0.url?.path } == [
+            "/v1/me", "/v1/schools/\(Self.schoolID.uuidString)/captures", "/v1/me"
+        ])
     }
 }
 
@@ -119,13 +147,26 @@ private func tripsEnvelope(_ page: [String: Any]) -> Data {
         "serverTime": "2026-09-28T18:00:00Z"])) ?? Data()
 }
 
+private func tripsPerson(_ scope: SchoolCommandScope, accessEpoch: Int? = nil) -> Data {
+    tripsEnvelope(["personId": scope.personID.uuidString, "version": 1, "displayName": "Moniteur exemple", "locale": "fr",
+        "memberships": [["membershipId": scope.membershipID.uuidString, "schoolId": scope.schoolID.uuidString,
+            "schoolName": "École exemple", "roles": ["ADMIN", "INSTRUCTOR"], "grants": [],
+            "accessEpoch": accessEpoch ?? scope.accessEpoch]]])
+}
+
 private actor TripsTransport: SchoolHTTPTransport {
     private let body: Data
+    private var person: Data?
     private var requests: [URLRequest] = []
-    init(body: Data) { self.body = body }
+    init(body: Data, person: Data? = nil) { self.body = body; self.person = person }
     func recorded() -> [URLRequest] { requests }
+    func replacePerson(_ value: Data) { person = value }
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         requests.append(request)
+        if request.url?.path == "/v1/me" {
+            guard let person else { throw SchoolCaptureFailure.invalidResponse }
+            return SchoolHTTPResponse(data: person, status: 200, url: request.url!, contentType: "application/json")
+        }
         return SchoolHTTPResponse(data: body, status: 200, url: request.url!, contentType: "application/json")
     }
 }

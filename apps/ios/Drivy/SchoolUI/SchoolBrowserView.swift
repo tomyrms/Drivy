@@ -247,7 +247,7 @@ private struct SchoolLearnerDetailView: View {
     /// A learner with one training: its lessons and progression are the dossier itself.
     private var singleTraining: SchoolTraining? {
         // Pendant une relecture du même élève, la formation affichée reste en place : l’écran (et ses feuilles) n’est pas retiré.
-        guard trainingClient != nil, workspace.trainingsError == nil,
+        guard trainingClient != nil,
               workspace.nextTrainingsCursor == nil, workspace.trainings.count == 1,
               let training = workspace.trainings.first, training.learnerId == workspace.learner?.id else { return nil }
         return training
@@ -257,6 +257,16 @@ private struct SchoolLearnerDetailView: View {
         Group {
             if let learner = workspace.learner, let training = singleTraining, let trainingClient {
                 SchoolTrainingScreen(client: trainingClient, workspace: workspace, learner: learner, trainingID: training.id)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        // Une panne de relecture reste visible sans retirer la formation ni la feuille qu’elle porte.
+                        if let error = workspace.learnerError {
+                            SchoolErrorNotice(message: error, retry: { Task { await workspace.loadSelectedLearner() } })
+                                .drivyPageContent()
+                        } else if let error = workspace.trainingsError {
+                            SchoolErrorNotice(message: error, retry: { Task { await workspace.loadTrainings() } })
+                                .drivyPageContent()
+                        }
+                    }
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         if let openPlanning, learner.archivedAt == nil {
                             DrivyStickyActionBar {

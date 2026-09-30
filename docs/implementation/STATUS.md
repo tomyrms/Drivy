@@ -1,5 +1,14 @@
 # État de la réalisation
 
+## 30 septembre 2026 — reprise de la passe de bugs
+
+- **Passe Claude retrouvée dans `39704b6`** : corrections poussées et IPA compilée, mais campagne Apple `36693678299` en échec sur le test de filtre des trajets. Sa fixture répondait avec des trajets au contrôle d'identité ; correction du test et ajout d'un cas de révocation pendant pagination. Nouvelle validation Apple à exécuter.
+- **Correction complémentaire** : une panne de relecture des formations ne retire plus le dossier déjà affiché et ses feuilles ; une erreur avec Réessayer reste visible.
+- **Agenda** : les erreurs au retour sur l'onglet sont affichées ; la feuille de leçon reste portée par la racine stable.
+- **Backend déjà déployé et revérifié** : release `5406f65`, code API/web identique à `39704b6`, 20 migrations comparées par nom/SHA-256, trois services actifs, chemins des processus et santé/HTTPS contrôlés. La migration020 est donc exécutée, contrairement au dernier paragraphe historique ci-dessous. Aucun redéploiement identique nécessaire.
+- **Tests serveur existants confirmés** : run `36693678804`, API 218/218 sur PostgreSQL 17.11 et Mailpit, web 93/93, typechecks/builds réussis. Recette locale Docker en cours de préparation.
+- **Reste** : nouvelle campagne Apple et IPA de cette reprise, puis gestes sur iPhone/iPad réel. GPS, batterie et VoiceOver physiques restent à qualifier. [Détail de la reprise](reprise-bugs-20260930.md).
+
 ## 29 septembre 2026 — retour sur appareil et revue UI Skills
 
 Le retour du porteur après installation a ouvert une nouvelle passe ; les résultats de la passe précédente ci-dessous ne qualifient pas ces corrections.

@@ -85,7 +85,7 @@ struct SchoolAgendaView: View {
         .navigationBarTitleDisplayMode(.large)
         // Réapparition de l’onglet : la semaine affichée reste en place pendant la relecture, et une feuille
         // ouverte n’est jamais refermée par elle. Un changement de semaine ou de filtre repart de zéro (loadedScope).
-        .task(id: scopeKey) { await loadWeek(keepingCurrent: true, silent: true) }
+        .task(id: scopeKey) { await loadWeek(keepingCurrent: true) }
         // Une ligne ouvre directement l’écran de la leçon ; l’agenda se relit sans s’effacer à la fermeture
         // (leçon terminée, déplacée ou annulée).
         .sheet(item: $selectedLesson, onDismiss: { Task { await loadWeek(keepingCurrent: true) } }) { lesson in
@@ -278,8 +278,7 @@ struct SchoolAgendaView: View {
         return SchoolPlanningWorkspace(scope: client.scope(person: person, membership: membership), client: client.planningClient, date: proposed)
     }
     /// `keepingCurrent` : relecture sans effacer la semaine affichée (retour d’une leçon, tirer pour actualiser).
-    /// `silent` : un échec de relecture laisse la semaine affichée au lieu de la remplacer par l’erreur.
-    @MainActor private func loadWeek(keepingCurrent: Bool = false, silent: Bool = false) async {
+    @MainActor private func loadWeek(keepingCurrent: Bool = false) async {
         let id = UUID(); requestID = id
         let keeps = keepingCurrent && loadedScope == scopeKey
         if !keeps { lessons = []; dayIndex = [:]; error = nil; loadedScope = nil }
@@ -303,7 +302,6 @@ struct SchoolAgendaView: View {
                 .mapValues { $0.sorted { $0.plannedStart < $1.plannedStart } }
         } catch {
             guard !Task.isCancelled, requestID == id else { return }
-            if keeps && silent { return }
             self.error = (error as? LocalizedError)?.errorDescription ?? "L’agenda n’a pas pu être chargé."
         }
     }
