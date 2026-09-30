@@ -1,0 +1,150 @@
+{
+  "date": "2026-09-30",
+  "scope": "Full local API and web verification of the new feedback implementation",
+  "baseCommit": "fe9fe6bf655d6ba4ce695aa908bc543b675d83e8",
+  "workingTree": true,
+  "startedAt": "2026-09-30T13:34:50.408995+00:00",
+  "sourceAtStart": {
+    "algorithm": "sha256",
+    "fileCount": 122,
+    "digest": "6bee82f09d86ac09d496116193d1f898e106694e59b8df939af08e430a788fa0"
+  },
+  "runtime": {
+    "platform": "Windows",
+    "node": "v24.6.0",
+    "npm": "11.7.0",
+    "dockerEngine": "29.8.0",
+    "postgresql": "17.11",
+    "mailpit": "/mailpit v1.31.2 compiled with go1.27.1 on linux/amd64"
+  },
+  "isolation": {
+    "postgresImage": "postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24",
+    "mailpitImage": "axllent/mailpit:v1.31.2@sha256:74d609a42ec279aa63c6b4622a6fa9b5408d1ad5b1d76a1c4be40a265ce0863d",
+    "dataStorage": "new tmpfs for both services, no existing volume attached",
+    "ports": "random loopback-only bindings",
+    "externalDatabaseUsed": false
+  },
+  "checks": [
+    {
+      "name": "api-typecheck",
+      "command": "npm run typecheck --workspace @drivy/api",
+      "exitCode": 0,
+      "durationSeconds": 2.88,
+      "status": "passed"
+    },
+    {
+      "name": "api-build",
+      "command": "npm run build --workspace @drivy/api",
+      "exitCode": 0,
+      "durationSeconds": 2.28,
+      "status": "passed"
+    },
+    {
+      "name": "api-tests",
+      "command": "npm test --workspace @drivy/api -- --reporter=default",
+      "exitCode": 0,
+      "durationSeconds": 70.27,
+      "status": "passed",
+      "testFiles": 19,
+      "tests": 224,
+      "passed": 224,
+      "failed": 0,
+      "pending": 0
+    },
+    {
+      "name": "web-typecheck",
+      "command": "npm run typecheck --prefix apps/web",
+      "exitCode": 0,
+      "durationSeconds": 4.17,
+      "status": "passed"
+    },
+    {
+      "name": "web-build",
+      "command": "npm run build --prefix apps/web",
+      "exitCode": 0,
+      "durationSeconds": 1.88,
+      "status": "passed"
+    },
+    {
+      "name": "web-tests",
+      "command": "npm test --prefix apps/web -- --reporter=default",
+      "exitCode": 0,
+      "durationSeconds": 1.38,
+      "status": "passed",
+      "testFiles": 7,
+      "tests": 93,
+      "passed": 93,
+      "failed": 0,
+      "pending": 0
+    }
+  ],
+  "cleanup": {
+    "createdContainerCount": 2,
+    "stoppedAndRemoved": true
+  },
+  "safety": {
+    "rawTestOutputPersisted": false,
+    "secretsTokensPersonalDataOrPositionsIncluded": false,
+    "physicalDeviceQualificationPerformed": false
+  },
+  "planningDefaultsTests": {
+    "file": "planning-defaults.integration.test.ts",
+    "status": "passed",
+    "tests": 6
+  },
+  "databaseChecks": {
+    "migrationCount": 21,
+    "planningMigrationRegistered": true,
+    "planningRlsEnabledAndForced": true,
+    "applicationRoleUnprivileged": true,
+    "harnessMigratorUnprivileged": true,
+    "applicationCannotDeletePreferences": true,
+    "applicationCannotUpdatePreferenceOwner": true
+  },
+  "sourceAtEnd": {
+    "algorithm": "sha256",
+    "fileCount": 122,
+    "digest": "6bee82f09d86ac09d496116193d1f898e106694e59b8df939af08e430a788fa0"
+  },
+  "sourceStableDuringRun": true,
+  "status": "passed",
+  "finishedAt": "2026-09-30T13:36:17.878844+00:00",
+  "testMaintenance": {
+    "files": [
+      "apps/api/test/capture.integration.test.ts",
+      "apps/api/test/capture-observations.integration.test.ts",
+      "apps/api/test/corrections.integration.test.ts"
+    ],
+    "changes": [
+      "Both capture suites still require every school table to have RLS enabled and forced, now require exactly 45 tables, and verify planning_defaults is among their exact text-array names.",
+      "The start-now contract expects the absent meeting point to remain empty; an invalid numeric meeting point still verifies schema rejection with HTTP 400."
+    ],
+    "productCodeChangedForVerification": false
+  },
+  "planningDefaultsReview": {
+    "method": "Independent read-only static review plus the complete integration suite on isolated PostgreSQL 17.11.",
+    "finding": "No certain defect identified in authorization, RLS, version concurrency, idempotence or commercial selection.",
+    "files": [
+      "apps/api/migrations/021_planning_defaults.sql",
+      "apps/api/src/planning-defaults.ts",
+      "apps/api/src/commands.ts",
+      "apps/api/src/lesson-setup.ts",
+      "apps/api/src/lessons.ts",
+      "apps/api/test/planning-defaults.integration.test.ts"
+    ],
+    "confirmedBySixSpecificTests": [
+      "Personal preferences persist separately for each school member; learners and other schools are denied.",
+      "RLS prevents even an administrator from reading another member preferences.",
+      "Identical command replay keeps one receipt and audit; changed payload and stale version are rejected.",
+      "Concurrent updates to an existing preference yield one success and one version conflict; preferences can be cleared.",
+      "Planning, moving and immediate start accept an absent or empty meeting point while retaining commercial and instructor prerequisites.",
+      "Immediate start snapshots the compatible current preferred tariff and falls back when that tariff is disabled."
+    ],
+    "coverageLimits": [
+      "No dedicated scenario for two concurrent first creations or forbidden direct RLS INSERT/UPDATE.",
+      "No dedicated scenario for a tariff superseded by a higher version or expired terms; the disabled-tariff branch is exercised.",
+      "No dedicated PUT or AP72 replay scenario after membership revocation; the revoked-member GET is exercised.",
+      "No physical-device GPS, battery or VoiceOver qualification is inferred from these server and web checks."
+    ]
+  }
+}

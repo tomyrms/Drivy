@@ -1,5 +1,18 @@
 # État de la réalisation
 
+## 30 septembre 2026 — retours complémentaires, validation en cours
+
+Source native et web `fe9fe6b` : **refonte visuelle générale web uniquement**. Le thème et l’identité iOS/iPadOS restent conservés ; les modifications natives portent sur les demandes ciblées. [Liste détaillée](plan-retours-20260930.md).
+
+- **Web** : navigation par usages, palette papier/forêt, sections plates et listes compactes. Rendu navigateur vérifié à 320/390/834/1440 px, clair/sombre, menu mobile et retour de focus. Typecheck/build et 93 tests réussis ; contrastes mesurés. Zoom texte 200 %, lecteurs d’écran et appareils physiques restent à qualifier. [Direction web](web-direction-20260930.md).
+- **Carte/replay** : caméra orientée et suivi initial, exploration/recentrage, géométrie retenue, signalements après persistance chiffrée avec ancre durable, compteur retiré, annulation sans bilan depuis la carte. Le recalage automatique sur route n’est pas activé ; précision réelle et batterie restent à mesurer. [Décision carte/GPS](carte-replay-gps-20260930.md).
+- **Planification** : lieu facultatif, moniteur courant éligible, préférences personnelles de catégorie/tarif dans Profil, secondaires repliés. Migration021 et routes `/planning-defaults` déployées sur le homelab. [Détail](planning-defaults-20260930.md).
+- **Dossier/bilan** : mois/année, pagination complète, propagation après reçu durable, relecture au premier plan, évaluations réversibles dans la leçon et observations compactes partagées. [Détail](dossier-progression-20260930.md).
+- **Revue croisée** : reprise d’historique pendant une page lente, confirmation d’une autre leçon, annulation suivie d’une panne de relecture, changement d’école dans les préférences corrigés et couverts par des tests ajoutés.
+- **Serveur/web qualifiés localement** : API **224/224**, web **93/93**, typechecks et builds réussis sur PostgreSQL17.11 et Mailpit Docker isolés ; 21 migrations et 45 tables avec RLS forcée. Trois attentes de test obsolètes adaptées au lieu facultatif et à la nouvelle table, sans retirer les contrôles. Conteneurs temporaires supprimés. [Preuve](proofs/backend-retours-20260930.json).
+- **Homelab déployé** : `fe9fe6b`, sauvegarde privée vérifiée avant migration, empreintes001–021 concordantes, API/web/identité actifs, chemins des processus et routes HTTPS contrôlés. [Preuve](proofs/deployment-retours-20260930.json).
+- **Qualification Apple ouverte** : premier run `36721649061` bloqué par deux appels mutables dans des macros de tests, corrigés dans `9c77dd6`. Tests complets, IPA finale et captures ciblées en cours. Les résultats de la reprise initiale ci-dessous ne qualifient pas ce nouveau lot.
+
 ## 30 septembre 2026 — reprise de la passe de bugs
 
 - **Passe Claude reprise et validée sur `8547d95`** : la fixture du test de filtre des trajets répondait avec des trajets au contrôle d'identité ; correction du test et ajout d'un cas de révocation pendant pagination. Run Apple `36716875435` réussi : **198/198 iPhone 17 Pro et 10/10 iPad Air 11 M4**, zéro échec/ignoré, iOS simulateur 26.4.1. [Preuve native](proofs/native-resume-20260930.json).

@@ -2,6 +2,8 @@
 
 Cette liste reprend les demandes de la conversation du 30 septembre. Elle complète la reprise de Claude, sans modifier la livraison de conception conservée. Une case cochée exige une réalisation et une preuve adaptées ; code écrit, compilation, test simulateur et essai physique sont distingués.
 
+**Lot intégré, qualification en cours** : source `9c77dd6`. Décisions et réalisations : [web](web-direction-20260930.md), [carte/GPS](carte-replay-gps-20260930.md), [planification](planning-defaults-20260930.md), [dossier/progression](dossier-progression-20260930.md). Les éléments natifs attendent les tests Apple ; les essais GPS, batterie et gestes réels restent distincts.
+
 ## 0. Reprise de Claude et environnement
 
 - [x] Lire la demande initiale, retrouver le commit et les tâches laissées inachevées.
@@ -85,14 +87,16 @@ Interprétation à vérifier dans le modèle : « formation par défaut » doit 
 
 Choix explicitement retenu par le porteur : **sobre et précise, listes compactes, carte dominante, peu de cartes décoratives, couleurs discrètes**. Il demande une refonte réelle de l'apparence actuelle de la webapp, qu'il juge trop générique et artificielle. **Clarification explicite : mobile/tablette/desktop désignent les formats de la webapp ; aucune refonte globale de l'identité native iOS/iPadOS n'est demandée.** Les changements natifs restent limités aux parcours et composants ciblés dans les sections 1 à 6.
 
-- [ ] Parcourir le catalogue UI Skills et sélectionner les guides réellement nécessaires pour chaque chantier.
-- [ ] Définir pour le web les principes de composition, typographie, densité, couleur et hiérarchie.
-- [ ] Refaire la webapp sur desktop, mobile et tablette, en priorisant une interface de bureau pratique.
-- [ ] Conserver le thème et l'identité native iPhone/iPad ; ne compacter que les composants explicitement visés par les retours.
-- [ ] Réduire les empilements de cartes, les grands blocs vides, les badges répétitifs et le texte décoratif.
-- [ ] Garder les actions principales faciles à atteindre et les actions secondaires accessibles sans surcharger les écrans.
-- [ ] Harmoniser les composants web pour que les améliorations se retrouvent partout dans la webapp.
-- [ ] Vérifier le rendu réel web en clair/sombre, tailles compactes/larges et grand texte ; vérifier séparément les seules modifications natives ciblées.
+- [x] Parcourir le catalogue UI Skills et sélectionner les guides réellement nécessaires pour chaque chantier.
+- [x] Définir pour le web les principes de composition, typographie, densité, couleur et hiérarchie.
+- [x] Refaire la webapp sur desktop, mobile et tablette, en priorisant une interface de bureau pratique.
+- [x] Conserver le thème et l'identité native iPhone/iPad ; ne compacter que les composants explicitement visés par les retours.
+- [x] Réduire les empilements de cartes, les grands blocs vides, les badges répétitifs et le texte décoratif.
+- [x] Garder les actions principales faciles à atteindre et les actions secondaires accessibles sans surcharger les écrans.
+- [x] Harmoniser les composants web pour que les améliorations se retrouvent partout dans la webapp.
+- [x] Vérifier le rendu réel web en clair/sombre et tailles compactes/larges : navigateur à 320/390/834/1440 px, contrastes et clavier.
+- [ ] Qualifier le zoom texte web à 200 % et les lecteurs d'écran sur appareil.
+- [ ] Vérifier séparément les captures Apple des seules modifications natives ciblées.
 
 ## 8. Livraison et preuves — intégration principale
 
@@ -100,8 +104,8 @@ Choix explicitement retenu par le porteur : **sobre et précise, listes compacte
 - [ ] Mettre à jour les décisions d'implémentation et cette liste sans modifier le manifeste de conception.
 - [ ] Exécuter les tests métier avec PostgreSQL réelle et les contrôles web adaptés.
 - [ ] Compiler et tester Swift/UI sur GitHub Actions, puis vérifier l'IPA finale pour iLoader.
-- [ ] Déployer les changements serveur nécessaires sur le homelab, avec sauvegarde vérifiée avant chaque déploiement.
-- [ ] Vérifier services, migrations, droits et routes après déploiement.
+- [x] Déployer les changements serveur nécessaires sur le homelab, avec sauvegarde vérifiée avant chaque déploiement : `fe9fe6b`, migrations001–021.
+- [x] Vérifier services, migrations, droits et routes après déploiement : trois services actifs, empreintes des migrations, chemins de processus, santé interne et barrières HTTPS conformes. [Preuve](proofs/deployment-retours-20260930.json).
 - [ ] Mettre à jour `STATUS.md` avec les résultats exécutés et les essais physiques restant à faire.
 
 Les agents travaillent sur des périmètres distincts : carte/capture/replay ; planification/défauts ; refonte visuelle web uniquement. L'intégration principale prend dossier, progression, bilan, cohérence générale et livraison.
