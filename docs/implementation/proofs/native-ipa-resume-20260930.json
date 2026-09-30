@@ -1,0 +1,13 @@
+{
+  "commit": "8547d95811ca05f39edccfa07f7b1ca9fe63769c",
+  "run": "36716860249",
+  "version": "0.7.0",
+  "build": "83",
+  "ipaSHA256": "091eee59c8da55c751bf806f9677b1b97147983e1485c08e3179d754662fff16",
+  "archiveCreated": true,
+  "unsigned": true,
+  "zipAndBinaryHashesVerified": true,
+  "productionConfigurationVerified": true,
+  "debugVisualFixturesExcluded": true,
+  "physicalQualification": "NOT_EXECUTED"
+}

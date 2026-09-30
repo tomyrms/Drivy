@@ -2,12 +2,15 @@
 
 ## 30 septembre 2026 — reprise de la passe de bugs
 
-- **Passe Claude retrouvée dans `39704b6`** : corrections poussées et IPA compilée, mais campagne Apple `36693678299` en échec sur le test de filtre des trajets. Sa fixture répondait avec des trajets au contrôle d'identité ; correction du test et ajout d'un cas de révocation pendant pagination. Nouvelle validation Apple à exécuter.
+- **Passe Claude reprise et validée sur `8547d95`** : la fixture du test de filtre des trajets répondait avec des trajets au contrôle d'identité ; correction du test et ajout d'un cas de révocation pendant pagination. Run Apple `36716875435` réussi : **198/198 iPhone 17 Pro et 10/10 iPad Air 11 M4**, zéro échec/ignoré, iOS simulateur 26.4.1. [Preuve native](proofs/native-resume-20260930.json).
 - **Correction complémentaire** : une panne de relecture des formations ne retire plus le dossier déjà affiché et ses feuilles ; une erreur avec Réessayer reste visible.
 - **Agenda** : les erreurs au retour sur l'onglet sont affichées ; la feuille de leçon reste portée par la racine stable.
 - **Backend déjà déployé et revérifié** : release `5406f65`, code API/web identique à `39704b6`, 20 migrations comparées par nom/SHA-256, trois services actifs, chemins des processus et santé/HTTPS contrôlés. La migration020 est donc exécutée, contrairement au dernier paragraphe historique ci-dessous. Aucun redéploiement identique nécessaire.
-- **Tests serveur existants confirmés** : run `36693678804`, API 218/218 sur PostgreSQL 17.11 et Mailpit, web 93/93, typechecks/builds réussis. Recette locale Docker en cours de préparation.
-- **Reste** : nouvelle campagne Apple et IPA de cette reprise, puis gestes sur iPhone/iPad réel. GPS, batterie et VoiceOver physiques restent à qualifier. [Détail de la reprise](reprise-bugs-20260930.md).
+- **Tests serveur exécutés** : run `36716860267` sur `8547d95`, API 218/218 sur PostgreSQL 17.11 et Mailpit, web 93/93, typechecks/builds réussis. Même résultat sur le PC, avec PostgreSQL Docker isolée et 20 migrations. [Preuve backend](proofs/backend-resume-20260930.json).
+- **Docker rétabli** : sockets temporaires inaccessibles conservés dans des dossiers de sauvegarde ; moteur opérationnel, volumes et conteneurs antérieurs présents. Les deux conteneurs de recette ont été arrêtés et retirés. [Intervention](docker-recovery-20260930.md).
+- **IPA disponible** : 0.7.0/build 83, source `8547d95`, run `36716860249`. Téléchargement, CRC ZIP, hashes des binaires, absence de signature et configuration du homelab vérifiés. [Preuve IPA](proofs/native-ipa-resume-20260930.json).
+- **Nouveaux retours en cours** : carte/replay/GPS, préférences de planification, dossier/compétences/synchronisation et refonte visuelle **web uniquement**. [Liste complète](plan-retours-20260930.md). Les résultats de `8547d95` ne qualifient pas les modifications ultérieures de ce chantier.
+- **Reste sur appareil** : gestes iPhone/iPad, GPS, batterie et VoiceOver. [Détail de la reprise](reprise-bugs-20260930.md), [vérification homelab](proofs/deployment-resume-20260930.json).
 
 ## 29 septembre 2026 — retour sur appareil et revue UI Skills
 
