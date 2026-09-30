@@ -4,8 +4,8 @@
 
 Le porteur juge l’organisation plus claire mais l’apparence encore trop élémentaire. Passe réalisée, **web uniquement** : palette encre/papier, typographie Source Sans 3 auto-hébergée, contrôles et tableaux retravaillés, hiérarchie des identités, heures et prix, états ordinaires allégés. Deux agents ont partagé composants communs et parcours métier ; l’intégration couvre catalogue, réglages, entrée et revue navigateur. Les cinq espaces de navigation sont conservés. [Décisions et guides](web-craft-20260930.md).
 
-- **104 tests web**, typecheck et build réussis. 18 destinations desktop/mobile inspectées, contrôle de repli à320px, tablette sombre834px, liste/détail1360px ; 44 captures, filtres et clavier contrôlés. 52 couples de contraste passent les seuils mesurés. [Preuve](proofs/web-craft-20260930.json).
-- Déploiement de cette passe esthétique à terminer après nouvelle sauvegarde. Zoom200%, lecteur d’écran, Safari et appareils physiques restent à qualifier.
+- **104 tests web et 224 tests API** réussis sur la CI `36733112389` du commit `946476a`, typechecks et builds réussis. 18 destinations desktop/mobile inspectées, contrôle de repli à 320 px, tablette sombre 834 px, liste/détail 1360 px ; 44 captures, filtres et clavier contrôlés. 52 couples de contraste passent les seuils mesurés. [Preuve](proofs/web-craft-20260930.json).
+- **Déployé sur le homelab : `946476a`**, après nouvelle sauvegarde vérifiée de `drivy_refonte`. API/web/identité actifs, migrations 001–021 conformes, JavaScript/CSS/police servis en HTTPS identiques au build local. [Preuve de déploiement](proofs/deployment-web-craft-20260930.json). Zoom 200 %, lecteur d’écran, Safari et appareils physiques restent à qualifier.
 
 ## 30 septembre 2026 — organisation des parcours web
 

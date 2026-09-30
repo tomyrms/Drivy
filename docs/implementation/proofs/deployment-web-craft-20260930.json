@@ -1,0 +1,143 @@
+{
+  "commit": "946476ac192fb5c7614ee545c647a40abb4e34a2",
+  "servicesActive": true,
+  "backupVerified": true,
+  "apiEnvironmentUnchanged": true,
+  "ipadTrialProfilePreserved": true,
+  "backedUpDatabases": [
+    "drivy_refonte"
+  ],
+  "backupAttempt": "20260930T145816Z-e944ab95592e",
+  "migrationHashesVerified": true,
+  "migrations": [
+    {
+      "name": "001_g1a.sql",
+      "sha256": "ab648269d745bffe74cfb07a39066d80a7985482e06b622d434fcddd3db0cd17"
+    },
+    {
+      "name": "002_g1b_school_setup.sql",
+      "sha256": "769f78bbceec1b5bca629a92e26907dbadc32d0358cf8e3115da8a822c1aed9e"
+    },
+    {
+      "name": "003_g1c_invitations.sql",
+      "sha256": "d1a35b84e4e33e43935b97fc274e89526b6fd839a6923258fd443e9c1d430edb"
+    },
+    {
+      "name": "004_g1d_profiles.sql",
+      "sha256": "68c5905af2c45d514adbf468a0ee3b6f437a4db35ddc306b2e7f537f8261f5ca"
+    },
+    {
+      "name": "005_g1d_catalogue.sql",
+      "sha256": "59ae7b56acad88294fe32f67538ca346ec525fcf7eb0036e27476e9ec7d699da"
+    },
+    {
+      "name": "006_lessons.sql",
+      "sha256": "4212873103e767c9242b9cfd2990b74a2485050d60a6d581b8f4e3f4cf122a3e"
+    },
+    {
+      "name": "007_lesson_reports.sql",
+      "sha256": "1568b7265e813e37a87eb29cb4aaf6cd48b9e5236ad40b5a306e4078ef87a176"
+    },
+    {
+      "name": "008_capture.sql",
+      "sha256": "ca2fea2c610d2ce5deeee8cf68fc72c28d68f06d1b5120ee5005146e77221049"
+    },
+    {
+      "name": "009_capture_observations.sql",
+      "sha256": "28e61c0bd55224dcb96a81ef04fdaa06e7d35ad42150fb7cf4b9b6024ff01c47"
+    },
+    {
+      "name": "010_permit_checks.sql",
+      "sha256": "ee887828e69b74cadda8288bb244213ec54f2e7b0f26acc9ea0874ef210a7d5b"
+    },
+    {
+      "name": "011_lesson_outcomes.sql",
+      "sha256": "2a0667b975febeaf8e8d8189e12f3b2d252422f9ab2f6dad9df7c33078b4c324"
+    },
+    {
+      "name": "012_learner_sharing.sql",
+      "sha256": "d10c40236282e1fb43311a0742ddb8fbfcb84ed5ea76dacc11390335c8d38244"
+    },
+    {
+      "name": "013_invitation_training.sql",
+      "sha256": "7d70c9fa7451f87d10af0316142c160955d0132091c3fb702420e989a75ec6c4"
+    },
+    {
+      "name": "014_admin_trip_access.sql",
+      "sha256": "728807c7e61d46e485521b7d876329df8450e5d059893f55e634c9b0bd55c2ef"
+    },
+    {
+      "name": "015_invitation_code.sql",
+      "sha256": "dcec3bc1325817b6cf49ad06da2d0dc66f547efa13e5fbad0d39ce229be6e968"
+    },
+    {
+      "name": "016_access_lifecycle.sql",
+      "sha256": "4b4c8bb9a92505db9fe2959bda474ea2797f8e11c2b9a299f37c8377e25c1807"
+    },
+    {
+      "name": "017_planning_corrections.sql",
+      "sha256": "57635de78ccc286c4142d62d22d7fde17587f2ea0ebe090a6075c235291016fc"
+    },
+    {
+      "name": "018_invitation_trainings.sql",
+      "sha256": "4edd96984ac5de98b70ee10e0d8c4276ca3989c738743b2e37eba7f0caafac86"
+    },
+    {
+      "name": "019_optional_report_content.sql",
+      "sha256": "c9b5a061e2a7a6267ae4772b28097b74ad9574325f05c0a0545601dfd1f2b99c"
+    },
+    {
+      "name": "020_admin_progress_read.sql",
+      "sha256": "12dd9dffd9ea0237cf30d8f8621df4d8a9b4debf7a421270a9f3c7ad147ff30f"
+    },
+    {
+      "name": "021_planning_defaults.sql",
+      "sha256": "68a3518c0eeff111bbfaff154a6e0a854017a0dc1b68c65e9a91d97f52a6b93f"
+    }
+  ],
+  "backupPaths": [
+    "/root/drivy_refonte-before-946476ac192fb5c7614ee545c647a40abb4e34a2-20260930T145816Z-e944ab95592e.dump"
+  ],
+  "archiveSHA256": "aea773898b3bf72e0fab6df748de8120cfc6bb01cb7b38310a1457b68e9460cc",
+  "services": {
+    "drivy-refonte-api": "active",
+    "drivy-refonte-web": "active",
+    "drivy-refonte-identity": "active"
+  },
+  "runtimePathsMatch": true,
+  "internalReady": true,
+  "readinessHost": "192.168.1.153",
+  "publicHttp": {
+    "/refonte/v1/me": 401,
+    "/app/": 200,
+    "/refonte/health/ready": 404,
+    "/identity/admin/": 404
+  },
+  "verifiedAt": "2026-09-30T15:03:05.089858+00:00",
+  "publicAssets": [
+    {
+      "path": "/app/assets/index-CSwK-14b.js",
+      "bytes": 508094,
+      "sha256": "add52985fc6162b09ec535f423806b8a40640329ed1a6fa04c21d4cd5f7f674b",
+      "matchesLocalBuild": true
+    },
+    {
+      "path": "/app/assets/index-DDFE8R_a.css",
+      "bytes": 50977,
+      "sha256": "5efa828b3d2e9f2c4aa37f9afac30815c3e1be6bce75e54d3ae08778b79e866a",
+      "matchesLocalBuild": true
+    },
+    {
+      "path": "/app/assets/SourceSans3VF-Upright-BsWL4Kly.woff2",
+      "bytes": 170188,
+      "sha256": "5f16566f7a40d39b339ad26be151fa5a1ab1f0c2574c7a2e619765584a1acbd8",
+      "matchesLocalBuild": true
+    }
+  ],
+  "ci": {
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/36733112389",
+    "conclusion": "success",
+    "apiTestsPassed": 224,
+    "webTestsPassed": 104
+  }
+}

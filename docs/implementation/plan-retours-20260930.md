@@ -138,4 +138,4 @@ Le porteur valide le progrès de l’organisation, mais demande de reprendre les
 - [x] Vérifier chaque destination au navigateur sur desktop et mobile, avec contrôle complémentaire tablette et sombre.
 - [x] Vérifier filtres, retours, formulaires et confirmations au clavier ; consigner les limites d’accessibilité.
 - [x] Exécuter typecheck, tests et build sur le lot final.
-- [ ] Déployer sur le homelab après sauvegarde vérifiée et contrôler les fichiers réellement servis.
+- [x] Déployer sur le homelab après sauvegarde vérifiée et contrôler les fichiers réellement servis : `946476a`, trois services actifs, migrations 001–021 conformes, JavaScript/CSS/police identiques au build local. [Preuve](proofs/deployment-web-craft-20260930.json).

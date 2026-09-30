@@ -728,5 +728,13 @@
       "path": "artifacts/retours-20260930/web-craft/trips-mobile.jpg",
       "sha256": "b7ec95fbd111238af1a9627178a03669c609d9f761c149aa21eadb3c5db6f41f"
     }
-  ]
+  ],
+  "commit": "946476ac192fb5c7614ee545c647a40abb4e34a2",
+  "ci": {
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/36733112389",
+    "conclusion": "success",
+    "apiTestsPassed": 224,
+    "webTestsPassed": 104
+  },
+  "deploymentProof": "docs/implementation/proofs/deployment-web-craft-20260930.json"
 }
