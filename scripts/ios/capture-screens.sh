@@ -16,7 +16,7 @@ if [[ -n "${DRIVY_VISUAL_ORIENTATIONS:-}" || " ${screens[*]} " =~ [[:space:]](li
   use_xctest=1
 fi
 for screen in "${screens[@]}"; do
-  [[ "$screen" =~ ^(dossier|progression|home-tabs|school-choice|no-school|profile-tab|learner-home|learner-progress|start-now|planning-settings|agenda|learners|learner|lesson|lesson-planned|lesson-observations|lesson-evidence|lesson-permit|invitation-code|trips|replay|design-system|gps-choice|signal|live-signal|signal-status|observations|capture-preparation|live|live-waiting|planning|planning-details|planning-confirmation|invitations|invitation-create|invitation-detail|lesson-finish|lesson-modal|lesson-tariff|sign-in|sign-in-error|sign-in-loading|sign-in-unconfigured|account|app-lock|join-code|join-code-preview|join-code-error|join-code-pending|join-code-confirmed|join-link|join-link-preview|profile|profile-error|onboarding-welcome|onboarding-information|onboarding-formation|onboarding-gps|onboarding-review|onboarding-ready|onboarding-staff)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
+  [[ "$screen" =~ ^(dossier|progression|home-tabs|school-choice|no-school|profile-tab|learner-home|learner-progress|start-now|planning-settings|agenda|learners|learner|lesson|lesson-planned|lesson-observations|lesson-evidence|lesson-permit|invitation-code|trips|replay|design-system|gps-choice|signal|live-signal|signal-status|observations|capture-preparation|live|live-waiting|planning|planning-details|planning-confirmation|invitations|invitation-create|invitation-detail|lesson-finish|lesson-modal|lesson-tariff|sign-in|sign-in-error|sign-in-loading|sign-in-unconfigured|account|app-lock|join-code|join-code-preview|join-code-error|join-code-pending|join-code-confirmed|join-link|join-link-preview|profile|profile-error|onboarding-welcome|onboarding-information|onboarding-formation|onboarding-gps|onboarding-review|onboarding-ready|onboarding-staff)$ ]] || { printf 'Écran de capture inconnu : %s. Vérifiez que la sélection et le code proviennent de la même version.\n' "$screen" >&2; exit 1; }
 done
 for kind in "${devices[@]}"; do
   [[ "$kind" == iPhone || "$kind" == iPad ]] || { echo 'Appareil de capture inconnu.' >&2; exit 1; }
@@ -38,7 +38,7 @@ cleanup_device() {
 trap cleanup_device EXIT
 
 capture_oriented() {
-  local kind=$1 appearance=$2 device_id=$3 xctestrun test_status=0
+  local kind=$1 appearance=$2 device_id=$3 xctestrun test_status=0 export_status=0
   # Copy beside the original: __TESTROOT__ paths must keep resolving to Products.
   xctestrun=$(python3 - "$kind" "$appearance" "${screens[*]}" "${orientations[*]}" "${DRIVY_VISUAL_LARGE_TEXT:-0}" <<'PY'
 import pathlib, plistlib, sys
@@ -70,10 +70,24 @@ PY
     -only-testing:DrivyUITests/VisualOrientationTests \
     -parallel-testing-enabled NO -resultBundlePath "$result" \
     2>&1 | tee "artifacts/ios/visual-${kind}-${appearance}-test.log" || test_status=$?
-  if (( test_status != 0 )); then return "$test_status"; fi
-  local exported="artifacts/ios/oriented-exports/${kind}-${appearance}"
+  # Export failure screenshots too. Do not replace xcodebuild's failure with
+  # an export error, and never validate an incomplete matrix as a success.
+  local exported="artifacts/ios/test-reports/Visual-${kind}-${appearance}/capture-attachments"
   mkdir -p "$exported"
-  xcrun xcresulttool export attachments --path "$result" --output-path "$exported"
+  if [[ -d "$result" ]]; then
+    xcrun xcresulttool export attachments --path "$result" --output-path "$exported" || export_status=$?
+  else
+    echo "Résultat XCTest absent : $result" >&2
+    export_status=1
+  fi
+  if (( export_status != 0 )); then
+    echo "Export des diagnostics incomplet (code $export_status) : $result" >&2
+  fi
+  if (( test_status != 0 )); then
+    echo "Échec des captures $kind/$appearance (code $test_status). Journal : artifacts/ios/visual-${kind}-${appearance}-test.log ; diagnostics : $exported" >&2
+    return "$test_status"
+  fi
+  if (( export_status != 0 )); then return "$export_status"; fi
   python3 - "$exported" "$kind" "$appearance" "${screens[*]}" "${orientations[*]}" <<'PY'
 import hashlib, json, pathlib, shutil, sys
 

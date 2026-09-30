@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 30 septembre 2026 — diagnostic de la campagne de captures iOS
+
+Correctif local de l’archive jointe : noms de captures validés avant lancement, diagnostics explicites avant les assertions, attente du compte sur son identifiant existant et export des pièces jointes même après échec. Le code 65 reste propagé ; les contrôles de rotation et de complétude restent obligatoires. **Le journal d’échec et l’archive sont des versions différentes** : l’ancien écran `student-file` n’existe pas dans cette campagne. Aucune équivalence avec un autre écran ni résolution de l’ancien parcours n’est revendiquée.
+
+**Exécuté** : syntaxe Bash, analyse syntaxique Swift Linux et 11 contrôles du script avec commandes Apple simulées. **Non exécuté** : compilation Apple et XCUITest iPhone/iPad. Aucun push ni déploiement. [Diagnostic et reprise](visual-ci-diagnostics-20260930.md).
+
 ## 30 septembre 2026 — passe UI/UX native iPhone et iPad
 
 Le porteur autorise maintenant la revue et l’amélioration des écrans natifs. Trois agents traitent agenda/démarrage, dossiers/compte et séance/carte avec les UI Skills et SwiftUI. Les changements de composition conservent l’identité native, les droits et la persistance. Compilation, tests et nouvelles captures Apple en cours de préparation. [Périmètre et suivi](native-ui-pass-20260930.md).
