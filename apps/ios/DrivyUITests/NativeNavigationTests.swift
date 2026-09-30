@@ -16,6 +16,11 @@ import XCTest
         back.tap()
         XCTAssertTrue(trips.waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["profile-planning-settings"].exists)
+        let resume = app.buttons["resume-school-onboarding"]
+        XCTAssertTrue(resume.exists)
+        resume.tap()
+        XCTAssertTrue(app.buttons["onboarding-start"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.buttons["onboarding-later"].exists)
     }
 
     func testObservationListShowsEachStatusWithoutGPS() {

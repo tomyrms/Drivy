@@ -65,6 +65,55 @@ import XCTest
         capture(app, name: "live-signal-reopened")
     }
 
+    func testPermitReasonSurvivesCancelledDiscardAndClearsOnlyAfterAbandon() {
+        continueAfterFailure = false
+        let app = launch("lesson-permit")
+        let reason = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier == %@ AND (elementType == %lu OR elementType == %lu)",
+            "lesson-permit-reason", XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.textView.rawValue
+        )).firstMatch
+        XCTAssertTrue(reason.waitForExistence(timeout: 20), app.debugDescription)
+        let finish = app.buttons["lesson-complete-permit"]
+        XCTAssertTrue(finish.exists)
+        XCTAssertFalse(finish.isEnabled)
+        let text = "Permis oublié, contrôle à reprendre."
+        reason.tap()
+        reason.typeText(text)
+        XCTAssertEqual(reason.value as? String, text)
+        XCTAssertTrue(finish.isEnabled)
+
+        let cancel = app.navigationBars["Permis d’élève"].buttons["Annuler"]
+        cancel.tap()
+        let discard = app.buttons["Quitter sans enregistrer"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 5), app.debugDescription)
+        let keepEditing = app.buttons["Continuer"]
+        if keepEditing.waitForExistence(timeout: 2) {
+            keepEditing.tap()
+        } else {
+            // Le popover de confirmation iPad se referme en touchant à l’extérieur.
+            app.navigationBars["Permis d’élève"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(discard.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(reason.value as? String, text)
+        XCTAssertTrue(finish.isEnabled)
+        capture(app, name: "lesson-permit-draft-preserved")
+
+        cancel.tap()
+        XCTAssertTrue(discard.waitForExistence(timeout: 5))
+        discard.tap()
+        XCTAssertTrue(reason.waitForNonExistence(timeout: 5))
+        let reopen = app.buttons["lesson-complete"]
+        XCTAssertTrue(reopen.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(app.buttons["lesson-save-report"].exists)
+        reopen.tap()
+        XCTAssertTrue(reason.waitForExistence(timeout: 5))
+        XCTAssertFalse((reason.value as? String ?? "").contains(text))
+        XCTAssertFalse(finish.isEnabled)
+        capture(app, name: "lesson-permit-reopened-empty")
+        // Aucune confirmation de fin n’est envoyée ; ce cas refuse aussi toute écriture fictive.
+        app.terminate()
+    }
+
     private func launch(_ screen: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = screen

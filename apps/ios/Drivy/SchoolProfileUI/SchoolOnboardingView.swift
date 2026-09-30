@@ -590,7 +590,7 @@ enum SchoolOnboardingPrompt {
     static func isPending(api: any SchoolProfileAPI, scope: SchoolCommandScope, kind: SchoolOnboardingKind) async -> Bool {
         guard let value = try? await api.onboarding(schoolID: scope.schoolID, kind: kind),
               value.schoolId == scope.schoolID, value.personId == scope.personID,
-              value.membershipId == scope.membershipID else { return false }
+              value.membershipId == scope.membershipID, value.kind == kind else { return false }
         return value.status != "COMPLETED"
     }
 }

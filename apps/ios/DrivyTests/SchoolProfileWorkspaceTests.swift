@@ -163,6 +163,24 @@ struct SchoolProfileWorkspaceTests {
         var draft = SchoolProfileDraft(ProfileFixture.profile()); draft.birthDate = "01.01.2999"
         #expect(!draft.isValid(allowed: [.birthDate], timeZone: "Europe/Zurich"))
     }
+    @Test func staffWelcomeResumeRequiresAnUnfinishedResponseForTheCurrentAccount() async {
+        let api = ProfileAPIStub(), scope = ConfigurationFixture.scope()
+        api.onboardingValue = ProfileFixture.onboarding(kind: .staff)
+        let pending = await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: .staff)
+        #expect(pending && api.commands.isEmpty)
+        api.onboardingValue = ProfileFixture.onboarding(status: "COMPLETED", kind: .staff)
+        let completed = await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: .staff)
+        #expect(!completed)
+        api.onboardingValue = ProfileFixture.onboarding(kind: .student)
+        let wrongKind = await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: .staff)
+        #expect(!wrongKind)
+        api.onboardingValue = ProfileFixture.onboarding(kind: .staff, membershipID: UUID())
+        let otherMembership = await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: .staff)
+        #expect(!otherMembership)
+        api.onboardingFailure = .unavailable
+        let unavailable = await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: .staff)
+        #expect(!unavailable && api.commands.isEmpty)
+    }
 }
 
 @MainActor
@@ -171,6 +189,7 @@ final class ProfileAPIStub: SchoolProfileAPI {
     var policyValues = [ProfileFixture.policy()]
     var noticeValue = ProfileFixture.notice()
     var onboardingValue = ProfileFixture.onboarding()
+    var onboardingFailure: SchoolProfileFailure?
     var firstPage: SchoolPage<SchoolProfilePolicy>?
     var readFailure: SchoolProfileFailure?
     var sendFailure: SchoolProfileFailure?
@@ -194,7 +213,10 @@ final class ProfileAPIStub: SchoolProfileAPI {
     func readiness(schoolID: UUID, learnerID: UUID, action: String) async throws -> SchoolLearnerReadiness {
         .init(learnerId: learnerID, action: action, resourceId: nil, ready: true, blockers: [], policyVersionId: ProfileFixture.policyID, computedAt: ConfigurationFixture.timestamp)
     }
-    func onboarding(schoolID: UUID, kind: SchoolOnboardingKind) async throws -> SchoolOnboarding { onboardingValue }
+    func onboarding(schoolID: UUID, kind: SchoolOnboardingKind) async throws -> SchoolOnboarding {
+        if let onboardingFailure { throw onboardingFailure }
+        return onboardingValue
+    }
     func operation(schoolID: UUID, id: UUID) async throws -> SchoolOperationReceipt {
         guard let receipt else { throw SchoolProfileFailure.operationUnknown }; return receipt
     }
@@ -251,9 +273,10 @@ enum ProfileFixture {
     static func notice() -> SchoolDataPolicy {
         var value = ConfigurationFixture.policy(approved: true); value.noticeVersionId = noticeID; return value
     }
-    static func onboarding(version: Int = 1, status: String = "IN_PROGRESS", step: SchoolOnboardingStep = .identity) -> SchoolOnboarding {
+    static func onboarding(version: Int = 1, status: String = "IN_PROGRESS", step: SchoolOnboardingStep = .identity,
+        kind: SchoolOnboardingKind = .student, membershipID: UUID = ConfigurationFixture.membershipID) -> SchoolOnboarding {
         .init(id: onboardingID, schoolId: ConfigurationFixture.schoolID, version: version, personId: ConfigurationFixture.personID,
-            membershipId: ConfigurationFixture.membershipID, kind: .student, status: status, currentStep: step,
+            membershipId: membershipID, kind: kind, status: status, currentStep: step,
             skippedOptionalSteps: [], policyVersionId: policyID, lastSavedAt: ConfigurationFixture.timestamp,
             pendingActions: step == .review ? [] : [.init(code: "ONBOARDING_REVIEW_REQUIRED", message: "Relis ton arrivée.", field: nil, purpose: nil, resourceId: nil, destinationKey: "PROFILE")],
             returnDestinationKey: nil, returnResourceId: nil)

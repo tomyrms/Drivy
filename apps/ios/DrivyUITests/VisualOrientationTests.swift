@@ -66,6 +66,14 @@ import XCTest
                         }
                         XCTAssertTrue(observation.exists && observation.isHittable, app.debugDescription)
                     }
+                    if screen == "lesson-permit" {
+                        let reason = app.descendants(matching: .any)["lesson-permit-reason"]
+                        XCTAssertTrue(reason.waitForExistence(timeout: 10), app.debugDescription)
+                        let finish = app.buttons["lesson-complete-permit"]
+                        XCTAssertTrue(finish.waitForExistence(timeout: 5), app.debugDescription)
+                        XCTAssertFalse(finish.isEnabled)
+                        XCTAssertTrue(app.navigationBars["Permis d’élève"].exists)
+                    }
                     XCTAssertEqual(XCUIDevice.shared.orientation.isLandscape, landscape)
                     let screenshot = XCUIScreen.main.screenshot()
                     XCTAssertTrue(matchesOrientation(screenshot.image.size, landscape: landscape),

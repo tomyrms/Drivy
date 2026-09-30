@@ -12,11 +12,11 @@ read -r -a appearances <<< "${DRIVY_VISUAL_APPEARANCES:-light dark}"
 read -r -a orientations <<< "${DRIVY_VISUAL_ORIENTATIONS:-portrait}"
 use_xctest=0
 # Interactive variants require XCTest even when no orientation was specified.
-if [[ -n "${DRIVY_VISUAL_ORIENTATIONS:-}" || " ${screens[*]} " =~ [[:space:]](live-signal|signal-status|lesson-evidence)[[:space:]] ]]; then
+if [[ -n "${DRIVY_VISUAL_ORIENTATIONS:-}" || " ${screens[*]} " =~ [[:space:]](live-signal|signal-status|lesson-evidence|lesson-permit)[[:space:]] ]]; then
   use_xctest=1
 fi
 for screen in "${screens[@]}"; do
-  [[ "$screen" =~ ^(dossier|progression|home-tabs|school-choice|no-school|profile-tab|learner-home|learner-progress|start-now|planning-settings|agenda|learners|learner|lesson|lesson-planned|lesson-observations|lesson-evidence|invitation-code|trips|replay|design-system|gps-choice|signal|live-signal|signal-status|observations|capture-preparation|live|live-waiting|planning|invitations|invitation-create|invitation-detail|lesson-finish|lesson-modal|lesson-tariff|sign-in|sign-in-error|sign-in-loading|sign-in-unconfigured|account|app-lock|join-code|join-code-preview|join-code-error|join-code-pending|join-code-confirmed|join-link|join-link-preview|profile|profile-error|onboarding-welcome|onboarding-information|onboarding-formation|onboarding-gps|onboarding-review|onboarding-ready)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
+  [[ "$screen" =~ ^(dossier|progression|home-tabs|school-choice|no-school|profile-tab|learner-home|learner-progress|start-now|planning-settings|agenda|learners|learner|lesson|lesson-planned|lesson-observations|lesson-evidence|lesson-permit|invitation-code|trips|replay|design-system|gps-choice|signal|live-signal|signal-status|observations|capture-preparation|live|live-waiting|planning|invitations|invitation-create|invitation-detail|lesson-finish|lesson-modal|lesson-tariff|sign-in|sign-in-error|sign-in-loading|sign-in-unconfigured|account|app-lock|join-code|join-code-preview|join-code-error|join-code-pending|join-code-confirmed|join-link|join-link-preview|profile|profile-error|onboarding-welcome|onboarding-information|onboarding-formation|onboarding-gps|onboarding-review|onboarding-ready|onboarding-staff)$ ]] || { echo 'Écran de capture inconnu.' >&2; exit 1; }
 done
 for kind in "${devices[@]}"; do
   [[ "$kind" == iPhone || "$kind" == iPad ]] || { echo 'Appareil de capture inconnu.' >&2; exit 1; }

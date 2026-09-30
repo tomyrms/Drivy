@@ -7,7 +7,7 @@ struct SchoolAccountVisualReview: View {
     static let screenNames: Set<String> = ["sign-in", "sign-in-error", "sign-in-loading", "sign-in-unconfigured", "account", "app-lock",
         "join-code", "join-code-preview", "join-code-error", "join-code-pending", "join-code-confirmed",
         "join-link", "join-link-preview", "profile", "profile-error", "onboarding-welcome", "onboarding-information",
-        "onboarding-formation", "onboarding-gps", "onboarding-review", "onboarding-ready"]
+        "onboarding-formation", "onboarding-gps", "onboarding-review", "onboarding-ready", "onboarding-staff"]
     let screen: String
     @State private var context: SchoolVisualContext?
     @State private var codeModel: SchoolCodeJoinWorkspace?
@@ -79,8 +79,10 @@ struct SchoolAccountVisualReview: View {
         let scope = SchoolCommandScope(personID: SchoolVisualData.personID, schoolID: school.id,
             membershipID: SchoolVisualData.membershipID, accessEpoch: 1, apiBaseURL: "https://visual.drivy.invalid")
         let api = SchoolAccountVisualProfileAPI(school: school, scope: scope, screen: screen)
-        let model = SchoolProfileWorkspace(scope: scope, roles: ["LEARNER"], learnerID: SchoolVisualData.learnerID,
-            isOwnProfile: true, onboardingKind: .student, api: api, outbox: SchoolVisualOutbox())
+        let isStaff = screen == "onboarding-staff"
+        let model = SchoolProfileWorkspace(scope: scope, roles: isStaff ? ["INSTRUCTOR"] : ["LEARNER"],
+            learnerID: isStaff ? nil : SchoolVisualData.learnerID,
+            isOwnProfile: true, onboardingKind: isStaff ? .staff : .student, api: api, outbox: SchoolVisualOutbox())
         await model.load()
         profileModel = model
     }

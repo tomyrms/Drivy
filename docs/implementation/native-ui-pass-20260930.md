@@ -19,6 +19,7 @@ Le routeur `ui-skills-root` et son catalogue orientent le choix. `swiftui-ui-pat
 - **Séance et bilan** : rédaction prioritaire sur téléphone, aperçu du trajet plus compact, signalement accessible sans déplacer la liste d’observations.
 - **GPS et replay** : choix sans GPS explicite dans la préparation, repères temporels utilisables et signalements adaptés au texte agrandi.
 - **Composants communs** : états vides de section moins hauts ; l’illustration de connexion s’efface lorsque la hauteur ou la taille de texte donne priorité au contenu.
+- **Reprise et stabilité** : retour manuel à l’accueil du moniteur après « Plus tard », après lecture de son état serveur ; identifiants distincts pour les mois communs aux leçons futures et passées ; saisie du motif de permis protégée à la fermeture.
 
 Les erreurs, états privés, confirmations et écritures durables ne sont pas retirés pour gagner de la place. Les constats précis et leurs limites sont consignés dans les revues spécialisées liées ci-dessous.
 
@@ -29,6 +30,12 @@ Compilation Apple, tests iPhone/iPad et revue des nouvelles captures en attente.
 La campagne prévue couvre les écrans de connexion/compte, rejoindre une école, onboarding, agenda, démarrage et planification, dossiers/progression, invitations, trajets, séance/observations et replay. Elle ajoute les écrans côté élève, les préférences personnelles et trois observations renseignées, absents des précédents rendus ciblés.
 
 GPS réel, batterie, haptique, VoiceOver physique et installation/signature iLoader restent distincts des essais simulateur.
+
+## Capacités encore distinctes de cette passe
+
+La photo de profil dépend du circuit documentaire : le serveur refuse actuellement une pièce non disponible (`DOCUMENT_NOT_READY`). Aucun bouton d’envoi sans écriture fonctionnelle n’a été ajouté. L’édition des disponibilités reste sur le web ; le renouvellement automatique de l’accueil à minuit reste à traiter. Le recalage GPS sur la route et sa qualification en circulation relèvent toujours de la campagne terrain décrite dans la liste de retours.
+
+Les captures sont des contrôles de composition et de navigation sur données fictives. Elles ne prouvent ni une authentification réelle, ni une écriture durable, ni la qualité GPS. Les tests de modèle vérifient séparément la reprise, les limites de saisie et les périmètres d’accès.
 
 ## Revues spécialisées
 

@@ -8,6 +8,7 @@ struct SchoolAccountActions {
     let openInvitations: (() -> Void)?
     let openJoinSchool: (() -> Void)?
     let signOut: () -> Void
+    var resumeOnboarding: (() -> Void)? = nil
 
     /// Les lignes du compte, dans l’ordre de la feuille. `afterChangingSchool` ferme la feuille qui les porte, s’il y en a une.
     @MainActor @ViewBuilder
@@ -15,6 +16,10 @@ struct SchoolAccountActions {
         if let openProfile {
             DrivyNavigationRow(title: "Mon profil", symbol: "person.text.rectangle", action: openProfile)
                 .accessibilityIdentifier("open-my-profile")
+        }
+        if let resumeOnboarding {
+            DrivyNavigationRow(title: "Reprendre l’accueil", symbol: "figure.wave", action: resumeOnboarding)
+                .accessibilityIdentifier("resume-school-onboarding")
         }
         if let openInvitations {
             DrivyNavigationRow(title: "Invitations", symbol: "envelope", action: openInvitations)

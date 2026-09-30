@@ -21,7 +21,7 @@ struct SchoolVisualReview: View {
                 switch screen {
                 case "gps-choice", "signal", "observations", "capture-preparation", "live", "live-waiting":
                     SchoolFieldVisualReview(screen: screen, context: context)
-                case "planning", "start-now", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal":
+                case "planning", "start-now", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit":
                     SchoolOfficeVisualReview(screen: screen, context: context)
                 case "lesson", "lesson-planned", "lesson-observations":
                     NavigationStack {
@@ -100,13 +100,14 @@ struct SchoolVisualReview: View {
     }
 }
 
-/// The real school shell (SchoolHomeView and its tab bar). Actions are inert:
-/// the capture only renders the first frame of each tab. « trips » shows the Profil tab: account, then trips.
+/// The real school shell, with isolated navigation into the welcome fixture.
+/// School writes and account actions remain inert.
 struct SchoolVisualShell: View {
     let context: SchoolVisualContext
     /// Selected after the list appears, as a tap would, so a compact split view pushes the dossier.
     let learnerID: UUID?
     @State private var selectedTab: SchoolHomeTab
+    @State private var showsWelcome = false
 
     init(context: SchoolVisualContext, tab: SchoolHomeTab, learnerID: UUID? = nil) {
         self.context = context
@@ -116,11 +117,15 @@ struct SchoolVisualShell: View {
 
     var body: some View {
         SchoolHomeView(workspace: context.workspace, openAccount: {},
-            account: SchoolAccountActions(manageURL: nil, openProfile: nil, openInvitations: {}, openJoinSchool: {}, signOut: {}),
+            account: SchoolAccountActions(manageURL: nil, openProfile: nil, openInvitations: {}, openJoinSchool: {}, signOut: {},
+                resumeOnboarding: { showsWelcome = true }),
             inviteLearner: {},
             openProfile: { _ in }, agendaClient: context.agenda,
             trainingClient: context.client, captureController: nil,
             selectedTab: $selectedTab)
+        .sheet(isPresented: $showsWelcome) {
+            SchoolAccountVisualReview(screen: "onboarding-staff")
+        }
         .task {
             guard let learnerID else { return }
             try? await Task.sleep(for: .milliseconds(500))

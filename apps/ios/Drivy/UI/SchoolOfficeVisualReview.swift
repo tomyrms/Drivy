@@ -38,7 +38,8 @@ struct SchoolOfficeVisualReview: View {
                     .sheet(item: $report, onDismiss: { reportClosed = true }) { route in
                         NavigationStack {
                             SchoolLessonReportView(client: models.agenda.reportClient, schoolWorkspace: context.workspace,
-                                lessonID: route.id, learnerName: context.learner.displayName, outbox: models.outbox)
+                                lessonID: route.id, learnerName: context.learner.displayName,
+                                opensCompletion: screen == "lesson-permit", outbox: models.outbox)
                         }
                     }
                 }
@@ -48,10 +49,10 @@ struct SchoolOfficeVisualReview: View {
         .task {
             guard models == nil else { return }
             do {
-                let loaded = try SchoolOfficeVisualModels(context: context)
+                let loaded = try SchoolOfficeVisualModels(context: context, permitWarning: screen == "lesson-permit")
                 await loaded.prepare(screen: screen)
                 models = loaded
-                if screen == "lesson-finish" { report = OfficeReportRoute(id: SchoolVisualData.plannedLessonID) }
+                if screen == "lesson-finish" || screen == "lesson-permit" { report = OfficeReportRoute(id: SchoolVisualData.plannedLessonID) }
                 if screen == "lesson-modal" { report = OfficeReportRoute(id: SchoolVisualData.lessonID) }
             } catch { self.error = error.localizedDescription }
         }
@@ -66,12 +67,13 @@ struct SchoolOfficeVisualReview: View {
     let tariff: SchoolLessonReportWorkspace
     let outbox: SchoolOfficeVisualOutbox
 
-    init(context: SchoolVisualContext) throws {
+    init(context: SchoolVisualContext, permitWarning: Bool = false) throws {
         guard let person = context.workspace.person, let membership = context.workspace.membership else { throw SchoolAPIError.invalidResponse }
         let scope = context.agenda.scope(person: person, membership: membership)
         let baseURL = URL(string: "https://visual.drivy.invalid")!, token = SchoolVisualToken()
-        let transport = SchoolOfficeVisualTransport(responses: try SchoolOfficeVisualData.responses())
-        let outbox = SchoolOfficeVisualOutbox()
+        let transport = SchoolOfficeVisualTransport(responses: try SchoolOfficeVisualData.responses(permitWarning: permitWarning),
+            allowsWrites: !permitWarning)
+        let outbox = SchoolOfficeVisualOutbox(allowsWrites: !permitWarning)
         self.outbox = outbox
         let agenda = SchoolAgendaClient(baseURL: baseURL, tokenSource: token, transport: transport)
         self.agenda = agenda
@@ -106,7 +108,7 @@ struct SchoolOfficeVisualReview: View {
 @MainActor private enum SchoolOfficeVisualData {
     static let productID = UUID(uuidString: "20000000-0000-4000-8000-000000000001")!
     static let termsID = UUID(uuidString: "20000000-0000-4000-8000-000000000002")!
-    static func responses() throws -> [String: Data] {
+    static func responses(permitWarning: Bool = false) throws -> [String: Data] {
         var responses = try SchoolVisualData.responses()
         let school = SchoolVisualData.schoolID.uuidString, member = SchoolVisualData.membershipID.uuidString
         let root = "/v1/schools/\(school)"
@@ -136,6 +138,13 @@ struct SchoolOfficeVisualReview: View {
         responses["\(root)/invitations"] = try envelope(page(invitations))
         // Le bilan de la leçon d’essai est réellement vide pour le test de sauvegarde.
         let planned = "\(root)/lessons/\(SchoolVisualData.plannedLessonID.uuidString)"
+        if permitWarning {
+            guard let bytes = responses[planned],
+                  let value = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+                  var lesson = value["data"] as? [String: Any] else { throw SchoolAPIError.invalidResponse }
+            lesson["permitWarning"] = true
+            responses[planned] = try envelope(lesson)
+        }
         if let bytes = responses["\(root)/lessons/\(SchoolVisualData.lessonID.uuidString)/report-drafts"],
            let value = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
            let data = value["data"] as? [String: Any], var draft = (data["items"] as? [[String: Any]])?.first {
@@ -151,9 +160,14 @@ struct SchoolOfficeVisualReview: View {
 
 private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
     private var responses: [String: Data]
-    init(responses: [String: Data]) { self.responses = responses }
+    private let allowsWrites: Bool
+    init(responses: [String: Data], allowsWrites: Bool = true) {
+        self.responses = responses
+        self.allowsWrites = allowsWrites
+    }
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         guard let url = request.url, url.host == "visual.drivy.invalid" else { throw SchoolAPIError.invalidResponse }
+        guard allowsWrites || (request.httpMethod ?? "GET") == "GET" else { throw SchoolAPIError.invalidResponse }
         func envelope(_ value: Any) throws -> Data {
             try JSONSerialization.data(withJSONObject: ["data": value, "requestId": UUID().uuidString, "serverTime": "2026-09-29T10:00:00Z"])
         }
@@ -192,8 +206,13 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
 
 @MainActor private final class SchoolOfficeVisualOutbox: SchoolCommandOutbox {
     private var value: PendingSchoolCommand?
+    private let allowsWrites: Bool
+    init(allowsWrites: Bool = true) { self.allowsWrites = allowsWrites }
     func pending(for scope: SchoolCommandScope) throws -> PendingSchoolCommand? { value?.scope == scope ? value : nil }
-    func save(_ command: PendingSchoolCommand) throws { value = command }
+    func save(_ command: PendingSchoolCommand) throws {
+        guard allowsWrites else { throw SchoolConfigurationFailure.storage }
+        value = command
+    }
     func remove(_ command: PendingSchoolCommand) throws { if value?.id == command.id { value = nil } }
 }
 #endif

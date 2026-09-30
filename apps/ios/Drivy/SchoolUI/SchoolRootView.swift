@@ -9,7 +9,7 @@ private struct SchoolWorkspaceSheet<Model: AnyObject>: Identifiable {
 }
 
 /// Ce que le compte ouvre une fois sa feuille fermée : une seule feuille à la fois.
-private enum AccountFollowUp { case join, invitations, profile }
+private enum AccountFollowUp { case join, invitations, profile, onboarding }
 
 struct SchoolRootView: View {
     let configuration: AppConfiguration?
@@ -44,6 +44,8 @@ struct SchoolRootView: View {
     /// Memberships already offered the welcome during this launch: « Plus tard » never loops.
     /// Across launches, SchoolOnboardingDeferral keeps the offer away for seven days.
     @State private var offeredOnboarding: Set<UUID> = []
+    /// Confirmé par la lecture serveur, même si l’offre automatique a été reportée.
+    @State private var staffOnboardingToResume: UUID?
 
     private var presentsSheet: Bool {
         joinRoute != nil || codeJoinRoute != nil || invitationsRoute != nil || inviteRoute != nil || profileRoute != nil
@@ -146,7 +148,7 @@ struct SchoolRootView: View {
                 openProfile: followUp(.profile, when: ownProfileLearner != nil),
                 openInvitations: followUp(.invitations, when: canManageInvitations),
                 openJoinSchool: followUp(.join, when: configuration != nil && identity.isAuthenticated),
-                signOut: signOut)
+                signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeStaffOnboarding))
         }
     }
 
@@ -236,6 +238,7 @@ struct SchoolRootView: View {
             if pendingJoinLink != nil { openJoin() } else { openCodeJoin() }
         case .invitations: openInvitations(creation: false)
         case .profile: if let learner = ownProfileLearner { openProfile(learner) }
+        case .onboarding: if canResumeStaffOnboarding && !presentsSheet { openOnboarding() }
         }
     }
 
@@ -245,7 +248,14 @@ struct SchoolRootView: View {
             openProfile: followUp(.profile, when: ownProfileLearner != nil),
             openInvitations: followUp(.invitations, when: canManageInvitations),
             openJoinSchool: followUp(.join, when: configuration != nil && identity.isAuthenticated),
-            signOut: signOut)
+            signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeStaffOnboarding))
+    }
+
+    private var canResumeStaffOnboarding: Bool {
+        guard configuration != nil, identity.isAuthenticated, workspace?.school?.status == "ACTIVE",
+              let membership = workspace?.membership else { return false }
+        return membership.roles.contains("INSTRUCTOR") && !membership.roles.contains("LEARNER")
+            && staffOnboardingToResume == membership.membershipId
     }
 
     /// La gestion de l’école est réservée à l’administration, sur le portail web.
@@ -366,28 +376,38 @@ struct SchoolRootView: View {
     // MARK: Profil et accueil
 
     private var onboardingOfferKey: String {
-        "\(workspace?.membership?.membershipId.uuidString ?? ""):\(workspace?.learners.isEmpty == false)"
+        "\(workspace?.membership?.membershipId.uuidString ?? ""):\(workspace?.membership?.accessEpoch ?? 0):\(workspace?.membership?.roles.joined(separator: ",") ?? ""):\(workspace?.school?.status ?? ""):\(workspace?.learners.isEmpty == false)"
     }
 
     /// First access: open the guided welcome once when the school says it is not finished.
     /// Staff with the ADMIN role only are not forced into it.
     private func offerOnboardingIfNeeded() async {
+        staffOnboardingToResume = nil
         guard identity.isAuthenticated, let configuration, let person = workspace?.person,
-              let membership = workspace?.membership, !offeredOnboarding.contains(membership.membershipId),
-              !SchoolOnboardingDeferral.isDeferred(membership.membershipId),
-              membership.roles.contains("LEARNER") || membership.roles.contains("INSTRUCTOR"),
-              !presentsSheet else { return }
+              let membership = workspace?.membership,
+              membership.roles.contains("LEARNER") || membership.roles.contains("INSTRUCTOR") else { return }
         let isLearner = membership.roles.contains("LEARNER")
         if isLearner && workspace?.learners.isEmpty != false { return }
-        offeredOnboarding.insert(membership.membershipId)
         let kind: SchoolOnboardingKind = isLearner ? .student : .staff
         let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
             membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
         let api = SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
         guard await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: kind),
-              // Une feuille ouverte ailleurs (leçon, démarrage) ferait perdre celle-ci sans un mot : on attend qu’elle se ferme.
-              await SchoolPresentationIdle.wait(isPresenting: { uikitIsPresenting }),
-              workspace?.membership?.membershipId == membership.membershipId, !presentsSheet else {
+              !Task.isCancelled, identity.isAuthenticated,
+              workspace?.person?.personId == person.personId,
+              workspace?.membership?.membershipId == membership.membershipId,
+              workspace?.membership?.accessEpoch == membership.accessEpoch else { return }
+        if !isLearner { staffOnboardingToResume = membership.membershipId }
+        guard !offeredOnboarding.contains(membership.membershipId),
+              !SchoolOnboardingDeferral.isDeferred(membership.membershipId), !presentsSheet else { return }
+        offeredOnboarding.insert(membership.membershipId)
+        // Une feuille ouverte ailleurs (leçon, démarrage) ferait perdre celle-ci sans un mot : on attend qu’elle se ferme.
+        guard await SchoolPresentationIdle.wait(isPresenting: { uikitIsPresenting }),
+              !Task.isCancelled, identity.isAuthenticated,
+              workspace?.person?.personId == person.personId,
+              workspace?.membership?.membershipId == membership.membershipId,
+              workspace?.membership?.accessEpoch == membership.accessEpoch,
+              workspace?.membership?.roles == membership.roles, !presentsSheet else {
             offeredOnboarding.remove(membership.membershipId)
             return
         }
@@ -435,6 +455,9 @@ struct SchoolRootView: View {
     }
     private func closeProfile() { profileWorkspace?.invalidate(); profileRoute = nil }
     private func profileDismissed() {
+        if onboardingWorkspaceID != nil, profileWorkspace?.onboarding?.status == "COMPLETED" {
+            staffOnboardingToResume = nil
+        }
         // Le dossier ne se relit que si le profil a changé : la relecture vide un instant la liste des formations
         // et fait disparaître l’écran de formation ouvert derrière.
         let changed = profileWorkspace?.successMessage != nil || onboardingWorkspaceID != nil
@@ -510,6 +533,7 @@ struct SchoolRootView: View {
     }
 
     private func closeAll() {
+        staffOnboardingToResume = nil
         closeJoin(); closeCodeJoin(); closeInvitations(); closeProfile()
     }
 
@@ -595,12 +619,13 @@ struct SchoolAccountView: View {
     let openInvitations: (() -> Void)?
     let openJoinSchool: (() -> Void)?
     let signOut: () -> Void
+    var resumeOnboarding: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
     private var actions: SchoolAccountActions {
         SchoolAccountActions(manageURL: manageURL, openProfile: openProfile, openInvitations: openInvitations,
-            openJoinSchool: openJoinSchool, signOut: signOut)
+            openJoinSchool: openJoinSchool, signOut: signOut, resumeOnboarding: resumeOnboarding)
     }
 
     var body: some View {

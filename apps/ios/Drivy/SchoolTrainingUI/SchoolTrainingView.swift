@@ -382,11 +382,11 @@ private struct SchoolTrainingContent: View {
             let toFinish = values.filter { $0.drivyState == .toFinish }
             let upcoming = values.filter { $0.status == "PLANNED" && $0.drivyState != .toFinish }
             let past = values.filter { $0.status != "PLANNED" }
-            var result = monthGroups(upcoming, newestFirst: false)
+            var result = monthGroups(upcoming, newestFirst: false, prefix: "upcoming")
             if !toFinish.isEmpty {
                 result.append(TrainingLessonMonth(id: "to-finish", title: "À terminer", lessons: sortedByDate(toFinish, newestFirst: false)))
             }
-            return result + monthGroups(past, newestFirst: true)
+            return result + monthGroups(past, newestFirst: true, prefix: "past")
         }
     }
     private func sortedByDate(_ values: [SchoolLesson], newestFirst: Bool) -> [SchoolLesson] {
@@ -396,10 +396,10 @@ private struct SchoolTrainingContent: View {
             return newestFirst ? a > b : a < b
         }
     }
-    private func monthGroups(_ values: [SchoolLesson], newestFirst: Bool) -> [TrainingLessonMonth] {
+    private func monthGroups(_ values: [SchoolLesson], newestFirst: Bool, prefix: String = "all") -> [TrainingLessonMonth] {
         var result: [TrainingLessonMonth] = []
         for lesson in sortedByDate(values, newestFirst: newestFirst) {
-            let key = SchoolTrainingFormatting.monthKey(lesson.plannedStart, zone: lesson.timeZone)
+            let key = "\(prefix)-\(SchoolTrainingFormatting.monthKey(lesson.plannedStart, zone: lesson.timeZone))"
             if let last = result.last, last.id == key {
                 result[result.count - 1] = TrainingLessonMonth(id: key, title: last.title, lessons: last.lessons + [lesson])
             } else {
