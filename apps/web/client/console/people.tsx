@@ -8,7 +8,7 @@ import {
 } from '../invitation-model';
 import { memberSchema, offeringSchema, readAll } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime, type Tone } from '../ui';
-import { useCommandRunner, useConsole, useLoad } from './context';
+import { useCommandRunner, useConsole, useLoad, useRouteSelection } from './context';
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
 
 const roles: readonly { value: Role; explanation: string }[] = [
@@ -40,7 +40,7 @@ export function TeamSection() {
   const loaded = useLoad(() => readAll(schoolId, 'members', memberSchema), [schoolId, revision]);
   const [filter, setFilter] = useState('');
   const [showLearners, setShowLearners] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useRouteSelection();
   const [draftRoles, setDraftRoles] = useState<Role[]>([]);
   const [draftGrants, setDraftGrants] = useState<string[]>([]);
   const [reason, setReason] = useState('');
@@ -79,12 +79,11 @@ export function TeamSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Personnes" title="Équipe et accès"
-        actions={<button type="button" className="button secondary" onClick={() => navigate('invitations')}><Symbol kind="mail" bare />Inviter une personne</button>} />
+      <SectionHeading title="Équipe et accès" />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.outcome?.code === 'REAUTH_REQUIRED' && <p className="caption">Après la reconnexion, rouvrez ce membre et saisissez à nouveau le changement : la saisie n’est pas conservée.</p>}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture de l’équipe…">{data => <SplitView
+      <LoadState loaded={loaded} label="Lecture de l’équipe…">{data => <SplitView mobileDetail={!!selected} onBack={() => setSelected(null)} backLabel="Tous les membres"
         list={<>
           <div className="list-toolbar">
             <TextField label="Rechercher un membre" value={filter} onChange={setFilter} placeholder="Nom" />
@@ -110,6 +109,10 @@ export function TeamSection() {
               {current.status === 'ACTIVE' && !self && <button type="button" className="button quiet danger" disabled={!canWrite}
                 onClick={() => { runner.clearOutcome(); setAcknowledged(false); setDialog('deactivate'); }}>Retirer l’accès…</button>}
             </>}>
+            {current.roles.includes('INSTRUCTOR') && <div className="button-row">
+              <button type="button" className="button secondary" onClick={() => navigate('agenda', { instructor: current.id })}>Voir son planning</button>
+              <button type="button" className="button secondary" onClick={() => navigate('disponibilites', { instructor: current.id, from: 'equipe' })}>Disponibilités et absences</button>
+            </div>}
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
               <fieldset className="fieldset">
                 <legend>Rôles dans cette école</legend>
@@ -189,7 +192,8 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 }
 
 export function InvitationsSection() {
-  const { schoolId, school, membership, navigate } = useConsole();
+  const { schoolId, school, membership, navigate, routeQuery } = useConsole();
+  const team = routeQuery?.audience === 'team';
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setCreating(null); setEmail(''); setInvitedRoles(['LEARNER']); setRevokeReason(''); });
   const loaded = useLoad(async () => {
@@ -197,8 +201,9 @@ export function InvitationsSection() {
       readAll(schoolId, 'invitations', invitationSchema), readAll(schoolId, 'offerings', offeringSchema), readAll(schoolId, 'members', memberSchema)]);
     return { invitations: invitations.items, offerings: offerings.items, members: members.items };
   }, [schoolId, revision]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useRouteSelection();
   const [creating, setCreating] = useState<CreateMode | null>(null);
+  useEffect(() => { if (selected) setCreating(null); }, [selected]);
   const [email, setEmail] = useState('');
   const [invitedRoles, setInvitedRoles] = useState<Role[]>(['LEARNER']);
   const [offeringIds, setOfferingIds] = useState<string[]>([]);
@@ -211,7 +216,7 @@ export function InvitationsSection() {
   /** The school confirmed a code but its response carried none that could be verified. */
   const [codeMissing, setCodeMissing] = useState(false);
   const data = loaded.data;
-  const items = useMemo(() => [...(data?.invitations ?? [])].reverse(), [data]);
+  const items = useMemo(() => [...(data?.invitations ?? [])].filter(item => team ? isStaff(item) : !isStaff(item)).reverse(), [data, team]);
   const offerings = useMemo(() => openOfferings(data?.offerings ?? []), [data]);
   const instructors = useMemo(() => activeInstructors(data?.members ?? []), [data]);
   const current = items.find(item => item.id === selected) ?? null;
@@ -279,8 +284,8 @@ export function InvitationsSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Personnes" title="Invitations"
-        actions={active ? <>
+      <SectionHeading context={team ? 'Équipe' : 'Élèves'} title={team ? 'Invitations de l’équipe' : 'Invitations élèves'}
+        actions={active && !team ? <>
           <button type="button" className={creating === 'code' ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={openCode}><Symbol kind="plus" bare />Code élève</button>
           {emailInvitations && <button type="button" className="button quiet" disabled={!canWrite} onClick={openEmail}><Symbol kind="mail" bare />Inviter par e-mail</button>}
         </> : undefined} />
@@ -290,8 +295,8 @@ export function InvitationsSection() {
       <OutcomeNotice outcome={issuedCode && runner.outcome?.tone === 'success' ? null : runner.outcome} onDismiss={runner.clearOutcome} />
       {codeMissing && <Notice tone="warning" title="Code non affiché"><p>La réponse de l’école ne permet pas d’afficher le code. « Nouveau code » en crée un autre.</p></Notice>}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des invitations…">{() => <SplitView
-        list={items.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation" message="Créez un code pour inviter un élève." />
+      <LoadState loaded={loaded} label="Lecture des invitations…">{() => <SplitView mobileDetail={!!selected || !!creating} onBack={() => { setSelected(null); setCreating(null); }} backLabel="Toutes les invitations"
+        list={items.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation" message={team ? 'Aucune invitation du personnel à afficher.' : 'Créez un code pour inviter un élève.'} />
           : <table className="data-table">
             <caption className="visually-hidden">Invitations de l’école, les plus récentes d’abord</caption>
             <thead><tr><th scope="col">Invitation</th><th scope="col">Rôles</th><th scope="col">Statut</th><th scope="col">Expire le</th></tr></thead>
@@ -354,7 +359,7 @@ export function InvitationsSection() {
               </div>
             </div>}
             {issuedCode?.invitationId !== current.id && <Facts items={[["Expiration", formatDateTime(current.expiresAt, school.timeZone)]]} />}
-            {!actionable && <p className="caption">{current.status === 'ACCEPTED' ? 'La personne a rejoint l’école : gérez ses accès dans Équipe et accès.' : 'Cette invitation ne peut plus être utilisée. Créez-en une nouvelle si nécessaire.'}</p>}
+            {!actionable && (current.status === 'ACCEPTED' ? <button type="button" className="button secondary" onClick={() => navigate(team ? 'equipe' : 'eleves')}>{team ? 'Ouvrir l’équipe' : 'Ouvrir les dossiers élèves'}</button> : <p className="caption">Cette invitation ne peut plus être utilisée.</p>)}
           </DetailPanel>
           : <Placeholder>Choisissez une invitation pour la renvoyer ou la révoquer.</Placeholder>} />}
       </LoadState>

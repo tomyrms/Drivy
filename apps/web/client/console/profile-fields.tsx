@@ -6,7 +6,7 @@ import {
 import { useCommandSnapshot } from '../command-store';
 import { dataPolicySchema, profilePolicySchema, readAll, readSchool, type ProfilePolicy } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Loading, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime } from '../ui';
-import { readError, useCommandRunner, useConsole, useLoad } from './context';
+import { readError, useCommandRunner, useConsole, useLoad, useRouteSelection } from './context';
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
 
 const fieldLabels: Record<ProfileField, string> = {
@@ -47,7 +47,7 @@ export function ProfileFieldsSection() {
     const [policies, notice] = await Promise.all([readAll(schoolId, 'profile-field-policies', profilePolicySchema), readSchool(schoolId, 'data-policy', dataPolicySchema)]);
     return { policies: policies.items, notice };
   }, [schoolId, revision]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useRouteSelection();
   const [draft, setDraft] = useState<PolicyDraft | null>(null);
   const [showErrors, setShowErrors] = useState(false);
   const [dialog, setDialog] = useState<'create' | 'publish' | null>(null);
@@ -99,7 +99,7 @@ export function ProfileFieldsSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context={school.name} title="Champs du profil"
+      <SectionHeading context="Réglages" title="Informations demandées aux élèves"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite || !noticeAdopted} onClick={() => edit(applicable)}><Symbol kind="plus" bare />Préparer une nouvelle version</button>} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
@@ -108,7 +108,7 @@ export function ProfileFieldsSection() {
           ? <p className="caption with-symbol"><Symbol kind="check" bare />Notice de données adoptée · version {notice!.version}. Chaque nouvelle version y est liée.</p>
           : <Notice tone="info" title="Notice de données à adopter" live={false} actions={<button type="button" className="button secondary" onClick={() => navigate('configuration')}>Ouvrir la configuration</button>}>
               <p>Adoptez d’abord la notice de données dans Configuration.</p></Notice>}
-        <SplitView
+        <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
           list={items.length === 0 ? <EmptyState symbol="list" title="Aucune version enregistrée" message="Préparez une première version pour indiquer les informations demandées aux élèves." />
             : <table className="data-table">
               <caption className="visually-hidden">Versions des champs du profil</caption>

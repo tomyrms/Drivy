@@ -14,10 +14,14 @@ const lessonState: Partial<Record<Lesson['status'], { label: string; tone: Tone;
 
 /** Agenda de l'école en lecture seule : la planification des leçons se fait dans l'app. */
 export function AgendaSection() {
-  const { schoolId, school } = useConsole();
+  const { schoolId, school, navigate, routeQuery, setRouteQuery } = useConsole();
   const { revision } = useCommandSnapshot();
-  const [monday, setMonday] = useState(() => weekStart(civilDateIn(school.timeZone)));
-  const [instructor, setInstructor] = useState('');
+  const [localMonday, setLocalMonday] = useState(() => weekStart(civilDateIn(school.timeZone)));
+  const [localInstructor, setLocalInstructor] = useState('');
+  const monday = routeQuery ? weekStart(routeQuery.week ?? civilDateIn(school.timeZone)) : localMonday;
+  const instructor = routeQuery ? routeQuery.instructor ?? '' : localInstructor;
+  const setMonday = (week: string) => { setLocalMonday(week); setRouteQuery?.({ ...routeQuery, week }); };
+  const setInstructor = (id: string) => { setLocalInstructor(id); setRouteQuery?.({ ...routeQuery, instructor: id || undefined }); };
   const bounds = weekWindow(monday, school.timeZone);
   const loaded = useLoad(async () => {
     if (!bounds) throw new Error('Semaine invalide.');
@@ -55,7 +59,11 @@ export function AgendaSection() {
               const state = lessonState[lesson.status];
               return <li key={lesson.id} className={lesson.status === 'CANCELLED' ? 'muted-row' : undefined}>
                 <div className="row-text">
-                  <h3 className="row-title">{formatTimeRange(lesson.plannedStart, lesson.plannedEnd, school.timeZone)} · {learnerName(lesson.learnerId)}</h3>
+                  <h3 className="row-title"><button type="button" className="row-button" onClick={() => navigate('eleves', {
+                    selection: lesson.learnerId, from: 'agenda', week: monday, instructor: instructor || undefined,
+                  })} aria-label={`Dossier de ${learnerName(lesson.learnerId)}, leçon ${formatTimeRange(lesson.plannedStart, lesson.plannedEnd, school.timeZone)}`}>
+                    {formatTimeRange(lesson.plannedStart, lesson.plannedEnd, school.timeZone)} · {learnerName(lesson.learnerId)}
+                  </button></h3>
                   <p className="row-meta">{memberName(lesson.instructorMembershipId)}{lesson.meetingPoint ? ` · ${lesson.meetingPoint}` : ''}</p>
                 </div>
                 {state && <StatusBadge tone={state.tone} symbol={state.symbol}>{state.label}</StatusBadge>}

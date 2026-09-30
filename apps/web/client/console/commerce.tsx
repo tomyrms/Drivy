@@ -3,7 +3,7 @@ import { centsToInput, createCommand, filled, formatCents, isCivilDate, parseCen
 import { useCommandSnapshot } from '../command-store';
 import { productSchema, productTypes, readAll, termsSchema, type CommercialTerms, type ServiceProduct } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatCivilDate, formatDateTime, formatDuration } from '../ui';
-import { useCommandRunner, useConsole, useLoad } from './context';
+import { useCommandRunner, useConsole, useLoad, useRouteSelection, useSectionDraft } from './context';
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
 import { approvalBadge } from './catalog';
 
@@ -36,8 +36,8 @@ export function TermsSection() {
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setDraft(null); setSelected(null); });
   const loaded = useLoad(() => readAll(schoolId, 'commercial-terms', termsSchema), [schoolId, revision]);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [draft, setDraft] = useState<TermsDraft | null>(null);
+  const [selected, setSelected] = useRouteSelection();
+  const [draft, setDraft] = useSectionDraft<TermsDraft>('terms');
   const [showErrors, setShowErrors] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -71,12 +71,12 @@ export function TermsSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Catalogue" title="Conditions commerciales"
+      <SectionHeading context="Formations et tarifs" title="Conditions commerciales"
         actions={canConfigureCatalog ? <button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelles conditions</button> : undefined} />
       {!canConfigureCatalog && <GrantNotice />}
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des conditions commerciales…">{() => <SplitView
+      <LoadState loaded={loaded} label="Lecture des conditions commerciales…">{() => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
         list={items.length === 0 ? <EmptyState symbol="receipt" title="Aucune condition commerciale" message="Rédigez et approuvez des conditions avant d’activer une prestation." />
           : <table className="data-table">
             <caption className="visually-hidden">Conditions commerciales</caption>
@@ -138,21 +138,29 @@ type ProductDraft = {
 };
 
 export function ProductsSection() {
-  const { schoolId, canConfigureCatalog, navigate } = useConsole();
+  const { schoolId, canConfigureCatalog, navigate, routeQuery } = useConsole();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setDraft(null); setSelected(null); });
   const loaded = useLoad(async () => {
     const [products, terms] = await Promise.all([readAll(schoolId, 'service-products', productSchema), readAll(schoolId, 'commercial-terms', termsSchema)]);
     return { products: products.items, terms: terms.items };
   }, [schoolId, revision]);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [draft, setDraft] = useState<ProductDraft | null>(null);
+  const [selected, setSelected] = useRouteSelection();
+  const [draft, setDraft] = useSectionDraft<ProductDraft>('product');
   const [showErrors, setShowErrors] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const data = loaded.data;
-  const rows = useMemo(() => [...(data?.products ?? [])].sort((a, b) => a.label.localeCompare(b.label, 'fr') || b.version - a.version), [data]);
-  const current = rows.find(item => item.id === selected) ?? null;
+  const [history, setHistory] = useState(false);
+  const rows = useMemo(() => {
+    const items = data?.products ?? [];
+    const latest = new Map<string, ServiceProduct>();
+    for (const item of items) if (!latest.has(item.productKey) || latest.get(item.productKey)!.version < item.version) latest.set(item.productKey, item);
+    return items.filter(item => (!routeQuery?.category || item.categoryCode === routeQuery.category)
+      && (history || latest.get(item.productKey)?.id === item.id))
+      .sort((a, b) => a.label.localeCompare(b.label, 'fr') || b.version - a.version);
+  }, [data, history, routeQuery?.category]);
+  const current = data?.products.find(item => item.id === selected) ?? null;
   const terms = (id: string) => data?.terms.find(item => item.id === id);
   const canWrite = canConfigureCatalog && !runner.pending && !runner.busy;
   const update = (change: Partial<ProductDraft>) => setDraft(value => value ? { ...value, ...change } : value);
@@ -174,7 +182,7 @@ export function ProductsSection() {
   })() : null;
   function edit(from: ServiceProduct | null) {
     runner.clearOutcome(); setShowErrors(false);
-    setDraft({ productKey: from?.productKey ?? '', label: from?.label ?? '', type: from?.type ?? 'INDIVIDUAL_LESSON', categoryCode: from?.categoryCode ?? '',
+    setDraft({ productKey: from?.productKey ?? '', label: from?.label ?? '', type: from?.type ?? 'INDIVIDUAL_LESSON', categoryCode: from?.categoryCode ?? routeQuery?.category ?? '',
       duration: from?.durationMinutes ? String(from.durationMinutes) : '', unitLabel: from?.unitLabel ?? 'leçon', price: from ? centsToInput(from.unitPriceCents) : '',
       validFrom: from?.validFrom ?? today(), validUntil: from?.validUntil ?? '', termsVersionId: from?.termsVersionId ?? '', enabled: false, basedOn: from });
   }
@@ -192,15 +200,15 @@ export function ProductsSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Catalogue" title="Prestations et tarifs"
+      <SectionHeading context="Formations et tarifs" title="Tarifs"
         actions={canConfigureCatalog ? <button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelle prestation</button> : undefined} />
       {!canConfigureCatalog && <GrantNotice />}
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des prestations…">{value => <SplitView
-        list={rows.length === 0 ? <EmptyState symbol="tag" title="Aucune prestation" message={value.terms.some(item => item.approved)
+      <LoadState loaded={loaded} label="Lecture des prestations…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
+        list={<><CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} />{rows.length === 0 ? <EmptyState symbol="tag" title="Aucune prestation" message={value.terms.some(item => item.approved)
             ? 'Créez une prestation et rattachez-la aux conditions commerciales approuvées.' : 'Commencez par approuver des conditions commerciales.'}
-            action={value.terms.some(item => item.approved) ? undefined : <button type="button" className="button secondary" onClick={() => navigate('conditions')}>Ouvrir les conditions commerciales</button>} />
+            action={value.terms.some(item => item.approved) ? undefined : <button type="button" className="button secondary" onClick={() => navigate('conditions', { from: 'prestations', category: routeQuery?.category })}>Ouvrir les conditions commerciales</button>} />
           : <table className="data-table">
             <caption className="visually-hidden">Prestations et tarifs</caption>
             <thead><tr><th scope="col">Prestation</th><th scope="col">Type</th><th scope="col" className="numeric">Prix</th><th scope="col">Validité</th><th scope="col">État</th></tr></thead>
@@ -210,7 +218,7 @@ export function ProductsSection() {
               <td>{typeLabels[item.type]}</td><td className="numeric">{formatCents(item.unitPriceCents)} / {item.unitLabel}</td>
               <td>{period(item.validFrom, item.validUntil)}</td><td>{state(item)}</td>
             </tr>)}</tbody>
-          </table>}
+          </table>}</>}
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · ${draft.basedOn.label}` : 'Nouvelle prestation'}
             meta={draft.basedOn ? `À partir de la version ${draft.basedOn.version}, qui reste inchangée.` : undefined}
             actions={<>
@@ -248,6 +256,7 @@ export function ProductsSection() {
           </DetailPanel>
           : current ? <DetailPanel focusKey={current.id} title={current.label} meta={`${typeLabels[current.type]} · version ${current.version}`} badge={state(current)}
             actions={canConfigureCatalog ? <button type="button" className="button primary" disabled={!canWrite} onClick={() => edit(current)}><Symbol kind="edit" bare />Nouvelle version</button> : undefined}>
+            <div className="button-row"><button type="button" className="button secondary" onClick={() => navigate('conditions', { selection: current.termsVersionId, category: current.categoryCode ?? undefined, from: 'prestations' })}>Conditions de ce tarif</button></div>
             <Facts items={[
               ['Référence', <code key="key">{current.productKey}</code>],
               ['Prix unitaire', `${formatCents(current.unitPriceCents)} / ${current.unitLabel}`],

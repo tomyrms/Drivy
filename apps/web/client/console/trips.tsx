@@ -1,27 +1,40 @@
 import { useState } from 'react';
 import { matchesSearch } from '../command-core';
-import { readPage } from '../school-api';
+import { readAll, readPage } from '../school-api';
 import { tripDuration, tripSchema } from '../trip-model';
-import { EmptyState, TextField, formatDateTime } from '../ui';
+import { EmptyState, Notice, TextField, formatDateTime } from '../ui';
 import { useConsole, useLoad } from './context';
 import { LoadState, SectionHeading } from './layout';
 
 /** Administrative trip inventory; API/RLS controls the school scope of every page. */
 export function TripsSection() {
-  const { schoolId } = useConsole();
+  const { schoolId, routeQuery, navigate } = useConsole();
+  const learner = routeQuery?.learner;
   const [query, setQuery] = useState('');
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const cursor = cursors.at(-1);
-  const loaded = useLoad(() => readPage(schoolId, 'captures', tripSchema, cursor), [schoolId, cursor]);
+  const loaded = useLoad(async () => {
+    if (learner) {
+      const page = await readAll(schoolId, 'captures', tripSchema);
+      return { items: page.items.filter(trip => trip.learnerId === learner), nextCursor: null, truncated: page.truncated };
+    }
+    return { ...await readPage(schoolId, 'captures', tripSchema, cursor), truncated: false };
+  }, [schoolId, cursor, learner]);
+  const dossier = (id: string) => navigate('eleves', { selection: id, week: routeQuery?.week, instructor: routeQuery?.instructor,
+    ...(routeQuery?.week ? { from: 'agenda' } : {}) });
   return <div className="section-stack">
-    <SectionHeading title="Trajets" />
+    <SectionHeading title={learner ? 'Trajets de l’élève' : 'Trajets'} actions={learner ? <div className="button-row">
+      <button type="button" className="button secondary" onClick={() => dossier(learner)}>Retour au dossier</button>
+      <button type="button" className="button quiet" onClick={() => navigate('trajets')}>Tous les trajets</button>
+    </div> : undefined} />
     <LoadState loaded={loaded} label="Lecture des trajets…">{page => <>
-      <TextField label="Rechercher dans cette page" value={query} onChange={setQuery} placeholder="Élève ou moniteur" />
-      {page.items.length === 0 ? <EmptyState symbol="layers" title="Aucun trajet" message="Les trajets enregistrés pendant les leçons apparaîtront ici." />
+      <TextField label={learner ? 'Rechercher un moniteur' : 'Rechercher dans cette page'} value={query} onChange={setQuery} placeholder={learner ? 'Moniteur' : 'Élève ou moniteur'} />
+      {page.truncated && <Notice tone="warning" title="Historique partiel" live={false}><p>Ce filtre porte sur les 1 000 derniers trajets de l’école. Ouvrez tous les trajets pour parcourir les plus anciens.</p></Notice>}
+      {page.items.length === 0 ? <EmptyState symbol="layers" title={page.truncated ? 'Aucun trajet dans cette partie de l’historique' : 'Aucun trajet'} message="Les trajets enregistrés pendant les leçons apparaîtront ici." />
         : <table className="data-table"><caption className="visually-hidden">Trajets de l’école</caption>
           <thead><tr><th scope="col">Élève</th><th scope="col">Moniteur</th><th scope="col">Départ</th><th scope="col">Durée</th></tr></thead>
           <tbody>{page.items.filter(trip => matchesSearch([trip.learnerName, trip.instructorName], query)).map(trip => <tr key={trip.id}>
-            <th scope="row">{trip.learnerName}</th><td>{trip.instructorName}</td>
+            <th scope="row"><button type="button" className="row-button" onClick={() => dossier(trip.learnerId)}>{trip.learnerName}</button></th><td>{trip.instructorName}</td>
             <td>{formatDateTime(trip.authorizedAt, trip.lessonTimeZone)}</td><td>{tripDuration(trip)}</td>
           </tr>)}</tbody>
         </table>}

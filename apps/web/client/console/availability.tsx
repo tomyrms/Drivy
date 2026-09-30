@@ -18,7 +18,7 @@ function dayRange(weekdays: readonly number[]): string {
 
 /** Disponibilités et absences des moniteurs : la planification dans l'app s'y appuie. */
 export function AvailabilitySection() {
-  const { schoolId, school, membership } = useConsole();
+  const { schoolId, school, membership, routeQuery, setRouteQuery, navigate } = useConsole();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner();
   const loaded = useLoad(async () => {
@@ -28,7 +28,9 @@ export function AvailabilitySection() {
   }, [schoolId, revision]);
   const instructors = useMemo(() => (loaded.data?.members ?? []).filter(member => member.status === 'ACTIVE' && member.roles.includes('INSTRUCTOR'))
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr')), [loaded.data]);
-  const [chosen, setChosen] = useState<string>('');
+  const [localChosen, setLocalChosen] = useState<string>('');
+  const chosen = routeQuery ? routeQuery.instructor ?? '' : localChosen;
+  const setChosen = (id: string) => { setLocalChosen(id); setRouteQuery?.({ ...routeQuery, instructor: id || undefined }); };
   const instructor = chosen || (instructors.some(item => item.id === membership.membershipId) ? membership.membershipId : instructors[0]?.id ?? '');
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [start, setStart] = useState('08:00');
@@ -70,7 +72,7 @@ export function AvailabilitySection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Planning" title="Disponibilités" />
+      <SectionHeading context="Planning" title="Disponibilités" actions={routeQuery?.from === 'equipe' ? <button type="button" className="button quiet" onClick={() => navigate('equipe', { selection: routeQuery.instructor })}>Retour au membre</button> : undefined} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       <LoadState loaded={loaded} label="Lecture des disponibilités…">{() => instructors.length === 0
         ? <EmptyState symbol="users" title="Aucun moniteur" message="Donnez le rôle Moniteur à un membre dans Équipe et accès." />

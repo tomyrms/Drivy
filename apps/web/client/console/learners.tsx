@@ -11,7 +11,7 @@ import {
   type Assignment, type Learner, type Permit, type Training,
 } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Loading, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatCivilDate } from '../ui';
-import { readError, useCommandRunner, useConsole, useLoad } from './context';
+import { readError, useCommandRunner, useConsole, useLoad, useRouteSelection } from './context';
 import { permitSummary, TrainingFollowUp } from './dossier';
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
 
@@ -29,9 +29,9 @@ type Dossier = { assignments: Assignment[]; permits: Permit[] | null; permitErro
 
 /** Élèves : dossier, formations, moniteurs, permis et suivi. Les leçons se planifient dans l'app. */
 export function LearnersSection() {
-  const { schoolId, school, membership } = useConsole();
+  const { schoolId, school, membership, navigate, routeQuery } = useConsole();
   const { revision } = useCommandSnapshot();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useRouteSelection();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'active' | 'archived' | 'all'>('active');
   const [offeringId, setOfferingId] = useState('');
@@ -130,10 +130,11 @@ export function LearnersSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Personnes" title="Élèves" />
+      {routeQuery?.from === 'agenda' && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('agenda', { week: routeQuery.week, instructor: routeQuery.instructor })}><Symbol kind="back" bare />Retour à l’agenda</button></div>}
+      <SectionHeading title="Élèves" actions={!selected && <button type="button" className="button primary" onClick={() => navigate('invitations', { audience: 'learners' })}><Symbol kind="plus" bare />Inviter un élève</button>} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des élèves…">{value => <SplitView
+      <LoadState loaded={loaded} label="Lecture des élèves…">{value => <SplitView mobileDetail={!!selected} onBack={() => setSelected(null)} backLabel="Tous les élèves"
         list={<>
           {value.truncated && <Notice tone="warning" title="Liste partielle" live={false}><p>L’école compte plus d’élèves que cette page n’en charge : la recherche ne porte que sur ceux affichés.</p></Notice>}
           <div className="list-toolbar">
@@ -159,6 +160,7 @@ export function LearnersSection() {
           actions={current.archivedAt ? membership.roles.includes('ADMIN') && <button type="button" className="button secondary" disabled={!canWrite}
             onClick={() => ask({ kind: 'restore' })}>Restaurer le dossier</button>
             : canArchive ? <button type="button" className="button quiet danger" disabled={!canEdit} onClick={() => ask({ kind: 'archive' })}>Archiver le dossier…</button> : undefined}>
+          <div className="button-row"><button type="button" className="button secondary" onClick={() => navigate('trajets', { learner: current.id, from: 'eleves', week: routeQuery?.week, instructor: routeQuery?.instructor })}>Trajets de l’élève</button></div>
           {dossier.status === 'error' && <Notice tone="error" title="Dossier incomplet" live={false}
             actions={<button type="button" className="button retry" onClick={dossier.reload}><Symbol kind="refresh" bare />Réessayer</button>}><p>{dossier.error ?? readError(null)}</p></Notice>}
           {trainingsOf(current.id).length === 0 && <p className="caption">Aucune formation.</p>}
@@ -178,6 +180,8 @@ export function LearnersSection() {
                   {permitInfo.badge && <StatusBadge tone={permitInfo.badge.tone} symbol="alert">{permitInfo.badge.label}</StatusBadge>}</p>}
                 {inProgress && detailReady && detail.permitError && <Notice tone="error" title="Permis non consultable" live={false}
                   actions={<button type="button" className="button retry" onClick={dossier.reload}>Réessayer</button>}><p>{detail.permitError}</p></Notice>}
+                <TrainingFollowUp schoolId={schoolId} training={training} competencies={competencies} timeZone={school.timeZone} />
+                <details className="disclosure"><summary>Gérer cette formation</summary>
                 {assigned.length > 0 && inProgress && <ul className="plain-list">{assigned.map(item => <li key={item.id}>
                   <span>{name(item.instructorMembershipId)}</span>
                   <button type="button" className="button quiet danger" disabled={!canEdit || !detailReady} aria-label={`Retirer ${name(item.instructorMembershipId)} de la formation ${title(training)}`}
@@ -194,19 +198,19 @@ export function LearnersSection() {
                   {trainingTransitions(training.status).map(transition => <button key={transition.target} type="button" className={transition.danger ? 'button quiet danger' : 'button quiet'}
                     disabled={!canEdit} aria-label={`${transition.label} : ${title(training)}`} onClick={() => ask({ kind: 'transition', training, transition })}>{transition.label}{transition.danger ? '…' : ''}</button>)}
                 </div>}
-                <TrainingFollowUp schoolId={schoolId} training={training} competencies={competencies} timeZone={school.timeZone} />
+                </details>
               </div>
               {training.status !== 'ACTIVE' && <StatusBadge tone="neutral" symbol="dot">{statusLabels[training.status]}</StatusBadge>}
             </li>;
           })}</ul>
-          {!current.archivedAt && availableOfferings.length > 0 && <form className="form-grid" onSubmit={event => { event.preventDefault(); void openTraining(); }}>
+          {!current.archivedAt && availableOfferings.length > 0 && <details className="disclosure"><summary>{trainingsOf(current.id).length ? 'Ouvrir une autre formation' : 'Ouvrir une formation'}</summary><form className="form-grid" onSubmit={event => { event.preventDefault(); void openTraining(); }}>
             <div className="form-row">
               <SelectField label="Nouvelle formation" value={offeringId} disabled={!canWrite} placeholder="Choisir une offre" onChange={setOfferingId}
                 options={availableOfferings.map(item => ({ value: item.id, label: offeringLabel(item, offerings) }))} />
               <TextField label="Début" type="date" value={startedOn} disabled={!canWrite} onChange={setStartedOn} />
             </div>
             <button type="submit" className="button primary" disabled={!canWrite || !availableOfferings.some(offering => offering.id === offeringId) || !isCivilDate(startedOn)}>Ouvrir la formation</button>
-          </form>}
+          </form></details>}
         </DetailPanel> : <Placeholder>Choisissez un élève.</Placeholder>} />}
       </LoadState>
       <ConfirmDialog open={dialog !== null} busy={runner.busy} onCancel={() => setDialog(null)} onConfirm={() => void confirm()}

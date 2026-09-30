@@ -1,0 +1,142 @@
+{
+  "date": "2026-09-30",
+  "scope": "Architecture et parcours du web uniquement, après retour complémentaire du porteur",
+  "typecheck": "PASSED",
+  "unitTests": {
+    "passed": 100,
+    "failed": 0,
+    "files": 8
+  },
+  "productionBuild": "PASSED",
+  "buildNote": "Avertissement Vite : bundle JavaScript unique 503 kB minifié, 140 kB gzip ; pas de mesure réseau physique.",
+  "browser": {
+    "surface": "Codex in-app browser, shell React réel avec réponses synthétiques locales",
+    "viewportsInspected": [
+      320,
+      390,
+      834,
+      1440
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "verifiedJourneys": [
+      "Agenda filtré Marie → dossier Éloïse → trajets de cet élève → dossier → agenda : semaine et moniteur conservés.",
+      "Retour navigateur vers dossier, puis Tous les élèves : liste visible, focus sur la ligne Éloïse, sans débordement horizontal à390.",
+      "Cinq destinations principales à320 ; menu Échap rend le focus à Menu.",
+      "FormationB → identifiant exact de compétencesB ; contexte catégorie et liens de retour présents.",
+      "Brouillon offreC → compétences prérequises → Retour à la formation : référence c-test et catégorieC conservées en mémoire.",
+      "Après brouillonC, lien direct vers formationA ouvre a-standard, pas le brouillonC.",
+      "Équipe → Invitations : aucune création Code élève ; Élèves → Inviter un élève → formulaire Code élève.",
+      "Racine écoleACTIVE → Agenda ; racine écoleDRAFT → Préparation de l’école."
+    ],
+    "notClaimed": [
+      "Écritures de production dans le navigateur",
+      "Rechargement authentifié réel : la fixture recrée ses UUID ; aller-retour URL couvert par tests unitaires",
+      "Zoom200%",
+      "VoiceOver/NVDA",
+      "Appareils physiques"
+    ],
+    "screenshots": [
+      {
+        "path": "artifacts/retours-20260930/web/formations-tablette-sombre.png",
+        "sha256": "6080d214e748d1f5849f3032d957892ef7fd38867f2850de4855c6391e54ed2c"
+      }
+    ]
+  },
+  "limits": [
+    "Les trajets filtrés par élève portent sur les1000derniers trajets de l’école ; avertissement explicite si tronqué, pagination complète toujours accessible dans Tous les trajets.",
+    "Les brouillons de catalogue non soumis restent en mémoire seulement ; changement de portée, déconnexion ou rechargement les efface. Le magasin des commandes gère une demande déjà envoyée."
+  ],
+  "sourceFiles": [
+    {
+      "path": "apps/web/client/console/agenda.tsx",
+      "sha256": "19689a054b386025bafee99d397e78a4c7a025dee6fc9329dfc72239b4dbdde2"
+    },
+    {
+      "path": "apps/web/client/console/availability.tsx",
+      "sha256": "5eac5993513266a06dc3c23564a8cb435e351086e38d00c92b6d496994adfc5c"
+    },
+    {
+      "path": "apps/web/client/console/catalog.tsx",
+      "sha256": "584715bf6f8e0fd24746e96929b7aff7c6dc6936d813db482edc4e341c75ff81"
+    },
+    {
+      "path": "apps/web/client/console/commerce.tsx",
+      "sha256": "923fa2f364f26c08b871c8f1adfd9010aa55dca28e47753bf5f81efd38f5be40"
+    },
+    {
+      "path": "apps/web/client/console/configuration.tsx",
+      "sha256": "4251d67b24e8a56d5652ab87d82baa79bf98f90d867653118515045d38651382"
+    },
+    {
+      "path": "apps/web/client/console/Console.tsx",
+      "sha256": "640c53babcc66893ee64a01a607984c19b0c0c4101ae561d454ce122ef4fc705"
+    },
+    {
+      "path": "apps/web/client/console/context.ts",
+      "sha256": "a5688fa2c4d7b94a636f7416f174983eefaeb43ad32928fc0988798a9cae4898"
+    },
+    {
+      "path": "apps/web/client/console/dossier.tsx",
+      "sha256": "fb0a7474c00ab5e52bdb1f354020f18bfb579da3e190d97548750a23ec907c38"
+    },
+    {
+      "path": "apps/web/client/console/draft-model.ts",
+      "sha256": "d50803284f3b90a0897a069cede9ba853ea8d86eae0f146fd420102df1ff5190"
+    },
+    {
+      "path": "apps/web/client/console/formations.tsx",
+      "sha256": "e16ba80ad41a382a9c6a48ff5c19f78802140db0ca6db168a559e467a8995298"
+    },
+    {
+      "path": "apps/web/client/console/layout.tsx",
+      "sha256": "fcae08182225cc96772544d858f652c1c06576dbc4e74440b35009b7eb144c33"
+    },
+    {
+      "path": "apps/web/client/console/learners.tsx",
+      "sha256": "aa46d96b2e2e4bd858236c9e7cc3b266a77f53e803573a0d9b68002414b5b077"
+    },
+    {
+      "path": "apps/web/client/console/navigation.ts",
+      "sha256": "07b7f2d9ea17117b510e74b18202f6b331db941a031655644e1f898edf4d810d"
+    },
+    {
+      "path": "apps/web/client/console/overview.tsx",
+      "sha256": "529d7f82e1386ad6a0255845c67c096e410f938750d83c50555bb347b3b9da89"
+    },
+    {
+      "path": "apps/web/client/console/people.tsx",
+      "sha256": "7c737ea41b6d33cc75e9b112cfe461b5d9e98b934c9ad9c880757f29cd7bc0c0"
+    },
+    {
+      "path": "apps/web/client/console/profile-fields.tsx",
+      "sha256": "f3b6589c67aab9b96d90fd2bac73c1c5ea4dc4f7590a064a401c7b98019dc797"
+    },
+    {
+      "path": "apps/web/client/console/route.ts",
+      "sha256": "55b5884ee4da8f3315c048e7d07c9ba0b55acba27c1f4ab9dc306d2b0b4605a5"
+    },
+    {
+      "path": "apps/web/client/console/sections.ts",
+      "sha256": "8fad012cdb1406767d3a74aa8e5924f6ceaa76804efe00798d093c97ddd90c8b"
+    },
+    {
+      "path": "apps/web/client/console/trips.tsx",
+      "sha256": "8785857e25d0bbde89b639998121c725bd3531bc2d97edc345b7e9dfed6fb512"
+    },
+    {
+      "path": "apps/web/client/styles.css",
+      "sha256": "b2560f7262623a8ef5e8b95117b2ae91838d70bc6ae715541fa619daa5fb311c"
+    },
+    {
+      "path": "apps/web/test/console-route.test.ts",
+      "sha256": "719bcb57ecfb4d64a0bd63f1805cd45182837fc04a1d9e10014af84c7c22d152"
+    },
+    {
+      "path": "apps/web/test/visual.tsx",
+      "sha256": "3632fce110b2d388e3c2cc5132953d4b9d5b3785dd4b3aac3dfe1d8947c0e3c1"
+    }
+  ]
+}

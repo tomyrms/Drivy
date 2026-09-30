@@ -3,7 +3,7 @@ import { createCommand, filled, isHttpURL } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { catalogPolicySchema, curriculumSchema, offeringSchema, readAll, type CatalogPolicy, type Curriculum, type Offering } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime, formatDuration } from '../ui';
-import { useCommandRunner, useConsole, useLoad } from './context';
+import { useCommandRunner, useConsole, useLoad, useRouteSelection, useSectionDraft } from './context';
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
 
 export const approvalBadge = (approved: boolean, feminine = false) => approved
@@ -49,30 +49,30 @@ function curriculumProblems(draft: CurriculumDraft) {
 }
 
 export function CurriculaSection() {
-  const { schoolId, school } = useConsole();
+  const { schoolId, school, routeQuery } = useConsole();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setDraft(null); setSelected(null); });
   const loaded = useLoad(() => readAll(schoolId, 'curricula', curriculumSchema), [schoolId, revision]);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [draft, setDraft] = useState<CurriculumDraft | null>(null);
+  const [selected, setSelected] = useRouteSelection();
+  const [draft, setDraft] = useSectionDraft<CurriculumDraft>('curriculum');
   const [showErrors, setShowErrors] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
-  const items = useMemo(() => [...(loaded.data?.items ?? [])].sort(byCategory(item => item.revision)), [loaded.data]);
+  const items = useMemo(() => [...(loaded.data?.items ?? [])].filter(item => !routeQuery?.category || item.categoryCode === routeQuery.category).sort(byCategory(item => item.revision)), [loaded.data, routeQuery?.category]);
   const current = items.find(item => item.id === selected) ?? null;
   const problems = draft ? curriculumProblems(draft) : null;
   const canWrite = !runner.pending && !runner.busy;
 
   function edit(from: Curriculum | null, approve = false) {
     runner.clearOutcome(); setShowErrors(false);
-    setDraft({ categoryCode: from?.categoryCode ?? '', approved: approve, approvalReason: '', basedOn: from,
+    setDraft({ categoryCode: from?.categoryCode ?? routeQuery?.category ?? '', approved: approve, approvalReason: '', basedOn: from,
       competencies: from ? from.competencies.map(item => ({ uid: uid(), key: item.key, label: item.label, description: item.description, sortOrder: String(item.sortOrder) }))
         : [{ uid: uid(), key: '', label: '', description: '', sortOrder: '10' }] });
   }
   const update = (change: Partial<CurriculumDraft>) => setDraft(value => value ? { ...value, ...change } : value);
   const updateCompetency = (key: string, change: Partial<CompetencyDraft>) =>
     setDraft(value => value ? { ...value, competencies: value.competencies.map(item => item.uid === key ? { ...item, ...change } : item) } : value);
-  const nextRevision = draft ? Math.max(0, ...items.filter(item => item.categoryCode === draft.categoryCode.trim()).map(item => item.revision)) + 1 : 1;
+  const nextRevision = draft ? Math.max(0, ...(loaded.data?.items ?? []).filter(item => item.categoryCode === draft.categoryCode.trim()).map(item => item.revision)) + 1 : 1;
 
   async function confirm() {
     if (!draft || !problems?.valid) return;
@@ -86,11 +86,11 @@ export function CurriculaSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Catalogue" title="Référentiels"
+      <SectionHeading context="Formations et tarifs" title="Compétences enseignées"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouveau référentiel</button>} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des référentiels…">{data => <SplitView
+      <LoadState loaded={loaded} label="Lecture des référentiels…">{data => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
         list={items.length === 0 ? <EmptyState symbol="book" title="Aucun référentiel" message="Préparez un premier référentiel pour une catégorie, puis approuvez-le pour ouvrir une offre." />
           : <table className="data-table">
             <caption className="visually-hidden">Référentiels de l’école{data.truncated ? ' (liste partielle)' : ''}</caption>
@@ -174,23 +174,23 @@ function procedureProblems(draft: ProcedureDraft) {
 }
 
 export function ProceduresSection() {
-  const { schoolId, school } = useConsole();
+  const { schoolId, school, routeQuery } = useConsole();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setDraft(null); setSelected(null); });
   const loaded = useLoad(() => readAll(schoolId, 'policy-versions', catalogPolicySchema), [schoolId, revision]);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [draft, setDraft] = useState<ProcedureDraft | null>(null);
+  const [selected, setSelected] = useRouteSelection();
+  const [draft, setDraft] = useSectionDraft<ProcedureDraft>('procedure');
   const [showErrors, setShowErrors] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
-  const items = useMemo(() => [...(loaded.data?.items ?? [])].sort(byCategory(item => item.version)), [loaded.data]);
+  const items = useMemo(() => [...(loaded.data?.items ?? [])].filter(item => !routeQuery?.category || item.categoryCode === routeQuery.category).sort(byCategory(item => item.version)), [loaded.data, routeQuery?.category]);
   const current = items.find(item => item.id === selected) ?? null;
   const problems = draft ? procedureProblems(draft) : null;
   const canWrite = !runner.pending && !runner.busy;
   const update = (change: Partial<ProcedureDraft>) => setDraft(value => value ? { ...value, ...change } : value);
   function edit(from: CatalogPolicy | null, approve = false) {
     runner.clearOutcome(); setShowErrors(false);
-    setDraft({ categoryCode: from?.categoryCode ?? '', procedureText: from?.procedureText ?? '', cancellationPolicyText: from?.cancellationPolicyText ?? '',
+    setDraft({ categoryCode: from?.categoryCode ?? routeQuery?.category ?? '', procedureText: from?.procedureText ?? '', cancellationPolicyText: from?.cancellationPolicyText ?? '',
       sources: from?.sourceUrls.join('\n') ?? '', approved: approve, approvalReason: '', basedOn: from });
   }
   async function confirm() {
@@ -205,11 +205,11 @@ export function ProceduresSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Catalogue" title="Procédures"
+      <SectionHeading context="Formations et tarifs" title="Déroulement et annulation"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelle procédure</button>} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des procédures…">{() => <SplitView
+      <LoadState loaded={loaded} label="Lecture des procédures…">{() => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
         list={items.length === 0 ? <EmptyState symbol="file" title="Aucune procédure" message="Rédigez la procédure d’une catégorie, puis approuvez-la pour ouvrir une offre." />
           : <table className="data-table">
             <caption className="visually-hidden">Procédures de l’école</caption>
@@ -269,7 +269,7 @@ export function ProceduresSection() {
 type OfferingDraft = { offeringKey: string; categoryCode: string; curriculumVersionId: string; policyVersionId: string; enabled: boolean; duration: string; basedOn: Offering | null };
 
 export function OfferingsSection() {
-  const { schoolId, navigate } = useConsole();
+  const { schoolId, navigate, routeQuery } = useConsole();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setDraft(null); setSelected(null); });
   const loaded = useLoad(async () => {
@@ -277,9 +277,9 @@ export function OfferingsSection() {
       readAll(schoolId, 'curricula', curriculumSchema), readAll(schoolId, 'policy-versions', catalogPolicySchema)]);
     return { offerings: offerings.items, curricula: curricula.items, policies: policies.items };
   }, [schoolId, revision]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useRouteSelection();
   const [history, setHistory] = useState(false);
-  const [draft, setDraft] = useState<OfferingDraft | null>(null);
+  const [draft, setDraft] = useSectionDraft<OfferingDraft>('offering');
   const [showErrors, setShowErrors] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -289,8 +289,9 @@ export function OfferingsSection() {
     for (const item of data?.offerings ?? []) if ((map.get(item.offeringKey)?.version ?? 0) < item.version) map.set(item.offeringKey, item);
     return map;
   }, [data]);
-  const rows = useMemo(() => [...(data?.offerings ?? [])].filter(item => history || latest.get(item.offeringKey)?.id === item.id)
-    .sort((a, b) => a.offeringKey.localeCompare(b.offeringKey, 'fr') || b.version - a.version), [data, history, latest]);
+  const rows = useMemo(() => [...(data?.offerings ?? [])].filter(item => (!routeQuery?.category || item.categoryCode === routeQuery.category)
+    && (history || latest.get(item.offeringKey)?.id === item.id))
+    .sort((a, b) => a.offeringKey.localeCompare(b.offeringKey, 'fr') || b.version - a.version), [data, history, latest, routeQuery?.category]);
   const current = data?.offerings.find(item => item.id === selected) ?? null;
   const canWrite = !runner.pending && !runner.busy;
   const curriculum = (id: string) => data?.curricula.find(item => item.id === id);
@@ -316,7 +317,7 @@ export function OfferingsSection() {
 
   function edit(from: Offering | null) {
     runner.clearOutcome(); setShowErrors(false);
-    setDraft({ offeringKey: from?.offeringKey ?? '', categoryCode: from?.categoryCode ?? '', curriculumVersionId: from?.curriculumVersionId ?? '',
+    setDraft({ offeringKey: from?.offeringKey ?? '', categoryCode: from?.categoryCode ?? routeQuery?.category ?? '', curriculumVersionId: from?.curriculumVersionId ?? '',
       policyVersionId: from?.policyVersionId ?? '', enabled: from?.enabled ?? false, duration: from ? String(from.defaultDurationMinutes) : '45', basedOn: from });
   }
   async function confirm() {
@@ -334,11 +335,11 @@ export function OfferingsSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Catalogue" title="Offres"
+      <SectionHeading context="Formations et tarifs" title="Formations proposées"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelle offre</button>} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des offres…">{value => <SplitView
+      <LoadState loaded={loaded} label="Lecture des offres…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
         list={<>
           <div className="list-toolbar"><CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} /></div>
           {rows.length === 0 ? <EmptyState symbol="layers" title="Aucune offre" message="Créez une offre à partir d’un référentiel et d’une procédure de la même catégorie." />
@@ -368,7 +369,7 @@ export function OfferingsSection() {
                   hint={draft.basedOn ? 'Une offre garde sa référence et sa catégorie.' : undefined} />
               </div>
               {category && curriculumOptions.length === 0 && policyOptions.length === 0 && <Notice tone="info" title="Contenus à créer" live={false}
-                actions={<><button type="button" className="button quiet" onClick={() => navigate('referentiels')}>Ouvrir les référentiels</button><button type="button" className="button quiet" onClick={() => navigate('procedures')}>Ouvrir les procédures</button></>}>
+                actions={<><button type="button" className="button quiet" onClick={() => navigate('referentiels', { category, from: 'offres' })}>Préparer les compétences</button><button type="button" className="button quiet" onClick={() => navigate('procedures', { category, from: 'offres' })}>Préparer le déroulement</button></>}>
                 <p>Créez d’abord le référentiel et la procédure de la catégorie {category}.</p></Notice>}
               <SelectField label="Référentiel" value={draft.curriculumVersionId} placeholder="Choisir un référentiel" disabled={!canWrite || !category}
                 options={curriculumOptions.map(item => ({ value: item.id, label: `Révision ${item.revision} · ${item.approved ? 'approuvée' : 'brouillon'}` }))}
@@ -384,6 +385,11 @@ export function OfferingsSection() {
           </DetailPanel>
           : current ? <DetailPanel focusKey={current.id} title={current.offeringKey} meta={`Catégorie ${current.categoryCode} · version ${current.version}`} badge={offerState(current)}
             actions={<button type="button" className="button primary" disabled={!canWrite} onClick={() => edit(current)}><Symbol kind="edit" bare />Nouvelle version</button>}>
+            <div className="button-row">
+              <button type="button" className="button secondary" onClick={() => navigate('referentiels', { selection: current.curriculumVersionId, category: current.categoryCode, from: 'formations' })}>Compétences enseignées</button>
+              <button type="button" className="button secondary" onClick={() => navigate('procedures', { selection: current.policyVersionId, category: current.categoryCode, from: 'formations' })}>Déroulement et annulation</button>
+              <button type="button" className="button secondary" onClick={() => navigate('prestations', { category: current.categoryCode, from: 'formations' })}>Tarifs de cette catégorie</button>
+            </div>
             <Facts items={[
               ['Référentiel', curriculum(current.curriculumVersionId) ? <>Révision {curriculum(current.curriculumVersionId)!.revision} {approvalBadge(curriculum(current.curriculumVersionId)!.approved)}</> : 'Non disponible'],
               ['Procédure', policy(current.policyVersionId) ? <>Version {policy(current.policyVersionId)!.version} {approvalBadge(policy(current.policyVersionId)!.approved, true)}</> : 'Non disponible'],

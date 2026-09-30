@@ -5,7 +5,7 @@ import { commandStore, useCommandSnapshot } from '../command-store';
 import { loginSchema, meSchema, okSchema, request, RequestFailure, roleLabel, sessionSchema } from '../protocol';
 import type { Me, Member, Session } from '../protocol';
 import { readSchool, schoolSchema, type School } from '../school-api';
-import { Loading, Notice, Symbol, formatDateTime, type SymbolKind } from '../ui';
+import { Loading, Notice, Symbol, formatDateTime } from '../ui';
 import { ConsoleContext, readError, sectionKeys, type ConsoleContextValue, type SectionKey } from './context';
 import { OverviewSection } from './overview';
 import { ConfigurationSection } from './configuration';
@@ -17,38 +17,9 @@ import { LearnersSection } from './learners';
 import { AvailabilitySection } from './availability';
 import { AgendaSection } from './agenda';
 import { TripsSection } from './trips';
-
-const navigation: readonly { group: string; items: readonly { key: SectionKey; label: string; symbol: SymbolKind }[] }[] = [
-  { group: 'Au quotidien', items: [
-    { key: 'apercu', label: 'Vue d’ensemble', symbol: 'home' },
-    { key: 'agenda', label: 'Agenda', symbol: 'calendar' },
-    { key: 'eleves', label: 'Élèves', symbol: 'users' },
-    { key: 'trajets', label: 'Trajets', symbol: 'route' },
-  ] },
-  { group: 'Organisation', items: [
-    { key: 'equipe', label: 'Équipe et accès', symbol: 'shield' },
-    { key: 'disponibilites', label: 'Disponibilités', symbol: 'clock' },
-    { key: 'invitations', label: 'Invitations', symbol: 'mail' },
-    { key: 'configuration', label: 'Configuration', symbol: 'settings' },
-    { key: 'champs-profil', label: 'Champs du profil', symbol: 'list' },
-  ] },
-  { group: 'Catalogue', items: [
-    { key: 'offres', label: 'Offres', symbol: 'layers' },
-    { key: 'referentiels', label: 'Référentiels', symbol: 'book' },
-    { key: 'procedures', label: 'Procédures', symbol: 'file' },
-    { key: 'prestations', label: 'Prestations et tarifs', symbol: 'tag' },
-    { key: 'conditions', label: 'Conditions commerciales', symbol: 'receipt' },
-  ] },
-];
-const sectionTitle = (key: SectionKey) => navigation.flatMap(group => group.items).find(item => item.key === key)!.label;
-
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function parseRoute(pathname: string): { schoolId: string | null; section: SectionKey } {
-  const [, , , schoolId, section] = pathname.replace(/\/$/, '').split('/');
-  return { schoolId: schoolId && uuid.test(schoolId) ? schoolId.toLowerCase() : null,
-    section: (sectionKeys as readonly string[]).includes(section ?? '') ? section as SectionKey : 'apercu' };
-}
-const pathFor = (schoolId: string, section: SectionKey) => `/app/gestion/${schoolId}${section === 'apercu' ? '' : `/${section}`}`;
+import { FormationsSection } from './formations';
+import { isLocalItemCurrent, parentSection, sectionTitles, workspaceFor, workspaces } from './navigation';
+import { consolePath, parseConsoleRoute, type NavigationQuery } from './route';
 
 type State =
   | { status: 'loading' }
@@ -59,7 +30,7 @@ type State =
   | { status: 'ready'; me: Me; membership: Member; school: School };
 
 export function ManagementConsole() {
-  const [route, setRoute] = useState(() => parseRoute(window.location.pathname));
+  const [route, setRoute] = useState(() => parseConsoleRoute(window.location.pathname, window.location.search));
   const [state, setState] = useState<State>({ status: 'loading' });
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,6 +39,9 @@ export function ManagementConsole() {
   const csrf = useRef('');
   const generation = useRef(0);
   const snapshot = useCommandSnapshot();
+  const draftScope = state.status === 'ready'
+    ? `${state.me.personId}/${state.membership.schoolId}/${state.membership.membershipId}/${state.membership.accessEpoch}` : null;
+  const drafts = useMemo(() => new Map<string, unknown>(), [draftScope]);
 
   const load = useCallback(async (schoolId: string | null) => {
     const current = ++generation.current;
@@ -87,25 +61,28 @@ export function ManagementConsole() {
       const school = await readSchool(membership.schoolId, '', schoolSchema);
       if (current !== generation.current) return;
       if (school.id !== membership.schoolId) throw new RequestFailure('INVALID_RESPONSE');
-      if (!schoolId) window.history.replaceState(null, '', pathFor(membership.schoolId, route.section));
-      setRoute(previous => ({ ...previous, schoolId: membership.schoolId }));
+      const currentRoute = parseConsoleRoute(window.location.pathname, window.location.search);
+      const explicitSection = (sectionKeys as readonly string[]).includes(window.location.pathname.replace(/\/$/, '').split('/')[4] ?? '');
+      const section = explicitSection ? currentRoute.section : school.status === 'ACTIVE' ? 'agenda' : 'apercu';
+      window.history.replaceState(null, '', consolePath(membership.schoolId, section, currentRoute.query));
+      setRoute({ ...currentRoute, schoolId: membership.schoolId, section });
       setState({ status: 'ready', me, membership, school });
     } catch (error) {
       if (current !== generation.current) return;
       if (error instanceof RequestFailure && error.status === 401) { setState({ status: 'signin' }); return; }
       setState({ status: 'error', message: readError(error) });
     }
-  }, [route.section]);
+  }, []);
 
   useEffect(() => { void load(route.schoolId); }, [route.schoolId]);
   useEffect(() => {
-    const onPopState = () => setRoute(parseRoute(window.location.pathname));
+    const onPopState = () => setRoute(parseConsoleRoute(window.location.pathname, window.location.search));
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
   useEffect(() => {
     const school = state.status === 'ready' ? state.school.name : null;
-    document.title = `${sectionTitle(route.section)}${school ? ` · ${school}` : ''} · Gestion Drivy`;
+    document.title = `${sectionTitles[route.section]}${school ? ` · ${school}` : ''} · Gestion Drivy`;
   }, [route.section, state]);
 
   async function login(options?: { reauthenticate?: boolean }) {
@@ -137,6 +114,7 @@ export function ManagementConsole() {
   const context = useMemo<ConsoleContextValue | null>(() => state.status !== 'ready' ? null : {
     schoolId: state.membership.schoolId, me: state.me, membership: state.membership, school: state.school,
     canConfigureCatalog: state.membership.grants.includes('CONFIGURE_CATALOG'),
+    drafts,
     reloadSchool: async () => {
       try {
         const school = await readSchool(state.membership.schoolId, '', schoolSchema);
@@ -145,13 +123,20 @@ export function ManagementConsole() {
     },
     csrf: () => csrf.current,
     refreshCsrf: async () => { const next = await request('session', sessionSchema); csrf.current = next.csrfToken; return next.csrfToken; },
-    navigate: (section: SectionKey) => {
-      window.history.pushState(null, '', pathFor(state.membership.schoolId, section));
-      setRoute({ schoolId: state.membership.schoolId, section });
+    routeQuery: route.query,
+    setRouteQuery: (query: NavigationQuery, replace = false) => {
+      const path = consolePath(state.membership.schoolId, route.section, query);
+      if (`${window.location.pathname}${window.location.search}` === path) return;
+      window.history[replace ? 'replaceState' : 'pushState'](null, '', path);
+      setRoute(parseConsoleRoute(window.location.pathname, window.location.search));
+    },
+    navigate: (section: SectionKey, query: NavigationQuery = {}) => {
+      window.history.pushState(null, '', consolePath(state.membership.schoolId, section, query));
+      setRoute(parseConsoleRoute(window.location.pathname, window.location.search));
       setNavigationOpen(false);
     },
     login: options => { void login(options); },
-  }, [state]);
+  }, [state, route.query, route.section, drafts]);
 
   const personName = state.status === 'ready' || state.status === 'choose' || state.status === 'denied' ? state.me.displayName : session?.user?.displayName;
   const adminSchools = state.status === 'ready' ? state.me.memberships.filter(member => member.roles.includes('ADMIN')) : [];
@@ -162,25 +147,29 @@ export function ManagementConsole() {
       <header className="console-bar">
         {context && <button ref={navigationButton} type="button" className="button quiet navigation-toggle" aria-controls="school-navigation" aria-expanded={navigationOpen}
           onClick={() => setNavigationOpen(open => !open)}><Symbol kind="menu" bare /><span>Menu</span></button>}
-        <a className="brand" href="/app/" aria-label="Drivy, retour à votre espace">
+        <a className="brand" href={context ? consolePath(context.schoolId, context.school.status === 'ACTIVE' ? 'agenda' : 'apercu') : '/app/'}
+          aria-label="Drivy, accueil de l’école" onClick={event => {
+            if (!context || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+            event.preventDefault(); context.navigate(context.school.status === 'ACTIVE' ? 'agenda' : 'apercu');
+          }}>
           <span className="brand-symbol" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="m11 24 5-16 5 16-5-4Z" /></svg></span>
           <span>Drivy</span>
         </a>
         {state.status === 'ready' && (adminSchools.length > 1
           ? <label className="school-switch"><span className="visually-hidden">École gérée</span>
-              <select value={state.membership.schoolId} onChange={event => { window.history.pushState(null, '', pathFor(event.target.value, 'apercu')); setRoute({ schoolId: event.target.value, section: 'apercu' }); }}>
+              <select value={state.membership.schoolId} onChange={event => { window.history.pushState(null, '', `/app/gestion/${event.target.value}`); setRoute({ schoolId: event.target.value, section: 'apercu', query: {} }); }}>
                 {adminSchools.map(member => <option key={member.schoolId} value={member.schoolId}>{member.schoolName}</option>)}
               </select>
             </label>
           : <span className="school-name">{state.school.name}</span>)}
         <div className="bar-end">
-          {personName && <span className="person-name"><Symbol kind="account" bare />{personName}</span>}
+          {personName && <a className="person-name" href="/app/" aria-label={`Compte de ${personName}`}><Symbol kind="account" bare />{personName}</a>}
           {session?.authenticated && <button type="button" className="button quiet" onClick={() => void logout()} disabled={busy}>Se déconnecter</button>}
         </div>
       </header>
 
       <div className="console-body">
-        {context && <ConsoleNavigation schoolId={context.schoolId} section={route.section} open={navigationOpen} navigate={context.navigate}
+        {context && <ConsoleNavigation schoolId={context.schoolId} section={route.section} query={route.query} open={navigationOpen} navigate={context.navigate}
           onEscape={() => { setNavigationOpen(false); navigationButton.current?.focus(); }} />}
 
         <main id="main" className="console-main" aria-busy={state.status === 'loading'}>
@@ -189,11 +178,12 @@ export function ManagementConsole() {
             actions={<button type="button" className="button retry" onClick={() => void load(route.schoolId)}><Symbol kind="refresh" bare />Réessayer</button>}>
             <p>{state.message}</p></Notice>}
           {state.status === 'signin' && <SignIn onLogin={() => void login()} busy={busy} pending={snapshot.entries.size > 0} />}
-          {state.status === 'choose' && <ChooseSchool schools={state.admin} onChoose={schoolId => { window.history.pushState(null, '', pathFor(schoolId, 'apercu')); setRoute({ schoolId, section: 'apercu' }); }} />}
+          {state.status === 'choose' && <ChooseSchool schools={state.admin} onChoose={schoolId => { window.history.pushState(null, '', `/app/gestion/${schoolId}`); setRoute({ schoolId, section: 'apercu', query: {} }); }} />}
           {state.status === 'denied' && <Denied membership={state.membership} />}
           {context && <ConsoleContext.Provider value={context}>
+            <SectionNavigation schoolId={context.schoolId} section={route.section} query={route.query} navigate={context.navigate} />
             <PendingPanel />
-            <Section section={route.section} key={`${context.schoolId}-${route.section}`} />
+            <Section section={route.section} key={`${draftScope}-${route.section}-${route.section === 'invitations' ? route.query.audience ?? 'learners' : ''}`} />
           </ConsoleContext.Provider>}
         </main>
       </div>
@@ -202,21 +192,49 @@ export function ManagementConsole() {
 }
 
 /** The same navigation is used by the live shell and the synthetic visual review. */
-export function ConsoleNavigation({ schoolId, section, open, navigate, onEscape }: {
-  schoolId: string; section: SectionKey; open: boolean; navigate: (section: SectionKey) => void; onEscape: () => void;
+export function ConsoleNavigation({ schoolId, section, query = {}, open, navigate, onEscape }: {
+  schoolId: string; section: SectionKey; query?: NavigationQuery; open: boolean; navigate: (section: SectionKey, query?: NavigationQuery) => void; onEscape: () => void;
 }) {
+  const current = workspaceFor(section, query);
   return <nav id="school-navigation" className={`console-nav${open ? ' is-open' : ''}`} aria-label="Gestion de l’école"
     onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); onEscape(); } }}><div className="nav-inner">
-    {navigation.map(group => <div className="nav-group" key={group.group}>
-      <h2 className="nav-title">{group.group}</h2>
-      <ul>{group.items.map(item => <li key={item.key}>
-        <a href={pathFor(schoolId, item.key)} aria-current={section === item.key ? 'page' : undefined}
-          onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(item.key); }}>
+      <ul>{workspaces.map(item => <li key={item.key}>
+        <a href={consolePath(schoolId, item.home)} aria-current={current.key === item.key ? 'true' : undefined}
+          onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(item.home); }}>
           <Symbol kind={item.symbol} bare /><span>{item.label}</span>
         </a>
       </li>)}</ul>
-    </div>)}
   </div></nav>;
+}
+
+/** A small local navigation and a real hierarchy, shared by every screen in a workspace. */
+export function SectionNavigation({ schoolId, section, query = {}, navigate }: {
+  schoolId: string; section: SectionKey; query?: NavigationQuery; navigate: (section: SectionKey, query?: NavigationQuery) => void;
+}) {
+  const workspace = workspaceFor(section, query), parent = parentSection(section);
+  const categoryQuery = query.category ? { category: query.category } : {};
+  const { category: _category, ...unfiltered } = query;
+  const returnTo = query.from && query.from !== section && ['offres', 'prestations', 'formations'].includes(query.from) ? query.from : null;
+  const link = (destination: SectionKey, label: string, destinationQuery: NavigationQuery = categoryQuery) => <a href={consolePath(schoolId, destination, destinationQuery)}
+    onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(destination, destinationQuery); }}>{label}</a>;
+  return <div className="section-navigation">
+    <nav className="breadcrumbs" aria-label="Fil d’Ariane"><ol>
+      <li>{section === workspace.home ? <span aria-current="page">{workspace.label}</span> : link(workspace.home, workspace.label)}</li>
+      {parent && parent !== workspace.home && <li>{link(parent, sectionTitles[parent])}</li>}
+      {section !== workspace.home && <li><span aria-current="page">{sectionTitles[section]}</span></li>}
+    </ol></nav>
+    <nav className="local-navigation" aria-label={`Rubriques · ${workspace.label}`}><ul>{workspace.items.map(item => {
+      const destinationQuery = { ...(workspace.key === 'formations' ? categoryQuery : {}), ...item.query };
+      return <li key={item.section}>
+        <a href={consolePath(schoolId, item.section, destinationQuery)} aria-current={isLocalItemCurrent(item, section) ? 'page' : undefined}
+          onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(item.section, destinationQuery); }}>{item.label}</a>
+      </li>;
+    })}</ul></nav>
+    {(returnTo || (query.category && section !== 'formations')) && <div className="navigation-context">
+      {returnTo && link(returnTo, returnTo === 'offres' ? 'Retour à la formation' : returnTo === 'prestations' ? 'Retour au tarif' : 'Retour aux formations')}
+      {query.category && section !== 'formations' && <><span>Permis {query.category}</span>{link(section, 'Toutes les catégories', unfiltered)}</>}
+    </div>}
+  </div>;
 }
 
 function Section({ section }: { section: SectionKey }): ReactNode {
@@ -225,6 +243,7 @@ function Section({ section }: { section: SectionKey }): ReactNode {
     case 'configuration': return <ConfigurationSection />;
     case 'champs-profil': return <ProfileFieldsSection />;
     case 'offres': return <OfferingsSection />;
+    case 'formations': return <FormationsSection />;
     case 'referentiels': return <CurriculaSection />;
     case 'procedures': return <ProceduresSection />;
     case 'prestations': return <ProductsSection />;

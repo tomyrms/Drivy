@@ -47,8 +47,25 @@ export function LoadState<T>({ loaded, label, children }: { loaded: Loaded<T>; l
 }
 
 /** List on the left, detail or form on the right; stacked on narrow screens. */
-export function SplitView({ list, detail }: { list: ReactNode; detail: ReactNode }) {
-  return <div className="split-view"><div className="split-list">{list}</div><div className="split-detail">{detail}</div></div>;
+export function SplitView({ list, detail, mobileDetail = false, onBack, backLabel = 'Retour à la liste' }: {
+  list: ReactNode; detail: ReactNode; mobileDetail?: boolean; onBack?: () => void; backLabel?: string;
+}) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const returnToList = () => {
+    const selectedRow = listRef.current?.querySelector<HTMLElement>('[aria-current="true"]');
+    onBack?.();
+    window.requestAnimationFrame(() => {
+      const target = selectedRow?.isConnected ? selectedRow : listRef.current?.querySelector<HTMLElement>('input,button,a,select') ?? listRef.current;
+      target?.focus();
+    });
+  };
+  return <div className={`split-view${onBack ? ' has-mobile-navigation' : ''}${mobileDetail ? ' shows-detail' : ''}`}>
+    <div className="split-list" ref={listRef} tabIndex={-1}>{list}</div>
+    <div className="split-detail">
+      {onBack && mobileDetail && <button type="button" className="button quiet detail-back" onClick={returnToList}><Symbol kind="back" bare />{backLabel}</button>}
+      {detail}
+    </div>
+  </div>;
 }
 
 /** Detail panel with a focusable title, so a selection from the list lands here for keyboard users. */

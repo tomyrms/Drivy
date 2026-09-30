@@ -11,13 +11,15 @@ import { ConfigurationSection } from '../client/console/configuration';
 import { ProfileFieldsSection } from '../client/console/profile-fields';
 import { OverviewSection } from '../client/console/overview';
 import { ManagementConsole } from '../client/console/Console';
+import { FormationsSection } from '../client/console/formations';
 
 const uuid = () => crypto.randomUUID();
 const schoolId = uuid(), meId = uuid(), lucId = uuid(), marieId = uuid(), offerB = uuid(), offerBOld = uuid(), offerA = uuid();
 const learnerA = uuid(), learnerB = uuid(), trainingA = uuid(), curriculumB = uuid(), comp1 = uuid(), comp2 = uuid(), lessonDone = uuid();
+const curriculumA = uuid(), policyA = uuid(), policyB = uuid(), termsId = uuid();
 const stamp = '2026-09-29T08:00:00.000Z';
-const member = (id: string, displayName: string, roles: string[], status = 'ACTIVE') => ({ id, schoolId, version: 1, personId: uuid(), displayName, status, roles, grants: id === marieId ? ['permit_review', 'MANAGE_LEARNER_ARCHIVES'] : [], accessEpoch: 1 });
-const offering = (id: string, offeringKey: string, version: number, enabled: boolean, categoryCode: string) => ({ id, schoolId, version, offeringKey, categoryCode, curriculumVersionId: curriculumB, policyVersionId: uuid(), enabled, defaultDurationMinutes: 45, defaultPriceCents: 9500 });
+const member = (id: string, displayName: string, roles: string[], status = 'ACTIVE') => ({ id, schoolId, version: 1, personId: uuid(), displayName, status, roles, grants: id === marieId ? ['permit_review', 'MANAGE_LEARNER_ARCHIVES', 'CONFIGURE_CATALOG'] : [], accessEpoch: 1 });
+const offering = (id: string, offeringKey: string, version: number, enabled: boolean, categoryCode: string) => ({ id, schoolId, version, offeringKey, categoryCode, curriculumVersionId: categoryCode === 'A' ? curriculumA : curriculumB, policyVersionId: categoryCode === 'A' ? policyA : policyB, enabled, defaultDurationMinutes: 45, defaultPriceCents: 9500 });
 const db: Record<string, any> = {
   members: [member(lucId, 'Luc Martin', ['ADMIN', 'INSTRUCTOR']), member(marieId, 'Marie Dupont', ['INSTRUCTOR']), member(uuid(), 'Paul Suspendu', ['INSTRUCTOR'], 'SUSPENDED'), member(uuid(), 'Éloïse Élève', ['LEARNER'])],
   offerings: [offering(offerBOld, 'b-standard', 1, true, 'B'), offering(offerB, 'b-standard', 2, true, 'B'), offering(offerA, 'a-standard', 1, true, 'A')],
@@ -32,7 +34,15 @@ const db: Record<string, any> = {
   assignments: [{ id: uuid(), schoolId, version: 1, trainingId: trainingA, instructorMembershipId: marieId, validFrom: '2026-09-01T08:00:00.000Z', validUntil: null }],
   permits: [] as Record<string, unknown>[],
   curricula: [{ id: curriculumB, schoolId, version: 1, categoryCode: 'B', revision: 1, approved: true, competencies: [
-    { id: comp1, key: 'demarrer', label: 'Démarrer et s’arrêter', description: 'x', sortOrder: 1 }, { id: comp2, key: 'ronds-points', label: 'Ronds-points', description: 'x', sortOrder: 2 }] }],
+    { id: comp1, key: 'demarrer', label: 'Démarrer et s’arrêter', description: 'x', sortOrder: 1 }, { id: comp2, key: 'ronds-points', label: 'Ronds-points', description: 'x', sortOrder: 2 }] },
+    { id: curriculumA, schoolId, version: 1, categoryCode: 'A', revision: 1, approved: true, competencies: [{ id: uuid(), key: 'equilibre', label: 'Maîtriser l’équilibre', description: 'Exemple de compétence moto.', sortOrder: 1 }] }],
+  'policy-versions': [{ id: policyA, categoryCode: 'A' }, { id: policyB, categoryCode: 'B' }].map(item => ({ ...item, schoolId, version: 1, procedureText: 'Parcours pédagogique synthétique.', cancellationPolicyText: 'Texte synthétique pour la revue.', sourceUrls: [], approved: true, approvedAt: stamp })),
+  'commercial-terms': [{ id: termsId, schoolId, version: 1, label: 'Conditions de l’école', termsText: 'Conditions synthétiques pour la revue.', validFrom: '2026-01-01', validUntil: null, approved: true, approvalReason: 'Revue locale', approvedAt: stamp }],
+  'service-products': [
+    { id: uuid(), schoolId, version: 1, productKey: 'conduite-b', label: 'Leçon de conduite', type: 'INDIVIDUAL_LESSON', categoryCode: 'B', durationMinutes: 45, unitLabel: 'leçon', unitPriceCents: 9500, validFrom: '2026-01-01', validUntil: null, termsVersionId: termsId, enabled: true },
+    { id: uuid(), schoolId, version: 2, productKey: 'conduite-b', label: 'Leçon de conduite', type: 'INDIVIDUAL_LESSON', categoryCode: 'B', durationMinutes: 45, unitLabel: 'leçon', unitPriceCents: 10000, validFrom: '2026-09-01', validUntil: null, termsVersionId: termsId, enabled: true },
+    { id: uuid(), schoolId, version: 1, productKey: 'conduite-a', label: 'Leçon moto', type: 'INDIVIDUAL_LESSON', categoryCode: 'A', durationMinutes: 45, unitLabel: 'leçon', unitPriceCents: 9000, validFrom: '2026-01-01', validUntil: null, termsVersionId: termsId, enabled: true },
+  ],
   lessons: [
     { id: lessonDone, schoolId, version: 2, trainingId: trainingA, learnerId: learnerA, instructorMembershipId: marieId, plannedStart: '2026-09-28T07:00:00.000Z', plannedEnd: '2026-09-28T08:00:00.000Z', timeZone: 'Europe/Zurich', meetingPoint: 'Gare', status: 'COMPLETED', permitWarning: false, currentPublishedRevisionId: uuid() },
     { id: uuid(), schoolId, version: 1, trainingId: trainingA, learnerId: learnerA, instructorMembershipId: marieId, plannedStart: '2026-09-30T13:00:00.000Z', plannedEnd: '2026-09-30T14:00:00.000Z', timeZone: 'Europe/Zurich', meetingPoint: 'Parking de l’école', status: 'PLANNED', permitWarning: true, currentPublishedRevisionId: null },
@@ -84,8 +94,8 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
 
 const value: ConsoleContextValue = {
   schoolId, me: { personId: meId, displayName: 'Luc Martin', version: 1, memberships: [] },
-  membership: { membershipId: marieId, schoolId, schoolName: 'École Synthétique', roles: ['ADMIN', 'INSTRUCTOR'], grants: ['permit_review', 'MANAGE_LEARNER_ARCHIVES'], accessEpoch: 1 },
-  school: { id: schoolId, schoolId, version: 1, name: 'École Synthétique', timeZone: 'Europe/Zurich', status: 'ACTIVE', contactEmail: 'a@b.ch', contactPhone: null, configurationVersion: 1,
+  membership: { membershipId: marieId, schoolId, schoolName: 'École Synthétique', roles: ['ADMIN', 'INSTRUCTOR'], grants: ['permit_review', 'MANAGE_LEARNER_ARCHIVES', 'CONFIGURE_CATALOG'], accessEpoch: 1 },
+  school: { id: schoolId, schoolId, version: 1, name: 'École Synthétique', timeZone: 'Europe/Zurich', status: new URLSearchParams(location.search).get('status') === 'draft' ? 'DRAFT' : 'ACTIVE', contactEmail: 'a@b.ch', contactPhone: null, configurationVersion: 1,
     modules: { gpsEnabled: true, packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false } },
   canConfigureCatalog: true, reloadSchool: async () => {}, csrf: () => 'csrf', refreshCsrf: async () => 'csrf', navigate: section => log.push(`navigate ${section}`), login: options => log.push(`login ${JSON.stringify(options ?? {})}`),
 };
@@ -96,11 +106,11 @@ if (new URLSearchParams(location.search).get('scheme') === 'light') {
   theme.textContent = reviewStyles.match(/:root\s*\{[\s\S]*?\}/)?.[0] ?? '';
   document.head.append(theme);
 }
-const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, config: ConfigurationSection, profile: ProfileFieldsSection, overview: OverviewSection };
+const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, config: ConfigurationSection, profile: ProfileFieldsSection, overview: OverviewSection, formations: FormationsSection };
 const Page = pages[page ?? ''] ?? InvitationsSection;
 const shell = new URLSearchParams(location.search).get('shell') === '1';
 if (shell) {
-  const sections: Record<string, string> = { overview: '', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', config: 'configuration', profile: 'champs-profil' };
+  const sections: Record<string, string> = { home: '', overview: 'apercu', formations: 'formations', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', config: 'configuration', profile: 'champs-profil' };
   window.history.replaceState(null, '', `/app/gestion/${schoolId}/${sections[page ?? 'overview'] ?? 'invitations'}`);
 }
 createRoot(document.getElementById('root')!).render(

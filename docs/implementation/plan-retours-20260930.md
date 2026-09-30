@@ -109,3 +109,18 @@ Choix explicitement retenu par le porteur : **sobre et précise, listes compacte
 - [ ] Mettre à jour `STATUS.md` avec les résultats exécutés et les essais physiques restant à faire.
 
 Les agents travaillent sur des périmètres distincts : carte/capture/replay ; planification/défauts ; refonte visuelle web uniquement. L'intégration principale prend dossier, progression, bilan, cohérence générale et livraison.
+
+## 9. Organisation des informations et parcours web — retour complémentaire
+
+- [x] Auditer les destinations et les difficultés de retour entre pages, au-delà de la palette.
+- [x] Regrouper le menu principal en Planning, Élèves, Équipe, Formations et tarifs, Réglages.
+- [x] Faire de Planning l’accueil quotidien ; placer préparation et activation dans Réglages.
+- [x] Relier chaque formation aux compétences, procédures et tarifs associés.
+- [x] Conserver sélection, semaine et moniteur dans les allers-retours ; ajouter les liens vers dossier et disponibilités.
+- [x] Sur mobile, ouvrir le détail à la place de la liste, avec retour et restitution du focus.
+- [x] Faire passer le suivi avant les formulaires administratifs dans le dossier.
+- [x] Séparer les invitations élèves et personnel ; conserver les brouillons non soumis lors des renvois de catalogue.
+- [x] Vérifier les parcours au navigateur, les anciennes routes et les règles de restauration : 100 tests web, typecheck et build.
+- [ ] Déployer cette nouvelle organisation, avec une nouvelle sauvegarde préalable.
+
+[Décisions et répartition des informations](web-architecture-20260930.md) · [preuve de vérification](proofs/web-architecture-20260930.json).

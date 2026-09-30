@@ -5,9 +5,10 @@ import { commandStore, useCommandSnapshot, type PendingEntry, type SubmitResult 
 import { errorMessage, RequestFailure } from '../protocol';
 import type { Member, Me } from '../protocol';
 import type { School } from '../school-api';
-
-export const sectionKeys = ['apercu', 'configuration', 'champs-profil', 'offres', 'referentiels', 'procedures', 'prestations', 'conditions', 'equipe', 'invitations', 'eleves', 'agenda', 'trajets', 'disponibilites'] as const;
-export type SectionKey = typeof sectionKeys[number];
+import type { NavigationQuery } from './route';
+import type { SectionKey } from './sections';
+import { resumableDraft } from './draft-model';
+export { sectionKeys, type SectionKey } from './sections';
 
 export interface ConsoleContextValue {
   schoolId: string;
@@ -19,7 +20,11 @@ export interface ConsoleContextValue {
   reloadSchool: () => Promise<void>;
   csrf: () => string;
   refreshCsrf: () => Promise<string>;
-  navigate: (section: SectionKey) => void;
+  navigate: (section: SectionKey, query?: NavigationQuery) => void;
+  routeQuery?: NavigationQuery;
+  setRouteQuery?: (query: NavigationQuery, replace?: boolean) => void;
+  /** Unsent catalogue drafts, memory only, renewed with the authenticated school/access scope. */
+  drafts?: Map<string, unknown>;
   /** Sign in again with the same account; `reauthenticate` forces the identity provider to ask for the password. */
   login: (options?: { reauthenticate?: boolean }) => void;
 }
@@ -29,6 +34,36 @@ export function useConsole(): ConsoleContextValue {
   const value = useContext(ConsoleContext);
   if (!value) throw new Error('Console absente.');
   return value;
+}
+
+/** Selection survives reload/back; only an identifier enters browser history. */
+export function useRouteSelection() {
+  const { routeQuery, setRouteQuery } = useConsole();
+  const [local, setLocal] = useState<string | null>(routeQuery?.selection ?? null);
+  const selected = routeQuery ? routeQuery.selection ?? null : local;
+  const select = (selection: string | null) => {
+    setLocal(selection);
+    setRouteQuery?.({ ...routeQuery, selection: selection ?? undefined });
+  };
+  return [selected, select] as const;
+}
+
+/** Keep a catalogue form during contextual navigation, never across reload/sign-out. */
+export function useSectionDraft<T>(key: string) {
+  const { drafts, routeQuery } = useConsole();
+  const [draft, setDraft] = useState<T | null>(() => resumableDraft<T>(drafts?.get(key), routeQuery));
+  const current = useRef(draft);
+  useEffect(() => {
+    const restored = resumableDraft<T>(drafts?.get(key), routeQuery);
+    current.current = restored; setDraft(restored);
+  }, [drafts, key, routeQuery?.selection, routeQuery?.category]);
+  const update = (value: T | null | ((previous: T | null) => T | null)) => {
+    const next = typeof value === 'function' ? (value as (previous: T | null) => T | null)(current.current) : value;
+    current.current = next;
+    if (next === null) drafts?.delete(key); else drafts?.set(key, next);
+    setDraft(next);
+  };
+  return [draft, update] as const;
 }
 
 export function readError(error: unknown): string {
@@ -101,6 +136,12 @@ export function useCommandRunner(onConfirmed?: () => void) {
   async function run(command: SchoolCommand, success: string): Promise<SubmitResult> {
     setBusy(true); setOutcome(null);
     submitted.current = command.operationId;
+    // Once sent, the command store owns recovery. Do not resurrect this form as a
+    // new version after a receipt confirms it while its section is unmounted.
+    const draftKey = ({ createCurriculum: 'curriculum', createCatalogPolicy: 'procedure', createOffering: 'offering',
+      createCommercialTerms: 'terms', createServiceProduct: 'product' } as Partial<Record<SchoolCommand['kind'], string>>)[command.kind];
+    const unsentDraft = draftKey ? context.drafts?.get(draftKey) : undefined;
+    if (draftKey) context.drafts?.delete(draftKey);
     const result = await commandStore.submit(command, context.csrf());
     setBusy(false);
     if (result.status === 'confirmed') {
@@ -108,6 +149,7 @@ export function useCommandRunner(onConfirmed?: () => void) {
       void context.reloadSchool();
     } else if (result.status === 'rejected') {
       submitted.current = null;
+      if (draftKey && unsentDraft !== undefined) context.drafts?.set(draftKey, unsentDraft);
       setOutcome({ tone: 'error', title: 'Modification refusée', message: result.needsLogin ? result.message : `${result.message} Votre saisie est conservée.`, code: result.code, needsLogin: result.needsLogin });
     } else {
       // The pending panel at the top of the page carries the verification; move focus there.

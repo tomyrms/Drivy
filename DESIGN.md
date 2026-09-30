@@ -97,7 +97,7 @@ components:
 
 La refonte de direction artistique du 30 septembre 2026 concerne **uniquement le web**, y compris son rendu sur téléphone et tablette. L’identité native iPhone/iPad est conservée. Les ajustements fonctionnels ciblés de l’app (carte, bilan, compétences) ne donnent pas mandat pour changer son thème.
 
-Le dossier `Drivy_Conception_v3_17_2026-09-20` reste une livraison conservée. Les décisions de cette passe sont dans [web-direction-20260930.md](docs/implementation/web-direction-20260930.md). La référence native détaillée reste ci-dessous et dans [la grille iOS](docs/implementation/DESIGN.md).
+Le dossier `Drivy_Conception_v3_17_2026-09-20` reste une livraison conservée. Les décisions de cette passe sont dans [web-direction-20260930.md](docs/implementation/web-direction-20260930.md), complétées par [l’architecture des parcours web](docs/implementation/web-architecture-20260930.md). La référence native détaillée reste ci-dessous et dans [la grille iOS](docs/implementation/DESIGN.md).
 
 ## Web · Bureau
 
@@ -105,10 +105,11 @@ Choix utilisateur : « Sobre et précise : listes compactes, carte dominante, pe
 
 ### Composition
 
-- La navigation commence par Vue d’ensemble, Agenda, Élèves et Trajets. L’organisation de l’école et son catalogue restent accessibles dans les groupes suivants.
+- Cinq espaces stables : Planning, Élèves, Équipe, Formations et tarifs, Réglages. Chaque espace expose deux ou trois destinations locales ; le fil d’Ariane garde la hiérarchie visible. Les compétences, procédures et conditions commerciales s’ouvrent depuis la formation ou le tarif concerné.
 - Desktop : rail de 232 px et zone de travail flexible. La liste et le dossier utilisent deux colonnes quand elles disposent de leur largeur utile. Le dossier a une séparation verticale, sans carte arrondie englobante.
+- Sur écran étroit, ouvrir un dossier remplace la liste par le détail et un retour visible. Le retour restaure le focus dans la liste. La sélection et les filtres de navigation autorisés vivent dans l’URL ; les brouillons restent uniquement en mémoire, par personne, école et époque d’accès.
 - Jusqu’à 1024 px : le bouton Menu ouvre les mêmes destinations dans le flux. Il remplace le ruban horizontal de toutes les rubriques. Sélectionner une destination ferme le menu ; Échap depuis la navigation restitue le focus au bouton.
-- Vue d’ensemble : accès directs aux tâches quotidiennes, préparation à terminer, puis coordonnées/fonctions. Les étapes déjà faites sont repliées ; une école active ne porte pas de badge décoratif.
+- L’école active ouvre sur Planning. La préparation appartient à Réglages et sert d’entrée pour l’école DRAFT. Les coordonnées et capacités ne sont plus répétées dans un tableau de bord quotidien. Le hub Formations regroupe les enseignements, compétences, procédures et tarifs par catégorie, avec liens vers leurs références exactes.
 - Sections de lecture plates, listes alignées et séparateurs discrets. Une couleur de surface sert une sélection, un contrôle ou un message. Les tableaux gardent leurs colonnes comparables ; un tableau large défile dans sa propre région.
 - Les formulaires composés adaptent leurs colonnes à leur conteneur. Un champ à l’intérieur d’un dossier ne dépend pas de la largeur totale de l’écran.
 
