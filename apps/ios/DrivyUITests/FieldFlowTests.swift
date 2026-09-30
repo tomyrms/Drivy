@@ -90,8 +90,9 @@ import XCTest
         if keepEditing.waitForExistence(timeout: 2) {
             keepEditing.tap()
         } else {
-            // Le popover de confirmation iPad se referme en touchant à l’extérieur.
-            app.navigationBars["Permis d’élève"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            // iOS 26 peut omettre l’action d’annulation d’un confirmationDialog
+            // dans l’arbre d’accessibilité. Taper réellement hors du popover.
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.45)).tap()
         }
         XCTAssertTrue(discard.waitForNonExistence(timeout: 5))
         XCTAssertEqual(reason.value as? String, text)
