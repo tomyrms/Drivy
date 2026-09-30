@@ -46,7 +46,7 @@ import Foundation
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolCatalogFailure.unauthorized }
         catch SchoolAPIError.unauthorized { throw SchoolCatalogFailure.unauthorized }
-        catch { throw SchoolCatalogFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolCatalogFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolCatalogFailure.unauthorized }
         try Task.checkCancellation()
         var request = URLRequest(url: target)
@@ -56,7 +56,7 @@ import Foundation
         request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
         let response: SchoolHTTPResponse
         do { response = try await transport.send(request) }
-        catch { throw SchoolCatalogFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolCatalogFailure.unavailable) }
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolCatalogFailure.invalidResponse }
         let media = response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased()
         let problem: Problem?

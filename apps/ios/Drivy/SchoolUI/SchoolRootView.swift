@@ -281,7 +281,8 @@ struct SchoolRootView: View {
         }
     }
     private func joinDismissed() {
-        let membership = joinMembershipToOpen
+        // Fermer (ou glisser) après « Tu as rejoint l’école » ouvre aussi l’école rejointe : le compte est relu dans tous les cas.
+        let membership = joinMembershipToOpen ?? joinWorkspace?.member
         let principal = joinWorkspace?.record?.principal
         let client = joinWorkspace?.client
         joinMembershipToOpen = nil; joinWorkspace?.invalidate(); joinWorkspace = nil
@@ -301,7 +302,7 @@ struct SchoolRootView: View {
     }
     private func closeCodeJoin() { codeJoinWorkspace?.invalidate(); codeJoinRoute = nil; opensLinkAfterCode = false }
     private func codeJoinDismissed() {
-        let membership = joinMembershipToOpen
+        let membership = joinMembershipToOpen ?? codeJoinWorkspace?.member
         let principal = codeJoinWorkspace?.record?.principal
         let client = codeJoinWorkspace?.client
         joinMembershipToOpen = nil; codeJoinWorkspace?.invalidate(); codeJoinWorkspace = nil
@@ -384,10 +385,20 @@ struct SchoolRootView: View {
             membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
         let api = SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
         guard await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: kind),
-              workspace?.membership?.membershipId == membership.membershipId, !presentsSheet else { return }
+              // Une feuille ouverte ailleurs (leçon, démarrage) ferait perdre celle-ci sans un mot : on attend qu’elle se ferme.
+              await SchoolPresentationIdle.wait(isPresenting: { uikitIsPresenting }),
+              workspace?.membership?.membershipId == membership.membershipId, !presentsSheet else {
+            offeredOnboarding.remove(membership.membershipId)
+            return
+        }
         // Offered once: whatever the answer (« Plus tard », closing), not again for seven days.
         SchoolOnboardingDeferral.record(membership.membershipId)
         openOnboarding()
+    }
+
+    /// Vrai quand un contrôleur modal (feuille SwiftUI, dialogue) est déjà présenté depuis la racine de la scène.
+    private var uikitIsPresenting: Bool {
+        presenter?.view.window?.rootViewController?.presentedViewController != nil
     }
 
     private var profileAction: ((SchoolLearner) -> Void)? {
@@ -424,8 +435,11 @@ struct SchoolRootView: View {
     }
     private func closeProfile() { profileWorkspace?.invalidate(); profileRoute = nil }
     private func profileDismissed() {
+        // Le dossier ne se relit que si le profil a changé : la relecture vide un instant la liste des formations
+        // et fait disparaître l’écran de formation ouvert derrière.
+        let changed = profileWorkspace?.successMessage != nil || onboardingWorkspaceID != nil
         profileWorkspace?.invalidate(); profileWorkspace = nil; onboardingWorkspaceID = nil
-        if identity.isAuthenticated, workspace?.selectedLearnerID != nil {
+        if changed, identity.isAuthenticated, workspace?.selectedLearnerID != nil {
             Task { await workspace?.loadSelectedLearner() }
         }
     }
@@ -537,6 +551,21 @@ struct SchoolRootView: View {
         if let client = homeAgendaClient?.captureClient {
             Task { await captureController.resumePendingSynchronizations(client: client, scope: scope) }
         }
+    }
+}
+
+/// Attend qu’aucune présentation ne soit à l’écran avant d’en ouvrir une autre depuis la racine.
+enum SchoolPresentationIdle {
+    /// `true` dès que rien n’est présenté ; `false` si l’attente est annulée ou dépasse `attempts` pauses.
+    @MainActor
+    static func wait(isPresenting: () -> Bool, attempts: Int = 30, pause: Duration = .seconds(1)) async -> Bool {
+        var remaining = attempts
+        while isPresenting() {
+            guard remaining > 0, !Task.isCancelled else { return false }
+            remaining -= 1
+            do { try await Task.sleep(for: pause) } catch { return false }
+        }
+        return !Task.isCancelled
     }
 }
 

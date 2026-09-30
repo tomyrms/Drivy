@@ -45,6 +45,12 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     private(set) var isSending = false
     var themes: [SchoolLiveObservationTheme] { competencies.flatMap(SchoolLiveObservationTheme.choices) }
     var canRecord: Bool { !stopped && !isSending && pending == nil }
+    /// La file chiffrée n’accepte qu’une demande par école : une autre demande en attente (départ de
+    /// leçon, fin de leçon, note…) bloque « Signaler » sans être une observation de cette leçon.
+    var pendingIsForeign: Bool {
+        guard let pending else { return false }
+        return !(pending.kind == .createObservation && pending.routeResourceID == lessonID)
+    }
     @ObservationIgnored private let client: SchoolObservationClient
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
     @ObservationIgnored private let onSettlement: (@MainActor () async -> Void)?
@@ -70,7 +76,10 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
             competencies = values
             competenciesMessage = values.isEmpty ? "Aucune compétence n’est disponible pour cette formation." : nil
         } catch {
-            guard !stopped else { return }
+            // Feuille fermée pendant la lecture : la requête annulée n’est pas un échec à afficher à la
+            // réouverture, qui relance elle-même la lecture.
+            guard !stopped, !Task.isCancelled, (error as? URLError)?.code != .cancelled,
+                  !(error is CancellationError) else { return }
             competenciesMessage = "Les thèmes n’ont pas pu être chargés. Réessaie pour choisir une observation précise."
         }
     }

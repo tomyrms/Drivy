@@ -28,7 +28,9 @@ import Observation
     var isEmpty: Bool { hasLoaded && trips.isEmpty && errorMessage == nil }
 
     func load() async {
-        guard !invalidated, !isLoading else { return }
+        // Une relecture demandée pendant qu’une autre est en cours (écran qui se relance, tirer pour actualiser)
+        // la remplace : ignorer la demande laissait l’ancienne, annulée, finir sur une erreur.
+        guard !invalidated else { return }
         let request = UUID(); generation = request
         isLoading = true; isLoadingMore = false; errorMessage = nil; moreErrorMessage = nil
         defer { if current(request) { isLoading = false } }

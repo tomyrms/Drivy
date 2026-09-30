@@ -58,17 +58,22 @@ struct SchoolCapturePreparationView: View {
                     Button("Fermer") { model.invalidate(); dismiss() }
                 }
             }
-            .task { await model.load(); await start() }
+            // Clé sur la validité de la portée : si les droits ne sont pas encore lisibles à l’ouverture
+            // (feuille présentée juste après une autre), le départ se lance dès qu’ils le deviennent,
+            // au lieu de laisser un écran vide.
+            .task(id: currentScope == model.scope) { await start() }
             .onDisappear { model.suspend() }
             .onChange(of: model.diagnosticIsAvailable) { _, available in if !available { model.closeDiagnostic() } }
             .onChange(of: currentScope) { _, scope in
-                guard scope != model.scope else { return }
+                // Une lecture du compte en cours vide un instant la portée : ce n’est pas un changement
+                // de droits. Seule une autre portée lisible ferme la préparation.
+                guard let scope, scope != model.scope else { return }
                 model.invalidate(); choiceRoute = nil; resendRoute = nil; startReview = nil; dismiss()
             }
             .sheet(item: $choiceRoute, onDismiss: {
                 Task {
                     await model.load()
-                    if model.choice?.status == .allowed { await start() }
+                    if model.choice?.status == .allowed { await start(reload: false) }
                     else if model.choice?.status == .refused { dismiss() }
                 }
             }) { route in
@@ -90,9 +95,15 @@ struct SchoolCapturePreparationView: View {
         }
     }
 
-    private func start() async {
-        guard currentScope == model.scope, model.pendingAssessments.isEmpty, model.pendingStarts.isEmpty else { return }
-        _ = await model.startInOneStep()
+    private func start(reload: Bool = true) async {
+        guard currentScope == model.scope else { return }
+        // La lecture initiale a toujours lieu, même s’il reste une demande à vérifier : ce sont
+        // ces panneaux qui les montrent. Le départ lui-même refuse d’avancer dans ce cas.
+        if !model.pendingAssessments.isEmpty || !model.pendingStarts.isEmpty {
+            if reload { await model.load() }
+            return
+        }
+        _ = await model.begin(reload: reload)
     }
 
     /// Un seul état visible : le départ en cours, ou ce qui l’empêche et comment le lever.

@@ -18,6 +18,35 @@ import Testing
         model.stop()
     }
 
+    @Test func anotherPendingCommandIsNamedForeignAndNeverReportedAsAnObservation() {
+        let other = PendingSchoolCommand(id: UUID(), scope: ConfigurationFixture.scope(), kind: .completeLesson,
+            resourceVersion: 1, createdAt: Date(), body: Data("{}".utf8), routeResourceID: HubFixture.lessonID)
+        let outbox = ConfigurationOutboxStub(value: other)
+        let model = recorder(outbox: outbox)
+        #expect(model.pending == other && model.pendingIsForeign)
+        #expect(!model.canRecord && !model.canRetry && !model.markMoment())
+        #expect(outbox.saves.isEmpty && outbox.value == other)
+        model.stop()
+    }
+
+    @Test func aPendingObservationOfThisLessonIsNotForeign() throws {
+        let outbox = ConfigurationOutboxStub()
+        let model = recorder(outbox: outbox)
+        #expect(!model.pendingIsForeign)
+        #expect(model.markMoment())
+        #expect(model.pending != nil && !model.pendingIsForeign)
+        model.stop()
+    }
+
+    @Test func invalidatedReplayNamesItsStateInsteadOfLoadingForever() async {
+        let scope = ConfigurationFixture.scope()
+        let client = SchoolCaptureClient(baseURL: URL(string: scope.apiBaseURL)!, tokenSource: HubToken(), transport: LiveObservationTransport())
+        let replay = SchoolCaptureReplayWorkspace(scope: scope, client: client, captureID: UUID())
+        replay.invalidate()
+        await replay.load()
+        #expect(replay.isInvalidated && replay.errorMessage != nil && !replay.isLoading && !replay.isComplete)
+    }
+
     @Test func failedStorageNeverClaimsTheGestureWasKept() {
         let outbox = ConfigurationOutboxStub(); outbox.failSave = true
         let model = recorder(outbox: outbox)

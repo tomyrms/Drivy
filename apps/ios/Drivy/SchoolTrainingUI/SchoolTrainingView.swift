@@ -31,6 +31,9 @@ struct SchoolTrainingScreen: View {
     let trainingID: UUID
     var section: SchoolTrainingSection? = nil
     @State private var model: SchoolTrainingWorkspace?
+    /// La leçon ouverte vit ici, hors du contenu conditionnel et de `.id` : une relecture ou un changement
+    /// de portée recrée le contenu, jamais la feuille qui le surplombe.
+    @State private var opened: OpenedLesson?
 
     private var scopeKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.joined(separator: ",") ?? ""):\(workspace.membership?.grants.joined(separator: ",") ?? ""):\(trainingID)"
@@ -38,7 +41,7 @@ struct SchoolTrainingScreen: View {
     var body: some View {
         Group {
             if let model, matches(model) {
-                SchoolTrainingContent(model: model, workspace: workspace, learner: learner, fixedSection: section)
+                SchoolTrainingContent(model: model, workspace: workspace, learner: learner, fixedSection: section, opened: $opened)
             } else {
                 ProgressView("Chargement de la formation…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -63,17 +66,35 @@ struct SchoolTrainingScreen: View {
             await shared.model.load(keepingCurrent: !shared.isNew)
         }
         .onChange(of: model?.accessRevoked) { _, revoked in
-            if revoked == true { Task { await workspace.loadAccount() } }
+            // Relecture silencieuse : `loadAccount` vide le compte et fait disparaître tout l’écran (feuille ouverte comprise).
+            if revoked == true { Task { await workspace.refreshAccount(minimumInterval: 0) } }
+        }
+        // Une leçon planifiée ailleurs (feuille de planification du dossier) : la liste se relit sans être recréée.
+        .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { _ in
+            if let model, matches(model) { Task { await model.refreshOnAppear() } }
+        }
+        .sheet(item: $opened, onDismiss: { if let model { Task { await model.load(keepingCurrent: true) } } }) { lesson in
+            NavigationStack {
+                SchoolLessonReportView(client: client.reports, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: learner.displayName,
+                    isNextPlanned: lesson.id == model?.upcomingLessons.first?.id)
+            }
+            .tint(DrivyTheme.accent)
         }
     }
     private func matches(_ model: SchoolTrainingWorkspace) -> Bool {
-        model.scope.personID == workspace.person?.personId && model.scope.membershipID == workspace.membership?.membershipId
+        model.learnerID == learner.id && model.trainingID == trainingID
+            && model.scope.personID == workspace.person?.personId && model.scope.membershipID == workspace.membership?.membershipId
             && model.scope.accessEpoch == workspace.membership?.accessEpoch && model.membership.roles == workspace.membership?.roles
             && model.membership.grants == workspace.membership?.grants
     }
 }
 
 private struct OpenedLesson: Identifiable { let id: UUID }
+
+extension Notification.Name {
+    /// Une leçon vient d’être créée, déplacée ou annulée hors de l’écran qui la montre.
+    static let drivyLessonsDidChange = Notification.Name("drivy.lessonsDidChange")
+}
 
 /// Filtre de statut des leçons du dossier. Deux ensembles disjoints (à venir, passées) ; « À terminer »
 /// est le sous-ensemble des passées restées sans issue.
@@ -127,8 +148,8 @@ private struct SchoolTrainingContent: View {
     @Bindable var workspace: SchoolWorkspace
     let learner: SchoolLearner
     let fixedSection: SchoolTrainingSection?
+    @Binding var opened: OpenedLesson?
     @State private var chosenSection: SchoolTrainingSection = .lessons
-    @State private var opened: OpenedLesson?
     /// Le tri et le filtre survivent aux changements d’onglet et de dossier pendant la session de la scène.
     @SceneStorage("training.lessons.filter") private var filter: TrainingLessonFilter = .all
     @SceneStorage("training.lessons.order") private var order: TrainingLessonOrder = .chronological
@@ -186,13 +207,6 @@ private struct SchoolTrainingContent: View {
         }
         .background(DrivyTheme.surface)
         .accessibilityIdentifier("training-dossier")
-        .sheet(item: $opened, onDismiss: { Task { await model.load(keepingCurrent: true) } }) { lesson in
-            NavigationStack {
-                SchoolLessonReportView(client: model.client.reports, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: learner.displayName,
-                    isNextPlanned: lesson.id == model.upcomingLessons.first?.id)
-            }
-            .tint(DrivyTheme.accent)
-        }
     }
     private var heading: some View {
         // Le dossier est celui d’une personne : son nom est le titre, la formation la précise.

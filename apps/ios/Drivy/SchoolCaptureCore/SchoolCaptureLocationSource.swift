@@ -228,6 +228,10 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
             else if segment.policy.requiresPreciseLocation && manager.accuracyAuthorization != .fullAccuracy { interrupt(.precisionReduced) }
         }
         if !permission.permitsLocation { lastDiagnostic = nil; diagnosticRequested = false }
+        // Un changement d’autorisation (y compris le rappel initial du système ou le retour au premier
+        // plan) ne termine pas une mesure ponctuelle en cours : seule sa réponse ou son échec le fait.
+        // Sinon le départ en un geste croyait la mesure finie et envoyait un diagnostic sans mesure.
+        if diagnosticRequested && segment == nil { return }
         onEvent?(.diagnosticChanged)
     }
 

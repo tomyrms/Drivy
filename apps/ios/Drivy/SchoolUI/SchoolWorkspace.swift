@@ -61,6 +61,7 @@ final class SchoolWorkspace {
     }
 
     func reset() {
+        SchoolTrainingModelCache.reset()
         accountRequest = UUID()
         person = nil
         accountError = nil
@@ -72,7 +73,18 @@ final class SchoolWorkspace {
         clearSchool()
     }
 
+    /// Lecture du compte. Quand un compte est déjà chargé et n’a pas été refusé, la relecture est silencieuse :
+    /// rien n’est effacé à l’écran (une feuille ouverte, un dossier, un trajet en cours restent en place) et seul un
+    /// changement de droits recharge l’école. Sinon (première lecture, accès refusé, déconnexion), tout repart de zéro.
     func loadAccount() async {
+        if person != nil, !accessRevoked, !isLoadingAccount {
+            await refreshAccount(minimumInterval: 0)
+            return
+        }
+        await loadAccountFromScratch()
+    }
+
+    private func loadAccountFromScratch() async {
         let preferredSchool = membership?.schoolId
         reset()
         let request = accountRequest
@@ -102,11 +114,12 @@ final class SchoolWorkspace {
         guard let current = person, !isLoadingAccount else { return }
         if let accountReadAt, now.timeIntervalSince(accountReadAt) < minimumInterval { return }
         let request = accountRequest
+        let previousReadAt = accountReadAt
         accountReadAt = now
         do {
             let result = try await api.me()
             guard request == accountRequest else { return }
-            guard result.personId == current.personId else { await loadAccount(); return }
+            guard result.personId == current.personId else { await loadAccountFromScratch(); return }
             person = result
             guard let selected = membership else {
                 if result.memberships.count == 1, let only = result.memberships.first { await selectSchool(only) }
@@ -127,14 +140,23 @@ final class SchoolWorkspace {
             }
         } catch {
             guard request == accountRequest else { return }
-            invalidateAccess(for: error)
+            // Une panne passagère ne compte pas comme une lecture : la prochaine occasion réessaie.
+            if !invalidateAccess(for: error) { accountReadAt = previousReadAt }
         }
     }
 
     func selectSchool(_ selected: SchoolMembership) async {
         guard person?.memberships.contains(selected) == true else { return }
-        clearSchool()
-        membership = selected
+        if membership == selected {
+            // Même école, mêmes droits (nouvel essai, retour d'une adhésion) : la portée reste en place pour que les
+            // écrans ouverts ne se ferment pas. Les réponses en vol de l'ancienne lecture sont écartées par le nouveau scope.
+            schoolScope = UUID()
+            schoolError = nil
+            isLoadingSchool = false
+        } else {
+            clearSchool()
+            membership = selected
+        }
         let scope = schoolScope
         isLoadingSchool = true
         do {
@@ -220,7 +242,8 @@ final class SchoolWorkspace {
         isLoadingTrainings = false
         isLoadingMoreTrainings = false
         learnerError = nil
-        isLoadingLearner = true
+        // Relecture du dossier déjà affiché : il reste à l’écran jusqu’à la réponse, sans écran de chargement.
+        isLoadingLearner = learner?.id != id
         do {
             let result = try await api.learner(schoolID: schoolID, id: id)
             guard scope == schoolScope, request == learnerRequest, selectedLearnerID == id else { return }
@@ -245,9 +268,10 @@ final class SchoolWorkspace {
         let request = learnerRequest
         trainingsRequest = UUID()
         let pageRequest = trainingsRequest
-        // Refreshing the list must not close a formation already open in the dossier.
+        // Refreshing the list must not close a formation already open in the dossier, nor remove the
+        // screen (and the sheets it carries) that depends on it: the rows already read stay until the
+        // answer replaces them. They always belong to this learner (changing learner clears them).
         // Its independent detail request remains bound to its selection and schoolScope.
-        trainings = []
         trainingCursors = []
         nextTrainingsCursor = nil
         trainingsError = nil
@@ -257,7 +281,9 @@ final class SchoolWorkspace {
             let page = try await api.trainings(schoolID: schoolID, learnerID: learnerID, cursor: nil)
             guard scope == schoolScope, request == learnerRequest, pageRequest == trainingsRequest else { return }
             guard page.items.allSatisfy({ $0.schoolId == schoolID && $0.learnerId == learnerID }) else { throw SchoolAPIError.invalidResponse }
-            Self.merge(page.items, into: &trainings)
+            var fresh: [SchoolTraining] = []
+            Self.merge(page.items, into: &fresh)
+            trainings = fresh
             nextTrainingsCursor = page.nextCursor
             isLoadingTrainings = false
         } catch {
@@ -308,7 +334,7 @@ final class SchoolWorkspace {
         trainingRequest = UUID()
         let request = trainingRequest
         isLoadingTraining = true
-        training = nil
+        if training?.id != id { training = nil }
         trainingError = nil
         do {
             let result = try await api.training(schoolID: schoolID, id: id)

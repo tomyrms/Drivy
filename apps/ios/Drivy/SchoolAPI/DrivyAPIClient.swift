@@ -7,6 +7,18 @@ struct SchoolHTTPResponse: Sendable {
     let contentType: String?
 }
 
+extension Error {
+    /// Une requête interrompue parce que l’écran s’est fermé ou relancé : ce n’est pas une panne du réseau
+    /// et elle ne doit jamais s’afficher comme telle.
+    var isRequestCancellation: Bool { self is CancellationError || (self as? URLError)?.code == .cancelled }
+
+    /// L’interruption reste une interruption ; toute autre panne devient l’erreur du domaine.
+    func unlessCancelled(_ failure: any Error) -> any Error {
+        if isRequestCancellation { return CancellationError() }
+        return failure
+    }
+}
+
 protocol SchoolHTTPTransport: Sendable {
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse
 }
@@ -158,7 +170,12 @@ final class DrivyAPIClient: SchoolAPI {
             components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         }
         guard let target = components.url else { throw SchoolAPIError.invalidConfiguration }
-        let token = try await tokenSource.accessToken()
+        let token: String
+        do { token = try await tokenSource.accessToken() }
+        catch IdentityFailure.reauthentication { throw SchoolAPIError.unauthorized }
+        catch let error where error.isRequestCancellation { throw CancellationError() }
+        catch let error as SchoolAPIError { throw error }
+        catch { throw SchoolAPIError.unavailable }
         try Task.checkCancellation()
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolAPIError.unauthorized }
         var request = URLRequest(url: target)

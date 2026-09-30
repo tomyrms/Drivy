@@ -164,7 +164,7 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         if !query.isEmpty { parts.queryItems = query }
         guard let target = parts.url else { throw SchoolReportFailure.invalidResponse }
         let token: String
-        do { token = try await tokenSource.accessToken() } catch IdentityFailure.reauthentication { throw SchoolReportFailure.unauthorized } catch { throw SchoolReportFailure.unavailable }
+        do { token = try await tokenSource.accessToken() } catch IdentityFailure.reauthentication { throw SchoolReportFailure.unauthorized } catch { throw error.unlessCancelled(SchoolReportFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolReportFailure.unauthorized }
         if let command {
             let person = try await DrivyAPIClient(baseURL: baseURL, tokenSource: PinnedToken(token), transport: transport).me()
@@ -183,7 +183,8 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
             request.setValue("\"\(command.ifMatchVersion)\"", forHTTPHeaderField: "If-Match")
         }
         let response: SchoolHTTPResponse
-        do { response = try await transport.send(request) } catch { throw SchoolReportFailure.unavailable }
+        do { response = try await transport.send(request) }
+        catch { throw error.unlessCancelled(SchoolReportFailure.unavailable) }
         try Task.checkCancellation()
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolReportFailure.invalidResponse }
         let type = response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased()

@@ -239,6 +239,125 @@ struct SchoolWorkspaceTests {
         #expect(workspace.person == nil && workspace.accessRevoked)
     }
 
+    @Test func reloadingTheDossierKeepsItsTrainingsOnScreenUntilTheAnswerReplacesThem() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        let before = workspace.trainings
+        #expect(before.count == 1)
+        let held = WorkspaceResponse<SchoolPage<SchoolTraining>>()
+        api.trainingsHandler = { _, _, _ in try await held.value() }
+        let reload = Task { await workspace.loadTrainings() }
+        await held.waitUntilRequested()
+        // The screen (and the sheets it carries) depends on these rows: they stay while the list is read again.
+        #expect(workspace.trainings == before)
+        #expect(workspace.isLoadingTrainings)
+        let fresh = WorkspaceFixture.training()
+        held.succeed(.init(items: [fresh], nextCursor: nil))
+        await reload.value
+        #expect(workspace.trainings == [fresh])
+        #expect(!workspace.isLoadingTrainings)
+    }
+
+    @Test func aFailedReloadOfTheTrainingsKeepsTheRowsAndSaysSo() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        let before = workspace.trainings
+        api.trainingsHandler = { _, _, _ in throw SchoolAPIError.unavailable }
+        await workspace.loadTrainings()
+        #expect(workspace.trainings == before)
+        #expect(workspace.trainingsError != nil)
+        #expect(!workspace.isLoadingTrainings)
+        #expect(!workspace.accessRevoked)
+    }
+
+    @Test func reopeningTheOpenDossierShowsNoLoadingScreen() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learner != nil)
+        let again = Task { await workspace.loadSelectedLearner() }
+        await Task.yield()
+        #expect(workspace.learner != nil)
+        #expect(!workspace.isLoadingLearner)
+        await again.value
+        #expect(workspace.learner?.id == WorkspaceFixture.learnerID)
+        #expect(workspace.trainings.count == 1)
+    }
+
+    @Test func rereadingTheAccountNeverEmptiesTheScreenWhileTheSameAccountIsSignedIn() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        let held = WorkspaceResponse<SchoolPerson>()
+        api.meHandler = { try await held.value() }
+        let reread = Task { await workspace.loadAccount() }
+        await held.waitUntilRequested()
+        // A sheet opened on this membership would be closed by any purge: nothing is cleared.
+        #expect(workspace.person != nil && workspace.membership != nil && workspace.school != nil)
+        #expect(workspace.learner?.id == WorkspaceFixture.learnerID)
+        held.succeed(api.person)
+        await reread.value
+        #expect(workspace.membership == WorkspaceFixture.firstMembership)
+        #expect(workspace.learner?.id == WorkspaceFixture.learnerID)
+        #expect(workspace.accountError == nil && !workspace.accessRevoked)
+    }
+
+    @Test func retryingTheCurrentSchoolKeepsTheScopeButDropsItsLateAnswers() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let membership = try #require(workspace.membership)
+        let held = WorkspaceResponse<SchoolDetails>()
+        api.schoolHandler = { _ in try await held.value() }
+        let retry = Task { await workspace.selectSchool(membership) }
+        await held.waitUntilRequested()
+        #expect(workspace.membership == membership)
+        #expect(workspace.person != nil)
+        held.succeed(WorkspaceFixture.school(membership.schoolId))
+        await retry.value
+        #expect(workspace.school?.id == membership.schoolId && !workspace.isLoadingSchool)
+    }
+
+    @Test func aBriefNetworkFailureDoesNotPostponeTheNextAccountCheck() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let now = Date()
+        let calls = RefreshCounter()
+        api.meHandler = { calls.value += 1; throw SchoolAPIError.unavailable }
+        await workspace.refreshAccount(now: now.addingTimeInterval(400))
+        await workspace.refreshAccount(now: now.addingTimeInterval(410))
+        #expect(calls.value == 2)
+    }
+
+    @Test func closingTheAccountDropsTheSharedTrainingModel() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let membership = WorkspaceFixture.firstMembership
+        let scope = SchoolCommandScope(personID: api.person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: "https://api.example.test")
+        let client = SchoolTrainingClient(baseURL: URL(string: "https://api.example.test")!, tokenSource: WorkspaceToken())
+        let learner = UUID(), training = UUID()
+        let first = SchoolTrainingModelCache.model(scope: scope, membership: membership, learnerID: learner, trainingID: training, client: client)
+        #expect(first.isNew)
+        workspace.reset()
+        #expect(first.model.invalidated)
+        let second = SchoolTrainingModelCache.model(scope: scope, membership: membership, learnerID: learner, trainingID: training, client: client)
+        #expect(second.isNew && second.model !== first.model)
+        SchoolTrainingModelCache.reset()
+    }
+
     @Test func theGuidedWelcomeIsOfferedAtMostOnceAWeekPerMembership() throws {
         let defaults = try #require(UserDefaults(suiteName: "drivy-tests-onboarding-\(UUID().uuidString)"))
         let membership = UUID(), now = Date()
@@ -252,6 +371,11 @@ struct SchoolWorkspaceTests {
 
 @MainActor
 private final class RefreshCounter { var value = 0 }
+
+@MainActor
+private final class WorkspaceToken: AccessTokenSource {
+    func accessToken() async throws -> String { "test-token" }
+}
 
 @MainActor
 private final class WorkspaceAPIStub: SchoolAPI {

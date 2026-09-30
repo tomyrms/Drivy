@@ -303,7 +303,10 @@ struct SchoolCaptureLiveView: View {
     @ViewBuilder private func observationFeedback(_ recorder: SchoolLiveObservationRecorder) -> some View {
         if recorder.isSending { DrivyLoadingState(title: "Envoi de l’observation…") }
         else if recorder.pending != nil {
-            DrivyInlineMessage(text: recorder.errorMessage ?? "Une observation attend son envoi.", tone: .warning)
+            DrivyInlineMessage(text: recorder.errorMessage
+                ?? (recorder.pendingIsForeign
+                    ? "Une autre demande de l’école attend d’être vérifiée. Elle empêche de signaler pour l’instant."
+                    : "Une observation attend son envoi."), tone: .warning)
             if recorder.canRetry {
                 Button("Réessayer l’envoi", systemImage: "arrow.clockwise") { Task { await recorder.retry() } }
                     .buttonStyle(DrivySecondaryButtonStyle())

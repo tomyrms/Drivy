@@ -21,7 +21,7 @@ import Observation
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var progressRequest = UUID()
     @ObservationIgnored private var seenCursors = Set<String>()
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
 
     init(scope: SchoolCommandScope, membership: SchoolMembership, learnerID: UUID, trainingID: UUID, client: SchoolTrainingClient) {
         self.scope = scope; self.membership = membership; self.learnerID = learnerID; self.trainingID = trainingID; self.client = client
@@ -115,7 +115,8 @@ import Observation
         } catch {
             guard request == generation, detailRequest == progressRequest, !invalidated else { return }
             if error is CancellationError { return }
-            if SchoolTrainingAccess.isRevoked(error) { fail(error) }
+            // Un refus sur la seule progression ne ferme pas le dossier : seule une session perdue le fait.
+            if let apiError = error as? SchoolAPIError, case .unauthorized = apiError { fail(error) }
             else { progressError = SchoolTrainingAccess.message(error) }
         }
     }
@@ -132,10 +133,18 @@ import Observation
 @MainActor enum SchoolTrainingModelCache {
     private static var current: SchoolTrainingWorkspace?
 
+    /// Fermeture du compte ou relecture complète : aucune leçon ni progression ne reste en mémoire
+    /// pour le compte suivant, même si aucun écran ne les affiche plus.
+    static func reset() {
+        current?.invalidate()
+        current = nil
+    }
+
     static func model(scope: SchoolCommandScope, membership: SchoolMembership, learnerID: UUID, trainingID: UUID,
                       client: SchoolTrainingClient) -> (model: SchoolTrainingWorkspace, isNew: Bool) {
         if let current, current.scope == scope, current.membership == membership, current.learnerID == learnerID,
-           current.trainingID == trainingID, current.client.baseURL == client.baseURL, !current.accessRevoked {
+           current.trainingID == trainingID, current.client.baseURL == client.baseURL, !current.accessRevoked,
+           !current.invalidated {
             return (current, false)
         }
         // Un écran encore ouvert garde son propre modèle : il n’est pas invalidé ici.

@@ -141,7 +141,7 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
         let token: String
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolJoinFailure.authentication }
-        catch { throw SchoolJoinFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolJoinFailure.unavailable) }
         guard configuration.isValid, token.utf8.count <= 32_768,
               token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolJoinFailure.authentication }
         let pieces = token.split(separator: ".", omittingEmptySubsequences: false)
@@ -241,7 +241,7 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
         try Task.checkCancellation()
         let response: SchoolHTTPResponse
         do { response = try await transport.send(request) }
-        catch { throw SchoolJoinFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolJoinFailure.unavailable) }
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolJoinFailure.invalidResponse }
         let type = response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased()
         guard response.status == (operationID == nil ? 200 : 201) else {

@@ -499,6 +499,11 @@ import Observation
         if error as? SchoolReportFailure == .permitReviewRequired { permitReviewDenied = true }
         let denied = isAccessRevoked(error) || error as? SchoolReportFailure == .notFound || error as? SchoolAPIError == .notFound
         if denied { invalidate() }
+        if error is CancellationError, pending == nil {
+            // Écran relancé ou fermé pendant la lecture : ce n’est pas une panne de l’école.
+            errorMessage = "Le chargement a été interrompu. Actualise pour réessayer."
+            return
+        }
         errorMessage = (error as? SchoolReportFailure)?.localizedDescription
             ?? (error as? SchoolConfigurationFailure)?.localizedDescription
             ?? (error as? SchoolAPIError)?.localizedDescription ?? SchoolReportFailure.unavailable.localizedDescription

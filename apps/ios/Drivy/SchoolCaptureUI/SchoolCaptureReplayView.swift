@@ -200,7 +200,7 @@ struct SchoolCaptureReplayView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = model.errorMessage {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                    SchoolErrorNotice(message: error, retry: { Task { await model.load() } })
+                    SchoolErrorNotice(message: error, retry: model.isInvalidated ? nil : { Task { await model.load() } })
                 }
                 .padding(DrivySpacing.m)
                 .frame(maxWidth: DrivyMapLayout.accessibleMaxWidth)

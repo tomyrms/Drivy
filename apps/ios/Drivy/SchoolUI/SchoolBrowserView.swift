@@ -162,6 +162,8 @@ struct SchoolChooserView: View {
                 ForEach(workspace.person?.memberships ?? []) { membership in
                     let isCurrent = workspace.membership?.membershipId == membership.membershipId
                     Button {
+                        // L’école déjà ouverte : on ferme sans tout reconstruire.
+                        guard !isCurrent else { onSelect?(); return }
                         workspace.leaveSchool()
                         onSelect?()
                         Task { await workspace.selectSchool(membership) }
@@ -244,7 +246,8 @@ private struct SchoolLearnerDetailView: View {
 
     /// A learner with one training: its lessons and progression are the dossier itself.
     private var singleTraining: SchoolTraining? {
-        guard trainingClient != nil, !workspace.isLoadingTrainings, workspace.trainingsError == nil,
+        // Pendant une relecture du même élève, la formation affichée reste en place : l’écran (et ses feuilles) n’est pas retiré.
+        guard trainingClient != nil, workspace.trainingsError == nil,
               workspace.nextTrainingsCursor == nil, workspace.trainings.count == 1,
               let training = workspace.trainings.first, training.learnerId == workspace.learner?.id else { return nil }
         return training

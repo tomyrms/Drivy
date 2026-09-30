@@ -133,7 +133,7 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolInvitationFailure.unauthorized }
         catch SchoolAPIError.unauthorized { throw SchoolInvitationFailure.unauthorized }
-        catch { throw SchoolInvitationFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolInvitationFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolInvitationFailure.unauthorized }
         try Task.checkCancellation()
         var request = URLRequest(url: target)
@@ -151,7 +151,7 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
         }
         let response: SchoolHTTPResponse
         do { response = try await transport.send(request) }
-        catch { throw SchoolInvitationFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolInvitationFailure.unavailable) }
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else {
             throw SchoolInvitationFailure.invalidResponse
         }

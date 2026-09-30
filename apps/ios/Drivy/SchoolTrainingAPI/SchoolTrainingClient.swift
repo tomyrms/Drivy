@@ -79,6 +79,7 @@ import Foundation
         let token: String
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolAPIError.unauthorized }
+        catch let error where error.isRequestCancellation { throw CancellationError() }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolAPIError.unauthorized }
         try Task.checkCancellation()
         var request = URLRequest(url: target)

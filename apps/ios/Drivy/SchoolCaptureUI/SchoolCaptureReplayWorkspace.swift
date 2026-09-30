@@ -26,6 +26,7 @@ struct SchoolCaptureReplayFragment: Identifiable {
     private(set) var quality: String?
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
+    var isInvalidated: Bool { invalidated }
 
     init(scope: SchoolCommandScope, client: SchoolCaptureClient, captureID: UUID) {
         self.scope = scope; self.client = client; self.captureID = captureID
@@ -73,8 +74,11 @@ struct SchoolCaptureReplayFragment: Identifiable {
                               pointKeys.count <= 100_000 else { throw SchoolCaptureFailure.invalidResponse }
                     }
                     if let previous = accumulated.last, let previousPoint = previous.points.last {
+                        // Une date illisible venue du serveur est une réponse invalide, jamais un plantage.
                         guard segment.segmentIndex >= previous.segmentIndex,
-                              SchoolLesson.date(first.capturedAt)! >= SchoolLesson.date(previousPoint.capturedAt)! else {
+                              let firstDate = SchoolLesson.date(first.capturedAt),
+                              let previousDate = SchoolLesson.date(previousPoint.capturedAt),
+                              firstDate >= previousDate else {
                             throw SchoolCaptureFailure.invalidResponse
                         }
                         if previous.segmentID == segment.segmentId {
@@ -132,6 +136,8 @@ struct SchoolCaptureReplayFragment: Identifiable {
     func invalidate() {
         invalidated = true; generation = UUID()
         fragments = []; observations = []; capture = nil; isLoading = false; isComplete = false
+        // Sans message, l’écran resterait sur « Ouverture du trajet… » sans fin.
+        errorMessage = "Tes accès ont changé. Ferme le replay puis rouvre-le depuis la leçon."
     }
     private func current(_ request: UUID) -> Bool { !invalidated && generation == request }
 }

@@ -12,6 +12,8 @@ struct SchoolTripsView<Header: View>: View {
     @State private var model: SchoolTripsWorkspace?
     @State private var uploads: SchoolCaptureHistoryWorkspace?
     @State private var replay: SchoolTripReplayRoute?
+    /// Portée du modèle en place : la vue qui réapparaît (onglet, replay plein écran refermé) ne le recrée pas.
+    @State private var preparedKey: String?
 
     init(workspace: SchoolWorkspace, agendaClient: SchoolAgendaClient,
          captureController: SchoolCaptureSessionController? = nil, @ViewBuilder header: () -> Header) {
@@ -47,7 +49,13 @@ struct SchoolTripsView<Header: View>: View {
                 .background(DrivyTheme.canvas)
             }
         }
-        .task(id: scopeKey) { await prepare() }
+        .task(id: scopeKey) {
+            if preparedKey == scopeKey, let model {
+                if model.loadedAt == nil { await refresh() }
+                return
+            }
+            await prepare()
+        }
         .onAppear {
             // Coming back to the tab after a lesson shows the trip that just ended.
             if let loadedAt = model?.loadedAt, Date().timeIntervalSince(loadedAt) > 30 { Task { await refresh() } }
@@ -61,12 +69,14 @@ struct SchoolTripsView<Header: View>: View {
     }
 
     private func prepare() async {
+        let key = scopeKey
+        preparedKey = nil
         model?.invalidate(); uploads?.invalidate(); replay = nil
         model = nil; uploads = nil; filter = .all
         guard let person = workspace.person, let membership = workspace.membership, workspace.school != nil else { return }
         let scope = agendaClient.scope(person: person, membership: membership)
         let trips = SchoolTripsWorkspace(scope: scope, client: agendaClient.captureClient)
-        model = trips
+        model = trips; preparedKey = key
         if let captureController, membership.roles.contains("INSTRUCTOR"), workspace.school?.status != "ARCHIVED" {
             uploads = SchoolCaptureHistoryWorkspace(scope: scope, client: agendaClient.captureClient, owner: captureController)
         }

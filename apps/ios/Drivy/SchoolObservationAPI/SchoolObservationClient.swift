@@ -171,8 +171,7 @@ import Foundation
         }
         let response: SchoolHTTPResponse
         do { response = try await transport.send(request) }
-        catch is CancellationError { throw CancellationError() }
-        catch { throw SchoolObservationFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolObservationFailure.unavailable) }
         // Une annulation tardive ne transforme pas l'accusé reçu en erreur : l'outbox doit pouvoir l'acquitter.
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolObservationFailure.invalidResponse }
         let type = response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased()

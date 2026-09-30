@@ -59,6 +59,10 @@ struct SchoolCaptureStartReview: Identifiable {
     @ObservationIgnored private var sourceTransferred = false
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
+    /// Change à chaque fermeture (suspend / invalidate) : une exécution de `begin()` lancée avant
+    /// n’est plus « vivante » et laisse sa place à la suivante au lieu de la faire échouer.
+    @ObservationIgnored private var lifecycle = UUID()
+    @ObservationIgnored private var beginRun: (id: UUID, lifecycle: UUID, task: Task<Bool, Never>)?
 
     init(scope: SchoolCommandScope, lessonID: UUID, client: SchoolCaptureClient,
          reader: any SchoolAPI, agenda: SchoolAgendaClient, store: SQLCipherSchoolCaptureStore? = nil,
@@ -120,6 +124,8 @@ struct SchoolCaptureStartReview: Identifiable {
     /// still be saved under their original scope, but cannot restart a diagnostic.
     func suspend() {
         generation = UUID()
+        lifecycle = UUID()
+        beginRun?.task.cancel()
         if !sourceTransferred { startTransfer?.invalidate() }
         startTransfer = nil
         closeDiagnostic()
@@ -141,6 +147,8 @@ struct SchoolCaptureStartReview: Identifiable {
     func invalidate() {
         invalidated = true
         generation = UUID()
+        lifecycle = UUID()
+        beginRun?.task.cancel()
         if !sourceTransferred { startTransfer?.invalidate() }
         startTransfer = nil
         closeDiagnostic()
@@ -356,6 +364,42 @@ struct SchoolCaptureStartReview: Identifiable {
         }
     }
 
+    /// Point d’entrée unique de la préparation : relit la leçon puis enchaîne le départ en un geste.
+    /// Idempotent et sûr si la feuille est présentée juste après la fermeture d’une autre (la vue peut
+    /// alors apparaître, disparaître puis réapparaître) : un appel qui arrive pendant une exécution encore
+    /// vivante la rejoint ; une exécution suspendue (feuille disparue) est attendue jusqu’au bout avant
+    /// d’en démarrer une neuve, si bien qu’une exécution périmée ne peut ni bloquer la suivante ni écrire
+    /// son échec par-dessus. `reload: false` évite une seconde lecture quand l’appelant vient de charger.
+    @discardableResult
+    func begin(reload: Bool = true) async -> Bool {
+        while true {
+            if let run = beginRun {
+                let live = run.lifecycle == lifecycle && !invalidated
+                let result = await run.task.value
+                if live { return result }
+                continue
+            }
+            guard !invalidated else { return false }
+            if captureStarted { return true }
+            let id = UUID(), stamp = lifecycle
+            let task = Task { @MainActor [self] () -> Bool in
+                quickBlock = nil; startMessage = nil
+                if reload || !contextIsCurrent || notice == nil {
+                    // Le libellé évite d’afficher un instant le bouton inactif entre deux étapes.
+                    quickStep = "Vérification de la leçon…"
+                    await load()
+                    quickStep = nil
+                }
+                guard !Task.isCancelled, !invalidated else { return false }
+                return await startInOneStep()
+            }
+            beginRun = (id, stamp, task)
+            let result = await task.value
+            if beginRun?.id == id { beginRun = nil }
+            return result
+        }
+    }
+
     /// « Démarrer le trajet » en un geste. L’accord de l’élève est demandé une fois et reste valable
     /// tant que l’information de l’école ne change pas ; l’autorisation de localisation, une mesure,
     /// le diagnostic (valable cinq minutes côté serveur) puis le départ s’enchaînent sans écran.
@@ -373,7 +417,8 @@ struct SchoolCaptureStartReview: Identifiable {
         guard collectionIsIntegrated, diagnosticIsAvailable else {
             return quickFailure("Arrête le trajet en cours avant d’en démarrer un autre.")
         }
-        guard storageError == nil, pendingAssessments.isEmpty, pendingStarts.isEmpty, !hasOldScope else {
+        if let storageError { return quickFailure(storageError) }
+        guard pendingAssessments.isEmpty, pendingStarts.isEmpty, !hasOldScope else {
             return quickFailure("Une demande précédente est à vérifier avant un nouveau départ.")
         }
         guard let notice else { return quickFailure(noticeError ?? "L’information GPS de l’école n’a pas pu être lue.") }
@@ -392,8 +437,11 @@ struct SchoolCaptureStartReview: Identifiable {
             // La réponse arrive quand la personne répond à la demande du système.
             var waited = 0
             while !invalidated && snapshot?.permission == .notDetermined && waited < 240 {
-                try? await Task.sleep(for: .milliseconds(250)); waited += 1; refreshSnapshot()
+                // Une exécution annulée (feuille fermée) sort aussitôt au lieu de tourner à vide.
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { break }
+                waited += 1; refreshSnapshot()
             }
+            guard !Task.isCancelled, !invalidated else { return false }
             guard snapshot?.permission.permitsLocation == true else {
                 quickBlock = .permission(denied: snapshot?.permission != .notDetermined); return false
             }
@@ -405,11 +453,15 @@ struct SchoolCaptureStartReview: Identifiable {
         if !assessmentIsValid {
             quickStep = "Mesure GPS…"
             await requestSample()
+            // Une mesure refusée d’emblée (services désactivés, app au second plan) dit sa vraie cause,
+            // au lieu de partir vers un diagnostic sans mesure.
+            if !isSampling, let reason = errorMessage { return quickFailure(reason) }
             var waited = 0
             while !invalidated && isSampling && waited < 80 {
-                try? await Task.sleep(for: .milliseconds(250)); waited += 1
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { break }
+                waited += 1
             }
-            guard !invalidated else { return false }
+            guard !Task.isCancelled, !invalidated else { return false }
             if isSampling {
                 closeDiagnostic()
                 return quickFailure("Aucune position GPS reçue. Place-toi à découvert puis réessaie.")
@@ -433,6 +485,8 @@ struct SchoolCaptureStartReview: Identifiable {
     }
 
     private func quickFailure(_ message: String) -> Bool {
+        // Une exécution annulée (feuille fermée) ne laisse pas d’échec périmé à la réouverture.
+        if Task.isCancelled { return false }
         quickBlock = .failed(message)
         return false
     }

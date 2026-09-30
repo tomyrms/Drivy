@@ -115,7 +115,7 @@ final class SchoolProfileClient: SchoolProfileAPI {
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolProfileFailure.unauthorized }
         catch SchoolAPIError.unauthorized { throw SchoolProfileFailure.unauthorized }
-        catch { throw SchoolProfileFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolProfileFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolProfileFailure.unauthorized }
         try Task.checkCancellation()
         var request = URLRequest(url: target)
@@ -131,7 +131,7 @@ final class SchoolProfileClient: SchoolProfileAPI {
         }
         let response: SchoolHTTPResponse
         do { response = try await transport.send(request) }
-        catch { throw SchoolProfileFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolProfileFailure.unavailable) }
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolProfileFailure.invalidResponse }
         let media = response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased()
         let problem: Problem?

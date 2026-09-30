@@ -39,7 +39,10 @@ struct SchoolHomeView: View {
         .sheet(isPresented: $choosesSchool) {
             SchoolChooserSheet(workspace: workspace, close: { choosesSchool = false })
         }
-        .sheet(item: $dossierPlanningModel) { model in SchoolPlanningView(model: model) }
+        // La leçon planifiée depuis le dossier apparaît dans sa liste : le dossier se relit à la fermeture.
+        .sheet(item: $dossierPlanningModel, onDismiss: { NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil) }) { model in
+            SchoolPlanningView(model: model)
+        }
         .sheet(item: $captureLesson) { route in
             if let agendaClient {
                 NavigationStack {

@@ -266,10 +266,30 @@ final class SchoolCaptureSessionController {
             let boundary = active.stopBoundary()
             active.terminalRequested = true
             active.local.halt()
-            _ = try? await active.local.stop(captureID: session.id, stoppedAt: boundary, reason: .deviceError)
-            if generation == request, state == .preparing { endedAt = .now; state = .failed; errorMessage = message(error) }
+            let sealed = (try? await active.local.stop(captureID: session.id, stoppedAt: boundary, reason: .deviceError)) != nil
+            if generation == request, state == .preparing {
+                if sealed {
+                    // Aucune position n’a jamais été collectée et l’arrêt est durable : ne pas laisser un
+                    // trajet « en échec » qui interdirait toute nouvelle préparation et la fin de la leçon.
+                    // L’arrêt scellé part avec les synchronisations en attente.
+                    discardUnstartedContext(active)
+                    Task { await retryPendingSynchronizations() }
+                } else {
+                    endedAt = .now; state = .failed; errorMessage = message(error)
+                }
+            }
             throw error
         }
+    }
+
+    /// Départ qui n’a jamais ouvert de segment et dont l’arrêt est scellé : retour à l’état neutre.
+    private func discardUnstartedContext(_ active: Context) {
+        active.source.onEvent = nil
+        context = nil; generation = UUID()
+        state = .idle; captureID = nil; lessonID = nil; segments = []
+        errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false
+        synchronizationNeedsRetry = false; finalizedSyncState = nil
+        beginning = nil; endedAt = nil
     }
 
     func pause() async {
@@ -292,8 +312,16 @@ final class SchoolCaptureSessionController {
         state = .preparing; errorMessage = nil
         do {
             let current = try await active.transfer.refresh(captureID: active.session.id)
-            guard generation == request, state == .preparing, !active.terminalRequested,
-                  current.serverCapture.captureState == .authorized else { return }
+            guard generation == request, state == .preparing, !active.terminalRequested else { return }
+            guard current.serverCapture.captureState == .authorized else {
+                // L’école a clos le trajet pendant la pause : sans cette branche l’état restait
+                // « Préparation du GPS » sans aucune commande. On scelle localement, GPS arrêté.
+                let boundary = active.stopBoundary()
+                active.terminalRequested = true; active.local.halt()
+                errorMessage = "L’école a arrêté ce trajet. Les positions déjà enregistrées sont conservées."
+                await finish(active, request: request, boundary: boundary, reason: .deviceError)
+                return
+            }
             try await openSegment(active, request: request, reason: .resume)
         } catch {
             guard generation == request, state == .preparing, !active.terminalRequested else { return }

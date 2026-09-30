@@ -310,7 +310,8 @@ struct InvitationCreationView: View {
                 await model.load()
             }
         }
-        .tint(DrivyTheme.accent).interactiveDismissDisabled(model.isBusy)
+        // Le code n’est montré qu’une fois : seul « Fermer » le referme, jamais un glissement involontaire.
+        .tint(DrivyTheme.accent).interactiveDismissDisabled(model.isBusy || model.issuedCode != nil)
     }
 
     private var form: some View {

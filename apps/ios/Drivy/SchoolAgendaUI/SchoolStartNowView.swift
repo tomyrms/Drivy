@@ -349,8 +349,10 @@ struct SchoolStartNowButton<Content: View>: View {
                 client: agendaClient.planningClient, date: Date().addingTimeInterval(120))
             planned.learnerID = model.learnerID
             planning = planned
-        }
-        onFinished()
+        } else { onFinished(); return }
+        // Une feuille de suite vient d’être demandée : l’écran d’origine ne se relit qu’à sa fermeture (onDismiss).
+        // Relire aussitôt fait apparaître la leçon créée, l’écran d’origine remplace alors ce bouton par « Démarrer le
+        // trajet », la vue qui porte la feuille disparaît et la feuille de suite n’est jamais affichée.
     }
 
     private func mayStart(_ lesson: SchoolLesson) -> Bool {

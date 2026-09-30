@@ -30,7 +30,8 @@ struct SchoolObservationEntryView: View {
         }
         .task(id: scopeKey) {
             model?.invalidate(); model = nil
-            guard let scope else { dismiss(); return }
+            // Portée momentanément illisible (compte en relecture) : la feuille attend, elle ne se ferme pas.
+            guard let scope else { return }
             model = SchoolObservationWorkspace(scope: scope, lessonID: lessonID, client: client)
         }
     }
@@ -57,7 +58,9 @@ struct SchoolObservationView: View {
         let recorder: SchoolLiveObservationRecorder
     }
     private var scopeMatches: Bool {
-        model.scope.personID == schoolWorkspace.person?.personId
+        // Compte en cours de relecture : rien à comparer, ce n’est pas un retrait de droits.
+        guard schoolWorkspace.person != nil, schoolWorkspace.membership != nil else { return true }
+        return model.scope.personID == schoolWorkspace.person?.personId
             && model.scope.schoolID == schoolWorkspace.membership?.schoolId
             && model.scope.membershipID == schoolWorkspace.membership?.membershipId
             && model.scope.accessEpoch == schoolWorkspace.membership?.accessEpoch
