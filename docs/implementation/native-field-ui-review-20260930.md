@@ -48,4 +48,26 @@ Les vues live, contrôles de carte et styles d’observation déjà corrects n�
 - À vérifier sur les nouveaux rendus : iPhone compact et grands caractères, iPad portrait/paysage et fenêtre étroite ; long commentaire de replay ; menu de repères rapprochés ; motif permis Annuler/Continuer/abandon ; accès au bilan et à Signaler après défilement.
 - Aucun résultat physique GPS, batterie, usage en circulation ou VoiceOver réel n’est revendiqué.
 
-Validation visuelle finale en attente des nouveaux rendus Apple ; pas d’approbation globale depuis la seule lecture du code.
+## Revue des 16 captures Apple reçues
+
+Les fichiers ci-dessous, dans `artifacts/native-ui-20260930/journeys/`, ont tous été ouverts avec `view_image`. Ils montrent le portrait clair à taille de texte standard, avant le correctif de fuseau du replay.
+
+| iPhone | iPad |
+| --- | --- |
+| `iPhone-lesson-planned-light-synthetic.png` | `iPad-lesson-planned-light-synthetic.png` |
+| `iPhone-lesson-light-synthetic.png` | `iPad-lesson-light-synthetic.png` |
+| `iPhone-lesson-observations-light-synthetic.png` | `iPad-lesson-observations-light-synthetic.png` |
+| `iPhone-lesson-tariff-light-synthetic.png` | `iPad-lesson-tariff-light-synthetic.png` |
+| `iPhone-observations-light-synthetic.png` | `iPad-observations-light-synthetic.png` |
+| `iPhone-gps-choice-light-synthetic.png` | — |
+| `iPhone-replay-light-synthetic.png` | — |
+| `iPhone-live-light-synthetic.png` | — |
+| `iPhone-live-waiting-light-synthetic.png` | — |
+| `iPhone-signal-light-synthetic.png` | — |
+| `iPhone-capture-preparation-light-synthetic.png` | — |
+
+Aucun bouton masqué, chevauchement de commandes ou texte tronqué n’a été constaté dans ces 16 images. Les trois appréciations se lisent dans la liste d’observations avec texte et symbole ; les commandes du live, du replay et de la préparation restent visibles. Le fond bleu du replay correspond aux coordonnées synthétiques délibérément placées à 0°/0°, pas à une absence de carte.
+
+Un défaut d’information a été confirmé : le replay affiche 07:00 alors que sa leçon affiche 09:00. Son en-tête utilisait le fuseau de l’appareil. Le correctif transmet maintenant le `lessonTimeZone` déjà reçu dans la liste de trajets, ou le `timeZone` de la leçon déjà chargée, jusqu’au replay. Aucune requête supplémentaire ; aucune heure locale supposée si le fuseau est absent ou invalide. `SchoolReplayFormattingTests.swift` couvre les décalages été/hiver, UTC, le passage de minuit et les données absentes/invalides. Exécution Apple et nouvelle capture de ce correctif restent nécessaires.
+
+Les images `lesson-observations` montrent seulement le premier écran du bilan : elles ne qualifient pas la liste située plus bas. La variante défilée `lesson-evidence` est nécessaire. La capture `lesson-tariff` ouvre le contenu seul ; elle ne prouve pas le comportement de la feuille dans sa présentation réelle. Les autres vues iPad, le paysage, le sombre, Dynamic Type et la vraie feuille permis restent hors de ce lot. Validation visuelle finale en attente de ces compléments ; aucune approbation globale déduite de ces seules captures.

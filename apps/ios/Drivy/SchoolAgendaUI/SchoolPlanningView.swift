@@ -5,6 +5,7 @@ struct SchoolPlanningView: View {
     var cancelling = false
     var beforeCancellation: (@MainActor () async -> Bool)? = nil
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var confirmsCancellation = false
     @State private var document: SchoolPlanningDocument?
 
@@ -15,14 +16,22 @@ struct SchoolPlanningView: View {
                 SchoolPlanningFeedback(model: model)
                 if !model.isLoading && model.school != nil {
                     if cancelling { cancellationFields }
-                    else { bookingFields }
+                    else {
+                        bookingFields
+                        if typeSize.isAccessibilitySize {
+                            Section {
+                                VStack(alignment: .leading, spacing: DrivySpacing.xs) { bookingActionContent }
+                            }
+                            .drivyFormRows()
+                        }
+                    }
                 }
             }
             .scrollContentBackground(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !cancelling && !model.isLoading && model.school != nil { bookingActionBar }
+                if !typeSize.isAccessibilitySize && !cancelling && !model.isLoading && model.school != nil { bookingActionBar }
             }
             .environment(\.timeZone, TimeZone(identifier: model.timeZone) ?? .current)
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
@@ -212,38 +221,41 @@ struct SchoolPlanningView: View {
     }
 
     private var bookingActionBar: some View {
-        DrivyStickyActionBar {
-            if model.duration > 0 {
-                ViewThatFits(in: .horizontal) {
-                    HStack {
-                        Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))").fixedSize()
-                        Spacer(minLength: DrivySpacing.s)
-                        if let price = bookingPrice { bookingPriceText(price).fixedSize() }
-                    }
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))")
-                        if let price = bookingPrice { bookingPriceText(price) }
-                    }
+        DrivyStickyActionBar { bookingActionContent }
+    }
+
+    @ViewBuilder private var bookingActionContent: some View {
+        if model.duration > 0 {
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))").fixedSize()
+                    Spacer(minLength: DrivySpacing.s)
+                    if let price = bookingPrice { bookingPriceText(price).fixedSize() }
                 }
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(DrivyTheme.muted)
-                .accessibilityElement(children: .combine)
-            }
-            if !model.validBooking {
-                DrivyActionNote(text: bookingHint)
-            }
-            Button {
-                Task { if await model.saveBooking() { dismiss() } }
-            } label: {
-                HStack(spacing: DrivySpacing.xs) {
-                    if model.isBusy { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
-                    Label(model.originalLesson == nil ? "Confirmer la leçon" : "Confirmer le déplacement", systemImage: "calendar.badge.checkmark")
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                    Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))")
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let price = bookingPrice { bookingPriceText(price) }
                 }
             }
-            .buttonStyle(DrivyPrimaryButtonStyle())
-            .disabled(!model.validBooking)
-            .accessibilityIdentifier("planning-confirm")
+            .font(.subheadline.monospacedDigit())
+            .foregroundStyle(DrivyTheme.muted)
+            .accessibilityElement(children: .combine)
         }
+        if !model.validBooking {
+            DrivyActionNote(text: bookingHint)
+        }
+        Button {
+            Task { if await model.saveBooking() { dismiss() } }
+        } label: {
+            HStack(spacing: DrivySpacing.xs) {
+                if model.isBusy { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
+                Label(model.originalLesson == nil ? "Confirmer la leçon" : "Confirmer le déplacement", systemImage: "calendar.badge.checkmark")
+            }
+        }
+        .buttonStyle(DrivyPrimaryButtonStyle())
+        .disabled(!model.validBooking)
+        .accessibilityIdentifier("planning-confirm")
     }
 
     /// Le prix est le point focal de la barre : plus grand que la durée et l’horaire qui l’accompagnent.

@@ -61,7 +61,7 @@ struct SchoolVisualReview: View {
                             .navigationTitle("Drivy")
                     }
                 case "replay":
-                    SchoolCaptureReplayView(model: context.replay, learnerName: "Trajet synthétique")
+                    SchoolCaptureReplayView(model: context.replay, learnerName: "Trajet synthétique", lessonTimeZone: "Europe/Zurich")
                 case "home-tabs":
                     SchoolVisualShell(context: context, tab: .session)
                 case "agenda":

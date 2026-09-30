@@ -36,6 +36,16 @@ import XCTest
         XCTAssertFalse(app.staticTexts["Aucune observation"].exists)
     }
 
+    func testOpeningALearnerLoadsItsTraining() {
+        let app = launch("learners")
+        let learner = app.descendants(matching: .any).matching(identifier: "school-learner-10000000-0000-4000-8000-000000000004").firstMatch
+        XCTAssertTrue(learner.waitForExistence(timeout: 20), app.debugDescription)
+        learner.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["training-lessons-menu"].waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertTrue(app.buttons["learner-start-now"].exists)
+        XCTAssertTrue(app.buttons["learner-plan-lesson"].exists)
+    }
+
     private func launch(_ screen: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = screen

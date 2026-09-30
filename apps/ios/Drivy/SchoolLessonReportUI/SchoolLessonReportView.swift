@@ -163,7 +163,7 @@ private struct SchoolLessonReportContent: View {
             }
         }
         .fullScreenCover(item: $replay) { route in
-            SchoolCaptureReplayView(model: route.model, learnerName: route.learnerName)
+            SchoolCaptureReplayView(model: route.model, learnerName: route.learnerName, lessonTimeZone: route.lessonTimeZone)
         }
         .sheet(item: $observationRoute, onDismiss: { Task { await model.load() } }) { route in
             SchoolObservationEntryView(client: route.client, schoolWorkspace: schoolWorkspace, lessonID: route.lessonID)
@@ -563,7 +563,7 @@ private struct SchoolLessonReportContent: View {
             ForEach(Array(model.replayableCaptures.enumerated()), id: \.element.id) { index, capture in
                 Button {
                     replay = SchoolTripReplayRoute(model: SchoolCaptureReplayWorkspace(scope: model.scope, client: agenda.captureClient,
-                        captureID: capture.id), learnerName: learnerName)
+                        captureID: capture.id), learnerName: learnerName, lessonTimeZone: model.lesson?.timeZone)
                 } label: {
                     Label(model.replayableCaptures.count == 1 ? "Revoir le trajet" : "Revoir le trajet \(index + 1)", systemImage: "play.circle")
                         .frame(minHeight: 44)

@@ -26,7 +26,8 @@ import XCTest
                     let app = XCUIApplication()
                     let interactiveSignal = ["live-signal", "signal-status"].contains(screen)
                     let lessonEvidence = screen == "lesson-evidence"
-                    app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = interactiveSignal ? "live" : (lessonEvidence ? "lesson-observations" : screen)
+                    let planningDetails = ["planning-details", "planning-confirmation"].contains(screen)
+                    app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = interactiveSignal ? "live" : (lessonEvidence ? "lesson-observations" : (planningDetails ? "planning" : screen))
                     app.launchEnvironment["DRIVY_VISUAL_LARGE_TEXT"] = environment["DRIVY_VISUAL_LARGE_TEXT"] ?? "0"
                     app.launchArguments = ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH",
                                            "-AppleInterfaceStyle", appearance == "dark" ? "Dark" : "Light"]
@@ -43,6 +44,19 @@ import XCTest
                                   "La fenêtre n’a pas pris l’orientation demandée.")
                     // Même délai de stabilisation des fixtures/MapKit que la voie simctl.
                     RunLoop.current.run(until: Date().addingTimeInterval(10))
+                    let readyIdentifier: String? = switch screen {
+                    case "learner", "dossier": "training-lessons-menu"
+                    case "profile-tab": "profile-open-trips"
+                    case "onboarding-staff": "onboarding-start"
+                    default: nil
+                    }
+                    if let readyIdentifier {
+                        XCTAssertTrue(app.descendants(matching: .any)[readyIdentifier].waitForExistence(timeout: 30), app.debugDescription)
+                    }
+                    if screen == "progression" {
+                        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(
+                            format: "label CONTAINS %@", "Avec accompagnement")).firstMatch.waitForExistence(timeout: 30), app.debugDescription)
+                    }
                     if interactiveSignal {
                         let signal = app.buttons["capture-signal-observation"]
                         XCTAssertTrue(signal.waitForExistence(timeout: 10))
@@ -76,6 +90,18 @@ import XCTest
                         XCTAssertTrue(finish.waitForExistence(timeout: 5), app.debugDescription)
                         XCTAssertFalse(finish.isEnabled)
                         XCTAssertTrue(app.navigationBars["Permis d’élève"].exists)
+                    }
+                    if planningDetails {
+                        let target = screen == "planning-confirmation" ? app.buttons["planning-confirm"] : app.buttons["Conditions tarifaires"]
+                        let form = app.collectionViews.firstMatch
+                        XCTAssertTrue(form.waitForExistence(timeout: 10))
+                        for _ in 0..<10 {
+                            if target.exists && target.isHittable { break }
+                            form.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.85))
+                                .press(forDuration: 0.05, thenDragTo: form.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.2)))
+                        }
+                        XCTAssertTrue(target.exists && target.isHittable, app.debugDescription)
+                        if screen == "planning-details" { XCTAssertTrue(app.switches["Prix et conditions acceptés"].exists) }
                     }
                     XCTAssertEqual(XCUIDevice.shared.orientation.isLandscape, landscape)
                     let screenshot = XCUIScreen.main.screenshot()

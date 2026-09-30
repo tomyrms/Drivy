@@ -144,11 +144,25 @@ struct SchoolReplayTimeline {
     }
 }
 
+enum SchoolReplayFormatting {
+    /// The replay uses the lesson's civil time, never the device's current time zone.
+    static func startLabel(_ date: Date?, lessonTimeZone: String?) -> String? {
+        guard let date, let lessonTimeZone, let zone = TimeZone(identifier: lessonTimeZone) else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_CH")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = zone
+        formatter.dateFormat = "d MMM 'à' HH:mm"
+        return formatter.string(from: date)
+    }
+}
+
 /// Private replay of a school capture for the assigned instructor (E24): same anatomy
 /// as the personal replay. Only what the school reconstructed is drawn; gaps stay gaps.
 struct SchoolCaptureReplayView: View {
     @Bindable var model: SchoolCaptureReplayWorkspace
     let learnerName: String
+    let lessonTimeZone: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
@@ -222,7 +236,7 @@ struct SchoolCaptureReplayView: View {
     }
 
     private var status: DrivyMapStatus {
-        let day = model.startsAt?.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(Locale(identifier: "fr_CH")))
+        let day = SchoolReplayFormatting.startLabel(model.startsAt, lessonTimeZone: lessonTimeZone)
         let suffix = day.map { " · \($0)" } ?? ""
         switch model.quality ?? "" {
         case "PARTIAL": return DrivyMapStatus(title: "Partiel\(suffix)", symbol: "exclamationmark.circle", tone: .warning)

@@ -226,7 +226,18 @@ struct SchoolAgendaView: View {
         }
     }
     private var compactDayPicker: some View {
-        DatePicker("Choisir un jour", selection: $selectedDate, displayedComponents: .date)
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                    Text("Choisir un jour").accessibilityHidden(true)
+                    DatePicker("Choisir un jour", selection: $selectedDate, displayedComponents: .date)
+                        .labelsHidden()
+                        .accessibilityLabel("Choisir un jour")
+                }
+            } else {
+                DatePicker("Choisir un jour", selection: $selectedDate, displayedComponents: .date)
+            }
+        }
             .environment(\.timeZone, calendar.timeZone)
             .environment(\.calendar, calendar)
             .environment(\.locale, Locale(identifier: "fr_CH"))

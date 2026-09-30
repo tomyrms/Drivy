@@ -66,7 +66,7 @@ struct SchoolTripsView<Header: View>: View {
             if state == .synced || state == .partial { Task { await refresh() } }
         }
         .fullScreenCover(item: $replay) { route in
-            SchoolCaptureReplayView(model: route.model, learnerName: route.learnerName)
+            SchoolCaptureReplayView(model: route.model, learnerName: route.learnerName, lessonTimeZone: route.lessonTimeZone)
         }
     }
 
@@ -95,7 +95,7 @@ struct SchoolTripsView<Header: View>: View {
     private func open(_ trip: SchoolCaptureTrip) {
         guard let model, SchoolTripsWorkspace.isReplayable(trip.capture) else { return }
         replay = SchoolTripReplayRoute(model: SchoolCaptureReplayWorkspace(scope: model.scope, client: model.client, captureID: trip.id),
-            learnerName: trip.learnerName.isEmpty ? "Trajet" : trip.learnerName)
+            learnerName: trip.learnerName.isEmpty ? "Trajet" : trip.learnerName, lessonTimeZone: trip.lessonTimeZone)
     }
 
     private func learnerName(_ learnerID: UUID) -> String {
@@ -108,6 +108,7 @@ struct SchoolTripsView<Header: View>: View {
 struct SchoolTripReplayRoute: Identifiable {
     let model: SchoolCaptureReplayWorkspace
     let learnerName: String
+    let lessonTimeZone: String?
     var id: UUID { model.id }
 }
 
