@@ -10,7 +10,7 @@ struct SchoolAccountActions {
     let signOut: () -> Void
 
     /// Les lignes du compte, dans l’ordre de la feuille. `afterChangingSchool` ferme la feuille qui les porte, s’il y en a une.
-    @ViewBuilder
+    @MainActor @ViewBuilder
     func rows(workspace: SchoolWorkspace?, openURL: OpenURLAction, afterChangingSchool: @escaping () -> Void = {}) -> some View {
         if let openProfile {
             DrivyNavigationRow(title: "Mon profil", symbol: "person.text.rectangle", action: openProfile)

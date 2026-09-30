@@ -207,6 +207,15 @@ describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)'
    return (r.json().data.items as {competencyId:string;level:string;sourceLessonId:string}[]).find(i=>i.competencyId===school.competency);
   };
   const revisions=async(lessonId:string,subject='demo-alice')=>(await call('GET',`/lessons/${lessonId}/reports`,undefined,null,subject)).json().data.items as {sequence:number;observations:{competencyId:string}[]}[];
+  // Isolation : les bilans partagés des tests précédents ne doivent pas peser sur la progression de ce test.
+  for(let guard=0;guard<10;guard++){
+   const left=await levelOf();if(!left)break;
+   const route=`/lessons/${left.sourceLessonId}/sharing`;
+   const current=(await call('GET',route)).json().data;
+   const hidden=await call('PUT',route,{operationId:randomUUID(),reportPrivate:true,captureHidden:false,privateObservationIds:[]},current.version);
+   expect(hidden.statusCode,hidden.body).toBe(200);
+  }
+  expect(await levelOf()).toBeUndefined();
   const older=await finish(120),recent=await finish(60);
   await save(older,'Travail',[{competencyId:school.competency,level:'GUIDED',context:'Leçon 1'}]);
   await save(recent,'Travail',[{competencyId:school.competency,level:'INDEPENDENT',context:'Leçon 2'}]);
