@@ -80,10 +80,11 @@ export function TermsSection() {
         list={items.length === 0 ? <EmptyState symbol="receipt" title="Aucune condition commerciale" message="Rédigez et approuvez des conditions avant d’activer une prestation." />
           : <table className="data-table">
             <caption className="visually-hidden">Conditions commerciales</caption>
-            <thead><tr><th scope="col">Libellé</th><th scope="col" className="numeric">Version</th><th scope="col">Validité</th><th scope="col">Statut</th></tr></thead>
+            <thead><tr><th scope="col">Conditions</th><th scope="col">Validité</th></tr></thead>
             <tbody>{items.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
-              <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>{item.label}</RowButton></th>
-              <td className="numeric">{item.version}</td><td>{period(item.validFrom, item.validUntil)}</td><td>{approvalBadge(item.approved, true)}</td>
+              <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>{item.label}</RowButton>
+                <span className="row-meta block">Version {item.version}</span>{!item.approved && approvalBadge(false, true)}</th>
+              <td>{period(item.validFrom, item.validUntil)}</td>
             </tr>)}</tbody>
           </table>}
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · ${draft.basedOn.label}` : 'Nouvelles conditions commerciales'}
@@ -196,7 +197,7 @@ export function ProductsSection() {
     setReviewing(false);
     if (result.status === 'confirmed') { setDraft(null); setSelected(null); }
   }
-  const state = (item: ServiceProduct) => item.enabled ? <StatusBadge tone="success" symbol="check">Active</StatusBadge> : <StatusBadge tone="neutral" symbol="dot">Désactivée</StatusBadge>;
+  const state = (item: ServiceProduct) => item.enabled ? <span className="status-text">Active</span> : <StatusBadge tone="neutral" symbol="dot">Désactivée</StatusBadge>;
 
   return (
     <div className="section-stack">
@@ -211,12 +212,12 @@ export function ProductsSection() {
             action={value.terms.some(item => item.approved) ? undefined : <button type="button" className="button secondary" onClick={() => navigate('conditions', { from: 'prestations', category: routeQuery?.category })}>Ouvrir les conditions commerciales</button>} />
           : <table className="data-table">
             <caption className="visually-hidden">Prestations et tarifs</caption>
-            <thead><tr><th scope="col">Prestation</th><th scope="col">Type</th><th scope="col" className="numeric">Prix</th><th scope="col">Validité</th><th scope="col">État</th></tr></thead>
+            <thead><tr><th scope="col">Prestation</th><th scope="col" className="numeric">Prix</th></tr></thead>
             <tbody>{rows.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
               <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>{item.label}</RowButton>
-                <span className="caption"> · v{item.version}</span></th>
-              <td>{typeLabels[item.type]}</td><td className="numeric">{formatCents(item.unitPriceCents)} / {item.unitLabel}</td>
-              <td>{period(item.validFrom, item.validUntil)}</td><td>{state(item)}</td>
+                <span className="row-meta block">{typeLabels[item.type]} · v{item.version}</span>
+                <span className="row-meta block">{period(item.validFrom, item.validUntil)}</span>{!item.enabled && state(item)}</th>
+              <td className="numeric"><strong>{formatCents(item.unitPriceCents)}</strong><span className="row-meta block">par {item.unitLabel}</span></td>
             </tr>)}</tbody>
           </table>}</>}
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · ${draft.basedOn.label}` : 'Nouvelle prestation'}
@@ -256,15 +257,13 @@ export function ProductsSection() {
           </DetailPanel>
           : current ? <DetailPanel focusKey={current.id} title={current.label} meta={`${typeLabels[current.type]} · version ${current.version}`} badge={state(current)}
             actions={canConfigureCatalog ? <button type="button" className="button primary" disabled={!canWrite} onClick={() => edit(current)}><Symbol kind="edit" bare />Nouvelle version</button> : undefined}>
-            <div className="button-row"><button type="button" className="button secondary" onClick={() => navigate('conditions', { selection: current.termsVersionId, category: current.categoryCode ?? undefined, from: 'prestations' })}>Conditions de ce tarif</button></div>
+            <div className="price-summary"><p className="price-amount">{formatCents(current.unitPriceCents)}<span> / {current.unitLabel}</span></p><p className="row-meta">{formatDuration(current.durationMinutes)}{current.categoryCode ? ` · Catégorie ${current.categoryCode}` : ''}</p></div>
             <Facts items={[
               ['Référence', <code key="key">{current.productKey}</code>],
-              ['Prix unitaire', `${formatCents(current.unitPriceCents)} / ${current.unitLabel}`],
-              ['Catégorie', current.categoryCode ?? 'Non renseignée'],
-              ['Durée', formatDuration(current.durationMinutes)],
               ['Validité', period(current.validFrom, current.validUntil)],
               ['Conditions', terms(current.termsVersionId) ? <>{terms(current.termsVersionId)!.label} · v{terms(current.termsVersionId)!.version} {approvalBadge(terms(current.termsVersionId)!.approved, true)}</> : 'Non disponibles'],
             ]} />
+            <div className="button-row"><button type="button" className="button secondary" onClick={() => navigate('conditions', { selection: current.termsVersionId, category: current.categoryCode ?? undefined, from: 'prestations' })}>Conditions de ce tarif</button></div>
           </DetailPanel>
           : <Placeholder>Choisissez une prestation pour la consulter.</Placeholder>} />}
       </LoadState>

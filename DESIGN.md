@@ -97,7 +97,7 @@ components:
 
 La refonte de direction artistique du 30 septembre 2026 concerne **uniquement le web**, y compris son rendu sur téléphone et tablette. L’identité native iPhone/iPad est conservée. Les ajustements fonctionnels ciblés de l’app (carte, bilan, compétences) ne donnent pas mandat pour changer son thème.
 
-Le dossier `Drivy_Conception_v3_17_2026-09-20` reste une livraison conservée. Les décisions de cette passe sont dans [web-direction-20260930.md](docs/implementation/web-direction-20260930.md), complétées par [l’architecture des parcours web](docs/implementation/web-architecture-20260930.md). La référence native détaillée reste ci-dessous et dans [la grille iOS](docs/implementation/DESIGN.md).
+Le dossier `Drivy_Conception_v3_17_2026-09-20` reste une livraison conservée. La première passe est consignée dans [web-direction-20260930.md](docs/implementation/web-direction-20260930.md), puis remplacée par [l’architecture des parcours web](docs/implementation/web-architecture-20260930.md) et [la passe esthétique encre et papier](docs/implementation/web-craft-20260930.md). La référence native détaillée reste ci-dessous et dans [la grille iOS](docs/implementation/DESIGN.md).
 
 ## Web · Bureau
 
@@ -106,11 +106,12 @@ Choix utilisateur : « Sobre et précise : listes compactes, carte dominante, pe
 ### Composition
 
 - Cinq espaces stables : Planning, Élèves, Équipe, Formations et tarifs, Réglages. Chaque espace expose deux ou trois destinations locales ; le fil d’Ariane garde la hiérarchie visible. Les compétences, procédures et conditions commerciales s’ouvrent depuis la formation ou le tarif concerné.
-- Desktop : rail de 232 px et zone de travail flexible. La liste et le dossier utilisent deux colonnes quand elles disposent de leur largeur utile. Le dossier a une séparation verticale, sans carte arrondie englobante.
+- Desktop : rail de 228 px sur fond perle et une seule surface de travail blanche, légèrement bordée. La liste et le dossier utilisent deux colonnes quand elles disposent de leur largeur utile. Le détail a un fond légèrement distinct et un en-tête ; ses actions ferment le panneau après son contenu.
 - Sur écran étroit, ouvrir un dossier remplace la liste par le détail et un retour visible. Le retour restaure le focus dans la liste. La sélection et les filtres de navigation autorisés vivent dans l’URL ; les brouillons restent uniquement en mémoire, par personne, école et époque d’accès.
 - Jusqu’à 1024 px : le bouton Menu ouvre les mêmes destinations dans le flux. Il remplace le ruban horizontal de toutes les rubriques. Sélectionner une destination ferme le menu ; Échap depuis la navigation restitue le focus au bouton.
 - L’école active ouvre sur Planning. La préparation appartient à Réglages et sert d’entrée pour l’école DRAFT. Les coordonnées et capacités ne sont plus répétées dans un tableau de bord quotidien. Le hub Formations regroupe les enseignements, compétences, procédures et tarifs par catégorie, avec liens vers leurs références exactes.
-- Sections de lecture plates, listes alignées et séparateurs discrets. Une couleur de surface sert une sélection, un contrôle ou un message. Les tableaux gardent leurs colonnes comparables ; un tableau large défile dans sa propre région.
+- Les tableaux alignent les données, avec en-tête discret et repère latéral pour la ligne sélectionnée. Les heures, montants et dates utilisent les chiffres tabulaires. L’agenda se lit du jour vers l’horaire puis l’élève ; une leçon est une seule cible. Les catégories enseignées ont une identité typographique commune, reliée aux compétences, procédures et tarifs. Une couleur de surface sert une sélection, un contrôle ou un message.
+- Le fil d’Ariane apparaît dans les sous-pages. À la racine d’un espace, la navigation principale, l’onglet courant et le titre suffisent. Les petits contextes qui répétaient le nom de l’espace sont retirés.
 - Les formulaires composés adaptent leurs colonnes à leur conteneur. Un champ à l’intérieur d’un dossier ne dépend pas de la largeur totale de l’écran.
 
 ### Tokens web
@@ -119,23 +120,25 @@ Source d’exécution : `apps/web/client/styles.css`. Les hexadécimaux sont nom
 
 | Rôle | Clair | Sombre |
 |---|---|---|
-| canvas | `#F7F7F4` | `#151B18` |
-| surface | `#FFFFFF` | `#1D2520` |
-| surface-muted | `#EEEFEB` | `#28322B` |
-| text | `#202925` | `#F1F4EE` |
-| muted | `#5D6861` | `#B4BEB5` |
-| accent | `#285847` | `#9CCBB8` |
-| accent-pressed | `#1D4336` | `#B6DECD` |
-| on-accent | `#FFFFFF` | `#193C2E` |
-| accent-soft | `#E9F0EB` | `#293E32` |
-| border | `#DCE1DA` | `#3C483F` |
-| control-border | `#7D887F` | `#86958A` |
+| canvas | `#F2F4F7` | `#141920` |
+| surface | `#FFFFFF` | `#1C232D` |
+| surface-muted | `#E9EDF3` | `#293341` |
+| surface-inset | `#F8F9FC` | `#171E28` |
+| surface-detail | `#FAFBFE` | `#202934` |
+| text | `#202936` | `#EEF2F8` |
+| muted | `#596579` | `#AFBBCD` |
+| accent | `#285CC4` | `#9ABEFF` |
+| accent-pressed | `#1C479D` | `#B6CFFF` |
+| on-accent | `#FFFFFF` | `#132A50` |
+| accent-soft | `#EEF3FD` | `#283A55` |
+| border | `#DFE4EC` | `#344050` |
+| control-border | `#7E899B` | `#8491A5` |
 
-Les couleurs sémantiques succès, alerte et erreur restent dans leurs rôles existants. Une réussite reçoit un texte ou symbole explicite ; l’accent vert n’est pas une preuve de réussite métier.
+Les couleurs sémantiques succès, alerte et erreur restent dans leurs rôles existants. Le bleu signale les actions, liens et sélections. Une réussite reçoit un texte ou symbole explicite. Les statuts courants restent du texte ; les badges servent les états inhabituels.
 
-Police système, titres principaux 28–32 px/650, titres de section 17 px/600, lignes 15 px, métadonnées 14 px. Les champs passent à 16 px sur petit écran ou pointeur tactile pour éviter le zoom de saisie Safari. Heures et montants utilisent les chiffres tabulaires. Les textes utiles restent sélectionnables.
+Source Sans 3 variable auto-hébergée (fichier officiel Adobe sous OFL, sans requête à un hébergeur de polices), puis police système en repli. Titres principaux 28–30 px/650, titres de détail 22 px/650, sections 18 px/600, lignes 15 px et métadonnées 13–14 px. Les champs passent à 16 px sur petit écran ou pointeur tactile pour éviter le zoom de saisie Safari. Les textes utiles restent sélectionnables.
 
-Rayons web : champ 8 px, contenu 12 px, panneau/dialogue 20 px. Les contrôles de gestion gardent au moins 44 px de hauteur. Une seule action primaire par vue ; secondaires neutres, destructives nommées. Les couleurs et rayons web ne doivent pas être recopiés dans `DrivyTheme.swift`.
+Rayons web : champ et commande 6 px, détail et surface de travail 12 px, panneau d’entrée 16 px. Les contrôles de gestion gardent au moins 44 px de hauteur. Une seule action primaire par vue ; secondaires blancs avec contour et ombre légère, actions discrètes en texte. L’ombre distingue une commande ou la surface de travail ; les séparations internes restent des traits. Les menus déroulants gardent leur comportement HTML natif. Les couleurs et rayons web ne doivent pas être recopiés dans `DrivyTheme.swift`.
 
 ### Accessibilité et états
 
@@ -143,7 +146,7 @@ Liens pour les destinations, boutons pour les actions, labels permanents, `aria-
 
 Conserver les refus serveur, les erreurs, la saisie et la demande incertaine. Un succès ne s’affiche qu’après la confirmation durable. Un style compact ne cache jamais une action nécessaire, un prix modifié ou un refus d’accès.
 
-Contrastes mesurés : texte sur surface 14,94:1 clair / 14,14:1 sombre ; secondaire 5,80:1 / 8,20:1 ; action primaire 8,15:1 / 6,74:1. [Mesures](docs/implementation/proofs/web-contrast-20260930.json). La lecture VoiceOver/NVDA, le zoom navigateur à 200 % et les essais physiques restent à qualifier.
+Contrastes calculés depuis les tokens : texte sur surface 14,67:1 clair / 14,08:1 sombre ; secondaire 5,90:1 / 8,14:1 ; action primaire 6,14:1 / 7,58:1 ; contour sur fond de champ 3,36:1 / 5,25:1. Les 52 couples vérifiés passent leurs seuils. [Mesures](docs/implementation/proofs/web-craft-contrast-20260930.json). La lecture VoiceOver/NVDA, le zoom navigateur à 200 % et les essais physiques restent à qualifier.
 
 ## Apple · Cartographie native conservée
 

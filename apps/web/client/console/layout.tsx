@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Loading, Notice, Symbol } from '../ui';
 import { useConsole, type Loaded, type Outcome } from './context';
+import { workspaces } from './navigation';
 
 /** Section title. Receives focus when the section opens, so screen readers announce the new page. */
 export function SectionHeading({ title, context, actions }: { title: string; context?: string; actions?: ReactNode }) {
@@ -10,7 +11,7 @@ export function SectionHeading({ title, context, actions }: { title: string; con
   return (
     <div className="section-head">
       <div className="section-head-text">
-        {context && <p className="context">{context}</p>}
+        {context && !workspaces.some(workspace => workspace.label === context) && <p className="context">{context}</p>}
         <h1 ref={heading} tabIndex={-1}>{title}</h1>
       </div>
       {actions && <div className="section-head-actions">{actions}</div>}

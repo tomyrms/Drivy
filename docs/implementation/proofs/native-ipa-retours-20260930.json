@@ -1,0 +1,16 @@
+{
+  "commit": "cd5a394dd5f87d219837e570c8043f9c5af7f1ed",
+  "run": "36723305514",
+  "version": "0.7.0",
+  "build": "87",
+  "ipaSHA256": "43ef637c81071c2db04e36cb297b16d06777da1618fcdf7ae9d39bff8fbde401",
+  "archiveCreated": true,
+  "unsigned": true,
+  "zipAndBinaryHashesVerified": true,
+  "productionConfigurationVerified": true,
+  "debugVisualFixturesExcluded": true,
+  "physicalQualification": "NOT_EXECUTED",
+  "date": "2026-09-30",
+  "artifactPath": "artifacts/retours-20260930/ipa/Drivy.ipa",
+  "installation": "Unsigned IPA for owner signature and installation with iLoader; installation not performed"
+}

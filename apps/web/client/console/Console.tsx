@@ -218,11 +218,11 @@ export function SectionNavigation({ schoolId, section, query = {}, navigate }: {
   const link = (destination: SectionKey, label: string, destinationQuery: NavigationQuery = categoryQuery) => <a href={consolePath(schoolId, destination, destinationQuery)}
     onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(destination, destinationQuery); }}>{label}</a>;
   return <div className="section-navigation">
-    <nav className="breadcrumbs" aria-label="Fil d’Ariane"><ol>
+    {section !== workspace.home && <nav className="breadcrumbs" aria-label="Fil d’Ariane"><ol>
       <li>{section === workspace.home ? <span aria-current="page">{workspace.label}</span> : link(workspace.home, workspace.label)}</li>
       {parent && parent !== workspace.home && <li>{link(parent, sectionTitles[parent])}</li>}
       {section !== workspace.home && <li><span aria-current="page">{sectionTitles[section]}</span></li>}
-    </ol></nav>
+    </ol></nav>}
     <nav className="local-navigation" aria-label={`Rubriques · ${workspace.label}`}><ul>{workspace.items.map(item => {
       const destinationQuery = { ...(workspace.key === 'formations' ? categoryQuery : {}), ...item.query };
       return <li key={item.section}>

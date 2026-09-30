@@ -7,7 +7,7 @@ import { useCommandRunner, useConsole, useLoad, useRouteSelection, useSectionDra
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
 
 export const approvalBadge = (approved: boolean, feminine = false) => approved
-  ? <StatusBadge tone="success" symbol="check">{feminine ? 'Approuvée' : 'Approuvé'}</StatusBadge>
+  ? <span className="status-text with-symbol"><Symbol kind="check" bare />{feminine ? 'Approuvée' : 'Approuvé'}</span>
   : <StatusBadge tone="warning" symbol="edit">Brouillon</StatusBadge>;
 const uid = () => globalThis.crypto.randomUUID();
 const byCategory = <T extends { categoryCode: string }>(order: (item: T) => number) => (a: T, b: T) =>
@@ -94,14 +94,15 @@ export function CurriculaSection() {
         list={items.length === 0 ? <EmptyState symbol="book" title="Aucun référentiel" message="Préparez un premier référentiel pour une catégorie, puis approuvez-le pour ouvrir une offre." />
           : <table className="data-table">
             <caption className="visually-hidden">Référentiels de l’école{data.truncated ? ' (liste partielle)' : ''}</caption>
-            <thead><tr><th scope="col">Catégorie</th><th scope="col" className="numeric">Révision</th><th scope="col" className="numeric">Compétences</th><th scope="col">Statut</th></tr></thead>
+            <thead><tr><th scope="col">Référentiel</th><th scope="col" className="numeric">Compétences</th></tr></thead>
             <tbody>{items.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
-              <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>Catégorie {item.categoryCode}</RowButton></th>
-              <td className="numeric">{item.revision}</td><td className="numeric">{item.competencies.length}</td><td>{approvalBadge(item.approved)}</td>
+              <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>Catégorie {item.categoryCode}</RowButton>
+                <span className="row-meta block">Révision {item.revision}</span>{!item.approved && approvalBadge(false)}</th>
+              <td className="numeric">{item.competencies.length}</td>
             </tr>)}</tbody>
           </table>}
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle révision · catégorie ${draft.basedOn.categoryCode}` : 'Nouveau référentiel'}
-            meta={draft.basedOn ? `À partir de la révision ${draft.basedOn.revision}, qui reste inchangée.` : 'La révision est numérotée par l’école.'}
+            meta={draft.basedOn ? `À partir de la révision ${draft.basedOn.revision}` : undefined}
             actions={<>
               <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
               <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
@@ -115,12 +116,12 @@ export function CurriculaSection() {
                 {problems.count && showErrors && <p className="field-error"><Symbol kind="alert" bare />{problems.count}</p>}
                 {draft.competencies.map((item, index) => <div className="repeat-row" key={item.uid}>
                   <p className="repeat-title">Compétence {index + 1}</p>
-                  <div className="form-row">
-                    <TextField label="Clé stable" value={item.key} maxLength={80} disabled={!canWrite} onChange={key => updateCompetency(item.uid, { key })} error={showErrors ? problems.competency[index]?.key : null} />
-                    <TextField label="Ordre" value={item.sortOrder} inputMode="numeric" disabled={!canWrite} onChange={sortOrder => updateCompetency(item.uid, { sortOrder })} error={showErrors ? problems.competency[index]?.sortOrder : null} />
-                  </div>
                   <TextField label="Libellé" value={item.label} maxLength={200} disabled={!canWrite} onChange={label => updateCompetency(item.uid, { label })} error={showErrors ? problems.competency[index]?.label : null} />
                   <TextArea label="Description" rows={2} maxLength={4000} value={item.description} disabled={!canWrite} onChange={description => updateCompetency(item.uid, { description })} error={showErrors ? problems.competency[index]?.description : null} />
+                  <div className="form-row">
+                    <TextField label="Référence" value={item.key} maxLength={80} disabled={!canWrite} onChange={key => updateCompetency(item.uid, { key })} error={showErrors ? problems.competency[index]?.key : null} />
+                    <TextField label="Ordre" value={item.sortOrder} inputMode="numeric" disabled={!canWrite} onChange={sortOrder => updateCompetency(item.uid, { sortOrder })} error={showErrors ? problems.competency[index]?.sortOrder : null} />
+                  </div>
                   {draft.competencies.length > 1 && <button type="button" className="button quiet danger" disabled={!canWrite}
                     onClick={() => update({ competencies: draft.competencies.filter(other => other.uid !== item.uid) })}>Retirer la compétence {index + 1}</button>}
                 </div>)}
@@ -139,8 +140,11 @@ export function CurriculaSection() {
             </>}>
             {!current.approved && <p className="caption">Approuver crée une nouvelle révision identique, approuvée : cette révision reste un brouillon.</p>}
             <ol className="competency-list">{[...current.competencies].sort((a, b) => a.sortOrder - b.sortOrder).map(item => <li key={item.id}>
-              <h3 className="row-title">{item.label}</h3><p className="row-meta"><code>{item.key}</code> · ordre {item.sortOrder}</p><p className="policy-copy">{item.description}</p>
+              <h3 className="row-title">{item.label}</h3><p className="policy-copy">{item.description}</p>
             </li>)}</ol>
+            <details className="disclosure"><summary>Références des compétences</summary>
+              <Facts items={[...current.competencies].sort((a, b) => a.sortOrder - b.sortOrder).map(item => [item.label, <code key={item.id}>{item.key}</code>])} />
+            </details>
           </DetailPanel>
           : <Placeholder>Choisissez un référentiel pour consulter ses compétences, ou créez-en un nouveau.</Placeholder>} />}
       </LoadState>
@@ -213,10 +217,11 @@ export function ProceduresSection() {
         list={items.length === 0 ? <EmptyState symbol="file" title="Aucune procédure" message="Rédigez la procédure d’une catégorie, puis approuvez-la pour ouvrir une offre." />
           : <table className="data-table">
             <caption className="visually-hidden">Procédures de l’école</caption>
-            <thead><tr><th scope="col">Catégorie</th><th scope="col" className="numeric">Version</th><th scope="col">Approuvée le</th><th scope="col">Statut</th></tr></thead>
+            <thead><tr><th scope="col">Procédure</th><th scope="col">Approuvée le</th></tr></thead>
             <tbody>{items.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
-              <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>Catégorie {item.categoryCode}</RowButton></th>
-              <td className="numeric">{item.version}</td><td>{item.approvedAt ? formatDateTime(item.approvedAt, school.timeZone) : '—'}</td><td>{approvalBadge(item.approved, true)}</td>
+              <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>Catégorie {item.categoryCode}</RowButton>
+                <span className="row-meta block">Version {item.version}</span>{!item.approved && approvalBadge(false, true)}</th>
+              <td>{item.approvedAt ? formatDateTime(item.approvedAt, school.timeZone) : '—'}</td>
             </tr>)}</tbody>
           </table>}
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · catégorie ${draft.basedOn.categoryCode}` : 'Nouvelle procédure'}
@@ -331,7 +336,7 @@ export function OfferingsSection() {
     setReviewing(false);
     if (result.status === 'confirmed') { setDraft(null); setSelected(null); }
   }
-  const offerState = (item: Offering) => item.enabled ? <StatusBadge tone="success" symbol="check">Activée</StatusBadge> : <StatusBadge tone="neutral" symbol="dot">Désactivée</StatusBadge>;
+  const offerState = (item: Offering) => item.enabled ? <span className="status-text">Activée</span> : <StatusBadge tone="neutral" symbol="dot">Désactivée</StatusBadge>;
 
   return (
     <div className="section-stack">
@@ -345,12 +350,12 @@ export function OfferingsSection() {
           {rows.length === 0 ? <EmptyState symbol="layers" title="Aucune offre" message="Créez une offre à partir d’un référentiel et d’une procédure de la même catégorie." />
           : <table className="data-table">
             <caption className="visually-hidden">Offres de l’école</caption>
-            <thead><tr><th scope="col">Offre</th><th scope="col">Cat.</th><th scope="col" className="numeric">Version</th><th scope="col" className="numeric">Durée</th><th scope="col">État</th></tr></thead>
+            <thead><tr><th scope="col">Formation</th><th scope="col" className="numeric">Durée</th></tr></thead>
             <tbody>{rows.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
               <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>{item.offeringKey}</RowButton>
-                {latest.get(item.offeringKey)?.id !== item.id && <span className="caption"> · ancienne version</span>}</th>
-              <td>{item.categoryCode}</td><td className="numeric">{item.version}</td>
-              <td className="numeric">{formatDuration(item.defaultDurationMinutes)}</td><td>{offerState(item)}</td>
+                <span className="row-meta block">Catégorie {item.categoryCode} · v{item.version}{latest.get(item.offeringKey)?.id !== item.id ? ' · ancienne version' : ''}</span>
+                {!item.enabled && offerState(item)}</th>
+              <td className="numeric">{formatDuration(item.defaultDurationMinutes)}</td>
             </tr>)}</tbody>
           </table>}
         </>}

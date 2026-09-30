@@ -39,35 +39,39 @@ export function AgendaSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Planning" title="Agenda"
-        actions={<div className="week-nav" role="group" aria-label="Semaine affichée">
+      <SectionHeading context="Planning" title="Agenda" />
+      <div className="agenda-toolbar">
+        <div className="week-nav" role="group" aria-label="Semaine affichée">
           <button type="button" className="button secondary" aria-label="Semaine précédente" onClick={() => setMonday(addDays(monday, -7))}><Symbol kind="back" bare /></button>
           <span className="week-label" aria-live="polite">{formatWeek(monday)}</span>
           <button type="button" className="button secondary" aria-label="Semaine suivante" onClick={() => setMonday(addDays(monday, 7))}><span className="flip"><Symbol kind="back" bare /></span></button>
           <button type="button" className="button quiet" disabled={monday === thisWeek} onClick={() => setMonday(thisWeek)}>Aujourd’hui</button>
-        </div>} />
+        </div>
+        {instructors.length > 1 && <SelectField label="Moniteur" value={instructor} onChange={setInstructor}
+          options={[{ value: '', label: 'Tous les moniteurs' }, ...instructors.map(item => ({ value: item.id, label: item.displayName }))]} />}
+      </div>
       <LoadState loaded={loaded} label="Lecture de l’agenda…">{value => <>
-        {instructors.length > 1 && <div className="list-toolbar">
-          <SelectField label="Moniteur" value={instructor} onChange={setInstructor}
-            options={[{ value: '', label: 'Tous les moniteurs' }, ...instructors.map(item => ({ value: item.id, label: item.displayName }))]} />
-        </div>}
         {value.truncated && <Notice tone="warning" title="Semaine partielle" live={false}><p>Trop de leçons pour cette semaine : choisissez un moniteur.</p></Notice>}
-        {days.length === 0 ? <EmptyState symbol="clock" title="Aucune leçon" message="Cette semaine n’a aucune leçon." />
+        {days.length === 0 ? <EmptyState symbol="clock" title="Aucune leçon cette semaine" message="" />
           : days.map(day => <section key={day.day} className="agenda-day" aria-labelledby={`day-${day.day}`}>
-            <h2 id={`day-${day.day}`} className="section-title">{formatDayHeading(day.day)}</h2>
+            <h2 id={`day-${day.day}`} className="section-title agenda-day-date">{formatDayHeading(day.day)}</h2>
             <ul className="row-list">{day.items.map(lesson => {
               const state = lessonState[lesson.status];
+              const [start, end] = formatTimeRange(lesson.plannedStart, lesson.plannedEnd, school.timeZone).split('–');
               return <li key={lesson.id} className={lesson.status === 'CANCELLED' ? 'muted-row' : undefined}>
-                <div className="row-text">
-                  <h3 className="row-title"><button type="button" className="row-button" onClick={() => navigate('eleves', {
+                <button type="button" className="agenda-lesson" onClick={() => navigate('eleves', {
                     selection: lesson.learnerId, from: 'agenda', week: monday, instructor: instructor || undefined,
-                  })} aria-label={`Dossier de ${learnerName(lesson.learnerId)}, leçon ${formatTimeRange(lesson.plannedStart, lesson.plannedEnd, school.timeZone)}`}>
-                    {formatTimeRange(lesson.plannedStart, lesson.plannedEnd, school.timeZone)} · {learnerName(lesson.learnerId)}
-                  </button></h3>
-                  <p className="row-meta">{memberName(lesson.instructorMembershipId)}{lesson.meetingPoint ? ` · ${lesson.meetingPoint}` : ''}</p>
-                </div>
-                {state && <StatusBadge tone={state.tone} symbol={state.symbol}>{state.label}</StatusBadge>}
-                {lesson.status === 'PLANNED' && lesson.permitWarning === true && <StatusBadge tone="warning" symbol="alert">Permis à vérifier</StatusBadge>}
+                  })}>
+                  <span className="agenda-time"><time dateTime={lesson.plannedStart}>{start}</time><span className="visually-hidden"> à </span><time dateTime={lesson.plannedEnd}>{end}</time></span>
+                  <span className="agenda-identity"><span className="row-title">{learnerName(lesson.learnerId)}</span>
+                    <span className="row-meta">{memberName(lesson.instructorMembershipId)}{lesson.meetingPoint ? ` · ${lesson.meetingPoint}` : ''}</span>
+                  </span>
+                  {(state || (lesson.status === 'PLANNED' && lesson.permitWarning === true)) && <span className="agenda-status">
+                    {state && <StatusBadge tone={state.tone} symbol={state.symbol}>{state.label}</StatusBadge>}
+                    {lesson.status === 'PLANNED' && lesson.permitWarning === true && <StatusBadge tone="warning" symbol="alert">Permis à vérifier</StatusBadge>}
+                  </span>}
+                  <span className="visually-hidden">Ouvrir le dossier</span>
+                </button>
               </li>;
             })}</ul>
           </section>)}

@@ -29,7 +29,6 @@ const grantLabel = (value: string) => grants.find(item => item.value === value)?
 const rolesText = (values: readonly Role[]) => values.length ? values.map(roleLabel).join(' · ') : 'Aucun rôle';
 const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every(item => b.includes(item));
 const isStaff = (member: { roles: readonly Role[] }) => member.roles.includes('ADMIN') || member.roles.includes('INSTRUCTOR');
-const memberStatus = (status: string): { label: string; tone: Tone } => status === 'ACTIVE' ? { label: 'Actif', tone: 'success' } : { label: 'Accès inactif', tone: 'neutral' };
 
 /* ---------------------------------------------------------------- Équipe et accès */
 
@@ -88,27 +87,22 @@ export function TeamSection() {
           <div className="list-toolbar">
             <TextField label="Rechercher un membre" value={filter} onChange={setFilter} placeholder="Nom" />
             <CheckField label="Afficher les élèves" checked={showLearners} onChange={setShowLearners} />
+            {filter && <button type="button" className="button quiet" onClick={() => setFilter('')}>Effacer la recherche</button>}
           </div>
-          {visible.length === 0 ? <EmptyState symbol="users" title={members.length ? 'Aucun membre trouvé' : 'Aucun membre'} message={members.length ? 'Modifiez la recherche.' : 'Invitez les personnes de votre école.'} />
+          {visible.length === 0 ? <EmptyState symbol="users" title={members.length ? 'Aucun membre trouvé' : 'Aucun membre'} message="" />
           : <table className="data-table">
             <caption className="visually-hidden">Membres de l’école{data.truncated ? ' (liste partielle)' : ''}</caption>
-            <thead><tr><th scope="col">Nom</th><th scope="col">Rôles</th><th scope="col" className="numeric">Autorisations</th><th scope="col">Accès</th></tr></thead>
+            <thead><tr><th scope="col">Membre</th><th scope="col">Rôles</th></tr></thead>
             <tbody>{visible.map(item => <tr key={item.id} className={item.id === selected ? 'selected' : undefined}>
               <th scope="row"><RowButton selected={item.id === selected} onSelect={() => setSelected(item.id)}>{item.displayName}</RowButton>
-                {item.id === membership.membershipId && <span className="caption"> · vous</span>}</th>
-              <td>{rolesText(item.roles)}</td><td className="numeric">{item.grants.length}</td>
-              <td><StatusBadge tone={memberStatus(item.status).tone} symbol={item.status === 'ACTIVE' ? 'check' : 'dot'}>{memberStatus(item.status).label}</StatusBadge></td>
+                {item.id === membership.membershipId && <span className="caption"> · vous</span>}
+                {item.status !== 'ACTIVE' && <span className="caption block"><StatusBadge tone="neutral" symbol="ban">Accès inactif</StatusBadge></span>}</th>
+              <td>{rolesText(item.roles)}</td>
             </tr>)}</tbody>
           </table>}
         </>}
         detail={current ? <DetailPanel focusKey={current.id} title={current.displayName} meta={self ? 'Votre propre accès' : rolesText(current.roles)}
-            badge={<StatusBadge tone={memberStatus(current.status).tone} symbol={current.status === 'ACTIVE' ? 'check' : 'dot'}>{memberStatus(current.status).label}</StatusBadge>}
-            actions={<>
-              <button type="button" className="button primary" disabled={!canWrite || !changed} onClick={() => { setShowErrors(true); if (!problem) { setAcknowledged(false); setDialog('access'); } }}>Relire le changement</button>
-              {changed && <button type="button" className="button quiet" onClick={() => { setDraftRoles([...current.roles]); setDraftGrants([...current.grants]); setReason(''); }}>Annuler les modifications</button>}
-              {current.status === 'ACTIVE' && !self && <button type="button" className="button quiet danger" disabled={!canWrite}
-                onClick={() => { runner.clearOutcome(); setAcknowledged(false); setDialog('deactivate'); }}>Retirer l’accès…</button>}
-            </>}>
+            badge={current.status !== 'ACTIVE' ? <StatusBadge tone="neutral" symbol="ban">Accès inactif</StatusBadge> : undefined}>
             {current.roles.includes('INSTRUCTOR') && <div className="button-row">
               <button type="button" className="button secondary" onClick={() => navigate('agenda', { instructor: current.id })}>Voir son planning</button>
               <button type="button" className="button secondary" onClick={() => navigate('disponibilites', { instructor: current.id, from: 'equipe' })}>Disponibilités et absences</button>
@@ -119,16 +113,22 @@ export function TeamSection() {
                 {roles.map(role => <CheckField key={role.value} label={roleLabel(role.value)} description={role.explanation} checked={draftRoles.includes(role.value)}
                   disabled={!canWrite} onChange={on => setDraftRoles(list => toggle(list, role.value, on))} />)}
               </fieldset>
-              <fieldset className="fieldset">
-                <legend>Autorisations particulières</legend>
+              <details className="disclosure"><summary>Autorisations particulières</summary><fieldset className="fieldset">
+                <legend className="visually-hidden">Autorisations particulières</legend>
                 <div className="check-grid">{grants.map(grant => <CheckField key={grant.value} label={grant.label} checked={draftGrants.includes(grant.value)}
                   disabled={!canWrite} onChange={on => setDraftGrants(list => toggle(list, grant.value, on))} />)}</div>
-              </fieldset>
+              </fieldset></details>
               {changed && <TextArea label="Motif du changement" rows={3} maxLength={1000} value={reason} onChange={setReason} disabled={!canWrite}
                 hint="Conservé dans l’historique de l’école." error={showErrors && problem && draftRoles.length ? problem : null} />}
               {changed && draftRoles.length === 0 && <p className="field-error"><Symbol kind="alert" bare />Gardez au moins un rôle.</p>}
               {loseAdmin && <Notice tone="warning" title="Vous retirez votre propre rôle Administration" live={false}><p>Vous ne pourrez plus administrer cette école après la confirmation.</p></Notice>}
+              {changed && <div className="form-actions">
+                <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (!problem) { setAcknowledged(false); setDialog('access'); } }}>Relire le changement</button>
+                <button type="button" className="button quiet" disabled={runner.busy} onClick={() => { setDraftRoles([...current.roles]); setDraftGrants([...current.grants]); setReason(''); setShowErrors(false); }}>Annuler les modifications</button>
+              </div>}
             </form>
+            {current.status === 'ACTIVE' && !self && <div className="form-actions"><button type="button" className="button quiet danger" disabled={!canWrite}
+              onClick={() => { runner.clearOutcome(); setAcknowledged(false); setDialog('deactivate'); }}>Retirer l’accès…</button></div>}
           </DetailPanel>
           : <Placeholder>Choisissez un membre pour consulter ou modifier ses accès.</Placeholder>} />}
       </LoadState>
@@ -158,6 +158,11 @@ const invitationStatus = (status: Invitation['status']): { label: string; tone: 
   PENDING: { label: 'En attente', tone: 'accent' as Tone }, ACCEPTED: { label: 'Acceptée', tone: 'success' as Tone },
   REVOKED: { label: 'Révoquée', tone: 'neutral' as Tone }, EXPIRED: { label: 'Expirée', tone: 'warning' as Tone },
 })[status];
+function InvitationState({ status }: { status: Invitation['status'] }) {
+  return status === 'EXPIRED' || status === 'REVOKED'
+    ? <StatusBadge tone={invitationStatus(status).tone} symbol={status === 'EXPIRED' ? 'clock' : 'ban'}>{invitationStatus(status).label}</StatusBadge>
+    : <span className="row-meta">{invitationStatus(status).label}</span>;
+}
 /**
  * The school has no e-mail relay: invitations by e-mail are not offered (a 5xx from a mail that never left used to
  * block every other change). Existing ones stay listed; set to true to offer them again.
@@ -285,8 +290,8 @@ export function InvitationsSection() {
   return (
     <div className="section-stack">
       <SectionHeading context={team ? 'Équipe' : 'Élèves'} title={team ? 'Invitations de l’équipe' : 'Invitations élèves'}
-        actions={active && !team ? <>
-          <button type="button" className={creating === 'code' ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={openCode}><Symbol kind="plus" bare />Code élève</button>
+        actions={active && !team && !creating ? <>
+          <button type="button" className="button primary" disabled={!canWrite} onClick={openCode}><Symbol kind="plus" bare />Code élève</button>
           {emailInvitations && <button type="button" className="button quiet" disabled={!canWrite} onClick={openEmail}><Symbol kind="mail" bare />Inviter par e-mail</button>}
         </> : undefined} />
       {!active && <Notice tone="info" title="Invitations disponibles après l’activation" live={false}
@@ -296,22 +301,18 @@ export function InvitationsSection() {
       {codeMissing && <Notice tone="warning" title="Code non affiché"><p>La réponse de l’école ne permet pas d’afficher le code. « Nouveau code » en crée un autre.</p></Notice>}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des invitations…">{() => <SplitView mobileDetail={!!selected || !!creating} onBack={() => { setSelected(null); setCreating(null); }} backLabel="Toutes les invitations"
-        list={items.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation" message={team ? 'Aucune invitation du personnel à afficher.' : 'Créez un code pour inviter un élève.'} />
+        list={items.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation" message="" />
           : <table className="data-table">
             <caption className="visually-hidden">Invitations de l’école, les plus récentes d’abord</caption>
-            <thead><tr><th scope="col">Invitation</th><th scope="col">Rôles</th><th scope="col">Statut</th><th scope="col">Expire le</th></tr></thead>
+            <thead><tr><th scope="col">Invitation</th>{team && <th scope="col">Rôles</th>}<th scope="col">Statut</th><th scope="col">Expire le</th></tr></thead>
             <tbody>{items.map(item => <tr key={item.id} className={item.id === selected && !creating ? 'selected' : undefined}>
               <th scope="row"><RowButton selected={item.id === selected && !creating} onSelect={() => { setCreating(null); setCodeMissing(false); setSelected(item.id); }}>{label(item)}</RowButton></th>
-              <td>{rolesText(item.roles)}</td>
-              <td><StatusBadge tone={invitationStatus(item.status).tone} symbol={item.status === 'ACCEPTED' ? 'check' : item.status === 'PENDING' ? (item.delivery === 'CODE' ? 'lock' : 'mail') : item.status === 'EXPIRED' ? 'clock' : 'ban'}>{invitationStatus(item.status).label}</StatusBadge></td>
-              <td>{formatDateTime(item.expiresAt, school.timeZone)}</td>
+              {team && <td>{rolesText(item.roles)}</td>}
+              <td><InvitationState status={item.status} /></td>
+              <td><time dateTime={item.expiresAt}>{formatDateTime(item.expiresAt, school.timeZone)}</time></td>
             </tr>)}</tbody>
           </table>}
-        detail={creating === 'code' ? <DetailPanel focusKey="create-code" title="Code élève"
-            actions={<>
-              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (!trainingProblem) void confirm('create'); }}>Créer le code</button>
-              <button type="button" className="button quiet" onClick={() => setCreating(null)} disabled={runner.busy}>Annuler</button>
-            </>}>
+        detail={creating === 'code' ? <DetailPanel focusKey="create-code" title="Code élève">
             <form className="form-grid" onSubmit={event => { event.preventDefault(); setShowErrors(true); if (!trainingProblem) void confirm('create'); }}>
               <fieldset className="fieldset"><legend>Permis</legend>
                 {offerings.map(item => <CheckField key={item.id} label={offeringLabel(item, offerings)} checked={offeringIds.includes(item.id)}
@@ -325,7 +326,11 @@ export function InvitationsSection() {
                 <p>Activez une offre pour créer un code élève.</p></Notice>}
               {offerings.length > 0 && instructors.length === 0 && <Notice tone="info" title="Aucun moniteur actif" live={false}
                 actions={<button type="button" className="button quiet" onClick={() => navigate('equipe')}>Ouvrir l’équipe</button>}>
-                <p>Ajoutez un moniteur actif pour créer un code élève.</p></Notice>}
+                <p>Donnez le rôle Moniteur à un membre actif.</p></Notice>}
+              <div className="form-actions">
+                <button type="submit" className="button primary" disabled={!canWrite} aria-busy={runner.busy}>Créer le code</button>
+                <button type="button" className="button quiet" onClick={() => setCreating(null)} disabled={runner.busy}>Annuler</button>
+              </div>
             </form>
           </DetailPanel>
           : creating === 'email' ? <DetailPanel focusKey="create-email" title="Inviter par e-mail"
@@ -344,7 +349,7 @@ export function InvitationsSection() {
             </form>
           </DetailPanel>
           : current ? <DetailPanel focusKey={current.id} title={label(current)} meta={rolesText(current.roles)}
-            badge={<StatusBadge tone={invitationStatus(current.status).tone} symbol={current.delivery === 'CODE' ? 'lock' : 'mail'}>{invitationStatus(current.status).label}</StatusBadge>}
+            badge={<InvitationState status={current.status} />}
             actions={actionable && active ? <>
               <button type="button" className="button secondary" disabled={!canWrite} onClick={() => { runner.clearOutcome(); setAcknowledged(false); setDialog('resend'); }}>
                 <Symbol kind={current.delivery === 'CODE' ? 'refresh' : 'send'} bare />{current.delivery === 'CODE' ? 'Nouveau code' : 'Renvoyer l’invitation'}</button>

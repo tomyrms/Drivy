@@ -69,7 +69,7 @@ export function ProfileFieldsSection() {
   const instant = draft ? schoolTimeToInstant(draft.effectiveFrom, school.timeZone) : null;
   const draftProblem = draft ? (instant === null ? 'Choisissez une date et une heure d’effet valides (heure de l’école).' : profilePolicyProblem(selectedRules)) : null;
 
-  const status = (policy: ProfilePolicy) => policy.id === applicable?.id ? <StatusBadge tone="success" symbol="check">En vigueur</StatusBadge>
+  const status = (policy: ProfilePolicy) => policy.id === applicable?.id ? <span className="status-text with-symbol"><Symbol kind="check" bare />En vigueur</span>
     : policy.status === 'DRAFT' ? <StatusBadge tone="warning" symbol="edit">Brouillon</StatusBadge>
       : policy.status === 'PUBLISHED' ? <StatusBadge tone="accent" symbol="clock">Publiée · à venir</StatusBadge>
         : <StatusBadge tone="neutral" symbol="dot">Ancienne version</StatusBadge>;
@@ -104,18 +104,16 @@ export function ProfileFieldsSection() {
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des champs du profil…">{() => <>
-        {noticeAdopted
-          ? <p className="caption with-symbol"><Symbol kind="check" bare />Notice de données adoptée · version {notice!.version}. Chaque nouvelle version y est liée.</p>
-          : <Notice tone="info" title="Notice de données à adopter" live={false} actions={<button type="button" className="button secondary" onClick={() => navigate('configuration')}>Ouvrir la configuration</button>}>
+        {!noticeAdopted && <Notice tone="info" title="Notice de données à adopter" live={false} actions={<button type="button" className="button secondary" onClick={() => navigate('configuration')}>Ouvrir les réglages de l’école</button>}>
               <p>Adoptez d’abord la notice de données dans Configuration.</p></Notice>}
         <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
           list={items.length === 0 ? <EmptyState symbol="list" title="Aucune version enregistrée" message="Préparez une première version pour indiquer les informations demandées aux élèves." />
             : <table className="data-table">
               <caption className="visually-hidden">Versions des champs du profil</caption>
-              <thead><tr><th scope="col">Version</th><th scope="col">Prise d’effet</th><th scope="col" className="numeric">Champs</th><th scope="col">Statut</th></tr></thead>
+              <thead><tr><th scope="col">Version</th><th scope="col">Prise d’effet</th><th scope="col" className="numeric">Champs</th></tr></thead>
               <tbody>{items.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
-                <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>Version {item.version}</RowButton></th>
-                <td>{formatDateTime(item.effectiveFrom, school.timeZone)}</td><td className="numeric">{item.fields.length}</td><td>{status(item)}</td>
+                <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>Version {item.version}</RowButton><span className="block">{status(item)}</span></th>
+                <td>{formatDateTime(item.effectiveFrom, school.timeZone)}</td><td className="numeric">{item.fields.length}</td>
               </tr>)}</tbody>
             </table>}
           detail={draft ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title="Nouvelle version des champs"

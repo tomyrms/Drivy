@@ -2,7 +2,7 @@
 
 Cette liste reprend les demandes de la conversation du 30 septembre. Elle complète la reprise de Claude, sans modifier la livraison de conception conservée. Une case cochée exige une réalisation et une preuve adaptées ; code écrit, compilation, test simulateur et essai physique sont distingués.
 
-**Lot intégré, qualification en cours** : source `9c77dd6`. Décisions et réalisations : [web](web-direction-20260930.md), [carte/GPS](carte-replay-gps-20260930.md), [planification](planning-defaults-20260930.md), [dossier/progression](dossier-progression-20260930.md). Les éléments natifs attendent les tests Apple ; les essais GPS, batterie et gestes réels restent distincts.
+**Lot fonctionnel intégré et testé** : source produit `fe9fe6b`, reprise Apple `e4eea1c`. Décisions et réalisations : [web](web-direction-20260930.md), [carte/GPS](carte-replay-gps-20260930.md), [planification](planning-defaults-20260930.md), [dossier/progression](dossier-progression-20260930.md). Tests Apple : 218 iPhone et 10 iPad réussis ; IPA129 vérifiée. Les essais GPS, batterie, grand texte et gestes réels restent distincts.
 
 ## 0. Reprise de Claude et environnement
 
@@ -21,67 +21,69 @@ Preuves et détail : [reprise](reprise-bugs-20260930.md), [état](STATUS.md).
 
 ## 1. Carte et replay — agent carte/GPS
 
-- [ ] Suivre automatiquement le point pendant la lecture du replay, avec une caméra comparable au suivi GPS d'AllTrails.
-- [ ] Orienter la carte selon le déplacement pour voir clairement la direction prise.
-- [ ] Respecter le mode de suivi/orientation choisi, y compris après pause, déplacement du curseur ou reprise.
-- [ ] Permettre l'exploration manuelle de la carte, puis le retour explicite au suivi.
-- [ ] En leçon active, faire du bouton de recentrage une commande de suivi avec orientation, avec état compréhensible.
-- [ ] Gérer l'arrêt, les points sans direction fiable, les changements de direction et les ruptures de trace sans mouvements trompeurs.
+- [x] Suivre automatiquement le point pendant la lecture du replay, avec une caméra comparable au suivi GPS d'AllTrails.
+- [x] Orienter la carte selon le déplacement pour voir clairement la direction prise.
+- [x] Respecter le mode de suivi/orientation choisi, y compris après pause, déplacement du curseur ou reprise.
+- [x] Permettre l'exploration manuelle de la carte, puis le retour explicite au suivi.
+- [x] En leçon active, faire du bouton de recentrage une commande de suivi avec orientation, avec état compréhensible.
+- [x] Gérer l'arrêt, les points sans direction fiable, les changements de direction et les ruptures de trace sans mouvements trompeurs.
 
 ## 2. Qualité du trajet et usages en leçon — agent carte/GPS
 
-- [ ] Diagnostiquer pourquoi la trace paraît peu dense, saccadée et éloignée des routes : acquisition, filtrage, stockage, transfert ou rendu.
-- [ ] Améliorer la fréquence/densité des mesures et la fluidité du rendu, dans les limites du capteur et de la batterie à mesurer.
-- [ ] Comparer MapKit/Core Location et Mapbox à partir de leurs documents officiels. L'ancien projet utilisait Mapbox ; aucun code de cet ancien dépôt ne doit être importé.
-- [ ] Distinguer trace réellement mesurée, interpolation d'affichage et éventuel recalage sur route. Ne jamais présenter une position ou un trajet calculé comme une mesure réelle.
-- [ ] Afficher immédiatement les signalements persistés sur la carte de la leçon active, sans attendre le replay.
-- [ ] Retirer le nombre de positions enregistrées de l'interface terrain.
-- [ ] Permettre l'annulation de la leçon depuis le panneau actif, sans imposer l'enregistrement d'un bilan.
-- [ ] Arrêter et conserver correctement la capture lors de cette annulation, en respectant les états serveur et les demandes incertaines.
+- [x] Diagnostiquer pourquoi la trace paraît peu dense, saccadée et éloignée des routes : acquisition, filtrage, stockage, transfert ou rendu.
+- [x] Améliorer le rendu et le réglage de précision Core Location selon l’alimentation ; aucune fréquence physique supérieure n’est encore attestée.
+- [ ] Mesurer la densité, la précision sur route, la fluidité réelle et la consommation sur appareil.
+- [x] Comparer MapKit/Core Location et Mapbox à partir de leurs documents officiels. L'ancien projet utilisait Mapbox ; aucun code de cet ancien dépôt ne doit être importé.
+- [x] Distinguer trace réellement mesurée, interpolation d'affichage et éventuel recalage sur route. Ne jamais présenter une position ou un trajet calculé comme une mesure réelle.
+- [x] Afficher immédiatement les signalements persistés sur la carte de la leçon active, sans attendre le replay.
+- [x] Retirer le nombre de positions enregistrées de l'interface terrain.
+- [x] Permettre l'annulation de la leçon depuis le panneau actif, sans imposer l'enregistrement d'un bilan.
+- [x] Arrêter et conserver correctement la capture lors de cette annulation, en respectant les états serveur et les demandes incertaines.
 - [ ] Vérifier sur appareil suivi, orientation, précision, fluidité, interruptions et consommation ; ne pas déduire ces résultats du simulateur.
 
 ## 3. Planification et valeurs par défaut — agent planification
 
-- [ ] Rendre le lieu de rendez-vous facultatif au démarrage immédiat et à la planification.
-- [ ] Conserver le champ de lieu pour ceux qui souhaitent le renseigner.
-- [ ] Ajouter une préférence de formation par défaut dans les réglages et l'utiliser lorsque ce choix est valide pour l'élève.
-- [ ] Préselectionner le moniteur connecté lorsqu'il est éligible : Luc s'il planifie comme moniteur, un autre moniteur pour son propre compte.
-- [ ] Conserver la possibilité de changer le moniteur.
-- [ ] Ajouter un tarif par défaut configurable depuis les réglages web ou natifs, puis le préselectionner quand il est applicable.
-- [ ] Garder l'intervalle entre deux leçons et les autres détails de rendez-vous, en les présentant comme options secondaires.
-- [ ] Placer procédures et conditions d'annulation dans des accès discrets en bas du formulaire, avec documents accessibles et obligations d'adoption conservées.
-- [ ] Réduire le nombre d'interactions pour arriver à une leçon créée, sans confirmer à la place de l'utilisateur une écriture ni élargir les droits.
-- [ ] Persister les préférences et vérifier leur application après rechargement/reconnexion, sur les interfaces concernées.
+- [x] Rendre le lieu de rendez-vous facultatif au démarrage immédiat et à la planification.
+- [x] Conserver le champ de lieu pour ceux qui souhaitent le renseigner.
+- [x] Ajouter une préférence de formation par défaut dans les réglages et l'utiliser lorsque ce choix est valide pour l'élève.
+- [x] Préselectionner le moniteur connecté lorsqu'il est éligible : Luc s'il planifie comme moniteur, un autre moniteur pour son propre compte.
+- [x] Conserver la possibilité de changer le moniteur.
+- [x] Ajouter un tarif par défaut configurable depuis les réglages web ou natifs, puis le préselectionner quand il est applicable.
+- [x] Garder l'intervalle entre deux leçons et les autres détails de rendez-vous, en les présentant comme options secondaires.
+- [x] Placer procédures et conditions d'annulation dans des accès discrets en bas du formulaire, avec documents accessibles et obligations d'adoption conservées.
+- [x] Réduire le nombre d'interactions pour arriver à une leçon créée, sans confirmer à la place de l'utilisateur une écriture ni élargir les droits.
+- [x] Persister les préférences et vérifier leur application après rechargement/reconnexion, sur les interfaces concernées.
 
-Interprétation à vérifier dans le modèle : « formation par défaut » doit sélectionner une formation autorisée de l'élève, éventuellement à partir d'une offre préférée ; ce réglage ne crée pas une inscription implicitement. Un tarif par défaut reste une version commerciale valide, modifiable avant confirmation.
+Interprétation implémentée et testée : « formation par défaut » doit sélectionner une formation autorisée de l'élève, éventuellement à partir d'une offre préférée ; ce réglage ne crée pas une inscription implicitement. Un tarif par défaut reste une version commerciale valide, modifiable avant confirmation.
 
 ## 4. Dossier élève et filtres — intégration principale
 
-- [ ] Conserver les filtres déjà présents dans le dossier.
-- [ ] Ajouter le filtre par année précise.
-- [ ] Ajouter le filtre par mois précis.
-- [ ] Permettre de combiner mois et année, ou d'utiliser chacun séparément.
-- [ ] Prévoir un retour simple à l'ensemble des leçons et un état vide compréhensible.
-- [ ] Appliquer les filtres aux données autorisées avec la bonne pagination, sans faire passer une page partielle pour tout l'historique.
+- [x] Conserver les filtres déjà présents dans le dossier.
+- [x] Ajouter le filtre par année précise.
+- [x] Ajouter le filtre par mois précis.
+- [x] Permettre de combiner mois et année, ou d'utiliser chacun séparément.
+- [x] Prévoir un retour simple à l'ensemble des leçons et un état vide compréhensible.
+- [x] Appliquer les filtres aux données autorisées avec la bonne pagination, sans faire passer une page partielle pour tout l'historique.
 
 ## 5. Progression, compétences et synchronisation — intégration principale
 
-- [ ] Revoir les liens entre dossier, leçon, observations, bilan et progression.
-- [ ] Corriger les données périmées après une modification, un retour d'écran, un changement d'onglet ou une reconnexion.
-- [ ] Vérifier que moniteur, élève et administration voient les données prévues par leurs droits, avec les règles de partage du 28 septembre.
-- [ ] Conserver le principe apprécié des trois points pour les niveaux de compétence.
-- [ ] Clarifier l'état « pas encore vu »/découverte, « avec accompagnement » et « en autonomie » dans la représentation.
-- [ ] Permettre de revenir à « pas encore vu » après une sélection accidentelle, avec sémantique serveur correcte et sans falsifier une observation historique.
+- [x] Revoir les liens entre dossier, leçon, observations, bilan et progression.
+- [x] Corriger les données périmées après une modification, un retour d'écran, un changement d'onglet ou une reconnexion.
+- [x] Vérifier que moniteur, élève et administration voient les données prévues par leurs droits, avec les règles de partage du 28 septembre.
+- [x] Conserver le principe apprécié des trois points pour les niveaux de compétence.
+- [x] Clarifier l'état « pas encore vu »/découverte, « avec accompagnement » et « en autonomie » dans la représentation.
+- [x] Permettre de revenir à « pas encore vu » après une sélection accidentelle, avec sémantique serveur correcte et sans falsifier une observation historique.
 - [ ] Revoir l'interface de sélection et de lecture des compétences, y compris iPad, grand texte et accessibilité.
-- [ ] Ajouter les tests utiles de propagation et de retour à l'état initial ; vérifier la durabilité après relecture.
+- [x] Ajouter les tests utiles de propagation et de retour à l'état initial ; vérifier la durabilité après relecture.
 
 ## 6. Observations et bilan — intégration principale, cohérence avec le design
 
-- [ ] Rendre plus compact le composant « À retravailler / Attention / Points positifs » de la leçon.
-- [ ] Revoir la présentation des cadenas : conserver une visibilité compréhensible sans icônes envahissantes.
-- [ ] Appliquer la correction aux autres usages du même composant.
-- [ ] Compacter et clarifier également le bilan lorsque sa présentation répète ces problèmes.
-- [ ] Conserver le partage et la confidentialité effectifs ; le changement visuel ne modifie pas les droits.
+- [x] Rendre plus compact le composant « À retravailler / Attention / Points positifs » de la leçon.
+- [x] Revoir la présentation des cadenas : conserver une visibilité compréhensible sans icônes envahissantes.
+- [x] Appliquer la correction aux autres usages du même composant.
+- [ ] Vérifier les observations compactes peuplées sur appareil ; les captures Apple de ce lot contiennent un état vide.
+- [x] Compacter et clarifier également le bilan lorsque sa présentation répète ces problèmes.
+- [x] Conserver le partage et la confidentialité effectifs ; le changement visuel ne modifie pas les droits.
 
 ## 7. Nouvelle direction artistique de la webapp uniquement — agent design
 
@@ -96,17 +98,17 @@ Choix explicitement retenu par le porteur : **sobre et précise, listes compacte
 - [x] Harmoniser les composants web pour que les améliorations se retrouvent partout dans la webapp.
 - [x] Vérifier le rendu réel web en clair/sombre et tailles compactes/larges : navigateur à 320/390/834/1440 px, contrastes et clavier.
 - [ ] Qualifier le zoom texte web à 200 % et les lecteurs d'écran sur appareil.
-- [ ] Vérifier séparément les captures Apple des seules modifications natives ciblées.
+- [x] Vérifier séparément les captures Apple des seules modifications natives ciblées.
 
 ## 8. Livraison et preuves — intégration principale
 
-- [ ] Relire les changements des agents ensemble et résoudre les incohérences entre parcours.
-- [ ] Mettre à jour les décisions d'implémentation et cette liste sans modifier le manifeste de conception.
-- [ ] Exécuter les tests métier avec PostgreSQL réelle et les contrôles web adaptés.
-- [ ] Compiler et tester Swift/UI sur GitHub Actions, puis vérifier l'IPA finale pour iLoader.
+- [x] Relire les changements des agents ensemble et résoudre les incohérences entre parcours.
+- [x] Mettre à jour les décisions d'implémentation et cette liste sans modifier le manifeste de conception.
+- [x] Exécuter les tests métier avec PostgreSQL réelle et les contrôles web adaptés.
+- [x] Compiler et tester Swift/UI sur GitHub Actions, puis vérifier l'IPA finale pour iLoader.
 - [x] Déployer les changements serveur nécessaires sur le homelab, avec sauvegarde vérifiée avant chaque déploiement : `fe9fe6b`, migrations001–021.
 - [x] Vérifier services, migrations, droits et routes après déploiement : trois services actifs, empreintes des migrations, chemins de processus, santé interne et barrières HTTPS conformes. [Preuve](proofs/deployment-retours-20260930.json).
-- [ ] Mettre à jour `STATUS.md` avec les résultats exécutés et les essais physiques restant à faire.
+- [x] Mettre à jour `STATUS.md` avec les résultats exécutés et les essais physiques restant à faire.
 
 Les agents travaillent sur des périmètres distincts : carte/capture/replay ; planification/défauts ; refonte visuelle web uniquement. L'intégration principale prend dossier, progression, bilan, cohérence générale et livraison.
 
@@ -121,6 +123,19 @@ Les agents travaillent sur des périmètres distincts : carte/capture/replay ; p
 - [x] Faire passer le suivi avant les formulaires administratifs dans le dossier.
 - [x] Séparer les invitations élèves et personnel ; conserver les brouillons non soumis lors des renvois de catalogue.
 - [x] Vérifier les parcours au navigateur, les anciennes routes et les règles de restauration : 100 tests web, typecheck et build.
-- [ ] Déployer cette nouvelle organisation, avec une nouvelle sauvegarde préalable.
+- [x] Déployer cette nouvelle organisation : `b5c6c38`, sauvegarde vérifiée avant installation ; services, migrations et empreintes des assets publics vérifiés. [Preuve](proofs/deployment-web-architecture-20260930.json).
 
 [Décisions et répartition des informations](web-architecture-20260930.md) · [preuve de vérification](proofs/web-architecture-20260930.json).
+
+## 10. Esthétique et ergonomie de chaque écran web — retour complémentaire
+
+Le porteur valide le progrès de l’organisation, mais demande de reprendre les composants et l’esthétique écran par écran. Périmètre : web responsive uniquement.
+
+- [x] Relancer des agents, parcourir les styles UI Skills et coordonner une direction cohérente.
+- [x] Revoir identité, typographie, palette, espaces, contrôles, tableaux et états de sélection.
+- [x] Reprendre connexion, compte, invitation, agenda, disponibilités, élèves/dossier/bilans, équipe, catalogue et réglages.
+- [x] Réduire les badges ordinaires et replier les formulaires secondaires ; donner la priorité aux noms, dates, horaires et prix.
+- [x] Vérifier chaque destination au navigateur sur desktop et mobile, avec contrôle complémentaire tablette et sombre.
+- [x] Vérifier filtres, retours, formulaires et confirmations au clavier ; consigner les limites d’accessibilité.
+- [x] Exécuter typecheck, tests et build sur le lot final.
+- [ ] Déployer sur le homelab après sauvegarde vérifiée et contrôler les fichiers réellement servis.

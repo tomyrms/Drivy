@@ -1,0 +1,732 @@
+{
+  "date": "2026-09-30",
+  "scope": "Esthétique et ergonomie du web uniquement ; écrans réels React avec données synthétiques",
+  "typecheck": "PASSED",
+  "productionBuild": "PASSED",
+  "tests": {
+    "passed": 104,
+    "failed": 0,
+    "files": 9
+  },
+  "buildNote": "Bloc JS508,09kB minifié /141,48kB gzip, avertissement Vite conservé ; WOFF2170,18kB auto-hébergé.",
+  "browser": {
+    "surface": "Codex in-app browser",
+    "matrix": [
+      {
+        "page": "signin",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Se connecter Ã  Drivy",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "account",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Vos Ã©coles",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "invitation",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Rejoindre une Ã©cole",
+        "scroll": 1185,
+        "width": 1185
+      },
+      {
+        "page": "agenda",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Agenda",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "learners",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Ã‰lÃ¨ves",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "team",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Ã‰quipe et accÃ¨s",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "availability",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "DisponibilitÃ©s",
+        "scroll": 1185,
+        "width": 1185
+      },
+      {
+        "page": "trips",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Trajets",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "invitations",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Invitations Ã©lÃ¨ves",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "formations",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Formations et tarifs",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "curricula",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "CompÃ©tences enseignÃ©es",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "procedures",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "DÃ©roulement et annulation",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "offerings",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Formations proposÃ©es",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "products",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Tarifs",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "terms",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Conditions commerciales",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "config",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Ã‰cole",
+        "scroll": 1185,
+        "width": 1185
+      },
+      {
+        "page": "profile",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "Informations demandÃ©es aux Ã©lÃ¨ves",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "overview",
+        "viewport": "1200x720",
+        "errors": [],
+        "heading": "PrÃ©paration de lâ€™Ã©cole",
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "signin",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Se connecter Ã  Drivy",
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "account",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Vos Ã©coles",
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "invitation",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Rejoindre une Ã©cole",
+        "scroll": 375,
+        "width": 375
+      },
+      {
+        "page": "agenda",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Agenda",
+        "scroll": 375,
+        "width": 375
+      },
+      {
+        "page": "learners",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Ã‰lÃ¨ves",
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "team",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Ã‰quipe et accÃ¨s",
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "availability",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "DisponibilitÃ©s",
+        "scroll": 375,
+        "width": 375
+      },
+      {
+        "page": "trips",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Trajets",
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "invitations",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Invitations Ã©lÃ¨ves",
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "formations",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Formations et tarifs",
+        "scroll": 375,
+        "width": 375
+      },
+      {
+        "page": "curricula",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "CompÃ©tences enseignÃ©es",
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "procedures",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "DÃ©roulement et annulation",
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "offerings",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Formations proposÃ©es",
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "products",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Tarifs",
+        "scroll": 375,
+        "width": 375
+      },
+      {
+        "page": "terms",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Conditions commerciales",
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "config",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Ã‰cole",
+        "scroll": 375,
+        "width": 375
+      },
+      {
+        "page": "profile",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "Informations demandÃ©es aux Ã©lÃ¨ves",
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "overview",
+        "viewport": "390x720",
+        "errors": [],
+        "heading": "PrÃ©paration de lâ€™Ã©cole",
+        "scroll": 375,
+        "width": 375
+      },
+      {
+        "page": "agenda",
+        "viewport": "320x720",
+        "scroll": 305,
+        "width": 305
+      },
+      {
+        "page": "learners",
+        "viewport": "320x720",
+        "scroll": 305,
+        "width": 305
+      },
+      {
+        "page": "team",
+        "viewport": "320x720",
+        "scroll": 305,
+        "width": 305
+      },
+      {
+        "page": "availability",
+        "viewport": "320x720",
+        "scroll": 305,
+        "width": 305
+      },
+      {
+        "page": "trips",
+        "viewport": "320x720",
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "invitations",
+        "viewport": "320x720",
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "formations",
+        "viewport": "320x720",
+        "scroll": 305,
+        "width": 305
+      },
+      {
+        "page": "curricula",
+        "viewport": "320x720",
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "procedures",
+        "viewport": "320x720",
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "offerings",
+        "viewport": "320x720",
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "products",
+        "viewport": "320x720",
+        "scroll": 305,
+        "width": 305
+      },
+      {
+        "page": "terms",
+        "viewport": "320x720",
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "config",
+        "viewport": "320x720",
+        "scroll": 305,
+        "width": 305
+      },
+      {
+        "page": "profile",
+        "viewport": "320x720",
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "overview",
+        "viewport": "320x720",
+        "scroll": 305,
+        "width": 305
+      }
+    ],
+    "visualInspection": "18 destinations desktop1200 et mobile390 inspectées ; tableaux catalogue simplifiés après retours, captures remplacées. Dossier/bilan mobile, mode sombre tablette834, formulaire invalide, lecture seule, état vide et erreur inspectés.",
+    "additionalChecks": [
+      "1360px : liste406px et détail622px simultanés, aucun débordement, police chargée",
+      "320px : 15 destinations gestion sans débordement horizontal, menu clavier et fermeture Échap",
+      "Élève : sélection mobile, bilan ouvert, filtres septembre2026/octobrevide, retour avec focus sur la ligne sélectionnée",
+      "Compétences : 2points pour accompagnement,0point pour non-vu, libellés textuels présents",
+      "Recherche élèves vide et effacement accessible",
+      "Disponibilités : horaire invalide saisi au clavier refusé avec aria-invalid et message",
+      "Tarif : erreur prix abc affichée, référence désactivée, action après champs",
+      "Dialogue : Tab et ShiftTab rebouclent, Échap ferme, focus rendu au bouton de relecture"
+    ],
+    "limits": [
+      "Réponses API synthétiques : ces images ne qualifient pas une écriture durable ou un vrai compte.",
+      "Pas de Safari physique, VoiceOver/NVDA, zoom200%, RTL ou clavier logiciel qualifiés.",
+      "Le banc réécrit les URLs ; son rechargement ne prouve pas la reprise authentifiée.",
+      "Tests physiques GPS/batterie indépendants de cette passe web."
+    ]
+  },
+  "contrastProof": "docs/implementation/proofs/web-craft-contrast-20260930.json",
+  "reviewFixes": [
+    "Tables étroites : versions déplacées en métadonnées, états ordinaires retirés des colonnes, prix/unités indivisibles",
+    "Brouillon coordonnées conserve son formulaire tant que dirty même après confirmation d’une autre commande",
+    "Nom accessible du lien Ouvrir l’école conserve son libellé visible",
+    "Fixture readonly dérivée des droits dans les deux modes",
+    "color-scheme explicite et boucle clavier de ConfirmDialog"
+  ],
+  "sourceBlobs": [
+    {
+      "path": "apps/web/client/agenda-model.ts",
+      "gitBlob": "bccd5bed65f39e3c87a6702eedd9f48204e66e7d"
+    },
+    {
+      "path": "apps/web/client/App.tsx",
+      "gitBlob": "3c4c8b6dfaf760f4b9ce536093fbfa4b809ba128"
+    },
+    {
+      "path": "apps/web/client/assets/fonts/SourceSans3VF-Upright.woff2",
+      "gitBlob": "96cc9fd06ceb275ec3d6103ad97c5647212c88c5"
+    },
+    {
+      "path": "apps/web/client/command-core.ts",
+      "gitBlob": "a99f108171bb1c09c44ccdcf69e43d97a1b1dc1b"
+    },
+    {
+      "path": "apps/web/client/command-store.ts",
+      "gitBlob": "f3b4f128b90266480e097901216b6ceff47747b8"
+    },
+    {
+      "path": "apps/web/client/console/agenda.tsx",
+      "gitBlob": "23144610a6e94f2cec6f98dc34743715df405a00"
+    },
+    {
+      "path": "apps/web/client/console/availability.tsx",
+      "gitBlob": "52fe5f0aaac11af442f55f2973f2c5e8e7da4db4"
+    },
+    {
+      "path": "apps/web/client/console/catalog.tsx",
+      "gitBlob": "ae10f2c0f3a19d640f59ed7da78f711e65a21f59"
+    },
+    {
+      "path": "apps/web/client/console/commerce.tsx",
+      "gitBlob": "6019789a8df5030c3f297ae68c831a3980e1525a"
+    },
+    {
+      "path": "apps/web/client/console/configuration.tsx",
+      "gitBlob": "cae421ea225995788a811f79cb35d09d2e4cb0a7"
+    },
+    {
+      "path": "apps/web/client/console/Console.tsx",
+      "gitBlob": "432d4fedf0bc09778d521e1cb2b4c487dda31148"
+    },
+    {
+      "path": "apps/web/client/console/context.ts",
+      "gitBlob": "823985ee3758e03a9c1f057e1464903430190226"
+    },
+    {
+      "path": "apps/web/client/console/dossier.tsx",
+      "gitBlob": "894f0788fca3f976d8be53e87cf9486b0812c8da"
+    },
+    {
+      "path": "apps/web/client/console/draft-model.ts",
+      "gitBlob": "b75fe0bffa2e2825a7a7a589177101d737777fb5"
+    },
+    {
+      "path": "apps/web/client/console/formations.tsx",
+      "gitBlob": "2e36c13d1a89e43b3976fbcd35be0225029ff9dd"
+    },
+    {
+      "path": "apps/web/client/console/layout.tsx",
+      "gitBlob": "a5d4b8311424503eec10861381d99cfc70fe4cb7"
+    },
+    {
+      "path": "apps/web/client/console/learners.tsx",
+      "gitBlob": "c4830740a6df5f29029adcd6eeecca4a087a82ff"
+    },
+    {
+      "path": "apps/web/client/console/navigation.ts",
+      "gitBlob": "8e19a091385a09ac8c8d30fb7820b915ae5310d1"
+    },
+    {
+      "path": "apps/web/client/console/overview.tsx",
+      "gitBlob": "40927b57917048fda886705a7d0e7c0900965660"
+    },
+    {
+      "path": "apps/web/client/console/people.tsx",
+      "gitBlob": "c820779cf6e017bf8a4098c539c361b56902629a"
+    },
+    {
+      "path": "apps/web/client/console/profile-fields.tsx",
+      "gitBlob": "5520f589249d4d7b575f3456b0489ee283f084e5"
+    },
+    {
+      "path": "apps/web/client/console/route.ts",
+      "gitBlob": "f62dee4617cffc515c6c5b5bfd497f45da6fdf4f"
+    },
+    {
+      "path": "apps/web/client/console/sections.ts",
+      "gitBlob": "9448698c3c847be6e8c4c0dec71517f42569ddef"
+    },
+    {
+      "path": "apps/web/client/console/trips.tsx",
+      "gitBlob": "7011d4370489fb325821b02f28a96f421c8164e2"
+    },
+    {
+      "path": "apps/web/client/dossier-model.ts",
+      "gitBlob": "ce912c66a2a292bff5d31f38286418a43b418600"
+    },
+    {
+      "path": "apps/web/client/invitation-link.ts",
+      "gitBlob": "bf12a6b51be0cb2e40e2cf5ed87d707ad14d1b93"
+    },
+    {
+      "path": "apps/web/client/invitation-model.ts",
+      "gitBlob": "60166d0cb4b6f5f3a1494eacd24145db35ffb8a2"
+    },
+    {
+      "path": "apps/web/client/main.tsx",
+      "gitBlob": "8807b9a53c9323ab2e3a06f0ecb64846a9b46141"
+    },
+    {
+      "path": "apps/web/client/protocol.ts",
+      "gitBlob": "15c0a3cd6a5da13beab12cfaa656588313632684"
+    },
+    {
+      "path": "apps/web/client/school-api.ts",
+      "gitBlob": "36c1e4bf5bbc87d7601fb0a40f21a80a4823b853"
+    },
+    {
+      "path": "apps/web/client/styles.css",
+      "gitBlob": "72acb8c0fd0c2ae30a190d52775be41476c2615d"
+    },
+    {
+      "path": "apps/web/client/trip-model.ts",
+      "gitBlob": "9bb506ed3c3fa48a92fce856d249267d107807c8"
+    },
+    {
+      "path": "apps/web/client/ui.tsx",
+      "gitBlob": "ae67b2e4c34bfcad474a10d0d3173f560c2082e0"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "artifacts/retours-20260930/web-craft/account-desktop.jpg",
+      "sha256": "23d9c2f91740b6a26549937a1a078495e449aa0c4a346148baa9d7387794db1a"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/account-mobile.jpg",
+      "sha256": "ef9d47258cc93096f7fe137952c53152167083ed997cf9f63722fccd934aeb3b"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/agenda-desktop.jpg",
+      "sha256": "760ef082a73749fbb94f52fa3f938a05c7b746a5d1a961df1121fb5645ff3594"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/agenda-error-tablet-dark.jpg",
+      "sha256": "d5c89df21b94363c3fa2eea19ed505ba6bf934d0fdcc5709bb260887c7ad1bb0"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/agenda-mobile.jpg",
+      "sha256": "ab746d0b42089f1a0d4b84136acfdab565609776f88d8fec872da0d3c6994881"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/availability-desktop.jpg",
+      "sha256": "4ab6a8a81f6f12cbf2bcfb46e33f80504d23f4e90a1d595e0396b940cee76652"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/availability-error-mobile.jpg",
+      "sha256": "9e3b97bcc5e52595d286dc0a1661892a9a0b561765e85d281a2ef99da1756a0c"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/availability-mobile.jpg",
+      "sha256": "49162e21da407211cd4c77089e0ad512f11de38de258273a97c629b975f337e0"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/config-desktop.jpg",
+      "sha256": "19a06117cf33aac781c55716c3e0d21b7e513deaa1f8891b94da62d451118694"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/config-mobile.jpg",
+      "sha256": "2613274f34e8aa8bbb153c9835a2dd9927b5f4dcbc9cf5eb7e7ff6c2430bd27c"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/curricula-desktop.jpg",
+      "sha256": "d683c83c93b2ce6f04c00fcef67b0614d17519db1df9f1abde653ef1ad0e8c0a"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/curricula-mobile.jpg",
+      "sha256": "43b80cf4ed74559a9db51af811b5872db6068bbed01a8bd59ac2334f79024555"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/dialog-tablet-light.jpg",
+      "sha256": "bfd2b6a681500beb4cfe9ecb9b4c74b3026907e749dd36f2aa53896a0992ba8d"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/dossier-bilan-mobile.jpg",
+      "sha256": "a4f82e77f9c9fb785eff9d5b2c99c317d3862aa19872f04140507987a3be62d2"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/formations-desktop.jpg",
+      "sha256": "e6e8e36b885018dd55de9e0b83f08f1adebaa4823ea7e0ac58209e101e24274f"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/formations-mobile.jpg",
+      "sha256": "953ff024c5da288485fe7b826c8594dd690b7e5f71d17639ff517f47c2ebd918"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/formations-tablet-dark.jpg",
+      "sha256": "e1c80b1e9d607ea9e71313c8311f4d4acf50ef339e9128d72bcffbb4e38a8e18"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/invitation-desktop.jpg",
+      "sha256": "74dea1107e0db6b347bd91891901e478b249ea02c37659a122ff946710d37b06"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/invitation-mobile.jpg",
+      "sha256": "534960e36ab2333da4ce60b8471e351e28a53137122e96d2d93e3d4eafdc169a"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/invitations-desktop.jpg",
+      "sha256": "7bb765c5b2c62435132fe349f279780bd3d0451a62c0d8396395ecaf4e49b2f0"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/invitations-mobile.jpg",
+      "sha256": "9d8591bb208c09c65fd7dc76cf1519563fa478f0e09768fd8d16c567918fa0fc"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/learners-desktop.jpg",
+      "sha256": "17ca7fb6ae990b29f29ebd0ff41851d42c1dfa3393b8b5f059cec2d4cd63f9fe"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/learners-empty-tablet-dark.jpg",
+      "sha256": "43f3dc014f43176fc140fa5e02ead167c894ca3877f1392f1b2acd45fe18a997"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/learners-mobile.jpg",
+      "sha256": "aa6b500558c0caf1cf6810730bec508a2e87b5a3dca04e56ccd2d7f8fc03a459"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/offerings-desktop.jpg",
+      "sha256": "f57866d434c48c706a2d158d383f44ce1de5f8d604d815e96e48708c975ecb1c"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/offerings-mobile.jpg",
+      "sha256": "e514a722941dca038c9e091e18bfbfa217afd8549b10ea25b1fe1d9d2978b971"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/overview-desktop.jpg",
+      "sha256": "bff95bda63767b7e057df1bd156d600a60518a323f0220341a704406aa91aad0"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/overview-mobile.jpg",
+      "sha256": "5f10f46dce39799b3d7039dfa72212dc1c66c4eeb2bf710ee6d977c93d2883d0"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/procedures-desktop.jpg",
+      "sha256": "379fcd23305205ade3b813b2853cd024faa79a4af432ab26618b72da8d16c8f4"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/procedures-mobile.jpg",
+      "sha256": "5a038a617458bc4b450f7f9e58c41dbcc18d627996287ac1cf90f1ce3d0b5d28"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/products-desktop.jpg",
+      "sha256": "4741ddec4dda5ab72714bdab04b203477f751d82466ced289ee53c1db8d164ce"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/products-mobile.jpg",
+      "sha256": "bc564ecf9446e2c53d31026fd2843a0742322ed088e8410f9127708192d39763"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/products-readonly-tablet-dark.jpg",
+      "sha256": "68393a411c335f7cc342d27a7d6b8cd6eaf683eea8bde8789d397be0b8abdfa9"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/profile-desktop.jpg",
+      "sha256": "5bdeda3457a105d8286945bd06f3677265ea68f0d9b143ae9eddeed5d222d962"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/profile-mobile.jpg",
+      "sha256": "0db1170aeac03de1e85b1c892f28c75259bf0f06ffd72b55b32a407f2e7bbd20"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/signin-desktop.jpg",
+      "sha256": "990ec2edba080a0b230247429c5594f55d06718efd3c7156112552b0534917bf"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/signin-mobile.jpg",
+      "sha256": "076b3bcb6e6238077abdc64412929699c23a308dd194885760e6e4038f6f183c"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/tarif-form-tablet-dark.jpg",
+      "sha256": "a38e24feb657f62909a6a92a768c4019a3295b0a30bdbd8b831c5d2a32189078"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/team-desktop.jpg",
+      "sha256": "ed502b43f0a8a5520dd3785aacfcbebe9af53bb8b230e1777488492ec1fc92c1"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/team-mobile.jpg",
+      "sha256": "3238b52cd379634a1aa71aa3f32276620fba0e276f74cc5361a1a1a6b77d509a"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/terms-desktop.jpg",
+      "sha256": "7a6a6dcde5c1981e2bda29f562b4f71b63e1534a3ce1b4f50e886a37a26097bd"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/terms-mobile.jpg",
+      "sha256": "41126adb7600490a0b83a606977aa7b3da75a7ece8e7d97cabfa9989c6e6fe5b"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/trips-desktop.jpg",
+      "sha256": "816fc33acda6655504033ed6eb8eb3ebe55965cd30ebfff18a54b96759293e6e"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-craft/trips-mobile.jpg",
+      "sha256": "b7ec95fbd111238af1a9627178a03669c609d9f761c149aa21eadb3c5db6f41f"
+    }
+  ]
+}

@@ -83,7 +83,7 @@ export function FormationsSection() {
             const curriculum = data.curricula.filter(item => item.categoryCode === category).sort((a, b) => b.revision - a.revision)[0];
             const procedure = data.procedures.filter(item => item.categoryCode === category).sort((a, b) => b.version - a.version)[0];
             return <section key={category} className="formation-group" aria-label={`Permis ${category}`}>
-              <div className="formation-heading"><h2>Permis {category}</h2>{link('offres', 'Gérer la formation', { category }, 'button quiet')}</div>
+              <div className="formation-heading"><h2><span className="formation-category-label">Permis</span> <span className="formation-category">{category}</span></h2>{link('offres', 'Gérer la formation', { category }, 'button secondary')}</div>
               <div className="formation-content">
                 <div><h3 className="formation-label">Enseignement</h3>
                   {offerings.length ? <ul className="formation-offerings">{offerings.map(offeringRow)}</ul> : <div className="formation-related empty-related">

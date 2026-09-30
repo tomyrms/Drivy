@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 export type SymbolKind = 'account' | 'school' | 'alert' | 'check' | 'refresh' | 'lock' | 'mail' | 'shield' | 'clock'
   | 'home' | 'settings' | 'list' | 'layers' | 'book' | 'file' | 'tag' | 'receipt' | 'users' | 'plus' | 'edit' | 'send'
-  | 'ban' | 'back' | 'info' | 'dot' | 'menu' | 'calendar' | 'route';
+  | 'ban' | 'back' | 'info' | 'dot' | 'menu' | 'calendar' | 'route' | 'chevron';
 
 const symbolPaths: Record<SymbolKind, ReactNode> = {
   account: <><circle cx="12" cy="8" r="3.5" /><path d="M5 21v-3a7 7 0 0 1 14 0v3" /></>,
@@ -34,6 +34,7 @@ const symbolPaths: Record<SymbolKind, ReactNode> = {
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4M17 3v4M3 10h18M7 14h3M14 14h3M7 17h3" /></>,
   route: <><circle cx="5" cy="18" r="2" /><circle cx="19" cy="6" r="2" /><path d="M5 16v-5a3 3 0 0 1 3-3h3a3 3 0 0 1 0 6h2a6 6 0 0 0 6-6" /></>,
+  chevron: <path d="m7 10 5 5 5-5" />,
 };
 
 /** Decorative outline symbol; every meaning it carries is also written in text. */
@@ -43,7 +44,7 @@ export function Symbol({ kind, tile = false, bare = false }: { kind: SymbolKind;
 }
 
 export type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
-/** Status pill shared with the Apple client: symbol + text + tone, never color alone. */
+/** Exceptional status: symbol + text + tone, never color alone. */
 export function StatusBadge({ tone, symbol, children }: { tone: Tone; symbol: SymbolKind; children: ReactNode }) {
   return <span className={`badge ${tone}`}><Symbol kind={symbol} bare />{children}</span>;
 }
@@ -69,13 +70,13 @@ export function Loading({ label }: { label: string }) {
   return <p className="loading" role="status"><span className="spinner" aria-hidden="true" />{label}</p>;
 }
 
-export function EmptyState({ symbol, title, message, action }: { symbol: SymbolKind; title: string; message: string; action?: ReactNode }) {
+export function EmptyState({ symbol, title, message, action }: { symbol: SymbolKind; title: string; message?: string; action?: ReactNode }) {
   return (
     <div className="empty-state">
       <Symbol kind={symbol} />
       <div className="row-text">
         <h3 className="row-title">{title}</h3>
-        <p className="row-meta">{message}</p>
+        {message && <p className="row-meta">{message}</p>}
         {action}
       </div>
     </div>
@@ -87,7 +88,7 @@ type FieldProps = { label: string; hint?: string | undefined; error?: string | n
 function FieldFrame({ id, label, hint, error, required, children, counter }: FieldProps & { id: string; children: ReactNode; counter?: ReactNode }) {
   return (
     <div className={error ? 'field invalid' : 'field'}>
-      <label htmlFor={id}>{label}{required === false && <span className="optional"> · facultatif</span>}</label>
+      <label htmlFor={id}>{label}{required === false && <span className="optional">Facultatif</span>}</label>
       {children}
       {(hint || counter) && <p className="caption field-hint" id={`${id}-hint`}>{hint}{counter}</p>}
       {error && <p className="field-error" id={`${id}-error`}><Symbol kind="alert" bare />{error}</p>}
@@ -135,11 +136,14 @@ export function SelectField<T extends string>({ label, value, onChange, options,
   const id = useId();
   return (
     <FieldFrame id={id} label={label} hint={hint} error={error} required={required}>
-      <select id={id} value={value} disabled={disabled} required={required} aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy(id, hint, error)} onChange={event => onChange(event.target.value as T)}>
-        {placeholder !== undefined && <option value="" disabled>{placeholder}</option>}
-        {options.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
-      </select>
+      <div className="select-control">
+        <select id={id} value={value} disabled={disabled} required={required} aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy(id, hint, error)} onChange={event => onChange(event.target.value as T)}>
+          {placeholder !== undefined && <option value="" disabled>{placeholder}</option>}
+          {options.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
+        </select>
+        <Symbol kind="chevron" bare />
+      </div>
     </FieldFrame>
   );
 }
@@ -170,6 +174,7 @@ export function ConfirmDialog({ open, title, confirmLabel, onConfirm, onCancel, 
   acknowledgement?: string; acknowledged?: boolean; onAcknowledge?: (value: boolean) => void; children: ReactNode; disabledReason?: string | null;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const titleHeading = useRef<HTMLHeadingElement>(null);
   const opener = useRef<Element | null>(null);
   const titleId = useId();
   useEffect(() => {
@@ -181,12 +186,33 @@ export function ConfirmDialog({ open, title, confirmLabel, onConfirm, onCancel, 
       if (opener.current instanceof HTMLElement && opener.current.isConnected && !opener.current.matches(':disabled')) opener.current.focus();
     }
   }, [open]);
+  useEffect(() => {
+    // Disabling every action can otherwise move focus to the document while the write is pending.
+    if (open && busy && dialog.current?.open) titleHeading.current?.focus({ preventScroll: true });
+  }, [open, busy]);
   const blocked = busy || (acknowledgement !== undefined && !acknowledged) || !!disabledReason;
   return (
     <dialog ref={dialog} className="confirm-dialog" aria-labelledby={titleId}
+      onKeyDown={event => {
+        if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) return;
+        const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('a[href],button,input,select,textarea,[tabindex],[contenteditable="true"]')]
+          .filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && !element.closest('[hidden],[inert],[aria-hidden="true"]')
+            && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden');
+        const first = controls[0], last = controls.at(-1);
+        if (!first || !last) {
+          event.preventDefault();
+          titleHeading.current?.focus({ preventScroll: true });
+          return;
+        }
+        const active = document.activeElement;
+        if (!controls.some(element => element === active) || (event.shiftKey ? active === first : active === last)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus();
+        }
+      }}
       onCancel={event => { event.preventDefault(); if (!busy) onCancel(); }}>
       <div className="dialog-header">
-        <h2 id={titleId}>{title}</h2>
+        <h2 id={titleId} ref={titleHeading} tabIndex={-1}>{title}</h2>
       </div>
       <div className="dialog-body">
         {children}

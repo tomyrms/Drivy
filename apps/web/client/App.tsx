@@ -213,7 +213,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
   const acceptanceHint = !reviewed && emailVerified;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${session?.authenticated ? 'account-shell' : 'entry-shell'}`}>
       <a className="skip-link" href="#main">Aller au contenu</a>
       <header className="site-header">
         <a className="brand" href="/app/" aria-label="Drivy, votre espace">
@@ -225,11 +225,8 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
 
       <main id="main" className="main" aria-busy={!loaded}>
         <div className="page-heading">
-          <p className="context">{page === 'invitation' ? 'Invitation de votre école' : 'Votre espace'}</p>
-          <h1 ref={heading} tabIndex={-1}>{page === 'invitation' ? 'Rejoindre votre école' : session?.authenticated ? 'Bienvenue dans Drivy' : 'Votre école, à portée de main'}</h1>
-          <p className="lead">{page === 'invitation'
-            ? 'Vérifiez l’école et le compte utilisé avant de confirmer votre rattachement.'
-            : session?.authenticated ? personName : 'Un seul compte pour retrouver vos écoles et les accès qu’elles vous donnent.'}</p>
+          <p className="context">{page === 'invitation' ? 'Invitation' : session?.authenticated ? personName : 'Espace école'}</p>
+          <h1 ref={heading} tabIndex={-1}>{page === 'invitation' ? 'Rejoindre une école' : session?.authenticated ? 'Vos écoles' : 'Se connecter à Drivy'}</h1>
         </div>
 
         <div className="feedback" aria-live="polite" aria-atomic="true">
@@ -260,12 +257,11 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
 
         {loaded && !session?.authenticated && <section className="panel sign-in" aria-labelledby="sign-in-title">
           <Symbol kind="account" tile />
-          <h2 id="sign-in-title">{page === 'invitation' ? 'Connectez-vous avec le compte invité' : 'Connectez-vous à votre compte'}</h2>
+          <h2 id="sign-in-title">{page === 'invitation' ? 'Utilisez le compte invité' : 'Retrouvez votre école'}</h2>
           <p className="secondary-text">{page === 'invitation'
             ? 'Utilisez l’adresse à laquelle votre école a envoyé ce lien. Vous pourrez relire les informations avant d’accepter.'
             : 'Retrouvez les écoles auxquelles vous êtes rattaché.'}</p>
           <button className="button primary" type="button" disabled={isBusy || invitationLink.token !== null || invitationLink.error} onClick={() => void login()}>Se connecter</button>
-          <p className="caption with-symbol"><Symbol kind="lock" bare />La connexion s’ouvre sur le service sécurisé de Drivy.</p>
           {page === 'invitation' && <p className="caption">Si vous fermez cette page avant la fin de la préparation, rouvrez le lien envoyé par votre école.</p>}
         </section>}
 
@@ -277,7 +273,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
               <div className="row-text">
                 <strong className="row-title">{personName}</strong>
                 {session.user?.email && <span className="row-meta">{session.user.email}</span>}
-                <StatusBadge tone={emailVerified ? 'success' : 'warning'} symbol={emailVerified ? 'check' : 'alert'}>{emailVerified ? 'Adresse vérifiée' : 'Adresse à vérifier'}</StatusBadge>
+                {!emailVerified && <StatusBadge tone="warning" symbol="alert">Adresse à vérifier</StatusBadge>}
               </div>
               <button type="button" className="button quiet" onClick={() => void logout()} disabled={isBusy}>Changer de compte</button>
             </div>
@@ -357,7 +353,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
 
           <section className="section" aria-labelledby="schools-title">
             <div className="section-heading">
-              <h2 id="schools-title" className="section-title">Vos écoles</h2>
+              <h2 id="schools-title" className="section-title">{me?.memberships.length === 1 ? 'Une école liée' : `${me?.memberships.length ?? 0} écoles liées`}</h2>
               <button className="button quiet" disabled={isBusy} type="button" onClick={() => void perform('Actualisation de vos écoles…', refresh)}>
                 <Symbol kind="refresh" bare />Actualiser
               </button>
@@ -366,7 +362,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
               ? <ul className="row-list">{me.memberships.map(member => <li key={member.membershipId}>
                   <Symbol kind="school" />
                   <div className="row-text"><h3 className="row-title">{member.schoolName}</h3><p className="row-meta">{member.roles.map(roleLabel).join(' · ')}</p></div>
-                  {member.roles.includes('ADMIN') && <a className="button secondary compact" href={`/app/gestion/${member.schoolId}`}>Gérer l’école</a>}
+                  {member.roles.includes('ADMIN') && <a className="button secondary compact" href={`/app/gestion/${member.schoolId}`} aria-label={`Ouvrir l’école ${member.schoolName}`}>Ouvrir l’école</a>}
                 </li>)}</ul>
               : !isBusy && !error
                 ? <div className="empty-state">

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { civilDateIn } from '../agenda-model';
 import { createCommand, isCivilDate, schoolTimeToInstant } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { availabilitySchema, closureSchema, memberSchema, readAll, type Availability, type Closure } from '../school-api';
@@ -7,7 +8,6 @@ import { useCommandRunner, useConsole, useLoad } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 
 const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
-const today = () => new Date().toLocaleDateString('sv-SE');
 const removal = 'Retirée depuis la gestion web.';
 
 function dayRange(weekdays: readonly number[]): string {
@@ -35,10 +35,14 @@ export function AvailabilitySection() {
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [start, setStart] = useState('08:00');
   const [end, setEnd] = useState('18:00');
-  const [from, setFrom] = useState(today());
+  const [from, setFrom] = useState(() => civilDateIn(school.timeZone));
   const [absenceStart, setAbsenceStart] = useState('');
   const [absenceEnd, setAbsenceEnd] = useState('');
-  const canWrite = !runner.pending && !runner.busy && instructor !== '';
+  const [ruleOpen, setRuleOpen] = useState(false);
+  const [absenceOpen, setAbsenceOpen] = useState(false);
+  const [ruleSubmitted, setRuleSubmitted] = useState(false);
+  const [absenceSubmitted, setAbsenceSubmitted] = useState(false);
+  const canWrite = school.status === 'ACTIVE' && loaded.status === 'ready' && !runner.pending && !runner.busy && instructors.some(item => item.id === instructor);
 
   const rules = (loaded.data?.rules ?? []).filter(rule => rule.instructorMembershipId === instructor)
     .sort((a, b) => a.weekdays[0]! - b.weekdays[0]! || a.localStart.localeCompare(b.localStart));
@@ -50,20 +54,23 @@ export function AvailabilitySection() {
   const absenceValid = absenceFrom !== null && absenceUntil !== null && Date.parse(absenceUntil) > Date.parse(absenceFrom);
 
   async function addRule() {
+    setRuleSubmitted(true);
     if (!ruleValid || !canWrite) return;
-    await runner.run(createCommand({ schoolId, kind: 'createAvailabilityRule', path: 'availability-rules', resourceVersion: 0,
+    const result = await runner.run(createCommand({ schoolId, kind: 'createAvailabilityRule', path: 'availability-rules', resourceVersion: 0,
       body: { instructorMembershipId: instructor, weekdays: [...weekdays].sort(), localStart: start, localEnd: end, validFrom: from, validUntil: null } }),
       'La disponibilité est ajoutée.');
+    if (result.status === 'confirmed') { setRuleOpen(false); setRuleSubmitted(false); }
   }
   async function removeRule(rule: Availability) {
     await runner.run(createCommand({ schoolId, kind: 'removeAvailabilityRule', path: `availability-rules/${rule.id}/remove`,
       resourceId: rule.id, resourceVersion: rule.version, ifMatch: rule.version, body: { reason: removal } }), 'La disponibilité est retirée.');
   }
   async function addAbsence() {
+    setAbsenceSubmitted(true);
     if (!absenceValid || !canWrite) return;
     const result = await runner.run(createCommand({ schoolId, kind: 'createClosure', path: 'closures', resourceVersion: 0,
       body: { instructorMembershipId: instructor, startsAt: absenceFrom, endsAt: absenceUntil, reason: null } }), 'L’absence est ajoutée.');
-    if (result.status === 'confirmed') { setAbsenceStart(''); setAbsenceEnd(''); }
+    if (result.status === 'confirmed') { setAbsenceStart(''); setAbsenceEnd(''); setAbsenceOpen(false); setAbsenceSubmitted(false); }
   }
   async function removeAbsence(closure: Closure) {
     await runner.run(createCommand({ schoolId, kind: 'removeClosure', path: `closures/${closure.id}/remove`,
@@ -79,48 +86,54 @@ export function AvailabilitySection() {
         : <>
           {instructors.length > 1 && <SelectField label="Moniteur" value={instructor} onChange={setChosen}
             options={instructors.map(member => ({ value: member.id, label: member.displayName }))} />}
-          <section className="panel" aria-labelledby="weekly-title">
-            <h2 id="weekly-title" className="section-title">Chaque semaine</h2>
+          <section className="panel schedule-section" aria-labelledby="weekly-title">
+            <h2 id="weekly-title" className="section-title">Horaires hebdomadaires</h2>
             {rules.length === 0 ? <p className="caption">Aucune disponibilité : aucune leçon ne peut être planifiée.</p>
-              : <ul className="row-list">{rules.map(rule => <li key={rule.id}>
+              : <ul className="row-list schedule-list">{rules.map(rule => <li key={rule.id}>
                 <div className="row-text">
-                  <h3 className="row-title">{dayRange(rule.weekdays)} · {rule.localStart}–{rule.localEnd}</h3>
+                  <h3 className="row-title">{dayRange(rule.weekdays)} <span className="schedule-period">{rule.localStart}–{rule.localEnd}</span></h3>
                   <p className="row-meta">Dès le {formatCivilDate(rule.validFrom)}{rule.validUntil ? ` jusqu’au ${formatCivilDate(rule.validUntil)}` : ''}</p>
                 </div>
-                <button type="button" className="button quiet" disabled={!canWrite} onClick={() => void removeRule(rule)}>Retirer</button>
+                <button type="button" className="button quiet" disabled={!canWrite} aria-label={`Retirer l’horaire ${dayRange(rule.weekdays)}, ${rule.localStart}–${rule.localEnd}`} onClick={() => void removeRule(rule)}>Retirer</button>
               </li>)}</ul>}
+            <details className="disclosure schedule-add" open={ruleOpen} onToggle={event => setRuleOpen(event.currentTarget.open)}><summary>Ajouter un horaire</summary>
             <form className="form-grid" onSubmit={event => { event.preventDefault(); void addRule(); }}>
-              <fieldset className="fieldset">
+              <fieldset className="fieldset" aria-describedby={ruleSubmitted && weekdays.length === 0 ? 'weekly-days-error' : undefined}>
                 <legend>Jours</legend>
                 <div className="day-picker">{days.map((label, index) => <CheckField key={label} label={label} checked={weekdays.includes(index + 1)} disabled={!canWrite}
                   onChange={checked => setWeekdays(current => checked ? [...current, index + 1] : current.filter(day => day !== index + 1))} />)}</div>
+                {ruleSubmitted && weekdays.length === 0 && <p id="weekly-days-error" className="field-error" role="alert">Choisissez au moins un jour.</p>}
               </fieldset>
               <div className="form-row">
-                <TextField label="De" type="time" value={start} disabled={!canWrite} onChange={setStart} />
-                <TextField label="À" type="time" value={end} disabled={!canWrite} onChange={setEnd} error={end <= start ? 'La fin suit le début.' : null} />
-                <TextField label="Dès le" type="date" value={from} disabled={!canWrite} onChange={setFrom} />
+                <TextField label="De" type="time" required value={start} disabled={!canWrite} onChange={setStart} />
+                <TextField label="À" type="time" required value={end} disabled={!canWrite} onChange={setEnd} error={ruleSubmitted && end <= start ? 'Choisissez une fin après le début.' : null} />
+                <TextField label="Dès le" type="date" required value={from} disabled={!canWrite} onChange={setFrom} />
               </div>
-              <button type="submit" className="button primary" disabled={!canWrite || !ruleValid}>Ajouter</button>
+              <div className="form-actions"><button type="submit" className="button primary" disabled={!canWrite} aria-busy={runner.busy}>Ajouter l’horaire</button></div>
             </form>
+            </details>
           </section>
-          <section className="panel" aria-labelledby="absence-title">
+          <section className="panel schedule-section" aria-labelledby="absence-title">
             <h2 id="absence-title" className="section-title">Absences</h2>
             {absences.length === 0 ? <p className="caption">Aucune absence prévue.</p>
-              : <ul className="row-list">{absences.map(item => <li key={item.id}>
+              : <ul className="row-list schedule-list">{absences.map(item => <li key={item.id}>
                 <div className="row-text">
-                  <h3 className="row-title">{formatDateTime(item.startsAt, school.timeZone)} → {formatDateTime(item.endsAt, school.timeZone)}</h3>
+                  <h3 className="row-title schedule-period"><time dateTime={item.startsAt}>{formatDateTime(item.startsAt, school.timeZone)}</time><span aria-hidden="true"> → </span><span className="visually-hidden"> au </span><time dateTime={item.endsAt}>{formatDateTime(item.endsAt, school.timeZone)}</time></h3>
                   {item.reason && <p className="row-meta">{item.reason}</p>}
                 </div>
-                <button type="button" className="button quiet" disabled={!canWrite} onClick={() => void removeAbsence(item)}>Retirer</button>
+                <button type="button" className="button quiet" disabled={!canWrite} aria-label={`Retirer l’absence du ${formatDateTime(item.startsAt, school.timeZone)}`} onClick={() => void removeAbsence(item)}>Retirer</button>
               </li>)}</ul>}
+            <details className="disclosure schedule-add" open={absenceOpen} onToggle={event => setAbsenceOpen(event.currentTarget.open)}><summary>Ajouter une absence</summary>
             <form className="form-grid" onSubmit={event => { event.preventDefault(); void addAbsence(); }}>
               <div className="form-row">
-                <TextField label="Du" type="datetime-local" value={absenceStart} disabled={!canWrite} onChange={setAbsenceStart} />
-                <TextField label="Au" type="datetime-local" value={absenceEnd} disabled={!canWrite} onChange={setAbsenceEnd}
-                  error={absenceStart && absenceEnd && !absenceValid ? 'La fin suit le début.' : null} />
+                <TextField label="Du" type="datetime-local" required value={absenceStart} disabled={!canWrite} onChange={setAbsenceStart}
+                  error={absenceSubmitted && absenceStart && !absenceFrom ? 'Cette heure n’existe pas dans le fuseau de l’école.' : null} />
+                <TextField label="Au" type="datetime-local" required value={absenceEnd} disabled={!canWrite} onChange={setAbsenceEnd}
+                  error={absenceSubmitted && absenceEnd && !absenceUntil ? 'Cette heure n’existe pas dans le fuseau de l’école.' : absenceSubmitted && absenceStart && absenceEnd && !absenceValid ? 'Choisissez une fin après le début.' : null} />
               </div>
-              <button type="submit" className="button secondary" disabled={!canWrite || !absenceValid}>Ajouter une absence</button>
+              <div className="form-actions"><button type="submit" className="button primary" disabled={!canWrite} aria-busy={runner.busy}>Ajouter l’absence</button></div>
             </form>
+            </details>
           </section>
         </>}
       </LoadState>

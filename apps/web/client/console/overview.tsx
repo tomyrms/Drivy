@@ -43,7 +43,8 @@ export function OverviewSection() {
     {failures > 0 && <Notice tone="warning" title="Préparation à vérifier" actions={<button type="button" className="button retry" onClick={loaded.reload}>Réessayer</button>}>
       <p>Certaines informations n’ont pas pu être lues.</p>
     </Notice>}
-    <ul className="preparation-list">{rows.map(row => <li key={row.section}>
+    <ul className="preparation-list">{rows.map((row, index) => <li key={row.section}>
+      <span className={row.done ? 'preparation-marker done' : 'preparation-marker'} aria-hidden="true">{row.done ? <Symbol kind="check" bare /> : String(index + 1).padStart(2, '0')}</span>
       <div className="row-text"><h2 className="row-title">{row.title}</h2>
         {row.done && <span className="row-meta with-symbol"><Symbol kind="check" bare />Prêt</span>}
       </div>

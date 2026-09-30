@@ -69,7 +69,7 @@ La fermeture s’appuie sur le reçu durable de la commande et le retrait réuss
 
 ## Vérifications et reste à qualifier
 
-Exécuté sur ce poste : lecture des sources, contrôle `git diff --check` ciblé, consultation des documentations officielles Apple/Mapbox. Le poste Windows ne possède ni `swift` ni Xcode : **compilation et tests Swift non exécutés dans ce chantier**.
+Exécuté sur ce poste : lecture des sources, contrôle `git diff --check` ciblé, consultation des documentations officielles Apple/Mapbox. Compilation et tests exécutés ensuite sur GitHub Actions : reprise `36727211560`, **218/218 iPhone et 10/10 iPad**, sans échec. La suite Swift Testing complète tourne sur iPhone ; iPad couvre présentation et UI. [Preuve native](proofs/native-retours-20260930.json).
 
 Tests ajoutés pour le runner Apple :
 

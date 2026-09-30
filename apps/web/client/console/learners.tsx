@@ -141,8 +141,9 @@ export function LearnersSection() {
             <TextField label="Rechercher un élève" value={search} onChange={setSearch} placeholder="Nom ou e-mail" />
             <SelectField label="Dossiers" value={statusFilter} onChange={setStatusFilter}
               options={[{ value: 'active', label: 'Actifs' }, { value: 'archived', label: 'Archivés' }, { value: 'all', label: 'Tous' }]} />
+            {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
           </div>
-          {visible.length === 0 ? <EmptyState symbol="users" title={learners.length ? 'Aucun élève trouvé' : 'Aucun élève'} message={learners.length ? 'Modifiez la recherche.' : 'Créez un code pour inviter un élève.'} />
+          {visible.length === 0 ? <EmptyState symbol="users" title={learners.length ? 'Aucun élève trouvé' : 'Aucun élève'} message={learners.length ? '' : 'Créez un code pour inviter un élève.'} />
             : <table className="data-table">
               <caption className="visually-hidden">Élèves</caption>
               <thead><tr><th scope="col">Élève</th><th scope="col">Formation</th></tr></thead>
@@ -165,7 +166,7 @@ export function LearnersSection() {
             actions={<button type="button" className="button retry" onClick={dossier.reload}><Symbol kind="refresh" bare />Réessayer</button>}><p>{dossier.error ?? readError(null)}</p></Notice>}
           {trainingsOf(current.id).length === 0 && <p className="caption">Aucune formation.</p>}
           {dossier.status === 'loading' && trainingsOf(current.id).length > 0 && <Loading label="Chargement des moniteurs et permis…" />}
-          <ul className="row-list">{trainingsOf(current.id).map(training => {
+          <ul className="row-list training-list">{trainingsOf(current.id).map(training => {
             const detail = dossier.data?.[training.id];
             const detailReady = dossier.status === 'ready' && detail !== undefined;
             const assigned = (detail?.assignments ?? []).filter(item => assignmentIsOpen(item));
@@ -173,7 +174,9 @@ export function LearnersSection() {
             const permitInfo = permitSummary(detail?.permits ? latestPermit(detail.permits, category(training)) : undefined);
             return <li key={training.id}>
               <div className="row-text">
-                <h3 className="row-title">{title(training)}</h3>
+                <div className="training-summary"><h3 className="row-title">{title(training)}</h3>
+                  {training.status !== 'ACTIVE' && <StatusBadge tone="neutral" symbol="dot">{statusLabels[training.status]}</StatusBadge>}
+                </div>
                 <p className="row-meta">{detailReady ? assigned.length ? assigned.map(item => name(item.instructorMembershipId)).join(', ') : 'Aucun moniteur' : 'Moniteurs à vérifier'}
                   {training.startedOn ? ` · depuis le ${formatCivilDate(training.startedOn)}` : ''}</p>
                 {inProgress && detail?.permits && <p className="row-meta with-badge">{permitInfo.text}
@@ -200,7 +203,6 @@ export function LearnersSection() {
                 </div>}
                 </details>
               </div>
-              {training.status !== 'ACTIVE' && <StatusBadge tone="neutral" symbol="dot">{statusLabels[training.status]}</StatusBadge>}
             </li>;
           })}</ul>
           {!current.archivedAt && availableOfferings.length > 0 && <details className="disclosure"><summary>{trainingsOf(current.id).length ? 'Ouvrir une autre formation' : 'Ouvrir une formation'}</summary><form className="form-grid" onSubmit={event => { event.preventDefault(); void openTraining(); }}>

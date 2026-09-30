@@ -15,6 +15,7 @@
       320,
       390,
       834,
+      1360,
       1440
     ],
     "themes": [
@@ -40,8 +41,20 @@
     ],
     "screenshots": [
       {
-        "path": "artifacts/retours-20260930/web/formations-tablette-sombre.png",
-        "sha256": "6080d214e748d1f5849f3032d957892ef7fd38867f2850de4855c6391e54ed2c"
+        "path": "artifacts/retours-20260930/web/formations-desktop-clair.jpg",
+        "sha256": "761803313b24203f853a8ed7793d6aa96b4a4856ed7de1c3ab1687f2eda3d216",
+        "dimensions": [
+          1360,
+          900
+        ]
+      },
+      {
+        "path": "artifacts/retours-20260930/web/formations-tablette-sombre.jpg",
+        "sha256": "6080d214e748d1f5849f3032d957892ef7fd38867f2850de4855c6391e54ed2c",
+        "dimensions": [
+          834,
+          1112
+        ]
       }
     ]
   },
@@ -60,11 +73,11 @@
     },
     {
       "path": "apps/web/client/console/catalog.tsx",
-      "sha256": "584715bf6f8e0fd24746e96929b7aff7c6dc6936d813db482edc4e341c75ff81"
+      "sha256": "437516b006bfd71bc6a69ab255b876b72a50e444a182b410815199e84e8f462b"
     },
     {
       "path": "apps/web/client/console/commerce.tsx",
-      "sha256": "923fa2f364f26c08b871c8f1adfd9010aa55dca28e47753bf5f81efd38f5be40"
+      "sha256": "226eb4925f53475f84af6c63fbba5857ce1a721e217e814e34487b3b750c216c"
     },
     {
       "path": "apps/web/client/console/configuration.tsx",
@@ -96,7 +109,7 @@
     },
     {
       "path": "apps/web/client/console/learners.tsx",
-      "sha256": "aa46d96b2e2e4bd858236c9e7cc3b266a77f53e803573a0d9b68002414b5b077"
+      "sha256": "1e11f891ff670d71c3ada3f23218434197f7c836088badb3ae3f11500e3eaecf"
     },
     {
       "path": "apps/web/client/console/navigation.ts",
@@ -104,7 +117,7 @@
     },
     {
       "path": "apps/web/client/console/overview.tsx",
-      "sha256": "529d7f82e1386ad6a0255845c67c096e410f938750d83c50555bb347b3b9da89"
+      "sha256": "702a46f3cbf2435f3ce84140f8371512227db2716b953fcb6bd32c4ca45d02c1"
     },
     {
       "path": "apps/web/client/console/people.tsx",
@@ -116,7 +129,7 @@
     },
     {
       "path": "apps/web/client/console/route.ts",
-      "sha256": "55b5884ee4da8f3315c048e7d07c9ba0b55acba27c1f4ab9dc306d2b0b4605a5"
+      "sha256": "d449a80b510cecaf25b01c8c37523560ca935ac5f655bf20403544d4ee74b371"
     },
     {
       "path": "apps/web/client/console/sections.ts",
@@ -128,7 +141,7 @@
     },
     {
       "path": "apps/web/client/styles.css",
-      "sha256": "b2560f7262623a8ef5e8b95117b2ae91838d70bc6ae715541fa619daa5fb311c"
+      "sha256": "ecfa61221bca852d961b998eb9542da5a8b92e591da7217eb26a109fd1dbc623"
     },
     {
       "path": "apps/web/test/console-route.test.ts",
@@ -138,5 +151,13 @@
       "path": "apps/web/test/visual.tsx",
       "sha256": "3632fce110b2d388e3c2cc5132953d4b9d5b3785dd4b3aac3dfe1d8947c0e3c1"
     }
-  ]
+  ],
+  "commit": "b5c6c3897767d45f734a60970df58a9b91e8b7ee",
+  "ci": {
+    "runId": 36728222518,
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/36728222518",
+    "conclusion": "success",
+    "apiPassed": 224,
+    "webPassed": 100
+  }
 }

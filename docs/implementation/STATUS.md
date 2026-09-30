@@ -1,5 +1,21 @@
 # État de la réalisation
 
+## 30 septembre 2026 — finition esthétique et ergonomique de chaque écran web
+
+Le porteur juge l’organisation plus claire mais l’apparence encore trop élémentaire. Passe réalisée, **web uniquement** : palette encre/papier, typographie Source Sans 3 auto-hébergée, contrôles et tableaux retravaillés, hiérarchie des identités, heures et prix, états ordinaires allégés. Deux agents ont partagé composants communs et parcours métier ; l’intégration couvre catalogue, réglages, entrée et revue navigateur. Les cinq espaces de navigation sont conservés. [Décisions et guides](web-craft-20260930.md).
+
+- **104 tests web**, typecheck et build réussis. 18 destinations desktop/mobile inspectées, contrôle de repli à320px, tablette sombre834px, liste/détail1360px ; 44 captures, filtres et clavier contrôlés. 52 couples de contraste passent les seuils mesurés. [Preuve](proofs/web-craft-20260930.json).
+- Déploiement de cette passe esthétique à terminer après nouvelle sauvegarde. Zoom200%, lecteur d’écran, Safari et appareils physiques restent à qualifier.
+
+## 30 septembre 2026 — organisation des parcours web
+
+Le retour complémentaire sur la difficulté à se repérer a conduit à une nouvelle répartition des informations : **cinq espaces**, accueil Planning, formations reliées à leurs compétences/procédures/tarifs, invitations séparées et détails mobiles avec retour. Les liens conservent leurs identifiants et filtres ; les brouillons de catalogue non soumis survivent aux renvois dans la même session. Le dossier place le suivi avant les formulaires administratifs. [Décision](web-architecture-20260930.md).
+
+- Typecheck/build et **100 tests web** réussis ; parcours vérifiés dans le shell réel avec données synthétiques, aux largeurs320/390/834/1440, clair et sombre. [Preuve](proofs/web-architecture-20260930.json). Déployé sur le homelab : `b5c6c38`, après nouvelle sauvegarde vérifiée. API/web/identité actifs, migrations001–021 conformes, assets HTTPS identiques au build local. [Preuve](proofs/deployment-web-architecture-20260930.json).
+- IPA native **0.7.0/build87** téléchargée et vérifiée ; source produit identique à `fe9fe6b`, seule la fixture de captures a changé sur `cd5a394`. [Preuve](proofs/native-ipa-retours-20260930.json).
+- Tests Apple : après correction des six échecs de fixtures/macros, reprise `36727211560` sur `e4eea1c` réussie : **218/218 iPhone** (208 Swift Testing, 3 présentation, 7 UI), **10/10 iPad** (3 présentation, 7 UI). IPA **0.7.0/build129** vérifiée ; binaires identiques à la build87. [Preuve complète](proofs/native-retours-20260930.json).
+- 24 captures ciblées Apple inspectées, avec limites explicites (observations vides, notification système sur une capture, cartes synthétiques). [Revue](native-visual-retours-20260930.md).
+
 ## 30 septembre 2026 — retours complémentaires, validation en cours
 
 Source native et web `fe9fe6b` : **refonte visuelle générale web uniquement**. Le thème et l’identité iOS/iPadOS restent conservés ; les modifications natives portent sur les demandes ciblées. [Liste détaillée](plan-retours-20260930.md).
@@ -11,7 +27,7 @@ Source native et web `fe9fe6b` : **refonte visuelle générale web uniquement**.
 - **Revue croisée** : reprise d’historique pendant une page lente, confirmation d’une autre leçon, annulation suivie d’une panne de relecture, changement d’école dans les préférences corrigés et couverts par des tests ajoutés.
 - **Serveur/web qualifiés localement** : API **224/224**, web **93/93**, typechecks et builds réussis sur PostgreSQL17.11 et Mailpit Docker isolés ; 21 migrations et 45 tables avec RLS forcée. Trois attentes de test obsolètes adaptées au lieu facultatif et à la nouvelle table, sans retirer les contrôles. Conteneurs temporaires supprimés. [Preuve](proofs/backend-retours-20260930.json).
 - **Homelab déployé** : `fe9fe6b`, sauvegarde privée vérifiée avant migration, empreintes001–021 concordantes, API/web/identité actifs, chemins des processus et routes HTTPS contrôlés. [Preuve](proofs/deployment-retours-20260930.json).
-- **Qualification Apple ouverte** : premier run `36721649061` bloqué par deux appels mutables dans des macros de tests, corrigés dans `9c77dd6`. Tests complets, IPA finale et captures ciblées en cours. Les résultats de la reprise initiale ci-dessous ne qualifient pas ce nouveau lot.
+- **Qualification Apple exécutée** : les échecs de macros/fixtures des premiers runs ont été corrigés dans les tests ; reprise finale `36727211560` réussie, 218 tests iPhone et 10 tests iPad, IPA129 vérifiée. Les 24 captures ciblées et leurs limites sont conservées dans la preuve native. Les essais physiques restent distincts.
 
 ## 30 septembre 2026 — reprise de la passe de bugs
 
