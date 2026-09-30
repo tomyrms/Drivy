@@ -366,6 +366,8 @@ struct SchoolVisualShell: View {
         let agendaKey = "\(root)/lessons" + SchoolVisualTransport.agendaSuffix
         var objects: [String: Any] = [
             "/v1/me": person, root: school,
+            "\(root)/planning-defaults": ["id": membershipID.uuidString, "schoolId": schoolID.uuidString,
+                "version": 1, "trainingCategoryCode": NSNull(), "serviceProductKey": NSNull()],
             "\(root)/learners": page(learnerObjects), "\(root)/learners/\(learnerID.uuidString)": learnerObject,
             "\(root)/trainings": page([training]), "\(root)/trainings/\(trainingID.uuidString)": training,
             "\(root)/trainings/\(trainingID.uuidString)/progress": progress,
