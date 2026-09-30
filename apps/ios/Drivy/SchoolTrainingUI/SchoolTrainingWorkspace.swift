@@ -26,10 +26,11 @@ import Observation
     init(scope: SchoolCommandScope, membership: SchoolMembership, learnerID: UUID, trainingID: UUID, client: SchoolTrainingClient) {
         self.scope = scope; self.membership = membership; self.learnerID = learnerID; self.trainingID = trainingID; self.client = client
     }
-    var hasPedagogicalRole: Bool { membership.roles.contains("INSTRUCTOR") || membership.roles.contains("LEARNER") }
+    /// Lit la progression de la formation : moniteur, élève, ou administration de l’école (lecture seule, droit relu par le serveur).
+    var hasPedagogicalRole: Bool { membership.roles.contains("INSTRUCTOR") || membership.roles.contains("LEARNER") || membership.roles.contains("ADMIN") }
     // L’ouverture déclenche sa propre lecture autorisée. AP58 n’est pas une permission
     // pour AP55/56 : une indisponibilité de la progression ne doit pas masquer les bilans.
-    var canOpenPedagogicalContent: Bool { (hasPedagogicalRole || membership.roles.contains("ADMIN")) && training != nil && !invalidated && !accessRevoked && !isLoading }
+    var canOpenPedagogicalContent: Bool { hasPedagogicalRole && training != nil && !invalidated && !accessRevoked && !isLoading }
     var upcomingLessons: [SchoolLesson] { lessons.filter { $0.status == "PLANNED" }.sorted { $0.plannedStart < $1.plannedStart } }
     var pastLessons: [SchoolLesson] { lessons.filter { $0.status != "PLANNED" }.sorted { $0.plannedStart > $1.plannedStart } }
     var unobservedCompetencies: [SchoolCatalogCompetency] {
@@ -37,6 +38,9 @@ import Observation
         let ids = Set(progress.unobservedCompetencyIds)
         return competencies.filter { ids.contains($0.id) }.sorted { $0.sortOrder < $1.sortOrder }
     }
+    /// Retour sur l’écran : le modèle est partagé et gardé en mémoire, donc relu à chaque affichage
+    /// (un bilan enregistré ailleurs change la progression). L’affichage courant reste visible jusqu’à la réponse.
+    func refreshOnAppear() async { await load(keepingCurrent: true) }
     func invalidate() { invalidated = true; generation = UUID(); progressRequest = UUID(); clear(); isLoading = false; isLoadingMore = false }
     private func clear() { training = nil; lessons = []; nextCursor = nil; progress = nil; competencies = []; seenCursors = []; lessonsLoaded = false }
 

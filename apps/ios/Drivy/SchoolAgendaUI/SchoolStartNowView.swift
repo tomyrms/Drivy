@@ -28,14 +28,27 @@ struct SchoolStartNowBody: Encodable, Sendable {
     /// Le serveur ne connaît pas encore « Démarrer une leçon ».
     private(set) var unsupported = false
     private(set) var started: SchoolLesson?
+    /// Le serveur a refusé : un rendez-vous du moniteur ou de l’élève tombe pendant la leçon. Rien n’est forcé.
+    private(set) var conflicted = false
+    /// Après un conflit, le moniteur choisit de planifier la leçon à un autre moment.
+    private(set) var planInstead = false
+    /// Élève déjà connu (fiche élève) : il est choisi d’emblée et la liste n’est pas proposée.
+    let presetLearnerID: UUID?
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var storageAvailable = false
     @ObservationIgnored private var invalidated = false
 
-    init(scope: SchoolCommandScope, client: SchoolPlanningClient, outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
-        self.scope = scope; self.client = client; self.outbox = outbox
+    init(scope: SchoolCommandScope, client: SchoolPlanningClient, learnerID: UUID? = nil,
+         outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
+        self.scope = scope; self.client = client; self.outbox = outbox; presetLearnerID = learnerID
     }
+
+    /// L’élève est imposé par la fiche d’où l’on part, et il est bien parmi les élèves affectés.
+    var hasPresetLearner: Bool { presetLearnerID != nil && presetLearnerID == learnerID }
+    var learnerName: String? { learners.first { $0.id == learnerID }?.displayName }
+
+    func planLater() { if conflicted { planInstead = true } }
 
     var canStart: Bool {
         !invalidated && !isLoading && !isBusy && storageAvailable && pending == nil && started == nil
@@ -62,7 +75,8 @@ struct SchoolStartNowBody: Encodable, Sendable {
                 .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
             if learners.isEmpty { errorMessage = "Aucun élève ne t’est affecté. Demande à l’administration de vérifier les affectations." }
             isLoading = false
-            if learners.count == 1, let only = learners.first { await select(only.id) }
+            if let preset = presetLearnerID, learners.contains(where: { $0.id == preset }) { await select(preset) }
+            else if learners.count == 1, let only = learners.first { await select(only.id) }
         } catch {
             guard request == generation else { return }
             isLoading = false
@@ -146,7 +160,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
 
     private func send(_ command: PendingSchoolCommand, fresh: Bool) async -> SchoolLesson? {
         let request = generation
-        isBusy = true; errorMessage = nil
+        isBusy = true; errorMessage = nil; conflicted = false
         defer { if request == generation { isBusy = false } }
         do {
             try outbox.save(command)
@@ -163,6 +177,9 @@ struct SchoolStartNowBody: Encodable, Sendable {
                 if failure == .notFound { unsupported = true; return nil }
             }
             errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription
+            if let failure = error as? SchoolPlanningFailure {
+                conflicted = failure == .rejected(SchoolPlanningClient.startNowConflictMessage)
+            }
             return nil
         }
     }
@@ -190,11 +207,15 @@ struct SchoolStartNowView: View {
                     }
                 }
                 Section {
-                    Picker("Élève", selection: Binding(get: { model.learnerID }, set: { id in
-                        if let id { Task { await model.select(id) } }
-                    })) {
-                        Text("Choisir un élève").tag(nil as UUID?)
-                        ForEach(model.learners) { learner in Text(learner.displayName).tag(Optional(learner.id)) }
+                    if model.hasPresetLearner, let name = model.learnerName {
+                        LabeledContent("Élève", value: name)
+                    } else {
+                        Picker("Élève", selection: Binding(get: { model.learnerID }, set: { id in
+                            if let id { Task { await model.select(id) } }
+                        })) {
+                            Text("Choisir un élève").tag(nil as UUID?)
+                            ForEach(model.learners) { learner in Text(learner.displayName).tag(Optional(learner.id)) }
+                        }
                     }
                     if model.trainings.count > 1 {
                         Picker("Formation", selection: $model.trainingID) {
@@ -218,20 +239,26 @@ struct SchoolStartNowView: View {
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 DrivyStickyActionBar {
-                    Button {
-                        Task {
-                            _ = await model.start()
-                            if model.started != nil || model.unsupported { dismiss() }
+                    if model.conflicted {
+                        // Rien n’est forcé : le serveur a refusé, la seule issue est de planifier autrement.
+                        Button {
+                            model.planLater(); dismiss()
+                        } label: { Label("Planifier à un autre moment", systemImage: "calendar") }
+                            .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+                            .accessibilityIdentifier("start-now-plan-later")
+                    } else {
+                        Button {
+                            Task {
+                                _ = await model.start()
+                                if model.started != nil || model.unsupported { dismiss() }
+                            }
+                        } label: {
+                            DrivyBusyLabel(title: "Démarrer maintenant", busyTitle: "Démarrage…", isBusy: model.isBusy)
                         }
-                    } label: {
-                        HStack(spacing: DrivySpacing.xs) {
-                            if model.isBusy { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
-                            Label("Démarrer maintenant", systemImage: "location.fill")
-                        }
+                        .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+                        .disabled(!model.canStart)
+                        .accessibilityIdentifier("start-now-confirm")
                     }
-                    .buttonStyle(DrivyPrimaryButtonStyle())
-                    .disabled(!model.canStart)
-                    .accessibilityIdentifier("start-now-confirm")
                 }
             }
             .navigationTitle("Démarrer une leçon").navigationBarTitleDisplayMode(.inline)
@@ -240,5 +267,103 @@ struct SchoolStartNowView: View {
         }
         .interactiveDismissDisabled(model.isBusy)
         .tint(DrivyTheme.accent)
+    }
+}
+
+/// Le geste complet « lancer une leçon tout de suite », réutilisable depuis Aujourd’hui et depuis la fiche d’un élève :
+/// choix de l’élève (déjà connu depuis sa fiche), création de la leçon par le serveur, puis départ direct du trajet.
+/// Si le trajet ne peut pas partir (GPS de l’école, fenêtre), la leçon s’ouvre ; si le serveur signale un conflit
+/// de planning, le moniteur peut planifier la leçon autrement. Le style du bouton est celui de l’appelant.
+struct SchoolStartNowButton<Content: View>: View {
+    @Bindable var workspace: SchoolWorkspace
+    let agendaClient: SchoolAgendaClient?
+    let captureController: SchoolCaptureSessionController?
+    var learnerID: UUID?
+    /// Appelé quand le geste est terminé (feuille fermée) pour que l’écran d’origine se relise.
+    var onFinished: () -> Void = {}
+    @ViewBuilder let label: Content
+
+    @State private var startNow: SchoolStartNowWorkspace?
+    @State private var lastStartNow: SchoolStartNowWorkspace?
+    @State private var preparation: SchoolCapturePreparationWorkspace?
+    @State private var planning: SchoolPlanningWorkspace?
+    @State private var opened: SchoolLesson?
+
+    private var scopeKey: String {
+        "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)"
+    }
+    /// Comme partout : moniteur d’une école active ; les droits sont relus par le serveur.
+    private var instructs: Bool {
+        workspace.membership?.roles.contains("INSTRUCTOR") == true && workspace.school?.status == "ACTIVE"
+    }
+
+    var body: some View {
+        Button { open() } label: { label }
+            .disabled(agendaClient == nil || !instructs)
+            .onChange(of: scopeKey) { _, _ in
+                lastStartNow?.invalidate(); lastStartNow = nil; startNow = nil
+                preparation?.invalidate(); preparation = nil
+                planning?.invalidate(); planning = nil; opened = nil
+            }
+            .sheet(item: $startNow, onDismiss: { closed() }) { model in
+                SchoolStartNowView(model: model)
+            }
+            .sheet(item: $preparation, onDismiss: { onFinished() }) { model in
+                SchoolCapturePreparationView(model: model, schoolWorkspace: workspace)
+            }
+            .sheet(item: $planning, onDismiss: { onFinished() }) { model in
+                SchoolPlanningView(model: model)
+            }
+            .sheet(item: $opened, onDismiss: { onFinished() }) { lesson in
+                if let agendaClient {
+                    NavigationStack {
+                        SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace, lessonID: lesson.id,
+                            learnerName: learnerName(lesson), opensCompletion: false)
+                    }
+                    .tint(DrivyTheme.accent)
+                    .environment(captureController)
+                }
+            }
+    }
+
+    private func open() {
+        guard let agendaClient, let person = workspace.person, let membership = workspace.membership, instructs else { return }
+        let model = SchoolStartNowWorkspace(scope: agendaClient.scope(person: person, membership: membership),
+            client: agendaClient.planningClient, learnerID: learnerID)
+        lastStartNow = model; startNow = model
+    }
+
+    /// Leçon créée : le trajet part aussitôt si possible, sinon la leçon s’ouvre. Conflit de planning ou serveur sans
+    /// la route : la planification classique s’ouvre avec l’élève déjà choisi.
+    private func closed() {
+        guard let model = lastStartNow else { return }
+        lastStartNow = nil
+        if let lesson = model.started {
+            if mayStart(lesson), let agendaClient, let person = workspace.person, let membership = workspace.membership {
+                preparation = agendaClient.capturePreparation(scope: agendaClient.scope(person: person, membership: membership),
+                    lessonID: lesson.id, controller: captureController)
+            } else { opened = lesson }
+        } else if model.planInstead || model.unsupported {
+            guard let agendaClient, let person = workspace.person, let membership = workspace.membership else { return onFinished() }
+            let planned = SchoolPlanningWorkspace(scope: agendaClient.scope(person: person, membership: membership),
+                client: agendaClient.planningClient, date: Date().addingTimeInterval(120))
+            planned.learnerID = model.learnerID
+            planning = planned
+        }
+        onFinished()
+    }
+
+    private func mayStart(_ lesson: SchoolLesson) -> Bool {
+        guard instructs, let captureController else { return false }
+        return SchoolLessonHubRules.mayStartCapture(lesson: lesson,
+            isAuthor: lesson.instructorMembershipId == workspace.membership?.membershipId, school: workspace.school,
+            capture: SchoolLessonCaptureStatus(controller: captureController, lessonID: lesson.id),
+            controllerCanPrepare: captureController.canPrepareCapture, now: Date())
+    }
+
+    private func learnerName(_ lesson: SchoolLesson) -> String {
+        lesson.providedLearnerName
+            ?? workspace.learners.first { $0.id == lesson.learnerId }?.displayName
+            ?? (workspace.learner?.id == lesson.learnerId ? workspace.learner?.displayName : nil) ?? "Leçon de conduite"
     }
 }

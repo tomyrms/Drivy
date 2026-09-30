@@ -124,7 +124,12 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
               let trainingID = command.routeResourceID,
               let object = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any],
               UUID(uuidString: object["operationId"] as? String ?? "") == command.id else { throw SchoolPlanningFailure.invalidResponse }
-        let lesson: SchoolLesson = try await request(command.scope.schoolID, ["lessons", "start-now"], command: command, statuses: [200, 201])
+        let lesson: SchoolLesson
+        do { lesson = try await request(command.scope.schoolID, ["lessons", "start-now"], command: command, statuses: [200, 201]) }
+        catch SchoolPlanningFailure.rejected(let text) where text == Self.slotConflictMessage {
+            // Le serveur reste anonyme sur le rendez-vous en cause ; pour une leçon immédiate, on dit quoi faire.
+            throw SchoolPlanningFailure.rejected(Self.startNowConflictMessage)
+        }
         guard lesson.schoolId == command.scope.schoolID, lesson.trainingId == trainingID, lesson.status == "PLANNED",
               lesson.instructorMembershipId == command.scope.membershipID, lesson.version > 0,
               let start = lesson.startsAt, let end = lesson.endsAt, end > start else { throw SchoolPlanningFailure.invalidResponse }
@@ -187,13 +192,15 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             return result.data
         } catch { throw SchoolPlanningFailure.invalidResponse }
     }
+    static let slotConflictMessage = "Le moniteur ou l’élève a déjà un rendez-vous sur ce créneau."
+    static let startNowConflictMessage = "Toi ou l’élève avez un rendez-vous pendant la durée de cette leçon. Planifie-la à un autre moment."
     static func failure(_ status: Int, _ code: String?, title: String? = nil) -> SchoolPlanningFailure {
         if status == 401 { return .unauthorized }; if status == 403 { return .forbidden }
         if status == 404 { return .notFound }; if status == 412 && code == "VERSION_CONFLICT" { return .conflict }
         let messages = [
             "SLOT_UNAVAILABLE": "Ce créneau n’est pas disponible pour ce moniteur.",
             "RESERVATION_CONFLICT": "Le moniteur ou l’élève a déjà un rendez-vous sur ce créneau.",
-            "SLOT_CONFLICT": "Le moniteur ou l’élève a déjà un rendez-vous sur ce créneau.",
+            "SLOT_CONFLICT": slotConflictMessage,
             "EXISTING_BOOKINGS": "Des leçons sont déjà planifiées sur cette période. Déplace-les avant de fermer ce créneau.",
             "PROFILE_POLICY_NOT_READY": "L’administration doit publier les champs du profil avant de planifier.",
             "PROFILE_INCOMPLETE": "Le profil de l’élève doit être complété avant de planifier.",

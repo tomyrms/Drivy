@@ -48,9 +48,8 @@ struct SchoolTrainingScreen: View {
         .id(scopeKey)
         .task(id: scopeKey) {
             if let model, matches(model), model.trainingID == trainingID {
-                // Une requête annulée par un changement d’onglet a pu laisser une erreur : relire sans effacer.
-                if model.errorMessage != nil || !model.lessonsLoaded { await model.load(keepingCurrent: true) }
-                else if model.progress == nil && model.hasPedagogicalRole { await model.loadProgress() }
+                // Retour sur l’écran ou changement d’onglet : toujours relire, sans effacer ce qui est affiché.
+                await model.refreshOnAppear()
                 return
             }
             model = nil
@@ -60,11 +59,8 @@ struct SchoolTrainingScreen: View {
             let shared = SchoolTrainingModelCache.model(scope: scope, membership: membership, learnerID: learner.id,
                 trainingID: trainingID, client: client)
             model = shared.model
-            if shared.isNew || shared.model.errorMessage != nil || !shared.model.lessonsLoaded {
-                await shared.model.load(keepingCurrent: !shared.isNew)
-            } else if shared.model.progress == nil && shared.model.hasPedagogicalRole {
-                await shared.model.loadProgress()
-            }
+            // Le modèle partagé peut dater d’avant un bilan enregistré ailleurs : relecture à chaque affichage.
+            await shared.model.load(keepingCurrent: !shared.isNew)
         }
         .onChange(of: model?.accessRevoked) { _, revoked in
             if revoked == true { Task { await workspace.loadAccount() } }
@@ -79,6 +75,53 @@ struct SchoolTrainingScreen: View {
 
 private struct OpenedLesson: Identifiable { let id: UUID }
 
+/// Filtre de statut des leçons du dossier. Deux ensembles disjoints (à venir, passées) ; « À terminer »
+/// est le sous-ensemble des passées restées sans issue.
+private enum TrainingLessonFilter: String, CaseIterable, Identifiable {
+    case all, upcoming, past, toFinish
+    var id: String { rawValue }
+    var title: String {
+        switch self { case .all: "Toutes"; case .upcoming: "À venir"; case .past: "Passées"; case .toFinish: "À terminer" }
+    }
+    var emptyTitle: String {
+        switch self {
+        case .all: "Aucune leçon"
+        case .upcoming: "Aucune leçon à venir"
+        case .past: "Aucune leçon passée"
+        case .toFinish: "Aucune leçon à terminer"
+        }
+    }
+    func includes(_ lesson: SchoolLesson) -> Bool {
+        let state = lesson.drivyState
+        let isUpcoming = lesson.status == "PLANNED" && state != .toFinish
+        switch self {
+        case .all: return true
+        case .upcoming: return isUpcoming
+        case .past: return !isUpcoming
+        case .toFinish: return state == .toFinish
+        }
+    }
+}
+
+/// Ordre des leçons. « Chronologique » garde la prochaine leçon en tête : à venir (croissant), à terminer,
+/// puis passées (la plus récente d’abord). Les deux autres sont strictement croissant ou décroissant.
+private enum TrainingLessonOrder: String, CaseIterable, Identifiable {
+    case chronological, newestFirst, oldestFirst
+    var id: String { rawValue }
+    var title: String {
+        switch self { case .chronological: "Chronologique"; case .newestFirst: "Plus récentes d’abord"; case .oldestFirst: "Plus anciennes d’abord" }
+    }
+    var symbol: String {
+        switch self { case .chronological: "arrow.up.arrow.down"; case .newestFirst: "arrow.down"; case .oldestFirst: "arrow.up" }
+    }
+}
+
+private struct TrainingLessonMonth: Identifiable {
+    let id: String
+    let title: String
+    let lessons: [SchoolLesson]
+}
+
 private struct SchoolTrainingContent: View {
     @Bindable var model: SchoolTrainingWorkspace
     @Bindable var workspace: SchoolWorkspace
@@ -86,6 +129,9 @@ private struct SchoolTrainingContent: View {
     let fixedSection: SchoolTrainingSection?
     @State private var chosenSection: SchoolTrainingSection = .lessons
     @State private var opened: OpenedLesson?
+    /// Le tri et le filtre survivent aux changements d’onglet et de dossier pendant la session de la scène.
+    @SceneStorage("training.lessons.filter") private var filter: TrainingLessonFilter = .all
+    @SceneStorage("training.lessons.order") private var order: TrainingLessonOrder = .chronological
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var section: SchoolTrainingSection { fixedSection ?? chosenSection }
@@ -185,22 +231,106 @@ private struct SchoolTrainingContent: View {
         }
     }
     private var lessons: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.l) {
+        let visible = model.lessons.filter(filter.includes)
+        return VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if model.lessonsLoaded && model.lessons.isEmpty && !model.isLoading {
                 DrivyEmptyState(title: "Aucune leçon", symbol: "calendar")
             }
-            if !model.upcomingLessons.isEmpty { lessonGroup("Prévues", values: model.upcomingLessons) }
-            if !model.pastLessons.isEmpty { lessonGroup("Passées", values: model.pastLessons) }
+            if !model.lessons.isEmpty { lessonsMenu }
+            if visible.isEmpty && !model.lessons.isEmpty {
+                DrivyEmptyState(title: filter.emptyTitle, symbol: "calendar",
+                    actionTitle: "Tout afficher", action: { filter = .all })
+            }
+            ForEach(months(of: visible)) { month in monthGroup(month) }
             moreLessons
         }
     }
-    private func lessonGroup(_ title: String, values: [SchoolLesson]) -> some View {
-        DrivyRowGroup(title: title) {
-            ForEach(values) { lesson in
-                Button { opened = OpenedLesson(id: lesson.id) } label: { SchoolTrainingLessonRow(lesson: lesson) }
-                    .buttonStyle(DrivyRowButtonStyle())
-                    .disabled(!model.canOpenPedagogicalContent)
-                    .accessibilityIdentifier("training-lesson-\(lesson.id.uuidString)")
+    /// Un seul contrôle natif : le libellé dit le filtre, la flèche dit le sens ; le menu range les deux choix.
+    private var lessonsMenu: some View {
+        Menu {
+            Section("Afficher") {
+                Picker("Afficher", selection: $filter) {
+                    ForEach(TrainingLessonFilter.allCases) { item in Text(item.title).tag(item) }
+                }
+                .pickerStyle(.inline)
+            }
+            Section("Trier") {
+                Picker("Trier", selection: $order) {
+                    ForEach(TrainingLessonOrder.allCases) { item in Text(item.title).tag(item) }
+                }
+                .pickerStyle(.inline)
+            }
+        } label: {
+            HStack(spacing: DrivySpacing.xs) {
+                Image(systemName: order.symbol).font(.caption.weight(.bold))
+                Text(filter.title)
+                Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold))
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(DrivyTheme.accent)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .accessibilityLabel("Afficher : \(filter.title), \(order.title)")
+        .accessibilityIdentifier("training-lessons-menu")
+    }
+    private func months(of values: [SchoolLesson]) -> [TrainingLessonMonth] {
+        switch order {
+        case .newestFirst: return monthGroups(values, newestFirst: true)
+        case .oldestFirst: return monthGroups(values, newestFirst: false)
+        case .chronological:
+            let toFinish = values.filter { $0.drivyState == .toFinish }
+            let upcoming = values.filter { $0.status == "PLANNED" && $0.drivyState != .toFinish }
+            let past = values.filter { $0.status != "PLANNED" }
+            var result = monthGroups(upcoming, newestFirst: false)
+            if !toFinish.isEmpty {
+                result.append(TrainingLessonMonth(id: "to-finish", title: "À terminer", lessons: sortedByDate(toFinish, newestFirst: false)))
+            }
+            return result + monthGroups(past, newestFirst: true)
+        }
+    }
+    private func sortedByDate(_ values: [SchoolLesson], newestFirst: Bool) -> [SchoolLesson] {
+        values.sorted { first, second in
+            let a = first.startsAt ?? .distantPast, b = second.startsAt ?? .distantPast
+            if a == b { return first.id.uuidString < second.id.uuidString }
+            return newestFirst ? a > b : a < b
+        }
+    }
+    private func monthGroups(_ values: [SchoolLesson], newestFirst: Bool) -> [TrainingLessonMonth] {
+        var result: [TrainingLessonMonth] = []
+        for lesson in sortedByDate(values, newestFirst: newestFirst) {
+            let key = SchoolTrainingFormatting.monthKey(lesson.plannedStart, zone: lesson.timeZone)
+            if let last = result.last, last.id == key {
+                result[result.count - 1] = TrainingLessonMonth(id: key, title: last.title, lessons: last.lessons + [lesson])
+            } else {
+                result.append(TrainingLessonMonth(id: key,
+                    title: SchoolTrainingFormatting.monthTitle(lesson.plannedStart, zone: lesson.timeZone), lessons: [lesson]))
+            }
+        }
+        return result
+    }
+    private func monthGroup(_ month: TrainingLessonMonth) -> some View {
+        let count = month.lessons.count
+        return VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
+                Text(month.title)
+                    .font(.drivySection).foregroundStyle(DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Text("\(count)").font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(month.title), \(count == 1 ? "1 leçon" : "\(count) leçons")")
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("training-month-\(month.id)")
+            DrivyRowGroup {
+                ForEach(month.lessons) { lesson in
+                    Button { opened = OpenedLesson(id: lesson.id) } label: { SchoolTrainingLessonRow(lesson: lesson) }
+                        .buttonStyle(DrivyRowButtonStyle())
+                        .disabled(!model.canOpenPedagogicalContent)
+                        .accessibilityIdentifier("training-lesson-\(lesson.id.uuidString)")
+                }
             }
         }
     }
@@ -322,6 +452,18 @@ enum SchoolTrainingFormatting {
         calendar.timeZone = timeZone
         let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: Date())
         return format(value, zone: zone, template: sameYear ? "EEE d MMMM" : "d MMMM yyyy").capitalizedFirst
+    }
+    /// Clé de regroupement par mois, dans le fuseau de la leçon.
+    static func monthKey(_ value: String, zone: String) -> String {
+        guard let date = SchoolLesson.date(value), let timeZone = TimeZone(identifier: zone) else { return "unknown" }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let parts = calendar.dateComponents([.year, .month], from: date)
+        return "\(parts.year ?? 0)-\(parts.month ?? 0)"
+    }
+    /// « Septembre 2026 ».
+    static func monthTitle(_ value: String, zone: String) -> String {
+        format(value, zone: zone, template: "LLLL yyyy").capitalizedFirst
     }
     private static func format(_ value: String, zone: String, template: String) -> String {
         guard let date = SchoolLesson.date(value), let timeZone = TimeZone(identifier: zone) else { return "Date indisponible" }

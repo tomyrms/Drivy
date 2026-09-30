@@ -1,12 +1,15 @@
 import SwiftUI
 
-enum SchoolHomeTab: Hashable { case session, agenda, learners, trips, lessons, progress }
+enum SchoolHomeTab: Hashable { case session, agenda, learners, profile, lessons, progress }
 
-/// Onglets par rôle : le moniteur conduit (Aujourd’hui, Agenda, Élèves, Trajets), l’élève suit (Leçons, Progression).
-/// La gestion de l’école vit sur le web ; le compte reste derrière l’avatar.
+/// Onglets par rôle : le moniteur et l’administration conduisent (Aujourd’hui, Agenda, Élèves) et trouvent
+/// leur compte et leurs trajets dans Profil ; l’élève suit (Leçons, Progression), son compte derrière l’avatar.
+/// La gestion de l’école vit sur le web.
 struct SchoolHomeView: View {
     @Bindable var workspace: SchoolWorkspace
     let openAccount: () -> Void
+    /// Les actions du compte, affichées dans l’onglet Profil du moniteur et de l’administration.
+    var account: SchoolAccountActions? = nil
     var inviteLearner: (() -> Void)? = nil
     var openProfile: ((SchoolLearner) -> Void)? = nil
     var agendaClient: SchoolAgendaClient? = nil
@@ -69,7 +72,7 @@ struct SchoolHomeView: View {
     // MARK: Moniteur
 
     private var staffSelection: Binding<SchoolHomeTab> {
-        Binding(get: { [.session, .agenda, .learners, .trips].contains(selectedTab) ? selectedTab : .session }, set: { selectedTab = $0 })
+        Binding(get: { [.session, .agenda, .learners, .profile].contains(selectedTab) ? selectedTab : .session }, set: { selectedTab = $0 })
     }
 
     private var staffTabs: some View {
@@ -80,23 +83,20 @@ struct SchoolHomeView: View {
             if let agendaClient {
                 NavigationStack {
                     SchoolAgendaView(client: agendaClient, workspace: workspace, captureController: captureController)
-                        .toolbar { contextToolbar }
+                        .toolbar { staffToolbar }
                 }
                 .tabItem { Label("Agenda", systemImage: "calendar") }
                 .tag(SchoolHomeTab.agenda)
             }
-            SchoolBrowserView(workspace: workspace, openAccount: openAccount, chooseSchool: chooseSchoolAction,
-                inviteLearner: inviteLearner, openProfile: openProfile, openPlanning: planningAction, trainingClient: trainingClient)
+            SchoolBrowserView(workspace: workspace, openAccount: nil, chooseSchool: chooseSchoolAction,
+                inviteLearner: inviteLearner, openProfile: openProfile, openPlanning: planningAction, trainingClient: trainingClient,
+                agendaClient: agendaClient, captureController: captureController)
                 .tabItem { Label("Élèves", systemImage: "person.2") }
                 .tag(SchoolHomeTab.learners)
-            if let agendaClient {
-                NavigationStack {
-                    SchoolTripsView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
-                        .toolbar { contextToolbar }
-                }
-                .tabItem { Label("Trajets", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
-                .tag(SchoolHomeTab.trips)
-            }
+            SchoolProfileTabView(workspace: workspace, account: account, agendaClient: agendaClient,
+                captureController: captureController, chooseSchool: chooseSchoolAction)
+                .tabItem { Label("Profil", systemImage: "person.crop.circle") }
+                .tag(SchoolHomeTab.profile)
         }
     }
 
@@ -115,7 +115,7 @@ struct SchoolHomeView: View {
                         .navigationBarTitleDisplayMode(.inline)
                 }
             }
-            .toolbar { contextToolbar }
+            .toolbar { staffToolbar }
         }
     }
 
@@ -234,6 +234,13 @@ struct SchoolHomeView: View {
     /// Le bouton d’école n’apparaît que si le compte en a plusieurs.
     private var chooseSchoolAction: (() -> Void)? {
         (workspace.person?.memberships.count ?? 0) > 1 ? { choosesSchool = true } : nil
+    }
+
+    /// Moniteur et administration : l’école seulement, le compte vit dans l’onglet Profil.
+    @ToolbarContentBuilder private var staffToolbar: some ToolbarContent {
+        if let chooseSchoolAction {
+            DrivySchoolToolbarItem(schoolName: workspace.school?.name ?? workspace.membership?.schoolName, chooseSchool: chooseSchoolAction)
+        }
     }
 
     @ToolbarContentBuilder private var contextToolbar: some ToolbarContent {

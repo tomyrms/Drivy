@@ -3,7 +3,8 @@ import SwiftUI
 
 /// Aujourd’hui : la carte et la leçon qui compte maintenant. Une leçon passée sans résultat passe en premier
 /// (« À terminer ») ; sinon la prochaine, avec son départ. Un trajet se lance toujours depuis une leçon et son élève ;
-/// sans leçon prévue, « Démarrer une leçon » en crée une qui commence maintenant.
+/// tant qu’aucune leçon n’est en cours ou imminente, « Démarrer une leçon » en crée une qui commence maintenant
+/// (le serveur contrôle le planning) puis enchaîne sur le départ du trajet.
 struct SchoolTodayView: View {
     @Bindable var workspace: SchoolWorkspace
     let agendaClient: SchoolAgendaClient?
@@ -14,9 +15,6 @@ struct SchoolTodayView: View {
     @State private var isLoading = false
     @State private var error: String?
     @State private var preparation: SchoolCapturePreparationWorkspace?
-    @State private var planning: SchoolPlanningWorkspace?
-    @State private var startNow: SchoolStartNowWorkspace?
-    @State private var lastStartNow: SchoolStartNowWorkspace?
     @State private var opened: OpenedLesson?
     @State private var showsDay = false
     @State private var cardHeight: CGFloat = 0
@@ -77,18 +75,10 @@ struct SchoolTodayView: View {
         }
         .task(id: scopeKey) { await load() }
         .onChange(of: scopeKey) { _, _ in
-            lastStartNow?.invalidate(); lastStartNow = nil; startNow = nil
-            preparation?.invalidate(); preparation = nil
-            planning?.invalidate(); planning = nil; opened = nil
+            preparation?.invalidate(); preparation = nil; opened = nil
         }
         .sheet(item: $preparation, onDismiss: { Task { await load() } }) { model in
             SchoolCapturePreparationView(model: model, schoolWorkspace: workspace)
-        }
-        .sheet(item: $planning, onDismiss: { Task { await load() } }) { model in
-            SchoolPlanningView(model: model)
-        }
-        .sheet(item: $startNow, onDismiss: { startNowClosed() }) { model in
-            SchoolStartNowView(model: model)
         }
         .sheet(item: $opened, onDismiss: { Task { await load() } }) { item in
             if let agendaClient {
@@ -136,12 +126,16 @@ struct SchoolTodayView: View {
                     Button { start(next) } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
                         .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                         .accessibilityIdentifier("today-start")
-                } else if let opening = startOpening(next, now: now) {
-                    Label("Démarrer dès \(opening)", systemImage: "clock")
-                        .font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .accessibilityIdentifier("today-start-later")
+                } else {
+                    if let opening = startOpening(next, now: now) {
+                        Label("Démarrer dès \(opening)", systemImage: "clock")
+                            .font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .accessibilityIdentifier("today-start-later")
+                    }
+                    // Ni en cours ni imminente : le moniteur peut lancer une autre leçon sans la planifier.
+                    if instructs, (next.startsAt ?? .distantPast) > now { startNowButton(prominent: false) }
                 }
             } else if isLoading && loadedKey != scopeKey {
                 DrivyLoadingState(title: "Chargement de la journée…")
@@ -149,11 +143,7 @@ struct SchoolTodayView: View {
                 Text(lessons.isEmpty ? "Aucune leçon aujourd’hui" : "Aucune autre leçon aujourd’hui")
                     .font(.headline).foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
-                if instructs {
-                    Button { openStartNow() } label: { Label("Démarrer une leçon", systemImage: "plus") }
-                        .buttonStyle(DrivyPrimaryButtonStyle())
-                        .accessibilityIdentifier("today-start-now")
-                }
+                if instructs { startNowButton(prominent: true) }
             }
             if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
             dayList(now: now, focus: toFinish.first?.id ?? next?.id)
@@ -261,30 +251,17 @@ struct SchoolTodayView: View {
         preparation = agendaClient.capturePreparation(scope: agendaClient.scope(person: person, membership: membership),
             lessonID: lesson.id, controller: captureController)
     }
-    private func openStartNow() {
-        guard let agendaClient, let person = workspace.person, let membership = workspace.membership, instructs else { return }
-        let model = SchoolStartNowWorkspace(scope: agendaClient.scope(person: person, membership: membership), client: agendaClient.planningClient)
-        lastStartNow = model; startNow = model
-    }
-    /// Leçon créée : le trajet démarre aussitôt si possible, sinon la leçon s’ouvre. Sans la route côté serveur,
-    /// la planification classique s’ouvre avec l’élève déjà choisi.
-    private func startNowClosed() {
-        guard let model = lastStartNow else { return }
-        lastStartNow = nil
-        if let lesson = model.started {
-            lessons.removeAll { $0.id == lesson.id }; lessons.append(lesson)
-            if mayStart(lesson) { start(lesson) } else { opened = OpenedLesson(lesson: lesson, completing: false) }
-        } else if model.unsupported {
-            planNow(learnerID: model.learnerID)
+    /// « Démarrer une leçon » : élève, leçon créée maintenant par le serveur, puis départ du trajet (voir SchoolStartNowButton).
+    @ViewBuilder private func startNowButton(prominent: Bool) -> some View {
+        let button = SchoolStartNowButton(workspace: workspace, agendaClient: agendaClient, captureController: captureController,
+            onFinished: { Task { await load() } }) {
+            Label("Démarrer une leçon", systemImage: "location.fill")
         }
-        Task { await load() }
-    }
-    private func planNow(learnerID: UUID?) {
-        guard let agendaClient, let person = workspace.person, let membership = workspace.membership, instructs else { return }
-        let model = SchoolPlanningWorkspace(scope: agendaClient.scope(person: person, membership: membership),
-            client: agendaClient.planningClient, date: Date().addingTimeInterval(120))
-        model.learnerID = learnerID
-        planning = model
+        if prominent {
+            button.buttonStyle(DrivyPrimaryButtonStyle(size: .field)).accessibilityIdentifier("today-start-now")
+        } else {
+            button.buttonStyle(DrivySecondaryButtonStyle(size: .field)).accessibilityIdentifier("today-start-now")
+        }
     }
 
     /// Relit la journée sans effacer ce qui est affiché.

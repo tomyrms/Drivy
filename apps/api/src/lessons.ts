@@ -206,7 +206,7 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
   empty.parse(r.query);const schoolId=schoolID(r),lessonId=z.object({lessonId:id}).parse(r.params).lessonId,identity=await options.verifyToken(r.headers.authorization);
   const data=await withActor(options.pool,identity,schoolId,async db=>lessonProjection(await getLesson(db,schoolId,lessonId)));reply.header('ETag',`"${data.version}"`);return envelope(data,r);
  });
- const slotConflict=(error:unknown):never=>{if(typeof error==='object'&&error!==null&&'code'in error&&error.code==='23P01')throw new ApiError(409,'SLOT_CONFLICT','Ce créneau n’est plus disponible. Vos autres informations sont conservées.');throw error;};
+ const slotConflict=(error:unknown,message='Ce créneau n’est plus disponible. Vos autres informations sont conservées.'):never=>{if(typeof error==='object'&&error!==null&&'code'in error&&error.code==='23P01')throw new ApiError(409,'SLOT_CONFLICT',message);throw error;};
  const command=async(r:FastifyRequest,type:string,body:{operationId:string},expected:number|null,target:Parameters<typeof lessonCommandGuards>[1],work:Parameters<typeof schoolCommand<Lesson>>[6])=>{
   empty.parse(r.query);checkIdempotency(r.headers['idempotency-key'],body.operationId);const schoolId=schoolID(r),identity=await options.verifyToken(r.headers.authorization);
   try{return await schoolCommand(options.pool,identity,schoolId,type,body,expected,work,['ADMIN','INSTRUCTOR'],lessonCommandGuards(schoolId,target));}
@@ -227,6 +227,8 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
  /** Extension : le moniteur affecté démarre une leçon maintenant. Le serveur fixe le début exact, la durée de l'offre,
   * la prestation en vigueur au prix du catalogue, la procédure de la formation, le moniteur (l'appelant) et un tampon nul.
   * Les ouvertures du moniteur ne s'appliquent pas à lui-même ; les occupations (exclusion PostgreSQL) et tous les droits restent contrôlés. */
+ /** Raison anonyme (contrat : aucun nom d’un autre rendez-vous), mais dite au moniteur en clair : la leçon dure toute la durée de l’offre. */
+ const startNowConflictMessage='Toi ou l’élève avez un rendez-vous pendant la durée de cette leçon. Planifie-la à un autre moment.';
  app.post(`${base}/lessons/start-now`,async(r,reply)=>{
   empty.parse(r.query);const body=startNowCommand.parse(r.body);checkIdempotency(r.headers['idempotency-key'],body.operationId);
   const schoolId=schoolID(r),identity=await options.verifyToken(r.headers.authorization);
@@ -252,7 +254,7 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
     await occupations(db,row,context.instructor_person_id);await revision(db,row,actor,body.operationId,'Initial booking');await event(db,row,body.operationId,'LessonCreated');
     return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonStartedNow',changedFields:['plannedStart','plannedEnd','instructorMembershipId','meetingPoint','commercialSelection']};
    },['INSTRUCTOR'],guards);
-  }catch(error){return slotConflict(error);}
+  }catch(error){return slotConflict(error,startNowConflictMessage);}
   reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,r);
  });
  app.post(`${base}/lessons/:lessonId/move`,async(r,reply)=>{

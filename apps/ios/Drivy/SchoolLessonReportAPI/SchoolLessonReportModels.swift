@@ -116,6 +116,14 @@ struct SchoolReportProgressItem: Codable, Sendable, Equatable, Identifiable {
     let label: String, level: String, context: String, observedAt: String
     var id: UUID { competencyId }
     var displayLabel: String { label == "Anticipation et partage de la route" ? "Anticipation" : label }
+    var levelLabel: String {
+        switch level {
+        case "DISCOVERING": "En découverte"
+        case "GUIDED": "Avec accompagnement"
+        case "INDEPENDENT": "En autonomie"
+        default: "À vérifier"
+        }
+    }
 }
 struct SchoolReportProgress: Codable, Sendable, Equatable {
     let trainingId: UUID

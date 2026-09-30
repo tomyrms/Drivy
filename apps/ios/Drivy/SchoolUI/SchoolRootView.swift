@@ -61,7 +61,7 @@ struct SchoolRootView: View {
         if identity.isAuthenticated, let workspace {
             if workspace.person != nil {
                 SchoolHomeView(workspace: workspace, openAccount: { showsAccount = true },
-                    inviteLearner: inviteAction, openProfile: profileAction, agendaClient: homeAgendaClient,
+                    account: accountActions, inviteLearner: inviteAction, openProfile: profileAction, agendaClient: homeAgendaClient,
                     trainingClient: homeTrainingClient, captureController: captureController,
                     joinSchool: joinByCodeAction, selectedTab: $selectedHomeTab)
             } else {
@@ -215,7 +215,10 @@ struct SchoolRootView: View {
 
     // MARK: Compte
 
-    private func follow(_ action: AccountFollowUp) { afterAccount = action; showsAccount = false }
+    /// From the account sheet, the action waits for the sheet to close; from the Profil tab, it runs at once.
+    private func follow(_ action: AccountFollowUp) {
+        if showsAccount { afterAccount = action; showsAccount = false } else { perform(action) }
+    }
     private func followUp(_ action: AccountFollowUp, when enabled: Bool) -> (() -> Void)? {
         guard enabled else { return nil }
         return { follow(action) }
@@ -224,12 +227,25 @@ struct SchoolRootView: View {
     private func accountDismissed() {
         guard let action = afterAccount else { return }
         afterAccount = nil
+        perform(action)
+    }
+
+    private func perform(_ action: AccountFollowUp) {
         switch action {
         case .join:
             if pendingJoinLink != nil { openJoin() } else { openCodeJoin() }
         case .invitations: openInvitations(creation: false)
         case .profile: if let learner = ownProfileLearner { openProfile(learner) }
         }
+    }
+
+    /// Les actions du compte, pour l’onglet Profil du moniteur et de l’administration.
+    private var accountActions: SchoolAccountActions {
+        SchoolAccountActions(manageURL: manageURL,
+            openProfile: followUp(.profile, when: ownProfileLearner != nil),
+            openInvitations: followUp(.invitations, when: canManageInvitations),
+            openJoinSchool: followUp(.join, when: configuration != nil && identity.isAuthenticated),
+            signOut: signOut)
     }
 
     /// La gestion de l’école est réservée à l’administration, sur le portail web.
@@ -540,7 +556,8 @@ enum SchoolOnboardingDeferral {
     }
 }
 
-/// Le compte : peu de lignes, chacune une action. La gestion de l’école ouvre le portail web.
+/// Le compte, en feuille : celui de l’élève, ou d’un compte sans école. Le moniteur et l’administration
+/// le trouvent dans l’onglet Profil. Peu de lignes, chacune une action ; la gestion de l’école ouvre le portail web.
 struct SchoolAccountView: View {
     let isAuthenticated: Bool
     let workspace: SchoolWorkspace?
@@ -551,65 +568,21 @@ struct SchoolAccountView: View {
     let signOut: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @Environment(AppLock.self) private var appLock: AppLock?
-    @ScaledMetric(relativeTo: .title3) private var symbolWidth: CGFloat = 28
 
-    private var hasSeveralSchools: Bool { (workspace?.person?.memberships.count ?? 0) > 1 }
+    private var actions: SchoolAccountActions {
+        SchoolAccountActions(manageURL: manageURL, openProfile: openProfile, openInvitations: openInvitations,
+            openJoinSchool: openJoinSchool, signOut: signOut)
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                    accountHeading
+                    SchoolAccountHeading(workspace: workspace, isAuthenticated: isAuthenticated)
                     if isAuthenticated {
                         // Une seule liste : les séparateurs suivent le même rythme d’un bout à l’autre.
                         DrivyRowGroup {
-                            if let openProfile {
-                                DrivyNavigationRow(title: "Mon profil", symbol: "person.text.rectangle", action: openProfile)
-                                    .accessibilityIdentifier("open-my-profile")
-                            }
-                            if let openInvitations {
-                                DrivyNavigationRow(title: "Invitations", symbol: "envelope", action: openInvitations)
-                                    .accessibilityIdentifier("open-school-invitations")
-                            }
-                            if let manageURL {
-                                DrivyNavigationRow(title: "Gérer l’école", detail: "Sur le web", symbol: "globe",
-                                    action: { openURL(manageURL) })
-                                    .accessibilityIdentifier("open-school-management")
-                            }
-                            if let workspace, hasSeveralSchools {
-                                DrivyNavigationRow(title: "Changer d’école", detail: workspace.membership?.schoolName,
-                                    symbol: "arrow.left.arrow.right", action: {
-                                        workspace.leaveSchool()
-                                        dismiss()
-                                    })
-                                    .accessibilityIdentifier("school-change-school")
-                            }
-                            if let openJoinSchool {
-                                DrivyNavigationRow(title: "Rejoindre une école", symbol: "number", action: openJoinSchool)
-                                    .accessibilityIdentifier("open-join-school")
-                            }
-                            if let appLock, let biometry = appLock.biometryName {
-                                // Same symbol column and height as the navigation rows around it.
-                                Toggle(isOn: Binding(get: { appLock.isEnabled }, set: { appLock.setEnabled($0) })) {
-                                    HStack(spacing: DrivySpacing.m) {
-                                        Image(systemName: biometry == "Touch ID" ? "touchid" : "faceid")
-                                            .font(.title3)
-                                            .foregroundStyle(DrivyTheme.muted)
-                                            .frame(width: symbolWidth)
-                                            .accessibilityHidden(true)
-                                        Text("Ouvrir avec \(biometry)")
-                                            .font(.headline)
-                                            .foregroundStyle(DrivyTheme.text)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                }
-                                .padding(.vertical, DrivySpacing.s)
-                                .frame(minHeight: 64)
-                                .accessibilityIdentifier("app-lock-toggle")
-                            }
-                            DrivyDestructiveRow(title: "Se déconnecter", symbol: "rectangle.portrait.and.arrow.right", action: signOut)
-                                .accessibilityIdentifier("school-sign-out")
+                            actions.rows(workspace: workspace, openURL: openURL, afterChangingSchool: { dismiss() })
                         }
                     }
                 }
@@ -625,28 +598,6 @@ struct SchoolAccountView: View {
             }
         }
         .tint(DrivyTheme.accent)
-    }
-
-    private var accountHeading: some View {
-        HStack(spacing: DrivySpacing.m) {
-            DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: 72)
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text(workspace?.person?.displayName ?? (isAuthenticated ? "Compte connecté" : "Aucun compte connecté"))
-                    .font(.drivyTitle)
-                    .foregroundStyle(DrivyTheme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let membership = workspace?.membership {
-                    // École puis rôles, chacun sur sa ligne : jamais un « · » orphelin en début de ligne.
-                    Text(membership.schoolName)
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(SchoolPresentation.roles(membership.roles))
-                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 

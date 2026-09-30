@@ -21,6 +21,15 @@ struct SchoolLessonHubTests {
         #expect(SchoolLessonCaptureStatus(controller: SchoolCaptureSessionController(), lessonID: lesson) == .none)
     }
 
+    @Test func unchangedChoiceRecallsTheCurrentLevelWithoutWritingIt() {
+        let item = SchoolReportProgressItem(competencyId: UUID(), sourceLessonId: UUID(), sourceRevisionId: UUID(), label: "Observation",
+            level: "INDEPENDENT", context: "", observedAt: "2026-09-20T10:00:00Z")
+        #expect(SchoolLessonHubRules.unchangedChoiceLabel(current: nil) == "Pas encore vu")
+        #expect(SchoolLessonHubRules.unchangedChoiceLabel(current: item) == "Actuel : En autonomie")
+        // Choisir « inchangé » ne crée aucune observation pour cette leçon.
+        #expect(SchoolLessonHubRules.observations([], setting: "", for: item.competencyId, context: "x").isEmpty)
+    }
+
     @Test func startIsOfferedOnlyWhereTheServerWouldAcceptIt() {
         let start = HubFixture.date("2026-09-28T12:00:00Z"), lesson = HubFixture.lesson()
         let school = HubFixture.school(gps: true)
@@ -290,11 +299,13 @@ actor HubServer: SchoolHTTPTransport {
     private var preparationStatus = 200
     private var personID = ConfigurationFixture.personID
     private var startNowAvailable = false
+    private var startNowConflict = false
 
     init(permitStatus: Int = 200, grants: [String] = ["permit_review"]) { self.permitStatus = permitStatus; self.grants = grants }
     func requests() -> [URLRequest] { recorded }
     func setPersonID(_ value: UUID) { personID = value }
     func enableStartNow() { startNowAvailable = true }
+    func enableStartNowConflict() { startNowAvailable = true; startNowConflict = true }
     func setPreparation(note: String? = nil, version: Int = 1, status: Int = 200) {
         preparationNote = note; preparationVersion = version; preparationStatus = status
     }
@@ -316,6 +327,7 @@ actor HubServer: SchoolHTTPTransport {
                     "schoolName": "École de test", "roles": ["INSTRUCTOR"], "grants": grants, "accessEpoch": 1] as [String: Any]] as [Any]])
         }
         if request.httpMethod == "POST", parts.suffix(2) == ["lessons", "start-now"], startNowAvailable {
+            if startNowConflict { return problem(409, "SLOT_CONFLICT") }
             return ok(try JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.lesson())) as? [String: Any] ?? [:])
         }
         if request.httpMethod == "POST", parts.suffix(3) == ["trainings", training, "permit-checks"] {

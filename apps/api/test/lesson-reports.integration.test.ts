@@ -53,6 +53,30 @@ describe('préparation et souhait (AP45–AP48)',()=>{
 });
 
 describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)',()=>{
+ it('progression : chaque leçon suivante reprend les niveaux précédents et ne remplace que les compétences notées',async()=>{
+  const at=(minutes:number)=>new Date(Date.now()-minutes*60_000).toISOString();
+  const finish=async(end:number,observations:{competencyId:string;level:string;context:string}[])=>{
+   const lesson=await plan();
+   const done=await call('POST',`/lessons/${lesson.id}/complete`,completeBody({actualStart:at(end+30),actualEnd:at(end)}),lesson.version);expect(done.statusCode,done.body).toBe(200);
+   const saved=await call('PUT',`/report-drafts/${done.json().data.draft.id}`,{operationId:randomUUID(),workedOn:'Travail',observationText:'',nextStep:'',observations,attachmentIds:[]},done.json().data.draft.version);
+   expect(saved.statusCode,saved.body).toBe(200);return lesson.id as string;
+  };
+  const progressOf=async(subject:string)=>{const r=await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,subject);expect(r.statusCode,r.body).toBe(200);return r.json().data as {items:{competencyId:string;level:string;sourceLessonId:string}[];unobservedCompetencyIds:string[]};};
+  const first=await finish(120,[{competencyId:school.competency,level:'DISCOVERING',context:'Leçon 1'},{competencyId:school.competency2,level:'GUIDED',context:'Leçon 1'}]);
+  const second=await finish(60,[{competencyId:school.competency,level:'INDEPENDENT',context:'Leçon 2'}]);
+  for(const subject of ['demo-alice','demo-instructor','demo-admin']){
+   const progress=await progressOf(subject);
+   expect(progress.items.find(i=>i.competencyId===school.competency),subject).toMatchObject({level:'INDEPENDENT',sourceLessonId:second});
+   expect(progress.items.find(i=>i.competencyId===school.competency2),subject).toMatchObject({level:'GUIDED',sourceLessonId:first});
+   expect(progress.unobservedCompetencyIds,subject).toEqual([]);
+  }
+  // Un bilan ancien saisi en retard ne remplace pas un niveau plus récent.
+  await finish(180,[{competencyId:school.competency,level:'GUIDED',context:'Rattrapage'}]);
+  expect((await progressOf('demo-admin')).items.find(i=>i.competencyId===school.competency)).toMatchObject({level:'INDEPENDENT',sourceLessonId:second});
+  // L'administration ne lit pas la progression d'une formation d'une autre école, ni un élève sans droit.
+  expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-bob')).statusCode).toBe(404);
+  expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-foreign')).statusCode).toBe(403);
+ });
  it('constat atomique avec charge unique, bilan partagé automatiquement, lecture élève, bilan privé et progression',async()=>{
   const lesson=await plan();const route=`/lessons/${lesson.id}/complete`;
   expect((await call('POST',route,completeBody({anomalyReason:null}),lesson.version)).json().code).toBe('ANOMALY_REASON_REQUIRED');
@@ -108,7 +132,9 @@ describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)'
   const progressResponse=await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-alice');await expectContract('ProgressEnvelope',progressResponse.json());const progress=progressResponse.json().data;
   expect(progress.items).toEqual([expect.objectContaining({competencyId:school.competency,level:'GUIDED',sourceLessonId:lesson.id,sourceRevisionId:revision.id})]);
   expect(progress.unobservedCompetencyIds).toEqual([school.competency2]);
-  expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-admin')).statusCode).toBe(404);
+  // L'administration de l'école relit la progression (lecture seule), sans ouvrir les bilans ni les brouillons.
+  const adminProgress=await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-admin');expect(adminProgress.statusCode,adminProgress.body).toBe(200);
+  expect(adminProgress.json().data.items).toEqual(progress.items);expect(adminProgress.json().data.unobservedCompetencyIds).toEqual(progress.unobservedCompetencyIds);
   expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-bob')).statusCode).toBe(404);
   // Bilan privé (extension de partage) : l'élève ne le lit plus, ni la progression qui en découle ; tout est conservé.
   const sharingRoute=`/lessons/${lesson.id}/sharing`;

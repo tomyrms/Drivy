@@ -70,6 +70,47 @@ import Testing
         #expect(model.track.isEmpty && model.errorMessage == nil)
     }
 
+    @Test func currentLevelsStartTheNextReportWithoutBecomingObservationsOfThisLesson() async throws {
+        let competency = LessonFinishServer.progressCompetency
+        let server = LessonFinishServer(progressLevel: "GUIDED"), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox: outbox)
+        await model.load()
+        // Une nouvelle leçon ne repart pas de zéro : le niveau actuel est rappelé, sans être écrit dans son bilan.
+        #expect(model.currentLevels[competency]?.level == "GUIDED")
+        #expect(model.unchangedChoiceLabel(for: competency) == "Actuel : Avec accompagnement")
+        #expect(model.unchangedChoiceLabel(for: UUID()) == "Pas encore vu")
+        #expect(model.observations.isEmpty)
+        model.setObservationLevel("INDEPENDENT", for: competency)
+        #expect(await model.saveDraft())
+        let saved = try #require(outbox.saves.first)
+        let body = try #require(JSONSerialization.jsonObject(with: saved.body) as? [String: Any])
+        let sent = try #require(body["observations"] as? [[String: Any]])
+        #expect(sent.count == 1 && sent.first?["competencyId"] as? String == competency.uuidString && sent.first?["level"] as? String == "INDEPENDENT")
+        // Après l’enregistrement, la progression est relue pour que le niveau suivant parte du plus récent.
+        let reads = await server.requests().filter { $0.url?.path.hasSuffix("/progress") == true }
+        #expect(reads.count >= 1)
+    }
+
+    @Test func aFailedProgressReadNeverBlocksTheReport() async {
+        let model = workspace(LessonFinishServer(progressStatus: 503), outbox: ConfigurationOutboxStub())
+        await model.load()
+        #expect(model.currentLevels.isEmpty && model.draft != nil && model.canMutate)
+        #expect(model.unchangedChoiceLabel(for: LessonFinishServer.progressCompetency) == "Pas encore vu")
+    }
+
+    @Test func administrationReadsProgressButNotThePrivateReport() {
+        let membership = SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: HubFixture.schoolID,
+            schoolName: "École de test", roles: ["ADMIN", "INSTRUCTOR"], grants: [], accessEpoch: 1)
+        let admin = SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: HubFixture.schoolID,
+            schoolName: "École de test", roles: ["ADMIN"], grants: [], accessEpoch: 1)
+        let client = SchoolTrainingClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!, tokenSource: HubToken(), transport: LessonFinishServer())
+        for value in [membership, admin] {
+            let model = SchoolTrainingWorkspace(scope: ConfigurationFixture.scope(), membership: value, learnerID: HubFixture.learnerID,
+                trainingID: HubFixture.trainingID, client: client)
+            #expect(model.hasPedagogicalRole)
+        }
+    }
+
     @Test func startNowReadsOnlyAssignedLearnersAndEligibleTrainings() async throws {
         let server = LessonFinishServer()
         let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!, tokenSource: HubToken(), transport: server)
@@ -95,15 +136,21 @@ actor LessonFinishServer: SchoolHTTPTransport {
     private let fallback = HubServer()
     private let roles: [String]
     private let emptyContext: Bool
+    private let progressLevel: String?
+    private let progressStatus: Int
+    static let progressCompetency = UUID(uuidString: "70000000-0000-4000-8000-0000000000c1")!
     private var receiptAvailable = true
     private var rejectSave = false
     private var operation: UUID?
     private var recorded: [URLRequest] = []
     private let draftID = UUID(uuidString: "70000000-0000-4000-8000-000000000050")!
-    init(roles: [String] = ["INSTRUCTOR"], emptyContext: Bool = false) { self.roles = roles; self.emptyContext = emptyContext }
+    init(roles: [String] = ["INSTRUCTOR"], emptyContext: Bool = false, progressLevel: String? = nil, progressStatus: Int = 200) {
+        self.roles = roles; self.emptyContext = emptyContext; self.progressLevel = progressLevel; self.progressStatus = progressStatus
+    }
     func setReceiptAvailable(_ value: Bool) { receiptAvailable = value }
     func setRejectSave(_ value: Bool) { rejectSave = value }
     func requests() -> [URLRequest] { recorded }
+    func enableStartNowConflict() async { await fallback.enableStartNowConflict() }
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         recorded.append(request)
@@ -123,6 +170,15 @@ actor LessonFinishServer: SchoolHTTPTransport {
         if parts.suffix(2) == ["lessons", HubFixture.lessonID.uuidString.lowercased()] {
             let data = try JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.lesson(status: "COMPLETED", permitWarning: false)))
             return try ok(data as! [String: Any])
+        }
+        if parts.last == "progress" {
+            if progressStatus != 200 { return problem(progressStatus, "UNAVAILABLE") }
+            let items: [[String: Any]] = progressLevel.map { level in
+                [["competencyId": Self.progressCompetency.uuidString, "label": "Observation", "level": level, "context": "Leçon précédente",
+                  "observedAt": "2026-09-20T10:00:00Z", "sourceLessonId": UUID().uuidString, "sourceRevisionId": UUID().uuidString]]
+            } ?? []
+            return try ok(["trainingId": HubFixture.trainingID.uuidString, "items": items, "unobservedCompetencyIds": [] as [String],
+                "computedAt": "2026-09-28T13:30:00Z"])
         }
         if parts.last == "report-drafts" {
             let draft = SchoolReportDraft(id: draftID, schoolId: HubFixture.schoolID, lessonId: HubFixture.lessonID,

@@ -43,7 +43,7 @@ struct SchoolVisualReview: View {
                             .navigationTitle("Progression")
                     }
                 case "trips":
-                    SchoolVisualShell(context: context, tab: .trips)
+                    SchoolVisualShell(context: context, tab: .profile)
                 case "replay":
                     SchoolCaptureReplayView(model: context.replay, learnerName: "Trajet synthétique")
                 case "home-tabs":
@@ -82,7 +82,7 @@ struct SchoolVisualReview: View {
 }
 
 /// The real school shell (SchoolHomeView and its tab bar). Actions are inert:
-/// the capture only renders the first frame of each tab.
+/// the capture only renders the first frame of each tab. « trips » shows the Profil tab: account, then trips.
 struct SchoolVisualShell: View {
     let context: SchoolVisualContext
     /// Selected after the list appears, as a tap would, so a compact split view pushes the dossier.
@@ -96,7 +96,9 @@ struct SchoolVisualShell: View {
     }
 
     var body: some View {
-        SchoolHomeView(workspace: context.workspace, openAccount: {}, inviteLearner: {},
+        SchoolHomeView(workspace: context.workspace, openAccount: {},
+            account: SchoolAccountActions(manageURL: nil, openProfile: nil, openInvitations: {}, openJoinSchool: {}, signOut: {}),
+            inviteLearner: {},
             openProfile: { _ in }, agendaClient: context.agenda,
             trainingClient: context.client, captureController: nil,
             selectedTab: $selectedTab)

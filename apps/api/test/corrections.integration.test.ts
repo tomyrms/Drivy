@@ -156,7 +156,7 @@ describe('démarrage immédiat d’une leçon (start-now)',()=>{
   expect((await call('GET',`/operations/${body.operationId}`)).json().data).toMatchObject({commandType:'START_LESSON_NOW',resourceType:'Lesson',resourceId:lesson.id});
   expect((await call('POST','/lessons/start-now',{...body,meetingPoint:'Ailleurs'})).json().code).toBe('IDEMPOTENCY_MISMATCH');
   // Les occupations restent contrôlées : pas de seconde leçon en même temps.
-  const second=await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining});expect(second.statusCode).toBe(409);expect(second.json().code).toBe('SLOT_CONFLICT');
+  const second=await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining});expect(second.statusCode).toBe(409);expect(second.json().code).toBe('SLOT_CONFLICT');expect(second.json().title).toContain('Planifie-la à un autre moment');
   // Droits : moniteur affecté seulement.
   expect((await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining},null,'demo-admin')).json().code).toBe('SETUP_ACCESS_REQUIRED');
   expect((await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining},null,'demo-alice')).statusCode).toBe(403);
@@ -168,6 +168,18 @@ describe('démarrage immédiat d’une leçon (start-now)',()=>{
   // Constat immédiat : la leçon a commencé, il n'y a pas d'attente de 15 minutes.
   const done=await call('POST',`/lessons/${lesson.id}/complete`,{operationId:randomUUID(),actualStart:new Date(Date.now()-30_000).toISOString(),actualEnd:new Date().toISOString(),workedOn:'Travail',anomalyReason:'Recette'},lesson.version);
   expect(done.statusCode,done.body).toBe(200);expect(done.json().data.lesson.status).toBe('COMPLETED');
+ });
+ it('refuse de démarrer sur une leçon planifiée qui commence pendant la durée de l’offre, sans nommer personne',async()=>{
+  const planned=await call('POST','/lessons',lessonBody(commercial,school.policy,44));expect(planned.statusCode,planned.body).toBe(201);
+  const lesson=planned.json().data;
+  // La leçon planifiée commence dans 20 minutes : les 50 minutes d'une leçon immédiate la chevauchent.
+  await pool.query(`UPDATE drivy.reservation SET during=tstzrange(now()+interval '20 minutes',now()+interval '70 minutes','[)') WHERE lesson_id=$1`,[lesson.id]);
+  await pool.query(`UPDATE drivy.lesson SET planned_start=now()+interval '20 minutes',planned_end=now()+interval '70 minutes' WHERE id=$1`,[lesson.id]);
+  try{
+   const refused=await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining});
+   expect(refused.statusCode,refused.body).toBe(409);expect(refused.json().code).toBe('SLOT_CONFLICT');
+   expect(refused.json().title).toContain('Planifie-la à un autre moment');expect(refused.body).not.toContain('Alice');
+  }finally{await cancelLesson(lesson,'demo-instructor');}
  });
  it('les ouvertures du moniteur ne s’appliquent pas à lui-même, avec un lieu de rendez-vous choisi',async()=>{
   await pool.query('UPDATE drivy.availability_rule SET removed_at=now() WHERE instructor_membership_id=$1 AND removed_at IS NULL',[id.instructorMember]);

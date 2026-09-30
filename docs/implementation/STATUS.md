@@ -147,3 +147,7 @@ Le porteur a confirmé l'installation et l'ouverture du premier IPA 0.1.0/build 
 Le laboratoire G0 n'est pas une capture scolaire ni un bilan partagé. Le produit complet conserve invitations, onboarding, administration des formations, agenda, leçons, bilans publiés, cours collectifs, packs et web de gestion dans son périmètre. Aucun service d'envoi d'emails utilisable n'a été établi par la documentation de l'ancien hébergement ; il reste à raccorder pour les invitations.
 
 Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut par simple création de code ou de workflows. G0 complet reste **NOT_QUALIFIED** : tests physiques GPS, autonomie, VoiceOver et budgets à mesurer. Aucune conformité juridique, disponibilité ou performance n'est déduite des tests automatisés.
+
+### Progression des compétences (essai terrain du 30 septembre 2026)
+
+Écrit, non exécuté : la migration `020_admin_progress_read.sql` (progression lisible en lecture seule par l'administration de l'école, bilans et brouillons inchangés), le rappel du niveau actuel de chaque compétence dans le bilan d'une nouvelle leçon (sans l'écrire dans ce bilan), et la relecture de la formation à chaque affichage. Les tests PostgreSQL (`lesson-reports.integration.test.ts`) et Swift (`SchoolLessonFinishTests`, `SchoolLessonHubTests`) tournent dans la CI « Refonte · vérifications ». À revérifier sur l'iPhone après déploiement (sauvegarde de la base d'abord) : enchaîner deux leçons, puis ouvrir la progression en moniteur, en élève et en administrateur.

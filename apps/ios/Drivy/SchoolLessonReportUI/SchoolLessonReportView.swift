@@ -647,7 +647,7 @@ private struct SchoolLessonReportContent: View {
                 // Un niveau choisi suffit : le jour et le lieu sont proposés comme situation, modifiable.
                 ForEach(model.competencies) { competency in
                     Picker(competency.displayLabel, selection: levelBinding(competency.id)) {
-                        Text("Pas encore vu").tag("")
+                        Text(model.unchangedChoiceLabel(for: competency.id)).tag("")
                         Text("En découverte").tag("DISCOVERING")
                         Text("Avec accompagnement").tag("GUIDED")
                         Text("En autonomie").tag("INDEPENDENT")

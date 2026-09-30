@@ -2,13 +2,24 @@ import SwiftUI
 
 /// Trajets : ceux du moniteur, ou tous ceux de l’école pour l’administration (le serveur décide).
 /// Les trajets arrêtés sur cet appareil et pas encore reçus par l’école restent en tête, « À envoyer ».
-struct SchoolTripsView: View {
+/// Vit dans l’onglet Profil : `header` apporte les sections du compte, au-dessus des trajets.
+struct SchoolTripsView<Header: View>: View {
     @Bindable var workspace: SchoolWorkspace
     let agendaClient: SchoolAgendaClient
-    var captureController: SchoolCaptureSessionController? = nil
+    var captureController: SchoolCaptureSessionController?
+    let header: Header
+    @State private var filter: SchoolTripFilter = .all
     @State private var model: SchoolTripsWorkspace?
     @State private var uploads: SchoolCaptureHistoryWorkspace?
     @State private var replay: SchoolTripReplayRoute?
+
+    init(workspace: SchoolWorkspace, agendaClient: SchoolAgendaClient,
+         captureController: SchoolCaptureSessionController? = nil, @ViewBuilder header: () -> Header) {
+        _workspace = Bindable(workspace)
+        self.agendaClient = agendaClient
+        self.captureController = captureController
+        self.header = header()
+    }
 
     private var scopeKey: String {
         [workspace.person?.personId.uuidString, workspace.membership?.membershipId.uuidString,
@@ -20,14 +31,22 @@ struct SchoolTripsView: View {
     var body: some View {
         Group {
             if let model {
-                SchoolTripsList(model: model, uploads: uploads, roles: roles, learnerName: learnerName,
-                    open: open, refresh: refresh)
+                SchoolTripsList(model: model, uploads: uploads, roles: roles, filter: $filter, header: header,
+                    learnerName: learnerName, open: open, refresh: refresh)
             } else {
-                ProgressView("Chargement des trajets…").frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.canvas)
+                // The account stays reachable while the school loads or when it cannot be read.
+                List {
+                    header
+                    Section { DrivyLoadingState(title: "Chargement des trajets…") }
+                        .drivyFormRows()
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+                .frame(maxWidth: DrivyLayout.formColumn)
+                .frame(maxWidth: .infinity)
+                .background(DrivyTheme.canvas)
             }
         }
-        .navigationTitle("Trajets")
-        .navigationBarTitleDisplayMode(.large)
         .task(id: scopeKey) { await prepare() }
         .onAppear {
             // Coming back to the tab after a lesson shows the trip that just ended.
@@ -43,7 +62,7 @@ struct SchoolTripsView: View {
 
     private func prepare() async {
         model?.invalidate(); uploads?.invalidate(); replay = nil
-        model = nil; uploads = nil
+        model = nil; uploads = nil; filter = .all
         guard let person = workspace.person, let membership = workspace.membership, workspace.school != nil else { return }
         let scope = agendaClient.scope(person: person, membership: membership)
         let trips = SchoolTripsWorkspace(scope: scope, client: agendaClient.captureClient)
@@ -80,19 +99,88 @@ struct SchoolTripReplayRoute: Identifiable {
     var id: UUID { model.id }
 }
 
-private struct SchoolTripsList: View {
+private struct SchoolTripsList<Header: View>: View {
     @Bindable var model: SchoolTripsWorkspace
     let uploads: SchoolCaptureHistoryWorkspace?
     let roles: [String]
+    @Binding var filter: SchoolTripFilter
+    let header: Header
     let learnerName: (UUID) -> String
     let open: (SchoolCaptureTrip) -> Void
     let refresh: () async -> Void
 
     private var hasUploads: Bool { !(uploads?.pendingUploads.isEmpty ?? true) }
     private var hasUploadError: Bool { uploads?.errorMessage != nil }
+    /// Only the administration reads other instructors’ trips, so only it narrows them.
+    private var canFilter: Bool { roles.contains("ADMIN") }
+    private var isInstructor: Bool { roles.contains("INSTRUCTOR") }
+    private var instructors: [SchoolTripInstructor] { model.otherInstructors() }
+
+    /// A filter whose instructor left the loaded trips falls back to everything.
+    private var activeFilter: SchoolTripFilter {
+        switch filter {
+        case .all: return .all
+        case .mine: return isInstructor ? .mine : .all
+        case .instructor(let id): return instructors.contains { $0.id == id } ? filter : .all
+        }
+    }
+
+    private var filterTitle: String {
+        switch activeFilter {
+        case .all: return "Tous les trajets"
+        case .mine: return "Mes trajets"
+        case .instructor(let id): return instructors.first { $0.id == id }?.name ?? "Tous les trajets"
+        }
+    }
+
+    private var tripsHeading: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.m) {
+                headingTitle
+                Spacer(minLength: DrivySpacing.xs)
+                filterMenu
+            }
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                headingTitle
+                filterMenu
+            }
+        }
+    }
+
+    private var headingTitle: some View {
+        Text("Trajets")
+            .font(.drivySection).foregroundStyle(DrivyTheme.text)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder private var filterMenu: some View {
+        if canFilter {
+            Menu {
+                Picker("Trajets", selection: Binding(get: { activeFilter }, set: { filter = $0 })) {
+                    Text("Tous les trajets").tag(SchoolTripFilter.all)
+                    if isInstructor { Text("Mes trajets").tag(SchoolTripFilter.mine) }
+                    ForEach(instructors) { instructor in
+                        Text(instructor.name).tag(SchoolTripFilter.instructor(instructor.id))
+                    }
+                }
+            } label: {
+                Label(filterTitle, systemImage: "line.3.horizontal.decrease.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight: 44)
+            }
+            .accessibilityLabel("Filtrer les trajets")
+            .accessibilityValue(filterTitle)
+            .accessibilityIdentifier("trips-filter")
+        }
+    }
 
     var body: some View {
-        List {
+        let days = model.days(filter: activeFilter)
+        return List {
+            header
+            Section { tripsHeading }
+                .listRowInsets(EdgeInsets(top: DrivySpacing.s, leading: DrivySpacing.m, bottom: 0, trailing: DrivySpacing.m))
+                .listRowBackground(Color.clear)
             if let uploads, hasUploads || hasUploadError {
                 SchoolCaptureUploadsSection(model: uploads, learnerName: learnerName,
                     onChange: { Task { await model.load() } })
@@ -108,7 +196,7 @@ private struct SchoolTripsList: View {
                 Section { DrivyLoadingState(title: "Chargement des trajets…") }
                     .drivyFormRows()
             }
-            ForEach(model.days()) { day in
+            ForEach(days) { day in
                 Section {
                     ForEach(day.trips) { trip in
                         SchoolTripRow(trip: trip, instructorName: model.instructorName(trip, viewerRoles: roles), open: open)
@@ -122,6 +210,15 @@ private struct SchoolTripsList: View {
                 }
                 .drivyFormRows()
             }
+            if days.isEmpty && model.hasLoaded && !model.isLoading && model.errorMessage == nil && !hasUploads && !hasUploadError
+                && (model.isEmpty || model.nextCursor == nil) {
+                Section {
+                    ContentUnavailableView("Aucun trajet", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                        .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("trips-empty")
+                }
+                .listRowBackground(Color.clear)
+            }
             if model.nextCursor != nil && model.errorMessage == nil {
                 Section { nextPage }
                     .drivyFormRows()
@@ -133,11 +230,7 @@ private struct SchoolTripsList: View {
         .frame(maxWidth: DrivyLayout.formColumn)
         .frame(maxWidth: .infinity)
         .background(DrivyTheme.canvas)
-        .overlay {
-            if model.isEmpty && !hasUploads && !hasUploadError {
-                ContentUnavailableView("Aucun trajet", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-            }
-        }
+        .accessibilityIdentifier("profile-list")
         .refreshable { await refresh() }
     }
 

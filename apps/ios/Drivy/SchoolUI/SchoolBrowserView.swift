@@ -3,12 +3,15 @@ import SwiftUI
 /// Les élèves du moniteur : rechercher, inviter, ouvrir un dossier. La gestion administrative vit sur le web.
 struct SchoolBrowserView: View {
     @Bindable var workspace: SchoolWorkspace
-    let openAccount: () -> Void
+    /// Nil pour le moniteur et l’administration : leur compte vit dans l’onglet Profil.
+    var openAccount: (() -> Void)? = nil
     var chooseSchool: (() -> Void)? = nil
     var inviteLearner: (() -> Void)? = nil
     var openProfile: ((SchoolLearner) -> Void)? = nil
     var openPlanning: ((SchoolLearner) -> Void)? = nil
     var trainingClient: SchoolTrainingClient? = nil
+    var agendaClient: SchoolAgendaClient? = nil
+    var captureController: SchoolCaptureSessionController? = nil
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
@@ -28,13 +31,14 @@ struct SchoolBrowserView: View {
                     }
                     ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 }
-                DrivyAccountToolbarItem(openAccount: openAccount)
+                if let openAccount { DrivyAccountToolbarItem(openAccount: openAccount) }
             }
             .navigationSplitViewColumnWidth(min: DrivyLayout.splitListMinWidth, ideal: DrivyLayout.splitListIdealWidth,
                 max: DrivyLayout.splitListMaxWidth)
         } detail: {
             if workspace.selectedLearnerID != nil {
-                SchoolLearnerDetailView(workspace: workspace, openProfile: openProfile, openPlanning: openPlanning, trainingClient: trainingClient)
+                SchoolLearnerDetailView(workspace: workspace, openProfile: openProfile, openPlanning: openPlanning, trainingClient: trainingClient,
+                    agendaClient: agendaClient, captureController: captureController)
             } else {
                 SchoolOverviewView(workspace: workspace)
             }
@@ -233,6 +237,8 @@ private struct SchoolLearnerDetailView: View {
     let openProfile: ((SchoolLearner) -> Void)?
     let openPlanning: ((SchoolLearner) -> Void)?
     let trainingClient: SchoolTrainingClient?
+    let agendaClient: SchoolAgendaClient?
+    let captureController: SchoolCaptureSessionController?
     @State private var presentedTraining: TrainingPresentation?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -250,7 +256,10 @@ private struct SchoolLearnerDetailView: View {
                 SchoolTrainingScreen(client: trainingClient, workspace: workspace, learner: learner, trainingID: training.id)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         if let openPlanning, learner.archivedAt == nil {
-                            DrivyStickyActionBar { planButton(learner, openPlanning: openPlanning) }
+                            DrivyStickyActionBar {
+                                if agendaClient != nil { startNowButton(learner) }
+                                planButton(learner, openPlanning: openPlanning, isSecondary: agendaClient != nil)
+                            }
                         }
                     }
                     .toolbar {
@@ -272,9 +281,21 @@ private struct SchoolLearnerDetailView: View {
         }
     }
 
-    private func planButton(_ learner: SchoolLearner, openPlanning: @escaping (SchoolLearner) -> Void) -> some View {
-        Button { openPlanning(learner) } label: { Label("Planifier une leçon", systemImage: "calendar.badge.plus") }
-            .buttonStyle(DrivyPrimaryButtonStyle()).accessibilityIdentifier("learner-plan-lesson")
+    @ViewBuilder
+    private func planButton(_ learner: SchoolLearner, openPlanning: @escaping (SchoolLearner) -> Void, isSecondary: Bool = false) -> some View {
+        let button = Button { openPlanning(learner) } label: { Label("Planifier une leçon", systemImage: "calendar.badge.plus") }
+            .accessibilityIdentifier("learner-plan-lesson")
+        if isSecondary { button.buttonStyle(DrivySecondaryButtonStyle()) } else { button.buttonStyle(DrivyPrimaryButtonStyle()) }
+    }
+
+    /// Une leçon tout de suite avec cet élève ; le serveur refuse si le planning ne le permet pas.
+    private func startNowButton(_ learner: SchoolLearner) -> some View {
+        SchoolStartNowButton(workspace: workspace, agendaClient: agendaClient, captureController: captureController,
+                             learnerID: learner.id, onFinished: { Task { await workspace.loadTrainings() } }) {
+            Label("Démarrer une leçon", systemImage: "location.fill")
+        }
+        .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+        .accessibilityIdentifier("learner-start-now")
     }
 
     /// Profile and contacts of a single-training dossier, whose page is the training itself.

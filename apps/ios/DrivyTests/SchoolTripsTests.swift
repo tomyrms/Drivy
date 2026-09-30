@@ -88,6 +88,25 @@ struct SchoolTripsTests {
         #expect(model.instructorName(mine, viewerRoles: ["ADMIN", "INSTRUCTOR"]) == nil)
         #expect(model.instructorName(other, viewerRoles: ["INSTRUCTOR"]) == nil)
     }
+
+    @Test func theProfileFilterNarrowsWhatTheServerReturnedWithoutWideningIt() async throws {
+        let own = UUID(), colleague = UUID()
+        let items = [Self.item(1, start: "2026-09-28T08:00:00Z", instructor: own),
+                     Self.item(2, start: "2026-09-28T09:00:00Z", instructor: colleague),
+                     Self.item(3, start: "2026-09-27T09:00:00Z", instructor: colleague)]
+        let scope = SchoolCommandScope(personID: UUID(), schoolID: Self.schoolID, membershipID: own, accessEpoch: 1,
+            apiBaseURL: Self.base.absoluteString)
+        let model = SchoolTripsWorkspace(scope: scope, client: SchoolCaptureClient(baseURL: Self.base, tokenSource: TripsToken(),
+            transport: TripsTransport(body: tripsEnvelope(["items": items, "nextCursor": NSNull()]))))
+        await model.load()
+        let now = try #require(SchoolLesson.date("2026-09-28T12:00:00Z"))
+        #expect(model.trips(matching: .all).count == 3)
+        #expect(model.trips(matching: .mine).count == 1)
+        #expect(model.trips(matching: .instructor(colleague)).count == 2)
+        #expect(model.trips(matching: .instructor(UUID())).isEmpty)
+        #expect(model.days(filter: .instructor(colleague), now: now).map(\.trips.count) == [1, 1])
+        #expect(model.otherInstructors() == [SchoolTripInstructor(id: colleague, name: "Luc Exemple")])
+    }
 }
 
 @MainActor

@@ -6,7 +6,7 @@ set -euo pipefail
 # fictional fixtures through an in-memory transport restricted to visual.drivy.invalid.
 app=artifacts/ios/DerivedData/Build/Products/Debug-iphonesimulator/Drivy.app
 [[ -d "$app" ]]
-read -r -a screens <<< "${DRIVY_VISUAL_SCREENS:-home-tabs agenda learners learner dossier}"
+read -r -a screens <<< "${DRIVY_VISUAL_SCREENS:-home-tabs agenda learners trips learner dossier}"
 read -r -a devices <<< "${DRIVY_VISUAL_DEVICES:-iPhone iPad}"
 read -r -a appearances <<< "${DRIVY_VISUAL_APPEARANCES:-light dark}"
 read -r -a orientations <<< "${DRIVY_VISUAL_ORIENTATIONS:-portrait}"

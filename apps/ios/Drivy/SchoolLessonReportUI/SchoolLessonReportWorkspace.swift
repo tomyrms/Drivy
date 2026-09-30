@@ -23,6 +23,8 @@ import Observation
     /// Formation de la leçon : catégorie et version exigées par le contrôle du permis (AP30).
     private(set) var training: SchoolTraining?
     private(set) var account: SchoolLessonAccount?
+    /// Niveaux actuels de l’élève (dernier bilan de chaque compétence, toutes leçons confondues) : point de départ du bilan.
+    private(set) var currentLevels: [UUID: SchoolReportProgressItem] = [:]
     /// Trajets de cette leçon connus de l’école (auteur, leçon planifiée) : horaires réels proposés au constat.
     private(set) var captures: [SchoolCaptureSession] = []
     /// Contrôle du permis enregistré depuis cet écran, ou refusé à ce compte par l’école.
@@ -90,6 +92,10 @@ import Observation
         ([workedOn, observationText, nextStep] + goals.map(\.label) + [administrativeNote, wishText]
             + observations.map { "\($0.levelLabel) : \($0.context)" })
             .filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+    /// Libellé du choix « aucun changement » d’une compétence : son niveau actuel, ou « Pas encore vu ».
+    func unchangedChoiceLabel(for competencyID: UUID) -> String {
+        SchoolLessonHubRules.unchangedChoiceLabel(current: currentLevels[competencyID])
     }
     /// Situation proposée quand une compétence reçoit un niveau.
     var defaultObservationContext: String { lesson.map(SchoolLessonHubRules.observationContext(for:)) ?? "Leçon" }
@@ -162,7 +168,7 @@ import Observation
         competencies = []; pending = nil; goals = []; administrativeNote = ""; wishText = ""; optimisticSharing = nil
         workedOn = ""; observationText = ""; nextStep = ""; observations = []
         sharing = nil; lessonObservations = []; track = []; trackAnchors = [:]
-        training = nil; account = nil; captures = []; permitRecorded = false; permitReviewDenied = false
+        training = nil; account = nil; currentLevels = [:]; captures = []; permitRecorded = false; permitReviewDenied = false
         isLoading = false; isBusy = false; storageAccessible = false; revisionsError = nil; reportSaveConfirmed = false
     }
     private struct DraftContent: Equatable {
@@ -275,6 +281,12 @@ import Observation
                     return curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }
                 }
             }
+            // Niveaux actuels de l’élève : lecture facultative, leur absence ne bloque ni le bilan ni les autres sections.
+            let progressRead = try await readSupplement(request: request, unavailable: "Les niveaux actuels n’ont pas pu être chargés.") {
+                let value = try await self.client.progress(schoolID: self.scope.schoolID, trainingID: lesson.trainingId)
+                guard value.trainingId == lesson.trainingId else { throw SchoolReportFailure.invalidResponse }
+                return value
+            }
             guard request == generation, !invalidated else { return }
             let draftPolicy = SchoolLessonRefreshPolicy.decide(previous: draft.map(DraftContent.init),
                 edited: DraftContent(id: draft?.id ?? UUID(), workedOn: workedOn, observationText: observationText,
@@ -301,13 +313,14 @@ import Observation
                 observations = draft?.observations ?? []
             }
             competencies = curriculumRead.value ?? []
+            currentLevels = Dictionary((progressRead.value?.items ?? []).map { ($0.competencyId, $0) }, uniquingKeysWith: { first, _ in first })
             lessonObservations = (observationsRead.value ?? []).sorted { ($0.observedAt ?? "") < ($1.observedAt ?? "") }
             sharing = sharingRead.value; optimisticSharing = nil
             track = trackRead.value?.segments ?? []; trackAnchors = trackRead.value?.pointsByAnchor ?? [:]
             if lesson.status == "COMPLETED" { captures = capturesRead.value ?? [] }
             else if !author { captures = [] }
             let notes = [wishRead.message, preparationRead.message, draftsRead.message, accountRead.message,
-                         observationsRead.message, capturesRead.message, trackRead.message, sharingRead.message, curriculumRead.message].compactMap { $0 }
+                         observationsRead.message, capturesRead.message, trackRead.message, sharingRead.message, curriculumRead.message, progressRead.message].compactMap { $0 }
             information = notes.isEmpty ? nil : notes.joined(separator: "\n\n")
             isLoading = false; needsReload = conflict
             if conflict {

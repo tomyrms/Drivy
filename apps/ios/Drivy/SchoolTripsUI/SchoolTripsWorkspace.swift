@@ -75,7 +75,31 @@ import Observation
     }
 
     /// Days in server order (newest first); inside a day, the server order is kept.
-    func days(now: Date = Date()) -> [SchoolTripDay] { Self.days(trips, now: now) }
+    /// The filter only narrows what the server already returned; it never widens access.
+    func days(filter: SchoolTripFilter = .all, now: Date = Date()) -> [SchoolTripDay] {
+        Self.days(trips(matching: filter), now: now)
+    }
+
+    func trips(matching filter: SchoolTripFilter) -> [SchoolCaptureTrip] {
+        switch filter {
+        case .all: trips
+        case .mine: trips.filter { $0.capture.instructorMembershipId == scope.membershipID }
+        case .instructor(let id): trips.filter { $0.capture.instructorMembershipId == id }
+        }
+    }
+
+    /// The other instructors present in the trips loaded so far (an administrator reads all of them).
+    func otherInstructors() -> [SchoolTripInstructor] {
+        var seen: Set<UUID> = []
+        var result: [SchoolTripInstructor] = []
+        for trip in trips {
+            let id = trip.capture.instructorMembershipId
+            let name = trip.instructorName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard id != scope.membershipID, !name.isEmpty, seen.insert(id).inserted else { continue }
+            result.append(SchoolTripInstructor(id: id, name: name))
+        }
+        return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
 
     static func days(_ trips: [SchoolCaptureTrip], now: Date) -> [SchoolTripDay] {
         var order: [String] = []
@@ -216,4 +240,16 @@ struct SchoolTripBadge: Equatable {
     let title: String
     let symbol: String
     let tone: DrivyTone
+}
+
+/// Narrowing of the trips already read: everything, the viewer’s own, or one instructor’s.
+enum SchoolTripFilter: Hashable {
+    case all
+    case mine
+    case instructor(UUID)
+}
+
+struct SchoolTripInstructor: Identifiable, Equatable {
+    let id: UUID
+    let name: String
 }

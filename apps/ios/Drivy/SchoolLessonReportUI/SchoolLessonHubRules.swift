@@ -115,6 +115,14 @@ enum SchoolLessonHubRules {
         return result
     }
 
+    /// Choix « inchangé » d’une compétence dans le bilan : la valeur vide n’écrit aucune observation. Quand l’élève a déjà un niveau
+    /// issu d’une autre leçon, il est rappelé ici comme point de départ ; il n’est jamais recopié dans le bilan de cette leçon
+    /// (« pas encore vu » n’est pas une note, et un niveau non travaillé ce jour-là n’est pas une observation).
+    static func unchangedChoiceLabel(current: SchoolReportProgressItem?) -> String {
+        guard let current else { return "Pas encore vu" }
+        return "Actuel : \(current.levelLabel)"
+    }
+
     /// Texte d’une observation repris comme situation d’une compétence (500 caractères au plus).
     static func situation(_ text: String?) -> String? {
         guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }

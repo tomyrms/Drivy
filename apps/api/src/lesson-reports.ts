@@ -225,8 +225,9 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
  app.get(`${base}/trainings/:trainingId/progress`,async r=>{
   empty.parse(r.query);const trainingId=targetID(r,'trainingId'),schoolId=schoolID(r);
   const value=await read(r,async db=>{
-   await trainingAccess(db,trainingId);
-   const rows=(await db.query<{competency_id:string;label:string;level:Observation['level'];context:string;observed_at:Date;source_lesson_id:string;source_revision_id:string}>('SELECT * FROM drivy.training_progress WHERE school_id=$1 AND training_id=$2 ORDER BY competency_id',[schoolId,trainingId])).rows;
+   // Lecture seule : moniteur affecté, élève, ou administration de l'école (migration 020).
+   if(!(await db.query<{ok:boolean}>('SELECT drivy.progress_training_access($1) AS ok',[trainingId])).rows[0]?.ok)throw notFound();
+   const rows=(await db.query<{competency_id:string;label:string;level:Observation['level'];context:string;observed_at:Date;source_lesson_id:string;source_revision_id:string}>('SELECT * FROM drivy.training_progress_read($2) WHERE school_id=$1 ORDER BY competency_id',[schoolId,trainingId])).rows;
    const definitions=(await db.query<{id:string}>(`SELECT c.id FROM drivy.competency_definition c JOIN drivy.offering_version o ON o.school_id=c.school_id AND o.curriculum_version_id=c.curriculum_version_id
     JOIN drivy.training t ON t.school_id=o.school_id AND t.offering_id=o.id WHERE t.school_id=$1 AND t.id=$2 ORDER BY c.sort_order,c.id`,[schoolId,trainingId])).rows;
    const observed=new Set(rows.map(row=>row.competency_id));
