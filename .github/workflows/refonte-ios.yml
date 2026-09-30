@@ -35,7 +35,9 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only }}-${{ inputs.visual_screens }}-${{ inputs.visual_devices }}-${{ inputs.visual_large_text }}-${{ inputs.visual_orientations }}-${{ inputs.visual_compact_ipad }}
+  # A long screen matrix must not exceed GitHub's 400-character group limit.
+  # Visual runs are independent; full test campaigns stay serial on each branch.
+  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only && github.run_id || 'tests' }}
   cancel-in-progress: false
 jobs:
   apple:

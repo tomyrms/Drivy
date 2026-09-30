@@ -95,11 +95,14 @@ import Testing
         outbox.failRead = true
         await model.load()
         try #require(!model.storageAvailable && !model.canStart)
+        try #require(model.errorMessage != nil)
+        #expect(model.errorMessage == SchoolConfigurationFailure.storage.localizedDescription)
         await server.removeOriginalAssignment()
         outbox.failRead = false
         await model.load()
 
         #expect(model.storageAvailable && model.learners.count == 2)
+        #expect(model.errorMessage == nil)
         #expect(model.learnerID == nil && model.trainingID == nil && model.trainings.isEmpty)
         #expect(!model.canStart)
         #expect(outbox.saves.isEmpty)

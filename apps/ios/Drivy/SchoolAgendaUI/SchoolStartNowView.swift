@@ -81,7 +81,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
             self.defaults = defaults
             learners = all.filter { $0.archivedAt == nil }
                 .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
-            if learners.isEmpty { errorMessage = "Aucun élève ne t’est affecté. Demande à l’administration de vérifier les affectations." }
+            if learners.isEmpty { setContextError("Aucun élève ne t’est affecté. Demande à l’administration de vérifier les affectations.") }
             isLoading = false
             if let preset = presetLearnerID, learners.contains(where: { $0.id == preset }) { await select(preset) }
             else if let previousLearnerID, learners.contains(where: { $0.id == previousLearnerID }) { await select(previousLearnerID) }
@@ -89,7 +89,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
         } catch {
             guard request == generation else { return }
             isLoading = false
-            if !(error is CancellationError) { errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription }
+            if !(error is CancellationError) { setContextError((error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription) }
         }
     }
 
@@ -97,7 +97,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
     func select(_ id: UUID) async {
         guard !invalidated, learners.contains(where: { $0.id == id }), !isBusy else { return }
         generation = UUID(); let request = generation
-        learnerID = id; trainings = []; trainingID = nil; meetingPoint = ""; errorMessage = nil; isLoading = true
+        learnerID = id; trainings = []; trainingID = nil; meetingPoint = ""; setContextError(nil); isLoading = true
         do {
             let values: [SchoolTraining] = try await client.records(scope.schoolID, path: ["trainings"],
                 query: [URLQueryItem(name: "learnerId", value: id.uuidString)])
@@ -105,7 +105,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
             let active = values.filter { $0.learnerId == id && $0.status == "ACTIVE" }
             trainings = active.filter { $0.startNowBlockerCode == nil }
             trainingID = defaults?.trainingID(in: trainings)
-            if trainings.isEmpty { errorMessage = Self.startBlockerMessage(active.first?.startNowBlockerCode) }
+            if trainings.isEmpty { setContextError(Self.startBlockerMessage(active.first?.startNowBlockerCode)) }
             if let training = trainingID {
                 let lessons: [SchoolLesson] = (try? await client.records(scope.schoolID, path: ["lessons"],
                     query: [URLQueryItem(name: "trainingId", value: training.uuidString)])) ?? []
@@ -116,8 +116,14 @@ struct SchoolStartNowBody: Encodable, Sendable {
         } catch {
             guard request == generation else { return }
             isLoading = false
-            if !(error is CancellationError) { errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription }
+            if !(error is CancellationError) { setContextError((error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription) }
         }
+    }
+
+    /// A successful context read cannot repair the encrypted outbox. Its failure
+    /// stays visible until load() has actually read that storage successfully.
+    private func setContextError(_ message: String?) {
+        errorMessage = storageAvailable ? message : SchoolConfigurationFailure.storage.localizedDescription
     }
 
     static func startBlockerMessage(_ code: String?) -> String {
