@@ -58,10 +58,13 @@ import XCTest
                     if lessonEvidence {
                         let observation = app.descendants(matching: .any).matching(NSPredicate(
                             format: "label CONTAINS %@", "Priorité à droite · regard tardif")).firstMatch
+                        let contextForm = app.collectionViews.firstMatch
+                        XCTAssertTrue(contextForm.waitForExistence(timeout: 5))
                         for _ in 0..<10 {
                             if observation.exists && observation.isHittable { break }
-                            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.85))
-                            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.25))
+                            // Stay inside the scrolling form, above the sticky action bar in landscape.
+                            let start = contextForm.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.85))
+                            let end = contextForm.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.2))
                             start.press(forDuration: 0.05, thenDragTo: end)
                         }
                         XCTAssertTrue(observation.exists && observation.isHittable, app.debugDescription)

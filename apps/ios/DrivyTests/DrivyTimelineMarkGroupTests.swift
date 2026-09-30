@@ -25,7 +25,10 @@ struct DrivyTimelineMarkGroupTests {
         #expect(narrow.count < wide.count)
         #expect(narrow.flatMap(\.marks) == wide.flatMap(\.marks))
         for group in wide {
-            #expect(group.position == (group.marks[0].offset / 100) * 600)
+            // Keep both operands CGFloat: #expect can select AnyHashable equality
+            // for a heterogeneous CGFloat/Double comparison (swiftlang/swift#91221).
+            let expectedPosition = CGFloat(group.marks[0].offset / 100) * 600
+            #expect(group.position == expectedPosition)
         }
     }
 

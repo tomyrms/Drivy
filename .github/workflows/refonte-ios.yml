@@ -107,7 +107,9 @@ jobs:
         run: bash scripts/ios/test-simulator.sh
       - name: Capturer les écrans pour la revue visuelle
         if: inputs.visual_only == true
-        timeout-minutes: 20
+        # Cold iPhone and iPad boots on macOS 26 can each take several minutes.
+        # Keep enough time for both devices and the complete requested matrix.
+        timeout-minutes: 35
         shell: bash
         env:
           DRIVY_VISUAL_SCREENS: ${{ inputs.visual_screens }}
