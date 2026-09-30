@@ -58,7 +58,7 @@ import Testing
     @Test func lessonChangeIsBroadcastOnlyAfterDurableConfirmation() async throws {
         let server = LessonFinishServer(), notifications = NotificationCenter(), changes = RecordedLessonChanges()
         let observer = notifications.addObserver(forName: .drivyLessonsDidChange, object: nil, queue: nil) {
-            if let change = $0.object as? SchoolLessonChange { changes.append(change) }
+            changes.append($0.object as? SchoolLessonChange)
         }
         defer { notifications.removeObserver(observer) }
         let client = SchoolLessonReportClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!, tokenSource: HubToken(), transport: server)
@@ -74,6 +74,26 @@ import Testing
         let change = try #require(changes.values.first)
         #expect(changes.values.count == 1 && model.reportSaveConfirmed)
         #expect(change.schoolID == HubFixture.schoolID && change.trainingID == HubFixture.trainingID && change.lessonID == HubFixture.lessonID)
+    }
+
+    @Test func receiptOfAnotherLessonNeverBroadcastsTheOpenLessonAsItsTarget() async throws {
+        let server = LessonFinishServer(), notifications = NotificationCenter(), changes = RecordedLessonChanges()
+        let observer = notifications.addObserver(forName: .drivyLessonsDidChange, object: nil, queue: nil) {
+            changes.append($0.object as? SchoolLessonChange)
+        }
+        defer { notifications.removeObserver(observer) }
+        let operation = UUID(), resource = UUID(), outbox = ConfigurationOutboxStub()
+        let body = SchoolSaveReport(operationId: operation, workedOn: "", observationText: "", nextStep: "", observations: [])
+        try outbox.save(PendingSchoolCommand(id: operation, scope: ConfigurationFixture.scope(), kind: .saveReportDraft,
+            resourceVersion: 1, createdAt: Date(), body: try JSONEncoder().encode(body), resourceID: resource))
+        await server.setConfirmedOperation(operation, resourceID: resource)
+        let client = SchoolLessonReportClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!, tokenSource: HubToken(), transport: server)
+        let model = SchoolLessonReportWorkspace(scope: ConfigurationFixture.scope(), membership: membership,
+            lessonID: HubFixture.lessonID, client: client, outbox: outbox, notifications: notifications)
+        await model.load()
+        await model.verifyPending()
+        #expect(changes.count == 1 && changes.values.isEmpty)
+        #expect(!model.reportSaveConfirmed && model.pending == nil)
     }
 
     private var membership: SchoolMembership {
@@ -92,8 +112,13 @@ import Testing
 private final class RecordedLessonChanges: @unchecked Sendable {
     private let lock = NSLock()
     private var stored: [SchoolLessonChange] = []
-    func append(_ value: SchoolLessonChange) { lock.lock(); defer { lock.unlock() }; stored.append(value) }
+    private var broadcasts = 0
+    func append(_ value: SchoolLessonChange?) {
+        lock.lock(); defer { lock.unlock() }; broadcasts += 1
+        if let value { stored.append(value) }
+    }
     var values: [SchoolLessonChange] { lock.lock(); defer { lock.unlock() }; return stored }
+    var count: Int { lock.lock(); defer { lock.unlock() }; return broadcasts }
 }
 
 private actor HistoryServer: SchoolHTTPTransport {

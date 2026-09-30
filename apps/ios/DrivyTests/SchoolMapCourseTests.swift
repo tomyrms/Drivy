@@ -7,15 +7,19 @@ struct SchoolMapCourseTests {
     @Test func movementOrientsTheMapWhileStationaryDriftDoesNot() throws {
         var course = SchoolMapCourse()
         let origin = CLLocationCoordinate2D(latitude: 47, longitude: 7)
-        #expect(course.receive(origin, at: 0, accuracy: 5) == nil)
-        #expect(course.receive(.init(latitude: 47.000005, longitude: 7.000005), at: 1, accuracy: 5) == nil)
-        let east = try #require(course.receive(.init(latitude: 47, longitude: 7.001), at: 2, accuracy: 5))
+        let initialHeading = course.receive(origin, at: 0, accuracy: 5)
+        let driftHeading = course.receive(.init(latitude: 47.000005, longitude: 7.000005), at: 1, accuracy: 5)
+        #expect(initialHeading == nil && driftHeading == nil)
+        let eastHeading = course.receive(.init(latitude: 47, longitude: 7.001), at: 2, accuracy: 5)
+        let east = try #require(eastHeading)
         #expect(abs(east - 90) < 1)
         let stationary = course.receive(.init(latitude: 47.000001, longitude: 7.001001), at: 3, accuracy: 5)
         #expect(stationary == east)
-        let north = try #require(course.receive(.init(latitude: 47.001, longitude: 7.001), at: 4, accuracy: 5))
+        let northHeading = course.receive(.init(latitude: 47.001, longitude: 7.001), at: 4, accuracy: 5)
+        let north = try #require(northHeading)
         #expect(north < 1 || north > 359)
-        #expect(course.receive(.init(latitude: 47.02, longitude: 7.02), at: 30, accuracy: 5) == nil)
+        let afterGap = course.receive(.init(latitude: 47.02, longitude: 7.02), at: 30, accuracy: 5)
+        #expect(afterGap == nil)
     }
 
     @Test func bearingUsesTheShortestDirectionAcrossTheDateLine() {

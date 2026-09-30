@@ -11,6 +11,10 @@ struct SchoolProfileTabView: View {
     var chooseSchool: (() -> Void)? = nil
     @Environment(\.openURL) private var openURL
 
+    private var scopeKey: String {
+        "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.schoolId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.joined(separator: ",") ?? ""):\(workspace.membership?.grants.joined(separator: ",") ?? "")"
+    }
+
     var body: some View {
         NavigationStack {
             content
@@ -23,6 +27,7 @@ struct SchoolProfileTabView: View {
                     }
                 }
         }
+        .id(scopeKey)
     }
 
     @ViewBuilder private var content: some View {

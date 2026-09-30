@@ -155,6 +155,7 @@ actor LessonFinishServer: SchoolHTTPTransport {
     private var receiptAvailable = true
     private var rejectSave = false
     private var operation: UUID?
+    private var receiptResourceID: UUID?
     private var recorded: [URLRequest] = []
     private let draftID = UUID(uuidString: "70000000-0000-4000-8000-000000000050")!
     init(roles: [String] = ["INSTRUCTOR"], emptyContext: Bool = false, progressLevel: String? = nil, progressStatus: Int = 200) {
@@ -162,6 +163,7 @@ actor LessonFinishServer: SchoolHTTPTransport {
     }
     func setReceiptAvailable(_ value: Bool) { receiptAvailable = value }
     func setRejectSave(_ value: Bool) { rejectSave = value }
+    func setConfirmedOperation(_ id: UUID, resourceID: UUID) { operation = id; receiptResourceID = resourceID }
     func requests() -> [URLRequest] { recorded }
     func enableStartNowConflict() async { await fallback.enableStartNowConflict() }
 
@@ -215,7 +217,7 @@ actor LessonFinishServer: SchoolHTTPTransport {
         if parts.dropLast().last == "operations", let operation, parts.last == operation.uuidString.lowercased() {
             guard receiptAvailable else { return problem(503, "UNAVAILABLE") }
             return try ok(["operationId": operation.uuidString, "commandType": "SAVE_REPORT_DRAFT", "resourceType": "ReportDraft",
-                "resourceId": draftID.uuidString, "committedAt": "2026-09-28T13:30:00Z", "resourceVersion": 2])
+                "resourceId": (receiptResourceID ?? draftID).uuidString, "committedAt": "2026-09-28T13:30:00Z", "resourceVersion": 2])
         }
         if parts.suffix(3) == ["lessons", HubFixture.lessonID.uuidString.lowercased(), "captures"] {
             let capture = HubFixture.capture(authorizedAt: "2026-09-28T12:00:00Z", stoppedAt: "2026-09-28T12:50:00Z", state: .stopped)

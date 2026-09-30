@@ -54,6 +54,34 @@ import Testing
         #expect(await server.writes().count == 1)
     }
 
+    @Test func cancellationIsConfirmedEvenWhenTheFollowingReadFails() async {
+        let server = PlanningDefaultsServer(failReadsAfterCancellation: true), outbox = ConfigurationOutboxStub()
+        let model = SchoolPlanningWorkspace(scope: ConfigurationFixture.scope(), client: client(server),
+            lesson: HubFixture.lesson(), outbox: outbox)
+        await model.load()
+        model.cancellationReason = "OTHER"
+        #expect(await model.cancel())
+        #expect(model.confirmedCancellationLessonID == HubFixture.lessonID)
+        #expect(model.originalLesson?.status == "PLANNED" && model.errorMessage != nil)
+        #expect(model.pending == nil && outbox.value == nil)
+    }
+
+    @Test func cancellationWaitsForTheReceiptAndCanBeConfirmedByVerification() async {
+        let server = PlanningDefaultsServer(receiptAvailable: false, failReadsAfterCancellation: true)
+        let outbox = ConfigurationOutboxStub()
+        let model = SchoolPlanningWorkspace(scope: ConfigurationFixture.scope(), client: client(server),
+            lesson: HubFixture.lesson(), outbox: outbox)
+        await model.load()
+        model.cancellationReason = "OTHER"
+        #expect(await model.cancel() == false)
+        #expect(model.confirmedCancellationLessonID == nil && outbox.value != nil)
+        await server.enableReceipt()
+        await model.verify()
+        #expect(model.confirmedCancellationLessonID == HubFixture.lessonID)
+        #expect(model.pending == nil && outbox.value == nil)
+        #expect(await server.writes().count == 1)
+    }
+
     private func training(_ category: String) -> SchoolTraining {
         SchoolTraining(id: UUID(), schoolId: HubFixture.schoolID, learnerId: HubFixture.learnerID, offeringId: UUID(),
             version: 1, categoryCode: category, status: "ACTIVE", startedOn: nil, closedOn: nil)
@@ -77,8 +105,13 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
     private var category: Any = NSNull()
     private var productKey: Any = NSNull()
     private var operationID: String?
+    private var cancelled = false
+    private let failReadsAfterCancellation: Bool
     private var sent: [URLRequest] = []
-    init(assigned: Bool = true, receiptAvailable: Bool = true) { self.assigned = assigned; self.receiptAvailable = receiptAvailable }
+    init(assigned: Bool = true, receiptAvailable: Bool = true, failReadsAfterCancellation: Bool = false) {
+        self.assigned = assigned; self.receiptAvailable = receiptAvailable
+        self.failReadsAfterCancellation = failReadsAfterCancellation
+    }
     func writes() -> [URLRequest] { sent.filter { $0.httpMethod != "GET" } }
     func enableReceipt() { receiptAvailable = true }
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
@@ -93,12 +126,21 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
         }
         func page(_ items: [[String: Any]]) throws -> SchoolHTTPResponse { try ok(["items": items, "nextCursor": NSNull()]) }
         if parts.last == "me" {
+            if cancelled && failReadsAfterCancellation { throw URLError(.notConnectedToInternet) }
             return try ok(["personId": ConfigurationFixture.personID.uuidString, "version": 1, "displayName": "Moniteur de test", "locale": "fr",
                 "memberships": [["membershipId": ConfigurationFixture.membershipID.uuidString, "schoolId": HubFixture.schoolID.uuidString,
                     "schoolName": "École de test", "roles": ["ADMIN", "INSTRUCTOR"], "grants": [], "accessEpoch": 1] as [String: Any]]])
         }
         if parts.last == HubFixture.schoolID.uuidString.lowercased() {
             return try ok(JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.school(gps: true))))
+        }
+        if parts.dropLast().last == "lessons", parts.last == HubFixture.lessonID.uuidString.lowercased() {
+            return try ok(JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.lesson(status: cancelled ? "CANCELLED" : "PLANNED"))))
+        }
+        if parts.last == "cancel" {
+            let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+            operationID = body["operationId"] as? String; cancelled = true
+            return try ok(["accepted": true])
         }
         if parts.last == "planning-defaults" {
             if request.httpMethod == "PUT" {
@@ -110,6 +152,10 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
         }
         if parts.dropLast().last == "operations", let operationID {
             if !receiptAvailable { return SchoolHTTPResponse(data: Data("{\"code\":\"SERVICE_UNAVAILABLE\"}".utf8), status: 503, url: url, contentType: "application/problem+json") }
+            if cancelled {
+                return try ok(["operationId": operationID, "commandType": "CANCEL_LESSON", "resourceType": "Lesson",
+                    "resourceId": HubFixture.lessonID.uuidString, "resourceVersion": 3, "committedAt": ISO8601DateFormatter().string(from: Date())])
+            }
             return try ok(["operationId": operationID, "commandType": "SAVE_PLANNING_DEFAULTS", "resourceType": "PlanningDefaults",
                 "resourceId": ConfigurationFixture.membershipID.uuidString, "resourceVersion": 2, "committedAt": ISO8601DateFormatter().string(from: Date())])
         }

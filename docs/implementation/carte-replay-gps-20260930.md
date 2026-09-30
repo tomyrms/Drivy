@@ -52,6 +52,8 @@ Le compteur de positions est supprimé du panneau et de la valeur accessible de 
 
 « Annuler la leçon » ouvre le formulaire d’annulation existant avec motif. L’ouverture ne stoppe pas le trajet. Après confirmation, le callback `beforeCancellation` arrête la collecte et attend sa sauvegarde locale, puis le formulaire émet la commande versionnée d’annulation. Aucun `CompleteLesson` ni bilan n’est créé. La navigation revient à la leçon annulée seulement après confirmation du serveur. Un échec réseau garde la commande dans la file existante ; un échec de sauvegarde GPS bloque l’annulation distante et conserve l’erreur de capture.
 
+La fermeture s’appuie sur le reçu durable de la commande et le retrait réussi de l’outbox, y compris lors d’une vérification ultérieure, sans dépendre du rechargement de la leçon. Une coupure après le reçu ne laisse donc pas la capture affichée comme encore à terminer. La pile de navigation Profil est identifiée par compte, école, adhésion et droits : changer d’école ferme ses préférences et recrée leur modèle dans la nouvelle portée.
+
 ## Guides UI consultés et traduction concrète
 
 | Guide lu | Application au périmètre |
@@ -74,5 +76,6 @@ Tests ajoutés pour le runner Apple :
 - `SchoolMapCourseTests` : cap Est/Nord/Ouest, stabilité avec faible dérive, réinitialisation après silence, passage de l’antiméridien, coordonnées mesurées inchangées, aucune ligne ni curseur à travers une lacune.
 - `SchoolLiveObservationRecorderTests` : marqueur après écriture seulement, absence en cas d’échec de stockage, restauration de l’intention, ancre et heure figées, refus d’une ancre invalidée.
 - `SchoolCaptureLifecycleTests` : aucune ancre avant commit, rejet d’un point ancien/futur ou d’un GPS en pause, flush idempotent d’un chunk partiel sans pause ni nouveau segment.
+- `SchoolPlanningDefaultsTests` : clôture confirmée malgré échec de la lecture suivante, absence de confirmation sans reçu et reprise par vérification du reçu sans second envoi.
 
 À exécuter sur iPhone/iPad : suivi en virage et à l’arrêt, pan/zoom/recentrage pendant lecture, signalement puis réseau coupé, annulation avec sauvegarde et erreur réseau, rotation et fenêtre étroite, VoiceOver et Réduire les animations. Pour la collecte réelle : trajet comprenant intersections, giratoires, tunnel, verrouillage, arrêt prolongé, branchement/débranchement, mesures de précision/intervalle et batterie. Utiliser une trace d’essai autorisée ; ne jamais joindre coordonnées ou données de personnes aux logs/artefacts CI. Le profil matériel reste `NOT_QUALIFIED`.

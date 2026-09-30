@@ -71,8 +71,8 @@ struct SchoolCaptureLiveView: View {
             SchoolPlanningView(model: model, cancelling: true, beforeCancellation: {
                 await controller.stopAndSynchronize()
             })
-            .onChange(of: model.originalLesson?.status) { _, status in
-                guard status == "CANCELLED", let id = model.originalLesson?.id else { return }
+            .onChange(of: model.confirmedCancellationLessonID) { _, id in
+                guard let id else { return }
                 controller.closeSaved()
                 openLesson?(id, false)
             }

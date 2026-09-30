@@ -11,6 +11,8 @@ struct SchoolPlanningInstructor: Identifiable {
     let scope: SchoolCommandScope
     let client: SchoolPlanningClient
     private(set) var originalLesson: SchoolLesson?
+    /// A durable command receipt closes the live capture even if the following read fails.
+    private(set) var confirmedCancellationLessonID: UUID?
     private(set) var roles: [String] = []
     private(set) var grants: [String] = []
     private(set) var school: SchoolDetails?
@@ -303,6 +305,7 @@ struct SchoolPlanningInstructor: Identifiable {
         do {
             _ = try await client.receipt(for: command); try outbox.remove(command)
             guard request == generation else { return }; pending = nil; isBusy = false; pendingRequiresReview = false
+            if command.kind == .cancelLesson { confirmedCancellationLessonID = command.resourceID }
             successMessage = "Enregistrement confirmé par l’école."; await load()
         } catch { guard request == generation else { return }; isBusy = false; fail(error) }
     }
@@ -313,6 +316,7 @@ struct SchoolPlanningInstructor: Identifiable {
             try outbox.save(command); try await client.send(command); try outbox.remove(command)
             guard request == generation else { return true }
             pending = nil; isBusy = false; successMessage = "Enregistrement confirmé par l’école."
+            if command.kind == .cancelLesson { confirmedCancellationLessonID = command.resourceID }
             await load(); return true
         } catch {
             guard request == generation else { return false }
