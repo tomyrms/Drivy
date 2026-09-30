@@ -145,15 +145,15 @@ final class SchoolProfileClient: SchoolProfileAPI {
             case 404 where path.first == "operations": throw SchoolProfileFailure.operationUnknown
             case 404: throw SchoolProfileFailure.notFound
             case 412 where problem?.code == "VERSION_CONFLICT": throw SchoolProfileFailure.conflict
-            case 400 where problem?.code == "INVALID_REQUEST": throw SchoolProfileFailure.rejected("Vérifiez les champs saisis avant de confirmer.")
+            case 400 where problem?.code == "INVALID_REQUEST": throw SchoolProfileFailure.rejected("Vérifie les champs saisis avant de confirmer.")
             case 428 where problem?.code == "PRECONDITION_REQUIRED": throw SchoolProfileFailure.conflict
             case 409:
                 if problem?.code == "IDEMPOTENCY_MISMATCH" { throw SchoolProfileFailure.pendingCommand }
                 switch problem?.code {
                 case "PROFILE_POLICY_NOT_READY": throw SchoolProfileFailure.notInitialized
                 case "PROFILE_POLICY_CHANGED": throw SchoolProfileFailure.conflict
-                case "ONBOARDING_NOT_READY": throw SchoolProfileFailure.rejected("Complétez le profil utile et relisez l’accueil avant de terminer.")
-                case "PROFILE_POLICY_ALREADY_PUBLISHED": throw SchoolProfileFailure.rejected("Cette politique est déjà publiée. Relisez les versions de l’école.")
+                case "ONBOARDING_NOT_READY": throw SchoolProfileFailure.rejected("Complète le profil utile et relis l’accueil avant de terminer.")
+                case "PROFILE_POLICY_ALREADY_PUBLISHED": throw SchoolProfileFailure.rejected("Cette politique est déjà publiée. Relis les versions de l’école.")
                 case "PROFILE_POLICY_DATE_CONFLICT": throw SchoolProfileFailure.rejected("Une politique publiée utilise déjà cette date d’effet.")
                 case "POLICY_REVIEW_REQUIRED": throw SchoolProfileFailure.rejected("La notice de données doit être adoptée dans cette école.")
                 case "SCHOOL_NOT_ACTIVE", "SCHOOL_ARCHIVED": throw SchoolProfileFailure.rejected("Cette école ne permet pas cette modification dans son état actuel.")
@@ -162,7 +162,7 @@ final class SchoolProfileClient: SchoolProfileAPI {
                 default: break
                 }
                 throw SchoolProfileFailure.pendingCommand
-            case 422 where problem?.code == "PROFILE_POLICY_RULE_INVALID": throw SchoolProfileFailure.rejected("Vérifiez les finalités et les étapes de chaque champ.")
+            case 422 where problem?.code == "PROFILE_POLICY_RULE_INVALID": throw SchoolProfileFailure.rejected("Vérifie les finalités et les étapes de chaque champ.")
             case 422 where problem?.code == "INVALID_BIRTH_DATE": throw SchoolProfileFailure.rejected("La naissance doit être une date réelle, non future.")
             case 429, 500...599: throw SchoolProfileFailure.unavailable
             default: throw SchoolProfileFailure.invalidResponse

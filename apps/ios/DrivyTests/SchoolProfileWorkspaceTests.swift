@@ -255,7 +255,7 @@ enum ProfileFixture {
         .init(id: onboardingID, schoolId: ConfigurationFixture.schoolID, version: version, personId: ConfigurationFixture.personID,
             membershipId: ConfigurationFixture.membershipID, kind: .student, status: status, currentStep: step,
             skippedOptionalSteps: [], policyVersionId: policyID, lastSavedAt: ConfigurationFixture.timestamp,
-            pendingActions: step == .review ? [] : [.init(code: "ONBOARDING_REVIEW_REQUIRED", message: "Relisez votre arrivée.", field: nil, purpose: nil, resourceId: nil, destinationKey: "PROFILE")],
+            pendingActions: step == .review ? [] : [.init(code: "ONBOARDING_REVIEW_REQUIRED", message: "Relis ton arrivée.", field: nil, purpose: nil, resourceId: nil, destinationKey: "PROFILE")],
             returnDestinationKey: nil, returnResourceId: nil)
     }
     static func workspace(api: ProfileAPIStub, box: ConfigurationOutboxStub = ConfigurationOutboxStub(), roles: [String] = ["ADMIN"]) -> SchoolProfileWorkspace {

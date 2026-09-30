@@ -114,15 +114,15 @@ enum SchoolObservationFailure: Error, LocalizedError, Equatable {
     case rejected(String)
     var errorDescription: String? {
         switch self {
-        case .unauthorized: "Reconnectez-vous pour retrouver les observations privées."
-        case .forbidden: "Votre accès à cette leçon a changé. La demande en attente reste conservée."
-        case .notFound: "Cette observation n’est pas disponible avec vos droits actuels."
+        case .unauthorized: "Reconnecte-toi pour retrouver les observations privées."
+        case .forbidden: "Ton accès à cette leçon a changé. La demande en attente reste conservée."
+        case .notFound: "Cette observation n’est pas disponible avec tes droits actuels."
         case .unavailable: "L’école est momentanément inaccessible. La demande en attente reste conservée."
-        case .invalidResponse: "La réponse ne peut pas être vérifiée. Conservez la demande pour vérifier son résultat."
-        case .conflict: "L’observation a changé, notamment lors du constat. Relisez sa version avant de la modifier."
+        case .invalidResponse: "La réponse ne peut pas être vérifiée. Conserve la demande pour vérifier son résultat."
+        case .conflict: "L’observation a changé, notamment lors du constat. Relis sa version avant de la modifier."
         case .anchorNotReady: "Le point de ce signalement attend encore son transfert. L’observation reste en attente."
-        case .reviewRequired: "Un bilan existe déjà. Reprenez explicitement cette observation dans le brouillon après relecture."
-        case .uncertain: "Le résultat reste à vérifier. Conservez cette demande et sa référence avant une autre modification."
+        case .reviewRequired: "Un bilan existe déjà. Reprends explicitement cette observation dans le brouillon après relecture."
+        case .uncertain: "Le résultat reste à vérifier. Conserve cette demande et sa référence avant une autre modification."
         case .rejected(let message): message
         }
     }

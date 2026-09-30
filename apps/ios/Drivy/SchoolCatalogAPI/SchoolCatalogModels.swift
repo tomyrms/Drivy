@@ -83,15 +83,15 @@ enum SchoolCatalogFailure: Error, LocalizedError, Equatable {
     case unauthorized, forbidden, notFound, unavailable, invalidResponse, operationUnknown, pending, conflict, reauthentication
     case rejected(String)
     var errorDescription: String? { switch self {
-        case .unauthorized: "Reconnectez-vous pour retrouver cet espace. Toute demande en attente reste conservée."
-        case .forbidden: "Vos accès ne permettent plus cette opération dans l’école."
-        case .notFound: "Cette information n’est pas disponible avec vos accès actuels."
-        case .unavailable: "L’école est momentanément inaccessible. Votre demande reste conservée jusqu’à confirmation."
+        case .unauthorized: "Reconnecte-toi pour retrouver cet espace. Toute demande en attente reste conservée."
+        case .forbidden: "Tes accès ne permettent plus cette opération dans l’école."
+        case .notFound: "Cette information n’est pas disponible avec tes accès actuels."
+        case .unavailable: "L’école est momentanément inaccessible. Ta demande reste conservée jusqu’à confirmation."
         case .invalidResponse: "La réponse de l’école ne peut pas être vérifiée."
-        case .operationUnknown: "Le résultat reste à vérifier. La référence de votre demande est conservée."
-        case .pending: "Vérifiez la demande en attente avant une autre modification."
-        case .conflict: "Les informations ont changé. Rechargez et relisez avant de confirmer."
-        case .reauthentication: "Reconnectez-vous avec le même compte pour confirmer ce changement de droits."
+        case .operationUnknown: "Le résultat reste à vérifier. La référence de ta demande est conservée."
+        case .pending: "Vérifie la demande en attente avant une autre modification."
+        case .conflict: "Les informations ont changé. Recharge et relis avant de confirmer."
+        case .reauthentication: "Reconnecte-toi avec le même compte pour confirmer ce changement de droits."
         case .rejected(let message): message
     } }
     var permitsFreshCorrection: Bool {

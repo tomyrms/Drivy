@@ -104,7 +104,7 @@ import Observation
                 let count = try await transfer.transferAvailableData(captureID: capture.id)
                 guard current(request) else { return }
                 feedback = count == 0 ? "Aucun envoi en attente pour ce trajet."
-                    : "L’école a confirmé les données envoyées. Vous pouvez vérifier le trajet complet."
+                    : "L’école a confirmé les données envoyées. Tu peux vérifier le trajet complet."
             }
             try await reload(store, request: request)
         } catch {

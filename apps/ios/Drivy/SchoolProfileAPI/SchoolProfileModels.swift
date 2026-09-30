@@ -228,15 +228,15 @@ enum SchoolProfileFailure: Error, LocalizedError, Equatable {
     case rejected(String)
     var errorDescription: String? {
         switch self {
-        case .unauthorized: "Reconnectez-vous pour continuer. La demande en attente reste conservée."
-        case .forbidden: "Vos droits ne permettent plus cet accès."
-        case .notFound: "Ce dossier n’est plus disponible dans votre périmètre d’accès."
+        case .unauthorized: "Reconnecte-toi pour continuer. La demande en attente reste conservée."
+        case .forbidden: "Tes droits ne permettent plus cet accès."
+        case .notFound: "Ce dossier n’est plus disponible dans ton périmètre d’accès."
         case .unavailable: "L’école est momentanément inaccessible. Une demande déjà envoyée reste conservée jusqu’à confirmation."
         case .invalidResponse: "La réponse de l’école ne peut pas être vérifiée."
         case .notInitialized: "L’école doit publier sa politique de champs avant de compléter les profils."
-        case .operationUnknown: "Le résultat n’est pas confirmé. Conservez cette référence et vérifiez à nouveau."
+        case .operationUnknown: "Le résultat n’est pas confirmé. Conserve cette référence et vérifie à nouveau."
         case .pendingCommand: "Une demande reste à vérifier avant une autre modification."
-        case .conflict: "Ce dossier ou sa politique a changé. Rechargez les informations et relisez vos modifications."
+        case .conflict: "Ce dossier ou sa politique a changé. Recharge les informations et relis tes modifications."
         case .rejected(let message): message
         }
     }

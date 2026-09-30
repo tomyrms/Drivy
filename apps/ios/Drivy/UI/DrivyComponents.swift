@@ -274,7 +274,32 @@ struct DrivyEmptyState: View {
     var action: (() -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
 
+    /// Title alone: the state of an empty list, centred with a larger glyph.
+    private var isAlone: Bool { message.isEmpty && (actionTitle == nil || action == nil) }
+
     var body: some View {
+        if isAlone && !typeSize.isAccessibilitySize {
+            VStack(spacing: DrivySpacing.s) {
+                Image(systemName: symbol)
+                    .font(.largeTitle)
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(DrivyTheme.muted)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(DrivyTheme.text)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, minHeight: 168, alignment: .center)
+            .padding(.vertical, DrivySpacing.l)
+            .accessibilityElement(children: .combine)
+        } else {
+            standardBody
+        }
+    }
+
+    @ViewBuilder private var standardBody: some View {
         let stacked = typeSize.isAccessibilitySize
         let layout = stacked
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))

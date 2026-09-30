@@ -356,7 +356,7 @@ Les styles système `.borderedProminent`, `.bordered` et `.controlSize` ne rempl
 ### En-têtes
 
 - `DrivySectionHeader` pour toute section de page de lecture (trait `.isHeader`, action facultative qui passe dessous en grand texte).
-- En `Form`, en-tête de `Section` natif ; pas de `footer` explicatif.
+- En `Form`, en-tête de `Section` natif stylé par `.drivyFormSectionHeader()` ; pas de `footer` explicatif.
 - `DrivyStepProgress` seulement pour l’accueil guidé.
 
 ### États
@@ -365,14 +365,14 @@ Les styles système `.borderedProminent`, `.bordered` et `.controlSize` ne rempl
 |---|---|---|
 | Chargement dans une section | `DrivyLoadingState(title:)` | Le texte nomme l’opération ; un `ProgressView()` seul n’est jamais acceptable. |
 | Chargement plein écran | `ProgressView("…")` centré sur `canvas` | Même texte nommé. |
-| Vide dans une section | `DrivyEmptyState` | Titre, une action si elle existe ; pas de paragraphe. |
+| Vide dans une section | `DrivyEmptyState` | Titre, une action si elle existe ; pas de paragraphe. Titre seul (liste vide) : glyphe `largeTitle` centré dans l’espace disponible (168 pt au moins), sans texte ajouté ; en tailles d’accessibilité, disposition empilée habituelle. |
 | Écran entier vide ou accès perdu | `ContentUnavailableView` | Titre, courte description de la marche à suivre, action. |
-| Erreur | `SchoolErrorNotice(message:retry:)` | Fond `dangerSurface`, symbole, message qui dit quoi faire, `DrivyRetryButton`. Saisie conservée. |
+| Erreur | `SchoolErrorNotice(message:retry:)` | Fond `dangerSurface`, symbole aligné sur la première ligne du message (pas au centre du bloc), message qui dit quoi faire, `DrivyRetryButton`. Saisie conservée. |
 | Succès ou alerte hors `Form` | `DrivyInlineMessage(text:tone:)` | Près de l’action, après écriture durable. |
 | Succès ou alerte dans un `Form` | `DrivyFormMessage` | Même vocabulaire. |
-| Action désactivée ou échec près du bouton bas | `DrivyStickyActionBar` / `DrivyFormActionBar` + `DrivyActionNote` | Une ligne qui dit pourquoi, au-dessus de l’action. |
+| Action désactivée ou échec près du bouton bas | `DrivyStickyActionBar` / `DrivyFormActionBar` + `DrivyActionNote` | Une ligne qui dit pourquoi, au-dessus de l’action. Sur une page courte centrée (connexion `SchoolSignInLanding`, verrou `AppLock`), la barre suit la colonne du contenu : `maxWidth: DrivyLayout.narrowColumn`. |
 | Résultat inconnu | `DrivyPendingRequest` | « Demande à vérifier » → « Vérifier auprès de l’école » → « Renvoyer la même demande » → référence repliée. |
-| Carte sans position | `DrivyMapPlaceholder` | Jamais une carte vide, jamais une vue de pays. |
+| Carte sans position | `DrivyMapPlaceholder` | Jamais une carte vide, jamais une vue de pays. Aujourd’hui : sans autorisation de localisation, le placeholder remplace la carte ; la caméra se replie sur `.automatic`, plus sur une région de pays. Le point de rendez-vous d’une leçon est un texte, pas une coordonnée : aucune région n’en est déduite. |
 | Statut | `DrivyStatusBadge(title:symbol:tone:)` | Seulement pour l’inhabituel ; symbole + texte + couleur. |
 
 ### Composants partagés de la passe du 29–30/09/2026
@@ -384,6 +384,9 @@ Les styles système `.borderedProminent`, `.bordered` et `.controlSize` ne rempl
 | `DrivyButtonSize` | `.regular` (corps semi-gras, 52 pt) et `.field` (title3 gras, 64 pt), variante terrain pour `DrivyPrimaryButtonStyle(size:)` et `DrivySecondaryButtonStyle(size:)`. |
 | `drivyFormRows(isSelected:)` | Fond des lignes de Form et de List (surface) ; remplace les `listRowBackground(DrivyTheme.surface)` locaux. Les fonds spéciaux (danger, clair) restent. |
 | `DrivyPrivacyMark(isPrivate:)` | Cadenas privé/partagé, teinte `muted` : le privé n’est jamais alarmant. |
+| `drivyFormSectionHeader()` | En-tête de `Section` de Form et de List : subheadline semi-gras, `muted`, casse d’écriture (`textCase(nil)`). Appliqué à tous les en-têtes natifs ; les `Section("Titre")` deviennent `Section { } header: { Text(...).drivyFormSectionHeader() }`. |
+| `DrivyLessonRow` | En largeur compacte, le badge passe sous le résumé (plus de coupure avant « · ») ; en largeur régulière il reste à droite. Le séparateur de List démarre sur la colonne du texte (`listRowSeparatorLeading`). |
+| `DrivyReplayTransport` | Une seule rangée dans une colonne de 380 pt : boutons de 48 pt (lecture 60 pt), espacement 4 pt, 276 pt au total ; repli sur deux rangées seulement en dessous. |
 | `DrivyMapPlaceholder(isSearching:)` | Emplacement GPS sans position inventée ; pulsation pendant la recherche, fixe sous Réduire les animations. |
 | `DrivyElevation` et `drivyShadow` | Ombre douce à deux couches issue de `DrivyTheme.shadow`. |
 
@@ -403,7 +406,7 @@ Un contrôle réagit sans changer d’identité : même taille de libellé, mêm
 | Appui d’une carte de sélection | Aujourd’hui 0,98 (`DrivyComponents.swift:455`). Proposition : 0,96 comme les autres, à arbitrer par le porteur. | Revue des composants du 29 septembre (point LOW ouvert) |
 | Désactivé | `disabledSurface` + `disabledText` ; le bouton garde sa forme visible (y compris les commandes de lecture de 48 pt). La raison s’écrit juste au-dessus avec `DrivyActionNote` ou `DrivyFormActionBar(hint:)`. | `DrivyTheme.swift`, `DrivyComponents+Agenda.swift:275` |
 | En cours | Libellé remplacé par `DrivyBusyLabel` (spinner + verbe : « Enregistrement… », « Création… », « Vérification… ») ; champs gelés ; fermeture interactive bloquée (`interactiveDismissDisabled(model.isBusy)`) ; bouton « Fermer » désactivé. Un chargement de contenu utilise `DrivyLoadingState(title:)`. | `DrivyComponents+Ecole.swift:306`, écrans d’invitation, d’observation, de profil |
-| Sélectionné | Fond `accentSoft`, contour `accent` 1,5 pt, `DrivySelectionMark` (coche pleine / cercle `controlBorder`), trait `.isSelected`. En `List`, `listRowBackground(accentSoft)` et titre en `accent` (`DrivyEntityRow(isSelected:)`). Suivi de position sur la carte : symbole plein en `accent` et trait `.isSelected`. | `DrivyComponents.swift:438-471`, `DrivyComponents+Seance.swift:309` |
+| Sélectionné | Fond `accentSoft`, contour `accent` 1,5 pt, `DrivySelectionMark` (coche pleine / cercle `controlBorder`), trait `.isSelected`. En `List`, `listRowBackground(accentSoft)` et titre qui reste en `text` (`DrivyEntityRow(isSelected:)` : le fond `accentSoft` et l’avatar portent la sélection, contraste 12:1 au lieu de 5,4:1). Suivi de position sur la carte : symbole plein en `accent` et trait `.isSelected`. | `DrivyComponents.swift:438-471`, `DrivyComponents+Seance.swift:309` |
 | Focus VoiceOver | Après le choix d’un thème de signalement, le focus va au titre du thème (`@AccessibilityFocusState`). Aucun anneau de focus personnalisé : le focus clavier iPad est celui du système et reste à vérifier sur appareil. | `SchoolLiveObservationSheet.swift:14`, `:171` |
 | Retour haptique | `.sensoryFeedback(.selection)` au choix d’un thème ; `.success` seulement après l’écriture chiffrée de l’observation ; `.success` à la copie d’un code d’invitation. Aucun autre retour haptique n’est établi. | `SchoolLiveObservationSheet.swift:50-51`, `SchoolInvitationsView.swift:436` |
 | Réduire les animations | `DrivyMotion.*` renvoie `nil` : plus d’échelle d’appui ni d’animation de contexte ; le panneau de signalement se ferme après 120 ms au lieu de 280 ms. L’état change quand même, immédiatement. | `DrivyTheme.swift:72-78`, `SchoolLiveObservationSheet.swift:56` |
@@ -434,7 +437,7 @@ Un contrôle réagit sans changer d’identité : même taille de libellé, mêm
 ## Rédaction
 
 - Français, phrases courtes ; identifiants de code en anglais. Heures en 24 h, dates explicites avec capitale initiale seule (`capitalizedFirst`), montants en CHF.
-- Moniteur : vouvoiement et verbes à l’infinitif sur les boutons. Élève : même ton dans l’app actuelle.
+- Tutoiement pour le moniteur comme pour l’élève (décision du 29/09/2026), verbes à l’infinitif sur les boutons. Les messages d’erreur des clients `School*API`, `IdentityVault` et des workspaces sont au tutoiement (« Vérifie ta connexion et réessaie. »).
 - Boutons : un verbe précis et son objet (« Terminer la leçon », « Planifier une leçon », « Inviter un élève », « Démarrer le trajet », « Créer le code »). « Fermer » pour quitter une feuille sans effet ; « Annuler » dans une feuille qui a une saisie ; « Réessayer » pour reprendre une lecture échouée ; « Renvoyer la même demande » pour un résultat inconnu. Pas de « OK » ni « Valider » quand un verbe précis existe ; « Terminé » reste réservé au bouton de confirmation de la barre système.
 - Abandon d’une saisie : « Quitter sans enregistrer », seul libellé (décision du 29/09/2026). Renvoi d’une demande incertaine : « Renvoyer la même demande ».
 - Chargement : nom de l’opération au présent progressif avec points de suspension (« Chargement de l’agenda… »).

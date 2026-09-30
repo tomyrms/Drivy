@@ -7,15 +7,15 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
     case permitReviewRequired
     var errorDescription: String? {
         switch self {
-        case .unauthorized: "Reconnectez-vous pour retrouver cette leçon."
-        case .forbidden: "Votre accès à cette leçon a changé. Actualisez votre école."
-        case .unavailable: "L’école est momentanément inaccessible. Votre demande en attente reste conservée."
+        case .unauthorized: "Reconnecte-toi pour retrouver cette leçon."
+        case .forbidden: "Ton accès à cette leçon a changé. Actualise ton école."
+        case .unavailable: "L’école est momentanément inaccessible. Ta demande en attente reste conservée."
         case .invalidResponse: "Les informations reçues ne peuvent pas être vérifiées."
-        case .notFound: "Ce contenu n’est pas disponible avec vos droits actuels."
-        case .conflict: "Cette version a changé. Rechargez les informations avant de confirmer."
+        case .notFound: "Ce contenu n’est pas disponible avec tes droits actuels."
+        case .conflict: "Cette version a changé. Recharge les informations avant de confirmer."
         case .rejected(let message): message
-        case .uncertain: "La confirmation reste à vérifier. Conservez cette demande et vérifiez son résultat avant toute nouvelle modification."
-        case .permitReviewRequired: "Vous n’êtes pas habilité à contrôler ce permis. Précisez la situation du permis."
+        case .uncertain: "La confirmation reste à vérifier. Conserve cette demande et vérifie son résultat avant toute nouvelle modification."
+        case .permitReviewRequired: "Tu n’as pas le droit de contrôler ce permis. Précise la situation du permis."
         }
     }
     var permitsFreshCorrection: Bool { switch self { case .conflict, .rejected, .permitReviewRequired: true; default: false } }
@@ -205,31 +205,31 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         if status == 401 { return .unauthorized }; if status == 403 { return .forbidden }; if status == 404 { return .notFound }
         if (status == 412 && code == "VERSION_CONFLICT") || (status == 409 && code == "PUBLICATION_VERSION_CONFLICT") { return .conflict }
         let messages = [
-            "REPORT_INCOMPLETE": "Complétez le travail réalisé, le constat et la prochaine étape avant de publier.",
-            "ANOMALY_REASON_REQUIRED": "Expliquez le constat avec un contrôle de permis non confirmé et les éventuels écarts horaires.",
+            "REPORT_INCOMPLETE": "Complète le travail réalisé, le constat et la prochaine étape avant de publier.",
+            "ANOMALY_REASON_REQUIRED": "Explique le constat avec un contrôle de permis non confirmé et les éventuels écarts horaires.",
             "INVALID_ACTUAL_INTERVAL": "La fin réelle doit suivre le début et ne pas être future.",
-            "LESSON_NOT_STARTED": "La leçon n’a pas encore commencé. Terminez-la au plus tôt 15 minutes avant son début.",
+            "LESSON_NOT_STARTED": "La leçon n’a pas encore commencé. Termine-la au plus tôt 15 minutes avant son début.",
             "LESSON_NOT_ENDED": "Une absence se note après la fin prévue du rendez-vous.",
-            "CORRECTION_REASON_REQUIRED": "Expliquez la correction avant de publier une nouvelle version.",
-            "CURRICULUM_VERSION_MISMATCH": "Le référentiel de cette formation a changé. Relisez les compétences.",
-            "LESSON_CLOSED": "La leçon possède déjà un résultat. Rechargez-la pour retrouver le bilan.",
+            "CORRECTION_REASON_REQUIRED": "Explique la correction avant de publier une nouvelle version.",
+            "CURRICULUM_VERSION_MISMATCH": "Le référentiel de cette formation a changé. Relis les compétences.",
+            "LESSON_CLOSED": "La leçon possède déjà un résultat. Recharge-la pour retrouver le bilan.",
             "LESSON_NOT_COMPLETED": "Le constat de réalisation doit être enregistré avant ce bilan.",
-            "ENTITLEMENT_NOT_READY": "La consommation du pack doit être disponible avant ce constat. Contactez l’école.",
+            "ENTITLEMENT_NOT_READY": "La consommation du pack doit être disponible avant ce constat. Contacte l’école.",
             "WISH_LESSON_INVALID": "Le souhait doit concerner une leçon planifiée de cette formation.",
             "ATTACHMENT_NOT_READY": "Cette pièce n’est pas encore disponible pour le bilan.",
             "OBSERVATION_PUBLICATION_NOT_READY": "Cette sélection d’annotations nécessite encore une qualification avant partage.",
-            "OBSERVATION_NOT_IN_LESSON": "Cette observation n’appartient plus à la leçon. Actualisez.",
-            "CATEGORY_MISMATCH": "La catégorie de cette formation a changé. Actualisez la leçon.",
-            "TRAINING_NOT_ACTIVE": "La formation n’est plus en cours. Précisez la situation du permis.",
-            "PERMIT_EXPIRED": "Ce permis est échu. Précisez la situation du permis.",
-            "INVALID_REQUEST": "Vérifiez les informations saisies et leurs longueurs."
+            "OBSERVATION_NOT_IN_LESSON": "Cette observation n’appartient plus à la leçon. Actualise.",
+            "CATEGORY_MISMATCH": "La catégorie de cette formation a changé. Actualise la leçon.",
+            "TRAINING_NOT_ACTIVE": "La formation n’est plus en cours. Précise la situation du permis.",
+            "PERMIT_EXPIRED": "Ce permis est échu. Précise la situation du permis.",
+            "INVALID_REQUEST": "Vérifie les informations saisies et leurs longueurs."
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }
         // Tout autre refus 4xx motivé par l’école est définitif : son explication (en français) est affichée.
         // Un identifiant d’opération déjà utilisé reste une incertitude à vérifier.
         if (400...499).contains(status), status != 429, let code, code != "IDEMPOTENCY_MISMATCH" {
             let text = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return .rejected(text.isEmpty || text.count > 300 ? "L’école a refusé cette demande. Vérifiez les informations puis réessayez." : text)
+            return .rejected(text.isEmpty || text.count > 300 ? "L’école a refusé cette demande. Vérifie les informations puis réessaie." : text)
         }
         if code == "IDEMPOTENCY_MISMATCH" { return .uncertain }
         return status >= 500 || status == 429 ? .unavailable : .invalidResponse

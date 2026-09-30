@@ -470,9 +470,16 @@ struct SchoolErrorNotice: View {
     var retry: (() -> Void)? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .font(.subheadline)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.subheadline)
+                    .accessibilityHidden(true)
+                Text(message)
+                    .font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .accessibilityElement(children: .combine)
             if let retry { DrivyRetryButton(action: retry) }
         }
         .foregroundStyle(DrivyTheme.danger)

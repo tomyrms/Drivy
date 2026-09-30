@@ -290,7 +290,7 @@ struct SchoolCaptureStartReview: Identifiable {
             let fresh = try await freshStartReview(resuming: review.pendingMutation)
             guard isCurrent(request) else { return false }
             guard sameStartReview(review, fresh) else {
-                throw SchoolCaptureFailure.rejected("La préparation a changé. Revenez à la leçon et relisez les informations avant de confirmer.")
+                throw SchoolCaptureFailure.rejected("La préparation a changé. Reviens à la leçon et relis les informations avant de confirmer.")
             }
             guard diagnosticIsAvailable else { throw SchoolCaptureStorageFailure.alreadyActive }
             let local = try diagnosticSource().diagnosticSnapshot()
@@ -371,7 +371,7 @@ struct SchoolCaptureStartReview: Identifiable {
             return quickFailure(errorMessage ?? "Seul le moniteur de cette leçon planifiée peut démarrer son trajet.")
         }
         guard collectionIsIntegrated, diagnosticIsAvailable else {
-            return quickFailure("Arrêtez le trajet en cours avant d’en démarrer un autre.")
+            return quickFailure("Arrête le trajet en cours avant d’en démarrer un autre.")
         }
         guard storageError == nil, pendingAssessments.isEmpty, pendingStarts.isEmpty, !hasOldScope else {
             return quickFailure("Une demande précédente est à vérifier avant un nouveau départ.")
@@ -412,7 +412,7 @@ struct SchoolCaptureStartReview: Identifiable {
             guard !invalidated else { return false }
             if isSampling {
                 closeDiagnostic()
-                return quickFailure("Aucune position GPS reçue. Placez-vous à découvert puis réessayez.")
+                return quickFailure("Aucune position GPS reçue. Place-toi à découvert puis réessaie.")
             }
             quickStep = "Vérification de l’appareil…"
             await assess()
@@ -498,7 +498,7 @@ struct SchoolCaptureStartReview: Identifiable {
             }
             assessmentID = body.deviceAssessmentId
         } else {
-            guard let assessment else { throw SchoolCaptureFailure.rejected("Vérifiez d’abord cet appareil auprès de l’école.") }
+            guard let assessment else { throw SchoolCaptureFailure.rejected("Vérifie d’abord cet appareil auprès de l’école.") }
             assessmentID = assessment.id
         }
         let checked = try await client.assessment(schoolID: scope.schoolID, deviceID: deviceID, assessmentID: assessmentID)

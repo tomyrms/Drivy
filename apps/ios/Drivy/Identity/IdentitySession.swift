@@ -189,7 +189,7 @@ final class IdentitySession: AccessTokenSource {
         isWorking = false
         errorMessage = nil
         do { try vault.clear() }
-        catch { errorMessage = "La session est fermée dans l’app, mais son effacement du Trousseau a échoué. Déverrouillez l’appareil puis réessayez de vous déconnecter." }
+        catch { errorMessage = "La session est fermée dans l’app, mais son effacement du Trousseau a échoué. Déverrouille l’appareil puis réessaie de te déconnecter." }
     }
 
     @discardableResult

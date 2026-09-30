@@ -191,13 +191,13 @@ import Foundation
         if status == 409, code == "OBSERVATION_REVIEW_REQUIRED" { return .reviewRequired }
         if status == 412, code == "VERSION_CONFLICT" { return .conflict }
         let messages = [
-            "ANCHOR_INVALID": "Cette position n’est plus admissible. Relisez et confirmez explicitement une observation sans position.",
+            "ANCHOR_INVALID": "Cette position n’est plus admissible. Relis et confirme explicitement une observation sans position.",
             "LESSON_STATE_CONFLICT": "Cette leçon est annulée ou non réalisée. L’observation ne peut pas y être ajoutée.",
-            "CURRICULUM_VERSION_MISMATCH": "Choisissez un thème du référentiel actuel de cette formation.",
-            "OBSERVATION_LIMIT_REACHED": "Cette leçon contient déjà 100 observations privées. Relisez-les avant un nouvel ajout.",
-            "OBSERVATION_TIME_CHANGED": "La qualification conserve l’instant du signalement. Corrigez l’heure explicitement en revue.",
-            "OBSERVATION_TIME_INVALID": "Relisez l’heure du signalement avant de confirmer.",
-            "INVALID_REQUEST": "Vérifiez les informations et les longueurs saisies."
+            "CURRICULUM_VERSION_MISMATCH": "Choisis un thème du référentiel actuel de cette formation.",
+            "OBSERVATION_LIMIT_REACHED": "Cette leçon contient déjà 100 observations privées. Relis-les avant un nouvel ajout.",
+            "OBSERVATION_TIME_CHANGED": "La qualification conserve l’instant du signalement. Corrige l’heure explicitement en revue.",
+            "OBSERVATION_TIME_INVALID": "Relis l’heure du signalement avant de confirmer.",
+            "INVALID_REQUEST": "Vérifie les informations et les longueurs saisies."
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }
         if code == "IDEMPOTENCY_MISMATCH" || code == "OBSERVATION_REMOVED" || status == 202 { return .uncertain }

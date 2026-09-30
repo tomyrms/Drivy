@@ -149,6 +149,6 @@ import Observation
 
     static func message(_ error: Error) -> String {
         if let failure = error as? SchoolJoinFailure { return failure.codeMessage }
-        return (error as? LocalizedError)?.errorDescription ?? "La demande n’a pas abouti. Réessayez."
+        return (error as? LocalizedError)?.errorDescription ?? "La demande n’a pas abouti. Réessaie."
     }
 }

@@ -172,23 +172,23 @@ enum SchoolInvitationFailure: Error, LocalizedError, Equatable {
     var provesNotCommitted: Bool { self == .deliveryUnavailable }
     var errorDescription: String? {
         switch self {
-        case .unauthorized: "Votre session a expiré. Connectez-vous à nouveau."
-        case .forbidden: "Vous n’avez plus accès aux invitations de cette école."
+        case .unauthorized: "Ta session a expiré. Connecte-toi à nouveau."
+        case .forbidden: "Tu n’as plus accès aux invitations de cette école."
         case .schoolInactive: "L’école doit être active pour gérer ses invitations."
         case .policyRequired: "La notice de l’école doit être adoptée avant d’inviter une personne."
         case .alreadyMember: "Cette personne appartient déjà à l’école. Aucun second dossier n’a été créé."
-        case .alreadyInvited: "Une invitation existe déjà pour cette adresse. Actualisez la liste avant de la renvoyer."
-        case .invitationUsed: "Cette invitation a déjà été acceptée. Actualisez la liste."
-        case .invitationRevoked: "Cette invitation a été révoquée. Actualisez la liste."
-        case .conflict: "L’invitation a changé. Actualisez-la avant de confirmer à nouveau."
-        case .rejected: "La demande a été refusée. Vérifiez l’adresse, les rôles ou le motif."
-        case .invalidCursor: "La liste a changé. Actualisez-la pour continuer."
+        case .alreadyInvited: "Une invitation existe déjà pour cette adresse. Actualise la liste avant de la renvoyer."
+        case .invitationUsed: "Cette invitation a déjà été acceptée. Actualise la liste."
+        case .invitationRevoked: "Cette invitation a été révoquée. Actualise la liste."
+        case .conflict: "L’invitation a changé. Actualise-la avant de confirmer à nouveau."
+        case .rejected: "La demande a été refusée. Vérifie l’adresse, les rôles ou le motif."
+        case .invalidCursor: "La liste a changé. Actualise-la pour continuer."
         case .unavailable: "Connexion indisponible ou réponse non reçue. Aucune confirmation ne peut être donnée."
-        case .deliveryUnavailable: "L’invitation par e-mail n’est pas disponible. Invitez l’élève avec un code."
+        case .deliveryUnavailable: "L’invitation par e-mail n’est pas disponible. Invite l’élève avec un code."
         case .invalidResponse: "La réponse n’a pas pu être vérifiée. Le résultat n’est pas confirmé."
-        case .pendingCommand: "Une demande attend sa confirmation. Vérifiez son résultat avant une autre action."
+        case .pendingCommand: "Une demande attend sa confirmation. Vérifie son résultat avant une autre action."
         case .operationUnknown: "Le résultat n’a pas encore pu être établi. La demande reste conservée sur cet appareil."
-        case .trainingInvalid: "Cette formation n’est plus ouverte. Choisissez-en une autre."
+        case .trainingInvalid: "Cette formation n’est plus ouverte. Choisis-en une autre."
         }
     }
 }

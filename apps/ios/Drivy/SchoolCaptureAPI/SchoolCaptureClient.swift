@@ -7,19 +7,19 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .unauthorized: "Reconnectez-vous pour retrouver cette séance."
+        case .unauthorized: "Reconnecte-toi pour retrouver cette séance."
         case .forbidden: "L’accès à cette capture n’est plus autorisé."
-        case .notFound: "Cette capture n’est pas disponible avec vos droits actuels."
+        case .notFound: "Cette capture n’est pas disponible avec tes droits actuels."
         case .choiceNotSet: "Le choix de l’élève concernant le GPS n’est pas renseigné."
         case .unavailable: "L’école est momentanément inaccessible. Les données déjà enregistrées restent conservées."
         case .invalidResponse: "L’autorisation de capture ne peut pas être vérifiée."
         case .expired: "L’autorisation GPS a expiré. La leçon peut continuer sans GPS."
-        case .changed: "La capture a changé. Rechargez son état avant de continuer."
+        case .changed: "La capture a changé. Recharge son état avant de continuer."
         case .rejected(let message): message
         case .finalizationRefused(let code):
             code == "CAPTURE_INCOMPLETE"
-                ? "La synchronisation est incomplète. Réessayez lorsque la connexion est disponible."
-                : "Le trajet a changé pendant la synchronisation. Réessayez."
+                ? "La synchronisation est incomplète. Réessaie lorsque la connexion est disponible."
+                : "Le trajet a changé pendant la synchronisation. Réessaie."
         }
     }
 }
@@ -325,17 +325,17 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
 
     private static let rejections: [String: String] = [
         "DEVICE_NOT_QUALIFIED": "Le GPS de cet appareil doit encore être vérifié pour cette version. La leçon reste disponible sans GPS.",
-        "DEVICE_ASSESSMENT_SUPERSEDED": "Un diagnostic plus récent existe. Relisez-le avant de démarrer.",
-        "DEVICE_ASSESSMENT_EXPIRED": "Le diagnostic a expiré. Vérifiez à nouveau cet appareil.",
+        "DEVICE_ASSESSMENT_SUPERSEDED": "Un diagnostic plus récent existe. Relis-le avant de démarrer.",
+        "DEVICE_ASSESSMENT_EXPIRED": "Le diagnostic a expiré. Vérifie à nouveau cet appareil.",
         "RECORDING_NOTICE_NOT_READY": "L’école doit d’abord adopter sa notice de localisation.",
         "RECORDING_NOT_ALLOWED": "Le choix actuel de l’élève ne permet pas le GPS. La leçon peut continuer sans localisation.",
         "RECORDING_CHOICE_PROTECTED": "Le refus de l’élève ne peut pas être remplacé par un accord verbal.",
-        "RECORDING_NOTICE_CHANGED": "La notice a changé. Relisez-la avant de confirmer le choix GPS.",
-        "RECORDING_CHOICE_CHANGED": "Le choix de l’élève a changé. Relisez-le avant de démarrer.",
+        "RECORDING_NOTICE_CHANGED": "La notice a changé. Relis-la avant de confirmer le choix GPS.",
+        "RECORDING_CHOICE_CHANGED": "Le choix de l’élève a changé. Relis-le avant de démarrer.",
         "CAPTURE_DISABLED": "Le GPS scolaire n’est pas activé. La leçon reste disponible sans GPS.",
         "CAPTURE_START_WINDOW": "Le GPS peut démarrer à proximité de l’horaire prévu de cette leçon.",
         "CAPTURE_ALREADY_ACTIVE": "Un trajet est déjà ouvert pour cette leçon, ce moniteur ou cet appareil.",
-        "CAPTURE_INCOMPLETE": "La synchronisation est incomplète. Réessayez lorsque la connexion est disponible.",
+        "CAPTURE_INCOMPLETE": "La synchronisation est incomplète. Réessaie lorsque la connexion est disponible.",
         "CAPTURE_MANIFEST_MISMATCH": "Les lots et le manifeste ne correspondent pas. Les données locales restent conservées.",
         "CHUNK_HASH_MISMATCH": "Le contenu du lot ne correspond pas à son empreinte. Le transfert est interrompu.",
         "CHUNK_CUTOFF_REJECTED": "Ce lot dépasse la fin de collecte autorisée et ne peut pas être envoyé.",

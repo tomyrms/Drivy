@@ -37,7 +37,7 @@ struct SchoolPlanningView: View {
     }
 
     @ViewBuilder private var bookingFields: some View {
-        Section("Élève et formation") {
+        Section {
             if model.originalLesson == nil {
                 Picker("Élève", selection: Binding(get: { model.learnerID }, set: { id in
                     if let id { Task { await model.selectLearner(id) } }
@@ -64,7 +64,7 @@ struct SchoolPlanningView: View {
                     LabeledContent("Formation") { Text("Permis \(training.categoryCode)").foregroundStyle(DrivyTheme.muted) }
                 }
             }
-        }
+        } header: { Text("Élève et formation").drivyFormSectionHeader() }
             .drivyFormRows()
         if model.trainingID != nil {
             scheduleFields
@@ -76,7 +76,7 @@ struct SchoolPlanningView: View {
                         LabeledContent("Durée conservée") { Text("\(lesson.durationMinutes) min").monospacedDigit().foregroundStyle(DrivyTheme.muted) }
                         LabeledContent("Prix conservé") { Text(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot)).monospacedDigit().foregroundStyle(DrivyTheme.muted) }
                     }
-                } header: { Text("Durée et prix") }
+                } header: { Text("Durée et prix").drivyFormSectionHeader() }
                     .drivyFormRows()
             }
             if model.originalLesson == nil || model.changesCommercialTerms { commercialFields }
@@ -124,7 +124,7 @@ struct SchoolPlanningView: View {
                     }
                 }
             }
-        } header: { Text("Le rendez-vous") }
+        } header: { Text("Le rendez-vous").drivyFormSectionHeader() }
             .drivyFormRows()
         .disabled(!model.canMutate)
     }
@@ -168,7 +168,7 @@ struct SchoolPlanningView: View {
                     Text(policy.cancellationPolicyText).font(.subheadline).textSelection(.enabled)
                 }
             }
-        } header: { Text("Le tarif") }
+        } header: { Text("Le tarif").drivyFormSectionHeader() }
             .drivyFormRows()
         .disabled(!model.canMutate)
     }
@@ -181,7 +181,7 @@ struct SchoolPlanningView: View {
                 TextField(model.changesCommercialTerms ? "Motif du changement" : "Motif facultatif", text: $model.reason, axis: .vertical).lineLimit(2...4)
                 Toggle("Le nouvel horaire est convenu", isOn: $model.agreementConfirmed)
             }
-        } header: { Text("Vérification") }
+        } header: { Text("Vérification").drivyFormSectionHeader() }
             .drivyFormRows()
     }
 
@@ -247,7 +247,7 @@ struct SchoolPlanningView: View {
     }
     @ViewBuilder private var cancellationFields: some View {
         if let lesson = model.originalLesson {
-            Section("Leçon concernée") {
+            Section {
                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                     Text(SchoolPlanningFormat.interval(lesson.plannedStart, lesson.plannedEnd, zone: lesson.timeZone))
                         .font(.headline.monospacedDigit())
@@ -256,7 +256,7 @@ struct SchoolPlanningView: View {
                 .padding(.vertical, DrivySpacing.xxs)
                 .accessibilityElement(children: .combine)
                 lesson.drivyState.badge
-            }
+            } header: { Text("Leçon concernée").drivyFormSectionHeader() }
                 .drivyFormRows()
         }
         Section {
@@ -272,7 +272,7 @@ struct SchoolPlanningView: View {
             if model.reason.count > 1000 {
                 DrivyFormMessage(text: "Raccourcis la précision à 1 000 caractères.", tone: .danger)
             }
-        } header: { Text("Motif d’annulation") }
+        } header: { Text("Motif d’annulation").drivyFormSectionHeader() }
             .drivyFormRows()
         Section {
             Button(role: .destructive) { confirmsCancellation = true } label: {

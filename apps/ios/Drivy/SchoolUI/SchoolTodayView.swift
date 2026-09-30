@@ -20,7 +20,9 @@ struct SchoolTodayView: View {
     @State private var opened: OpenedLesson?
     @State private var showsDay = false
     @State private var cardHeight: CGFloat = 0
-    @State private var camera: MapCameraPosition = .userLocation(fallback: .region(JourneyMapRegion.overview))
+    /// Lu à chaque rendu (la minuterie de la vue le rafraîchit) : sans autorisation, pas de carte inventée.
+    @State private var locationManager = CLLocationManager()
+    @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
 
     private struct OpenedLesson: Identifiable {
         let lesson: SchoolLesson
@@ -100,10 +102,20 @@ struct SchoolTodayView: View {
         }
     }
 
-    private var map: some View {
-        Map(position: $camera) { UserAnnotation() }
-            .mapStyle(.standard(pointsOfInterest: .excludingAll))
-            .mapControls { MapUserLocationButton() }
+    private var locationPermitted: Bool {
+        locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways
+    }
+
+    /// Sans position autorisée, un état honnête plutôt qu’une vue du pays entier.
+    @ViewBuilder private var map: some View {
+        if locationPermitted {
+            Map(position: $camera) { UserAnnotation() }
+                .mapStyle(.standard(pointsOfInterest: .excludingAll))
+                .mapControls { MapUserLocationButton() }
+        } else {
+            DrivyMapPlaceholder(title: "Position indisponible",
+                message: "Autorise la localisation de Drivy dans Réglages pour voir la carte.")
+        }
     }
 
     /// Panneau de la journée : la leçon qui compte maintenant et son action dominante, puis le reste du jour.

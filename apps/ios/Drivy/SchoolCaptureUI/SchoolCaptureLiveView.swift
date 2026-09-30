@@ -477,7 +477,7 @@ private struct SchoolCaptureLiveMap: View {
     let segments: [SchoolCaptureMapSegment]
     let resetCameraID: UUID
     @Binding var followsPosition: Bool
-    @State private var camera: MapCameraPosition = .region(JourneyMapRegion.overview)
+    @State private var camera: MapCameraPosition = .automatic
 
     private var count: Int { segments.reduce(0) { $0 + $1.measurements.count } }
     private var last: SchoolCaptureMeasurement? { segments.last(where: { !$0.measurements.isEmpty })?.measurements.last }
@@ -518,7 +518,7 @@ private struct SchoolCaptureLiveMap: View {
         }
         .onChange(of: resetCameraID) { _, _ in
             if followsPosition { followPoint() }
-            else { camera = count > 0 ? .automatic : .region(JourneyMapRegion.overview) }
+            else { camera = .automatic }
         }
         .accessibilityLabel("Carte du trajet enregistré")
         .accessibilityValue("\(count) positions enregistrées")

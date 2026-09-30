@@ -187,12 +187,12 @@ import Observation
     }
 
     private static func message(_ error: Error) -> String {
-        if error is CancellationError { return "Le chargement a été interrompu. Réessayez." }
+        if error is CancellationError { return "Le chargement a été interrompu. Réessaie." }
         switch error as? SchoolCaptureFailure {
-        case .unauthorized: return "Reconnectez-vous pour retrouver vos trajets."
-        case .forbidden, .notFound: return "Vos accès ont changé. Actualisez votre école."
-        case .unavailable: return "Connexion impossible. Vérifiez le réseau puis réessayez."
-        default: return "Les trajets n’ont pas pu être chargés. Réessayez."
+        case .unauthorized: return "Reconnecte-toi pour retrouver tes trajets."
+        case .forbidden, .notFound: return "Tes accès ont changé. Actualise ton école."
+        case .unavailable: return "Connexion impossible. Vérifie le réseau puis réessaie."
+        default: return "Les trajets n’ont pas pu être chargés. Réessaie."
         }
     }
 

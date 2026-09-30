@@ -71,7 +71,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
             competenciesMessage = values.isEmpty ? "Aucune compétence n’est disponible pour cette formation." : nil
         } catch {
             guard !stopped else { return }
-            competenciesMessage = "Les thèmes n’ont pas pu être chargés. Réessayez pour choisir une observation précise."
+            competenciesMessage = "Les thèmes n’ont pas pu être chargés. Réessaie pour choisir une observation précise."
         }
     }
 
@@ -102,7 +102,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
             Task { await retry() }
             return true
         } catch {
-            errorMessage = "L’observation n’a pas été enregistrée. Vérifiez les demandes en attente de la leçon."
+            errorMessage = "L’observation n’a pas été enregistrée. Vérifie les demandes en attente de la leçon."
             return false
         }
     }
@@ -133,7 +133,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
                 // Même un refus conserve le geste pour une relecture explicite depuis la leçon.
                 errorMessage = "Observation conservée sur cet appareil. Son envoi reste à confirmer."
                 if error as? SchoolObservationFailure == .unauthorized || error as? SchoolObservationFailure == .forbidden {
-                    stop(); errorMessage = "Votre accès a changé. L’observation reste conservée dans le compte d’origine."
+                    stop(); errorMessage = "Ton accès a changé. L’observation reste conservée dans le compte d’origine."
                 }
             }
         }

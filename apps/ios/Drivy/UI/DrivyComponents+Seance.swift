@@ -590,7 +590,7 @@ struct DrivyReplayTransport: View {
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: DrivySpacing.xs) {
+            HStack(spacing: DrivySpacing.xxs) {
                 speedButton
                 Spacer(minLength: 0)
                 playbackButtons
@@ -614,7 +614,7 @@ struct DrivyReplayTransport: View {
             Button(action: cycleSpeed) {
                 Text("×\(speed)")
                     .font(.headline.monospacedDigit())
-                    .frame(width: 52, height: 48)
+                    .frame(width: 48, height: 48)
                     .background(DrivyTheme.surfaceMuted, in: Capsule())
                     .contentShape(Capsule())
             }
@@ -632,7 +632,7 @@ struct DrivyReplayTransport: View {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     .font(.title2)
                     .foregroundStyle(DrivyTheme.onAccent)
-                    .frame(width: 64, height: 64)
+                    .frame(width: 60, height: 60)
                     .background(DrivyTheme.accent, in: Circle())
                     .contentShape(Circle())
             }
@@ -649,14 +649,14 @@ struct DrivyReplayTransport: View {
                 Button(action: openList) {
                     Image(systemName: "list.bullet")
                         .font(.headline)
-                        .frame(width: 52, height: 48)
+                        .frame(width: 48, height: 48)
                         .background(DrivyTheme.surfaceMuted, in: Capsule())
                         .contentShape(Capsule())
                 }
                 .accessibilityLabel("Toutes les observations")
                 .accessibilityIdentifier("replay-list")
             } else {
-                Spacer().frame(width: 52, height: 48)
+                Spacer().frame(width: 48, height: 48)
             }
     }
 
@@ -665,7 +665,7 @@ struct DrivyReplayTransport: View {
             Image(systemName: symbol)
                 .font(.headline)
                 .foregroundStyle(isEnabled ? DrivyTheme.text : DrivyTheme.disabledText)
-                .frame(width: 52, height: 52)
+                .frame(width: 48, height: 48)
                 .background(isEnabled ? DrivyTheme.surfaceMuted : DrivyTheme.disabledSurface, in: Circle())
                 .overlay { if !isEnabled { Circle().strokeBorder(DrivyTheme.border, lineWidth: 1) } }
                 .contentShape(Circle())

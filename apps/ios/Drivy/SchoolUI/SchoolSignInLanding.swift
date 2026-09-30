@@ -42,7 +42,7 @@ struct SchoolSignInLanding: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if isConfigured {
-                DrivyStickyActionBar {
+                DrivyStickyActionBar(maxWidth: DrivyLayout.narrowColumn) {
                     Button(action: signIn) {
                         DrivyBusyLabel(title: "Se connecter", busyTitle: "Connexion…", isBusy: isWorking)
                     }

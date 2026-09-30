@@ -120,7 +120,7 @@ struct AppLockView: View {
         }
         .background(DrivyTheme.surface)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            DrivyStickyActionBar {
+            DrivyStickyActionBar(maxWidth: DrivyLayout.narrowColumn) {
                 Button {
                     Task { await lock.unlock() }
                 } label: {

@@ -21,7 +21,7 @@ struct SchoolCaptureUploadsSection: View {
                     .listRowBackground(Color.clear)
             }
         } header: {
-            Text("À envoyer")
+            Text("À envoyer").drivyFormSectionHeader()
         }
     }
 }

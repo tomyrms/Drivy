@@ -210,7 +210,7 @@ import Observation
             }
             var revisionsRead: (value: [SchoolReportRevision]?, message: String?) = (nil, nil)
             if author || isOwn || current.roles.contains("INSTRUCTOR") {
-                revisionsRead = try await readSupplement(request: request, unavailable: "Les bilans partagés n’ont pas pu être chargés. Actualisez pour les retrouver.") {
+                revisionsRead = try await readSupplement(request: request, unavailable: "Les bilans partagés n’ont pas pu être chargés. Actualise pour les retrouver.") {
                     try await self.client.revisions(schoolID: self.scope.schoolID, lessonID: self.lessonID)
                 }
             }
@@ -225,7 +225,7 @@ import Observation
             }
             if author {
                 if lesson.status == "COMPLETED" {
-                    draftsRead = try await readSupplement(request: request, unavailable: "Le brouillon privé n’a pas pu être chargé. Actualisez avant de le modifier.") {
+                    draftsRead = try await readSupplement(request: request, unavailable: "Le brouillon privé n’a pas pu être chargé. Actualise avant de le modifier.") {
                         let values = try await self.client.drafts(schoolID: self.scope.schoolID, lessonID: self.lessonID)
                         guard values.count <= 1, values.allSatisfy({ $0.authorMembershipId == current.membershipId }) else { throw SchoolReportFailure.invalidResponse }
                         return values
@@ -246,11 +246,11 @@ import Observation
                 accountRead = try await readSupplement(request: request, unavailable: "Le solde n’a pas pu être chargé.") {
                     try await self.client.account(schoolID: self.scope.schoolID, lessonID: self.lessonID)
                 }
-                capturesRead = try await readSupplement(request: request, unavailable: "Les trajets n’ont pas pu être chargés. Actualisez pour ouvrir le replay.") {
+                capturesRead = try await readSupplement(request: request, unavailable: "Les trajets n’ont pas pu être chargés. Actualise pour ouvrir le replay.") {
                     try await self.client.agenda.captureClient.lessonCaptures(schoolID: self.scope.schoolID, lessonID: self.lessonID)
                 }
                 if let capture = capturesRead.value?.last(where: { SchoolTripsWorkspace.isReplayable($0) }) {
-                    trackRead = try await readSupplement(request: request, unavailable: "L’aperçu du trajet n’a pas pu être chargé. Vous pouvez ouvrir le replay pour réessayer.") {
+                    trackRead = try await readSupplement(request: request, unavailable: "L’aperçu du trajet n’a pas pu être chargé. Tu peux ouvrir le replay pour réessayer.") {
                         try await self.client.agenda.captureClient.replayTrack(schoolID: self.scope.schoolID, captureID: capture.id)
                     }
                 }
@@ -311,7 +311,7 @@ import Observation
             information = notes.isEmpty ? nil : notes.joined(separator: "\n\n")
             isLoading = false; needsReload = conflict
             if conflict {
-                errorMessage = "Votre saisie est conservée. Le contenu enregistré a changé ou n’a pas pu être relu. Copiez votre texte si nécessaire, puis actualisez avant d’enregistrer."
+                errorMessage = "Ta saisie est conservée. Le contenu enregistré a changé ou n’a pas pu être relu. Copie ton texte si nécessaire, puis actualise avant d’enregistrer."
             }
             if author && lesson.status == "PLANNED" { await refreshCaptures() }
         } catch { guard request == generation, !invalidated else { return }; isLoading = false; fail(error) }
@@ -430,7 +430,7 @@ import Observation
         do {
             let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
             let body = try encoder.encode(value)
-            guard body.count <= 200_000 else { errorMessage = "Le contenu dépasse la taille de sauvegarde protégée. Raccourcissez les textes avant de confirmer."; return false }
+            guard body.count <= 200_000 else { errorMessage = "Le contenu dépasse la taille de sauvegarde protégée. Raccourcis les textes avant de confirmer."; return false }
             let command = PendingSchoolCommand(id: id, scope: scope, kind: kind, resourceVersion: version, createdAt: Date(), body: body, resourceID: resourceID, routeResourceID: routeID, expectedVersion: expectedVersion)
             try outbox.save(command); pending = command; pendingReviewed = true
         } catch { storageAccessible = false; fail(error); return false }

@@ -5,7 +5,7 @@ enum SchoolCaptureLocationFailure: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .permissionRequired: "La permission de localisation requise n’est pas disponible. La leçon reste accessible sans GPS."
-        case .servicesDisabled: "Activez le service de localisation dans Réglages > Confidentialité et sécurité > Service de localisation."
+        case .servicesDisabled: "Active le service de localisation dans Réglages > Confidentialité et sécurité > Service de localisation."
         case .invalidContext: "Le contexte de capture doit être vérifié avant de démarrer."
         case .invalidPolicy: "Les paramètres du collecteur ne sont pas valides."
         case .alreadyRunning: "Le collecteur doit être arrêté avant un nouveau départ."
@@ -145,15 +145,15 @@ enum SchoolCaptureLocationInterruption: Sendable {
     }
     var message: String {
         switch self {
-        case .permissionLost: "La localisation est désactivée. Vérifiez l’autorisation de Drivy dans Réglages."
-        case .precisionReduced: "La position précise a été désactivée. Réactivez-la dans les réglages de localisation de Drivy."
+        case .permissionLost: "La localisation est désactivée. Vérifie l’autorisation de Drivy dans Réglages."
+        case .precisionReduced: "La position précise a été désactivée. Réactive-la dans les réglages de localisation de Drivy."
         case .expired: "L’autorisation GPS est arrivée à sa fin. Les positions enregistrées sont conservées."
         case .scopeChanged: "Le compte ou les droits de l’école ont changé. L’enregistrement GPS est arrêté."
         case .signalLost: "Le signal GPS revient. L’enregistrement reprend dans un nouveau segment."
         case .clockChanged: "L’heure de l’appareil a changé. Le GPS est arrêté pour préserver l’heure des positions."
         case .systemPaused: "iOS a interrompu la localisation. Les positions enregistrées sont conservées."
         case .deviceFailure: "iOS n’a pas pu poursuivre la localisation. Les positions enregistrées sont conservées."
-        case .storageLow: "L’espace disponible est insuffisant. Le GPS est arrêté ; libérez de l’espace sur l’appareil."
+        case .storageLow: "L’espace disponible est insuffisant. Le GPS est arrêté ; libère de l’espace sur l’appareil."
         }
     }
 }
@@ -163,7 +163,7 @@ enum SchoolCaptureLocationSignal: Sendable, Equatable {
     var message: String? {
         switch self {
         case .acquiring, .receiving: nil
-        case .waitingForPosition: "Aucune position récente reçue. La recherche GPS continue ; placez l’appareil près d’une vitre ou à découvert."
+        case .waitingForPosition: "Aucune position récente reçue. La recherche GPS continue ; place l’appareil près d’une vitre ou à découvert."
         case .temporarilyUnavailable: "Le signal GPS est momentanément indisponible. La recherche continue."
         }
     }

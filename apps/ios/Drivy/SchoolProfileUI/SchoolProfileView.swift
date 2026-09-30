@@ -45,7 +45,7 @@ struct SchoolProfileView: View {
                     Section {
                         Label("Une photo est associée au dossier", systemImage: "person.crop.circle")
                             .foregroundStyle(DrivyTheme.muted)
-                    } header: { Text("Photo") }
+                    } header: { Text("Photo").drivyFormSectionHeader() }
                         .drivyFormRows()
                 }
                 readinessSection
@@ -119,7 +119,7 @@ struct SchoolProfileView: View {
                 profileField("Nom", text: $model.draft.lastName, identifier: "profile-last-name").textContentType(.familyName)
                 fieldExplanation(.lastName)
             } else { LabeledContent("Nom", value: profile.lastName ?? "À compléter") }
-        } header: { Text("Identité scolaire") }
+        } header: { Text("Identité scolaire").drivyFormSectionHeader() }
             .drivyFormRows()
         .disabled(!model.canMutate)
     }
@@ -138,7 +138,7 @@ struct SchoolProfileView: View {
                         .textContentType(.telephoneNumber).keyboardType(.phonePad)
                     fieldExplanation(.contactPhone)
                 }
-            } header: { Text("Contacts") }
+            } header: { Text("Contacts").drivyFormSectionHeader() }
                 .drivyFormRows()
             .disabled(!model.canMutate)
         }
@@ -153,7 +153,7 @@ struct SchoolProfileView: View {
             }
             .padding(.vertical, DrivySpacing.xxs)
             fieldExplanation(.birthDate)
-        } header: { Text("Date de naissance") }
+        } header: { Text("Date de naissance").drivyFormSectionHeader() }
             .drivyFormRows()
         .disabled(!model.canMutate)
     }
@@ -170,7 +170,7 @@ struct SchoolProfileView: View {
                     .textInputAutocapitalization(.characters).autocorrectionDisabled()
             }
             fieldExplanation(.postalAddress)
-        } header: { Text("Adresse postale") }
+        } header: { Text("Adresse postale").drivyFormSectionHeader() }
             .drivyFormRows()
         .disabled(!model.canMutate)
     }
@@ -204,7 +204,7 @@ struct SchoolProfileView: View {
                     .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
                 SchoolProfileBlockers(blockers: readiness.blockers)
-            } header: { Text("Prochaine étape") }
+            } header: { Text("Prochaine étape").drivyFormSectionHeader() }
                 .drivyFormRows()
         }
     }
@@ -229,7 +229,7 @@ struct SchoolProfileView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-        } header: { Text("Accueil dans l’école") }
+        } header: { Text("Accueil dans l’école").drivyFormSectionHeader() }
             .drivyFormRows()
     }
     /// Les deux explications (champs demandés, usage des données) forment un seul groupe :

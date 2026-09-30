@@ -188,7 +188,7 @@ struct DrivyDesignSystemGallery: View {
                 DrivyEmptyState(title: "État vide sans action",
                                 message: "Rien à faire ici pour le moment.")
                 DrivyLoadingState(title: "Chargement de l’agenda…")
-                SchoolErrorNotice(message: "L’agenda n’a pas pu être chargé. Vérifiez la connexion puis réessayez.") {}
+                SchoolErrorNotice(message: "L’agenda n’a pas pu être chargé. Vérifie la connexion puis réessaie.") {}
                 SchoolErrorNotice(message: "Erreur sans reprise possible.")
                 InlineErrorView(message: "L’observation n’a pas encore été enregistrée.") {}
             }

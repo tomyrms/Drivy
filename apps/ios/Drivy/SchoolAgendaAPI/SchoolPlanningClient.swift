@@ -39,12 +39,12 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
     case unauthorized, forbidden, unavailable, invalidResponse, notFound, conflict, rejected(String)
     var errorDescription: String? {
         switch self {
-        case .unauthorized: "Reconnectez-vous pour retrouver votre planning."
-        case .forbidden: "Vos accès ont changé. Actualisez votre école avant de continuer."
+        case .unauthorized: "Reconnecte-toi pour retrouver ton planning."
+        case .forbidden: "Tes accès ont changé. Actualise ton école avant de continuer."
         case .unavailable: "L’école est momentanément inaccessible. Toute demande en attente reste conservée."
         case .invalidResponse: "La réponse de l’école n’a pas pu être vérifiée."
-        case .notFound: "Cette information n’est pas disponible avec vos accès actuels."
-        case .conflict: "Ces informations ont changé. Rechargez-les avant de confirmer."
+        case .notFound: "Cette information n’est pas disponible avec tes accès actuels."
+        case .conflict: "Ces informations ont changé. Recharge-les avant de confirmer."
         case .rejected(let message): message
         }
     }
@@ -194,7 +194,7 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             "SLOT_UNAVAILABLE": "Ce créneau n’est pas disponible pour ce moniteur.",
             "RESERVATION_CONFLICT": "Le moniteur ou l’élève a déjà un rendez-vous sur ce créneau.",
             "SLOT_CONFLICT": "Le moniteur ou l’élève a déjà un rendez-vous sur ce créneau.",
-            "EXISTING_BOOKINGS": "Des leçons sont déjà planifiées sur cette période. Déplacez-les avant de fermer ce créneau.",
+            "EXISTING_BOOKINGS": "Des leçons sont déjà planifiées sur cette période. Déplace-les avant de fermer ce créneau.",
             "PROFILE_POLICY_NOT_READY": "L’administration doit publier les champs du profil avant de planifier.",
             "PROFILE_INCOMPLETE": "Le profil de l’élève doit être complété avant de planifier.",
             "PROFILE_ACTION_REQUIRED": "Le profil de l’élève doit être complété avant de planifier.",
@@ -205,23 +205,23 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             "COMMERCIAL_QUANTITY_MISMATCH": "La durée doit correspondre à la quantité de la prestation choisie.",
             "PRICE_OVERRIDE_REQUIRED": "Le prix doit correspondre à la prestation choisie.",
             "LESSON_COMMERCIAL_CHANGE_REQUIRED": "Un changement de durée exige un nouvel accord commercial.",
-            "INVALID_TIME_ZONE": "Utilisez le fuseau horaire de l’école affiché.",
-            "INVALID_SERVICE_PRODUCT": "Précisez la catégorie et la durée de cette prestation.",
+            "INVALID_TIME_ZONE": "Utilise le fuseau horaire de l’école affiché.",
+            "INVALID_SERVICE_PRODUCT": "Précise la catégorie et la durée de cette prestation.",
             "SCHOOL_NOT_ACTIVE": "L’école doit être active pour planifier une leçon.",
             "OFFERING_NOT_READY": "La formation nécessite une offre active et une procédure approuvée.",
-            "SCHOOL_POLICY_CHANGED": "La procédure de la formation a changé. Rechargez-la avant de confirmer.",
-            "COMMERCIAL_TERMS_NOT_APPROVED": "Choisissez des conditions commerciales approuvées.",
+            "SCHOOL_POLICY_CHANGED": "La procédure de la formation a changé. Recharge-la avant de confirmer.",
+            "COMMERCIAL_TERMS_NOT_APPROVED": "Choisis des conditions commerciales approuvées.",
             "LESSON_CLOSED": "Cette leçon est déjà terminée ou annulée.",
             "LESSON_STARTED": "Le début prévu est passé. Le moniteur doit maintenant constater la séance.",
-            "INVALID_INTERVAL": "Vérifiez les dates, les horaires et la durée de cette réservation.",
-            "INVALID_REQUEST": "Vérifiez les informations saisies avant de confirmer."
+            "INVALID_INTERVAL": "Vérifie les dates, les horaires et la durée de cette réservation.",
+            "INVALID_REQUEST": "Vérifie les informations saisies avant de confirmer."
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }
         // Tout autre refus 4xx motivé par l’école est définitif : son explication (en français) est affichée.
         // Un identifiant d’opération déjà utilisé reste à vérifier.
         if (400...499).contains(status), status != 429, let code, code != "IDEMPOTENCY_MISMATCH" {
             let text = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return .rejected(text.isEmpty || text.count > 300 ? "L’école a refusé cette demande. Vérifiez les informations puis réessayez." : text)
+            return .rejected(text.isEmpty || text.count > 300 ? "L’école a refusé cette demande. Vérifie les informations puis réessaie." : text)
         }
         return status >= 500 || status == 429 ? .unavailable : .invalidResponse
     }

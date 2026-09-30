@@ -85,7 +85,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             try await reloadQueue(request: request)
         } catch {
             guard request == generation, !invalidated else { return }
-            storageError = "Le journal protégé n’est pas accessible. Vous pouvez lire le choix, mais pas en enregistrer un nouveau."
+            storageError = "Le journal protégé n’est pas accessible. Tu peux lire le choix, mais pas en enregistrer un nouveau."
         }
         guard request == generation, !invalidated else { return }
         do {
@@ -126,7 +126,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             guard context.learner.id == review.learnerID, context.source == review.source,
                   sameNotice(context.notice, review.notice), context.choice == review.previousChoice else {
                 isBusy = false
-                errorMessage = "Les informations de l’école ou le choix ont changé. Consultez leur version actuelle, puis choisissez à nouveau."
+                errorMessage = "Les informations de l’école ou le choix ont changé. Consulte leur version actuelle, puis choisis à nouveau."
                 return false
             }
             guard !(review.status == .allowed && verbalAgreementIsProtected) else { throw SchoolCaptureFailure.forbidden }
@@ -246,7 +246,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
         do { try await reloadQueue(request: request) }
         catch {
             guard request == generation, !invalidated else { return }
-            storageError = "La sauvegarde de la demande doit être vérifiée. Rouvrez cet écran avant de continuer."
+            storageError = "La sauvegarde de la demande doit être vérifiée. Rouvre cet écran avant de continuer."
         }
     }
     private func sameNotice(_ lhs: SchoolRecordingNotice, _ rhs: SchoolRecordingNotice) -> Bool {

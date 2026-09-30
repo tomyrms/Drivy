@@ -101,15 +101,15 @@ enum SchoolConfigurationFailure: Error, LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .unauthorized: "Votre session a expiré. Connectez-vous à nouveau."
-        case .forbidden: "Vous n’avez plus accès à la configuration de cette école."
-        case .conflict: "La configuration a changé. Rechargez-la avant de confirmer à nouveau."
-        case .incomplete: "L’école n’est pas encore prête. Vérifiez les éléments à compléter."
-        case .rejected: "Cette modification a été refusée. Vérifiez les informations saisies."
-        case .unavailable: "La réponse n’a pas été reçue. Vérifiez le résultat avec la même demande avant de continuer."
+        case .unauthorized: "Ta session a expiré. Connecte-toi à nouveau."
+        case .forbidden: "Tu n’as plus accès à la configuration de cette école."
+        case .conflict: "La configuration a changé. Recharge-la avant de confirmer à nouveau."
+        case .incomplete: "L’école n’est pas encore prête. Vérifie les éléments à compléter."
+        case .rejected: "Cette modification a été refusée. Vérifie les informations saisies."
+        case .unavailable: "La réponse n’a pas été reçue. Vérifie le résultat avec la même demande avant de continuer."
         case .invalidResponse: "La réponse n’a pas pu être vérifiée. La modification n’est pas confirmée."
-        case .storage: "Le suivi protégé de la demande est inaccessible. Vérifiez son résultat avant une nouvelle modification."
-        case .pendingCommand: "Une demande attend encore sa confirmation. Vérifiez son résultat avant une autre modification."
+        case .storage: "Le suivi protégé de la demande est inaccessible. Vérifie son résultat avant une nouvelle modification."
+        case .pendingCommand: "Une demande attend encore sa confirmation. Vérifie son résultat avant une autre modification."
         case .operationUnknown: "Le résultat n’a pas encore pu être établi. La demande reste protégée sur cet appareil."
         }
     }

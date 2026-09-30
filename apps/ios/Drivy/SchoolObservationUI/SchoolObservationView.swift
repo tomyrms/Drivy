@@ -273,7 +273,7 @@ private struct SchoolObservationComposer: View {
                         .lineLimit(4...10).accessibilityIdentifier("school-observation-text")
                     Text("\(text.unicodeScalars.count) / 4 000").font(.caption.monospacedDigit())
                         .foregroundStyle(text.unicodeScalars.count > 4_000 ? DrivyTheme.danger : DrivyTheme.muted)
-                } header: { Text(editor.origin == "LIVE" ? "Précision facultative" : "Observation") }
+                } header: { Text(editor.origin == "LIVE" ? "Précision facultative" : "Observation").drivyFormSectionHeader() }
                   footer: {
                     if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let label = emptyNoteLabel {
                         Text("Libellé conservé sans commentaire : « \(label) ».")
@@ -354,7 +354,7 @@ private struct SchoolObservationComposer: View {
                     }.buttonStyle(.plain).accessibilityAddTraits(status == value ? [.isSelected] : [])
                 }
             }
-        } header: { Text("Compétence et appréciation") }
+        } header: { Text("Compétence et appréciation").drivyFormSectionHeader() }
             .drivyFormRows()
     }
 }
@@ -368,12 +368,12 @@ private struct SchoolObservationRemoval: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Observation concernée") { Text(observation.text).fixedSize(horizontal: false, vertical: true) }
+                Section { Text(observation.text).fixedSize(horizontal: false, vertical: true) } header: { Text("Observation concernée").drivyFormSectionHeader() }
                     .drivyFormRows()
                 Section {
                     TextField("Pourquoi retirer cette observation ?", text: $reason, axis: .vertical).lineLimit(3...6)
                     Toggle("Je confirme son retrait", isOn: $acknowledged)
-                } header: { Text("Motif du retrait") }
+                } header: { Text("Motif du retrait").drivyFormSectionHeader() }
                 footer: { Text("Ce retrait ne modifie pas un bilan déjà partagé.") }
                     .drivyFormRows()
                 if model.pending != nil {

@@ -108,6 +108,7 @@ struct DrivyLessonRow: View {
     var badge: DrivyStatusBadge? = nil
     var showsChevron = true
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         Group {
@@ -124,8 +125,19 @@ struct DrivyLessonRow: View {
                 HStack(alignment: .top, spacing: DrivySpacing.m) {
                     DrivyTimeColumn(start: start, end: end)
                         .fixedSize(horizontal: true, vertical: false)
-                    summary
-                    if let badge { badge }
+                    // Compact width: the badge sits under the summary so the lines
+                    // are not cut before « · »; the separator starts on the text column.
+                    if sizeClass == .compact {
+                        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                            summary
+                            if let badge { badge }
+                        }
+                        .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+                    } else {
+                        summary
+                            .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+                        if let badge { badge }
+                    }
                     if showsChevron {
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))

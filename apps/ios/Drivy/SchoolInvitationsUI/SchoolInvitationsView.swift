@@ -84,7 +84,7 @@ struct SchoolInvitationsView: View {
             if let invitation = model.selectedInvitation {
                 InvitationDetailView(model: model, invitation: invitation)
             } else {
-                ContentUnavailableView("Choisissez une invitation", systemImage: "envelope.open")
+                ContentUnavailableView("Choisis une invitation", systemImage: "envelope.open")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(DrivyTheme.surface)
             }
@@ -126,7 +126,7 @@ private struct InvitationPendingNotice: View {
     var body: some View {
         DrivyPendingRequest(
             message: pending.kind.isInvitation
-                ? "La demande est conservée sur cet appareil. Vérifiez son résultat avant une nouvelle action."
+                ? "La demande est conservée sur cet appareil. Vérifie son résultat avant une nouvelle action."
                 : "Une modification de l’école attend sa confirmation. La consultation des invitations reste disponible.",
             notes: notes,
             verify: { Task { await model.verifyPending() } }, canVerify: model.canVerifyPending,
@@ -135,8 +135,8 @@ private struct InvitationPendingNotice: View {
             retryIdentifier: "invitation-retry-command")
     }
     private var notes: [String] {
-        if pending.scope != model.scope { return ["Vos accès ont changé. La demande ne sera pas renvoyée avec ces nouveaux accès."] }
-        if model.pendingRequiresReview { return ["La demande nécessite une vérification par l’école. Conservez sa référence."] }
+        if pending.scope != model.scope { return ["Tes accès ont changé. La demande ne sera pas renvoyée avec ces nouveaux accès."] }
+        if model.pendingRequiresReview { return ["La demande nécessite une vérification par l’école. Conserve sa référence."] }
         return []
     }
 }
@@ -146,7 +146,7 @@ private struct InvitationCodeRecovery: View {
     @Bindable var model: SchoolInvitationWorkspace
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            Label("Le code n’a pas été reçu. Créez-en un nouveau : l’ancien ne fonctionnera plus.",
+            Label("Le code n’a pas été reçu. Crée-en un nouveau : l’ancien ne fonctionnera plus.",
                   systemImage: "exclamationmark.triangle.fill")
                 .font(.subheadline)
                 .foregroundStyle(DrivyTheme.warning)
@@ -323,20 +323,20 @@ struct InvitationCreationView: View {
                 }
                 if model.lacksOpenTraining {
                     Section {
-                        DrivyEmptyState(title: "Aucune formation ouverte", message: "Ouvrez-la sur le web pour inviter un élève.",
+                        DrivyEmptyState(title: "Aucune formation ouverte", message: "Ouvre-la sur le web pour inviter un élève.",
                             symbol: "steeringwheel")
                     }
                         .drivyFormRows()
                 }
                 if model.lacksInstructor {
                     Section {
-                        DrivyEmptyState(title: "Aucun moniteur actif", message: "Ajoutez un moniteur sur le web pour inviter un élève.",
+                        DrivyEmptyState(title: "Aucun moniteur actif", message: "Ajoute un moniteur sur le web pour inviter un élève.",
                             symbol: "person.crop.circle")
                     }
                         .drivyFormRows()
                 }
                 if model.carriesTraining && !model.offerings.isEmpty {
-                    Section("Permis") {
+                    Section {
                         ForEach(model.offerings) { offering in
                             Toggle(offeringLabel(offering), isOn: Binding(
                                 get: { model.selectedOfferingIDs.contains(offering.id) },
@@ -347,7 +347,7 @@ struct InvitationCreationView: View {
                                 .disabled(!model.selectedOfferingIDs.contains(offering.id) && model.selectedOfferingIDs.count >= 16)
                                 .accessibilityIdentifier("invitation-training-\(offering.id.uuidString)")
                         }
-                    }
+                    } header: { Text("Permis").drivyFormSectionHeader() }
                         .drivyFormRows()
                     .disabled(!model.mayEdit)
                 }
@@ -400,8 +400,8 @@ struct InvitationCreationView: View {
 
     private var hint: String? {
         guard model.mayEdit, model.creationOptionsError == nil else { return nil }
-        if !model.offerings.isEmpty && model.selectedOfferingIDs.isEmpty { return "Choisissez au moins un permis." }
-        if !model.instructors.isEmpty && model.selectedInstructorID == nil { return "Choisissez le moniteur." }
+        if !model.offerings.isEmpty && model.selectedOfferingIDs.isEmpty { return "Choisis au moins un permis." }
+        if !model.instructors.isEmpty && model.selectedInstructorID == nil { return "Choisis le moniteur." }
         return nil
     }
 
@@ -520,15 +520,15 @@ private struct InvitationRevocationView: View {
                 }
                 .listRowBackground(DrivyTheme.canvas)
                 .listRowSeparator(.hidden)
-                Section("Motif") {
-                    TextField(invitation.isCode ? "Pourquoi révoquer ce code ?" : "Expliquez pourquoi ce lien doit être révoqué",
+                Section {
+                    TextField(invitation.isCode ? "Pourquoi révoquer ce code ?" : "Explique pourquoi ce lien doit être révoqué",
                         text: $reason, axis: .vertical).lineLimit(3...8)
                         .accessibilityLabel("Motif de révocation").accessibilityIdentifier("invitation-revoke-reason")
                     if reason.unicodeScalars.count > 800 {
                         Text("\(reason.unicodeScalars.count)/1 000 caractères").font(.caption)
                             .foregroundStyle(reason.unicodeScalars.count > 1000 ? DrivyTheme.danger : DrivyTheme.muted)
                     }
-                }
+                } header: { Text("Motif").drivyFormSectionHeader() }
                 .disabled(!model.mayEdit)
                 .drivyFormRows()
                 Group {
@@ -547,7 +547,7 @@ private struct InvitationRevocationView: View {
             .frame(maxWidth: DrivyLayout.formColumn).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
-                DrivyFormActionBar(hint: reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Indiquez le motif de la révocation." : nil) {
+                DrivyFormActionBar(hint: reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Indique le motif de la révocation." : nil) {
                     Button(role: .destructive) { confirms = true } label: {
                         DrivyBusyLabel(title: invitation.isCode ? "Révoquer le code" : "Révoquer l’invitation", isBusy: model.isBusy)
                     }

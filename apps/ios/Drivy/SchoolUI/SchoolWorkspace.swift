@@ -398,8 +398,8 @@ final class SchoolWorkspace {
     }
 
     private func message(for error: any Error) -> String {
-        if error is CancellationError { return "Le chargement a été interrompu. Réessayez." }
-        return (error as? SchoolAPIError)?.localizedDescription ?? "La connexion a échoué. Vos données n’ont pas été modifiées."
+        if error is CancellationError { return "Le chargement a été interrompu. Réessaie." }
+        return (error as? SchoolAPIError)?.localizedDescription ?? "La connexion a échoué. Tes données n’ont pas été modifiées."
     }
 
     private static func merge<T: Identifiable>(_ newItems: [T], into items: inout [T]) where T.ID: Hashable {

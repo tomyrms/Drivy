@@ -106,7 +106,7 @@ struct DrivyEntityRow: View {
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(title)
                     .font(.headline)
-                    .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.text)
+                    .foregroundStyle(DrivyTheme.text)
                 if let meta, !meta.isEmpty {
                     Text(meta).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 }
@@ -212,6 +212,14 @@ extension View {
     /// a special fill (selection, danger, clear header) is set on its own row instead.
     func drivyFormRows(isSelected: Bool = false) -> some View {
         listRowBackground(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surface)
+    }
+
+    /// Header of a native Form or List section: subheadline semibold, muted, in
+    /// the written case (no system capitals). Apply it to the header Text.
+    func drivyFormSectionHeader() -> some View {
+        font(.subheadline.weight(.semibold))
+            .foregroundStyle(DrivyTheme.muted)
+            .textCase(nil)
     }
 }
 

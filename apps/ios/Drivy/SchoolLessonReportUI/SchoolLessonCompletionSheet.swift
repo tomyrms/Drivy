@@ -35,7 +35,7 @@ struct SchoolLessonCompletionSheet: View {
                     .drivyFormRows()
                 }
                 if model.completionNeedsReason {
-                    Section("Permis non présenté") {
+                    Section {
                         TextField("Situation du permis", text: $reason, axis: .vertical).lineLimit(2...6)
                             .disabled(isSubmitting)
                             .accessibilityLabel("Situation du permis")
@@ -43,7 +43,7 @@ struct SchoolLessonCompletionSheet: View {
                         if reason.unicodeScalars.count > 1_000 {
                             DrivyActionNote(text: "Raccourcis le motif à 1 000 caractères.", isError: true)
                         }
-                    }
+                    } header: { Text("Permis non présenté").drivyFormSectionHeader() }
                     .drivyFormRows()
                 }
             }

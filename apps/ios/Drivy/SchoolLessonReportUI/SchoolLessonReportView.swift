@@ -250,7 +250,7 @@ private struct SchoolLessonReportContent: View {
         headerSection
         Group {
             if model.needsReload && model.hasLocalEdits {
-                Section("Saisie conservée") { Text(model.retainedEditsText).textSelection(.enabled) }
+                Section { Text(model.retainedEditsText).textSelection(.enabled) } header: { Text("Saisie conservée").drivyFormSectionHeader() }
                     .drivyFormRows()
             }
             if model.pending != nil { pendingSection }
@@ -556,7 +556,7 @@ private struct SchoolLessonReportContent: View {
                 sharingToggle(Binding(get: { model.captureShared },
                     set: { shared in Task { await model.updateSharing(captureHidden: !shared) } }))
             }
-        } header: { Text("Trajet") }
+        } header: { Text("Trajet").drivyFormSectionHeader() }
             .drivyFormRows()
     }
 
@@ -589,7 +589,7 @@ private struct SchoolLessonReportContent: View {
                     .disabled(model.isBusy || model.isLoading)
                     .accessibilityIdentifier("lesson-private-observations")
             }
-        } header: { Text("Pendant la leçon") }
+        } header: { Text("Pendant la leçon").drivyFormSectionHeader() }
             .drivyFormRows()
     }
 
@@ -640,7 +640,7 @@ private struct SchoolLessonReportContent: View {
             reportField("Travail réalisé", text: $model.workedOn)
             reportField("À retenir", text: $model.observationText)
             reportField("Prochaine étape", text: $model.nextStep)
-        } header: { Text("Bilan") }
+        } header: { Text("Bilan").drivyFormSectionHeader() }
             .drivyFormRows()
         if !model.competencies.isEmpty {
             Section {
@@ -664,7 +664,7 @@ private struct SchoolLessonReportContent: View {
                             .accessibilityLabel("Situation, \(competency.displayLabel)")
                     }
                 }
-            } header: { Text("Compétences") }
+            } header: { Text("Compétences").drivyFormSectionHeader() }
                 .drivyFormRows()
         }
     }
@@ -688,12 +688,12 @@ private struct SchoolLessonReportContent: View {
                     DrivyCompetencyNote(label: model.competencies.first(where: { $0.id == observation.id })?.displayLabel ?? "Compétence",
                         level: observation.levelLabel, context: observation.context)
                 }
-            } header: { Text("Bilan") }
+            } header: { Text("Bilan").drivyFormSectionHeader() }
                 .drivyFormRows()
         } else if model.revisionsError == nil, !model.isLoading {
             Section {
                 Text("Ton moniteur n’a pas encore écrit le bilan.").foregroundStyle(DrivyTheme.muted)
-            } header: { Text("Bilan") }
+            } header: { Text("Bilan").drivyFormSectionHeader() }
                 .drivyFormRows()
         }
     }
@@ -732,14 +732,14 @@ private struct SchoolLessonReportContent: View {
                 Button("Enregistrer les objectifs") { Task { await model.savePreparation() } }
                     .disabled(!model.canMutate || !model.preparationValid || !model.preparationChanged)
             }
-        } header: { Text("Objectifs") }
+        } header: { Text("Objectifs").drivyFormSectionHeader() }
             .drivyFormRows()
     }
 
     private func goalsReader(_ goals: [SchoolLessonGoal]) -> some View {
         Section {
             ForEach(goals) { goal in Text(goal.label) }
-        } header: { Text("Objectifs") }
+        } header: { Text("Objectifs").drivyFormSectionHeader() }
             .drivyFormRows()
     }
 
@@ -752,7 +752,7 @@ private struct SchoolLessonReportContent: View {
             } else {
                 Text(wish.text)
             }
-        } header: { Text(model.isOwnLearner ? "Mon souhait" : "Souhait de l’élève") }
+        } header: { Text(model.isOwnLearner ? "Mon souhait" : "Souhait de l’élève").drivyFormSectionHeader() }
             .drivyFormRows()
     }
 

@@ -76,9 +76,9 @@ enum SchoolAgendaFailure: Error, LocalizedError {
     case unavailable, authentication, forbidden, invalidResponse
     var errorDescription: String? {
         switch self {
-        case .unavailable: "L’agenda est momentanément indisponible. Réessayez dans quelques instants."
-        case .authentication: "Reconnectez-vous pour retrouver votre agenda."
-        case .forbidden: "Votre accès à cet agenda a changé. Actualisez votre école."
+        case .unavailable: "L’agenda est momentanément indisponible. Réessaie dans quelques instants."
+        case .authentication: "Reconnecte-toi pour retrouver ton agenda."
+        case .forbidden: "Ton accès à cet agenda a changé. Actualise ton école."
         case .invalidResponse: "L’agenda n’a pas pu être chargé correctement."
         }
     }

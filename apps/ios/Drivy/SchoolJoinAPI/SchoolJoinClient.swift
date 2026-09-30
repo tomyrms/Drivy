@@ -76,20 +76,20 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
     case invalidCode, codeAttempts, notLinked
     case rejected(String)
     var errorDescription: String? { switch self {
-        case .invalidLink: "Ce lien d’invitation n’est pas reconnu. Copiez le lien complet reçu de votre école."
-        case .authentication: "Connectez-vous pour consulter cette invitation."
-        case .differentAccount: "Cette demande appartient à un autre compte. Votre session et sa référence restent conservées."
-        case .mismatch: "Cette invitation ne correspond pas à l’adresse vérifiée de votre compte, ou le lien a été remplacé. Connectez-vous avec le compte destinataire."
-        case .expired: "Cette invitation a expiré. Demandez un nouveau lien à votre école."
-        case .revoked: "L’école a retiré cette invitation. Demandez-lui un nouveau lien."
+        case .invalidLink: "Ce lien d’invitation n’est pas reconnu. Copie le lien complet reçu de ton école."
+        case .authentication: "Connecte-toi pour consulter cette invitation."
+        case .differentAccount: "Cette demande appartient à un autre compte. Ta session et sa référence restent conservées."
+        case .mismatch: "Cette invitation ne correspond pas à l’adresse vérifiée de ton compte, ou le lien a été remplacé. Connecte-toi avec le compte destinataire."
+        case .expired: "Cette invitation a expiré. Demande un nouveau lien à ton école."
+        case .revoked: "L’école a retiré cette invitation. Demande-lui un nouveau lien."
         case .used: "Cette invitation a déjà été acceptée par une autre personne."
         case .unavailable: "L’école est momentanément inaccessible. Toute demande envoyée reste conservée."
         case .invalidResponse: "La réponse de l’école ne peut pas être vérifiée."
-        case .storage: "La demande ne peut pas être conservée sur cet appareil. Déverrouillez-le puis réessayez."
-        case .pending: "Vérifiez la demande en attente avant d’accepter une autre invitation."
-        case .unknown: "La confirmation reste inconnue. Gardez cette référence et vérifiez la demande avant de la renvoyer."
-        case .invalidCode: "Ce code n’est pas valable. Vérifiez-le ou demandez un nouveau code à votre moniteur."
-        case .codeAttempts: "Trop d’essais. Patientez quelques minutes avant de réessayer."
+        case .storage: "La demande ne peut pas être conservée sur cet appareil. Déverrouille-le puis réessaie."
+        case .pending: "Vérifie la demande en attente avant d’accepter une autre invitation."
+        case .unknown: "La confirmation reste inconnue. Garde cette référence et vérifie la demande avant de la renvoyer."
+        case .invalidCode: "Ce code n’est pas valable. Vérifie-le ou demande un nouveau code à ton moniteur."
+        case .codeAttempts: "Trop d’essais. Patiente quelques minutes avant de réessayer."
         case .notLinked: "Ce compte n’a pas encore accès à Drivy."
         case .rejected(let message): message
     } }
@@ -100,10 +100,10 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
     /// The same failures, told about a code rather than a link.
     var codeMessage: String {
         switch self {
-        case .expired: "Ce code a expiré. Demandez-en un nouveau à votre moniteur."
-        case .revoked: "Ce code a été retiré par l’école. Demandez-en un nouveau à votre moniteur."
-        case .used: "Ce code a déjà été utilisé. Demandez-en un nouveau à votre moniteur."
-        case .mismatch: "Ce code ne peut pas être utilisé avec ce compte. Demandez-en un nouveau à votre moniteur."
+        case .expired: "Ce code a expiré. Demande-en un nouveau à ton moniteur."
+        case .revoked: "Ce code a été retiré par l’école. Demande-en un nouveau à ton moniteur."
+        case .used: "Ce code a déjà été utilisé. Demande-en un nouveau à ton moniteur."
+        case .mismatch: "Ce code ne peut pas être utilisé avec ce compte. Demande-en un nouveau à ton moniteur."
         case .rejected(let message): message.replacingOccurrences(of: "un nouveau lien", with: "un nouveau code")
         default: errorDescription ?? "La demande n’a pas abouti."
         }
@@ -260,8 +260,8 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
         case "INVITATION_REVOKED": return .revoked
         case "INVITATION_USED": return .used
         case "SCHOOL_NOT_ACTIVE": return .rejected("Cette école n’accepte pas de nouveaux accès pour le moment.")
-        case "LEARNER_ARCHIVED": return .rejected("Votre dossier doit être traité par l’administration avant de rejoindre cette école.")
-        case "INVITATION_ROLE_FORBIDDEN": return .rejected("L’émetteur ne peut plus accorder ces rôles. Demandez un nouveau lien à l’école.")
+        case "LEARNER_ARCHIVED": return .rejected("Ton dossier doit être traité par l’administration avant de rejoindre cette école.")
+        case "INVITATION_ROLE_FORBIDDEN": return .rejected("L’émetteur ne peut plus accorder ces rôles. Demande un nouveau lien à l’école.")
         case "INVITATION_CODE_INVALID": return .invalidCode
         case "INVITATION_CODE_ATTEMPTS": return .codeAttempts
         case "IDENTITY_NOT_LINKED": return .notLinked

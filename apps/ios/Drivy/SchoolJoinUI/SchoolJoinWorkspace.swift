@@ -68,7 +68,7 @@ import Observation
             guard request == generation, !invalidated else { return }
             guard current == shown else {
                 preview = current; acknowledgesNotice = false; isBusy = false
-                errorMessage = "L’invitation a changé. Relisez les informations avant de confirmer."; return
+                errorMessage = "L’invitation a changé. Relis les informations avant de confirmer."; return
             }
             let id = UUID(); let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
             let record = SchoolJoinRecord(version: 1, principal: principal, operationID: id, preview: shown, createdAt: Date(),

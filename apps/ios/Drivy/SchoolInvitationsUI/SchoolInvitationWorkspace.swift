@@ -161,12 +161,12 @@ final class SchoolInvitationWorkspace: Identifiable {
                     guard request == generation else { return }
                     offerings = []; instructors = []; selectedOfferingIDs = []; selectedOfferingID = nil; selectedInstructorID = nil
                     if error as? SchoolInvitationFailure == .unauthorized || error as? SchoolInvitationFailure == .forbidden { throw error }
-                    creationOptionsError = "Les permis et moniteurs n’ont pas pu être chargés. Réessayez."
+                    creationOptionsError = "Les permis et moniteurs n’ont pas pu être chargés. Réessaie."
                 }
             }
             hasLoaded = true; needsReload = false; isLoading = false
             errorMessage = storageError ?? (receiptRefused
-                ? "Vos droits ne permettent pas de vérifier cette demande. Sa référence reste conservée." : nil)
+                ? "Tes droits ne permettent pas de vérifier cette demande. Sa référence reste conservée." : nil)
         } catch {
             guard request == generation else { return }
             isLoading = false
