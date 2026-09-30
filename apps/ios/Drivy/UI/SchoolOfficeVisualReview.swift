@@ -16,6 +16,12 @@ struct SchoolOfficeVisualReview: View {
             if let models {
                 switch screen {
                 case "planning": SchoolPlanningView(model: models.planning)
+                case "start-now": SchoolStartNowView(model: models.startNow)
+                case "planning-settings":
+                    NavigationStack {
+                        SchoolPlanningSettingsView(scope: models.planning.scope, client: models.agenda.planningClient,
+                            outbox: models.outbox)
+                    }
                 case "invitation-create": InvitationCreationView(model: models.invitations)
                 case "invitations", "invitation-detail": SchoolInvitationsView(model: models.invitations)
                 case "lesson-tariff": SchoolLessonTariffSheet(model: models.tariff)
@@ -55,6 +61,7 @@ struct SchoolOfficeVisualReview: View {
 @MainActor private final class SchoolOfficeVisualModels {
     let agenda: SchoolAgendaClient
     let planning: SchoolPlanningWorkspace
+    let startNow: SchoolStartNowWorkspace
     let invitations: SchoolInvitationWorkspace
     let tariff: SchoolLessonReportWorkspace
     let outbox: SchoolOfficeVisualOutbox
@@ -69,6 +76,8 @@ struct SchoolOfficeVisualReview: View {
         let agenda = SchoolAgendaClient(baseURL: baseURL, tokenSource: token, transport: transport)
         self.agenda = agenda
         planning = SchoolPlanningWorkspace(scope: scope, client: agenda.planningClient, date: Date().addingTimeInterval(86_400), outbox: outbox)
+        startNow = SchoolStartNowWorkspace(scope: scope, client: agenda.planningClient,
+            learnerID: SchoolVisualData.learnerID, outbox: outbox)
         invitations = SchoolInvitationWorkspace(scope: scope, roles: membership.roles,
             api: SchoolInvitationClient(baseURL: baseURL, tokenSource: token, transport: transport), outbox: outbox)
         tariff = SchoolLessonReportWorkspace(scope: scope, membership: membership, lessonID: SchoolVisualData.lessonID,

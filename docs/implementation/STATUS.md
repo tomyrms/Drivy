@@ -1,5 +1,9 @@
 # État de la réalisation
 
+## 30 septembre 2026 — passe UI/UX native iPhone et iPad
+
+Le porteur autorise maintenant la revue et l’amélioration des écrans natifs. Trois agents traitent agenda/démarrage, dossiers/compte et séance/carte avec les UI Skills et SwiftUI. Les changements de composition conservent l’identité native, les droits et la persistance. Compilation, tests et nouvelles captures Apple en cours de préparation. [Périmètre et suivi](native-ui-pass-20260930.md).
+
 ## 30 septembre 2026 — deuxième passe des layouts web
 
 Les 18 destinations web ont reçu une seconde revue de composition, avec trois agents et une revue indépendante des changements. Les en-têtes sont rapprochés, les fils d’Ariane limités aux véritables sous-pages, les listes/détails adaptés à la largeur du conteneur. Annuaires entièrement cliquables, horaires/absences côte à côte, réglages en sections alignées et entrée simplifiée. Palette et typographie conservées. [Décisions et vérification](web-layout-pass2-20260930.md).

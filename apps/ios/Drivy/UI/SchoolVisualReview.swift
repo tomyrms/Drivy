@@ -5,7 +5,7 @@ import SwiftUI
 /// No production credentials, persistent school store or network transport is created.
 struct SchoolVisualReview: View {
     /// Shell screens routed here directly by DrivyApp, with the real tab bar.
-    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner", "trips"]
+    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner", "profile-tab", "learner-home", "learner-progress"]
 
     let screen: String
     @State private var context: SchoolVisualContext?
@@ -21,12 +21,12 @@ struct SchoolVisualReview: View {
                 switch screen {
                 case "gps-choice", "signal", "observations", "capture-preparation", "live", "live-waiting":
                     SchoolFieldVisualReview(screen: screen, context: context)
-                case "planning", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal":
+                case "planning", "start-now", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal":
                     SchoolOfficeVisualReview(screen: screen, context: context)
-                case "lesson", "lesson-planned":
+                case "lesson", "lesson-planned", "lesson-observations":
                     NavigationStack {
                         SchoolLessonReportView(client: context.agenda.reportClient, schoolWorkspace: context.workspace,
-                            lessonID: screen == "lesson" ? SchoolVisualData.lessonID : SchoolVisualData.plannedLessonID,
+                            lessonID: screen == "lesson-planned" ? SchoolVisualData.plannedLessonID : SchoolVisualData.lessonID,
                             learnerName: context.learner.displayName, outbox: SchoolVisualOutbox())
                     }
                 case "invitation-code":
@@ -43,7 +43,23 @@ struct SchoolVisualReview: View {
                             .navigationTitle("Progression")
                     }
                 case "trips":
+                    NavigationStack {
+                        SchoolTripsView(workspace: context.workspace, agendaClient: context.agenda, showsHeading: false) { EmptyView() }
+                            .navigationTitle("Trajets")
+                    }
+                case "profile-tab":
                     SchoolVisualShell(context: context, tab: .profile)
+                case "learner-home":
+                    SchoolVisualShell(context: context, tab: .lessons)
+                case "learner-progress":
+                    SchoolVisualShell(context: context, tab: .progress)
+                case "school-choice":
+                    SchoolChooserSheet(workspace: context.workspace, close: {})
+                case "no-school":
+                    NavigationStack {
+                        SchoolWithoutSchoolView(joinSchool: {})
+                            .navigationTitle("Drivy")
+                    }
                 case "replay":
                     SchoolCaptureReplayView(model: context.replay, learnerName: "Trajet synthétique")
                 case "home-tabs":
@@ -75,7 +91,10 @@ struct SchoolVisualReview: View {
         .task {
             guard !SchoolAccountVisualReview.screenNames.contains(screen) else { return }
             guard context == nil else { return }
-            do { context = try await SchoolVisualData.prepare() }
+            do {
+                context = try await SchoolVisualData.prepare(learnerRole: screen == "learner-home" || screen == "learner-progress",
+                    populatedObservations: screen == "lesson-observations")
+            }
             catch { self.error = error.localizedDescription }
         }
     }
@@ -133,9 +152,9 @@ struct SchoolVisualShell: View {
     nonisolated static let captureID = identifier(70)
     nonisolated static let time = "2026-09-24T10:00:00Z"
 
-    static func prepare() async throws -> SchoolVisualContext {
+    static func prepare(learnerRole: Bool = false, populatedObservations: Bool = false) async throws -> SchoolVisualContext {
         let baseURL = URL(string: "https://visual.drivy.invalid")!
-        let fixtures = try responses()
+        let fixtures = try responses(learnerRole: learnerRole, populatedObservations: populatedObservations)
         let transport = SchoolVisualTransport(responses: fixtures)
         let token = SchoolVisualToken()
         let client = SchoolTrainingClient(baseURL: baseURL, tokenSource: token, transport: transport)
@@ -298,14 +317,14 @@ struct SchoolVisualShell: View {
             "generatedAt": time, "reportRevisionId": NSNull(), "geometrySnapshotId": NSNull()]
     }
 
-    static func responses() throws -> [String: Data] {
+    static func responses(learnerRole: Bool = false, populatedObservations: Bool = false) throws -> [String: Data] {
         let null = NSNull()
         let root = "/v1/schools/\(schoolID.uuidString)"
         let roles = ["ADMIN", "INSTRUCTOR"]
         let membership: [String: Any] = ["membershipId": membershipID.uuidString, "schoolId": schoolID.uuidString,
-            "schoolName": "École Exemple", "roles": roles, "grants": [], "accessEpoch": 1]
-        let person: [String: Any] = ["personId": personID.uuidString, "version": 1,
-            "displayName": "Moniteur Exemple", "locale": "fr-CH", "memberships": [membership]]
+            "schoolName": "École Exemple", "roles": learnerRole ? ["LEARNER"] : roles, "grants": [], "accessEpoch": 1]
+        let person: [String: Any] = ["personId": (learnerRole ? identifier(11) : personID).uuidString, "version": 1,
+            "displayName": learnerRole ? "Camille Exemple" : "Moniteur Exemple", "locale": "fr-CH", "memberships": [membership]]
         let school: [String: Any] = ["id": schoolID.uuidString, "schoolId": schoolID.uuidString,
             "version": 1, "name": "École Exemple", "timeZone": "Europe/Zurich", "status": "ACTIVE",
             "contactEmail": "contact@example.invalid", "contactPhone": null, "logoAssetId": null,
@@ -410,7 +429,17 @@ struct SchoolVisualShell: View {
                 "schoolId": schoolID.uuidString, "lessonId": id.uuidString, "version": 1,
                 "goals": [["label": "Anticiper les intersections", "competencyId": identifier(30).uuidString, "context": null]],
                 "administrativeCheckNote": null, "plannedWaypoints": [] as [Any]]
-            objects["\(root)/lessons/\(id.uuidString)/geo-observations"] = page([])
+            let observations: [[String: Any]] = populatedObservations ? (0..<3).map { index in
+                ["id": identifier(110 + index).uuidString, "schoolId": schoolID.uuidString, "version": 1,
+                 "lessonId": id.uuidString, "trainingId": trainingID.uuidString,
+                 "captureId": null, "segmentId": null, "pointSequence": null,
+                 "competencyId": identifier(30 + index).uuidString,
+                 "text": ["Priorité à droite · regard tardif", "Stationnement · contrôle de l’angle mort", "Insertion · bonne anticipation"][index],
+                 "origin": "LIVE", "observedAt": "\(id == lessonID ? "2026-09-21T07" : "2026-09-28T08"):\(10 + index * 10):00Z",
+                 "eventKind": "QUALIFIED", "eventStatus": ["TO_REWORK", "ATTENTION", "POSITIVE"][index],
+                 "authorMembershipId": membershipID.uuidString]
+            } : []
+            objects["\(root)/lessons/\(id.uuidString)/geo-observations"] = page(observations)
             objects["\(root)/lessons/\(id.uuidString)/captures"] = ["items": [] as [Any]]
         }
         objects["\(root)/lessons/\(lessonID.uuidString)/captures"] = ["items": [syntheticCapture(captureID)]]

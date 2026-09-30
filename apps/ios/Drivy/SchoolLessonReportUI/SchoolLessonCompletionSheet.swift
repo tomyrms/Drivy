@@ -8,6 +8,7 @@ struct SchoolLessonCompletionSheet: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var reason = ""
     @State private var isSubmitting = false
+    @State private var confirmsDiscard = false
 
     private var validReason: Bool {
         !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && reason.unicodeScalars.count <= 1_000
@@ -79,14 +80,20 @@ struct SchoolLessonCompletionSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     // Une feuille qui porte une saisie se quitte par « Annuler ».
-                    Button("Annuler") { dismiss() }.disabled(model.isBusy || isSubmitting)
+                    Button("Annuler") {
+                        if reason.isEmpty { dismiss() } else { confirmsDiscard = true }
+                    }.disabled(model.isBusy || isSubmitting)
                 }
+            }
+            .confirmationDialog("Quitter sans enregistrer ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+                Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
+                Button("Continuer", role: .cancel) { }
             }
         }
         // Feuille courte : mi-hauteur sur iPhone, pleine hauteur aux tailles d’accessibilité.
         .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .presentationDragIndicator(.visible)
-        .interactiveDismissDisabled(model.isBusy || isSubmitting)
+        .interactiveDismissDisabled(!reason.isEmpty || model.isBusy || isSubmitting)
         .tint(DrivyTheme.accent)
     }
 }

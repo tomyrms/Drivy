@@ -2,11 +2,12 @@ import SwiftUI
 
 /// Trajets : ceux du moniteur, ou tous ceux de l’école pour l’administration (le serveur décide).
 /// Les trajets arrêtés sur cet appareil et pas encore reçus par l’école restent en tête, « À envoyer ».
-/// Vit dans l’onglet Profil : `header` apporte les sections du compte, au-dessus des trajets.
+/// Destination de l’onglet Profil ; `header` reste disponible pour les rendus composés.
 struct SchoolTripsView<Header: View>: View {
     @Bindable var workspace: SchoolWorkspace
     let agendaClient: SchoolAgendaClient
     var captureController: SchoolCaptureSessionController?
+    var showsHeading: Bool
     let header: Header
     @State private var filter: SchoolTripFilter = .all
     @State private var model: SchoolTripsWorkspace?
@@ -16,10 +17,11 @@ struct SchoolTripsView<Header: View>: View {
     @State private var preparedKey: String?
 
     init(workspace: SchoolWorkspace, agendaClient: SchoolAgendaClient,
-         captureController: SchoolCaptureSessionController? = nil, @ViewBuilder header: () -> Header) {
+         captureController: SchoolCaptureSessionController? = nil, showsHeading: Bool = true, @ViewBuilder header: () -> Header) {
         _workspace = Bindable(workspace)
         self.agendaClient = agendaClient
         self.captureController = captureController
+        self.showsHeading = showsHeading
         self.header = header()
     }
 
@@ -33,7 +35,7 @@ struct SchoolTripsView<Header: View>: View {
     var body: some View {
         Group {
             if let model {
-                SchoolTripsList(model: model, uploads: uploads, roles: roles, filter: $filter, header: header,
+                SchoolTripsList(model: model, uploads: uploads, roles: roles, filter: $filter, header: header, showsHeading: showsHeading,
                     learnerName: learnerName, open: open, refresh: refresh)
             } else {
                 // The account stays reachable while the school loads or when it cannot be read.
@@ -115,6 +117,7 @@ private struct SchoolTripsList<Header: View>: View {
     let roles: [String]
     @Binding var filter: SchoolTripFilter
     let header: Header
+    let showsHeading: Bool
     let learnerName: (UUID) -> String
     let open: (SchoolCaptureTrip) -> Void
     let refresh: () async -> Void
@@ -188,9 +191,13 @@ private struct SchoolTripsList<Header: View>: View {
         let days = model.days(filter: activeFilter)
         return List {
             header
-            Section { tripsHeading }
-                .listRowInsets(EdgeInsets(top: DrivySpacing.s, leading: DrivySpacing.m, bottom: 0, trailing: DrivySpacing.m))
-                .listRowBackground(Color.clear)
+            if showsHeading || canFilter {
+                Section {
+                    if showsHeading { tripsHeading } else { filterMenu }
+                }
+                    .listRowInsets(EdgeInsets(top: DrivySpacing.s, leading: DrivySpacing.m, bottom: 0, trailing: DrivySpacing.m))
+                    .listRowBackground(Color.clear)
+            }
             if let uploads, hasUploads || hasUploadError {
                 SchoolCaptureUploadsSection(model: uploads, learnerName: learnerName,
                     onChange: { Task { await model.load() } })
@@ -240,7 +247,7 @@ private struct SchoolTripsList<Header: View>: View {
         .frame(maxWidth: DrivyLayout.formColumn)
         .frame(maxWidth: .infinity)
         .background(DrivyTheme.canvas)
-        .accessibilityIdentifier("profile-list")
+        .accessibilityIdentifier("trips-list")
         .refreshable { await refresh() }
     }
 

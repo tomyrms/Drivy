@@ -351,6 +351,8 @@ struct SchoolCaptureReplayView: View {
                         .font(.subheadline.weight(.semibold)).foregroundStyle(item.tone.foreground)
                     if item.isMarker, item.text != item.title {
                         Text(item.text).font(.subheadline)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 3)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Text(meta(item))
                         .font(.caption.monospacedDigit())
@@ -542,7 +544,7 @@ struct SchoolCaptureReplayView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { showsList = false } } }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .presentationDragIndicator(.visible)
     }
 

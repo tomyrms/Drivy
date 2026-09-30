@@ -73,7 +73,6 @@ struct SchoolObservationView: View {
                     heading
                     feedback
                     if model.loaded {
-                        if model.canAdd { actions }
                         observationList
                     }
                     if let pending = model.pending { pendingCard(pending) }
@@ -81,6 +80,9 @@ struct SchoolObservationView: View {
                 .drivyPageContent()
             }
             .background(DrivyTheme.surface)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if model.loaded && model.canAdd { DrivyStickyActionBar { actions } }
+            }
             .navigationTitle("Observations").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
@@ -111,7 +113,7 @@ struct SchoolObservationView: View {
         // sauf celles que le moniteur garde pour lui depuis l’écran de la leçon.
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             Text(model.learnerName.isEmpty ? "Pendant la leçon" : model.learnerName)
-                .font(.drivyScreenTitle).fixedSize(horizontal: false, vertical: true)
+                .font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
         }
     }
@@ -142,7 +144,7 @@ struct SchoolObservationView: View {
     /// Liste sur page de lecture : lignes séparées par un filet (DrivyRowGroup), pas une carte par
     /// observation ; même pastille de statut (symbole, libellé, ton) que le replay et le signalement.
     private var observationList: some View {
-        DrivyRowGroup(title: "Pendant la leçon") {
+        DrivyRowGroup {
             if model.observations.isEmpty {
                 DrivyEmptyState(title: "Aucune observation", symbol: "text.bubble")
             } else {

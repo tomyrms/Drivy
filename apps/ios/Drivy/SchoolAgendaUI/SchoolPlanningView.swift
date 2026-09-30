@@ -19,6 +19,7 @@ struct SchoolPlanningView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !cancelling && !model.isLoading && model.school != nil { bookingActionBar }
@@ -106,12 +107,15 @@ struct SchoolPlanningView: View {
                 .onChange(of: model.startsAt) { _, _ in model.termsAccepted = false; model.agreementConfirmed = false }
             DatePicker("Heure", selection: $model.startsAt, displayedComponents: .hourAndMinute)
                 .onChange(of: model.startsAt) { _, _ in model.termsAccepted = false; model.agreementConfirmed = false }
+            if model.duration > 0 {
+                LabeledContent("Fin prévue") { Text(SchoolPlanningFormat.instant(model.endsAt, zone: model.timeZone)).monospacedDigit().foregroundStyle(DrivyTheme.muted) }
+            }
             DisclosureGroup("Détails du rendez-vous") {
-                LabeledContent("Lieu (facultatif)") {
-                    TextField("Lieu du rendez-vous", text: $model.meetingPoint, axis: .vertical).lineLimit(1...3)
-                        .multilineTextAlignment(.trailing)
-                }
+                SchoolMeetingPointField(text: $model.meetingPoint)
                 .onChange(of: model.meetingPoint) { _, _ in model.agreementConfirmed = false }
+                if model.meetingPointTooLong {
+                    DrivyFormMessage(text: "Raccourcis le lieu à 500 caractères.", tone: .danger)
+                }
                 if model.originalLesson == nil {
                     Stepper("Intervalle : \(model.bufferMinutes) min", value: $model.bufferMinutes, in: 0...240, step: 5)
                         .accessibilityLabel("Temps entre deux leçons")
@@ -151,11 +155,12 @@ struct SchoolPlanningView: View {
             }
             if let product = model.selectedProduct {
                 Stepper(value: $model.quantity, in: 1...100) {
-                    Text("Quantité : \(model.quantity)").monospacedDigit()
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        Text("Quantité : \(model.quantity)").monospacedDigit()
+                        Text("Durée : \(model.duration) min").font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+                    }
                 }
                 .onChange(of: model.quantity) { _, _ in model.termsAccepted = false }
-                LabeledContent("Durée") { Text("\(model.duration) min").monospacedDigit().foregroundStyle(DrivyTheme.muted) }
-                if let price = model.selectedPrice { LabeledContent("Prix convenu") { Text(SchoolCatalogFormatting.price(price)).monospacedDigit().foregroundStyle(DrivyTheme.muted) } }
                 // Le prix unitaire n’apporte rien quand il est déjà le prix convenu.
                 if model.quantity > 1 {
                     LabeledContent("Prix par \(product.unitLabel)") {
@@ -173,7 +178,7 @@ struct SchoolPlanningView: View {
     private var documentLinks: some View {
         Section {
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: DrivySpacing.m) { documentButtons }
+                HStack(spacing: DrivySpacing.m) { documentButtons }.fixedSize(horizontal: true, vertical: false)
                 VStack(alignment: .leading, spacing: 0) { documentButtons }
             }
             .font(.footnote)
@@ -195,17 +200,15 @@ struct SchoolPlanningView: View {
                 label: { Text("Annulation").frame(minHeight: 44).contentShape(Rectangle()) }
         }
     }
-    private var reviewFields: some View {
-        Section {
-            if model.duration > 0 {
-                LabeledContent("Fin prévue") { Text(SchoolPlanningFormat.instant(model.endsAt, zone: model.timeZone)).monospacedDigit().foregroundStyle(DrivyTheme.muted) }
-            }
-            if model.originalLesson != nil {
+    @ViewBuilder private var reviewFields: some View {
+        if model.originalLesson != nil {
+            Section {
                 TextField(model.changesCommercialTerms ? "Motif du changement" : "Motif facultatif", text: $model.reason, axis: .vertical).lineLimit(2...4)
                 Toggle("Le nouvel horaire est convenu", isOn: $model.agreementConfirmed)
-            }
-        } header: { Text("Vérification").drivyFormSectionHeader() }
+            } header: { Text("Vérification").drivyFormSectionHeader() }
             .drivyFormRows()
+            .disabled(!model.canMutate)
+        }
     }
 
     private var bookingActionBar: some View {
@@ -213,9 +216,9 @@ struct SchoolPlanningView: View {
             if model.duration > 0 {
                 ViewThatFits(in: .horizontal) {
                     HStack {
-                        Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))")
+                        Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))").fixedSize()
                         Spacer(minLength: DrivySpacing.s)
-                        if let price = bookingPrice { bookingPriceText(price) }
+                        if let price = bookingPrice { bookingPriceText(price).fixedSize() }
                     }
                     VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                         Text("\(model.duration) min · \(SchoolPlanningFormat.instant(model.startsAt, zone: model.timeZone))")
@@ -296,6 +299,7 @@ struct SchoolPlanningView: View {
             }
         } header: { Text("Motif d’annulation").drivyFormSectionHeader() }
             .drivyFormRows()
+            .disabled(!model.canMutate)
         Section {
             Button(role: .destructive) { confirmsCancellation = true } label: {
                 Label("Annuler la leçon", systemImage: "calendar.badge.minus")
@@ -310,6 +314,30 @@ struct SchoolPlanningView: View {
     }
     private func formNote(_ text: String) -> some View {
         Text(text).font(.subheadline).foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// A permanent label; large text keeps the field on its own line instead of squeezing its value.
+struct SchoolMeetingPointField: View {
+    @Binding var text: String
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                    Text("Lieu (facultatif)").accessibilityHidden(true)
+                    field
+                }
+            } else {
+                LabeledContent("Lieu (facultatif)") { field.multilineTextAlignment(.trailing) }
+            }
+        }
+    }
+    private var field: some View {
+        TextField("Lieu du rendez-vous", text: $text, axis: .vertical)
+            .lineLimit(1...3)
+            .accessibilityLabel("Lieu du rendez-vous, facultatif")
     }
 }
 

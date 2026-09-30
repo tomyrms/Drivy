@@ -418,6 +418,31 @@ struct DrivyTimelineMark: Identifiable, Equatable {
     let label: String
 }
 
+/// Groups only overlapping touch targets. Every observation keeps its real offset;
+/// the track below still draws a tick for every instant.
+struct DrivyTimelineMarkGroup: Identifiable {
+    let id: UUID
+    let position: CGFloat
+    var marks: [DrivyTimelineMark]
+
+    static func groups(_ marks: [DrivyTimelineMark], duration: TimeInterval, width: CGFloat) -> [Self] {
+        let ordered = marks.enumerated().sorted {
+            $0.element.offset == $1.element.offset ? $0.offset < $1.offset : $0.element.offset < $1.element.offset
+        }.map(\.element)
+        var result: [Self] = []
+        for mark in ordered {
+            let progress = duration > 0 ? min(1, max(0, mark.offset / duration)) : 0
+            let position = CGFloat(progress) * max(0, width)
+            if let last = result.last, position - last.position < 48 {
+                result[result.count - 1].marks.append(mark)
+            } else {
+                result.append(Self(id: mark.id, position: position, marks: [mark]))
+            }
+        }
+        return result
+    }
+}
+
 /// Replay scrubber: follows recorded time (not distance), draws interruptions as
 /// dotted stretches without position, and puts each observation on its own
 /// tappable pin above the track. VoiceOver reads one adjustable element.
@@ -432,9 +457,9 @@ struct DrivyReplayScrubber: View {
     let onSelectMark: (UUID) -> Void
     @State private var isDragging = false
 
-    private let inset: CGFloat = 14
-    private let pinArea: CGFloat = 34
-    private let trackArea: CGFloat = 36
+    private let inset: CGFloat = 22
+    private let pinArea: CGFloat = 44
+    private let trackArea: CGFloat = 44
 
     var body: some View {
         VStack(spacing: DrivySpacing.xxs) {
@@ -443,9 +468,9 @@ struct DrivyReplayScrubber: View {
                 VStack(spacing: 0) {
                     ZStack(alignment: .topLeading) {
                         Color.clear
-                        ForEach(marks) { mark in
-                            pin(mark)
-                                .position(x: inset + CGFloat(progress(mark.offset)) * usable, y: pinArea / 2)
+                        ForEach(DrivyTimelineMarkGroup.groups(marks, duration: duration, width: usable)) { group in
+                            pinGroup(group)
+                                .position(x: inset + group.position, y: pinArea / 2)
                         }
                     }
                     .frame(width: geometry.size.width, height: pinArea)
@@ -529,6 +554,32 @@ struct DrivyReplayScrubber: View {
                 let tick = Path(roundedRect: CGRect(x: px - 1, y: 0, width: 2, height: max(0, y - 4)), cornerRadius: 1)
                 context.fill(tick, with: .color(color.opacity(0.6)))
             }
+        }
+    }
+
+    @ViewBuilder private func pinGroup(_ group: DrivyTimelineMarkGroup) -> some View {
+        if group.marks.count == 1, let mark = group.marks.first {
+            pin(mark)
+        } else {
+            Menu {
+                ForEach(group.marks) { mark in
+                    Button { onSelectMark(mark.id) } label: {
+                        Label("\(Self.clock(mark.offset)) · \(mark.label)", systemImage: mark.symbol)
+                    }
+                }
+            } label: {
+                Text("\(group.marks.count)")
+                    .font(.caption.weight(.bold).monospacedDigit())
+                    .foregroundStyle(DrivyTheme.text)
+                    .frame(width: 28, height: 28)
+                    .background(DrivyTheme.surfaceMuted, in: Circle())
+                    .overlay(Circle().strokeBorder(DrivyTheme.controlBorder, lineWidth: 1.5))
+                    .frame(width: 44, height: pinArea)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            // The adjustable timeline and the full observation list remain the spoken paths.
+            .accessibilityHidden(true)
         }
     }
 

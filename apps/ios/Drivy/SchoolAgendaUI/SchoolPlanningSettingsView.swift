@@ -25,11 +25,14 @@ import Foundation
     var availableProducts: [SchoolServiceProduct] {
         products.filter { trainingCategoryCode.isEmpty || $0.categoryCode == trainingCategoryCode }
     }
+    var hasChanges: Bool {
+        trainingCategoryCode != (saved?.trainingCategoryCode ?? "") || serviceProductKey != (saved?.serviceProductKey ?? "")
+    }
     var canSave: Bool {
         saved != nil && storageAvailable && !isBusy && !isLoading && pending == nil
             && (trainingCategoryCode.isEmpty || categories.contains(trainingCategoryCode))
             && (serviceProductKey.isEmpty || availableProducts.contains { $0.productKey == serviceProductKey })
-            && (trainingCategoryCode != (saved?.trainingCategoryCode ?? "") || serviceProductKey != (saved?.serviceProductKey ?? ""))
+            && hasChanges
     }
     var canRetry: Bool { pending?.kind == .savePlanningDefaults && pending?.scope == scope && !isBusy && !isLoading }
 
@@ -111,8 +114,8 @@ import Foundation
 
 struct SchoolPlanningSettingsView: View {
     @State private var model: SchoolPlanningSettingsWorkspace
-    init(scope: SchoolCommandScope, client: SchoolPlanningClient) {
-        _model = State(initialValue: SchoolPlanningSettingsWorkspace(scope: scope, client: client))
+    init(scope: SchoolCommandScope, client: SchoolPlanningClient, outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
+        _model = State(initialValue: SchoolPlanningSettingsWorkspace(scope: scope, client: client, outbox: outbox))
     }
     var body: some View {
         Form {
@@ -120,7 +123,7 @@ struct SchoolPlanningSettingsView: View {
             if let error = model.errorMessage {
                 Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }.drivyFormRows()
             }
-            if let success = model.successMessage { Section { DrivyFormMessage(text: success, tone: .success) }.drivyFormRows() }
+            if let success = model.successMessage, !model.hasChanges { Section { DrivyFormMessage(text: success, tone: .success) }.drivyFormRows() }
             if let pending = model.pending {
                 Section {
                     DrivyPendingRequest(message: "Une demande attend sa confirmation.", reference: pending.id,

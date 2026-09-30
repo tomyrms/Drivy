@@ -267,14 +267,6 @@ private struct SchoolLearnerDetailView: View {
                                 .drivyPageContent()
                         }
                     }
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        if let openPlanning, learner.archivedAt == nil {
-                            DrivyStickyActionBar {
-                                if agendaClient != nil { startNowButton(learner) }
-                                planButton(learner, openPlanning: openPlanning, isSecondary: agendaClient != nil)
-                            }
-                        }
-                    }
                     .toolbar {
                         if openProfile != nil || learner.contactEmail != nil || learner.contactPhone != nil {
                             ToolbarItem(placement: .topBarTrailing) { dossierMenu(learner) }
@@ -287,6 +279,19 @@ private struct SchoolLearnerDetailView: View {
         .background(DrivyTheme.surface)
         .navigationTitle("Dossier")
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let learner = workspace.learner, let openPlanning, learner.archivedAt == nil {
+                DrivyStickyActionBar {
+                    let layout = dynamicTypeSize.isAccessibilitySize
+                        ? AnyLayout(VStackLayout(spacing: DrivySpacing.s))
+                        : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
+                    layout {
+                        if agendaClient != nil { startNowButton(learner) }
+                        planButton(learner, openPlanning: openPlanning, isSecondary: agendaClient != nil)
+                    }
+                }
+            }
+        }
         .task(id: workspace.selectedLearnerID) { await workspace.loadSelectedLearner() }
         .sheet(item: $presentedTraining, onDismiss: { workspace.selectTraining(nil) }) { presentation in
             SchoolTrainingView(client: presentation.client, workspace: workspace,
@@ -296,7 +301,8 @@ private struct SchoolLearnerDetailView: View {
 
     @ViewBuilder
     private func planButton(_ learner: SchoolLearner, openPlanning: @escaping (SchoolLearner) -> Void, isSecondary: Bool = false) -> some View {
-        let button = Button { openPlanning(learner) } label: { Label("Planifier une leçon", systemImage: "calendar.badge.plus") }
+        let button = Button { openPlanning(learner) } label: { Label("Planifier", systemImage: "calendar.badge.plus") }
+            .accessibilityLabel("Planifier une leçon")
             .accessibilityIdentifier("learner-plan-lesson")
         if isSecondary { button.buttonStyle(DrivySecondaryButtonStyle()) } else { button.buttonStyle(DrivyPrimaryButtonStyle()) }
     }
@@ -305,9 +311,10 @@ private struct SchoolLearnerDetailView: View {
     private func startNowButton(_ learner: SchoolLearner) -> some View {
         SchoolStartNowButton(workspace: workspace, agendaClient: agendaClient, captureController: captureController,
                              learnerID: learner.id, onFinished: { Task { await workspace.loadTrainings() } }) {
-            Label("Démarrer une leçon", systemImage: "location.fill")
+            Label("Démarrer", systemImage: "location.fill")
         }
-        .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+        .buttonStyle(DrivyPrimaryButtonStyle())
+        .accessibilityLabel("Démarrer une leçon")
         .accessibilityIdentifier("learner-start-now")
     }
 
@@ -340,10 +347,7 @@ private struct SchoolLearnerDetailView: View {
                 } else if let error = workspace.learnerError {
                     SchoolErrorNotice(message: error, retry: { Task { await workspace.loadSelectedLearner() } })
                 } else if let learner = workspace.learner {
-                    VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                        learnerHeading(learner)
-                        if let openPlanning, learner.archivedAt == nil { planButton(learner, openPlanning: openPlanning) }
-                    }
+                    learnerHeading(learner)
                     trainings
                     if let openProfile {
                         DrivyRowGroup {
@@ -442,6 +446,7 @@ private struct SchoolContactActionRow: View {
     let value: String
     let symbol: String
     let actions: [Action]
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     static func actions(email: String, name: String) -> [Action] {
         guard let url = SchoolContactLinks.mail(email) else { return [] }
@@ -455,18 +460,23 @@ private struct SchoolContactActionRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: DrivySpacing.s) {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.s))
+        return layout {
             DrivyContactRow(title: title, value: value, symbol: symbol)
-            ForEach(actions) { action in
-                Link(destination: action.url) {
-                    Image(systemName: action.symbol)
-                        .font(.body.weight(.semibold))
-                        .frame(width: 44, height: 44)
-                        .background(DrivyTheme.accentSoft, in: Circle())
-                        .contentShape(Circle())
+            HStack(spacing: DrivySpacing.s) {
+                ForEach(actions) { action in
+                    Link(destination: action.url) {
+                        Image(systemName: action.symbol)
+                            .font(.body.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                            .background(DrivyTheme.accentSoft, in: Circle())
+                            .contentShape(Circle())
+                    }
+                    .foregroundStyle(DrivyTheme.accent)
+                    .accessibilityLabel(action.label)
                 }
-                .foregroundStyle(DrivyTheme.accent)
-                .accessibilityLabel(action.label)
             }
         }
     }

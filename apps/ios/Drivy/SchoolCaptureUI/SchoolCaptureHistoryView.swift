@@ -32,10 +32,14 @@ private struct SchoolCaptureUploadRow: View {
     let learnerName: String
     let onChange: () -> Void
     @State private var confirmsPartial = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            HStack(alignment: .center, spacing: DrivySpacing.s) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
+                : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.s))
+            layout {
                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                     Text(learnerName)
                         .font(.headline).foregroundStyle(DrivyTheme.text)
@@ -57,6 +61,7 @@ private struct SchoolCaptureUploadRow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
+                .fixedSize(horizontal: !dynamicTypeSize.isAccessibilitySize, vertical: false)
                 .disabled(model.isBusy)
                 .accessibilityLabel("Envoyer le trajet de \(learnerName)")
                 .accessibilityIdentifier("school-upload-\(capture.id.uuidString)")

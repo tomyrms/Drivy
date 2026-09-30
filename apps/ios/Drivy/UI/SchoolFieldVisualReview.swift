@@ -50,7 +50,7 @@ struct SchoolFieldVisualReview: View {
         .task {
             guard models == nil else { return }
             do {
-                let loaded = try SchoolFieldVisualModels(context: context)
+                let loaded = try SchoolFieldVisualModels(context: context, populatedObservations: screen == "observations")
                 models = loaded
                 await loaded.recorder.loadCompetencies()
                 if screen == "gps-choice" { route = .choice }
@@ -69,10 +69,10 @@ struct SchoolFieldVisualReview: View {
     let waiting: SchoolCaptureSessionController
     let instant = Date()
 
-    init(context: SchoolVisualContext) throws {
+    init(context: SchoolVisualContext, populatedObservations: Bool) throws {
         guard let person = context.workspace.person, let membership = context.workspace.membership else { throw SchoolAPIError.invalidResponse }
         let scope = context.agenda.scope(person: person, membership: membership)
-        let transport = SchoolFieldVisualTransport(responses: try SchoolVisualData.responses())
+        let transport = SchoolFieldVisualTransport(responses: try SchoolVisualData.responses(populatedObservations: populatedObservations))
         let baseURL = URL(string: "https://visual.drivy.invalid")!
         let token = SchoolVisualToken()
         let agenda = SchoolAgendaClient(baseURL: baseURL, tokenSource: token, transport: transport)

@@ -159,7 +159,7 @@ struct DrivyLessonRow: View {
             Text(title)
                 .font(.headline)
                 .foregroundStyle(DrivyTheme.text)
-            ForEach(Array(details.enumerated()), id: \.offset) { _, line in
+            ForEach(Array(details.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.enumerated()), id: \.offset) { _, line in
                 Text(line)
                     .font(.subheadline)
                     .foregroundStyle(DrivyTheme.muted)

@@ -115,11 +115,13 @@ struct SchoolTodayView: View {
         DrivyMapDock(floating: floating) {
             if let lesson = toFinish.first {
                 lessonSummary(lesson, badge: lesson.drivyState(now: now).badge)
-                Button { opened = OpenedLesson(lesson: lesson, completing: true) } label: {
-                    Label("Terminer la leçon", systemImage: "checkmark.circle")
+                if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId {
+                    Button { opened = OpenedLesson(lesson: lesson, completing: true) } label: {
+                        Label("Terminer la leçon", systemImage: "checkmark.circle")
+                    }
+                    .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+                    .accessibilityIdentifier("today-finish-lesson")
                 }
-                .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
-                .accessibilityIdentifier("today-finish-lesson")
             } else if let next {
                 lessonSummary(next, badge: nil)
                 if mayStart(next, now: now) {
@@ -139,7 +141,7 @@ struct SchoolTodayView: View {
                 }
             } else if isLoading && loadedKey != scopeKey {
                 DrivyLoadingState(title: "Chargement de la journée…")
-            } else {
+            } else if error == nil {
                 Text(lessons.isEmpty ? "Aucune leçon aujourd’hui" : "Aucune autre leçon aujourd’hui")
                     .font(.headline).foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
@@ -169,8 +171,10 @@ struct SchoolTodayView: View {
                     VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                         Text(name(lesson)).font(.headline).foregroundStyle(DrivyTheme.text)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
+                        if !lesson.meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     if !stacked {
                         Spacer(minLength: DrivySpacing.xs)

@@ -82,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           action=build-for-testing
-          if [[ "$VISUAL_ONLY" == true && -z "$VISUAL_ORIENTATIONS" && ! " $VISUAL_SCREENS " =~ [[:space:]](live-signal|signal-status)[[:space:]] ]]; then action=build; fi
+          if [[ "$VISUAL_ONLY" == true && -z "$VISUAL_ORIENTATIONS" && ! " $VISUAL_SCREENS " =~ [[:space:]](live-signal|signal-status|lesson-evidence)[[:space:]] ]]; then action=build; fi
           xcodebuild "$action" \
             -project apps/ios/Drivy.xcodeproj -scheme Drivy \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
@@ -175,7 +175,7 @@ jobs:
       # JPEG et imprimées en base64 à la fin du journal, lisible par l'API des
       # journaux quand le téléchargement des artefacts est impossible.
       - name: Captures en base64 pour la revue
-        if: always() && inputs.visual_only == true && inputs.visual_orientations == '' && !contains(inputs.visual_screens, 'live-signal') && !contains(inputs.visual_screens, 'signal-status')
+        if: always() && inputs.visual_only == true && inputs.visual_orientations == '' && !contains(inputs.visual_screens, 'live-signal') && !contains(inputs.visual_screens, 'signal-status') && !contains(inputs.visual_screens, 'lesson-evidence')
         shell: bash
         env:
           DRIVY_VISUAL_SCREENS: ${{ inputs.visual_screens }}

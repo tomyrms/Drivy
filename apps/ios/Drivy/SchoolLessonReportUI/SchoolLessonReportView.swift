@@ -215,8 +215,10 @@ private struct SchoolLessonReportContent: View {
                 .frame(maxWidth: .infinity)
             } else {
                 Form {
-                    lessonContext
+                    headerSection
+                    lessonNotices
                     completedReport
+                    lessonEvidence
                     // Avant la leçon : le souhait de l’élève éclaire les objectifs, puis viennent les observations.
                     Group {
                         if let wish = model.wish, showsWish(wish) { wishSection(wish) }
@@ -254,12 +256,23 @@ private struct SchoolLessonReportContent: View {
     /// Les lignes des sections prennent la surface du thème (le gris système du sombre ne s’accorde pas au canevas).
     @ViewBuilder private var lessonContext: some View {
         headerSection
+        lessonNotices
+        lessonEvidence
+    }
+
+    @ViewBuilder private var lessonNotices: some View {
         Group {
             if model.needsReload && model.hasLocalEdits {
                 Section { Text(model.retainedEditsText).textSelection(.enabled) } header: { Text("Saisie conservée").drivyFormSectionHeader() }
                     .drivyFormRows()
             }
             if model.pending != nil { pendingSection }
+        }
+        .drivyFormRows()
+    }
+
+    @ViewBuilder private var lessonEvidence: some View {
+        Group {
             if isCompleted, readsLesson, !model.captures.isEmpty || !model.track.isEmpty { trackSection }
             if isCompleted, model.isAuthor || model.isOwnLearner { observationsSection }
         }
@@ -326,7 +339,7 @@ private struct SchoolLessonReportContent: View {
     private var headerSection: some View {
         Section {
             HStack(alignment: .top, spacing: DrivySpacing.m) {
-                DrivyAvatar(name: learnerName, size: 56)
+                if !typeSize.isAccessibilitySize { DrivyAvatar(name: learnerName, size: 44) }
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     Text(learnerName).font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
                     if let lesson = model.lesson {
@@ -361,7 +374,9 @@ private struct SchoolLessonReportContent: View {
         ViewThatFits(in: .horizontal) {
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 if let schedule { headerLine("clock", schedule).fixedSize(horizontal: true, vertical: false) }
-                headerLine("mappin", lesson.meetingPoint).fixedSize(horizontal: true, vertical: false)
+                if !lesson.meetingPoint.isEmpty {
+                    headerLine("mappin", lesson.meetingPoint).fixedSize(horizontal: true, vertical: false)
+                }
             }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 if parts.count == 2 {
@@ -370,7 +385,7 @@ private struct SchoolLessonReportContent: View {
                 } else if let schedule {
                     headerLine("clock", schedule)
                 }
-                headerLine("mappin", lesson.meetingPoint)
+                if !lesson.meetingPoint.isEmpty { headerLine("mappin", lesson.meetingPoint) }
             }
         }
     }
@@ -861,7 +876,7 @@ struct LessonTrackMap: View {
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
-        .frame(height: 260)
+        .frame(height: DrivyMapLayout.previewHeight)
         .accessibilityLabel("Trajet de la leçon")
     }
 }

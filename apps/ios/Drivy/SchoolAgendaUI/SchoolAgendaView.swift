@@ -159,15 +159,30 @@ struct SchoolAgendaView: View {
 
     /// Month context and week navigation, as in the mockup: quiet month, 44 pt arrows.
     private var weekHeader: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: DrivySpacing.xs) {
+                monthTitle.fixedSize()
+                Spacer(minLength: DrivySpacing.xs)
+                weekControls.fixedSize()
+            }
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                monthTitle
+                weekControls
+            }
+        }
+    }
+    private var monthTitle: some View {
+        Text(formattedDay(selectedDate, template: "MMMM yyyy").capitalizedFirst)
+            .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+    private var weekControls: some View {
         HStack(spacing: DrivySpacing.xxs) {
-            Text(formattedDay(selectedDate, template: "MMMM yyyy").capitalizedFirst)
-                .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: DrivySpacing.xs)
             if !calendar.isDateInToday(selectedDate) {
                 Button("Aujourd’hui") { selectedDate = Date() }
                     .font(.subheadline.weight(.semibold))
-                    .frame(minHeight: 44)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(minWidth: 44, minHeight: 44)
             }
             Button { moveWeek(-1) } label: {
                 Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
@@ -197,7 +212,7 @@ struct SchoolAgendaView: View {
     private var planButton: some View {
         Button { planningModel = newPlanningModel() } label: {
             Label("Planifier une leçon", systemImage: "plus").font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
-                .frame(minHeight: 44).fixedSize().contentShape(Rectangle())
+                .fixedSize(horizontal: false, vertical: true).frame(minHeight: 44).contentShape(Rectangle())
         }
         .accessibilityIdentifier("agenda-plan-lesson")
     }

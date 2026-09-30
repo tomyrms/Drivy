@@ -4,6 +4,7 @@ struct SchoolProfileView: View {
     @Bindable var model: SchoolProfileWorkspace
     var loadsOnAppear = true
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var showsGuidedWelcome = false
     @State private var confirmsDiscard = false
     @State private var attemptedSave = false
@@ -58,7 +59,7 @@ struct SchoolProfileView: View {
         .frame(maxWidth: .infinity)
         .background(DrivyTheme.canvas)
         .safeAreaInset(edge: .bottom) {
-            if model.profile != nil, !model.editableFields.isEmpty {
+            if model.profile != nil, !model.editableFields.isEmpty, model.hasEdits || model.isBusy {
                 DrivyFormActionBar(hint: saveHint.text, hintTone: saveHint.tone) {
                     Button {
                         attemptedSave = true
@@ -87,7 +88,7 @@ struct SchoolProfileView: View {
         if !name.isEmpty {
             Section {
                 HStack(spacing: DrivySpacing.m) {
-                    DrivyAvatar(name: name, size: 72)
+                    if !typeSize.isAccessibilitySize { DrivyAvatar(name: name, size: 52) }
                     VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                         Text(name)
                             .font(.drivyTitle)
@@ -134,7 +135,7 @@ struct SchoolProfileView: View {
                     fieldExplanation(.contactEmail)
                 }
                 if model.editableFields.contains(.contactPhone) {
-                    profileField("Téléphone", text: $model.draft.contactPhone, prompt: "Facultatif", identifier: "profile-phone")
+                    profileField("Téléphone", text: $model.draft.contactPhone, identifier: "profile-phone")
                         .textContentType(.telephoneNumber).keyboardType(.phonePad)
                     fieldExplanation(.contactPhone)
                 }
@@ -146,7 +147,6 @@ struct SchoolProfileView: View {
     private var birthSection: some View {
         Section {
             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                Text("Date de naissance").font(.subheadline).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
                 TextField("JJ.MM.AAAA", text: $model.draft.birthDate).keyboardType(.numbersAndPunctuation)
                     .accessibilityLabel("Date de naissance, jour point mois point année")
                     .accessibilityIdentifier("profile-birth-date")

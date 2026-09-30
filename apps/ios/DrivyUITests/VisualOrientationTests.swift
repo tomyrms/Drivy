@@ -25,7 +25,8 @@ import XCTest
                 XCTContext.runActivity(named: "\(device) · \(screen) · \(appearance) · \(orientation)") { _ in
                     let app = XCUIApplication()
                     let interactiveSignal = ["live-signal", "signal-status"].contains(screen)
-                    app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = interactiveSignal ? "live" : screen
+                    let lessonEvidence = screen == "lesson-evidence"
+                    app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = interactiveSignal ? "live" : (lessonEvidence ? "lesson-observations" : screen)
                     app.launchEnvironment["DRIVY_VISUAL_LARGE_TEXT"] = environment["DRIVY_VISUAL_LARGE_TEXT"] ?? "0"
                     app.launchArguments = ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH",
                                            "-AppleInterfaceStyle", appearance == "dark" ? "Dark" : "Light"]
@@ -53,6 +54,17 @@ import XCTest
                             XCTAssertTrue(app.buttons["live-observation-status-ATTENTION"].waitForExistence(timeout: 10))
                         }
                         RunLoop.current.run(until: Date().addingTimeInterval(1))
+                    }
+                    if lessonEvidence {
+                        let observation = app.descendants(matching: .any).matching(NSPredicate(
+                            format: "label CONTAINS %@", "Priorité à droite · regard tardif")).firstMatch
+                        for _ in 0..<10 {
+                            if observation.exists && observation.isHittable { break }
+                            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.85))
+                            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.25))
+                            start.press(forDuration: 0.05, thenDragTo: end)
+                        }
+                        XCTAssertTrue(observation.exists && observation.isHittable, app.debugDescription)
                     }
                     XCTAssertEqual(XCUIDevice.shared.orientation.isLandscape, landscape)
                     let screenshot = XCUIScreen.main.screenshot()

@@ -412,36 +412,39 @@ struct InvitationCreationView: View {
     }
 }
 
-/// The code, very large, to show or send to the learner. Read aloud character by character.
+/// Code lisible en entier, sur deux groupes si la taille de texte ne tient plus en une ligne.
 struct InvitationCodeResultView: View {
     let issued: SchoolIssuedInvitationCode
     let schoolName: String?
     var now = Date()
     @State private var copied = false
-    @ScaledMetric(relativeTo: .largeTitle) private var codeSize: CGFloat = 46
+    @ScaledMetric(relativeTo: .title) private var codeSize: CGFloat = 32
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         ScrollView {
             VStack(spacing: DrivySpacing.l) {
                 VStack(spacing: DrivySpacing.m) {
-                    Text(issued.code)
-                        .font(.system(size: codeSize, weight: .bold, design: .monospaced))
-                        .tracking(codeSize * 0.12)
+                    ViewThatFits(in: .horizontal) {
+                        codeText(issued.code)
+                        VStack(spacing: DrivySpacing.xxs) {
+                            ForEach(Array(issued.code.split(separator: "-").enumerated()), id: \.offset) { _, group in
+                                codeText(String(group))
+                            }
+                        }
+                    }
                         .foregroundStyle(DrivyTheme.text)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.4)
                         .textSelection(.enabled)
+                        .accessibilityElement(children: .ignore)
                         .accessibilityLabel("Code")
                         .accessibilityValue(Text(issued.code.replacingOccurrences(of: "-", with: " ")).speechSpellsOutCharacters())
                         .accessibilityIdentifier("invitation-code-value")
-                    // Filet court entre le code et sa validité : le code reste le seul point focal.
-                    Capsule().fill(DrivyTheme.border).frame(width: DrivySpacing.xl, height: 2).accessibilityHidden(true)
                     Label(Self.validity(until: issued.expiresAt, now: now), systemImage: "clock")
                         .font(.subheadline.monospacedDigit())
                         .foregroundStyle(DrivyTheme.muted)
                 }
-                .padding(.vertical, DrivySpacing.xxl)
+                .padding(.vertical, DrivySpacing.l)
                 .padding(.horizontal, DrivySpacing.m)
                 .frame(maxWidth: .infinity)
                 .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content))
@@ -477,6 +480,15 @@ struct InvitationCodeResultView: View {
             guard copied, (try? await Task.sleep(for: .seconds(2))) != nil else { return }
             copied = false
         }
+    }
+
+    private func codeText(_ value: String) -> some View {
+        Text(value)
+            .font(typeSize.isAccessibilitySize
+                ? .system(.body, design: .monospaced).weight(.bold)
+                : .system(size: codeSize, weight: .bold, design: .monospaced))
+            .tracking(typeSize.isAccessibilitySize ? 0 : codeSize * 0.06)
+            .fixedSize()
     }
 
     private func copy() {

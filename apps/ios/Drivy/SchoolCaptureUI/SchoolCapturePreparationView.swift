@@ -27,6 +27,15 @@ struct SchoolCapturePreparationView: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     heading
                     quickStart
+                    if model.quickBlock != nil && model.quickStep == nil && !model.captureStarted && model.pendingStarts.isEmpty {
+                        Button("Continuer sans GPS", systemImage: "location.slash") {
+                            model.invalidate()
+                            dismiss()
+                        }
+                        .buttonStyle(DrivySecondaryButtonStyle())
+                        .disabled(model.isBusy || model.isLoading)
+                        .accessibilityIdentifier("capture-continue-without-gps")
+                    }
                     if !model.pendingAssessments.isEmpty { pendingPanel }
                     if !model.pendingStarts.isEmpty { pendingStartsPanel }
                     if model.hasOldScope {

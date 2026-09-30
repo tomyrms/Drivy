@@ -109,9 +109,11 @@ struct SchoolPlanningInstructor: Identifiable {
         return (selectedProduct?.durationMinutes ?? 0) * quantity
     }
     var endsAt: Date { startsAt.addingTimeInterval(TimeInterval(duration * 60)) }
+    /// The API trims the value then applies JavaScript's 500 UTF-16 code-unit limit.
+    var meetingPointTooLong: Bool { meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count > 500 }
     var validBooking: Bool {
         guard canMutate, trainingID != nil, let instructorID, assignedInstructors.contains(where: { $0.id == instructorID }),
-              meetingPoint.count <= 500, (1...480).contains(duration), (0...240).contains(bufferMinutes), startsAt > Date() else { return false }
+              !meetingPointTooLong, (1...480).contains(duration), (0...240).contains(bufferMinutes), startsAt > Date() else { return false }
         if let originalLesson {
             guard originalLesson.status == "PLANNED", agreementConfirmed, reason.count <= 1000 else { return false }
             if !changesCommercialTerms { return true }

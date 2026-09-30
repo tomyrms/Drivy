@@ -102,7 +102,7 @@ struct SchoolOnboardingView: View {
                         symbol: "figure.wave", actionTitle: "Réessayer", action: { Task { await model.load() } })
                 }
             }
-            .drivyPageContent()
+            .drivyPageContent(maxWidth: DrivyLayout.formColumn)
         }
         .scrollDismissesKeyboard(.interactively)
     }
@@ -609,26 +609,26 @@ private final class SchoolOnboardingLocationPermission: NSObject, @preconcurrenc
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) { status = manager.authorizationStatus }
 }
 
-/// Tête des écrans d’ouverture et de fin de l’accueil : pastille de symbole sur l’aplat de marque, puis le titre.
+/// Tête des écrans d’ouverture et de fin de l’accueil : petit symbole et titre sur une même ligne.
 /// La pastille disparaît aux tailles d’accessibilité pour laisser la largeur au titre.
 private struct SchoolOnboardingHero: View {
     let symbol: String
     let title: String
     @Environment(\.dynamicTypeSize) private var typeSize
-    @ScaledMetric(relativeTo: .largeTitle) private var plate: CGFloat = 88
+    @ScaledMetric(relativeTo: .title2) private var plate: CGFloat = 44
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.l) {
+        HStack(alignment: .center, spacing: DrivySpacing.m) {
             if !typeSize.isAccessibilitySize {
                 Image(systemName: symbol)
-                    .font(.largeTitle)
+                    .font(.title2)
                     .foregroundStyle(DrivyTheme.accent)
                     .frame(width: plate, height: plate)
                     .background(DrivyTheme.accentSoft, in: Circle())
                     .accessibilityHidden(true)
             }
             Text(title)
-                .font(.drivyScreenTitle)
+                .font(.drivyTitle)
                 .foregroundStyle(DrivyTheme.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)

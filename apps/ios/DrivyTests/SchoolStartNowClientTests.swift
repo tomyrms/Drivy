@@ -63,11 +63,72 @@ import Testing
         #expect(!stranger.hasPresetLearner)
     }
 
+    @Test func optionalImmediatePlaceUsesTheSameTrimmedUTF16LimitAsTheAPI() async throws {
+        let server = LessonFinishServer()
+        let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+            tokenSource: HubToken(), transport: server)
+        let model = SchoolStartNowWorkspace(scope: ConfigurationFixture.scope(), client: client,
+            learnerID: HubFixture.learnerID, outbox: ConfigurationOutboxStub())
+        await model.load()
+        try #require(model.canStart)
+
+        for value in ["", " \n\t ", String(repeating: "a", count: 500), "  \(String(repeating: "a", count: 500))\n", String(repeating: "🚗", count: 250)] {
+            model.meetingPoint = value
+            #expect(!model.meetingPointTooLong)
+            #expect(model.canStart)
+        }
+        for value in [String(repeating: "a", count: 501), String(repeating: "🚗", count: 251)] {
+            model.meetingPoint = value
+            #expect(model.meetingPointTooLong)
+            #expect(!model.canStart)
+        }
+    }
+
+    @Test func retryAfterStorageFailureDiscardsALearnerWhoseAssignmentWasRemoved() async throws {
+        let server = StartNowAssignmentReloadServer(), outbox = ConfigurationOutboxStub()
+        let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+            tokenSource: HubToken(), transport: server)
+        let model = SchoolStartNowWorkspace(scope: ConfigurationFixture.scope(), client: client, outbox: outbox)
+        await model.load()
+        try #require(model.canStart && model.learnerID == HubFixture.learnerID)
+
+        outbox.failRead = true
+        await model.load()
+        try #require(!model.storageAvailable && !model.canStart)
+        await server.removeOriginalAssignment()
+        outbox.failRead = false
+        await model.load()
+
+        #expect(model.storageAvailable && model.learners.count == 2)
+        #expect(model.learnerID == nil && model.trainingID == nil && model.trainings.isEmpty)
+        #expect(!model.canStart)
+        #expect(outbox.saves.isEmpty)
+    }
+
     private func command() throws -> PendingSchoolCommand {
         let operation = UUID()
         return PendingSchoolCommand(id: operation, scope: ConfigurationFixture.scope(), kind: .startLessonNow,
             resourceVersion: 0, createdAt: HubFixture.date("2026-09-28T12:00:00Z"),
             body: try JSONEncoder().encode(SchoolStartNowBody(operationId: operation, trainingId: HubFixture.trainingID, meetingPoint: nil)),
             routeResourceID: HubFixture.trainingID)
+    }
+}
+
+private actor StartNowAssignmentReloadServer: SchoolHTTPTransport {
+    private let fallback = LessonFinishServer()
+    private var originalRemoved = false
+    func removeOriginalAssignment() { originalRemoved = true }
+
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        guard originalRemoved, let url = request.url, url.lastPathComponent == "learners" else {
+            return try await fallback.send(request)
+        }
+        let learners: [[String: Any]] = (1...2).map { index in
+            ["id": UUID().uuidString, "schoolId": HubFixture.schoolID.uuidString, "personId": UUID().uuidString,
+             "version": 1, "displayName": "Autre élève \(index)", "contactEmail": NSNull(), "contactPhone": NSNull(), "archivedAt": NSNull()]
+        }
+        let envelope: [String: Any] = ["data": ["items": learners, "nextCursor": NSNull()],
+            "requestId": UUID().uuidString, "serverTime": "2026-09-30T12:00:00Z"]
+        return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: envelope), status: 200, url: url, contentType: "application/json")
     }
 }

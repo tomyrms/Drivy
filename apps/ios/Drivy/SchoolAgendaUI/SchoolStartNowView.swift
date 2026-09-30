@@ -37,7 +37,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
     let presetLearnerID: UUID?
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
     @ObservationIgnored private var generation = UUID()
-    @ObservationIgnored private var storageAvailable = false
+    @ObservationIgnored private(set) var storageAvailable = false
     @ObservationIgnored private var invalidated = false
 
     init(scope: SchoolCommandScope, client: SchoolPlanningClient, learnerID: UUID? = nil,
@@ -51,14 +51,19 @@ struct SchoolStartNowBody: Encodable, Sendable {
 
     func planLater() { if conflicted { planInstead = true } }
 
+    /// Same trimmed UTF-16 length as the API and the planning form.
+    var meetingPointTooLong: Bool { meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count > 500 }
     var canStart: Bool {
         !invalidated && !isLoading && !isBusy && storageAvailable && pending == nil && started == nil
-            && trainingID.map { id in trainings.contains { $0.id == id } } == true && meetingPoint.unicodeScalars.count <= 500
+            && learnerID.map { id in learners.contains { $0.id == id } } == true
+            && trainingID.map { id in trainings.contains { $0.id == id && $0.learnerId == learnerID } } == true && !meetingPointTooLong
     }
 
     func load() async {
         guard !invalidated else { return }
         generation = UUID(); let request = generation
+        let previousLearnerID = learnerID
+        learners = []; learnerID = nil; trainings = []; trainingID = nil; meetingPoint = ""
         isLoading = true; errorMessage = nil
         do { pending = try outbox.pending(for: scope); storageAvailable = true }
         catch { storageAvailable = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
@@ -79,6 +84,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
             if learners.isEmpty { errorMessage = "Aucun élève ne t’est affecté. Demande à l’administration de vérifier les affectations." }
             isLoading = false
             if let preset = presetLearnerID, learners.contains(where: { $0.id == preset }) { await select(preset) }
+            else if let previousLearnerID, learners.contains(where: { $0.id == previousLearnerID }) { await select(previousLearnerID) }
             else if learners.count == 1, let only = learners.first { await select(only.id) }
         } catch {
             guard request == generation else { return }
@@ -195,19 +201,21 @@ struct SchoolStartNowView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let error = model.errorMessage {
-                    if let pending = model.pending {
-                        // Résultat inconnu : même présentation que partout (« Demande à vérifier »).
-                        Section {
-                            DrivyPendingRequest(message: error, reference: pending.id,
-                                retry: { Task { if await model.retry() != nil { dismiss() } } }, canRetry: !model.isBusy)
-                        }
-                            .drivyFormRows()
-                    } else {
-                        Section { SchoolErrorNotice(message: error) }
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color.clear)
+                if let pending = model.pending {
+                    Section {
+                        DrivyPendingRequest(message: model.errorMessage ?? "Une demande attend sa confirmation.", reference: pending.id,
+                            retry: pending.kind == .startLessonNow && pending.scope == model.scope ? { Task { if await model.retry() != nil { dismiss() } } } : nil,
+                            canRetry: !model.isBusy && !model.isLoading)
                     }
+                    .drivyFormRows()
+                } else if let error = model.errorMessage {
+                    Section {
+                        SchoolErrorNotice(message: error, retry: model.learners.isEmpty || model.trainings.isEmpty || !model.storageAvailable
+                            ? { Task { await reloadContext() } } : nil)
+                        .disabled(model.isBusy || model.isLoading)
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                 }
                 Section {
                     if model.hasPresetLearner, let name = model.learnerName {
@@ -225,20 +233,23 @@ struct SchoolStartNowView: View {
                             Text("Choisir une formation").tag(nil as UUID?)
                             ForEach(model.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
                         }
+                    } else if let training = model.trainings.first, training.id == model.trainingID {
+                        LabeledContent("Formation", value: "Permis \(training.categoryCode)")
                     }
-                    LabeledContent("Lieu (facultatif)") {
-                        TextField("Lieu du rendez-vous", text: $model.meetingPoint, axis: .vertical).lineLimit(1...3)
-                            .multilineTextAlignment(.trailing)
+                    SchoolMeetingPointField(text: $model.meetingPoint)
+                    if model.meetingPointTooLong {
+                        DrivyFormMessage(text: "Raccourcis le lieu à 500 caractères.", tone: .danger)
                     }
                 }
                     .drivyFormRows()
-                .disabled(model.isBusy)
+                .disabled(model.isBusy || model.isLoading || model.pending != nil)
                 if model.isLoading {
                     Section { DrivyLoadingState(title: model.learnerID == nil ? "Chargement des élèves…" : "Chargement de la formation…") }
                         .drivyFormRows()
                 }
             }
             .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 DrivyStickyActionBar {
@@ -270,6 +281,13 @@ struct SchoolStartNowView: View {
         }
         .interactiveDismissDisabled(model.isBusy)
         .tint(DrivyTheme.accent)
+    }
+
+    @MainActor private func reloadContext() async {
+        let learnerID = model.learnerID, meetingPoint = model.meetingPoint
+        if !model.storageAvailable || model.learners.isEmpty { await model.load() }
+        else if let learnerID { await model.select(learnerID) }
+        if model.learnerID == learnerID { model.meetingPoint = meetingPoint }
     }
 }
 

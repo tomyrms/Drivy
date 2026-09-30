@@ -39,6 +39,27 @@ import Testing
         #expect(!model.validBooking)
     }
 
+    @Test func optionalPlanningPlaceUsesTheSameTrimmedUTF16LimitAsTheAPI() async throws {
+        let server = PlanningDefaultsServer()
+        let model = planning(server)
+        await model.load()
+        await model.selectLearner(HubFixture.learnerID)
+        model.termsAccepted = true
+        try #require(model.validBooking)
+
+        for value in ["", " \n\t ", String(repeating: "a", count: 500), "  \(String(repeating: "a", count: 500))\n", String(repeating: "🚗", count: 250)] {
+            model.meetingPoint = value
+            #expect(!model.meetingPointTooLong)
+            #expect(model.validBooking)
+        }
+        for value in [String(repeating: "a", count: 501), String(repeating: "🚗", count: 251)] {
+            model.meetingPoint = value
+            #expect(model.meetingPointTooLong)
+            #expect(!model.validBooking)
+        }
+        #expect(await server.writes().isEmpty)
+    }
+
     @Test func settingsKeepTheSameCommandUntilItsDurableReceiptIsAvailable() async throws {
         let server = PlanningDefaultsServer(receiptAvailable: false), outbox = ConfigurationOutboxStub()
         let model = SchoolPlanningSettingsWorkspace(scope: ConfigurationFixture.scope(), client: client(server), outbox: outbox)

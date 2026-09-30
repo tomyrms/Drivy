@@ -231,7 +231,7 @@ private struct SchoolTrainingContent: View {
                 .drivyPageContent(maxWidth: TrainingLayout.twoColumnMaxWidth)
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.m) {
                         if fixedSection == nil { heading }
                         if model.isLoading && model.training == nil { DrivyLoadingState(title: "Chargement de la formation…") }
                         if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
@@ -259,7 +259,7 @@ private struct SchoolTrainingContent: View {
         // Le dossier est celui d’une personne : son nom est le titre, la formation la précise.
         HStack(spacing: DrivySpacing.m) {
             if !dynamicTypeSize.isAccessibilitySize {
-                DrivyAvatar(name: learner.displayName, size: 60)
+                DrivyAvatar(name: learner.displayName, size: 48)
             }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(learner.displayName)
@@ -293,7 +293,7 @@ private struct SchoolTrainingContent: View {
     }
     private var lessons: some View {
         let visible = model.lessons.filter { filter.includes($0) && period.includes($0) }
-        return VStack(alignment: .leading, spacing: DrivySpacing.l) {
+        return VStack(alignment: .leading, spacing: DrivySpacing.m) {
             if model.lessonsLoaded && model.lessons.isEmpty && !model.isLoading {
                 DrivyEmptyState(title: "Aucune leçon", symbol: "calendar")
             }
@@ -329,8 +329,8 @@ private struct SchoolTrainingContent: View {
         } label: {
             HStack(spacing: DrivySpacing.xs) {
                 Image(systemName: order.symbol).font(.caption.weight(.bold))
-                Text(filter.title)
-                if period.isActive { Text(period.title) }
+                Text(period.isActive ? "\(filter.title) · \(period.title)" : filter.title)
+                    .fixedSize(horizontal: false, vertical: true)
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold))
             }
             .font(.subheadline.weight(.semibold))
@@ -339,7 +339,8 @@ private struct SchoolTrainingContent: View {
             .contentShape(Rectangle())
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .accessibilityLabel("Afficher : \(filter.title), \(period.title), \(order.title)")
+        .accessibilityLabel("Filtrer et trier les leçons")
+        .accessibilityValue([filter.title, period.isActive ? period.title : "Toutes les périodes", order.title].joined(separator: ", "))
         .accessibilityIdentifier("training-lessons-menu")
     }
     private var periodPicker: some View {
@@ -443,7 +444,7 @@ private struct SchoolTrainingContent: View {
                             .accessibilityHint("Ouvre la leçon")
                     }
                     ForEach(model.unobservedCompetencies) { competency in
-                        HStack(spacing: DrivySpacing.m) {
+                        progressLayout {
                             DrivyCompetencyNote(label: competency.displayLabel, level: "Pas encore vu", tone: .neutral)
                             DrivyCompetencyMeter(level: "")
                         }
@@ -461,19 +462,26 @@ private struct SchoolTrainingContent: View {
         }
     }
     private func progressRow(_ item: SchoolReportProgressItem) -> some View {
-        HStack(alignment: .top, spacing: DrivySpacing.m) {
+        progressLayout {
             DrivyCompetencyNote(label: model.competencies.first(where: { $0.id == item.id })?.displayLabel ?? item.displayLabel,
                 level: SchoolTrainingFormatting.level(item.level), context: item.context,
                 date: SchoolTrainingFormatting.day(item.observedAt, zone: workspace.school?.timeZone ?? "Europe/Zurich"))
-            DrivyCompetencyMeter(level: item.level).padding(.top, DrivySpacing.xs)
-            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                .padding(.top, DrivySpacing.xxs)
-                .accessibilityHidden(true)
+            HStack(spacing: DrivySpacing.s) {
+                DrivyCompetencyMeter(level: item.level)
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                    .accessibilityHidden(true)
+            }
+            .padding(.top, DrivySpacing.xs)
         }
         .padding(.vertical, DrivySpacing.s)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+    private var progressLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.m))
     }
     private func orderedProgress(_ items: [SchoolReportProgressItem]) -> [SchoolReportProgressItem] {
         let ranks = Dictionary(model.competencies.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })

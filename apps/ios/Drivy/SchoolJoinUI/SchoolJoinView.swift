@@ -217,24 +217,26 @@ struct SchoolJoinSchoolHeader: View {
     /// Once joined, the mark turns into the success tone: the result is read before the sentence.
     var isConfirmed = false
     @Environment(\.dynamicTypeSize) private var typeSize
-    @ScaledMetric(relativeTo: .title2) private var plate: CGFloat = 56
+    @ScaledMetric(relativeTo: .title2) private var plate: CGFloat = 44
     @ScaledMetric(relativeTo: .subheadline) private var factSymbol: CGFloat = 20
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            if !typeSize.isAccessibilitySize {
-                Image(systemName: isConfirmed ? "checkmark" : "building.2")
-                    .font(isConfirmed ? Font.title2.weight(.semibold) : Font.title2)
-                    .foregroundStyle(isConfirmed ? DrivyTheme.success : DrivyTheme.accent)
-                    .frame(width: plate, height: plate)
-                    .background(isConfirmed ? DrivyTheme.successSurface : DrivyTheme.accentSoft, in: Circle())
-                    .accessibilityHidden(true)
+            HStack(spacing: DrivySpacing.s) {
+                if !typeSize.isAccessibilitySize {
+                    Image(systemName: isConfirmed ? "checkmark" : "building.2")
+                        .font(isConfirmed ? Font.title2.weight(.semibold) : Font.title2)
+                        .foregroundStyle(isConfirmed ? DrivyTheme.success : DrivyTheme.accent)
+                        .frame(width: plate, height: plate)
+                        .background(isConfirmed ? DrivyTheme.successSurface : DrivyTheme.accentSoft, in: Circle())
+                        .accessibilityHidden(true)
+                }
+                Text(name)
+                    .font(.drivyTitle)
+                    .foregroundStyle(DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
             }
-            Text(name)
-                .font(.drivyTitle)
-                .foregroundStyle(DrivyTheme.text)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                 ForEach(facts) { fact in
                     // One symbol column: the texts of the facts start on the same vertical line.

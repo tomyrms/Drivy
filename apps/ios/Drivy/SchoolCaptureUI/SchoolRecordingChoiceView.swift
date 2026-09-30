@@ -53,7 +53,7 @@ struct SchoolRecordingChoiceView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     if let learner = model.learner {
-                        Text(learner.displayName).font(.drivyScreenTitle)
+                        Text(learner.displayName).font(.drivyTitle)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if model.isLoading { DrivyLoadingState(title: "Chargement du choix…") }
@@ -116,20 +116,20 @@ struct SchoolRecordingChoiceView: View {
             let isChosen = model.choice?.status == status
             VStack(spacing: DrivySpacing.s) {
                 Image(systemName: symbol)
-                    .font(.title.weight(.semibold))
+                    .font(.title2.weight(.semibold))
                     .foregroundStyle(isEnabled ? DrivyTheme.accent : DrivyTheme.disabledText)
-                    .frame(width: 64, height: 64)
+                    .frame(width: 44, height: 44)
                     .background(isChosen ? DrivyTheme.surface : DrivyTheme.accentSoft, in: Circle())
                     .accessibilityHidden(true)
                 HStack(spacing: DrivySpacing.xs) {
                     Text(title)
-                        .font(.title3.weight(.semibold))
+                        .font(.headline)
                         .foregroundStyle(isEnabled ? DrivyTheme.text : DrivyTheme.disabledText)
                         .fixedSize(horizontal: false, vertical: true)
                     DrivySelectionMark(isSelected: isChosen)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 144)
+            .frame(maxWidth: .infinity, minHeight: 104)
         }
         .buttonStyle(DrivySelectionCardStyle(isSelected: model.choice?.status == status))
         .disabled(!isEnabled)

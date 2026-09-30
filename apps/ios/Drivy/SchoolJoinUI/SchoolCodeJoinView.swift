@@ -9,7 +9,7 @@ struct SchoolCodeJoinView: View {
     var loadsOnAppear = true
     @Environment(\.dismiss) private var dismiss
     @FocusState private var fieldFocused: Bool
-    @ScaledMetric(relativeTo: .title) private var codeSize: CGFloat = 36
+    @ScaledMetric(relativeTo: .title2) private var codeSize: CGFloat = 28
 
     var body: some View {
         NavigationStack {
@@ -80,7 +80,7 @@ struct SchoolCodeJoinView: View {
                         .submitLabel(.go)
                         .onSubmit { Task { await model.inspect() } }
                         .focused($fieldFocused)
-                        .schoolJoinFieldChrome(hasError: error != nil, isFocused: fieldFocused, minHeight: 80)
+                        .schoolJoinFieldChrome(hasError: error != nil, isFocused: fieldFocused, minHeight: 64)
                         .disabled(model.isBusy)
                         .accessibilityLabel("Code d’invitation")
                         .accessibilityHint(error ?? "")

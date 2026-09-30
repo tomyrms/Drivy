@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Onglet Profil du moniteur et de l’administration : le compte en tête (avatar, école, rôle, réglages),
-/// puis les trajets que le serveur laisse lire à ce compte. L’administration voit ceux de toute l’école
-/// et peut les filtrer ; le moniteur voit les siens.
+/// Le compte et ses réglages. L’historique des trajets a sa propre destination,
+/// sans déplacer les filtres ni élargir les données autorisées par le serveur.
 struct SchoolProfileTabView: View {
     @Bindable var workspace: SchoolWorkspace
     let account: SchoolAccountActions?
@@ -30,28 +29,47 @@ struct SchoolProfileTabView: View {
         .id(scopeKey)
     }
 
-    @ViewBuilder private var content: some View {
-        if let agendaClient {
-            SchoolTripsView(workspace: workspace, agendaClient: agendaClient, captureController: captureController) {
-                accountSections
-            }
-        } else {
-            List { accountSections }
-                .listStyle(.insetGrouped)
-                .scrollContentBackground(.hidden)
-                .frame(maxWidth: DrivyLayout.formColumn)
-                .frame(maxWidth: .infinity)
-                .background(DrivyTheme.canvas)
-        }
+    private var content: some View {
+        List { accountSections }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .frame(maxWidth: DrivyLayout.formColumn)
+            .frame(maxWidth: .infinity)
+            .background(DrivyTheme.canvas)
+            .accessibilityIdentifier("profile-list")
     }
 
-    /// Deux sections en tête de la liste : l’en-tête du compte, puis ses lignes.
+    /// Identité, accès aux leçons, puis actions du compte.
     @ViewBuilder private var accountSections: some View {
         Section {
             SchoolAccountHeading(workspace: workspace, isAuthenticated: true)
         }
         .listRowInsets(EdgeInsets(top: DrivySpacing.s, leading: DrivySpacing.m, bottom: DrivySpacing.s, trailing: DrivySpacing.m))
         .listRowBackground(Color.clear)
+        if let agendaClient {
+            Section {
+                NavigationLink {
+                    SchoolTripsView(workspace: workspace, agendaClient: agendaClient, captureController: captureController, showsHeading: false) { EmptyView() }
+                        .navigationTitle("Trajets")
+                        .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    Label("Trajets", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                        .frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("profile-open-trips")
+                if let person = workspace.person, let membership = workspace.membership,
+                   membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") {
+                    NavigationLink {
+                        SchoolPlanningSettingsView(scope: agendaClient.scope(person: person, membership: membership), client: agendaClient.planningClient)
+                    } label: {
+                        Label("Préférences de leçon", systemImage: "slider.horizontal.3")
+                            .frame(minHeight: 44)
+                    }
+                    .accessibilityIdentifier("profile-planning-settings")
+                }
+            } header: { Text("Leçons").drivyFormSectionHeader() }
+            .drivyFormRows()
+        }
         if let account {
             Section {
                 account.rows(workspace: workspace, openURL: openURL)
@@ -59,14 +77,6 @@ struct SchoolProfileTabView: View {
                     .listRowInsets(EdgeInsets(top: 0, leading: DrivySpacing.m, bottom: 0, trailing: DrivySpacing.m))
             }
             .drivyFormRows()
-        }
-        if let agendaClient, let person = workspace.person, let membership = workspace.membership,
-           membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") {
-            Section {
-                NavigationLink("Préférences de leçon") {
-                    SchoolPlanningSettingsView(scope: agendaClient.scope(person: person, membership: membership), client: agendaClient.planningClient)
-                }
-            }.drivyFormRows()
         }
     }
 }

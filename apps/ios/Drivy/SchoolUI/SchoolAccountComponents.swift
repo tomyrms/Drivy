@@ -47,10 +47,13 @@ struct SchoolAccountActions {
 struct SchoolAccountHeading: View {
     let workspace: SchoolWorkspace?
     let isAuthenticated: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         HStack(spacing: DrivySpacing.m) {
-            DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: 72)
+            if !typeSize.isAccessibilitySize {
+                DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: 52)
+            }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(workspace?.person?.displayName ?? (isAuthenticated ? "Compte connecté" : "Aucun compte connecté"))
                     .font(.drivyTitle)
@@ -94,7 +97,7 @@ private struct SchoolAppLockRow: View {
                 }
             }
             .padding(.vertical, DrivySpacing.s)
-            .frame(minHeight: 64)
+            .frame(minHeight: 52)
             .accessibilityIdentifier("app-lock-toggle")
         }
     }

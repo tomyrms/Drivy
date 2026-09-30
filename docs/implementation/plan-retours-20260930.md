@@ -151,3 +151,14 @@ Le porteur valide le progrès de l’organisation, mais demande de reprendre les
 - [x] Déployer après une nouvelle sauvegarde vérifiée et contrôler les fichiers publics : `e30e4ea`, services actifs, migrations 001–021 conformes, assets HTTPS identiques au build testé. CI : 224 tests API et 104 tests web réussis. [Preuve](proofs/deployment-web-layout-pass2-20260930.json).
 
 [Compte rendu et limites](web-layout-pass2-20260930.md).
+
+## 12. Revue de l’application native iPhone et iPad
+
+- [x] Répartir les écrans entre trois agents, avec UI Skills et guides SwiftUI.
+- [x] Examiner les parcours, identifier les espaces inutiles et les actions peu accessibles.
+- [ ] Finaliser les corrections et la revue croisée des sources.
+- [ ] Compiler et exécuter les tests sur les runners Apple iPhone et iPad.
+- [ ] Examiner les captures du lot courant, avec variantes de taille de texte, thème et orientation.
+- [ ] Produire et vérifier l’IPA non signé pour iLoader ; consigner les limites restantes.
+
+[Périmètre et résultats](native-ui-pass-20260930.md).

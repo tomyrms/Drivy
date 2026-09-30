@@ -97,18 +97,18 @@ struct SchoolLiveObservationSheet: View {
     private var themes: some View {
         VStack(spacing: DrivySpacing.l) {
             if recorder.isLoadingCompetencies { DrivyLoadingState(title: "Chargement des thèmes…") }
-            // Grille de tuiles égales, sans orpheline : « Marquer un moment » est la dernière tuile, au même
-            // rang que les thèmes (même cible, même geste), et tout tient dans la feuille sans défiler.
+            // La largeur utile décide du nombre de colonnes. Les libellés gardent leur taille,
+            // y compris dans une feuille étroite ou avec le texte agrandi.
             LazyVGrid(columns: dynamicTypeSize.isAccessibilitySize
                       ? [GridItem(.flexible())]
-                      : Array(repeating: GridItem(.flexible(), spacing: DrivySpacing.s), count: 3),
+                      : [GridItem(.adaptive(minimum: dynamicTypeSize >= .xxLarge ? 160 : 132), spacing: DrivySpacing.s)],
                       spacing: DrivySpacing.s) {
                 ForEach(recorder.themes) { theme in
                     Button {
                         withAnimation(motion) { selected = theme }
                         selectionFocused = true
                     } label: {
-                        tileLabel(theme.title) { emblem(theme, size: 64) }
+                        tileLabel(theme.title) { emblem(theme, size: 48) }
                     }
                     .buttonStyle(DrivyTileButtonStyle())
                     .disabled(!recorder.canRecord)
@@ -120,7 +120,7 @@ struct SchoolLiveObservationSheet: View {
                         withAnimation(motion) { saved = true }
                     }
                 } label: {
-                    tileLabel("Marquer un moment") { SchoolMarkerEmblem(size: 64) }
+                    tileLabel("Marquer un moment") { SchoolMarkerEmblem(size: 48) }
                 }
                 .buttonStyle(DrivyTileButtonStyle())
                 .disabled(!recorder.canRecord)
@@ -136,8 +136,7 @@ struct SchoolLiveObservationSheet: View {
         }
     }
 
-    /// Tuile pleine : le choix se lit comme un bouton, et la cible dépasse largement 44 pt. Un mot long
-    /// (« Stationnement ») se réduit un peu plutôt que de se couper en deux.
+    /// Même commande et même instant quelle que soit la composition ; aucun texte réduit pour tenir.
     @ViewBuilder private func tileLabel<Emblem: View>(_ title: String,
                                                       @ViewBuilder emblem: () -> Emblem) -> some View {
         let mark = emblem()
@@ -159,14 +158,12 @@ struct SchoolLiveObservationSheet: View {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
                     .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(minHeight: 38, alignment: .top)
             }
             .padding(.vertical, DrivySpacing.s)
             .padding(.horizontal, DrivySpacing.xxs)
-            .frame(maxWidth: .infinity, minHeight: 128, alignment: .top)
+            .frame(maxWidth: .infinity, minHeight: 112, alignment: .top)
             .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.xxs))
             .contentShape(shape)
         }
@@ -178,22 +175,18 @@ struct SchoolLiveObservationSheet: View {
     }
 
     private func appraisal(for theme: SchoolLiveObservationTheme) -> some View {
-        VStack(spacing: DrivySpacing.xl) {
-            VStack(spacing: DrivySpacing.m) {
-                emblem(theme, size: 96)
+        VStack(alignment: .leading, spacing: DrivySpacing.l) {
+            HStack(spacing: DrivySpacing.m) {
+                emblem(theme, size: 48)
                 Text(theme.title).font(.drivyTitle)
-                    .multilineTextAlignment(.center)
+                    .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($selectionFocused)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.top, DrivySpacing.s)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            let layout = dynamicTypeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(spacing: DrivySpacing.s))
-                : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.s))
-            layout {
+            VStack(spacing: DrivySpacing.s) {
                 ForEach([SchoolObservationStatus.toWorkOn, .attention, .positive]) { status in
                     appraisalButton(status, theme: theme)
                 }
@@ -247,48 +240,40 @@ struct SchoolLiveObservationSheet: View {
     }
 }
 
-/// Tuile d’appréciation : aplat de la teinte de l’état, pastille pleine et libellé en gras, pour se lire
-/// d’un coup d’œil en plein soleil comme de nuit. L’état n’est jamais porté par la seule couleur :
-/// symbole et mot sont toujours présents. Aucune animation d’entrée propre : le geste se répète des dizaines
-/// de fois par leçon, seuls l’appui (DrivyTileButtonStyle) et le passage de l’écran précédent bougent.
+/// Trois choix explicites, chacun sur une rangée : symbole et mot portent l’état,
+/// la couleur reste un repère secondaire. Aucun statut n’est présélectionné.
 private struct SchoolAppraisalTile: View {
     let status: SchoolObservationStatus
     let tone: DrivyTone
     let action: () -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        let stacked = dynamicTypeSize.isAccessibilitySize
         let shape = RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.xxs, style: .continuous)
-        let badge: CGFloat = stacked ? 64 : 76
         Button(action: action) {
-            let layout = stacked
-                ? AnyLayout(HStackLayout(spacing: DrivySpacing.m))
-                : AnyLayout(VStackLayout(spacing: DrivySpacing.s))
-            layout {
+            HStack(spacing: DrivySpacing.m) {
                 Image(systemName: status.symbol)
-                    .font(.title.weight(.heavy))
-                    .foregroundStyle(tone.background)
-                    .frame(width: badge, height: badge)
-                    .background(tone.foreground, in: Circle())
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(tone.foreground)
+                    .frame(width: 40, height: 40)
+                    .background(tone.background, in: Circle())
                     .accessibilityHidden(true)
                 Text(status.label)
                     .font(.headline)
                     .foregroundStyle(DrivyTheme.text)
-                    .multilineTextAlignment(stacked ? .leading : .center)
+                    .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, minHeight: 38, alignment: stacked ? .leading : .top)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.vertical, DrivySpacing.m)
-            .padding(.horizontal, DrivySpacing.xs)
-            .frame(maxWidth: .infinity, minHeight: stacked ? 96 : 168)
-            .background(tone.background, in: shape)
-            .overlay { shape.strokeBorder(tone.foreground.opacity(contrast == .increased ? 1 : 0.45), lineWidth: contrast == .increased ? 2 : 1) }
+            .padding(DrivySpacing.s)
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .background(DrivyTheme.surfaceMuted, in: shape)
+            .overlay { shape.strokeBorder(contrast == .increased ? DrivyTheme.controlBorder : DrivyTheme.border, lineWidth: contrast == .increased ? 2 : 1) }
             .contentShape(shape)
         }
         .buttonStyle(DrivyTileButtonStyle())
         .accessibilityLabel(status.label)
+        .accessibilityHint("Enregistre cette observation")
         .accessibilityIdentifier("live-observation-status-\(status.rawValue)")
     }
 }

@@ -11,13 +11,15 @@ struct SchoolSignInLanding: View {
     let canPresent: Bool
     let signIn: () -> Void
     let joinWithCode: () -> Void
-    @ScaledMetric(relativeTo: .largeTitle) private var glyphHeight: CGFloat = 148
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         GeometryReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.xl) {
-                    hero
+                    if !typeSize.isAccessibilitySize && proxy.size.height > 340 {
+                        hero(height: min(148, proxy.size.height * 0.25))
+                    }
                     Text("Tes leçons, tes trajets, ton école.")
                         .font(.drivyScreenTitle)
                         .lineSpacing(DrivySpacing.xxs)
@@ -58,10 +60,10 @@ struct SchoolSignInLanding: View {
     }
 
     /// Aplat de marque doux, trace au centre : le trajet est l'image de l'app. Profondeur par filet, sans ombre ni dégradé.
-    private var hero: some View {
+    private func hero(height: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous)
         return DrivyRouteGlyph()
-            .frame(height: glyphHeight)
+            .frame(height: height)
             .padding(.vertical, DrivySpacing.xl)
             .padding(.horizontal, DrivySpacing.l)
             .frame(maxWidth: .infinity)
