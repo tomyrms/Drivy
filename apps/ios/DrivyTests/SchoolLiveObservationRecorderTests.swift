@@ -192,7 +192,9 @@ import Testing
     @Test func revokedAnchorRequiresAnotherExplicitGestureInsteadOfMovingTheMarker() {
         let outbox = ConfigurationOutboxStub()
         let model = recorder(outbox: outbox, permitsAnchor: { _ in false })
-        #expect(!model.markMoment(anchor: .init(captureID: UUID(), segmentID: UUID(), pointSequence: 0)))
+        let anchor = SchoolLiveObservationAnchor(captureID: UUID(), segmentID: UUID(), pointSequence: 0)
+        let accepted = model.markMoment(anchor: anchor)
+        #expect(accepted == false)
         #expect(outbox.value == nil && model.mapObservations.isEmpty)
         #expect(model.errorMessage != nil)
         #expect(model.markMoment())

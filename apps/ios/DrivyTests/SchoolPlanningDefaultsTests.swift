@@ -14,10 +14,12 @@ import Testing
         #expect(defaults.trainingID(in: [a, training("C")]) == nil)
     }
 
-    @Test func planningPrefillsCurrentInstructorForDualRoleAndRequiresCommercialAgreementWithoutAPlace() async {
+    @Test func planningPrefillsCurrentInstructorForDualRoleAndRequiresCommercialAgreementWithoutAPlace() async throws {
         let server = PlanningDefaultsServer()
         let model = planning(server)
-        await model.load(); await model.selectLearner(HubFixture.learnerID)
+        await model.load()
+        try #require(model.errorMessage == nil && !model.needsReload)
+        await model.selectLearner(HubFixture.learnerID)
         #expect(model.trainingID == HubFixture.trainingID)
         #expect(model.instructorID == ConfigurationFixture.membershipID)
         #expect(model.productID == PlanningDefaultsServer.productID)
@@ -26,10 +28,12 @@ import Testing
         #expect(model.validBooking)
     }
 
-    @Test func currentMemberIsNotPrefilledWithoutAnAssignment() async {
+    @Test func currentMemberIsNotPrefilledWithoutAnAssignment() async throws {
         let server = PlanningDefaultsServer(assigned: false)
         let model = planning(server)
-        await model.load(); await model.selectLearner(HubFixture.learnerID)
+        await model.load()
+        try #require(model.errorMessage == nil && !model.needsReload)
+        await model.selectLearner(HubFixture.learnerID)
         #expect(model.trainingID == HubFixture.trainingID && model.instructorID == nil)
         model.termsAccepted = true
         #expect(!model.validBooking)
@@ -39,6 +43,7 @@ import Testing
         let server = PlanningDefaultsServer(receiptAvailable: false), outbox = ConfigurationOutboxStub()
         let model = SchoolPlanningSettingsWorkspace(scope: ConfigurationFixture.scope(), client: client(server), outbox: outbox)
         await model.load()
+        try #require(model.saved != nil && model.errorMessage == nil)
         model.trainingCategoryCode = "B"; model.serviceProductKey = "lesson-50"
         #expect(model.canSave)
         await model.save()
@@ -54,11 +59,12 @@ import Testing
         #expect(await server.writes().count == 1)
     }
 
-    @Test func cancellationIsConfirmedEvenWhenTheFollowingReadFails() async {
+    @Test func cancellationIsConfirmedEvenWhenTheFollowingReadFails() async throws {
         let server = PlanningDefaultsServer(failReadsAfterCancellation: true), outbox = ConfigurationOutboxStub()
         let model = SchoolPlanningWorkspace(scope: ConfigurationFixture.scope(), client: client(server),
             lesson: HubFixture.lesson(), outbox: outbox)
         await model.load()
+        try #require(model.errorMessage == nil && model.canMutate)
         model.cancellationReason = "OTHER"
         #expect(await model.cancel())
         #expect(model.confirmedCancellationLessonID == HubFixture.lessonID)
@@ -66,12 +72,13 @@ import Testing
         #expect(model.pending == nil && outbox.value == nil)
     }
 
-    @Test func cancellationWaitsForTheReceiptAndCanBeConfirmedByVerification() async {
+    @Test func cancellationWaitsForTheReceiptAndCanBeConfirmedByVerification() async throws {
         let server = PlanningDefaultsServer(receiptAvailable: false, failReadsAfterCancellation: true)
         let outbox = ConfigurationOutboxStub()
         let model = SchoolPlanningWorkspace(scope: ConfigurationFixture.scope(), client: client(server),
             lesson: HubFixture.lesson(), outbox: outbox)
         await model.load()
+        try #require(model.errorMessage == nil && model.canMutate)
         model.cancellationReason = "OTHER"
         #expect(await model.cancel() == false)
         #expect(model.confirmedCancellationLessonID == nil && outbox.value != nil)
@@ -132,7 +139,10 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
                     "schoolName": "École de test", "roles": ["ADMIN", "INSTRUCTOR"], "grants": [], "accessEpoch": 1] as [String: Any]]])
         }
         if parts.last == HubFixture.schoolID.uuidString.lowercased() {
-            return try ok(JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.school(gps: true))))
+            var school = try JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.school(gps: true))) as! [String: Any]
+            // The API includes nullable fields; synthesized Encodable omits nil properties.
+            school["contactPhone"] = NSNull(); school["logoAssetId"] = NSNull()
+            return try ok(school)
         }
         if parts.dropLast().last == "lessons", parts.last == HubFixture.lessonID.uuidString.lowercased() {
             return try ok(JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.lesson(status: cancelled ? "CANCELLED" : "PLANNED"))))
@@ -164,7 +174,7 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
         if parts.last == "service-products" { return try page([record(Self.productID, ["productKey": "lesson-50", "label": "Leçon", "type": "INDIVIDUAL_LESSON", "categoryCode": "B", "durationMinutes": 50, "siteId": NSNull(), "unitLabel": "leçon", "unitPriceCents": 9000, "validFrom": "2020-01-01", "validUntil": NSNull(), "termsVersionId": termsID.uuidString, "enabled": true, "current": true])]) }
         if parts.last == "commercial-terms" { return try page([record(termsID, ["label": "Conditions", "termsText": "Texte", "validFrom": "2020-01-01", "validUntil": NSNull(), "approved": true])]) }
         if parts.last == "members" { return try page([record(ConfigurationFixture.membershipID, ["personId": ConfigurationFixture.personID.uuidString, "displayName": "Moniteur de test", "status": "ACTIVE", "roles": ["ADMIN", "INSTRUCTOR"], "grants": [], "accessEpoch": 1])]) }
-        if parts.last == "learners" { return try page([record(HubFixture.learnerID, ["personId": UUID().uuidString, "displayName": "Élève de test", "archivedAt": NSNull()])]) }
+        if parts.last == "learners" { return try page([record(HubFixture.learnerID, ["personId": UUID().uuidString, "displayName": "Élève de test", "contactEmail": NSNull(), "contactPhone": NSNull(), "archivedAt": NSNull()])]) }
         if parts.last == "trainings" { return try page([record(HubFixture.trainingID, ["learnerId": HubFixture.learnerID.uuidString, "offeringId": offeringID.uuidString, "categoryCode": "B", "status": "ACTIVE", "startedOn": NSNull(), "closedOn": NSNull()])]) }
         if parts.last == "assignments" { return try page(assigned ? [record(UUID(), ["trainingId": HubFixture.trainingID.uuidString, "instructorMembershipId": ConfigurationFixture.membershipID.uuidString, "validFrom": "2020-01-01T00:00:00Z", "validUntil": NSNull()])] : []) }
         return try page([])
