@@ -94,6 +94,26 @@ import Testing
         #expect(model.canStart && model.meetingPoint == "Rendez-vous saisi")
     }
 
+    @Test(arguments: ["planning-defaults", "learners", "trainings", "lessons"], [401, 403])
+    func refusedReloadRemovesPreviouslyDisplayedContext(resource: String, status: Int) async throws {
+        let server = StartNowAssignmentReloadServer(), outbox = ConfigurationOutboxStub()
+        let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+            tokenSource: HubToken(), transport: server)
+        let model = SchoolStartNowWorkspace(scope: ConfigurationFixture.scope(), client: client, outbox: outbox)
+        await model.load()
+        try #require(model.canStart && !model.learners.isEmpty && !model.trainings.isEmpty)
+        model.meetingPoint = "Rendez-vous saisi"
+        // Une nouvelle sélection relit aussi le dernier lieu connu, qui reste une donnée protégée.
+        if resource == "lessons" { model.trainingID = nil }
+        await server.refuse(resource: resource, status: status)
+        await model.load()
+
+        #expect(model.learners.isEmpty && model.trainings.isEmpty && model.defaults == nil)
+        #expect(model.learnerID == nil && model.trainingID == nil && model.meetingPoint.isEmpty)
+        #expect(!model.contextValid && !model.canStart && !model.isLoading && model.errorMessage != nil)
+        #expect(outbox.saves.isEmpty)
+    }
+
     @Test func todayTimeContextDoesNotClaimTheLessonHasBeenStarted() {
         let lesson = HubFixture.lesson()
         let start = lesson.startsAt!
@@ -160,11 +180,17 @@ private actor StartNowAssignmentReloadServer: SchoolHTTPTransport {
     private let fallback = LessonFinishServer()
     private var originalRemoved = false
     private var unavailable = false
+    private var refusedResource: String?
+    private var refusedStatus = 403
     func removeOriginalAssignment() { originalRemoved = true }
     func setUnavailable(_ value: Bool) { unavailable = value }
+    func refuse(resource: String, status: Int) { refusedResource = resource; refusedStatus = status }
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         if unavailable { throw URLError(.notConnectedToInternet) }
+        if let url = request.url, url.lastPathComponent == refusedResource {
+            return SchoolHTTPResponse(data: Data("{}".utf8), status: refusedStatus, url: url, contentType: "application/problem+json")
+        }
         guard originalRemoved, let url = request.url, url.lastPathComponent == "learners" else {
             return try await fallback.send(request)
         }

@@ -96,6 +96,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
         } catch {
             guard request == generation else { return }
             isLoading = false
+            if Self.isAccessRefusal(error) { clearContext() }
             if !(error is CancellationError) { setContextError((error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription) }
         }
     }
@@ -117,8 +118,14 @@ struct SchoolStartNowBody: Encodable, Sendable {
             trainingID = trainings.contains(where: { $0.id == previousTrainingID }) ? previousTrainingID : defaults?.trainingID(in: trainings)
             if trainings.isEmpty { setContextError(Self.startBlockerMessage(active.first?.startNowBlockerCode)) }
             if let training = trainingID, training != previousTrainingID {
-                let lessons: [SchoolLesson] = (try? await client.records(scope.schoolID, path: ["lessons"],
-                    query: [URLQueryItem(name: "trainingId", value: training.uuidString)])) ?? []
+                let lessons: [SchoolLesson]
+                do {
+                    lessons = try await client.records(scope.schoolID, path: ["lessons"],
+                        query: [URLQueryItem(name: "trainingId", value: training.uuidString)])
+                } catch {
+                    if Self.isAccessRefusal(error) || error is CancellationError { throw error }
+                    lessons = []
+                }
                 guard request == generation else { return }
                 meetingPoint = SchoolStartNowWorkspace.lastMeetingPoint(lessons, trainingID: training) ?? ""
             }
@@ -127,8 +134,25 @@ struct SchoolStartNowBody: Encodable, Sendable {
         } catch {
             guard request == generation else { return }
             isLoading = false
+            if Self.isAccessRefusal(error) { clearContext() }
             if !(error is CancellationError) { setContextError((error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription) }
         }
+    }
+
+    private static func isAccessRefusal(_ error: Error) -> Bool {
+        if let failure = error as? SchoolPlanningFailure {
+            return failure == .unauthorized || failure == .forbidden
+        }
+        if let failure = error as? SchoolAPIError {
+            return failure == .unauthorized || failure == .forbidden || failure == .identityNotLinked
+        }
+        return false
+    }
+
+    /// Un refus explicite retire les données affichées sans effacer une demande durable en attente.
+    private func clearContext() {
+        learners = []; trainings = []; defaults = nil; learnerID = nil; trainingID = nil; meetingPoint = ""
+        contextValid = false; started = nil; conflicted = false; planInstead = false; unsupported = false
     }
 
     /// A successful context read cannot repair the encrypted outbox. Its failure
