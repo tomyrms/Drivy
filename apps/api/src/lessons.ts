@@ -4,7 +4,7 @@ import type {Pool,PoolClient} from 'pg';
 import {z} from 'zod';
 import type {TokenVerifier} from './auth.js';
 import {withActor} from './database.js';
-import {schoolCommand,checkIdempotency,checkVersion,requireVersion,type CommandActor,type CommandGuards,type SchoolRow} from './commands.js';
+import {schoolCommand,schoolColumns,checkIdempotency,checkVersion,requireVersion,type CommandActor,type CommandGuards,type SchoolRow} from './commands.js';
 import {ApiError,forbidden,notFound} from './errors.js';
 import {Cursors} from './cursor.js';
 import {ensureOpen,instructorPermission} from './lesson-setup.js';
@@ -17,6 +17,8 @@ const commercialChange=z.object({commercialSelection:selection,agreedPriceCents:
 const startNowCommand=z.object({operationId:id,trainingId:id,meetingPoint:z.string().trim().max(500).nullable().optional()}).strict();
 const moveCommand=z.object({operationId:id,...interval,agreementConfirmed:z.literal(true),reason:z.string().max(1000).nullable().optional(),commercialChange:commercialChange.optional()}).strict();
 const cancelCommand=z.object({operationId:id,reasonCode:z.enum(['LEARNER_REQUEST','INSTRUCTOR_UNAVAILABLE','SCHOOL_CLOSURE','OTHER']),comment:z.string().max(1000).nullable().optional()}).strict();
+const availabilityQuery=z.object({trainingId:id,instructorMembershipId:id,plannedStart:date,plannedEnd:date,
+ timeZone:z.string().min(1).max(100),bufferMinutes:z.coerce.number().int().min(0).max(240),excludeLessonId:id.optional()}).strict();
 type Selection=z.infer<typeof selection>;
 export interface LessonRow {id:string;school_id:string;version:number;training_id:string;learner_id:string;learner_person_id:string;instructor_membership_id:string;
  planned_start:Date;planned_end:Date;time_zone:string;meeting_point:string;status:'PLANNED'|'COMPLETED'|'CANCELLED'|'NO_SHOW';price_cents_snapshot:string;buffer_minutes_snapshot:number;
@@ -51,7 +53,7 @@ export function lessonCommandGuards(schoolId:string,target:{trainingId:string;in
  authorize:async db=>{const row='trainingId'in target?{training_id:target.trainingId,instructor_membership_id:target.instructorMembershipId}:await getLesson(db,schoolId,target.lessonId);await access(db,row.training_id,row.instructor_membership_id);},
  replay:async(db,_actor,previous)=>{await getLesson(db,schoolId,previous.id);return previous;}
 };}
-function validateInterval(body:z.infer<typeof moveCommand>|z.infer<typeof createCommand>,school:SchoolRow){
+function validateInterval(body:{plannedStart:string;plannedEnd:string;timeZone:string},school:SchoolRow){
  let valid=false;try{new Intl.DateTimeFormat('fr',{timeZone:body.timeZone});valid=body.timeZone===school.timeZone;}catch{ /* Invalid zone is never coerced. */ }
  const minutes=(Date.parse(body.plannedEnd)-Date.parse(body.plannedStart))/60_000;
  if(!valid)throw new ApiError(422,'INVALID_TIME_ZONE','Utilisez le fuseau de l’école affiché.');
@@ -188,8 +190,35 @@ export async function schoolPlanningBlockers(db:PoolClient,schoolId:string){
 }
 export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string}){
  const base='/v1/schools/:schoolId',cursors=new Cursors(options.cursorSecret),schoolID=(r:FastifyRequest)=>z.object({schoolId:id}).parse(r.params).schoolId;
- const envelope=(data:unknown,r:FastifyRequest)=>({data,requestId:r.id,serverTime:new Date().toISOString()});
- app.get(`${base}/lessons`,async r=>{
+  const envelope=(data:unknown,r:FastifyRequest)=>({data,requestId:r.id,serverTime:new Date().toISOString()});
+  // Lecture indicative avant le tarif : les occupations privées ne quittent jamais le serveur.
+  // Aucun créneau n'est retenu ; CREATE/MOVE rejouent toutes les validations sous leurs verrous.
+  app.get(`${base}/lessons/availability`,async r=>{
+   const query=availabilityQuery.parse(r.query),schoolId=schoolID(r),identity=await options.verifyToken(r.headers.authorization);
+   const data=await withActor(options.pool,identity,schoolId,async(db,_actor,member)=>{
+    if(!member?.roles.some(role=>role==='ADMIN'||role==='INSTRUCTOR'))throw forbidden();
+    const school=(await db.query<SchoolRow>(`SELECT ${schoolColumns} FROM drivy.school WHERE id=$1`,[schoolId])).rows[0];
+    if(!school)throw notFound();
+    validateInterval(query,school);
+    await learnerPerson(db,schoolId,query.trainingId);
+    await trainingContext(db,school,query.trainingId,query.instructorMembershipId,query.plannedStart,query.plannedEnd);
+    if(query.excludeLessonId){
+     const original=await getLesson(db,schoolId,query.excludeLessonId);
+     await access(db,original.training_id,original.instructor_membership_id);
+     if(original.training_id!==query.trainingId)throw notFound();
+     if(original.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Seule une leçon planifiée peut être déplacée.');
+     if(original.planned_start.getTime()<=Date.now()||original.actual_start)throw new ApiError(409,'LESSON_STARTED','La leçon a déjà commencé.');
+     if(original.buffer_minutes_snapshot!==query.bufferMinutes)throw new ApiError(422,'INVALID_INTERVAL','Le déplacement conserve l’intervalle de la leçon.');
+    }
+    try{await ensureOpen(db,schoolId,query.instructorMembershipId,query.plannedStart,query.plannedEnd,query.timeZone);}
+    catch(error){if(error instanceof ApiError&&error.code==='SLOT_UNAVAILABLE')return {available:false,reasonCode:'SLOT_UNAVAILABLE'};throw error;}
+    const result=(await db.query<{conflict:boolean}>(`SELECT drivy.lesson_slot_conflict($1,$2,$3,$4,$5,$6,$7) AS conflict`,
+     [schoolId,query.trainingId,query.instructorMembershipId,query.plannedStart,query.plannedEnd,query.bufferMinutes,query.excludeLessonId??null])).rows[0];
+    if(typeof result?.conflict!=='boolean')throw new ApiError(503,'SERVICE_UNAVAILABLE','Le créneau n’a pas pu être vérifié.');
+    return {available:!result.conflict,reasonCode:result.conflict?'SLOT_CONFLICT':null};
+   });return envelope(data,r);
+  });
+  app.get(`${base}/lessons`,async r=>{
   const query=z.object({from:date.optional(),to:date.optional(),trainingId:id.optional(),instructorMembershipId:id.optional(),limit:z.coerce.number().int().min(1).max(100).default(50),cursor:z.string().max(6000).optional()}).strict().parse(r.query);
   if(query.from&&query.to&&Date.parse(query.to)<=Date.parse(query.from))throw new ApiError(422,'INVALID_INTERVAL','La fenêtre de planning est invalide.');
   const schoolId=schoolID(r),identity=await options.verifyToken(r.headers.authorization);
