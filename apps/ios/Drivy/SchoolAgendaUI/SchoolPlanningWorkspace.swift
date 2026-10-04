@@ -136,6 +136,7 @@ struct SchoolPlanningInstructor: Identifiable {
     }
     func load() async {
         guard !invalidated, !isBusy else { return }
+        let previousInstructorID = instructorID
         generation = UUID(); selectionGeneration = UUID(); availabilityGeneration = UUID(); let request = generation
         clearAvailability()
         isLoading = true; needsReload = true; errorMessage = nil; storageAvailable = false
@@ -181,6 +182,10 @@ struct SchoolPlanningInstructor: Identifiable {
             else {
                 learnerID = nil; trainingID = nil; trainings = []; assignments = []; instructorID = nil; productID = nil
             }
+            // The retained form's task(id:) does not restart when the instructor stays the same.
+            if request == generation, instructorID != nil, instructorID == previousInstructorID {
+                await loadAvailability()
+            }
         } catch { if request == generation { fail(error) } }
     }
     func selectLearner(_ id: UUID) async {
@@ -212,6 +217,7 @@ struct SchoolPlanningInstructor: Identifiable {
         guard !invalidated, !isBusy else { return }
         guard trainings.contains(where: { $0.id == id }) else { return }
         selectionGeneration = UUID(); let request = selectionGeneration
+        let previousInstructorID = trainingID == id ? instructorID : nil
         if trainingID != id { productID = nil }
         trainingID = id; assignments = []; termsAccepted = false; isLoading = true
         do {
@@ -220,7 +226,11 @@ struct SchoolPlanningInstructor: Identifiable {
             assignments = records; isLoading = false
             refreshProductSelection()
             if originalLesson == nil {
-                instructorID = assignedInstructors.contains(where: { $0.id == scope.membershipID }) ? scope.membershipID : nil
+                if let previousInstructorID, assignedInstructors.contains(where: { $0.id == previousInstructorID }) {
+                    instructorID = previousInstructorID
+                } else {
+                    instructorID = assignedInstructors.contains(where: { $0.id == scope.membershipID }) ? scope.membershipID : nil
+                }
             }
         } catch { guard request == selectionGeneration else { return }; isLoading = false; fail(error) }
     }

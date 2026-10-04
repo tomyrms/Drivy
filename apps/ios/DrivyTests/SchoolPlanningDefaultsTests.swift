@@ -35,6 +35,25 @@ import Testing
         #expect(await server.writes().isEmpty)
     }
 
+    @Test func settingsRequireExplicitResolutionOfConcurrentChanges() async throws {
+        let server = PlanningDefaultsServer()
+        let model = SchoolPlanningSettingsWorkspace(scope: ConfigurationFixture.scope(), client: client(server), outbox: ConfigurationOutboxStub())
+        await model.load()
+        try #require(model.saved?.version == 1)
+        model.trainingCategoryCode = "B"; model.serviceProductKey = "lesson-50"
+        await server.changeDefaultsRemotely()
+        await model.load()
+        #expect(model.saved?.version == 1 && model.conflictingDefaults?.version == 2)
+        #expect(model.trainingCategoryCode == "B" && model.serviceProductKey == "lesson-50")
+        #expect(!model.canSave && model.errorMessage != nil)
+        await model.save()
+        #expect(await server.writes().isEmpty)
+        model.useUpdatedDefaults()
+        #expect(model.saved?.version == 2 && model.conflictingDefaults == nil)
+        #expect(model.trainingCategoryCode == "B" && model.serviceProductKey.isEmpty)
+        #expect(model.errorMessage == nil && !model.hasChanges)
+    }
+
     @Test func cancellationReasonUsesTheAPIsUTF16Limit() async throws {
         let model = SchoolPlanningWorkspace(scope: ConfigurationFixture.scope(), client: client(PlanningDefaultsServer()),
             lesson: HubFixture.lesson(), outbox: ConfigurationOutboxStub())
@@ -141,6 +160,18 @@ import Testing
         #expect(await server.writes().count == 1)
     }
 
+    @Test func reloadingTheSameInstructorRestoresAvailabilityWithoutAViewTaskRestart() async throws {
+        let model = planning(PlanningDefaultsServer())
+        await model.load()
+        await model.selectLearner(HubFixture.learnerID)
+        await model.loadAvailability()
+        try #require(model.instructorID != nil && model.availabilityLoaded)
+        let instructor = model.instructorID
+        await model.load()
+        #expect(model.instructorID == instructor)
+        #expect(model.availabilityLoaded && !model.isLoadingAvailability && model.availabilityError == nil)
+    }
+
     private func training(_ category: String) -> SchoolTraining {
         SchoolTraining(id: UUID(), schoolId: HubFixture.schoolID, learnerId: HubFixture.learnerID, offeringId: UUID(),
             version: 1, categoryCode: category, status: "ACTIVE", startedOn: nil, closedOn: nil)
@@ -175,6 +206,7 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
     func writes() -> [URLRequest] { sent.filter { $0.httpMethod != "GET" } }
     func enableReceipt() { receiptAvailable = true }
     func setReadUnavailable(_ value: Bool) { readUnavailable = value }
+    func changeDefaultsRemotely() { defaultsVersion = 2; category = "B"; productKey = NSNull() }
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         if readUnavailable && request.httpMethod == "GET" { throw URLError(.notConnectedToInternet) }
         sent.append(request)

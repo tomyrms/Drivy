@@ -257,6 +257,11 @@ struct SchoolPlanningView: View {
             DrivyActionNote(text: "Raccourcis le lieu à 500 caractères.", isError: true)
         } else if model.reasonTooLong {
             DrivyActionNote(text: "Raccourcis le motif à 1 000 caractères.", isError: true)
+        } else if model.startsAt <= Date() {
+            DrivyActionNote(text: "Choisis un horaire à venir.", isError: true)
+        } else if model.originalLesson != nil && model.changesCommercialTerms
+            && model.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            DrivyActionNote(text: "Indique le motif du changement.", isError: true)
         }
         Button {
             Task { if await model.saveBooking() { dismiss() } }

@@ -15,6 +15,7 @@ import Foundation
     private(set) var pending: PendingSchoolCommand?
     private(set) var storageAvailable = false
     private(set) var contextCurrent = false
+    private(set) var conflictingDefaults: SchoolPlanningDefaults?
     var trainingCategoryCode = ""
     var serviceProductKey = ""
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
@@ -37,10 +38,10 @@ import Foundation
     }
     var canRetry: Bool { pending?.kind == .savePlanningDefaults && pending?.scope == scope && !isBusy && !isLoading }
 
-    func load() async {
+    func load(keepingEdits: Bool = true) async {
         guard !isBusy, !isLoading else { return }
-        let preservingEdits = saved != nil && hasChanges
-        isLoading = true; errorMessage = nil; storageAvailable = false; contextCurrent = false
+        let preservingEdits = keepingEdits && saved != nil && hasChanges
+        isLoading = true; errorMessage = nil; storageAvailable = false; contextCurrent = false; conflictingDefaults = nil
         defer { isLoading = false }
         do {
             pending = try outbox.pending(for: scope); storageAvailable = true
@@ -63,17 +64,28 @@ import Foundation
                     && (product.durationMinutes ?? 0) > 0 && product.validFrom <= date && (product.validUntil.map { $0 >= date } ?? true)
                     && terms.contains { $0.id == product.termsVersionId && $0.approved && $0.validFrom <= date && ($0.validUntil.map { $0 >= date } ?? true) }
             }
-            saved = current; contextCurrent = true
+            if preservingEdits, saved?.version != current.version {
+                conflictingDefaults = current
+                errorMessage = "Les préférences ont changé depuis leur ouverture. Recharge leur nouvelle version avant d’enregistrer."
+            } else {
+                saved = current; contextCurrent = true; conflictingDefaults = nil
+            }
             if !preservingEdits {
                 trainingCategoryCode = current.trainingCategoryCode ?? ""; serviceProductKey = current.serviceProductKey ?? ""
             }
         } catch {
             if error as? SchoolPlanningFailure == .forbidden || error as? SchoolPlanningFailure == .unauthorized
                 || error as? SchoolAPIError == .forbidden || error as? SchoolAPIError == .unauthorized {
-                saved = nil; offerings = []; products = []; trainingCategoryCode = ""; serviceProductKey = ""
+                saved = nil; conflictingDefaults = nil; offerings = []; products = []; trainingCategoryCode = ""; serviceProductKey = ""
             }
             if !(error is CancellationError) { errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription }
         }
+    }
+    func useUpdatedDefaults() {
+        guard !isBusy, !isLoading, pending == nil, let current = conflictingDefaults else { return }
+        saved = current; trainingCategoryCode = current.trainingCategoryCode ?? ""
+        serviceProductKey = current.serviceProductKey ?? ""
+        conflictingDefaults = nil; contextCurrent = true; errorMessage = nil; successMessage = nil
     }
     func save() async {
         guard canSave, let saved else { return }
@@ -100,7 +112,7 @@ import Foundation
         do {
             _ = try await client.receipt(for: command)
             try outbox.remove(command); pending = nil; successMessage = "Préférences enregistrées."
-            isBusy = false; await load()
+            isBusy = false; await load(keepingEdits: false)
         } catch { isBusy = false; errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription }
     }
     private func send(_ command: PendingSchoolCommand, fresh: Bool) async {
@@ -109,7 +121,7 @@ import Foundation
             try outbox.save(command)
             try await client.send(command)
             try outbox.remove(command); pending = nil; successMessage = "Préférences enregistrées."
-            isBusy = false; await load()
+            isBusy = false; await load(keepingEdits: false)
         } catch {
             if fresh, let failure = error as? SchoolPlanningFailure, failure.definitiveRejection {
                 do { try outbox.remove(command); pending = nil }
@@ -131,7 +143,15 @@ struct SchoolPlanningSettingsView: View {
                 Section { DrivySkeletonRows(count: 2).drivySkeleton("Chargement des préférences…") }.drivyFormRows()
             }
             if let error = model.errorMessage {
-                Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }.drivyFormRows()
+                Section {
+                    if model.conflictingDefaults != nil {
+                        DrivyFormMessage(text: error, tone: .danger)
+                        Button("Utiliser les préférences actualisées") { model.useUpdatedDefaults() }
+                            .disabled(model.isBusy || model.isLoading || model.pending != nil)
+                    } else {
+                        SchoolErrorNotice(message: error, retry: { Task { await model.load() } })
+                    }
+                }.drivyFormRows()
             }
             if let success = model.successMessage, !model.hasChanges { Section { DrivyFormMessage(text: success, tone: .success) }.drivyFormRows() }
             if let pending = model.pending {
