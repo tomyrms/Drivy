@@ -1,0 +1,361 @@
+{
+  "date": "2026-10-04",
+  "status": "ipa-delivered-remaining-campaigns-stopped-at-user-request",
+  "source": "e36b0d4c48325f30ba9c4c3e8cf2a7cd6f58e7bc",
+  "local": {
+    "diffCheck": "passed",
+    "bashSyntax": "passed with Git Bash",
+    "captureScriptRegression": {
+      "tests": 11,
+      "result": "passed",
+      "environment": "Windows, Git Bash on PATH, PYTHONUTF8=1",
+      "limit": "Apple commands mocked; no native compilation"
+    },
+    "candidateVectorIcons": 60,
+    "vectorThemesAndActions": 12,
+    "runtimeAssetsMatchSelected": 12,
+    "appProposals": 5,
+    "appSelectedOriginal": 1,
+    "appSelectedRefined": true,
+    "logoSkill": "logo-design at 0ecf52e9a4b3ac92b714f7cc6e3148ab8c774134",
+    "appLogoFinal": "vector A v2; replaces raster selection after requested skill review",
+    "logoRuntimeExport": {
+      "width": 1024,
+      "height": 1024,
+      "channels": 3,
+      "hasAlpha": false,
+      "sha256": "2c253227f7f0cceca364b97d624f0c009c2feea9f19a815ce39ab3ae16733a76",
+      "runtimeIdentical": true
+    }
+  },
+  "runs": {
+    "initialNative": {
+      "id": 37207341781,
+      "source": "99b35bf1dce308b506cb525931011a2564523fed",
+      "result": "failure",
+      "build": "success",
+      "swiftTesting": {
+        "tests": 241,
+        "suites": 23,
+        "result": "success"
+      },
+      "presentationTests": {
+        "iPhone": 3,
+        "iPad": 3,
+        "result": "success"
+      },
+      "ui": {
+        "iPhone": {
+          "passed": 12,
+          "failed": 0
+        },
+        "iPad": {
+          "passed": 11,
+          "failed": 1
+        }
+      },
+      "failure": "XCTest tab selector expected a TabBar on iPad; fixed by matching native Button/Cell labels"
+    },
+    "generalFinal": {
+      "id": 37209303465,
+      "source": "10f1d1296c190a6994647b2b2c42871506361550",
+      "result": "success"
+    },
+    "ipaFinal": {
+      "id": 37209303445,
+      "source": "10f1d1296c190a6994647b2b2c42871506361550",
+      "result": "success"
+    },
+    "nativeFinal": {
+      "id": 37209322885,
+      "result": "cancelled at user request; no test verdict retained"
+    },
+    "normalFinal": {
+      "id": 37209324641,
+      "result": "success"
+    },
+    "largeFinal": {
+      "id": 37209326488,
+      "result": "success"
+    },
+    "logoGeneral": {
+      "id": 37210789140,
+      "result": "success"
+    },
+    "logoIPA": {
+      "id": 37210789141,
+      "result": "success"
+    },
+    "logoNative": {
+      "id": 37210798960,
+      "result": "cancelled before execution"
+    },
+    "logoTodayNormal": {
+      "id": 37210800901,
+      "result": "cancelled at user request"
+    },
+    "logoTodayLarge": {
+      "id": 37210802959,
+      "result": "cancelled"
+    }
+  },
+  "initialVisualReview": {
+    "normal": {
+      "runId": 37207343731,
+      "inspected": [
+        "iPad-agenda-dark-synthetic.png",
+        "iPad-agenda-light-synthetic.png",
+        "iPad-home-tabs-dark-synthetic.png",
+        "iPad-home-tabs-light-synthetic.png",
+        "iPad-invitations-dark-synthetic.png",
+        "iPad-invitations-light-synthetic.png",
+        "iPad-learner-dark-synthetic.png",
+        "iPad-learner-light-synthetic.png",
+        "iPad-lesson-dark-synthetic.png",
+        "iPad-lesson-light-synthetic.png",
+        "iPad-live-dark-synthetic.png",
+        "iPad-live-light-synthetic.png",
+        "iPad-live-waiting-dark-synthetic.png",
+        "iPad-live-waiting-light-synthetic.png",
+        "iPad-planning-settings-dark-synthetic.png",
+        "iPad-planning-settings-light-synthetic.png",
+        "iPad-profile-dark-synthetic.png",
+        "iPad-profile-light-synthetic.png",
+        "iPad-skeletons-dark-synthetic.png",
+        "iPad-skeletons-light-synthetic.png",
+        "iPad-start-now-dark-synthetic.png",
+        "iPad-start-now-light-synthetic.png",
+        "iPhone-agenda-dark-synthetic.png",
+        "iPhone-agenda-light-synthetic.png",
+        "iPhone-home-tabs-dark-synthetic.png",
+        "iPhone-home-tabs-light-synthetic.png",
+        "iPhone-invitations-dark-synthetic.png",
+        "iPhone-invitations-light-synthetic.png",
+        "iPhone-learner-dark-synthetic.png",
+        "iPhone-learner-light-synthetic.png",
+        "iPhone-lesson-dark-synthetic.png",
+        "iPhone-lesson-light-synthetic.png",
+        "iPhone-live-dark-synthetic.png",
+        "iPhone-live-light-synthetic.png",
+        "iPhone-live-waiting-dark-synthetic.png",
+        "iPhone-live-waiting-light-synthetic.png",
+        "iPhone-planning-settings-dark-synthetic.png",
+        "iPhone-planning-settings-light-synthetic.png",
+        "iPhone-profile-dark-synthetic.png",
+        "iPhone-profile-light-synthetic.png",
+        "iPhone-skeletons-dark-synthetic.png",
+        "iPhone-skeletons-light-synthetic.png",
+        "iPhone-start-now-dark-synthetic.png",
+        "iPhone-start-now-light-synthetic.png"
+      ],
+      "excluded": {
+        "iPad-live-light-synthetic.png": "System notification masks header"
+      },
+      "usableCount": 43,
+      "findings": [
+        "Today synthetic transport did not filter day window"
+      ]
+    },
+    "large": {
+      "runId": 37207345568,
+      "inspected": [
+        "iPad-home-tabs-dark-synthetic.png",
+        "iPad-home-tabs-light-synthetic.png",
+        "iPad-live-dark-synthetic.png",
+        "iPad-live-light-synthetic.png",
+        "iPad-live-waiting-dark-synthetic.png",
+        "iPad-live-waiting-light-synthetic.png",
+        "iPad-replay-dark-synthetic.png",
+        "iPad-replay-light-synthetic.png",
+        "iPad-skeletons-dark-synthetic.png",
+        "iPad-skeletons-light-synthetic.png",
+        "iPhone-home-tabs-dark-synthetic.png",
+        "iPhone-home-tabs-light-synthetic.png",
+        "iPhone-live-dark-synthetic.png",
+        "iPhone-live-light-synthetic.png",
+        "iPhone-live-waiting-dark-synthetic.png",
+        "iPhone-live-waiting-light-synthetic.png",
+        "iPhone-replay-dark-synthetic.png",
+        "iPhone-replay-light-synthetic.png",
+        "iPhone-skeletons-dark-synthetic.png",
+        "iPhone-skeletons-light-synthetic.png"
+      ],
+      "excluded": {
+        "iPad-home-tabs-light-synthetic.png": "Blank capture",
+        "iPad-live-waiting-light-synthetic.png": "System notification masks header"
+      },
+      "usableCount": 18,
+      "findings": [
+        "Today fixed dock truncated in AX",
+        "Semantic symbols overflow fixed controls"
+      ]
+    }
+  },
+  "physicalQualification": {
+    "GPS": "not performed",
+    "battery": "not performed",
+    "VoiceOver": "not performed",
+    "deviceInstallation": "owner signs with iLoader"
+  },
+  "deployment": "none during this review",
+  "pullRequest": "https://github.com/tomyrms/Drivy/pull/5",
+  "ipa": {
+    "commit": "e36b0d4c48325f30ba9c4c3e8cf2a7cd6f58e7bc",
+    "run": "37210789141",
+    "build": "98",
+    "version": "0.7.0",
+    "bundleIdentifier": "ch.drivy.qualification",
+    "executable": "Drivy",
+    "builtAt": "2026-10-04T14:55:32.442733+00:00",
+    "configuration": "Release",
+    "signed": false,
+    "archiveCreated": true,
+    "signatureVerification": {
+      "status": "PASSED",
+      "method": "codesign --display après suppression ; plateforme via lipo et vtool",
+      "checkedBundles": 4,
+      "checkedBinaries": 2
+    },
+    "minimumOS": "26.0",
+    "platforms": [
+      "iPhoneOS"
+    ],
+    "sdkName": "iphoneos26.5",
+    "xcodeBuild": "17F113",
+    "ipaSHA256": "2bd5a34c4073ccd49fdfb21b93ba305cf631216f24b3c7ce95fcf3bb9d0a8e2e",
+    "binaries": [
+      {
+        "path": "Payload/Drivy.app/Drivy",
+        "sha256": "29d8061587855315232d968e5137de24b87c8edaa38c95af9d52395b5c37f707",
+        "slices": [
+          {
+            "architecture": "arm64",
+            "platform": "iOS",
+            "minimumOS": "26.0",
+            "sdk": "26.5"
+          }
+        ]
+      },
+      {
+        "path": "Payload/Drivy.app/Frameworks/SQLCipher.framework/SQLCipher",
+        "sha256": "ec36b9a465db3abc5cdedf285a34288b9163b3c00993694bd9e6e7e7104b3dcb",
+        "slices": [
+          {
+            "architecture": "arm64",
+            "platform": "iOS",
+            "minimumOS": "12.0",
+            "sdk": "18.5"
+          }
+        ]
+      }
+    ],
+    "packageResolvedSHA256": "90d879f790dc4d740e9a5100510447a8a6b284892995f448a362481cf780ecd5",
+    "distribution": "Signature locale avec iLoader",
+    "scope": "Leçons scolaires, trajets facultatifs, observations, bilans et invitations par code ; qualification physique distincte",
+    "schoolConnectionConfigured": true,
+    "physicalQualification": "NOT_EXECUTED",
+    "downloadSHA256Verified": true
+  },
+  "finalVisualReview": {
+    "large": {
+      "runId": 37209326488,
+      "source": "10f1d12",
+      "inspected": [
+        "iPad-home-tabs-dark-portrait-synthetic.png",
+        "iPad-home-tabs-light-portrait-synthetic.png",
+        "iPad-live-dark-portrait-synthetic.png",
+        "iPad-live-light-portrait-synthetic.png",
+        "iPad-live-waiting-dark-portrait-synthetic.png",
+        "iPad-live-waiting-light-portrait-synthetic.png",
+        "iPad-replay-dark-portrait-synthetic.png",
+        "iPad-replay-light-portrait-synthetic.png",
+        "iPad-signal-dark-portrait-synthetic.png",
+        "iPad-signal-light-portrait-synthetic.png",
+        "iPad-signal-status-dark-portrait-synthetic.png",
+        "iPad-signal-status-light-portrait-synthetic.png",
+        "iPhone-home-tabs-dark-portrait-synthetic.png",
+        "iPhone-home-tabs-light-portrait-synthetic.png",
+        "iPhone-live-dark-portrait-synthetic.png",
+        "iPhone-live-light-portrait-synthetic.png",
+        "iPhone-live-waiting-dark-portrait-synthetic.png",
+        "iPhone-live-waiting-light-portrait-synthetic.png",
+        "iPhone-replay-dark-portrait-synthetic.png",
+        "iPhone-replay-light-portrait-synthetic.png",
+        "iPhone-signal-dark-portrait-synthetic.png",
+        "iPhone-signal-light-portrait-synthetic.png",
+        "iPhone-signal-status-dark-portrait-synthetic.png",
+        "iPhone-signal-status-light-portrait-synthetic.png"
+      ],
+      "excluded": {},
+      "limitations": [
+        "iPhone live map controls below initial scroll viewport",
+        "Last signal categories and marker below initial scroll viewport"
+      ],
+      "newP0toP2": 0
+    },
+    "logoTodayPartial": {
+      "source": "e36b0d4",
+      "normalPNG": 0,
+      "largeInspected": [
+        "iPhone-home-tabs-light-portrait-synthetic.png",
+        "iPhone-sign-in-light-portrait-synthetic.png"
+      ],
+      "largeExpected": 8,
+      "normalExpected": 8,
+      "confirmed": "Today has4 lessons within current day; labels fit; sign-in legible",
+      "limits": [
+        "14 other captures not qualified",
+        "Brand mark intentionally hidden in AX; new logo integration not qualified by these screenshots"
+      ]
+    },
+    "normal": {
+      "runId": 37209324641,
+      "source": "10f1d12",
+      "inspected": [
+        "iPad-home-tabs-dark-portrait-synthetic.png",
+        "iPad-home-tabs-light-portrait-synthetic.png",
+        "iPad-live-dark-portrait-synthetic.png",
+        "iPad-live-light-portrait-synthetic.png",
+        "iPad-replay-dark-portrait-synthetic.png",
+        "iPad-replay-light-portrait-synthetic.png",
+        "iPad-sign-in-dark-portrait-synthetic.png",
+        "iPad-sign-in-light-portrait-synthetic.png",
+        "iPad-signal-dark-portrait-synthetic.png",
+        "iPad-signal-light-portrait-synthetic.png",
+        "iPad-signal-status-dark-portrait-synthetic.png",
+        "iPad-signal-status-light-portrait-synthetic.png",
+        "iPhone-home-tabs-dark-portrait-synthetic.png",
+        "iPhone-home-tabs-light-portrait-synthetic.png",
+        "iPhone-live-dark-portrait-synthetic.png",
+        "iPhone-live-light-portrait-synthetic.png",
+        "iPhone-replay-dark-portrait-synthetic.png",
+        "iPhone-replay-light-portrait-synthetic.png",
+        "iPhone-sign-in-dark-portrait-synthetic.png",
+        "iPhone-sign-in-light-portrait-synthetic.png",
+        "iPhone-signal-dark-portrait-synthetic.png",
+        "iPhone-signal-light-portrait-synthetic.png",
+        "iPhone-signal-status-dark-portrait-synthetic.png",
+        "iPhone-signal-status-light-portrait-synthetic.png"
+      ],
+      "excluded": {},
+      "newP0toP2": 0,
+      "confirmed": [
+        "Direct and replay controls contained",
+        "Replay speed x1 complete",
+        "11 categories and marker visible and legible",
+        "3 appraisals legible"
+      ],
+      "limitations": [
+        "Today fixture and app logo are from source10f, superseded by e36"
+      ]
+    }
+  },
+  "pullRequestSecurityCheck": {
+    "provider": "GitGuardian",
+    "checkId": 111461991780,
+    "result": "failure",
+    "reportedDetections": 3,
+    "details": "No paths or detector type accessible in check summary; no annotations. Findings unverified.",
+    "url": "https://dashboard.gitguardian.com"
+  }
+}

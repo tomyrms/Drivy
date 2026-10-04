@@ -18,7 +18,7 @@ La seconde passe relève le symbole de 2 unités sur le canevas 256. Le centrage
 
 ## Contrôles effectués
 
-Deux planches réellement rendues et inspectées : les trois concepts, puis la comparaison v1/v2/réserve, tailles 64/32/24/16, miroir, rotation 180° et masque d’application. Le PNG 1024 final a également été inspecté. Une relecture indépendante confirme le centrage, la lisibilité et l’absence de défaut concret à corriger. La rotation donne naturellement un p ; le symbole à l’endroit se lit comme un d.
+Deux planches réellement rendues et inspectées : les trois concepts, puis la comparaison v1/v2/réserve, tailles 64/32/24/16, miroir, rotation 180° et masque d’application. Le PNG 1024 final a également été inspecté. Une planche locale compare le dessin aux quatre références Khan Academy, Dashlane, Pagekit et Precursor à taille égale ; le contrôle flouté à 128 px garde la contreforme ouverte. Ces images de référence ne sont pas exportées dans les livrables du dépôt. Une relecture indépendante confirme le centrage, la lisibilité et l’absence de défaut concret à corriger. La rotation donne naturellement un p ; le symbole à l’endroit se lit comme un d.
 
 L’audit SVG final est conservé dans `audit-final.txt` : aucune police vivante, raster, filtre ou trait non développé dans les masters. Les remarques de centrage géométrique sont connues et relues optiquement. Les notes de l’audit ne constituent pas une certification graphique.
 

@@ -1,9 +1,12 @@
 # État de la réalisation
 
-## 4 octobre 2026 — revue UI/UX native en cours
+## 4 octobre 2026 — revue native, icônes et IPA livrée
 
-Huit lots implémentés et relus : Aujourd’hui, squelettes, navigation de la leçon, filtre GPS partagé, agenda/planification, dossiers/progression, bilan/observations et compte/invitations. Les corrections conservent les mesures originales, les droits au serveur et les commandes durables. Relecture indépendante des erreurs et des conflits en cours de clôture. **Qualification Apple en préparation : aucun résultat Swift ni physique annoncé à ce stade.** [État détaillé et reprise](reprise-revue-ui-20261004.md). Aucun déploiement du homelab.
+Huit lots intégrés : Aujourd’hui, squelettes, navigation de leçon, sélection GPS partagée, agenda/planification, dossiers/progression, bilan/observations et compte/invitations. Cinq propositions d’application et cinq pictogrammes par catégorie conservés, puis sélection et finition ; Signaler simplifié. À la demande du porteur, skill logo-design installé, trois pistes vectorielles comparées et d continu intégré à l’icône et à l’accueil.
 
+**Livré : IPA 0.7.0/build98**, source `e36b0d4`, [compilation Apple réussie](https://github.com/tomyrms/Drivy/actions/runs/37210789141), téléchargement et SHA-256 vérifiés. [PR5 ouverte](https://github.com/tomyrms/Drivy/pull/5), retirée du brouillon à sa demande. Le porteur souhaite l’IPA sans attendre toutes les campagnes : tests natifs restants et captures complémentaires arrêtés, aucun succès supposé pour ces vérifications.
+
+**Exécuté** : 224 tests API PostgreSQL et 104 web sur la CI générale ; première campagne Apple : 241 Swift et 12 UI iPhone réussis, UI iPad 11/12 (sélecteur corrigé). 48 captures finales normales et AX inspectées individuellement ; aucun nouveau P0–P2 établi, avec limites de champ documentées. Tests ajoutés après la première campagne non déclarés qualifiés. Deux captures AX complémentaires confirment la fixture Aujourd’hui corrigée et la connexion ; quatorze autres vues non qualifiées. GitGuardian signale trois détections non vérifiées, détails absents du résultat accessible. Aucun résultat physique GPS, batterie ou VoiceOver ; aucun déploiement homelab. [Revue et preuves](native-ui-review-20261004.md), [icônes](native-icon-signal-review-20261004.md), [logo](drivy-logo-skill-20261004.md), [passation](reprise-revue-ui-20261004.md).
 
 ## 30 septembre 2026 — diagnostic de la campagne de captures iOS
 

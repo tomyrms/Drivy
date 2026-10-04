@@ -2,7 +2,7 @@
 
 Document de passation. Il permet à une autre session (Codex, Claude) de reprendre ce chantier sans l'historique de la conversation. **Il est tenu à jour à chaque étape : la section « État des lots » fait foi.**
 
-Dernière mise à jour : 4 octobre 2026, huit lots implémentés et relus. Qualification Apple en préparation ; revue indépendante des accès et des conflits intégrée avant push.
+Dernière mise à jour : 4 octobre 2026, huit lots intégrés et première qualification Apple exécutée. Source produit affinée `10f1d12`, campagne finale en cours. Voir [résultats précis](native-ui-review-20261004.md) et [sélection des icônes](native-icon-signal-review-20261004.md).
 
 ## Pour reprendre (à lire en premier)
 
@@ -67,14 +67,14 @@ Chaque lot possède ses fichiers ; personne d'autre ne les modifie. Les signatur
 
 | Lot | Sujet | Fichiers possédés | État |
 |---|---|---|---|
-| 1 | Composant de squelettes ; compte, onglet Profil, liste des trajets | `UI/DrivySkeleton.swift`, `UI/DrivyDesignSystemGallery.swift`, `UI/DrivyComponents+Accueil.swift`, `SchoolUI/SchoolRootView.swift`, `SchoolUI/SchoolAccountComponents.swift`, `SchoolTripsUI/*`, tests `SchoolTripsTests`, `SchoolPresentationIdleTests` | implémenté, qualification Apple en attente |
-| 2 | Page « Aujourd'hui », « Démarrer une leçon » | `SchoolUI/SchoolTodayView.swift`, `SchoolAgendaUI/SchoolStartNowView.swift`, tests `SchoolStartNowClientTests` | implémenté, qualification Apple en attente |
-| 3 | Leçon en cours : actions, navigation, mentions légales ; onglets | `SchoolCaptureUI/SchoolCaptureLiveView.swift`, `SchoolLiveObservationSheet.swift`, `SchoolCaptureLiveObservations.swift`, `SchoolObservationEmblem.swift`, `UI/DrivyComponents+Seance.swift`, `SchoolUI/SchoolHomeView.swift`, tests `FieldFlowTests`, `SchoolLiveObservationRecorderTests` | implémenté, qualification Apple en attente |
-| 4 | Fiabilité du tracé GPS ; écran de replay | `SchoolCaptureUI/SchoolCaptureLiveMap.swift`, `SchoolMapCourse.swift`, `SchoolCaptureReplayView.swift`, `SchoolCaptureReplayWorkspace.swift`, `SchoolCaptureCore/*`, `SchoolCaptureAPI/*`, tests `SchoolMapCourseTests`, `SchoolCaptureLifecycleTests`, `SchoolCaptureInteropTests`, `SchoolReplayFormattingTests`, `DrivyTimelineMarkGroupTests` | implémenté, qualification Apple en attente |
-| 5 | Agenda et planification | `SchoolAgendaUI/SchoolAgendaView.swift`, `SchoolPlanningView.swift`, `SchoolPlanningWorkspace.swift`, `SchoolPlanningSettingsView.swift`, `UI/DrivyComponents+Agenda.swift`, tests `SchoolPlanningDefaultsTests` | implémenté, qualification Apple en attente |
-| 6 | Élèves, dossier, formation, progression (moniteur et élève) | `SchoolUI/SchoolBrowserView.swift`, `SchoolUI/SchoolWorkspace.swift`, `SchoolTrainingUI/*`, tests `SchoolDossierTests`, `SchoolTrainingRefreshTests`, `SchoolWorkspaceTests` | implémenté, qualification Apple en attente |
-| 7 | Fiche de leçon, bilan, observations, préparation du trajet | `SchoolLessonReportUI/*`, `SchoolObservationUI/*`, `SchoolCaptureUI/SchoolCapturePreparation*.swift`, `SchoolRecordingChoice*.swift`, tests `SchoolLessonFinishTests`, `SchoolLessonHubTests` | implémenté, qualification Apple en attente |
-| 8 | Invitations, entrée dans une école, profil, accueil guidé | `SchoolInvitationsUI/*`, `SchoolJoinUI/*`, `SchoolProfileUI/*`, `UI/DrivyComponents+Ecole.swift`, tests `SchoolInvitation*Tests`, `SchoolProfile*Tests` | implémenté, qualification Apple en attente |
+| 1 | Composant de squelettes ; compte, onglet Profil, liste des trajets | `UI/DrivySkeleton.swift`, `UI/DrivyDesignSystemGallery.swift`, `UI/DrivyComponents+Accueil.swift`, `SchoolUI/SchoolRootView.swift`, `SchoolUI/SchoolAccountComponents.swift`, `SchoolTripsUI/*`, tests `SchoolTripsTests`, `SchoolPresentationIdleTests` | intégré ; première campagne exécutée, attente finale arrêtée par le porteur |
+| 2 | Page « Aujourd'hui », « Démarrer une leçon » | `SchoolUI/SchoolTodayView.swift`, `SchoolAgendaUI/SchoolStartNowView.swift`, tests `SchoolStartNowClientTests` | intégré ; première campagne exécutée, attente finale arrêtée par le porteur |
+| 3 | Leçon en cours : actions, navigation, mentions légales ; onglets | `SchoolCaptureUI/SchoolCaptureLiveView.swift`, `SchoolLiveObservationSheet.swift`, `SchoolCaptureLiveObservations.swift`, `SchoolObservationEmblem.swift`, `UI/DrivyComponents+Seance.swift`, `SchoolUI/SchoolHomeView.swift`, tests `FieldFlowTests`, `SchoolLiveObservationRecorderTests` | intégré ; première campagne exécutée, attente finale arrêtée par le porteur |
+| 4 | Fiabilité du tracé GPS ; écran de replay | `SchoolCaptureUI/SchoolCaptureLiveMap.swift`, `SchoolMapCourse.swift`, `SchoolCaptureReplayView.swift`, `SchoolCaptureReplayWorkspace.swift`, `SchoolCaptureCore/*`, `SchoolCaptureAPI/*`, tests `SchoolMapCourseTests`, `SchoolCaptureLifecycleTests`, `SchoolCaptureInteropTests`, `SchoolReplayFormattingTests`, `DrivyTimelineMarkGroupTests` | intégré ; première campagne exécutée, attente finale arrêtée par le porteur |
+| 5 | Agenda et planification | `SchoolAgendaUI/SchoolAgendaView.swift`, `SchoolPlanningView.swift`, `SchoolPlanningWorkspace.swift`, `SchoolPlanningSettingsView.swift`, `UI/DrivyComponents+Agenda.swift`, tests `SchoolPlanningDefaultsTests` | intégré ; première campagne exécutée, attente finale arrêtée par le porteur |
+| 6 | Élèves, dossier, formation, progression (moniteur et élève) | `SchoolUI/SchoolBrowserView.swift`, `SchoolUI/SchoolWorkspace.swift`, `SchoolTrainingUI/*`, tests `SchoolDossierTests`, `SchoolTrainingRefreshTests`, `SchoolWorkspaceTests` | intégré ; première campagne exécutée, attente finale arrêtée par le porteur |
+| 7 | Fiche de leçon, bilan, observations, préparation du trajet | `SchoolLessonReportUI/*`, `SchoolObservationUI/*`, `SchoolCaptureUI/SchoolCapturePreparation*.swift`, `SchoolRecordingChoice*.swift`, tests `SchoolLessonFinishTests`, `SchoolLessonHubTests` | intégré ; première campagne exécutée, attente finale arrêtée par le porteur |
+| 8 | Invitations, entrée dans une école, profil, accueil guidé | `SchoolInvitationsUI/*`, `SchoolJoinUI/*`, `SchoolProfileUI/*`, `UI/DrivyComponents+Ecole.swift`, tests `SchoolInvitation*Tests`, `SchoolProfile*Tests` | intégré ; première campagne exécutée, attente finale arrêtée par le porteur |
 
 Chemins relatifs à `apps/ios/Drivy/` (tests : `apps/ios/DrivyTests/`, `apps/ios/DrivyUITests/`). Fichiers partagés sans propriétaire, à ne modifier qu'à l'intégration : `UI/DrivyComponents.swift`, `UI/DrivyTheme.swift`, `UI/*VisualReview.swift`, `DrivyTests/SchoolPresentationTests.swift`.
 
@@ -105,16 +105,13 @@ Les skills sont des dossiers `.claude/skills/<nom>/` : lire `SKILL.md` puis ses 
 - Documents écrits par script (Python en UTF-8), pas par un outil qui les ouvre à l'écran du porteur.
 - Aucun déploiement du homelab n'est nécessaire tant que seul `apps/ios` change. Un changement d'API demande une sauvegarde de la base avant déploiement et l'accord du porteur.
 
-## Ce qu'il reste à faire
+## Livraison et qualification restante
 
-1. Attendre ou terminer chaque lot ; relire son diff ; passer son état à « terminé » dans le tableau ; committer ses fichiers seuls (`git add <chemins>`, jamais `-A`).
-2. Intégration : vérifier par recherche tous les appels des signatures modifiées (`SchoolCaptureLiveView`, `DrivyLiveTopBar`, `DrivyMapHeaderAction`, `DrivyLessonRow`, `SchoolCaptureLiveMap`), les identifiants d'accessibilité utilisés par `DrivyUITests`, les bancs visuels et `SchoolPresentationTests`. Vérifier que `DrivySkeleton.swift` respecte le contrat et que chaque lot l'emploie correctement.
-3. Relecture croisée de l'ensemble (cohérence du vocabulaire et des états de chargement entre écrans).
-4. Pousser la branche ; attendre la compilation de l'IPA ; corriger jusqu'à réussite.
-5. Lancer « Refonte · iOS » ; corriger les échecs ; relire les captures (Aujourd'hui, leçon en cours avec la mention Apple Plans, squelettes), en clair, sombre, grand texte, iPhone et iPad.
-6. Écrire `docs/implementation/native-ui-review-20261004.md` (constats, décisions, changements, skills appliqués, limites) et mettre à jour `docs/implementation/STATUS.md` avec ce qui est exécuté et ce qui reste à qualifier.
-7. Ouvrir la PR vers `master` (le porteur l'attend en fin de tâche ; annoncer l'intention avant de pousser).
-8. Reste hors de portée du simulateur, à dire tel quel : tracé GPS sur route (intersections, giratoire, tunnel, arrêt prolongé, départ, pause et reprise), batterie, VoiceOver sur appareil, position réelle de la mention Apple Plans sur iPhone.
+L’IPA **0.7.0/build98** (`e36b0d4`) a compilé avec succès dans `37210789141`, puis a été téléchargée et vérifiée. Le porteur demande de la recevoir sans attendre tous les tests ; les campagnes encore actives/en attente sont arrêtées. La [PR5](https://github.com/tomyrms/Drivy/pull/5) est ouverte, attachée au chat et sortie du brouillon. Aucun déploiement.
+
+- Les résultats exécutés et les captures inspectées sont dans [la revue](native-ui-review-20261004.md) et sa preuve JSON.
+- Les tests ajoutés après la campagne initiale, la revalidation du sélecteur iPad et les nouvelles captures de la fixture Aujourd’hui/logo ne sont pas supposés réussis. Reprendre ces qualifications uniquement lorsqu’elles sont demandées.
+- Qualification physique : route GPS, batterie, VoiceOver, gestes et mentions Apple Plans sur iPhone. Signature de l’IPA avec iLoader par le porteur.
 
 ## Journal
 
@@ -123,3 +120,9 @@ Les skills sont des dossiers `.claude/skills/<nom>/` : lire `SKILL.md` puis ses 
 - Reprise active : trois agents travaillent sur 2/5 puis 8, 4, 6/7. Intégration 1/3 par l’agent principal. Squelettes communs repris ; erreur école visible dans Trajets ; annulation déplacée dans le menu ; onglets conservés et contrôles carte séparés du dock. Aucune compilation Swift locale. Nouveau harnais `skeletons` et fixture live dans les vrais onglets pour les captures Apple. Les tests Python de capture ne sont pas exécutables ici via le bash WSL absent ; la CI Linux les exécutera.
 
 - Intégration : lots 1–8 implémentés et committés séparément. Relecture A : disponibilités après relecture, conflit de préférences, explications ciblées de validation corrigés ; purge du démarrage après refus d’accès en finition. Relecture B indépendante en cours. Syntaxe Bash vérifiée avec Git Bash ; aucune compilation Swift locale.
+
+- Extension demandée par le porteur : 65 propositions d’icônes conservées (5 application, 5 × 12 thèmes/actions), sélection et polissage, Signaler simplifié. Documents dédiés et planches dans `assets/native-icons-20261004`.
+
+- Suite : skill logo-design installé et appliqué ; logo d continu intégré dans `e36b0d4`. Les 24 captures AX de `10f1d12` sont inspectées. Correction de la note initiale sur Python : les 11 tests de capture passent localement avec Git Bash et PYTHONUTF8=1 ; ils ne sont pas câblés dans la CI générale.
+
+- Livraison : à la demande du porteur, arrêt des campagnes restantes et retrait du brouillon PR5 ; IPA 0.7.0/build98 fournie immédiatement, sans attendre les tests.
