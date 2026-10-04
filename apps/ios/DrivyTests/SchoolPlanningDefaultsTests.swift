@@ -172,6 +172,67 @@ import Testing
         #expect(model.availabilityLoaded && !model.isLoadingAvailability && model.availabilityError == nil)
     }
 
+    @Test func sameInstructorAvailabilityRemainsVisibleDuringReloadAndAfterTransientFailure() async throws {
+        let server = PlanningDefaultsServer()
+        let model = planning(server)
+        await model.load()
+        await model.selectLearner(HubFixture.learnerID)
+        await model.loadAvailability()
+        try #require(model.availabilityLoaded && !model.availability.isEmpty && !model.closures.isEmpty)
+        let rules = model.availability.map(\.id), closures = model.closures.map(\.id)
+
+        await server.pauseNextAvailabilityRead()
+        let reload = Task { await model.load() }
+        await server.waitForPausedAvailabilityRead()
+        #expect(model.isLoadingAvailability && model.availabilityLoaded)
+        #expect(model.availability.map(\.id) == rules && model.closures.map(\.id) == closures)
+        await server.setAvailabilityFailure(503)
+        await server.resumeAvailabilityRead()
+        await reload.value
+
+        #expect(model.availabilityLoaded && !model.isLoadingAvailability && model.availabilityError != nil)
+        #expect(model.availability.map(\.id) == rules && model.closures.map(\.id) == closures)
+        await server.setAvailabilityFailure(nil)
+        await model.loadAvailability()
+        #expect(model.availabilityLoaded && model.availabilityError == nil)
+        #expect(model.availability.map(\.id) == rules && model.closures.map(\.id) == closures)
+    }
+
+    @Test func changingInstructorClearsAvailabilityAndDiscardsThePreviousPendingResponse() async throws {
+        let server = PlanningDefaultsServer()
+        let model = planning(server)
+        await model.load()
+        await model.selectLearner(HubFixture.learnerID)
+        await model.loadAvailability()
+        try #require(model.availabilityLoaded && !model.availability.isEmpty && !model.closures.isEmpty)
+
+        await server.pauseNextAvailabilityRead()
+        let reload = Task { await model.loadAvailability() }
+        await server.waitForPausedAvailabilityRead()
+        model.instructorID = UUID()
+        #expect(model.availability.isEmpty && model.closures.isEmpty && !model.availabilityLoaded)
+        #expect(!model.isLoadingAvailability && model.availabilityError == nil)
+        await server.resumeAvailabilityRead()
+        await reload.value
+        #expect(model.availability.isEmpty && model.closures.isEmpty && !model.availabilityLoaded)
+        #expect(!model.isLoadingAvailability && model.availabilityError == nil)
+    }
+
+    @Test func availabilityAccessRevocationClearsPreviouslyVisibleData() async throws {
+        let server = PlanningDefaultsServer()
+        let model = planning(server)
+        await model.load()
+        await model.selectLearner(HubFixture.learnerID)
+        await model.loadAvailability()
+        try #require(model.availabilityLoaded && !model.availability.isEmpty && !model.closures.isEmpty)
+
+        await server.setAvailabilityFailure(403)
+        await model.loadAvailability()
+        #expect(model.accessRevoked && model.school == nil)
+        #expect(model.availability.isEmpty && model.closures.isEmpty && !model.availabilityLoaded)
+        #expect(!model.isLoadingAvailability && model.availabilityError == nil)
+    }
+
     private func training(_ category: String) -> SchoolTraining {
         SchoolTraining(id: UUID(), schoolId: HubFixture.schoolID, learnerId: HubFixture.learnerID, offeringId: UUID(),
             version: 1, categoryCode: category, status: "ACTIVE", startedOn: nil, closedOn: nil)
@@ -199,6 +260,10 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
     private let failReadsAfterCancellation: Bool
     private var sent: [URLRequest] = []
     private var readUnavailable = false
+    private var availabilityFailure: Int?
+    private var pausesNextAvailabilityRead = false
+    private var pausedAvailabilityRead: CheckedContinuation<Void, Never>?
+    private var availabilityPauseWaiter: CheckedContinuation<Void, Never>?
     init(assigned: Bool = true, receiptAvailable: Bool = true, failReadsAfterCancellation: Bool = false) {
         self.assigned = assigned; self.receiptAvailable = receiptAvailable
         self.failReadsAfterCancellation = failReadsAfterCancellation
@@ -206,6 +271,15 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
     func writes() -> [URLRequest] { sent.filter { $0.httpMethod != "GET" } }
     func enableReceipt() { receiptAvailable = true }
     func setReadUnavailable(_ value: Bool) { readUnavailable = value }
+    func setAvailabilityFailure(_ status: Int?) { availabilityFailure = status }
+    func pauseNextAvailabilityRead() { pausesNextAvailabilityRead = true }
+    func waitForPausedAvailabilityRead() async {
+        if pausedAvailabilityRead != nil { return }
+        await withCheckedContinuation { availabilityPauseWaiter = $0 }
+    }
+    func resumeAvailabilityRead() {
+        pausedAvailabilityRead?.resume(); pausedAvailabilityRead = nil
+    }
     func changeDefaultsRemotely() { defaultsVersion = 2; category = "B"; productKey = NSNull() }
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         if readUnavailable && request.httpMethod == "GET" { throw URLError(.notConnectedToInternet) }
@@ -264,6 +338,27 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
         if parts.last == "learners" { return try page([record(HubFixture.learnerID, ["personId": UUID().uuidString, "displayName": "Élève de test", "contactEmail": NSNull(), "contactPhone": NSNull(), "archivedAt": NSNull()])]) }
         if parts.last == "trainings" { return try page([record(HubFixture.trainingID, ["learnerId": HubFixture.learnerID.uuidString, "offeringId": offeringID.uuidString, "categoryCode": "B", "status": "ACTIVE", "startedOn": NSNull(), "closedOn": NSNull()])]) }
         if parts.last == "assignments" { return try page(assigned ? [record(UUID(), ["trainingId": HubFixture.trainingID.uuidString, "instructorMembershipId": ConfigurationFixture.membershipID.uuidString, "validFrom": "2020-01-01T00:00:00Z", "validUntil": NSNull()])] : []) }
+        if parts.last == "availability-rules" {
+            if pausesNextAvailabilityRead {
+                pausesNextAvailabilityRead = false
+                await withCheckedContinuation { continuation in
+                    pausedAvailabilityRead = continuation
+                    availabilityPauseWaiter?.resume(); availabilityPauseWaiter = nil
+                }
+            }
+            if let status = availabilityFailure {
+                return SchoolHTTPResponse(data: Data("{\"code\":\"AVAILABILITY_UNAVAILABLE\"}".utf8), status: status,
+                    url: url, contentType: "application/problem+json")
+            }
+            return try page([record(UUID(uuidString: "76000000-0000-4000-8000-000000000005")!,
+                ["instructorMembershipId": ConfigurationFixture.membershipID.uuidString, "weekdays": [1, 2, 3, 4, 5],
+                 "localStart": "08:00", "localEnd": "18:00", "validFrom": "2020-01-01", "validUntil": NSNull()])])
+        }
+        if parts.last == "closures" {
+            return try page([record(UUID(uuidString: "76000000-0000-4000-8000-000000000006")!,
+                ["instructorMembershipId": ConfigurationFixture.membershipID.uuidString, "startsAt": "2030-01-01T08:00:00Z",
+                 "endsAt": "2030-01-01T12:00:00Z", "reason": NSNull()])])
+        }
         return try page([])
     }
 }

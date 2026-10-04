@@ -138,7 +138,9 @@ struct SchoolPlanningInstructor: Identifiable {
         guard !invalidated, !isBusy else { return }
         let previousInstructorID = instructorID
         generation = UUID(); selectionGeneration = UUID(); availabilityGeneration = UUID(); let request = generation
-        clearAvailability()
+        // Keep this instructor's last confirmed data while the same scope is reread.
+        // A changed instructor or revoked access still clears it immediately.
+        isLoadingAvailability = false; availabilityError = nil
         isLoading = true; needsReload = true; errorMessage = nil; storageAvailable = false
         defer { if request == generation { isLoading = false } }
         var storageError: String?
@@ -247,7 +249,7 @@ struct SchoolPlanningInstructor: Identifiable {
     func loadAvailability() async {
         guard let instructorID, !invalidated, !accessRevoked else { clearAvailability(); return }
         let request = generation; availabilityGeneration = UUID(); let availabilityRequest = availabilityGeneration
-        clearAvailability(); isLoadingAvailability = true
+        availabilityError = nil; isLoadingAvailability = true
         defer {
             if request == generation, availabilityRequest == availabilityGeneration { isLoadingAvailability = false }
         }

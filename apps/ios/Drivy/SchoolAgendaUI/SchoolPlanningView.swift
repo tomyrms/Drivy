@@ -137,11 +137,15 @@ struct SchoolPlanningView: View {
             }
             if model.instructorID != nil {
                 DisclosureGroup("Disponibilités du moniteur") {
-                    if model.isLoadingAvailability || (!model.availabilityLoaded && model.availabilityError == nil) {
+                    if !model.availabilityLoaded && model.availabilityError == nil {
                         DrivySkeletonRows(count: 2).drivySkeleton("Chargement des disponibilités…")
-                    } else if let error = model.availabilityError {
+                    } else if model.isLoadingAvailability {
+                        ProgressView().accessibilityLabel("Actualisation des disponibilités")
+                    }
+                    if let error = model.availabilityError {
                         SchoolErrorNotice(message: error, retry: { Task { await model.loadAvailability() } })
-                    } else if model.availabilityLoaded && model.availability.isEmpty {
+                    }
+                    if model.availabilityLoaded && model.availability.isEmpty {
                         formNote("Aucune disponibilité : ajoute-la sur le web.")
                     }
                     ForEach(model.availability) { rule in
