@@ -51,44 +51,70 @@ struct SchoolReplayTimeline {
     init(fragments source: [SchoolCaptureReplayFragment], observations: [SchoolPrivateGeoObservation],
          startsAt: Date?, endsAt: Date?, maxPointAge: TimeInterval = 15) {
         let observationDates = observations.compactMap(\.observedDate)
-        let firstPointDate = source.first?.points.first.flatMap { SchoolLesson.date($0.capturedAt) }
+        let orderedFragments = source.sorted {
+            $0.segmentIndex == $1.segmentIndex
+                ? ($0.points.map(\.sequence).min() ?? 0) < ($1.points.map(\.sequence).min() ?? 0)
+                : $0.segmentIndex < $1.segmentIndex
+        }
+        // Page/chunk boundaries must not reset the selection policy. The original
+        // sequence and elapsed-time gaps still split the resulting measured route.
+        var orderedSource: [SchoolCaptureReplayFragment] = []
+        for fragment in orderedFragments {
+            if orderedSource.last?.segmentID == fragment.segmentID {
+                orderedSource[orderedSource.count - 1].points.append(contentsOf: fragment.points)
+            } else {
+                orderedSource.append(fragment)
+            }
+        }
+        let firstPointDate = orderedSource.first?.points.min(by: { $0.sequence < $1.sequence })
+            .flatMap { SchoolLesson.date($0.capturedAt) }
         let origin = startsAt ?? firstPointDate ?? observationDates.min() ?? Date()
         var samples: [Sample] = []
         var built: [Fragment] = []
         var coordinateByKey: [String: CLLocationCoordinate2D] = [:]
-        for (index, fragment) in source.enumerated() {
+        var lastSourceOffset: TimeInterval = 0
+        var filteredTails: [ClosedRange<TimeInterval>] = []
+        for fragment in orderedSource {
             // One date parse per fragment; the other points follow their monotonic elapsed time.
-            guard let first = fragment.points.first, let base = SchoolLesson.date(first.capturedAt) else { continue }
+            guard let first = fragment.points.min(by: { $0.sequence < $1.sequence }),
+                  let base = SchoolLesson.date(first.capturedAt) else { continue }
             let baseOffset = base.timeIntervalSince(origin)
+            let lastOffset = baseOffset + Double((fragment.points.map(\.elapsedMs).max() ?? first.elapsedMs) - first.elapsedMs) / 1000
+            lastSourceOffset = max(lastSourceOffset, lastOffset)
             var coordinates: [CLLocationCoordinate2D] = []
             var course = SchoolMapCourse()
-            var previousOffset: TimeInterval?
             var part = 0
             coordinates.reserveCapacity(fragment.points.count)
-            for point in fragment.points {
+            let selected = SchoolCaptureDisplayRoute.select(fragment.points, maximumGap: maxPointAge)
+            for sample in selected {
+                let point = sample.point
                 let coordinate = CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
                 let offset = baseOffset + Double(point.elapsedMs - first.elapsedMs) / 1000
-                if let previousOffset, offset - previousOffset > maxPointAge {
+                if sample.startsFragment && !coordinates.isEmpty {
                     built.append(Fragment(id: "\(fragment.id):\(part)", coordinates: coordinates))
                     coordinates = []; part += 1
                 }
+                if sample.startsFragment { course = SchoolMapCourse() }
                 coordinates.append(coordinate)
-                samples.append(Sample(offset: offset, coordinate: coordinate, fragmentIndex: index,
+                samples.append(Sample(offset: offset, coordinate: coordinate, fragmentIndex: built.count,
                     heading: course.receive(coordinate, at: offset, accuracy: point.accuracyMeters)))
                 coordinateByKey["\(fragment.segmentID.uuidString):\(point.sequence)"] = coordinate
-                previousOffset = offset
             }
-            built.append(Fragment(id: "\(fragment.id):\(part)", coordinates: coordinates))
+            if !coordinates.isEmpty { built.append(Fragment(id: "\(fragment.id):\(part)", coordinates: coordinates)) }
+            if let last = selected.last?.point {
+                let lastRetainedOffset = baseOffset + Double(last.elapsedMs - first.elapsedMs) / 1000
+                if lastOffset > lastRetainedOffset { filteredTails.append(lastRetainedOffset...lastOffset) }
+            }
         }
         samples.sort { $0.offset < $1.offset }
         let observationOffsets = observationDates.map { $0.timeIntervalSince(origin) }
-        let end = max(endsAt.map { $0.timeIntervalSince(origin) } ?? 0, samples.last?.offset ?? 0, observationOffsets.max() ?? 0)
+        let end = max(endsAt.map { $0.timeIntervalSince(origin) } ?? 0, lastSourceOffset, observationOffsets.max() ?? 0)
         let total = max(1, end)
 
-        var gaps: [ClosedRange<TimeInterval>] = []
+        var gaps: [ClosedRange<TimeInterval>] = filteredTails
         func clamp(_ value: TimeInterval) -> TimeInterval { min(total, max(0, value)) }
         if let first = samples.first, let last = samples.last {
-            if clamp(first.offset) > maxPointAge { gaps.append(0...clamp(first.offset)) }
+            if clamp(first.offset) > 0 { gaps.append(0...clamp(first.offset)) }
             for (previous, next) in zip(samples, samples.dropFirst()) {
                 let lower = clamp(previous.offset), upper = clamp(next.offset)
                 if upper > lower && (previous.fragmentIndex != next.fragmentIndex || upper - lower > maxPointAge) {
@@ -135,6 +161,8 @@ struct SchoolReplayTimeline {
         }
         guard low > 0 else { return nil }
         let candidate = samples[low - 1]
+        if offset == candidate.offset { return candidate }
+        if gaps.contains(where: { offset > $0.lowerBound && offset <= $0.upperBound }) { return nil }
         // A known interruption is empty, even when the previous point is recent.
         if low < samples.count, offset > candidate.offset,
            samples[low].fragmentIndex != candidate.fragmentIndex || samples[low].offset - candidate.offset > maxPointAge {
@@ -178,12 +206,12 @@ struct SchoolCaptureReplayView: View {
     @State private var showsList = false
 
     private var contentKey: String {
-        "\(model.fragments.count):\(model.pointCount):\(model.observations.count):\(model.isComplete)"
+        "\(model.contentRevision):\(model.isComplete)"
     }
 
     var body: some View {
         Group {
-            if let timeline, model.isComplete || (!model.fragments.isEmpty && !model.isLoading) {
+            if let timeline, model.isComplete || !model.fragments.isEmpty {
                 GeometryReader { geometry in
                     if dynamicTypeSize.isAccessibilitySize {
                         accessibleLayout(timeline)
@@ -211,8 +239,11 @@ struct SchoolCaptureReplayView: View {
     }
 
     private func rebuildTimeline() {
+        isPlaying = false
         timeline = SchoolReplayTimeline(fragments: model.fragments, observations: model.observations,
                                         startsAt: model.startsAt, endsAt: model.endsAt)
+        if let timeline { offset = min(offset, timeline.duration) }
+        if !model.observations.contains(where: { $0.id == selectedID }) { selectedID = nil }
     }
 
     // MARK: States
@@ -222,8 +253,15 @@ struct SchoolCaptureReplayView: View {
             header(floating: false)
                 .padding(DrivySpacing.m)
             if model.isLoading || (model.errorMessage == nil && !model.isComplete) {
-                DrivyLoadingState(title: "Ouverture du trajet…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                    DrivySkeletonBlock(height: DrivyMapLayout.accessibleMapHeight, radius: DrivyRadius.mapPanel, scalesWithText: false)
+                    DrivySkeletonRows(count: 2)
+                    DrivySkeletonBlock(height: 44)
+                }
+                .drivySkeleton("Ouverture du trajet…")
+                .padding(DrivySpacing.m)
+                .frame(maxWidth: DrivyMapLayout.accessibleMaxWidth)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             } else if let error = model.errorMessage {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     SchoolErrorNotice(message: error, retry: model.isInvalidated ? nil : { Task { await model.load() } })
@@ -253,12 +291,16 @@ struct SchoolCaptureReplayView: View {
 
     private func compactLayout(_ timeline: SchoolReplayTimeline) -> some View {
         mapArea(timeline)
+            .overlay(alignment: .bottomTrailing) {
+                if !timeline.samples.isEmpty {
+                    controls(timeline, axis: .horizontal).padding(DrivySpacing.m)
+                }
+            }
             .safeAreaInset(edge: .top, spacing: 0) {
                 header().padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.s)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(alignment: .trailing, spacing: DrivySpacing.s) {
-                    if !timeline.samples.isEmpty { controls(timeline, axis: .horizontal) }
                     DrivyMapDock {
                         // Sur iPhone, l’observation choisie remplace le rail : le dock ne grandit
                         // pas et la carte garde sa place. Fermer le détail rend le rail.
@@ -268,7 +310,7 @@ struct SchoolCaptureReplayView: View {
                             rail(timeline)
                         }
                         player(timeline, showsList: true)
-                        if let error = model.errorMessage { DrivyInlineMessage(text: error, tone: .warning) }
+                        replayLoadingOrError
                     }
                 }
                 .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.s)
@@ -288,7 +330,7 @@ struct SchoolCaptureReplayView: View {
                 DrivyMapDock(floating: false) {
                     selectedDetail(timeline)
                     player(timeline, showsList: false)
-                    if let error = model.errorMessage { DrivyInlineMessage(text: error, tone: .warning) }
+                    replayLoadingOrError
                 }
                 .padding(DrivySpacing.m)
             }
@@ -308,11 +350,13 @@ struct SchoolCaptureReplayView: View {
                 if !timeline.samples.isEmpty {
                     mapArea(timeline)
                         .frame(height: DrivyMapLayout.accessibleMapHeight)
+                        .overlay(alignment: .bottomTrailing) { controls(timeline, axis: .horizontal).padding(DrivySpacing.m) }
                         .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                 }
                 DrivyMapDock(floating: false) {
                     selectedDetail(timeline)
                     player(timeline, showsList: false)
+                    replayLoadingOrError
                 }
                 observationList(timeline, closesSheet: false)
             }
@@ -322,12 +366,21 @@ struct SchoolCaptureReplayView: View {
         }
     }
 
+    @ViewBuilder private var replayLoadingOrError: some View {
+        if model.isLoading {
+            DrivyLoadingState(title: "Chargement de la suite…")
+        } else if let error = model.errorMessage {
+            SchoolErrorNotice(message: error, retry: model.isInvalidated ? nil : { Task { await model.load() } })
+        }
+    }
+
     @ViewBuilder
     private func mapArea(_ timeline: SchoolReplayTimeline) -> some View {
         if timeline.samples.isEmpty {
             DrivyMapPlaceholder(title: "Aucune position confirmée",
-                message: timeline.items.isEmpty
-                    ? "L’école n’a reconstruit aucune position pour ce trajet."
+                message: model.pointCount > 0
+                    ? "Le signal ne permet pas d’afficher le trajet. Les observations gardent leur heure."
+                    : timeline.items.isEmpty ? "L’école n’a reconstruit aucune position pour ce trajet."
                     : "Les observations gardent leur heure. Retrouve-les sur la chronologie.")
         } else {
             SchoolReplayMap(timeline: timeline, current: timeline.sample(at: offset), selectedID: $selectedID,
@@ -472,7 +525,7 @@ struct SchoolCaptureReplayView: View {
                 },
                 gaps: timeline.gaps,
                 selectedMarkID: selectedID,
-                valueDescription: "\(DrivyReplayScrubber.clock(current)) sur \(DrivyReplayScrubber.clock(timeline.duration))\(inGap ? ", aucune position mesurée" : "")",
+                valueDescription: "\(DrivyReplayScrubber.clock(current)) sur \(DrivyReplayScrubber.clock(timeline.duration))\(inGap ? ", position indisponible" : "")",
                 onScrubStart: { isPlaying = false; selectedID = nil },
                 onSelectMark: { id in
                     if let item = timeline.items.first(where: { $0.id == id }) { select(item) }
@@ -480,7 +533,7 @@ struct SchoolCaptureReplayView: View {
             )
             .accessibilityIdentifier("school-replay-timeline")
             if inGap {
-                Label("Aucune position mesurée pendant cette interruption.", systemImage: "location.slash")
+                Label("Position indisponible à cet instant.", systemImage: "location.slash")
                     .font(.caption)
                     .foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)

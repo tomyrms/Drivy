@@ -4,7 +4,28 @@ import Observation
 
 struct SchoolCaptureMapSegment: Identifiable {
     let id: UUID
-    var measurements: [SchoolCaptureMeasurement]
+    private(set) var measurements: [SchoolCaptureMeasurement]
+    private(set) var displaySamples: [SchoolCaptureDisplayRoute.Sample]
+
+    init(id: UUID, measurements: [SchoolCaptureMeasurement]) {
+        self.id = id
+        self.measurements = measurements
+        displaySamples = []
+        displaySamples = SchoolCaptureDisplayRoute.select(points)
+    }
+
+    mutating func appendDurable(_ measurements: [SchoolCaptureMeasurement]) {
+        self.measurements.append(contentsOf: measurements)
+        displaySamples = SchoolCaptureDisplayRoute.select(points)
+    }
+
+    /// The presentation queue preserves the storage order, before any display filter.
+    var points: [SchoolCapturePoint] {
+        measurements.enumerated().map { sequence, measurement in
+            SchoolCapturePoint(sequence: sequence, elapsedMs: measurement.elapsedMs, capturedAt: measurement.capturedAt,
+                latitude: measurement.latitude, longitude: measurement.longitude, accuracyMeters: measurement.accuracyMeters)
+        }
+    }
 }
 
 struct SchoolCaptureLessonTimes {
@@ -67,6 +88,7 @@ final class SchoolCaptureSessionController {
         var terminalRequested = false
         var finishingTask: Task<Bool, Never>?
         var synchronizationTask: Task<Void, Never>?
+        var presentationTail: Task<Void, Never>?
         var startedAt: String?
         var durableStoppedAt: String?
 
@@ -89,6 +111,7 @@ final class SchoolCaptureSessionController {
     init(store: SQLCipherSchoolCaptureStore? = nil) { sharedJournal = store }
 
     var pointCount: Int { segments.reduce(0) { $0 + $1.measurements.count } }
+    var displayedPointCount: Int { segments.reduce(0) { $0 + $1.displaySamples.count } }
     var isCollecting: Bool { state == .recording }
     var canPause: Bool { state == .recording }
     var canResume: Bool { state == .paused && context?.terminalRequested == false && context?.lease.permitsCollection() == true }
@@ -127,9 +150,10 @@ final class SchoolCaptureSessionController {
         guard state == .recording, let active = context, active.scope == permittedScope,
               active.lease.permitsCollection(), let handle = active.handle,
               let segment = segments.first(where: { $0.id == handle.segmentID }),
-              let sequence = segment.measurements.indices.last, let point = segment.measurements.last,
+              let point = segment.displaySamples.last?.point,
+              point.sequence == segment.measurements.count - 1,
               let measured = SchoolLesson.date(point.capturedAt), (0...15).contains(instant.timeIntervalSince(measured)) else { return nil }
-        return .init(captureID: active.session.id, segmentID: segment.id, pointSequence: sequence)
+        return .init(captureID: active.session.id, segmentID: segment.id, pointSequence: point.sequence)
     }
 
     func cancellationWorkspace(client: SchoolPlanningClient) async throws -> SchoolPlanningWorkspace {
@@ -597,12 +621,15 @@ final class SchoolCaptureSessionController {
             guard state == .recording, active.handle == handle else { return }
             do {
                 let saved = try active.local.enqueue(values, handle: handle)
-                Task {
+                let previousPresentation = active.presentationTail
+                active.presentationTail = Task {
+                    // Completion callbacks can resume in a different order from SQL commits.
+                    // Publish in the same order so array indices remain durable sequences.
+                    await previousPresentation?.value
                     do {
                         _ = try await saved.value
                         guard generation == request, let index = segments.firstIndex(where: { $0.id == handle.segmentID }) else { return }
-                        segments[index].measurements.append(contentsOf: values)
-                        segments[index].measurements.sort { $0.elapsedMs < $1.elapsedMs }
+                        segments[index].appendDurable(values)
                     } catch { failCollector(active, request: request, error: error) }
                 }
             } catch { failCollector(active, request: request, error: error) }

@@ -24,6 +24,7 @@ struct SchoolCaptureReplayFragment: Identifiable {
     private(set) var isComplete = false
     private(set) var errorMessage: String?
     private(set) var quality: String?
+    private(set) var contentRevision = 0
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
     var isInvalidated: Bool { invalidated }
@@ -45,7 +46,6 @@ struct SchoolCaptureReplayFragment: Identifiable {
         guard !invalidated, !isLoading else { return }
         let request = UUID(); generation = request
         isLoading = true; isComplete = false; errorMessage = nil
-        fragments = []; observations = []; quality = nil; capture = nil
         defer { if current(request) { isLoading = false } }
         do {
             let currentCapture = try await client.capture(schoolID: scope.schoolID, captureID: captureID, scope: scope)
@@ -57,6 +57,7 @@ struct SchoolCaptureReplayFragment: Identifiable {
             var accumulated: [SchoolCaptureReplayFragment] = []
             var knownObservations: [UUID: SchoolPrivateGeoObservation] = [:]
             var pages = 0
+            var loadedQuality: String?
             repeat {
                 try Task.checkCancellation()
                 let page = try await client.privateReplayPage(schoolID: scope.schoolID, captureID: captureID,
@@ -65,7 +66,8 @@ struct SchoolCaptureReplayFragment: Identifiable {
                 guard page.publicationState == .privateCapture else { throw SchoolCaptureFailure.notFound }
                 pages += 1
                 guard pages <= 1000, !page.segments.isEmpty || page.nextCursor == nil else { throw SchoolCaptureFailure.invalidResponse }
-                if let quality, quality != page.quality { throw SchoolCaptureFailure.changed }
+                if let loadedQuality, loadedQuality != page.quality { throw SchoolCaptureFailure.changed }
+                loadedQuality = page.quality
                 quality = page.quality
                 for (index, segment) in page.segments.enumerated() {
                     guard let first = segment.points.first, let last = segment.points.last else { throw SchoolCaptureFailure.invalidResponse }
@@ -118,6 +120,7 @@ struct SchoolCaptureReplayFragment: Identifiable {
                     let rhs = $1.observedAt.flatMap(SchoolLesson.date) ?? .distantPast
                     return lhs == rhs ? $0.id.uuidString < $1.id.uuidString : lhs < rhs
                 }
+                contentRevision += 1
                 cursor = page.nextCursor
                 if let cursor, !seenCursors.insert(cursor).inserted { throw SchoolCaptureFailure.invalidResponse }
             } while cursor != nil
@@ -128,6 +131,7 @@ struct SchoolCaptureReplayFragment: Identifiable {
             guard current(request) else { return }
             if let failure = error as? SchoolCaptureFailure, failure != .unavailable {
                 fragments = []; observations = []; capture = nil
+                contentRevision += 1
             }
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Le replay n’a pas pu être chargé."
         }
@@ -136,6 +140,7 @@ struct SchoolCaptureReplayFragment: Identifiable {
     func invalidate() {
         invalidated = true; generation = UUID()
         fragments = []; observations = []; capture = nil; isLoading = false; isComplete = false
+        contentRevision += 1
         // Sans message, l’écran resterait sur « Ouverture du trajet… » sans fin.
         errorMessage = "Tes accès ont changé. Ferme le replay puis rouvre-le depuis la leçon."
     }

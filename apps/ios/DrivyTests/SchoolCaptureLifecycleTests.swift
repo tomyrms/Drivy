@@ -96,6 +96,44 @@ import Testing
         await fixture.waitUntilSettled()
     }
 
+    @Test func displayedAnchorPreservesDurableSequenceAfterAnImpreciseDeparture() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        let imprecise = try #require(fixture.source.emitPoint(accuracyMeters: 100))
+        for _ in 0..<300 {
+            if fixture.controller.pointCount == 1 { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(fixture.controller.pointCount == 1)
+        #expect(fixture.controller.displayedPointCount == 0)
+        #expect(fixture.controller.observationAnchor(at: imprecise.addingTimeInterval(1)) == nil)
+        try await Task.sleep(for: .milliseconds(5))
+        let precise = try #require(fixture.source.emitPoint())
+        for _ in 0..<300 {
+            if fixture.controller.pointCount == 2 { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(fixture.controller.pointCount == 2)
+        #expect(fixture.controller.displayedPointCount == 1)
+        let anchor = try #require(fixture.controller.observationAnchor(at: precise.addingTimeInterval(1)))
+        #expect(anchor.pointSequence == 1)
+        try await fixture.store.flushForObservation(captureID: anchor.captureID, segmentID: anchor.segmentID,
+            sequence: anchor.pointSequence, scope: fixture.scope)
+        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId)
+        let chunkData = try #require(queue.first(where: { $0.mutation.kind == .uploadChunk })?.mutation.body)
+        let chunk = try JSONDecoder().decode(SchoolCaptureChunkBody.self, from: chunkData)
+        #expect(chunk.points.map(\.sequence) == [0, 1])
+        #expect(chunk.points.first?.accuracyMeters == 100)
+        try await Task.sleep(for: .milliseconds(5))
+        let rejected = try #require(fixture.source.emitPoint(accuracyMeters: 100))
+        for _ in 0..<300 {
+            if fixture.controller.pointCount == 3 { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(fixture.controller.observationAnchor(at: rejected.addingTimeInterval(1)) == nil)
+        #expect(await fixture.controller.stopAndSynchronize())
+        await fixture.waitUntilSettled()
+    }
+
     @Test func closingTheLessonDoesNotCancelDurableSynchronization() async throws {
         let fixture = try await CaptureLifecycleFixture.make()
         await fixture.server.holdTransfers()
@@ -276,12 +314,12 @@ import Testing
     func start(segment: SchoolCaptureLocationSegment, handle: SchoolCaptureSegmentHandle) throws {
         self.segment = segment; self.handle = handle; isRunning = true; boundary = nil
     }
-    func emitPoint() -> Date? {
+    func emitPoint(accuracyMeters: Double = 5) -> Date? {
         guard isRunning, let segment, let handle else { return nil }
         let elapsed = max(1, Int(SchoolCaptureLocationTime.seconds(segment.monotonicStartedAt.duration(to: .now)) * 1000))
         let date = segment.mappedStartedAt.addingTimeInterval(Double(elapsed) / 1000)
         onEvent?(.measurements(handle: handle, values: [.init(capturedAt: SchoolCaptureLocationTime.timestamp(date),
-            elapsedMs: elapsed, latitude: 47, longitude: 7, accuracyMeters: 5)]))
+            elapsedMs: elapsed, latitude: 47, longitude: 7, accuracyMeters: accuracyMeters)]))
         return date
     }
     func stop() -> SchoolCaptureLocationStop? {

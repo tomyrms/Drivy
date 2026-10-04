@@ -81,7 +81,10 @@ struct SchoolHomeView: View {
     private var staffTabs: some View {
         TabView(selection: staffSelection) {
             sessionTab
-                .tabItem { Label("Aujourd’hui", systemImage: "map") }
+                .tabItem {
+                    Label("Aujourd’hui", systemImage: captureController?.captureID != nil ? "location.fill" : "map")
+                        .accessibilityValue(captureController?.captureID != nil ? "Leçon en cours" : "")
+                }
                 .tag(SchoolHomeTab.session)
             if let agendaClient {
                 NavigationStack {
@@ -111,7 +114,7 @@ struct SchoolHomeView: View {
                         closeSaved: { captureController.closeSaved() },
                         openLesson: { lessonID, completing in
                             captureLesson = CaptureLessonRoute(id: lessonID, learnerName: captureLearnerName, completing: completing)
-                        }, observationClient: agendaClient?.observationClient)
+                        }, observationClient: agendaClient?.observationClient, isTabRoot: true)
                 } else {
                     SchoolTodayView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
                         .navigationTitle("Aujourd’hui")
@@ -205,7 +208,10 @@ struct SchoolHomeView: View {
                 .frame(maxHeight: .infinity, alignment: .top).background(DrivyTheme.surface)
         } else if workspace.isLoadingSchool || workspace.isSearching || workspace.isLoadingLearner || workspace.isLoadingTrainings
                     || (ownLearner != nil && workspace.learner == nil) {
-            ProgressView("Chargement de ton dossier…").frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.surface)
+            DrivySkeletonRows(count: 3)
+                .drivySkeleton("Chargement de ton dossier…")
+                .drivyPageContent()
+                .frame(maxHeight: .infinity, alignment: .top).background(DrivyTheme.surface)
         } else if workspace.school?.status != "ACTIVE" {
             ContentUnavailableView("L’école se prépare", systemImage: "building.2")
         } else if ownLearner == nil {

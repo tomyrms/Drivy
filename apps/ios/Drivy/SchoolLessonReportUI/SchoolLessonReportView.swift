@@ -868,6 +868,10 @@ struct LessonTrackMap: View {
                 if line.coordinates.count > 1 {
                     MapPolyline(coordinates: line.coordinates).stroke(DrivyTheme.routeHalo, lineWidth: 8)
                     MapPolyline(coordinates: line.coordinates).stroke(DrivyTheme.route, lineWidth: 4)
+                } else if let coordinate = line.coordinates.first {
+                    Annotation("Position enregistrée", coordinate: coordinate) {
+                        Circle().fill(DrivyTheme.route).frame(width: 8, height: 8)
+                    }.annotationTitles(.hidden)
                 }
             }
             ForEach(pins) { pin in

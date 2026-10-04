@@ -189,15 +189,25 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
               value.items.allSatisfy({ $0.schoolId == schoolID && $0.lessonId == lessonID && $0.hasValidTimeline }) else { throw SchoolCaptureFailure.invalidResponse }
         return value.items
     }
-    /// Tout le trajet reconstruit, page après page, avec les observations ancrées visibles par ce compte.
+    /// Display projection after all pages: the same measured selection as live/replay.
+    /// The original transport, sequences and observation times are not modified.
     func replayTrack(schoolID: UUID, captureID: UUID) async throws -> (segments: [[SchoolCapturePoint]], observations: [SchoolPrivateGeoObservation], pointsByAnchor: [String: SchoolCapturePoint]) {
         var segments: [UUID: [SchoolCapturePoint]] = [:], order: [UUID] = [], observations: [SchoolPrivateGeoObservation] = []
         var cursor: String?, seen = Set<String>(), pages = 0
+        var pointKeys = Set<String>()
+        var quality: String?
         repeat {
             pages += 1
-            guard pages <= 100 else { throw SchoolCaptureFailure.invalidResponse }
+            guard pages <= 1000 else { throw SchoolCaptureFailure.invalidResponse }
             let page = try await privateReplayPage(schoolID: schoolID, captureID: captureID, cursor: cursor)
+            guard page.publicationState == .privateCapture else { throw SchoolCaptureFailure.notFound }
+            if let quality, quality != page.quality { throw SchoolCaptureFailure.changed }
+            quality = page.quality
             for segment in page.segments {
+                for point in segment.points {
+                    guard pointKeys.insert("\(segment.segmentId):\(point.sequence)").inserted,
+                          pointKeys.count <= 100_000 else { throw SchoolCaptureFailure.invalidResponse }
+                }
                 if segments[segment.segmentId] == nil { order.append(segment.segmentId) }
                 segments[segment.segmentId, default: []].append(contentsOf: segment.points)
             }
@@ -207,8 +217,13 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
             if let cursor, !seen.insert(cursor).inserted { throw SchoolCaptureFailure.invalidResponse }
         } while cursor != nil
         var anchors: [String: SchoolCapturePoint] = [:]
-        for (id, points) in segments { for point in points { anchors["\(id.uuidString.lowercased()):\(point.sequence)"] = point } }
-        return (order.compactMap { segments[$0] }, observations, anchors)
+        var displayed: [[SchoolCapturePoint]] = []
+        for id in order {
+            let selected = SchoolCaptureDisplayRoute.select(segments[id] ?? [])
+            displayed.append(contentsOf: SchoolCaptureDisplayRoute.fragments(selected))
+            for sample in selected { anchors["\(id.uuidString.lowercased()):\(sample.point.sequence)"] = sample.point }
+        }
+        return (displayed, observations, anchors)
     }
     private struct CaptureList: Decodable { let items: [SchoolCaptureSession] }
 

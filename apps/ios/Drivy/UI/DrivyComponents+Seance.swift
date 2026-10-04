@@ -78,8 +78,8 @@ struct DrivyMapHeaderAction {
         DrivyMapHeaderAction(symbol: "xmark", label: label, hint: hint, isDisabled: isDisabled, action: action)
     }
 
-    static func back(label: String, action: @escaping () -> Void) -> Self {
-        DrivyMapHeaderAction(symbol: "chevron.left", label: label, action: action)
+    static func back(label: String, hint: String? = nil, isDisabled: Bool = false, action: @escaping () -> Void) -> Self {
+        DrivyMapHeaderAction(symbol: "chevron.left", label: label, hint: hint, isDisabled: isDisabled, action: action)
     }
 }
 
@@ -175,13 +175,13 @@ struct DrivyLiveTopBar<Trailing: View>: View {
     private let elapsed: String?
     private let elapsedLabel: String
     private let status: DrivyMapStatus
-    private let leading: DrivyMapHeaderAction
+    private let leading: DrivyMapHeaderAction?
     private let floating: Bool
     private let trailing: Trailing
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(context: String? = nil, elapsed: String?, elapsedLabel: String = "Durée du trajet",
-         status: DrivyMapStatus, leading: DrivyMapHeaderAction, floating: Bool = true,
+         status: DrivyMapStatus, leading: DrivyMapHeaderAction? = nil, floating: Bool = true,
          @ViewBuilder trailing: () -> Trailing) {
         self.context = context
         self.elapsed = elapsed
@@ -197,7 +197,7 @@ struct DrivyLiveTopBar<Trailing: View>: View {
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     HStack(spacing: DrivySpacing.xs) {
-                        DrivyMapLeadingButton(action: leading)
+                        if let leading { DrivyMapLeadingButton(action: leading) }
                         Spacer(minLength: 0)
                         trailing
                     }
@@ -205,14 +205,14 @@ struct DrivyLiveTopBar<Trailing: View>: View {
                 }
             } else {
                 HStack(alignment: .center, spacing: DrivySpacing.s) {
-                    DrivyMapLeadingButton(action: leading)
+                    if let leading { DrivyMapLeadingButton(action: leading) }
                     information
                     trailing
                 }
             }
         }
         .padding(.vertical, DrivySpacing.xs)
-        .padding(.leading, DrivySpacing.xs)
+        .padding(.leading, leading == nil ? DrivySpacing.m : DrivySpacing.xs)
         .padding(.trailing, DrivySpacing.xs)
         .foregroundStyle(DrivyTheme.text)
         .drivyMapPanel(floating: floating)
@@ -243,7 +243,7 @@ struct DrivyLiveTopBar<Trailing: View>: View {
 
 extension DrivyLiveTopBar where Trailing == EmptyView {
     init(context: String? = nil, elapsed: String?, elapsedLabel: String = "Durée du trajet",
-         status: DrivyMapStatus, leading: DrivyMapHeaderAction, floating: Bool = true) {
+         status: DrivyMapStatus, leading: DrivyMapHeaderAction? = nil, floating: Bool = true) {
         self.init(context: context, elapsed: elapsed, elapsedLabel: elapsedLabel, status: status,
                   leading: leading, floating: floating) { EmptyView() }
     }

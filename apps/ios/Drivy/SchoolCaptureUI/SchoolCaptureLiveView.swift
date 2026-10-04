@@ -10,6 +10,7 @@ struct SchoolCaptureLiveView: View {
     var returnToLesson: (() -> Void)? = nil
     var openLesson: ((UUID, Bool) -> Void)? = nil
     var observationClient: SchoolObservationClient? = nil
+    var isTabRoot: Bool = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -81,6 +82,11 @@ struct SchoolCaptureLiveView: View {
 
     private var compactContent: some View {
         routeMap
+            .overlay(alignment: .bottomTrailing) {
+                if controller.displayedPointCount > 0 {
+                    mapControls(axis: .horizontal).padding(DrivySpacing.m)
+                }
+            }
             .safeAreaInset(edge: .top, spacing: 0) {
                 heading()
                     .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
@@ -88,10 +94,7 @@ struct SchoolCaptureLiveView: View {
                     .frame(maxWidth: .infinity)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(alignment: .trailing, spacing: DrivySpacing.s) {
-                    if controller.pointCount > 0 { mapControls(axis: .horizontal) }
-                    commandPanel()
-                }
+                commandPanel()
                 .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
                 .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.s)
                 .frame(maxWidth: .infinity)
@@ -115,7 +118,7 @@ struct SchoolCaptureLiveView: View {
             .frame(width: DrivyMapLayout.sidebarWidth)
             .background(DrivyTheme.canvas)
             routeMap.overlay(alignment: .bottomTrailing) {
-                if controller.pointCount > 0 { mapControls(axis: .vertical).padding(DrivySpacing.l) }
+                if controller.displayedPointCount > 0 { mapControls(axis: .vertical).padding(DrivySpacing.l) }
             }
         }
     }
@@ -124,7 +127,7 @@ struct SchoolCaptureLiveView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.l) {
                 heading(floating: false)
-                if controller.pointCount > 0 {
+                if controller.displayedPointCount > 0 {
                     routeMap.frame(height: DrivyMapLayout.accessibleMapHeight)
                         .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                     mapControls(axis: .horizontal).frame(maxWidth: .infinity, alignment: .trailing)
@@ -149,7 +152,7 @@ struct SchoolCaptureLiveView: View {
 
     /// No position yet: an honest wait instead of a country overview.
     @ViewBuilder private var routeMap: some View {
-        if controller.pointCount > 0 {
+        if controller.displayedPointCount > 0 {
             SchoolCaptureLiveMap(segments: controller.segments,
                 observations: controller.liveObservations?.mapObservations ?? [],
                 resetCameraID: resetCameraID, followsPosition: $followsPosition)
@@ -177,7 +180,7 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    /// Identité et état GPS ; les commandes de leçon restent dans le panneau inférieur.
+    /// Identité et état GPS ; les actions secondaires de leçon sont dans le menu.
     private func heading(floating: Bool = true) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             DrivyLiveTopBar(
@@ -185,11 +188,11 @@ struct SchoolCaptureLiveView: View {
                 elapsed: showsElapsed ? elapsedLabel : nil,
                 elapsedLabel: "Temps écoulé depuis le départ GPS",
                 status: status,
-                leading: .close(label: "Revenir à la leçon",
+                leading: isTabRoot ? nil : .back(label: "Revenir à la leçon",
                     hint: controller.canStop ? "Le GPS conserve son état actuel" : "Fermer le trajet",
                     isDisabled: isFinishing) { close() },
                 floating: floating
-            ) { EmptyView() }
+            ) { lessonMenu }
         }
     }
 
@@ -207,7 +210,7 @@ struct SchoolCaptureLiveView: View {
 
     private var hasSessionInformation: Bool {
         controller.errorMessage != nil || cancellationError != nil
-            || (controller.pointCount > 0 && controller.locationMessage != nil)
+            || (controller.displayedPointCount > 0 && controller.locationMessage != nil)
             || (controller.transferMessage != nil && controller.finalizedSyncState == nil)
     }
 
@@ -217,7 +220,7 @@ struct SchoolCaptureLiveView: View {
             if let error = controller.errorMessage {
                 DrivyInlineMessage(text: error, tone: .warning)
             }
-            if controller.pointCount > 0, let message = controller.locationMessage {
+            if controller.displayedPointCount > 0, let message = controller.locationMessage {
                 DrivyInlineMessage(text: message, tone: .warning)
             }
             if let message = controller.transferMessage, controller.finalizedSyncState == nil {
@@ -279,7 +282,6 @@ struct SchoolCaptureLiveView: View {
                     VStack(spacing: DrivySpacing.s) { secondaryCommands(hugsFirst: false) }
                 }
             }
-            cancellationButton
         }
     }
 
@@ -388,25 +390,37 @@ struct SchoolCaptureLiveView: View {
             if let state = controller.finalizedSyncState { finalizationResult(state) }
             Button("Terminer la leçon", systemImage: "checkmark.circle") { finishLesson() }
                 .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(isFinishing)
-            cancellationButton
         }
     }
 
-    @ViewBuilder private var cancellationButton: some View {
-        if observationClient != nil {
-            Button("Annuler la leçon", role: .destructive) {
-                guard let client = observationClient?.agenda.planningClient else { return }
-                isFinishing = true; cancellationError = nil
-                Task { @MainActor in
-                    defer { isFinishing = false }
-                    do { cancellationModel = try await controller.cancellationWorkspace(client: client) }
-                    catch { cancellationError = (error as? LocalizedError)?.errorDescription ?? "Impossible d’ouvrir l’annulation. Vérifie la connexion et réessaie." }
-                }
+    private var lessonMenu: some View {
+        Menu {
+            Button("Voir la leçon", systemImage: "doc.text") { close() }
+            if observationClient != nil {
+                Button("Annuler la leçon", systemImage: "xmark.circle", role: .destructive) { openCancellation() }
+                    .disabled(!controller.canStop && controller.state != .saved)
+                    .accessibilityIdentifier("capture-cancel-lesson")
             }
-            .font(.subheadline)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .disabled(isFinishing)
-            .accessibilityIdentifier("capture-cancel-lesson")
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(DrivyTheme.text)
+                .frame(width: 48, height: 48)
+                .background(DrivyTheme.surfaceMuted, in: Circle())
+                .contentShape(Circle())
+        }
+        .disabled(isFinishing)
+        .accessibilityLabel("Plus d’actions")
+        .accessibilityIdentifier("capture-more")
+    }
+
+    private func openCancellation() {
+        guard !isFinishing, let client = observationClient?.agenda.planningClient else { return }
+        isFinishing = true; cancellationError = nil
+        Task { @MainActor in
+            defer { isFinishing = false }
+            do { cancellationModel = try await controller.cancellationWorkspace(client: client) }
+            catch { cancellationError = (error as? LocalizedError)?.errorDescription ?? "Impossible d’ouvrir l’annulation. Vérifie la connexion et réessaie." }
         }
     }
 
@@ -466,7 +480,7 @@ struct SchoolCaptureLiveView: View {
         case .idle: DrivyMapStatus(title: "Aucun trajet en cours", symbol: "location.slash")
         case .preparing: DrivyMapStatus(title: "Préparation du GPS", symbol: "clock")
         case .recording:
-            controller.pointCount == 0
+            controller.displayedPointCount == 0
                 ? DrivyMapStatus(title: "En attente de position", symbol: "location")
                 : DrivyMapStatus(title: "GPS actif", symbol: "location.fill", tone: .accent)
         case .paused: DrivyMapStatus(title: "GPS en pause", symbol: "pause.circle")
@@ -500,139 +514,6 @@ struct SchoolCaptureLiveView: View {
             case .resume: await controller.resume()
             case .retrySaving: await controller.retrySaving()
             }
-        }
-    }
-}
-
-private struct SchoolCaptureLiveMap: View {
-    let segments: [SchoolCaptureMapSegment]
-    let observations: [SchoolLiveMapObservation]
-    let resetCameraID: UUID
-    @Binding var followsPosition: Bool
-    @State private var camera: MapCameraPosition = .automatic
-    @State private var mapHeading = 0.0
-    @State private var followDistance = 650.0
-    @State private var course = SchoolMapCourse()
-    @State private var courseSegmentID: UUID?
-    @State private var coursePointCount = 0
-    @State private var heading: Double?
-    @State private var drawnSegments: [SchoolMapRouteFragment] = []
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var count: Int { segments.reduce(0) { $0 + $1.measurements.count } }
-    private var last: SchoolCaptureMeasurement? { segments.last(where: { !$0.measurements.isEmpty })?.measurements.last }
-
-    var body: some View {
-        Map(position: $camera) {
-            ForEach(drawnSegments) { segment in
-                if segment.line.pointCount > 1 {
-                    // Trait épais : lisible d’un regard, en plein soleil comme de nuit.
-                    MapPolyline(segment.line).stroke(DrivyTheme.routeHalo, lineWidth: 11)
-                    MapPolyline(segment.line).stroke(DrivyTheme.route, lineWidth: 6)
-                } else if let coordinate = segment.firstCoordinate {
-                    Annotation("Position enregistrée", coordinate: coordinate) {
-                        Circle().fill(DrivyTheme.route).frame(width: 8, height: 8)
-                    }.annotationTitles(.hidden)
-                }
-            }
-            ForEach(observations) { observation in
-                if let coordinate = coordinate(for: observation) {
-                    Annotation(observation.body.text, coordinate: coordinate) {
-                        observationMarker(observation)
-                    }.annotationTitles(.hidden)
-                }
-            }
-            if let last {
-                Annotation("Dernière position enregistrée", coordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude)) {
-                    SchoolMapPositionMarker(course: heading, mapHeading: mapHeading)
-                }.annotationTitles(.hidden)
-            }
-        }
-        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
-        .mapControls { }
-        .onAppear { updateRoute(); updateCourse(); if followsPosition { followPoint() } else if count > 0 { camera = .automatic } }
-        .onMapCameraChange(frequency: .continuous) { context in
-            mapHeading = context.camera.heading
-            if camera.positionedByUser { followDistance = min(2500, max(180, context.camera.distance)) }
-        }
-        .onChange(of: camera.positionedByUser) { _, byUser in if byUser { followsPosition = false } }
-        .onChange(of: followsPosition) { _, follows in if follows { followPoint() } }
-        .onChange(of: count) { before, after in
-            updateRoute()
-            updateCourse()
-            if followsPosition && !camera.positionedByUser { followPoint() }
-            else if before == 0 && after > 0 { camera = .automatic }
-        }
-        .onChange(of: resetCameraID) { _, _ in
-            if followsPosition { followPoint() }
-            else { camera = .automatic }
-        }
-        .accessibilityLabel("Carte du trajet enregistré")
-        .accessibilityValue(followsPosition ? "Suivi dans le sens du trajet" : "Carte libre")
-    }
-
-    private func coordinate(for observation: SchoolLiveMapObservation) -> CLLocationCoordinate2D? {
-        guard let segmentID = observation.body.segmentId, let sequence = observation.body.pointSequence,
-              let segment = segments.first(where: { $0.id == segmentID }), segment.measurements.indices.contains(sequence) else { return nil }
-        let point = segment.measurements[sequence]
-        return CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
-    }
-
-    private func observationMarker(_ observation: SchoolLiveMapObservation) -> some View {
-        let status = observation.body.eventStatus.flatMap(SchoolObservationStatus.init(rawValue:))
-        let color: Color = switch status {
-        case .attention: DrivyTone.warning.foreground
-        case .toWorkOn: DrivyTone.danger.foreground
-        case .positive: DrivyTone.success.foreground
-        case nil: DrivyTheme.text
-        }
-        return Image(systemName: status?.symbol ?? "bookmark.fill")
-            .font(.caption.weight(.bold))
-            .foregroundStyle(color)
-            .frame(width: 28, height: 28)
-            .background(DrivyTheme.surface, in: Circle())
-            .overlay(Circle().strokeBorder(color, style: StrokeStyle(lineWidth: 2, dash: observation.isPending ? [3, 2] : [])))
-            .accessibilityLabel("\(observation.body.text), \(status?.label ?? "Repère")\(observation.isPending ? ", envoi en attente" : "")")
-    }
-
-    private func updateCourse() {
-        guard let segment = segments.last(where: { !$0.measurements.isEmpty }) else { return }
-        if courseSegmentID != segment.id || coursePointCount > segment.measurements.count {
-            course = SchoolMapCourse(); courseSegmentID = segment.id; coursePointCount = 0; heading = nil
-        }
-        for point in segment.measurements.dropFirst(coursePointCount) {
-            heading = course.receive(CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude),
-                at: Double(point.elapsedMs) / 1000, accuracy: point.accuracyMeters)
-        }
-        coursePointCount = segment.measurements.count
-    }
-
-    private func updateRoute() {
-        drawnSegments = segments.flatMap { segment -> [SchoolMapRouteFragment] in
-            let prefix = segment.id.uuidString + ":"
-            let previous = drawnSegments.filter { $0.id.hasPrefix(prefix) }
-            if previous.reduce(0, { $0 + $1.line.pointCount }) == segment.measurements.count { return previous }
-            var fragments: [SchoolMapRouteFragment] = []
-            var coordinates: [CLLocationCoordinate2D] = []
-            var previousElapsed: Int?
-            for point in segment.measurements {
-                if let previousElapsed, point.elapsedMs - previousElapsed > 15_000 {
-                    fragments.append(.init(id: "\(prefix)\(fragments.count)", coordinates: coordinates))
-                    coordinates = []
-                }
-                coordinates.append(CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude))
-                previousElapsed = point.elapsedMs
-            }
-            if !coordinates.isEmpty { fragments.append(.init(id: "\(prefix)\(fragments.count)", coordinates: coordinates)) }
-            return fragments
-        }
-    }
-
-    private func followPoint() {
-        guard let last else { return }
-        withAnimation(reduceMotion ? nil : .linear(duration: 0.35)) {
-            camera = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude),
-                distance: followDistance, heading: heading ?? mapHeading, pitch: 0))
         }
     }
 }
