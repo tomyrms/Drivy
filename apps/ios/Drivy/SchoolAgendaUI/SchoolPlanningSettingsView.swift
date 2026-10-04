@@ -192,7 +192,7 @@ struct SchoolPlanningSettingsView: View {
                     }.disabled(model.isLoading || model.isBusy || model.pending != nil)
                 }
                 Button { Task { await model.save() } } label: {
-                    DrivyBusyLabel(title: "Enregistrer", busyTitle: "Enregistrement…", isBusy: model.isBusy)
+                    DrivyBusyLabel(title: "Enregistrer les préférences", busyTitle: "Enregistrement des préférences…", isBusy: model.isBusy)
                 }
                 .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canSave)
                 .accessibilityIdentifier("planning-settings-save")
@@ -213,6 +213,7 @@ struct SchoolPlanningSettingsView: View {
         .interactiveDismissDisabled(model.hasChanges || model.isBusy)
         .alert("Quitter sans enregistrer tes changements ?", isPresented: $confirmsDiscard) {
             Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
+            Button("Continuer la modification", role: .cancel) { }
         } message: {
             Text("Une demande déjà envoyée reste conservée sur cet appareil jusqu’à confirmation.")
         }

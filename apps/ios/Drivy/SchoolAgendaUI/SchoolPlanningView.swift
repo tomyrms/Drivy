@@ -82,12 +82,7 @@ struct SchoolPlanningView: View {
                 }.disabled(!model.canMutate)
                 if model.learners.isEmpty && !model.isLoading { formNote("Aucun dossier d’élève actif n’est accessible avec ton rôle.") }
                 if model.learnerID != nil {
-                    Picker("Formation", selection: Binding(get: { model.trainingID }, set: { id in
-                        if let id { Task { await model.selectTraining(id) } }
-                    })) {
-                        Text("Choisir une formation").tag(nil as UUID?)
-                        ForEach(model.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
-                    }.disabled(!model.canMutate)
+                    trainingChoice
                     if model.isLoading && model.trainings.isEmpty {
                         DrivySkeletonRow().drivySkeleton("Chargement de la formation…")
                     } else if model.trainings.isEmpty {
@@ -107,23 +102,39 @@ struct SchoolPlanningView: View {
             .drivyFormRows()
         if model.trainingID != nil {
             scheduleFields
-            if model.originalLesson != nil {
-                Section {
-                    Toggle("Changer la durée ou le tarif", isOn: $model.changesCommercialTerms)
-                        .disabled(!model.canMutate)
-                    if !model.changesCommercialTerms, let lesson = model.originalLesson {
-                        LabeledContent("Durée conservée") { Text("\(lesson.durationMinutes) min").monospacedDigit().foregroundStyle(DrivyTheme.muted) }
-                        LabeledContent("Prix conservé") { Text(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot)).monospacedDigit().foregroundStyle(DrivyTheme.muted) }
-                    }
-                } header: { Text("Durée et prix").drivyFormSectionHeader() }
-                    .drivyFormRows()
-            }
+            if model.originalLesson != nil { keptTermsFields }
             if model.slotIsAvailable {
-                if model.originalLesson == nil || model.changesCommercialTerms { commercialFields }
                 reviewFields
                 documentLinks
             }
         }
+    }
+    /// Une seule formation en cours : il n’y a rien à choisir, une ligne suffit (comme pour un déplacement).
+    @ViewBuilder private var trainingChoice: some View {
+        if model.trainings.count == 1, let training = model.trainings.first, training.id == model.trainingID {
+            LabeledContent("Formation") { Text("Permis \(training.categoryCode)").foregroundStyle(DrivyTheme.muted) }
+        } else {
+            Picker("Formation", selection: Binding(get: { model.trainingID }, set: { id in
+                if let id { Task { await model.selectTraining(id) } }
+            })) {
+                Text("Choisir une formation").tag(nil as UUID?)
+                ForEach(model.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
+            }.disabled(!model.canMutate)
+        }
+    }
+    /// Déplacement : la durée et le prix restent ceux de la leçon, sauf si le moniteur les change.
+    private var keptTermsFields: some View {
+        Section {
+            Toggle("Changer la durée ou le tarif", isOn: $model.changesCommercialTerms)
+                .disabled(!model.canMutate)
+            if !model.changesCommercialTerms, let lesson = model.originalLesson {
+                LabeledContent("Durée et prix conservés") {
+                    Text("\(lesson.durationMinutes) min · \(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot))")
+                        .monospacedDigit().foregroundStyle(DrivyTheme.muted)
+                }
+            }
+        }
+        .drivyFormRows()
     }
     private var scheduleFields: some View {
         Section {
@@ -150,7 +161,7 @@ struct SchoolPlanningView: View {
             if model.duration > 0 {
                 LabeledContent("Fin prévue") { Text(SchoolPlanningFormat.instant(model.endsAt, zone: model.timeZone)).monospacedDigit().foregroundStyle(DrivyTheme.muted) }
             }
-            slotFeedback
+            slotStatus
             DisclosureGroup("Détails du rendez-vous") {
                 SchoolMeetingPointField(text: $model.meetingPoint)
                 .onChange(of: model.meetingPoint) { _, _ in model.agreementConfirmed = false }
@@ -158,7 +169,7 @@ struct SchoolPlanningView: View {
                     DrivyFormMessage(text: "Raccourcis le lieu à 500 caractères.", tone: .danger)
                 }
                 if model.originalLesson == nil {
-                    Stepper("Intervalle : \(model.bufferMinutes) min", value: $model.bufferMinutes, in: 0...240, step: 5)
+                    Stepper("Temps entre deux leçons : \(model.bufferMinutes) min", value: $model.bufferMinutes, in: 0...240, step: 5)
                         .accessibilityLabel("Temps entre deux leçons")
                         .accessibilityValue("\(model.bufferMinutes) minutes")
                 }
@@ -184,8 +195,9 @@ struct SchoolPlanningView: View {
                         }.padding(.vertical, DrivySpacing.xxs)
                     }
                     ForEach(model.closures) { closure in
-                        Label(SchoolPlanningFormat.interval(closure.startsAt, closure.endsAt, zone: model.timeZone), systemImage: "calendar.badge.minus")
+                        Text("Indisponible : \(SchoolPlanningFormat.interval(closure.startsAt, closure.endsAt, zone: model.timeZone))")
                             .font(.caption).foregroundStyle(DrivyTheme.warning)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .task(id: model.instructorID) { await model.loadAvailability() }
@@ -210,29 +222,31 @@ struct SchoolPlanningView: View {
             }
         }
     }
-    private var commercialFields: some View {
-        Section {
-            Picker("Tarif", selection: $model.productID) {
-                Text("Choisir un tarif").tag(nil as UUID?)
-                ForEach(model.compatibleProducts) { product in
-                    Text("\(product.label) · \(SchoolCatalogFormatting.price(product.unitPriceCents))").tag(Optional(product.id))
+    /// Le créneau puis, au même endroit, le tarif : la ligne remplace l’indicateur de vérification.
+    @ViewBuilder private var slotStatus: some View {
+        slotFeedback
+        tariffRow
+    }
+    /// Le prix convenu est celui de la barre d’action. Ici, seulement la prestation : une ligne quand il n’y a
+    /// rien à choisir, un sélecteur quand plusieurs tarifs correspondent. Le motif d’un tarif manquant est dans la barre.
+    @ViewBuilder private var tariffRow: some View {
+        if model.slotIsAvailable && (model.originalLesson == nil || model.changesCommercialTerms) {
+            if let product = model.automaticTariff {
+                LabeledContent("Tarif") {
+                    Text(model.quantity > 1 ? SchoolPlanningFormat.tariff(product, quantity: model.quantity) : product.label)
+                        .monospacedDigit().foregroundStyle(DrivyTheme.muted)
                 }
-            }
-            if model.compatibleProducts.isEmpty && !model.isLoading {
-                formNote("Aucun tarif ne correspond à cette durée et à cette date.")
-            }
-            if let product = model.selectedProduct {
-                // Le prix unitaire n’apporte rien quand il est déjà le prix convenu.
-                if model.quantity > 1 {
-                    LabeledContent("Quantité") { Text("\(model.quantity)").monospacedDigit().foregroundStyle(DrivyTheme.muted) }
-                    LabeledContent("Prix par \(product.unitLabel)") {
-                        Text(SchoolCatalogFormatting.price(product.unitPriceCents)).monospacedDigit().foregroundStyle(DrivyTheme.muted)
+                .accessibilityIdentifier("planning-tariff")
+            } else if model.needsTariffChoice {
+                Picker("Tarif", selection: $model.productID) {
+                    Text("Choisir un tarif").tag(nil as UUID?)
+                    ForEach(model.compatibleProducts) { product in
+                        Text(SchoolPlanningFormat.tariff(product, quantity: model.quantityCovered(by: product))).tag(Optional(product.id))
                     }
                 }
+                .accessibilityIdentifier("planning-tariff")
             }
-        } header: { Text("Le tarif").drivyFormSectionHeader() }
-            .drivyFormRows()
-        .disabled(!model.canMutate)
+        }
     }
     private var documentLinks: some View {
         Section {
@@ -264,7 +278,7 @@ struct SchoolPlanningView: View {
             Section {
                 TextField(model.changesCommercialTerms ? "Motif du changement" : "Motif facultatif", text: $model.reason, axis: .vertical).lineLimit(2...4)
                 Toggle("Le nouvel horaire est convenu", isOn: $model.agreementConfirmed)
-            } header: { Text("Vérification").drivyFormSectionHeader() }
+            } header: { Text("Motif et accord").drivyFormSectionHeader() }
             .drivyFormRows()
             .disabled(!model.canMutate)
         }
@@ -298,6 +312,8 @@ struct SchoolPlanningView: View {
             DrivyActionNote(text: "Raccourcis le motif à 1 000 caractères.", isError: true)
         } else if model.startsAt <= Date() {
             DrivyActionNote(text: "Choisis un horaire à venir.", isError: true)
+        } else if let message = model.tariffMessage {
+            DrivyActionNote(text: message, isError: true)
         } else if model.originalLesson != nil && model.changesCommercialTerms
             && model.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             DrivyActionNote(text: "Indique le motif du changement.", isError: true)
@@ -307,7 +323,7 @@ struct SchoolPlanningView: View {
         } label: {
             HStack(spacing: DrivySpacing.xs) {
                 if model.isBusy { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
-                Label(model.originalLesson == nil ? "Planifier" : "Confirmer le déplacement", systemImage: "calendar.badge.checkmark")
+                Text(model.originalLesson == nil ? "Planifier" : "Confirmer le déplacement")
             }
         }
         .buttonStyle(DrivyPrimaryButtonStyle())
@@ -335,7 +351,8 @@ struct SchoolPlanningView: View {
                 }
                 .padding(.vertical, DrivySpacing.xxs)
                 .accessibilityElement(children: .combine)
-                lesson.drivyState.badge
+                // Un badge seulement pour l’inhabituel : une leçon planifiée à venir n’en porte pas.
+                if let badge = lesson.drivyState.rowBadge { badge }
             } header: { Text("Leçon concernée").drivyFormSectionHeader() }
                 .drivyFormRows()
         }
@@ -357,7 +374,7 @@ struct SchoolPlanningView: View {
             .disabled(!model.canMutate || isPreparingCancellation)
         Section {
             Button(role: .destructive) { confirmsCancellation = true } label: {
-                Label("Annuler la leçon", systemImage: "calendar.badge.minus")
+                Text("Annuler la leçon")
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity, minHeight: 48)
             }
@@ -446,6 +463,11 @@ enum SchoolPlanningFormat {
     static func validity(_ from: String, until: String?) -> String {
         if let until { return "Du \(civil(from)) au \(civil(until))" }
         return "Dès le \(civil(from))"
+    }
+    /// La prestation et son prix unitaire ; une durée multiple précise la quantité (« 2 × CHF 95.00 »).
+    static func tariff(_ product: SchoolServiceProduct, quantity: Int) -> String {
+        let price = SchoolCatalogFormatting.price(product.unitPriceCents)
+        return quantity > 1 ? "\(product.label) · \(quantity) × \(price)" : "\(product.label) · \(price)"
     }
     static func instant(_ date: Date, zone: String) -> String {
         let format = DateFormatter(); format.locale = Locale(identifier: "fr_CH"); format.timeZone = TimeZone(identifier: zone)

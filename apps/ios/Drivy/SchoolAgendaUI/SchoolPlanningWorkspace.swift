@@ -154,6 +154,27 @@ struct SchoolPlanningInstructor: Identifiable {
                 && terms.contains { $0.id == product.termsVersionId && $0.approved && $0.validFrom <= date && ($0.validUntil.map { $0 >= date } ?? true) }
         }
     }
+    /// Quantité de cette prestation que couvre la durée choisie (1 si la durée n’en est pas un multiple).
+    func quantityCovered(by product: SchoolServiceProduct) -> Int {
+        guard let minutes = product.durationMinutes, minutes > 0, duration > 0, duration % minutes == 0 else { return 1 }
+        return max(1, duration / minutes)
+    }
+    /// Le seul tarif possible, déjà retenu : il n’y a rien à choisir, le formulaire l’indique sans sélecteur.
+    var automaticTariff: SchoolServiceProduct? {
+        let products = compatibleProducts
+        guard products.count == 1, let product = products.first, product.id == productID else { return nil }
+        return product
+    }
+    /// Plusieurs tarifs possibles, ou un seul que le formulaire n’a pas retenu : le choix revient au moniteur.
+    var needsTariffChoice: Bool { !compatibleProducts.isEmpty && automaticTariff == nil }
+    /// Ce qui empêche de retenir un tarif quand le formulaire en attend un.
+    /// Nil si un tarif est retenu, ou s’il n’est pas en jeu (déplacement qui garde la durée et le prix).
+    var tariffMessage: String? {
+        guard trainingID != nil, !isLoading, originalLesson == nil || changesCommercialTerms else { return nil }
+        let products = compatibleProducts
+        if products.contains(where: { $0.id == productID }) { return nil }
+        return products.isEmpty ? "Aucun tarif ne correspond à cette durée et à cette date." : "Choisis un tarif."
+    }
     func selectDuration(_ minutes: Int) {
         guard (1...480).contains(minutes) else { return }
         selectedDurationMinutes = minutes; agreementConfirmed = false

@@ -166,7 +166,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
         case "INSTRUCTOR_NOT_ASSIGNED", "ASSIGNMENT_ENDS_BEFORE_LESSON_END":
             "Ton affectation ne couvre pas cette leçon. Demande à l’administration de la vérifier."
         case "INSTRUCTOR_REQUIRED": "Seul un moniteur peut démarrer une leçon."
-        case "OFFERING_NOT_READY": "Le tarif de cette formation n’est pas prêt. Demande à l’administration de la vérifier."
+        case "OFFERING_NOT_READY": "L’offre de cette formation n’est pas prête. Demande à l’administration de vérifier sa durée et sa procédure."
         case "SCHOOL_NOT_ACTIVE": "L’école n’est pas active. Contacte son administration."
         default: "Aucune formation disponible pour démarrer avec cet élève. Demande à l’administration de vérifier sa formation."
         }
@@ -342,7 +342,7 @@ struct SchoolStartNowView: View {
             // Rien n’est forcé : le serveur a refusé, la seule issue est de planifier autrement.
             Button {
                 model.planLater(); dismiss()
-            } label: { Label("Planifier à un autre moment", systemImage: "calendar") }
+            } label: { Text("Planifier à un autre moment") }
                 .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                 .accessibilityIdentifier("start-now-plan-later")
         } else {

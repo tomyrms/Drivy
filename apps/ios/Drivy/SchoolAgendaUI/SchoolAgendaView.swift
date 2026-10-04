@@ -142,10 +142,10 @@ struct SchoolAgendaView: View {
             if loadedScope != scopeKey && error == nil {
                 DrivySkeletonRows(count: 3, leading: .time).drivySkeleton("Chargement de l’agenda…")
             } else if loadedScope == scopeKey && dailyLessons.isEmpty {
+                // Qui planifie a déjà « Planifier une leçon » dans l’en-tête du jour : pas de second bouton identique.
                 DrivyEmptyState(title: "Aucune leçon ce jour", message: "",
-                    symbol: "calendar", actionTitle: mayPlan ? "Planifier une leçon" : "Voir le jour suivant") {
-                    if mayPlan { planningModel = newPlanningModel() }
-                    else if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
+                    symbol: "calendar", actionTitle: mayPlan ? nil : "Voir le jour suivant") {
+                    if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
                 }
             } else if loadedScope == scopeKey {
                 LazyVStack(spacing: 0) {
