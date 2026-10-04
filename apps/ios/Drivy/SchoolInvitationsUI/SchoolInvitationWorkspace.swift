@@ -28,6 +28,7 @@ final class SchoolInvitationWorkspace: Identifiable {
     private(set) var nextCursor: String?
     private(set) var pending: PendingSchoolCommand?
     private(set) var isLoading = false
+    private(set) var hasLoaded = false
     private(set) var isLoadingMore = false
     private(set) var isBusy = false
     private(set) var needsReload = false
@@ -53,7 +54,6 @@ final class SchoolInvitationWorkspace: Identifiable {
     @ObservationIgnored private var pageRequest = UUID()
     @ObservationIgnored private var seenCursors: Set<String> = []
     @ObservationIgnored private var storageAccessible = false
-    @ObservationIgnored private var hasLoaded = false
     @ObservationIgnored private var isInvalidated = false
 
     init(scope: SchoolCommandScope, roles: [String], api: any SchoolInvitationAPI,
@@ -144,14 +144,18 @@ final class SchoolInvitationWorkspace: Identifiable {
                 do {
                     let offerings = try await api.trainingOfferings(schoolID: scope.schoolID)
                     guard request == generation else { return }
+                    let instructors: [SchoolInvitationInstructor]
+                    if roles.contains("ADMIN") {
+                        instructors = try await api.instructors(schoolID: scope.schoolID)
+                        guard request == generation else { return }
+                    } else { instructors = [] }
+                    // Publish a complete context: a failed instructor read must not erase a selected permit.
                     self.offerings = offerings
+                    self.instructors = instructors
                     if !offerings.contains(where: { $0.id == selectedOfferingID }) { selectedOfferingID = offerings.count == 1 ? offerings[0].id : nil }
                     selectedOfferingIDs.formIntersection(Set(offerings.map(\.id)))
                     if selectedOfferingIDs.isEmpty, offerings.count == 1 { selectedOfferingIDs = [offerings[0].id] }
                     if roles.contains("ADMIN") {
-                        let instructors = try await api.instructors(schoolID: scope.schoolID)
-                        guard request == generation else { return }
-                        self.instructors = instructors
                         if !instructors.contains(where: { $0.id == selectedInstructorID }) {
                             selectedInstructorID = instructors.first { $0.id == scope.membershipID }?.id
                                 ?? (instructors.count == 1 ? instructors[0].id : nil)
@@ -159,7 +163,6 @@ final class SchoolInvitationWorkspace: Identifiable {
                     } else { selectedInstructorID = scope.membershipID }
                 } catch {
                     guard request == generation else { return }
-                    offerings = []; instructors = []; selectedOfferingIDs = []; selectedOfferingID = nil; selectedInstructorID = nil
                     if error as? SchoolInvitationFailure == .unauthorized || error as? SchoolInvitationFailure == .forbidden { throw error }
                     creationOptionsError = "Les permis et moniteurs n’ont pas pu être chargés. Réessaie."
                 }
@@ -415,6 +418,8 @@ final class SchoolInvitationWorkspace: Identifiable {
             errorMessage = failure.localizedDescription
             if failure == .unauthorized || failure == .forbidden {
                 school = nil; invitations = []; nextCursor = nil; selectedID = nil
+                offerings = []; instructors = []; selectedOfferingIDs = []; selectedOfferingID = nil; selectedInstructorID = nil
+                creationOptionsError = nil
                 email = ""; selectedRoles = [.learner]; successMessage = nil; issuedCode = nil; codeRecovery = nil
                 storageAccessible = false; hasLoaded = false
                 generation = UUID(); pageRequest = UUID(); isLoading = false; isLoadingMore = false

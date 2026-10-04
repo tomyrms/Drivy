@@ -79,7 +79,7 @@ struct SchoolProfileView: View {
         if attemptedSave, let error = model.errorMessage { return (error, .danger) }
         guard model.hasEdits else { return (nil, .neutral) }
         return (model.draft.isValid(allowed: model.editableFields, timeZone: model.school?.timeZone ?? "Europe/Zurich")
-            ? "Modifications à enregistrer dans cette école." : "Vérifie les champs signalés.", .neutral)
+            ? nil : "Vérifie les champs signalés.", .neutral)
     }
 
     /// Même tête que l’écran Compte : avatar, nom, école. Elle ne redit pas les champs, elle nomme la personne.
@@ -274,8 +274,11 @@ struct SchoolProfileStatusSections: View {
     @Bindable var model: SchoolProfileWorkspace
     var body: some View {
         Group {
-            if model.isLoading { Section { ProgressView("Vérification du dossier…").frame(maxWidth: .infinity, minHeight: 44) }
-                .drivyFormRows() }
+            if model.profile == nil && model.onboarding == nil && model.errorMessage == nil
+                && (model.isLoading || model.school == nil) {
+                Section { DrivySkeletonRows(count: 4).drivySkeleton("Chargement du dossier…") }
+                    .drivyFormRows()
+            }
             if let error = model.errorMessage {
                 // The notice is the whole row: no white card around the red one.
                 Section {

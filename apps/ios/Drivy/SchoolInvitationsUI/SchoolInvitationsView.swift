@@ -29,8 +29,10 @@ struct SchoolInvitationsView: View {
                     Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
                         .drivyFormRows()
                 }
-                if model.isLoading { Section { DrivyLoadingState(title: "Chargement des invitations…") }
-                    .drivyFormRows() }
+                if !model.hasLoaded && model.invitations.isEmpty && model.errorMessage == nil {
+                    Section { DrivySkeletonRows(count: 4, leading: .avatar).drivySkeleton("Chargement des invitations…") }
+                        .drivyFormRows()
+                }
                 if model.school != nil && model.invitations.isEmpty && !model.isLoading && model.errorMessage == nil {
                     Section {
                         DrivyEmptyState(title: "Aucune invitation", symbol: "envelope",
@@ -53,8 +55,8 @@ struct SchoolInvitationsView: View {
                     }
                     if model.nextCursor != nil {
                         Button { Task { await model.loadMore() } } label: {
-                            if model.isLoadingMore { ProgressView() }
-                            else { Text("Afficher la suite").font(.subheadline.weight(.semibold)) }
+                            DrivyBusyLabel(title: "Afficher la suite", busyTitle: "Chargement…", isBusy: model.isLoadingMore)
+                                .font(.subheadline.weight(.semibold))
                         }
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .disabled(model.isLoadingMore || model.isLoading || model.isBusy)
@@ -193,7 +195,7 @@ private struct InvitationRow: View {
         } else {
             DrivyEntityRow(title: InvitationPresentation.title(invitation, training: training), meta: invitation.roleLabel,
                 leading: .symbol("envelope"),
-                badge: DrivyStatusBadge(title: invitation.status.label, symbol: InvitationPresentation.symbol(invitation.status),
+                badge: invitation.status == .pending ? nil : DrivyStatusBadge(title: invitation.status.label, symbol: InvitationPresentation.symbol(invitation.status),
                     tone: InvitationPresentation.tone(invitation.status)), isSelected: isSelected)
         }
     }
@@ -216,8 +218,8 @@ private struct InvitationDetailView: View {
                     Text(InvitationPresentation.title(invitation, training: model.trainingLabel(invitation)))
                         .font(.drivyTitle).foregroundStyle(DrivyTheme.text)
                         .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                    // Un badge seulement pour l’inhabituel, comme dans la liste : un code valable n’en porte pas.
-                    if !(invitation.isCode && invitation.status == .pending) {
+                    // Une invitation en attente est l’état ordinaire, qu’elle utilise un code ou un lien.
+                    if invitation.status != .pending {
                         DrivyStatusBadge(title: statusTitle, symbol: InvitationPresentation.symbol(invitation.status),
                             tone: InvitationPresentation.tone(invitation.status))
                     }
@@ -318,8 +320,8 @@ struct InvitationCreationView: View {
         Form {
             // Lignes sur la surface du thème, comme la liste des invitations (le gris système du sombre ne s’accorde pas).
             Group {
-                if model.isLoading && model.school == nil {
-                    Section { DrivyLoadingState(title: "Chargement de l’école…") }
+                if !model.hasLoaded && model.errorMessage == nil {
+                    Section { DrivySkeletonRows(count: 3, lines: 1).drivySkeleton("Chargement des formations et des moniteurs…") }
                         .drivyFormRows()
                 }
                 if model.lacksOpenTraining {
@@ -350,7 +352,7 @@ struct InvitationCreationView: View {
                         }
                     } header: { Text("Permis").drivyFormSectionHeader() }
                         .drivyFormRows()
-                    .disabled(!model.mayEdit)
+                    .disabled(!model.mayEdit || model.creationOptionsError != nil)
                 }
                 if model.roles.contains("ADMIN"), !model.instructors.isEmpty {
                     Section {
@@ -363,7 +365,7 @@ struct InvitationCreationView: View {
                         .accessibilityIdentifier("invitation-instructor")
                     }
                         .drivyFormRows()
-                    .disabled(!model.mayEdit)
+                    .disabled(!model.mayEdit || model.creationOptionsError != nil)
                 }
                 if let error = model.creationOptionsError {
                     Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }

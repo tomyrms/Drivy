@@ -47,6 +47,31 @@ struct SchoolInvitationWorkspaceTests {
         #expect(api.queries.isEmpty)
     }
 
+    @Test func failedInstructorRefreshRetainsTheReviewedTrainingAndRequiresFreshOptionsBeforeCreation() async {
+        let api = InvitationAPIStub()
+        let offering = SchoolOffering(id: UUID(), schoolId: ConfigurationFixture.schoolID, version: 1, offeringKey: "B",
+            categoryCode: "B", curriculumVersionId: UUID(), policyVersionId: UUID(), enabled: true,
+            defaultDurationMinutes: 50, defaultPriceCents: 9000)
+        let instructor = SchoolInvitationInstructor(id: UUID(), displayName: "Moniteur exemple")
+        api.offeringValues = [offering]; api.instructorValues = [instructor]
+        let model = InvitationFixture.workspace(api: api)
+        await model.load()
+        #expect(model.codeDraftIsValid)
+        // The next response must not partly replace the reviewed context before the second read succeeds.
+        api.offeringValues = []; api.instructorFailure = .unavailable
+        await model.load()
+        #expect(model.offerings.map(\.id) == [offering.id])
+        #expect(model.instructors.map(\.id) == [instructor.id])
+        #expect(model.selectedOfferingIDs == [offering.id] && model.selectedInstructorID == instructor.id)
+        #expect(model.creationOptionsError != nil && !model.codeDraftIsValid)
+        #expect(await model.createCode() == false)
+        #expect(api.commands.isEmpty)
+        api.offeringValues = [offering]; api.instructorFailure = nil
+        await model.load()
+        #expect(model.creationOptionsError == nil && model.codeDraftIsValid)
+        #expect(model.selectedOfferingIDs == [offering.id] && model.selectedInstructorID == instructor.id)
+    }
+
     @Test func creationRequiresConfirmationThenKeepsOnlyMaskedServerProjection() async throws {
         let api = InvitationAPIStub()
         let outbox = ConfigurationOutboxStub()
@@ -253,12 +278,18 @@ struct SchoolInvitationWorkspaceTests {
         let command = try InvitationFixture.command()
         let outbox = ConfigurationOutboxStub(value: command)
         let api = InvitationAPIStub()
+        api.offeringValues = [SchoolOffering(id: UUID(), schoolId: ConfigurationFixture.schoolID, version: 1, offeringKey: "B",
+            categoryCode: "B", curriculumVersionId: UUID(), policyVersionId: UUID(), enabled: true,
+            defaultDurationMinutes: 50, defaultPriceCents: 9000)]
+        api.instructorValues = [.init(id: UUID(), displayName: "Moniteur exemple")]
         let model = InvitationFixture.workspace(api: api, outbox: outbox)
         await model.load()
         model.email = "private@example.invalid"
         api.sendFailure = .forbidden
         await model.retryPending()
         #expect(model.invitations.isEmpty && model.school == nil && model.email.isEmpty)
+        #expect(model.offerings.isEmpty && model.instructors.isEmpty && model.selectedOfferingIDs.isEmpty)
+        #expect(model.selectedOfferingID == nil && model.selectedInstructorID == nil && !model.hasLoaded)
         #expect(model.accessFailure == .forbidden)
         #expect(outbox.value == command)
     }
@@ -345,6 +376,7 @@ final class InvitationAPIStub: SchoolInvitationAPI {
     var offeringValues: [SchoolOffering] = []
     var offeringFailure: SchoolInvitationFailure?
     var instructorValues: [SchoolInvitationInstructor] = []
+    var instructorFailure: SchoolInvitationFailure?
     /// Code handed back when a code invitation is created (nil: a replayed answer, without code).
     var creationCode: String? = "K7Q4MX2P"
     /// Code handed back when a code invitation is renewed.
@@ -354,7 +386,10 @@ final class InvitationAPIStub: SchoolInvitationAPI {
         if let offeringFailure { throw offeringFailure }
         return offeringValues
     }
-    func instructors(schoolID: UUID) async throws -> [SchoolInvitationInstructor] { instructorValues }
+    func instructors(schoolID: UUID) async throws -> [SchoolInvitationInstructor] {
+        if let instructorFailure { throw instructorFailure }
+        return instructorValues
+    }
     func invitations(schoolID: UUID, cursor: String?) async throws -> SchoolPage<SchoolInvitation> {
         queries.append(cursor)
         if let listHandler { return try await listHandler(cursor) }

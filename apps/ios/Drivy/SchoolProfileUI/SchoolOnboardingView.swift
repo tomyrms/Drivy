@@ -94,8 +94,12 @@ struct SchoolOnboardingView: View {
                 statusBlock
                 if let screen {
                     content(screen)
-                } else if model.isLoading {
-                    DrivyLoadingState(title: "Préparation de ton accueil…")
+                } else if model.errorMessage == nil && (model.isLoading || model.school == nil) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                        DrivySkeletonBlock(width: 220, height: 30)
+                        DrivySkeletonRows(count: 3, leading: .avatar, lines: 1)
+                    }
+                    .drivySkeleton("Préparation de ton accueil…")
                 } else if model.errorMessage == nil {
                     DrivyEmptyState(title: "Accueil indisponible",
                         message: "L’accueil de cette école ne peut pas être affiché pour le moment.",
