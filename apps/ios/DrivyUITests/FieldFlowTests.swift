@@ -44,18 +44,39 @@ import XCTest
         priority.tap()
         let attention = app.buttons["live-observation-status-ATTENTION"]
         XCTAssertTrue(attention.waitForExistence(timeout: 5))
+        XCTAssertTrue(attention.isEnabled)
+        XCTAssertTrue(priority.exists && priority.isSelected)
+        XCTAssertTrue(app.buttons["live-observation-theme-Signalisation"].exists)
         capture(app, name: "signal-status")
         attention.tap()
         XCTAssertTrue(app.staticTexts["field-observation-saved"].waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertFalse(attention.exists)
     }
 
-    func testFinishingALessonNeedsNoDateConfirmationOrReportText() {
+    func testFinishingALessonRequiresConfirmationButNoDatesOrReportText() {
+        continueAfterFailure = false
         let app = launch("lesson-finish")
         let finish = app.buttons["lesson-complete"]
         XCTAssertTrue(finish.waitForExistence(timeout: 20), app.debugDescription)
         finish.tap()
+        let confirm = completionConfirmation(in: app)
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), app.debugDescription)
         let save = app.buttons["lesson-save-report"]
+        XCTAssertFalse(save.exists)
+        let keepLesson = app.buttons["Continuer la leçon"]
+        if keepLesson.waitForExistence(timeout: 2) {
+            keepLesson.tap()
+        } else {
+            // Sur iPad, l’annulation native du popover peut se faire uniquement à l’extérieur.
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.45)).tap()
+        }
+        XCTAssertTrue(confirm.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(finish.exists && finish.isEnabled)
+        XCTAssertFalse(save.exists)
+        XCTAssertFalse(app.staticTexts["field-lesson-closed"].exists)
+        finish.tap()
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), app.debugDescription)
+        confirm.tap()
         XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(app.datePickers.count, 0)
         XCTAssertTrue(save.isEnabled)
@@ -64,29 +85,43 @@ import XCTest
         XCTAssertTrue(app.staticTexts["field-lesson-closed"].waitForExistence(timeout: 10), app.debugDescription)
     }
 
-    func testLiveSignalCanGoBackCancelAndReopenWithoutRecording() {
+    func testLiveSignalKeepsThemesVisibleWhenSelectingAndCancelling() {
+        continueAfterFailure = false
         let app = launch("live")
         let signal = app.buttons["capture-signal-observation"]
         XCTAssertTrue(signal.waitForExistence(timeout: 20), app.debugDescription)
         signal.tap()
         let priority = app.buttons["live-observation-theme-Priorité à droite"]
         XCTAssertTrue(priority.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertFalse(priority.isSelected)
         priority.tap()
-        XCTAssertTrue(app.buttons["live-observation-status-ATTENTION"].waitForExistence(timeout: 5))
+        let attention = app.buttons["live-observation-status-ATTENTION"]
+        XCTAssertTrue(attention.waitForExistence(timeout: 5))
+        XCTAssertTrue(attention.isEnabled)
+        XCTAssertTrue(priority.exists && priority.isSelected)
+        XCTAssertTrue(app.buttons["live-observation-theme-Signalisation"].exists)
+        XCTAssertTrue(app.buttons["live-observation-marker"].exists)
+        // Cette action efface la sélection dans la même palette ; elle ne change plus de page.
         app.buttons["live-observation-back"].tap()
         XCTAssertTrue(priority.waitForExistence(timeout: 5))
+        XCTAssertFalse(priority.isSelected)
+        XCTAssertTrue(app.buttons["live-observation-theme-Signalisation"].exists)
         app.buttons["live-observation-close"].tap()
         XCTAssertTrue(priority.waitForNonExistence(timeout: 5))
         XCTAssertTrue(signal.isEnabled)
         signal.tap()
         XCTAssertTrue(priority.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["live-observation-status-ATTENTION"].exists)
+        XCTAssertFalse(priority.isSelected)
+        XCTAssertTrue(app.buttons["live-observation-theme-Signalisation"].exists)
         capture(app, name: "live-signal-reopened")
     }
 
     func testPermitReasonSurvivesCancelledDiscardAndClearsOnlyAfterAbandon() {
         continueAfterFailure = false
         let app = launch("lesson-permit")
+        let confirm = completionConfirmation(in: app)
+        XCTAssertTrue(confirm.waitForExistence(timeout: 20), app.debugDescription)
+        confirm.tap()
         let reason = app.descendants(matching: .any).matching(NSPredicate(
             format: "identifier == %@ AND (elementType == %lu OR elementType == %lu)",
             "lesson-permit-reason", XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.textView.rawValue
@@ -126,12 +161,20 @@ import XCTest
         XCTAssertTrue(reopen.waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertFalse(app.buttons["lesson-save-report"].exists)
         reopen.tap()
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), app.debugDescription)
+        confirm.tap()
         XCTAssertTrue(reason.waitForExistence(timeout: 5))
         XCTAssertFalse((reason.value as? String ?? "").contains(text))
         XCTAssertFalse(finish.isEnabled)
         capture(app, name: "lesson-permit-reopened-empty")
-        // Aucune confirmation de fin n’est envoyée ; ce cas refuse aussi toute écriture fictive.
+        // Aucune commande de clôture n’est envoyée ; ce cas refuse aussi toute écriture fictive.
         app.terminate()
+    }
+
+    private func completionConfirmation(in app: XCUIApplication) -> XCUIElement {
+        // Le libellé reste la référence si iOS n’expose pas l’identifiant de l’action native.
+        app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@",
+            "lesson-confirm-completion", "Terminer et ouvrir le bilan")).firstMatch
     }
 
     private func nativeTab(_ title: String, in app: XCUIApplication,

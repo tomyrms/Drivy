@@ -270,7 +270,7 @@ struct SchoolTodayView: View {
         .accessibilityHint("Ouvre la leçon")
     }
 
-    /// Les autres leçons du jour, repliées : une ligne par leçon, un badge seulement pour l’inhabituel.
+    /// La prochaine leçon reste visible sous une leçon passée à terminer.
     private func upcomingLesson(_ lesson: SchoolLesson, now: Date) -> some View {
         Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
@@ -285,18 +285,17 @@ struct SchoolTodayView: View {
     }
 
     @ViewBuilder private func dayList(now: Date, excluding: Set<UUID>) -> some View {
-        let others = lessons.filter { !excluding.contains($0.id) }.sorted { $0.plannedStart < $1.plannedStart }
+        let others = SchoolTodayPresentation.upcomingLessons(lessons, now: now, excluding: excluding)
         if !others.isEmpty {
           VStack(spacing: 0) {
-            // Filet entre la leçon qui compte et le reste du jour : deux groupes, pas une pile.
+            // La liste complète reste dans l’agenda ; ce groupe ne montre que la suite de la journée.
             Divider().overlay(DrivyTheme.border)
             DisclosureGroup(isExpanded: $showsDay) {
                 VStack(spacing: 0) {
                     ForEach(others) { lesson in
                         Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
                             DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                                details: [lesson.meetingPoint], badge: lesson.drivyState(now: now).rowBadge, showsChevron: false,
-                                isSecondary: lesson.status == "COMPLETED" || lesson.status == "CANCELLED" || lesson.status == "NO_SHOW")
+                                details: [lesson.meetingPoint], badge: lesson.drivyState(now: now).rowBadge, showsChevron: false)
                         }
                         .buttonStyle(DrivyRowButtonStyle())
                         .accessibilityHint("Ouvre la leçon")
@@ -304,7 +303,7 @@ struct SchoolTodayView: View {
                     }
                 }
             } label: {
-                Text(others.count == 1 ? "1 autre leçon" : "\(others.count) autres leçons")
+                Text(others.count == 1 ? "Prochaine leçon" : "\(others.count) prochaines leçons")
                     .font(.subheadline.weight(.semibold)).monospacedDigit()
                     .frame(minHeight: 44, alignment: .leading)
             }
@@ -405,6 +404,14 @@ struct SchoolTodayView: View {
 }
 
 enum SchoolTodayPresentation {
+    /// Une leçon planifiée reste présente pendant son créneau, jusqu’à sa fin exclue.
+    /// Les leçons passées sans constat gardent leur mise en avant « À terminer » dans la carte.
+    static func upcomingLessons(_ lessons: [SchoolLesson], now: Date, excluding: Set<UUID> = []) -> [SchoolLesson] {
+        lessons.filter { lesson in
+            lesson.status == "PLANNED" && (lesson.endsAt ?? .distantPast) > now && !excluding.contains(lesson.id)
+        }.sorted { $0.plannedStart < $1.plannedStart }
+    }
+
     /// Un horaire écoulé ne prouve pas que la conduite a démarré.
     static func moment(for lesson: SchoolLesson, now: Date) -> String {
         guard let start = lesson.startsAt else { return "Prochaine leçon" }

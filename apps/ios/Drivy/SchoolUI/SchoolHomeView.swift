@@ -47,7 +47,8 @@ struct SchoolHomeView: View {
             if let agendaClient {
                 NavigationStack {
                     SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace,
-                        lessonID: route.id, learnerName: route.learnerName, opensCompletion: route.completing)
+                        lessonID: route.id, learnerName: route.learnerName, opensCompletion: route.completing,
+                        completionConfirmed: route.completing)
                 }
                 .tint(DrivyTheme.accent)
                 .environment(captureController)

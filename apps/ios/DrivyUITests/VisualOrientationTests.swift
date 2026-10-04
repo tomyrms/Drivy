@@ -103,8 +103,11 @@ import XCTest
                             "Thème de signalement absent.", app: app, name: captureName) else { return }
                         if screen == "signal-status" {
                             priority.tap()
-                            guard requireVisual(app.buttons["live-observation-status-ATTENTION"].waitForExistence(timeout: 10),
+                            let attention = app.buttons["live-observation-status-ATTENTION"]
+                            guard requireVisual(attention.waitForExistence(timeout: 10),
                                 "Statut du signalement absent.", app: app, name: captureName) else { return }
+                            guard requireVisual(attention.isEnabled && priority.exists && priority.isSelected,
+                                "La palette de signalement n’a pas conservé le thème sélectionné.", app: app, name: captureName) else { return }
                         }
                         RunLoop.current.run(until: Date().addingTimeInterval(1))
                     }
@@ -125,6 +128,11 @@ import XCTest
                             "Observation attendue absente ou inaccessible.", app: app, name: captureName) else { return }
                     }
                     if screen == "lesson-permit" {
+                        let confirm = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@",
+                            "lesson-confirm-completion", "Terminer et ouvrir le bilan")).firstMatch
+                        guard requireVisual(confirm.waitForExistence(timeout: 10),
+                            "Confirmation de fin de leçon absente.", app: app, name: captureName) else { return }
+                        confirm.tap()
                         let reason = app.descendants(matching: .any)["lesson-permit-reason"]
                         guard requireVisual(reason.waitForExistence(timeout: 10),
                             "Motif du permis absent.", app: app, name: captureName) else { return }

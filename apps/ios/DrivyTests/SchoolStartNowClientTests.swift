@@ -122,6 +122,30 @@ import Testing
         #expect(SchoolTodayPresentation.moment(for: lesson, now: start) == "Horaire commencé")
     }
 
+    @Test(arguments: ["COMPLETED", "CANCELLED", "NO_SHOW", "UNKNOWN"])
+    func todayUpcomingListOmitsClosedOrUnknownLessonsEvenBeforeTheirPlannedEnd(status: String) {
+        let lesson = HubFixture.lesson(status: status)
+        let now = lesson.startsAt!.addingTimeInterval(-60)
+        #expect(SchoolTodayPresentation.upcomingLessons([lesson], now: now).isEmpty)
+    }
+
+    @Test func todayUpcomingListKeepsTheCurrentSlotUntilItsEnd() {
+        let lesson = HubFixture.lesson()
+        let start = lesson.startsAt!, end = lesson.endsAt!
+        for now in [start.addingTimeInterval(-60), start, end.addingTimeInterval(-1)] {
+            #expect(SchoolTodayPresentation.upcomingLessons([lesson], now: now).map(\.id) == [lesson.id])
+        }
+        for now in [end, end.addingTimeInterval(60)] {
+            #expect(SchoolTodayPresentation.upcomingLessons([lesson], now: now).isEmpty)
+            #expect(lesson.drivyState(now: now) == .toFinish)
+        }
+    }
+
+    @Test func todayUpcomingListDoesNotRepeatTheHighlightedLesson() {
+        let lesson = HubFixture.lesson()
+        #expect(SchoolTodayPresentation.upcomingLessons([lesson], now: lesson.startsAt!, excluding: [lesson.id]).isEmpty)
+    }
+
     @Test func optionalImmediatePlaceUsesTheSameTrimmedUTF16LimitAsTheAPI() async throws {
         let server = LessonFinishServer()
         let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,

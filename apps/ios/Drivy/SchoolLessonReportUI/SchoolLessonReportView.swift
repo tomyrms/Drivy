@@ -9,8 +9,10 @@ struct SchoolLessonReportView: View {
     @Bindable var schoolWorkspace: SchoolWorkspace
     let lessonID: UUID
     let learnerName: String
-    /// Ouvre « Terminer » dès que la leçon est lue (« À terminer » d’Aujourd’hui, fin du trajet).
+    /// Propose la fin dès que la leçon est lue (« À terminer » d’Aujourd’hui, fin du trajet).
     var opensCompletion = false
+    /// Seule la carte transmet ce consentement après sa confirmation explicite.
+    var completionConfirmed = false
     /// Élève : le souhait se modifie sur la prochaine leçon seulement ; `nil` quand l’appelant ne le sait pas.
     var isNextPlanned: Bool? = nil
     var outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()
@@ -19,6 +21,7 @@ struct SchoolLessonReportView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var confirmsDiscard = false
+    @State private var isCompletingLesson = false
 
     private var hasUnsavedChanges: Bool { model?.hasLocalEdits ?? false }
 
@@ -35,29 +38,35 @@ struct SchoolLessonReportView: View {
         Group {
             if let model, matches(model) {
                 SchoolLessonReportContent(model: model, learnerName: learnerName, schoolWorkspace: schoolWorkspace, agenda: client.agenda,
-                    opensCompletion: opensCompletion, isNextPlanned: isNextPlanned)
+                    opensCompletion: opensCompletion, completionConfirmed: completionConfirmed, isNextPlanned: isNextPlanned,
+                    isFinishing: $isCompletingLesson)
             } else if schoolWorkspace.membership != nil {
-                DrivySkeletonRows(count: 4)
-                    .drivySkeleton("Chargement de la leçon…")
-                    .drivyPageContent()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).background(DrivyTheme.canvas)
+                if opensCompletion && completionConfirmed {
+                    SchoolLessonFinishingView()
+                } else {
+                    DrivySkeletonRows(count: 4)
+                        .drivySkeleton("Chargement de la leçon…")
+                        .drivyPageContent()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .background(DrivyTheme.canvas)
+                }
             } else {
                 ContentUnavailableView("Choisis ton école", systemImage: "building.2")
             }
         }
-        .navigationTitle("Leçon")
+        .navigationTitle(opensCompletion && completionConfirmed ? "Bilan" : "Leçon")
         .navigationBarTitleDisplayMode(.inline)
         .presentationSizing(.page)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Fermer") {
                     if hasUnsavedChanges { confirmsDiscard = true } else { model?.invalidate(); dismiss() }
-                }.disabled(model?.isBusy == true)
+                }.disabled(model?.isBusy == true || isCompletingLesson)
             }
         }
-        .interactiveDismissDisabled(hasUnsavedChanges || model?.isBusy == true)
+        .interactiveDismissDisabled(hasUnsavedChanges || model?.isBusy == true || isCompletingLesson)
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active, let model, matches(model), !model.isLoading, !model.isBusy else { return }
+            guard phase == .active, let model, matches(model), !model.isLoading, !model.isBusy, !isCompletingLesson else { return }
             Task { await model.load() }
         }
         .onChange(of: model?.reportSaveConfirmed) { _, confirmed in
@@ -83,6 +92,18 @@ struct SchoolLessonReportView: View {
     }
 }
 
+/// Une seule attente pendant le constat durable et la lecture du bilan, sans fiche planifiée intermédiaire.
+private struct SchoolLessonFinishingView: View {
+    var body: some View {
+        ProgressView("Préparation du bilan…")
+            .controlSize(.large)
+            .font(.headline)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(DrivyTheme.canvas)
+            .accessibilityIdentifier("lesson-finishing")
+    }
+}
+
 /// Seuils et colonnes de la leçon : contexte à gauche, bilan à droite dès que la fenêtre le permet.
 private enum LessonLayout {
     static let splitBreakpoint: CGFloat = 900
@@ -97,6 +118,7 @@ private struct SchoolLessonReportContent: View {
     @Bindable var schoolWorkspace: SchoolWorkspace
     let agenda: SchoolAgendaClient
     let opensCompletion: Bool
+    let completionConfirmed: Bool
     let isNextPlanned: Bool?
     /// Contrôleur de séance de l’app ; absent, rien de ce qui dépend du GPS de l’appareil n’est proposé.
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
@@ -104,9 +126,11 @@ private struct SchoolLessonReportContent: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var lessonSheet: LessonSheet?
     @State private var replay: SchoolTripReplayRoute?
-    @State private var isFinishing = false
+    @Binding var isFinishing: Bool
     @State private var finishError: String?
     @State private var completionOpened = false
+    @State private var confirmsCompletion = false
+    @State private var completionQueued = false
     @State private var showReloadConfirmation = false
     @State private var confirmsNoShow = false
     @State private var showsLive = false
@@ -146,9 +170,18 @@ private struct SchoolLessonReportContent: View {
 
     var body: some View {
         TimelineView(.everyMinute) { context in
-            form(now: context.date)
+            if isFinishing || completionQueued || awaitsConfirmedCompletion {
+                SchoolLessonFinishingView()
+            } else {
+                form(now: context.date)
+            }
         }
         .tint(DrivyTheme.accent)
+        .confirmationDialog("Terminer la leçon ?", isPresented: $confirmsCompletion, titleVisibility: .visible) {
+            Button("Terminer et ouvrir le bilan") { beginCompletion() }
+                .accessibilityIdentifier("lesson-confirm-completion")
+            Button("Continuer la leçon", role: .cancel) { }
+        }
         .confirmationDialog("Recharger et perdre la saisie ?", isPresented: $showReloadConfirmation, titleVisibility: .visible) {
             Button("Recharger", role: .destructive) { Task { await model.load(discardingEdits: true) } }
             Button("Annuler", role: .cancel) {}
@@ -178,8 +211,8 @@ private struct SchoolLessonReportContent: View {
         .navigationDestination(isPresented: $showsLive) {
             if let capture {
                 SchoolCaptureLiveView(controller: capture, learnerName: learnerName, openLesson: { _, completing in
+                    if completing { beginCompletion() }
                     showsLive = false
-                    if completing { Task { _ = await finishLesson("") } }
                 }, observationClient: agenda.observationClient)
             }
         }
@@ -190,10 +223,10 @@ private struct SchoolLessonReportContent: View {
         .onChange(of: model.lesson?.status) { _, _ in openCompletionIfAsked() }
         .onChange(of: model.isLoading) { _, loading in if !loading { openCompletionIfAsked() } }
         .onChange(of: capture?.finalizedSyncState) { _, state in
-            if isCompleted && (state == .synced || state == .partial) { Task { await model.load() } }
+            if isCompleted && !isFinishing && (state == .synced || state == .partial) { Task { await model.load() } }
         }
         .onAppear { openCompletionIfAsked() }
-        .interactiveDismissDisabled(isFinishing)
+        .interactiveDismissDisabled(isFinishing || completionQueued || awaitsConfirmedCompletion)
     }
 
     private func form(now: Date) -> some View {
@@ -302,9 +335,27 @@ private struct SchoolLessonReportContent: View {
     }
 
     private func openCompletionIfAsked() {
-        guard opensCompletion, !completionOpened, isPlanned, model.isAuthor, model.canMutate else { return }
+        guard opensCompletion, !completionOpened, !model.isLoading, model.lesson != nil else { return }
         completionOpened = true
-        Task { _ = await finishLesson("") }
+        guard isPlanned, model.isAuthor, model.canMutate else { return }
+        if completionConfirmed { beginCompletion() }
+        else { confirmsCompletion = true }
+    }
+
+    /// Le formulaire planifié ne s’affiche pas entre le chargement de la leçon et son constat.
+    /// Une panne ou une demande conservée libère la place pour les contrôles de reprise existants.
+    private var awaitsConfirmedCompletion: Bool {
+        opensCompletion && completionConfirmed && !completionOpened
+            && (model.isLoading || (isPlanned && model.isAuthor && model.canMutate))
+    }
+
+    private func beginCompletion() {
+        guard !completionQueued, !isFinishing, model.canMutate, isPlanned, model.isAuthor else { return }
+        completionQueued = true
+        Task {
+            _ = await finishLesson("")
+            completionQueued = false
+        }
     }
 
     /// L’arrêt est écrit sur l’appareil avant le constat. Le transfert du trajet continue sans retenir le bilan.
@@ -499,7 +550,7 @@ private struct SchoolLessonReportContent: View {
 
     @ViewBuilder private func completeButton(primary: Bool) -> some View {
         if primary {
-            Button { Task { _ = await finishLesson("") } } label: {
+            Button { confirmsCompletion = true } label: {
                 HStack(spacing: DrivySpacing.xs) {
                     if isFinishing { ProgressView().accessibilityHidden(true) }
                     Label("Terminer la leçon", systemImage: "checkmark.circle")
@@ -510,7 +561,7 @@ private struct SchoolLessonReportContent: View {
                 .accessibilityIdentifier("lesson-complete")
         } else {
             // Action alternative sous « Démarrer le trajet » ou « Trajet en cours » : même composant que partout.
-            Button { Task { _ = await finishLesson("") } } label: {
+            Button { confirmsCompletion = true } label: {
                 HStack(spacing: DrivySpacing.xs) {
                     if isFinishing { ProgressView().accessibilityHidden(true) }
                     Label("Terminer la leçon", systemImage: "checkmark.circle")

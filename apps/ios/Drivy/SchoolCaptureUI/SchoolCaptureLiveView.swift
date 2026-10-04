@@ -14,10 +14,12 @@ struct SchoolCaptureLiveView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var resetCameraID = UUID()
     @State private var followsPosition = true
     @State private var observationMoment: ObservationMoment?
     @State private var isFinishing = false
+    @State private var confirmsFinish = false
     @State private var cancellationModel: SchoolPlanningWorkspace?
     @State private var cancellationError: String?
 
@@ -29,6 +31,14 @@ struct SchoolCaptureLiveView: View {
     }
 
     private enum Command { case pause, resume, retrySaving }
+
+    private var usesInlineObservation: Bool {
+        horizontalSizeClass != .regular && !dynamicTypeSize.isAccessibilitySize
+    }
+
+    private var observationPopover: Binding<ObservationMoment?> {
+        Binding(get: { usesInlineObservation ? nil : observationMoment }, set: { observationMoment = $0 })
+    }
 
     var body: some View {
         Group {
@@ -44,12 +54,34 @@ struct SchoolCaptureLiveView: View {
                 }
             } else {
                 GeometryReader { geometry in
-                    if dynamicTypeSize.isAccessibilitySize {
-                        accessibleContent(availableHeight: geometry.size.height)
-                    } else if geometry.size.width >= DrivyMapLayout.sidebarBreakpoint {
-                        wideContent
-                    } else {
-                        compactContent
+                    ZStack(alignment: .bottom) {
+                        Group {
+                            if dynamicTypeSize.isAccessibilitySize {
+                                accessibleContent(availableHeight: geometry.size.height)
+                            } else if geometry.size.width >= DrivyMapLayout.sidebarBreakpoint {
+                                wideContent
+                            } else {
+                                compactContent
+                            }
+                        }
+                        .allowsHitTesting(!(usesInlineObservation && observationMoment != nil))
+                        .accessibilityHidden(usesInlineObservation && observationMoment != nil)
+                        if usesInlineObservation, let moment = observationMoment {
+                            Color.black.opacity(0.16)
+                                .ignoresSafeArea(edges: .top)
+                                .onTapGesture { closeObservation() }
+                                .accessibilityHidden(true)
+                            SchoolLiveObservationPalette(recorder: moment.recorder, observedAt: moment.instant,
+                                anchor: moment.anchor, onClose: closeObservation)
+                                .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
+                                .frame(height: min(480, max(0, geometry.size.height - DrivySpacing.xl)))
+                                .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel))
+                                .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel))
+                                .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 8)
+                                .padding(DrivySpacing.m)
+                                .accessibilityAddTraits(.isModal)
+                                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        }
                     }
                 }
             }
@@ -59,15 +91,22 @@ struct SchoolCaptureLiveView: View {
         .tint(DrivyTheme.accent)
         .toolbar(.hidden, for: .navigationBar)
         .interactiveDismissDisabled(isFinishing)
+        .confirmationDialog("Terminer la leçon ?", isPresented: $confirmsFinish, titleVisibility: .visible) {
+            Button("Terminer et ouvrir le bilan") { finishLesson() }
+                .accessibilityIdentifier("capture-confirm-finish")
+            Button("Continuer la leçon", role: .cancel) { }
+        }
         .task(id: controller.captureID) {
             if let observationClient { controller.prepareLiveObservations(client: observationClient) }
             await controller.liveObservations?.loadCompetencies()
         }
         .onChange(of: controller.captureID) { _, _ in
             observationMoment = nil
+            confirmsFinish = false
             resetCameraID = UUID()
             followsPosition = true
         }
+        .onDisappear { observationMoment = nil }
         .sheet(item: $cancellationModel) { model in
             SchoolPlanningView(model: model, cancelling: true, beforeCancellation: {
                 await controller.stopAndSynchronize()
@@ -231,35 +270,39 @@ struct SchoolCaptureLiveView: View {
     }
 
     @ViewBuilder private var actions: some View {
-        switch controller.state {
-        case .recording:
-            collectingActions
-        case .paused:
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
-                VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                    collectingActions
-                    if !controller.canResume {
-                        DrivyInlineMessage(text: "La reprise du GPS n’est plus autorisée. Tu peux arrêter le GPS et poursuivre la leçon.",
-                            tone: .warning)
+        if isFinishing {
+            DrivyLoadingState(title: "Préparation du bilan…")
+        } else {
+            switch controller.state {
+            case .recording:
+                collectingActions
+            case .paused:
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                        collectingActions
+                        if !controller.canResume {
+                            DrivyInlineMessage(text: "La reprise du GPS n’est plus autorisée. Tu peux arrêter le GPS et poursuivre la leçon.",
+                                tone: .warning)
+                        }
                     }
                 }
-            }
-        case .preparing:
-            DrivyLoadingState(title: "Préparation du GPS…")
-        case .stopping:
-            DrivyLoadingState(title: "Sauvegarde des positions…")
-        case .saved:
-            savedActions
-        case .failed:
-            if controller.canRetrySaving {
-                Button { run(.retrySaving) } label: {
-                    Label("Réessayer la sauvegarde", systemImage: "arrow.clockwise")
+            case .preparing:
+                DrivyLoadingState(title: "Préparation du GPS…")
+            case .stopping:
+                DrivyLoadingState(title: "Sauvegarde des positions…")
+            case .saved:
+                savedActions
+            case .failed:
+                if controller.canRetrySaving {
+                    Button { run(.retrySaving) } label: {
+                        Label("Réessayer la sauvegarde", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+                    .accessibilityIdentifier("school-capture-retry-saving")
                 }
-                .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
-                .accessibilityIdentifier("school-capture-retry-saving")
+            case .idle:
+                EmptyView()
             }
-        case .idle:
-            EmptyView()
         }
     }
 
@@ -290,7 +333,9 @@ struct SchoolCaptureLiveView: View {
     @ViewBuilder private func signalButton(_ recorder: SchoolLiveObservationRecorder, isDominant: Bool) -> some View {
         let signal = Button {
             let instant = Date()
-            observationMoment = ObservationMoment(instant: instant, recorder: recorder, anchor: controller.observationAnchor(at: instant))
+            withAnimation(reduceMotion ? nil : .snappy(duration: 0.24, extraBounce: 0)) {
+                observationMoment = ObservationMoment(instant: instant, recorder: recorder, anchor: controller.observationAnchor(at: instant))
+            }
         } label: {
             Label("Signaler", systemImage: "text.bubble.fill")
         }
@@ -304,12 +349,16 @@ struct SchoolCaptureLiveView: View {
         .disabled(!recorder.canRecord || isFinishing)
         .sensoryFeedback(.impact(weight: .medium), trigger: observationMoment?.id)
         .accessibilityIdentifier("capture-signal-observation")
-        .popover(item: $observationMoment, attachmentAnchor: .rect(.bounds)) { moment in
+        .popover(item: observationPopover, attachmentAnchor: .rect(.bounds)) { moment in
             SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant, anchor: moment.anchor)
                 .frame(width: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.width : nil,
                        height: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.height : nil)
                 .presentationCompactAdaptation(.sheet)
         }
+    }
+
+    private func closeObservation() {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.24, extraBounce: 0)) { observationMoment = nil }
     }
 
     @ViewBuilder private func observationFeedback(_ recorder: SchoolLiveObservationRecorder) -> some View {
@@ -343,7 +392,7 @@ struct SchoolCaptureLiveView: View {
                 .fixedSize(horizontal: hugsFirst, vertical: false)
         }
         Button {
-            finishLesson()
+            confirmsFinish = true
         } label: {
             Label("Terminer la leçon", systemImage: "checkmark.circle")
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
@@ -389,7 +438,7 @@ struct SchoolCaptureLiveView: View {
                 }.buttonStyle(DrivySecondaryButtonStyle())
             }
             if let state = controller.finalizedSyncState { finalizationResult(state) }
-            Button("Terminer la leçon", systemImage: "checkmark.circle") { finishLesson() }
+            Button("Terminer la leçon", systemImage: "checkmark.circle") { confirmsFinish = true }
                 .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(isFinishing)
         }
     }
@@ -426,12 +475,13 @@ struct SchoolCaptureLiveView: View {
     }
 
     private func finishLesson() {
-        guard !isFinishing, let lessonID = controller.lessonID else { return }
+        guard !isFinishing, let lessonID = controller.lessonID, let captureID = controller.captureID,
+              controller.canStop || controller.state == .saved else { return }
         isFinishing = true
         Task { @MainActor in
             let saved = await controller.stopAndSynchronize()
             isFinishing = false
-            guard saved else { return }
+            guard saved, controller.captureID == captureID, controller.lessonID == lessonID else { return }
             if let openLesson { openLesson(lessonID, true) }
             else { close() }
         }

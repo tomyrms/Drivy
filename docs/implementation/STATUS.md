@@ -1,5 +1,9 @@
 # État de la réalisation
 
+## 4 octobre 2026 — prochaines leçons, palette Signaler et confirmation de fin
+
+Le porteur valide les feuilles stables de build100. La liste secondaire d’Aujourd’hui conserve les prochaines leçons PLANNED uniquement (créneau en cours inclus), sans terminées/annulées/absences ni doublon du focus. Signaler devient une palette sur la carte iPhone, avec ses catégories et appréciations réunies ; iPad et grand texte gardent une présentation native. La fin de leçon demande confirmation avant toute mutation et conserve une attente neutre jusqu’au bilan, sans formulaire planifié fugitif. Compilation IPA en attente ; tests ciblés adaptés mais non exécutés, aucune longue campagne native. [Décision et limites](today-signal-finish-20261004.md).
+
 ## 4 octobre 2026 — correction des hauteurs et gestes de feuille
 
 Le retour du porteur sur build99 signale une mauvaise hauteur initiale et des saccades à l’agrandissement. Le composant de mesure automatique est supprimé : dix présentations utilisent désormais des hauteurs natives stables, sans pilotage de la sélection ni recalcul sur le contenu ; popover Signaler iPad fixé à 480 × 560 pt. Contenus compacts et gestes gérés par SwiftUI. **IPA 0.7.0/build100 compilée avec succès** sur `9c1b12a`, [run37213508972](https://github.com/tomyrms/Drivy/actions/runs/37213508972), téléchargée et empreintes vérifiées. Fluidité, clavier et accessibilité sur appareil restent à qualifier. Aucune longue campagne native lancée. [Décision et limites](stable-sheets-20261004.md).

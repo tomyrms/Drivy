@@ -1,88 +1,154 @@
 import SwiftUI
 
-/// Panneau de terrain : l’instant appartient au geste d’ouverture, jamais à l’animation.
+/// La présentation native reste séparée de la palette posée sur la carte.
 struct SchoolLiveObservationSheet: View {
     @Bindable var recorder: SchoolLiveObservationRecorder
     let observedAt: Date
     var anchor: SchoolLiveObservationAnchor? = nil
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        SchoolLiveObservationPalette(recorder: recorder, observedAt: observedAt, anchor: anchor)
+            .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+            .presentationDragIndicator(.visible)
+            .presentationSizing(.form)
+            .presentationCornerRadius(DrivyRadius.mapPanel + DrivySpacing.xs)
+            .presentationBackground(DrivyTheme.surface)
+    }
+}
+
+/// L’instant et l’ancre appartiennent au geste d’ouverture, jamais au choix ou à l’animation.
+/// Le conteneur choisit la hauteur ; la grille défile entre les commandes et les appréciations.
+struct SchoolLiveObservationPalette: View {
+    @Bindable var recorder: SchoolLiveObservationRecorder
+    let observedAt: Date
+    var anchor: SchoolLiveObservationAnchor? = nil
+    var onClose: (() -> Void)? = nil
     @State private var selected: SchoolLiveObservationTheme?
     @State private var saved = false
     @State private var savedStatus: SchoolObservationStatus?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.dismiss) private var dismiss
-    @AccessibilityFocusState private var selectionFocused: Bool
+    @AccessibilityFocusState private var focusedStatus: String?
 
-    /// Changement de contexte provoqué par le doigt : ressort court, sans rebond marqué, interrompable
-    /// (un nouvel appui reprend l’animation là où elle en est). Court, car le moniteur conduit et répète
-    /// ce geste ; supprimé sous Réduire les animations.
-    private var motion: Animation? { reduceMotion ? nil : .snappy(duration: 0.22, extraBounce: 0.03) }
+    private var motion: Animation? { reduceMotion ? nil : .easeOut(duration: 0.16) }
+    private let statuses: [SchoolObservationStatus] = [.toWorkOn, .attention, .positive]
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            ScrollView {
-                VStack(spacing: DrivySpacing.l) {
-                    if saved {
-                        savedFeedback.transition(reduceMotion ? .opacity : .scale(scale: 0.92).combined(with: .opacity))
-                    } else if let selected {
-                        appraisal(for: selected).transition(.opacity)
-                    } else {
-                        themes.transition(.opacity)
-                    }
-                    if let error = recorder.errorMessage { SchoolErrorNotice(message: error) }
+        ScrollViewReader { scroll in
+            paletteContents
+                .onChange(of: recorder.errorMessage) { _, error in
+                    if error != nil { scroll.scrollTo("live-observation-error", anchor: .bottom) }
                 }
-                .padding(.horizontal, DrivySpacing.m)
-                .padding(.top, DrivySpacing.xs)
-                .padding(.bottom, DrivySpacing.m)
-                .frame(maxWidth: DrivyLayout.compactColumn)
-                .frame(maxWidth: .infinity)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollDismissesKeyboard(.interactively)
+        }
+        // Keeping the chooser mounted preserves its height and scroll position during confirmation.
+        .opacity(saved ? 0 : 1)
+        .accessibilityHidden(saved)
+        .disabled(saved)
+        .overlay {
+            if saved { savedFeedback.transition(.opacity) }
         }
         .foregroundStyle(DrivyTheme.text)
         .background(DrivyTheme.surface)
         .tint(DrivyTheme.accent)
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
-        .presentationDragIndicator(.visible)
-        .presentationSizing(.form)
-        .presentationCornerRadius(DrivyRadius.mapPanel + DrivySpacing.xs)
-        .presentationBackground(DrivyTheme.surface)
-        .interactiveDismissDisabled(saved)
         .sensoryFeedback(.selection, trigger: selected?.id)
         .sensoryFeedback(.success, trigger: saved)
         .task { await recorder.loadCompetencies() }
         .task(id: saved) {
             guard saved else { return }
-            // `saved` n’est posé qu’après l’écriture locale durable (record / markMoment ont répondu vrai) :
-            // la confirmation ne précède jamais l’enregistrement. Retour bref, sans étape en plus.
-            try? await Task.sleep(for: .milliseconds(reduceMotion ? 250 : 420))
-            dismiss()
+            // The recorder returns true only after the encrypted local write succeeds.
+            do { try await Task.sleep(for: .milliseconds(reduceMotion ? 250 : 420)) }
+            catch { return }
+            close()
         }
     }
 
-    private var header: some View {
-        HStack(spacing: DrivySpacing.s) {
-            if selected != nil && !saved {
-                roundControl("Revenir aux thèmes", symbol: "chevron.left") {
-                    withAnimation(motion) { selected = nil }
-                    selectionFocused = false
+    @ViewBuilder private var paletteContents: some View {
+        if verticalSizeClass == .compact {
+            // Landscape can leave less room than the header and choices need together.
+            ScrollView {
+                VStack(spacing: 0) {
+                    header
+                    themeContent
+                    appraisalBar
                 }
-                .accessibilityIdentifier("live-observation-back")
             }
+            .scrollBounceBehavior(.basedOnSize)
+        } else {
+            VStack(spacing: 0) {
+                header
+                ScrollView { themeContent }
+                    .scrollBounceBehavior(.basedOnSize)
+                appraisalBar
+            }
+        }
+    }
+
+    private var themeContent: some View {
+        VStack(spacing: DrivySpacing.m) {
+            themes
+            if let error = recorder.errorMessage {
+                VStack(spacing: DrivySpacing.s) {
+                    SchoolErrorNotice(message: error)
+                    if recorder.canRetry {
+                        Button("Réessayer", systemImage: "arrow.clockwise") { Task { await recorder.retry() } }
+                            .buttonStyle(DrivySecondaryButtonStyle())
+                    }
+                }
+                .id("live-observation-error")
+            }
+        }
+        .padding(.horizontal, DrivySpacing.s)
+        .padding(.bottom, DrivySpacing.s)
+    }
+
+    private var appraisalBar: some View {
+        VStack(spacing: 0) {
+            Divider().overlay(DrivyTheme.border)
+            appraisals
+                .padding(.horizontal, DrivySpacing.s)
+                .padding(.vertical, DrivySpacing.xs)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var header: some View {
+        HStack(spacing: DrivySpacing.xxs) {
             Text("Signaler")
-                .font(.drivyTitle)
+                .font(.headline)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: DrivySpacing.s)
-            roundControl("Annuler le signalement", symbol: "xmark") { dismiss() }
-                .disabled(saved)
+            Spacer(minLength: DrivySpacing.xs)
+            roundControl("Effacer le choix", symbol: "arrow.counterclockwise") {
+                withAnimation(motion) { selected = nil }
+                focusedStatus = nil
+            }
+            .opacity(selected == nil ? 0 : 1)
+            .disabled(selected == nil)
+            .accessibilityHidden(selected == nil)
+            .accessibilityIdentifier("live-observation-back")
+            Button {
+                guard recorder.markMoment(at: observedAt, anchor: anchor) else { return }
+                withAnimation(motion) { savedStatus = nil; saved = true }
+            } label: {
+                SchoolMarkerEmblem(size: 28)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(DrivyTileButtonStyle())
+            .disabled(!recorder.canRecord)
+            .opacity(recorder.canRecord ? 1 : 0.45)
+            .accessibilityLabel("Marquer un moment")
+            .accessibilityIdentifier("live-observation-marker")
+            roundControl("Annuler le signalement", symbol: "xmark", action: close)
                 .accessibilityIdentifier("live-observation-close")
         }
-        .padding(.horizontal, DrivySpacing.m)
-        .padding(.top, DrivySpacing.m)
-        .padding(.bottom, DrivySpacing.xs)
+        .padding(.leading, DrivySpacing.m)
+        .padding(.trailing, DrivySpacing.s)
+        .padding(.vertical, DrivySpacing.xs)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func roundControl(_ label: String, symbol: String, action: @escaping () -> Void) -> some View {
@@ -90,8 +156,7 @@ struct SchoolLiveObservationSheet: View {
             Image(systemName: symbol)
                 .font(DrivyMapGlyph.control)
                 .foregroundStyle(DrivyTheme.muted)
-                .frame(width: 48, height: 48)
-                .background(DrivyTheme.surfaceMuted, in: Circle())
+                .frame(width: 44, height: 44)
                 .contentShape(Circle())
         }
         .buttonStyle(DrivyTileButtonStyle())
@@ -103,46 +168,11 @@ struct SchoolLiveObservationSheet: View {
             if recorder.isLoadingCompetencies {
                 DrivySkeletonRows(count: 3).drivySkeleton("Chargement des thèmes…")
             }
-            // Paired rows read as a compact chooser, with the icon beside its label.
-            // Eager layout lets the sheet measure all rows before sizing itself.
-            Grid(horizontalSpacing: DrivySpacing.xs, verticalSpacing: DrivySpacing.xxs) {
-                ForEach(0..<themeRowCount, id: \.self) { row in
-                    GridRow {
-                        ForEach(0..<themeColumnCount, id: \.self) { column in
-                            let index = row * themeColumnCount + column
-                            if index < recorder.themes.count {
-                                themeButton(recorder.themes[index])
-                            } else {
-                                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                                    .accessibilityHidden(true)
-                            }
-                        }
-                    }
-                }
+            LazyVGrid(columns: themeColumns, spacing: DrivySpacing.xxs) {
+                ForEach(recorder.themes) { theme in themeButton(theme) }
             }
-            Divider().overlay(DrivyTheme.border)
-            Button {
-                if recorder.markMoment(at: observedAt, anchor: anchor) {
-                    withAnimation(motion) { saved = true }
-                }
-            } label: {
-                HStack(spacing: DrivySpacing.s) {
-                    SchoolMarkerEmblem(size: 28)
-                    Text("Marquer un moment").font(.subheadline.weight(.semibold))
-                        .foregroundStyle(DrivyTheme.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, DrivySpacing.s)
-                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(SchoolObservationChoiceStyle())
-            .disabled(!recorder.canRecord)
-            .accessibilityLabel("Marquer un moment")
-            .accessibilityIdentifier("live-observation-marker")
             if let message = recorder.competenciesMessage {
-                // Avertissement, pas une erreur : « Marquer un moment » reste disponible.
+                // Le marqueur de l’en-tête reste disponible même sans référentiel.
                 DrivyInlineMessage(text: message, tone: .warning)
                 Button("Réessayer", systemImage: "arrow.clockwise") { Task { await recorder.loadCompetencies() } }
                     .buttonStyle(DrivySecondaryButtonStyle())
@@ -150,68 +180,91 @@ struct SchoolLiveObservationSheet: View {
         }
     }
 
-    private var themeColumnCount: Int { dynamicTypeSize >= .xxLarge ? 1 : 2 }
-    private var themeRowCount: Int { (recorder.themes.count + themeColumnCount - 1) / themeColumnCount }
+    private var themeColumns: [GridItem] {
+        if dynamicTypeSize.isAccessibilitySize { return [GridItem(.flexible())] }
+        return [GridItem(.adaptive(minimum: dynamicTypeSize >= .xxLarge ? 148 : 104), spacing: DrivySpacing.xxs)]
+    }
 
     private func themeButton(_ theme: SchoolLiveObservationTheme) -> some View {
-        Button {
+        let isSelected = selected?.id == theme.id
+        return Button {
             withAnimation(motion) { selected = theme }
-            selectionFocused = true
+            focusedStatus = SchoolObservationStatus.toWorkOn.rawValue
         } label: {
-            HStack(spacing: DrivySpacing.m) {
-                emblem(theme, size: 32)
-                Text(theme.title)
-                    .font(.subheadline.weight(.semibold))
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    HStack(spacing: DrivySpacing.s) {
+                        SchoolObservationEmblem(theme: theme, size: 32)
+                        themeLabel(theme).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                } else {
+                    VStack(spacing: DrivySpacing.xxs) {
+                        SchoolObservationEmblem(theme: theme, size: 28)
+                        themeLabel(theme).multilineTextAlignment(.center)
+                    }
+                }
             }
-            .padding(.vertical, DrivySpacing.xs)
             .padding(.horizontal, DrivySpacing.xs)
-            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+            .padding(.vertical, DrivySpacing.xs)
+            .frame(maxWidth: .infinity, minHeight: 80)
+            .background(isSelected ? DrivyTheme.accentSoft : .clear,
+                        in: RoundedRectangle(cornerRadius: DrivyRadius.field))
+            .overlay {
+                RoundedRectangle(cornerRadius: DrivyRadius.field)
+                    .strokeBorder(isSelected ? DrivyTheme.accent : .clear, lineWidth: 1.5)
+            }
             .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field))
         }
         .buttonStyle(SchoolObservationChoiceStyle())
         .disabled(!recorder.canRecord)
         .accessibilityLabel(theme.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier("live-observation-theme-\(theme.title)")
     }
 
-    private func emblem(_ theme: SchoolLiveObservationTheme, size: CGFloat) -> some View {
-        SchoolObservationEmblem(theme: theme, size: size)
+    private func themeLabel(_ theme: SchoolLiveObservationTheme) -> some View {
+        Text(theme.title)
+            .font(dynamicTypeSize.isAccessibilitySize ? .body.weight(.semibold) : .footnote.weight(.semibold))
+            .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func appraisal(for theme: SchoolLiveObservationTheme) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: DrivySpacing.s) {
-                emblem(theme, size: 32)
-                Text(theme.title).font(.headline)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityFocused($selectionFocused)
-            }
-            .padding(.horizontal, DrivySpacing.s)
-            .padding(.bottom, DrivySpacing.m)
-            ForEach([SchoolObservationStatus.toWorkOn, .attention, .positive]) { status in
-                appraisalButton(status, theme: theme)
-                if status != .positive { Divider().overlay(DrivyTheme.border) }
+    private var appraisals: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: DrivySpacing.xxs) {
+                    ForEach(statuses) { status in appraisalButton(status) }
+                }
+            } else {
+                HStack(alignment: .top, spacing: DrivySpacing.xxs) {
+                    ForEach(statuses) { status in appraisalButton(status) }
+                }
             }
         }
     }
 
-    private func appraisalButton(_ status: SchoolObservationStatus, theme: SchoolLiveObservationTheme) -> some View {
-        SchoolAppraisalTile(status: status, tone: tone(status)) {
-            guard recorder.record(theme: theme, status: status, at: observedAt, anchor: anchor) else { return }
+    private func appraisalButton(_ status: SchoolObservationStatus) -> some View {
+        Button {
+            guard let selected,
+                  recorder.record(theme: selected, status: status, at: observedAt, anchor: anchor) else { return }
             withAnimation(motion) { savedStatus = status; saved = true }
+        } label: {
+            SchoolAppraisalLabel(status: status, tone: tone(status), isVertical: !dynamicTypeSize.isAccessibilitySize)
         }
-        .disabled(!recorder.canRecord || saved)
+        .buttonStyle(SchoolObservationChoiceStyle())
+        .disabled(selected == nil || !recorder.canRecord)
+        .opacity(selected == nil || !recorder.canRecord ? 0.45 : 1)
+        // The reserved choices are not actionable until a theme has been chosen.
+        .accessibilityHidden(selected == nil)
+        .accessibilityLabel(status.label)
+        .accessibilityHint("Enregistre \(selected?.title ?? "cette observation")")
+        .accessibilityIdentifier("live-observation-status-\(status.rawValue)")
+        .accessibilityFocused($focusedStatus, equals: status.rawValue)
     }
 
-    /// This confirmation appears only after the encrypted local write succeeds.
     private var savedFeedback: some View {
-        VStack(spacing: DrivySpacing.m) {
+        VStack(spacing: DrivySpacing.s) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 48, weight: .medium))
+                .font(.system(size: 40, weight: .medium))
                 .foregroundStyle(DrivyTheme.success)
                 .accessibilityHidden(true)
             Text("Ajouté à la leçon").font(.headline)
@@ -219,52 +272,60 @@ struct SchoolLiveObservationSheet: View {
                 Text(savedStatus.label).font(.subheadline).foregroundStyle(tone(savedStatus).foreground)
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DrivySpacing.xl)
+        .padding(DrivySpacing.m)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(selected == nil ? "Moment ajouté à la leçon" : "Observation ajoutée à la leçon")
+        .accessibilityLabel(savedStatus == nil ? "Moment ajouté à la leçon" : "Observation ajoutée à la leçon")
     }
 
-    /// Même ton que `ObservationStatus.tone` (DrivyObservationStyle) : Attention, À retravailler, Point positif.
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
+    }
+
     private func tone(_ status: SchoolObservationStatus) -> DrivyTone {
         switch status { case .toWorkOn: .danger; case .attention: .warning; case .positive: .success }
     }
 }
 
-/// Trois choix explicites, chacun sur une rangée : symbole et mot portent l’état,
-/// la couleur reste un repère secondaire. Aucun statut n’est présélectionné.
-private struct SchoolAppraisalTile: View {
+/// Même contenu avant et après la sélection : aucune appréciation n’est présélectionnée.
+private struct SchoolAppraisalLabel: View {
     let status: SchoolObservationStatus
     let tone: DrivyTone
-    let action: () -> Void
+    let isVertical: Bool
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: DrivySpacing.m) {
-                Image(systemName: status.symbol)
-                    .font(DrivyMapGlyph.observation)
-                    .foregroundStyle(tone.foreground)
-                    .frame(width: 40, height: 40)
-                    .accessibilityHidden(true)
-                Text(status.label)
-                    .font(.headline)
-                    .foregroundStyle(DrivyTheme.text)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        Group {
+            if isVertical {
+                VStack(spacing: DrivySpacing.xs) {
+                    symbol
+                    Text(status.label).font(.footnote.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                HStack(spacing: DrivySpacing.s) {
+                    symbol
+                    Text(status.label).font(.body.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
-            .padding(DrivySpacing.s)
-            .frame(maxWidth: .infinity, minHeight: 64)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(SchoolObservationChoiceStyle())
-        .accessibilityLabel(status.label)
-        .accessibilityHint("Enregistre cette observation")
-        .accessibilityIdentifier("live-observation-status-\(status.rawValue)")
+        .foregroundStyle(DrivyTheme.text)
+        .padding(DrivySpacing.xs)
+        .frame(maxWidth: .infinity, minHeight: isVertical ? 76 : 56)
+        .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field))
+    }
+
+    private var symbol: some View {
+        Image(systemName: status.symbol)
+            .font(DrivyMapGlyph.observation)
+            .foregroundStyle(tone.foreground)
+            .frame(width: 24, height: 24)
+            .accessibilityHidden(true)
     }
 }
 
-/// A visible touch response without giving every category a permanent card.
+/// Retour tactile discret ; seul le thème sélectionné conserve un fond.
 private struct SchoolObservationChoiceStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
