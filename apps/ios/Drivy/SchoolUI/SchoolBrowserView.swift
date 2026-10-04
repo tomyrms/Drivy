@@ -141,7 +141,7 @@ struct SchoolChooserSheet: View {
 
     var body: some View {
         NavigationStack {
-            SchoolChooserView(workspace: workspace, onSelect: close)
+            SchoolChooserView(workspace: workspace, onSelect: close, fitsSheet: true)
                 .navigationTitle("Changer d’école")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -149,50 +149,56 @@ struct SchoolChooserSheet: View {
                 }
         }
         .tint(DrivyTheme.accent)
-        .presentationDetents([.medium, .large])
+        .drivyFittedSheet()
     }
 }
 
 struct SchoolChooserView: View {
     @Bindable var workspace: SchoolWorkspace
     var onSelect: (() -> Void)? = nil
+    var fitsSheet = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                ForEach(workspace.person?.memberships ?? []) { membership in
-                    let isCurrent = workspace.membership?.membershipId == membership.membershipId
-                    Button {
-                        // L’école déjà ouverte : on ferme sans tout reconstruire.
-                        guard !isCurrent else { onSelect?(); return }
-                        workspace.leaveSchool()
-                        onSelect?()
-                        Task { await workspace.selectSchool(membership) }
-                    } label: {
-                        HStack(spacing: DrivySpacing.m) {
-                            Image(systemName: "building.2")
-                                .font(.title3)
-                                .foregroundStyle(isCurrent ? DrivyTheme.accent : DrivyTheme.muted)
-                                .frame(width: 28)
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                                Text(membership.schoolName).font(.headline).foregroundStyle(DrivyTheme.text)
-                                Text(SchoolPresentation.roles(membership.roles))
-                                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                            }
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            DrivySelectionMark(isSelected: isCurrent)
-                        }
-                    }
-                    .buttonStyle(DrivySelectionCardStyle(isSelected: isCurrent))
-                    .accessibilityAddTraits(isCurrent ? .isSelected : [])
-                    .accessibilityIdentifier("school-choice-\(membership.schoolId.uuidString)")
-                }
-            }
-            .drivyPageContent()
+        Group {
+            if fitsSheet { DrivySheetScrollView { choices } }
+            else { ScrollView { choices } }
         }
         .background(DrivyTheme.surface)
+    }
+
+    private var choices: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            ForEach(workspace.person?.memberships ?? []) { membership in
+                let isCurrent = workspace.membership?.membershipId == membership.membershipId
+                Button {
+                    // L’école déjà ouverte : on ferme sans tout reconstruire.
+                    guard !isCurrent else { onSelect?(); return }
+                    workspace.leaveSchool()
+                    onSelect?()
+                    Task { await workspace.selectSchool(membership) }
+                } label: {
+                    HStack(spacing: DrivySpacing.m) {
+                        Image(systemName: "building.2")
+                            .font(.title3)
+                            .foregroundStyle(isCurrent ? DrivyTheme.accent : DrivyTheme.muted)
+                            .frame(width: 28)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                            Text(membership.schoolName).font(.headline).foregroundStyle(DrivyTheme.text)
+                            Text(SchoolPresentation.roles(membership.roles))
+                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        DrivySelectionMark(isSelected: isCurrent)
+                    }
+                }
+                .buttonStyle(DrivySelectionCardStyle(isSelected: isCurrent))
+                .accessibilityAddTraits(isCurrent ? .isSelected : [])
+                .accessibilityIdentifier("school-choice-\(membership.schoolId.uuidString)")
+            }
+        }
+        .drivyPageContent()
     }
 }
 

@@ -9,6 +9,7 @@ struct SchoolProfileTabView: View {
     var captureController: SchoolCaptureSessionController? = nil
     var chooseSchool: (() -> Void)? = nil
     @Environment(\.openURL) private var openURL
+    @State private var planningSettings: PlanningSettingsPresentation?
 
     private var scopeKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.schoolId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.joined(separator: ",") ?? ""):\(workspace.membership?.grants.joined(separator: ",") ?? "")"
@@ -27,6 +28,14 @@ struct SchoolProfileTabView: View {
                 }
         }
         .id(scopeKey)
+        .sheet(item: $planningSettings) { presentation in
+            NavigationStack {
+                SchoolPlanningSettingsView(scope: presentation.scope, client: presentation.client)
+            }
+            .tint(DrivyTheme.accent)
+            .drivyFittedSheet()
+        }
+        .onChange(of: scopeKey) { _, _ in planningSettings = nil }
     }
 
     private var content: some View {
@@ -59,8 +68,9 @@ struct SchoolProfileTabView: View {
                 .accessibilityIdentifier("profile-open-trips")
                 if let person = workspace.person, let membership = workspace.membership,
                    membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") {
-                    NavigationLink {
-                        SchoolPlanningSettingsView(scope: agendaClient.scope(person: person, membership: membership), client: agendaClient.planningClient)
+                    Button {
+                        planningSettings = PlanningSettingsPresentation(scope: agendaClient.scope(person: person, membership: membership),
+                            client: agendaClient.planningClient)
                     } label: {
                         Label("Préférences de leçon", systemImage: "slider.horizontal.3")
                             .frame(minHeight: 44)
@@ -79,4 +89,10 @@ struct SchoolProfileTabView: View {
             .drivyFormRows()
         }
     }
+}
+
+private struct PlanningSettingsPresentation: Identifiable {
+    let id = UUID()
+    let scope: SchoolCommandScope
+    let client: SchoolPlanningClient
 }

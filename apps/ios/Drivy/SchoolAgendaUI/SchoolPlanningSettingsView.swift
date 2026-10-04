@@ -134,68 +134,98 @@ import Foundation
 
 struct SchoolPlanningSettingsView: View {
     @State private var model: SchoolPlanningSettingsWorkspace
+    @State private var confirmsDiscard = false
+    @Environment(\.dismiss) private var dismiss
     init(scope: SchoolCommandScope, client: SchoolPlanningClient, outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
         _model = State(initialValue: SchoolPlanningSettingsWorkspace(scope: scope, client: client, outbox: outbox))
     }
     var body: some View {
-        Form {
-            if model.saved == nil && (model.isLoading || model.errorMessage == nil) {
-                Section { DrivySkeletonRows(count: 2).drivySkeleton("Chargement des préférences…") }.drivyFormRows()
-            }
-            if let error = model.errorMessage {
-                Section {
-                    if model.conflictingDefaults != nil {
-                        DrivyFormMessage(text: error, tone: .danger)
-                        Button("Utiliser les préférences actualisées") { model.useUpdatedDefaults() }
-                            .disabled(model.isBusy || model.isLoading || model.pending != nil)
-                    } else {
-                        SchoolErrorNotice(message: error, retry: { Task { await model.load() } })
+        DrivySheetScrollView {
+            VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                if model.saved == nil && (model.isLoading || model.errorMessage == nil) {
+                    DrivySkeletonRows(count: 2).drivySkeleton("Chargement des préférences…")
+                }
+                if let error = model.errorMessage {
+                    VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                        if model.conflictingDefaults != nil {
+                            DrivyFormMessage(text: error, tone: .danger)
+                            Button("Utiliser les préférences actualisées") { model.useUpdatedDefaults() }
+                                .frame(minHeight: 44)
+                                .disabled(model.isBusy || model.isLoading || model.pending != nil)
+                        } else {
+                            SchoolErrorNotice(message: error, retry: { Task { await model.load() } })
+                        }
                     }
-                }.drivyFormRows()
-            }
-            if let success = model.successMessage, !model.hasChanges { Section { DrivyFormMessage(text: success, tone: .success) }.drivyFormRows() }
-            if let pending = model.pending {
-                Section {
+                }
+                if let success = model.successMessage, !model.hasChanges { DrivyFormMessage(text: success, tone: .success) }
+                if let pending = model.pending {
                     DrivyPendingRequest(message: "Une demande attend sa confirmation.", reference: pending.id,
                         verify: pending.kind == .savePlanningDefaults ? { Task { await model.verify() } } : nil,
                         canVerify: !model.isBusy && !model.isLoading,
                         retry: model.canRetry ? { Task { await model.retry() } } : nil)
-                }.drivyFormRows()
-            }
-            if model.saved != nil {
-                Section {
-                    Picker("Formation par défaut", selection: $model.trainingCategoryCode) {
-                        Text("Aucune").tag("")
-                        ForEach(model.categories, id: \.self) { Text("Permis \($0)").tag($0) }
-                        if !model.trainingCategoryCode.isEmpty && !model.categories.contains(model.trainingCategoryCode) {
-                            Text("Formation indisponible").tag(model.trainingCategoryCode)
+                }
+                if model.saved != nil {
+                    DrivyRowGroup {
+                        preferenceField("Formation par défaut") {
+                            Picker("Formation par défaut", selection: $model.trainingCategoryCode) {
+                                Text("Aucune").tag("")
+                                ForEach(model.categories, id: \.self) { Text("Permis \($0)").tag($0) }
+                                if !model.trainingCategoryCode.isEmpty && !model.categories.contains(model.trainingCategoryCode) {
+                                    Text("Formation indisponible").tag(model.trainingCategoryCode)
+                                }
+                            }
+                            .onChange(of: model.trainingCategoryCode) { _, _ in
+                                if !model.availableProducts.contains(where: { $0.productKey == model.serviceProductKey }) { model.serviceProductKey = "" }
+                            }
                         }
-                    }
-                    .onChange(of: model.trainingCategoryCode) { _, _ in
-                        if !model.availableProducts.contains(where: { $0.productKey == model.serviceProductKey }) { model.serviceProductKey = "" }
-                    }
-                    Picker("Tarif par défaut", selection: $model.serviceProductKey) {
-                        Text("Aucun").tag("")
-                        ForEach(model.availableProducts) { product in
-                            Text("\(product.label) · \(SchoolCatalogFormatting.price(product.unitPriceCents))").tag(product.productKey)
+                        preferenceField("Tarif par défaut") {
+                            Picker("Tarif par défaut", selection: $model.serviceProductKey) {
+                                Text("Aucun").tag("")
+                                ForEach(model.availableProducts) { product in
+                                    Text("\(product.label) · \(SchoolCatalogFormatting.price(product.unitPriceCents))").tag(product.productKey)
+                                }
+                                if !model.serviceProductKey.isEmpty && !model.availableProducts.contains(where: { $0.productKey == model.serviceProductKey }) {
+                                    Text("Tarif indisponible").tag(model.serviceProductKey)
+                                }
+                            }
                         }
-                        if !model.serviceProductKey.isEmpty && !model.availableProducts.contains(where: { $0.productKey == model.serviceProductKey }) {
-                            Text("Tarif indisponible").tag(model.serviceProductKey)
-                        }
-                    }
-                }.drivyFormRows().disabled(model.isLoading || model.isBusy || model.pending != nil)
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
-        .navigationTitle("Préférences de leçon").navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            DrivyStickyActionBar {
+                    }.disabled(model.isLoading || model.isBusy || model.pending != nil)
+                }
                 Button { Task { await model.save() } } label: {
                     DrivyBusyLabel(title: "Enregistrer", busyTitle: "Enregistrement…", isBusy: model.isBusy)
-                }.buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canSave)
+                }
+                .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canSave)
+                .accessibilityIdentifier("planning-settings-save")
+            }
+            .drivyPageContent(maxWidth: SchoolFormLayout.maxWidth)
+        }
+        .background(DrivyTheme.surface)
+        .navigationTitle("Préférences de leçon").navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Fermer") {
+                    if model.hasChanges { confirmsDiscard = true } else { dismiss() }
+                }.disabled(model.isBusy)
             }
         }
+        .interactiveDismissDisabled(model.hasChanges || model.isBusy)
+        .confirmationDialog("Quitter sans enregistrer tes changements ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+            Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
+        } message: {
+            Text("Une demande déjà envoyée reste conservée sur cet appareil jusqu’à confirmation.")
+        }
         .task { await model.load() }
+    }
+
+    private func preferenceField<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            content().labelsHidden().pickerStyle(.menu)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, DrivySpacing.xs)
     }
 }

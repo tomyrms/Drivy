@@ -155,7 +155,8 @@ struct SchoolCaptureLiveView: View {
         if controller.displayedPointCount > 0 {
             SchoolCaptureLiveMap(segments: controller.segments,
                 observations: controller.liveObservations?.mapObservations ?? [],
-                resetCameraID: resetCameraID, followsPosition: $followsPosition)
+                resetCameraID: resetCameraID, isRecording: controller.state == .recording,
+                followsPosition: $followsPosition)
         } else {
             DrivyMapPlaceholder(title: placeholderTitle, message: placeholderMessage, symbol: "location",
                 isSearching: controller.state == .preparing || controller.state == .recording)
@@ -305,8 +306,7 @@ struct SchoolCaptureLiveView: View {
         .accessibilityIdentifier("capture-signal-observation")
         .popover(item: $observationMoment, attachmentAnchor: .rect(.bounds)) { moment in
             SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant, anchor: moment.anchor)
-                .frame(width: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.width : nil,
-                       height: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.height : nil)
+                .frame(width: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.width : nil)
                 .presentationCompactAdaptation(.sheet)
         }
     }

@@ -238,94 +238,122 @@ struct SchoolStartNowBody: Encodable, Sendable {
 struct SchoolStartNowView: View {
     @Bindable var model: SchoolStartNowWorkspace
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         NavigationStack {
-            Form {
-                if let pending = model.pending {
-                    Section {
+            DrivySheetScrollView {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                    if let pending = model.pending {
                         DrivyPendingRequest(message: model.errorMessage ?? "Une demande attend sa confirmation.", reference: pending.id,
                             retry: pending.kind == .startLessonNow && pending.scope == model.scope ? { Task { if await model.retry() != nil { dismiss() } } } : nil,
                             canRetry: !model.isBusy && !model.isLoading)
-                    }
-                    .drivyFormRows()
-                } else if let error = model.errorMessage {
-                    Section {
+                    } else if let error = model.errorMessage {
                         SchoolErrorNotice(message: error, retry: !model.contextValid || model.learners.isEmpty || model.trainings.isEmpty || !model.storageAvailable
                             ? { Task { await reloadContext() } } : nil)
                         .disabled(model.isBusy || model.isLoading)
                     }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                }
-                if model.learners.isEmpty && (model.isLoading || (model.defaults == nil && model.errorMessage == nil)) {
-                    Section {
+                    if model.learners.isEmpty && (model.isLoading || (model.defaults == nil && model.errorMessage == nil)) {
                         DrivySkeletonRows(count: 3).drivySkeleton("Chargement des élèves…")
-                    }.drivyFormRows()
-                } else {
-                Section {
-                    if model.hasPresetLearner, let name = model.learnerName {
-                        LabeledContent("Élève", value: name)
                     } else {
-                        Picker("Élève", selection: Binding(get: { model.learnerID }, set: { id in
-                            if let id { Task { await model.select(id) } }
-                        })) {
-                            Text("Choisir un élève").tag(nil as UUID?)
-                            ForEach(model.learners) { learner in Text(learner.displayName).tag(Optional(learner.id)) }
-                        }
+                        fields
+                            .disabled(model.isBusy || model.isLoading || model.pending != nil)
                     }
-                    if model.isLoading && model.trainings.isEmpty && model.learnerID != nil {
-                        DrivySkeletonRow().drivySkeleton("Chargement de la formation…")
-                    } else if model.trainings.count > 1 {
-                        Picker("Formation", selection: $model.trainingID) {
-                            Text("Choisir une formation").tag(nil as UUID?)
-                            ForEach(model.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
-                        }
-                    } else if let training = model.trainings.first, training.id == model.trainingID {
-                        LabeledContent("Formation", value: "Permis \(training.categoryCode)")
-                    }
-                    SchoolMeetingPointField(text: $model.meetingPoint)
-                    if model.meetingPointTooLong {
-                        DrivyFormMessage(text: "Raccourcis le lieu à 500 caractères.", tone: .danger)
-                    }
-                }
-                    .drivyFormRows()
-                .disabled(model.isBusy || model.isLoading || model.pending != nil)
-                }
+                    primaryAction
+                }.drivyPageContent(maxWidth: DrivyLayout.compactColumn)
             }
-            .scrollContentBackground(.hidden)
-            .scrollDismissesKeyboard(.interactively)
-            .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                DrivyStickyActionBar {
-                    if model.conflicted {
-                        // Rien n’est forcé : le serveur a refusé, la seule issue est de planifier autrement.
-                        Button {
-                            model.planLater(); dismiss()
-                        } label: { Label("Planifier à un autre moment", systemImage: "calendar") }
-                            .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
-                            .accessibilityIdentifier("start-now-plan-later")
-                    } else {
-                        Button {
-                            Task {
-                                _ = await model.start()
-                                if model.started != nil || model.unsupported { dismiss() }
-                            }
-                        } label: {
-                            DrivyBusyLabel(title: "Démarrer maintenant", busyTitle: "Démarrage…", isBusy: model.isBusy)
-                        }
-                        .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
-                        .disabled(!model.canStart)
-                        .accessibilityIdentifier("start-now-confirm")
-                    }
-                }
-            }
+            .background(DrivyTheme.canvas)
             .navigationTitle("Démarrer une leçon").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
             .task { if model.learners.isEmpty { await model.load() } }
         }
+        .drivyFittedSheet()
         .interactiveDismissDisabled(model.isBusy)
         .tint(DrivyTheme.accent)
+    }
+
+    private var fields: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            fieldRow("Élève") {
+                if model.hasPresetLearner, let name = model.learnerName {
+                    Text(name).fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Picker("Élève", selection: Binding(get: { model.learnerID }, set: { id in
+                        if let id { Task { await model.select(id) } }
+                    })) {
+                        Text("Choisir un élève").tag(nil as UUID?)
+                        ForEach(model.learners) { learner in Text(learner.displayName).tag(Optional(learner.id)) }
+                    }
+                    .pickerStyle(.menu).labelsHidden()
+                    .frame(minHeight: 44).contentShape(Rectangle())
+                }
+            }
+            if model.isLoading && model.trainings.isEmpty && model.learnerID != nil {
+                Divider()
+                DrivySkeletonRow().drivySkeleton("Chargement de la formation…")
+                    .padding(.vertical, DrivySpacing.s)
+            } else if model.trainings.count > 1 {
+                Divider()
+                fieldRow("Formation") {
+                    Picker("Formation", selection: $model.trainingID) {
+                        Text("Choisir une formation").tag(nil as UUID?)
+                        ForEach(model.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
+                    }
+                    .pickerStyle(.menu).labelsHidden()
+                    .frame(minHeight: 44).contentShape(Rectangle())
+                }
+            } else if let training = model.trainings.first, training.id == model.trainingID {
+                Divider()
+                fieldRow("Formation") { Text("Permis \(training.categoryCode)") }
+            }
+            Divider()
+            SchoolMeetingPointField(text: $model.meetingPoint)
+                .padding(.vertical, DrivySpacing.s)
+                .frame(minHeight: 44)
+            if model.meetingPointTooLong {
+                DrivyFormMessage(text: "Raccourcis le lieu à 500 caractères.", tone: .danger)
+                    .padding(.bottom, DrivySpacing.s)
+            }
+        }
+        .padding(.horizontal, DrivySpacing.m)
+        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content))
+    }
+
+    private func fieldRow<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.m))
+        return layout {
+            Text(title).fixedSize(horizontal: false, vertical: true)
+            if !typeSize.isAccessibilitySize { Spacer(minLength: DrivySpacing.xs) }
+            content()
+                .multilineTextAlignment(typeSize.isAccessibilitySize ? .leading : .trailing)
+        }
+        .padding(.vertical, DrivySpacing.s)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+    }
+
+    @ViewBuilder private var primaryAction: some View {
+        if model.conflicted {
+            // Rien n’est forcé : le serveur a refusé, la seule issue est de planifier autrement.
+            Button {
+                model.planLater(); dismiss()
+            } label: { Label("Planifier à un autre moment", systemImage: "calendar") }
+                .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+                .accessibilityIdentifier("start-now-plan-later")
+        } else {
+            Button {
+                Task {
+                    _ = await model.start()
+                    if model.started != nil || model.unsupported { dismiss() }
+                }
+            } label: {
+                DrivyBusyLabel(title: "Démarrer maintenant", busyTitle: "Démarrage…", isBusy: model.isBusy)
+            }
+            .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+            .disabled(!model.canStart)
+            .accessibilityIdentifier("start-now-confirm")
+        }
     }
 
     @MainActor private func reloadContext() async {

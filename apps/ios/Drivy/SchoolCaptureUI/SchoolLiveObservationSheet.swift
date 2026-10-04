@@ -21,7 +21,7 @@ struct SchoolLiveObservationSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            ScrollView {
+            DrivySheetScrollView {
                 VStack(spacing: DrivySpacing.l) {
                     if saved {
                         savedFeedback.transition(reduceMotion ? .opacity : .scale(scale: 0.92).combined(with: .opacity))
@@ -32,19 +32,17 @@ struct SchoolLiveObservationSheet: View {
                     }
                     if let error = recorder.errorMessage { SchoolErrorNotice(message: error) }
                 }
-                .padding(.horizontal, DrivySpacing.l)
-                .padding(.top, DrivySpacing.s)
-                .padding(.bottom, DrivySpacing.l)
+                .padding(.horizontal, DrivySpacing.m)
+                .padding(.top, DrivySpacing.xs)
+                .padding(.bottom, DrivySpacing.m)
                 .frame(maxWidth: DrivyLayout.compactColumn)
                 .frame(maxWidth: .infinity)
             }
-            .scrollBounceBehavior(.basedOnSize)
         }
         .foregroundStyle(DrivyTheme.text)
         .background(DrivyTheme.surface)
         .tint(DrivyTheme.accent)
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
+        .drivyFittedSheet()
         .presentationCornerRadius(DrivyRadius.mapPanel + DrivySpacing.xs)
         .presentationBackground(DrivyTheme.surface)
         .interactiveDismissDisabled(saved)
@@ -78,9 +76,9 @@ struct SchoolLiveObservationSheet: View {
                 .disabled(saved)
                 .accessibilityIdentifier("live-observation-close")
         }
-        .padding(.horizontal, DrivySpacing.l)
-        .padding(.top, DrivySpacing.l)
-        .padding(.bottom, DrivySpacing.s)
+        .padding(.horizontal, DrivySpacing.m)
+        .padding(.top, DrivySpacing.m)
+        .padding(.bottom, DrivySpacing.xs)
     }
 
     private func roundControl(_ label: String, symbol: String, action: @escaping () -> Void) -> some View {
@@ -101,23 +99,21 @@ struct SchoolLiveObservationSheet: View {
             if recorder.isLoadingCompetencies {
                 DrivySkeletonRows(count: 3).drivySkeleton("Chargement des thèmes…")
             }
-            // La largeur utile décide du nombre de colonnes. Les libellés gardent leur taille,
-            // y compris dans une feuille étroite ou avec le texte agrandi.
-            LazyVGrid(columns: dynamicTypeSize.isAccessibilitySize
-                      ? [GridItem(.flexible())]
-                      : [GridItem(.adaptive(minimum: dynamicTypeSize >= .xxLarge ? 144 : 96), spacing: DrivySpacing.xs)],
-                      spacing: DrivySpacing.xs) {
-                ForEach(recorder.themes) { theme in
-                    Button {
-                        withAnimation(motion) { selected = theme }
-                        selectionFocused = true
-                    } label: {
-                        tileLabel(theme.title) { emblem(theme, size: 40) }
+            // Paired rows read as a compact chooser, with the icon beside its label.
+            // Eager layout lets the sheet measure all rows before sizing itself.
+            Grid(horizontalSpacing: DrivySpacing.xs, verticalSpacing: DrivySpacing.xxs) {
+                ForEach(0..<themeRowCount, id: \.self) { row in
+                    GridRow {
+                        ForEach(0..<themeColumnCount, id: \.self) { column in
+                            let index = row * themeColumnCount + column
+                            if index < recorder.themes.count {
+                                themeButton(recorder.themes[index])
+                            } else {
+                                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                                    .accessibilityHidden(true)
+                            }
+                        }
                     }
-                    .buttonStyle(SchoolObservationChoiceStyle())
-                    .disabled(!recorder.canRecord)
-                    .accessibilityLabel(theme.title)
-                    .accessibilityIdentifier("live-observation-theme-\(theme.title)")
                 }
             }
             Divider().overlay(DrivyTheme.border)
@@ -150,34 +146,31 @@ struct SchoolLiveObservationSheet: View {
         }
     }
 
-    /// Même commande et même instant quelle que soit la composition ; aucun texte réduit pour tenir.
-    @ViewBuilder private func tileLabel<Emblem: View>(_ title: String,
-                                                      @ViewBuilder emblem: () -> Emblem) -> some View {
-        let mark = emblem()
-        let shape = RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
-        if dynamicTypeSize.isAccessibilitySize {
+    private var themeColumnCount: Int { dynamicTypeSize >= .xxLarge ? 1 : 2 }
+    private var themeRowCount: Int { (recorder.themes.count + themeColumnCount - 1) / themeColumnCount }
+
+    private func themeButton(_ theme: SchoolLiveObservationTheme) -> some View {
+        Button {
+            withAnimation(motion) { selected = theme }
+            selectionFocused = true
+        } label: {
             HStack(spacing: DrivySpacing.m) {
-                mark
-                Text(title).font(.headline).multilineTextAlignment(.leading)
-                Spacer(minLength: 0)
-            }
-            .padding(DrivySpacing.s)
-            .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
-            .contentShape(shape)
-        } else {
-            VStack(spacing: DrivySpacing.xs) {
-                mark
-                Text(title)
+                emblem(theme, size: 32)
+                Text(theme.title)
                     .font(.subheadline.weight(.semibold))
-                    .multilineTextAlignment(.center)
+                    .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(minHeight: 40, alignment: .top)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.vertical, DrivySpacing.s)
-            .padding(.horizontal, DrivySpacing.xxs)
-            .frame(maxWidth: .infinity, minHeight: 104, alignment: .top)
-            .contentShape(shape)
+            .padding(.vertical, DrivySpacing.xs)
+            .padding(.horizontal, DrivySpacing.xs)
+            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field))
         }
+        .buttonStyle(SchoolObservationChoiceStyle())
+        .disabled(!recorder.canRecord)
+        .accessibilityLabel(theme.title)
+        .accessibilityIdentifier("live-observation-theme-\(theme.title)")
     }
 
     private func emblem(_ theme: SchoolLiveObservationTheme, size: CGFloat) -> some View {
@@ -193,7 +186,8 @@ struct SchoolLiveObservationSheet: View {
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($selectionFocused)
             }
-            .padding(.bottom, DrivySpacing.l)
+            .padding(.horizontal, DrivySpacing.s)
+            .padding(.bottom, DrivySpacing.m)
             ForEach([SchoolObservationStatus.toWorkOn, .attention, .positive]) { status in
                 appraisalButton(status, theme: theme)
                 if status != .positive { Divider().overlay(DrivyTheme.border) }
@@ -256,7 +250,7 @@ private struct SchoolAppraisalTile: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(DrivySpacing.s)
-            .frame(maxWidth: .infinity, minHeight: 76)
+            .frame(maxWidth: .infinity, minHeight: 64)
             .contentShape(Rectangle())
         }
         .buttonStyle(SchoolObservationChoiceStyle())

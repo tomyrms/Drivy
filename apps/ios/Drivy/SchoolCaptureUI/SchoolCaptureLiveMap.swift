@@ -6,6 +6,7 @@ struct SchoolCaptureLiveMap: View {
     let segments: [SchoolCaptureMapSegment]
     let observations: [SchoolLiveMapObservation]
     let resetCameraID: UUID
+    let isRecording: Bool
     @Binding var followsPosition: Bool
     @State private var camera: MapCameraPosition = .automatic
     @State private var mapHeading = 0.0
@@ -15,10 +16,15 @@ struct SchoolCaptureLiveMap: View {
     @State private var selectedSamples: [UUID: [SchoolCaptureDisplayRoute.Sample]] = [:]
     @State private var cachedCounts: [UUID: Int] = [:]
     @State private var last: SchoolCapturePoint?
+    @State private var compass = SchoolLiveHeadingSource()
+    @State private var isVisible = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     private var count: Int { segments.reduce(0) { $0 + $1.measurements.count } }
     private var contentKey: String { segments.map { "\($0.id):\($0.measurements.count)" }.joined(separator: ",") }
+    private var compassIsActive: Bool { isVisible && isRecording && scenePhase == .active }
+    private var displayedHeading: Double? { compass.degrees ?? heading }
 
     var body: some View {
         Map(position: $camera) {
@@ -42,13 +48,28 @@ struct SchoolCaptureLiveMap: View {
             }
             if let last {
                 Annotation("Dernière position enregistrée", coordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude)) {
-                    SchoolMapPositionMarker(course: heading, mapHeading: mapHeading)
+                    SchoolMapPositionMarker(course: displayedHeading, mapHeading: mapHeading)
+                        .accessibilityLabel(compass.degrees == nil
+                            ? (heading == nil ? "Dernière position enregistrée" : "Dernière position et direction du déplacement")
+                            : "Dernière position enregistrée et orientation de l’appareil")
                 }.annotationTitles(.hidden)
             }
         }
         .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .mapControls { }
-        .onAppear { updateRoute(); updateCourse(); if followsPosition { followPoint() } else if count > 0 { camera = .automatic } }
+        .background(SchoolLiveHeadingWindowReader(source: compass).accessibilityHidden(true))
+        .onAppear {
+            isVisible = true
+            updateRoute(); updateCourse()
+            compass.setActive(compassIsActive)
+            if followsPosition { followPoint() } else if count > 0 { camera = .automatic }
+        }
+        .onDisappear { isVisible = false; compass.stop() }
+        .onChange(of: compassIsActive) { _, active in compass.setActive(active) }
+        .onChange(of: compass.degrees) { _, degrees in
+            guard degrees != nil, followsPosition, !camera.positionedByUser else { return }
+            followPoint()
+        }
         .onMapCameraChange(frequency: .continuous) { context in
             mapHeading = context.camera.heading
             if camera.positionedByUser { followDistance = min(2500, max(180, context.camera.distance)) }
@@ -67,7 +88,9 @@ struct SchoolCaptureLiveMap: View {
             else { camera = .automatic }
         }
         .accessibilityLabel("Carte du trajet enregistré")
-        .accessibilityValue(followsPosition ? "Suivi dans le sens du trajet" : "Carte libre")
+        .accessibilityValue(followsPosition
+            ? (compass.degrees == nil ? "Suivi dans le sens du trajet" : "Suivi de la position et du cap de l’appareil")
+            : "Carte libre")
     }
 
     private func coordinate(for observation: SchoolLiveMapObservation) -> CLLocationCoordinate2D? {
@@ -134,7 +157,7 @@ struct SchoolCaptureLiveMap: View {
         guard let last else { return }
         withAnimation(reduceMotion ? nil : .linear(duration: 0.35)) {
             camera = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude),
-                distance: followDistance, heading: heading ?? mapHeading, pitch: 0))
+                distance: followDistance, heading: displayedHeading ?? mapHeading, pitch: 0))
         }
     }
 }

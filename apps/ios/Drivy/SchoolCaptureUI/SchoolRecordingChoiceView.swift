@@ -27,10 +27,15 @@ struct SchoolRecordingChoiceEntryView: View {
                 SchoolRecordingChoiceView(model: model)
             } else {
                 NavigationStack {
-                    ContentUnavailableView("Choix GPS de la leçon", systemImage: "location.slash",
-                        description: Text(currentScope == nil ? "Ouvre une leçon de ton école pour retrouver ce choix." : "Vérification de la leçon…"))
-                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
+                    DrivySheetScrollView {
+                        ContentUnavailableView("Choix GPS de la leçon", systemImage: "location.slash",
+                            description: Text(currentScope == nil ? "Ouvre une leçon de ton école pour retrouver ce choix." : "Vérification de la leçon…"))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
+                    }
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
                 }
+                .drivyFittedSheet()
             }
         }
         .task(id: scopeKey) {
@@ -50,7 +55,7 @@ struct SchoolRecordingChoiceView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            DrivySheetScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     if let learner = model.learner {
                         Text(learner.displayName).font(.drivyTitle)
@@ -74,7 +79,7 @@ struct SchoolRecordingChoiceView: View {
                     }
                     if let notice = model.notice { documentLinks(notice) }
                 }
-                .drivyPageContent()
+                .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
             }
             .background(DrivyTheme.surface)
             .navigationTitle("Accord GPS").navigationBarTitleDisplayMode(.inline)
@@ -85,6 +90,7 @@ struct SchoolRecordingChoiceView: View {
             .refreshable { await model.load() }
             .sheet(item: $document) { RecordingDocumentView(document: $0) }
         }
+        .drivyFittedSheet()
         .tint(DrivyTheme.accent).foregroundStyle(DrivyTheme.text)
         .interactiveDismissDisabled(model.isBusy)
     }

@@ -354,29 +354,51 @@ private struct SchoolTrainingContent: View {
     }
     private var periodPicker: some View {
         NavigationStack {
-            Form {
-                Section {
-                    Picker("Mois", selection: $selectedMonth) {
-                        Text("Tous les mois").tag(0)
-                        ForEach(1...12, id: \.self) { month in Text(SchoolLessonPeriod.monthName(month)).tag(month) }
+            DrivySheetScrollView {
+                VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                    DrivyRowGroup {
+                        periodField("Mois") {
+                            Picker("Mois", selection: $selectedMonth) {
+                                Text("Tous les mois").tag(0)
+                                ForEach(1...12, id: \.self) { month in Text(SchoolLessonPeriod.monthName(month)).tag(month) }
+                            }
+                        }
+                        periodField("Année") {
+                            Picker("Année", selection: $selectedYear) {
+                                Text("Toutes les années").tag(0)
+                                ForEach(periodYears, id: \.self) { year in Text(String(year)).tag(year) }
+                            }
+                            .disabled(model.isLoadingHistory)
+                        }
                     }
-                    Picker("Année", selection: $selectedYear) {
-                        Text("Toutes les années").tag(0)
-                        ForEach(periodYears, id: \.self) { year in Text(String(year)).tag(year) }
+                    if model.isLoadingHistory { ProgressView("Chargement de l’historique…") }
+                    if let error = model.errorMessage {
+                        SchoolErrorNotice(message: error, retry: { Task { await model.loadHistory() } })
                     }
-                    .disabled(model.isLoadingHistory)
+                    if period.isActive {
+                        Button("Toutes les périodes") { selectedMonth = 0; selectedYear = 0 }
+                            .frame(minHeight: 44)
+                    }
                 }
-                if model.isLoadingHistory { ProgressView("Chargement de l’historique…") }
-                if let error = model.errorMessage {
-                    SchoolErrorNotice(message: error, retry: { Task { await model.loadHistory() } })
-                }
-                if period.isActive { Button("Toutes les périodes") { selectedMonth = 0; selectedYear = 0 } }
+                .drivyPageContent(maxWidth: DrivyLayout.formColumn)
             }
+            .background(DrivyTheme.surface)
             .navigationTitle("Période").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Afficher") { showsPeriod = false } } }
             .task { await model.loadHistory() }
         }
-        .presentationDetents([.medium, .large])
+        .drivyFittedSheet()
+    }
+    private func periodField<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            content().labelsHidden().pickerStyle(.menu)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, DrivySpacing.xs)
     }
     private var periodYears: [Int] {
         var years = Set(model.lessons.compactMap { SchoolLessonPeriod.parts($0)?.year })

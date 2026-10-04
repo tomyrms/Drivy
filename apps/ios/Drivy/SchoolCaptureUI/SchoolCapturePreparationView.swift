@@ -22,7 +22,7 @@ struct SchoolCapturePreparationView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            DrivySheetScrollView {
                 if currentScope == model.scope {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     heading
@@ -55,9 +55,11 @@ struct SchoolCapturePreparationView: View {
                         .font(.subheadline.weight(.semibold))
                     }
                 }
-                .drivyPageContent()
+                .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
                 } else {
                     ContentUnavailableView("Accès à actualiser", systemImage: "lock", description: Text("Tes droits ont changé. Rouvre la préparation depuis ta leçon."))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
                 }
             }
             .background(DrivyTheme.surface)
@@ -95,6 +97,7 @@ struct SchoolCapturePreparationView: View {
             .sheet(item: $startReview) { review in SchoolCaptureStartReviewView(model: model, review: review) }
             .onChange(of: model.captureStarted) { _, started in if started { dismiss() } }
         }
+        .drivyFittedSheet()
         .tint(DrivyTheme.accent)
         .interactiveDismissDisabled(model.isBusy)
     }
@@ -374,18 +377,26 @@ struct SchoolCapturePreparationView: View {
 
     private func resendSheet(_ queued: SchoolCaptureQueuedMutation) -> some View {
         NavigationStack {
-            Form {
-                Section {
+            DrivySheetScrollView {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     Text("Cette reprise conserve le diagnostic déjà sauvegardé. Elle ne prend aucune nouvelle mesure.")
+                        .fixedSize(horizontal: false, vertical: true)
                     Toggle("Je confirme la reprise de cette demande", isOn: $confirmsResend)
+                        .disabled(model.isBusy)
                     Button("Renvoyer la même demande") {
                         Task { await model.resume(queued, verifyFirst: false); resendRoute = nil }
-                    }.disabled(!confirmsResend || !model.mayResume(queued))
+                    }
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .disabled(!confirmsResend || !model.mayResume(queued))
                 }
-                    .drivyFormRows()
-            }.navigationTitle("Reprendre le diagnostic").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { resendRoute = nil } } }
+                .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
+            }
+            .background(DrivyTheme.surface)
+            .navigationTitle("Reprendre le diagnostic").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { resendRoute = nil }.disabled(model.isBusy) } }
         }
+        .drivyFittedSheet()
+        .interactiveDismissDisabled(model.isBusy)
     }
 
     /// A refusal is a normal choice, stated calmly; only an unreadable state asks for attention.
@@ -435,7 +446,7 @@ private struct SchoolCaptureStartReviewView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            DrivySheetScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                         Text(review.learnerName).font(.drivyScreenTitle)
@@ -476,12 +487,14 @@ private struct SchoolCaptureStartReviewView: View {
                     } label: { Label("Démarrer le GPS", systemImage: "location.fill") }
                         .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!acknowledged || !model.mayConfirmStart)
                         .accessibilityIdentifier("capture-start")
-                }.drivyPageContent()
+                }.drivyPageContent(maxWidth: DrivyLayout.compactColumn)
             }.background(DrivyTheme.surface)
                 .navigationTitle("Démarrer le GPS").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { dismiss() }.disabled(model.isBusy) } }
-                .interactiveDismissDisabled(model.isBusy)
-        }.tint(DrivyTheme.accent)
+        }
+        .drivyFittedSheet()
+        .interactiveDismissDisabled(model.isBusy)
+        .tint(DrivyTheme.accent)
     }
 
     private var lessonDate: String {
