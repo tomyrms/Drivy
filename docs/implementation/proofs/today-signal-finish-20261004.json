@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-04",
+  "source": "ffd860cf08450473c09a24bb190f0a38f220c490",
+  "pullRequest": "https://github.com/tomyrms/Drivy/pull/5",
+  "ipa": {
+    "run": "37215218985",
+    "version": "0.7.0",
+    "build": "101",
+    "signed": false,
+    "ipaSHA256": "25ba181f5288a5ff12ca35116e4c22b2a2ba54484399b219c8e75d4ca96bd520"
+  },
+  "nativeBuild": "success",
+  "downloadSHA256Verified": true,
+  "changes": [
+    "Upcoming PLANNED lessons only in Today secondary list, preserving current slot and removing highlighted duplicates",
+    "Inline signal palette on compact map; native presentation on iPad and accessibility text sizes",
+    "Confirmation before lesson finish; neutral handoff through durable completion and report read"
+  ],
+  "review": {
+    "independentSourceReview": "Today filter, finish transitions and signal palette reviewed; no additional concrete P0-P2 found",
+    "diffCheck": "passed",
+    "impeccableLayout": {
+      "result": [],
+      "limit": "Primarily HTML/CSS detector; no native-render qualification"
+    }
+  },
+  "tests": {
+    "addedSwiftTests": 3,
+    "oneTestParameterizedCases": 4,
+    "updatedUIHarnesses": [
+      "FieldFlowTests",
+      "VisualOrientationTests"
+    ],
+    "nativeExecution": "not performed at user request",
+    "newNativeScreenshots": 0
+  },
+  "notQualified": [
+    "New palette rendering and gestures on device",
+    "Small screens, landscape, Dynamic Type and VoiceOver",
+    "Confirmation with and without GPS, failure recovery and report transition on device",
+    "Physical GPS and battery"
+  ],
+  "deployment": "none"
+}

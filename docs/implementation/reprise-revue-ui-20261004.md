@@ -2,7 +2,7 @@
 
 Document de passation. Il permet à une autre session (Codex, Claude) de reprendre ce chantier sans l'historique de la conversation. **Il est tenu à jour à chaque étape : la section « État des lots » fait foi.**
 
-Dernière mise à jour : 4 octobre 2026, après essai de build100. Les huit lots sont intégrés, le logo et les icônes livrés ; les longues campagnes Apple restantes ont été arrêtées à la demande du porteur. Les feuilles natives stables de build100 sont validées par son retour. Correctif en cours : [prochaines leçons, palette Signaler et confirmation de fin](today-signal-finish-20261004.md). Voir [STATUS](STATUS.md) pour la dernière IPA et les limites, [résultats de la revue initiale](native-ui-review-20261004.md) et [icônes](native-icon-signal-review-20261004.md).
+Dernière mise à jour : 4 octobre 2026, après essai de build100. Les huit lots sont intégrés, le logo et les icônes livrés ; les longues campagnes Apple restantes ont été arrêtées à la demande du porteur. Les feuilles natives stables de build100 sont validées par son retour. IPA build101 compilée et livrée : [prochaines leçons, palette Signaler et confirmation de fin](today-signal-finish-20261004.md). Voir [STATUS](STATUS.md) pour la dernière IPA et les limites, [résultats de la revue initiale](native-ui-review-20261004.md) et [icônes](native-icon-signal-review-20261004.md).
 
 ## Pour reprendre (à lire en premier)
 
