@@ -2,7 +2,7 @@
 
 ## 4 octobre 2026 — correction des hauteurs et gestes de feuille
 
-Le retour du porteur sur build99 signale une mauvaise hauteur initiale et des saccades à l’agrandissement. Le composant de mesure automatique est supprimé : dix présentations utilisent désormais des hauteurs natives stables, sans pilotage de la sélection ni recalcul sur le contenu ; popover Signaler iPad fixé à 480 × 560 pt. Contenus compacts et gestes gérés par SwiftUI. Compilation IPA en attente ; fluidité, clavier et accessibilité sur appareil restent à qualifier. Aucune longue campagne native lancée. [Décision et limites](stable-sheets-20261004.md).
+Le retour du porteur sur build99 signale une mauvaise hauteur initiale et des saccades à l’agrandissement. Le composant de mesure automatique est supprimé : dix présentations utilisent désormais des hauteurs natives stables, sans pilotage de la sélection ni recalcul sur le contenu ; popover Signaler iPad fixé à 480 × 560 pt. Contenus compacts et gestes gérés par SwiftUI. **IPA 0.7.0/build100 compilée avec succès** sur `9c1b12a`, [run37213508972](https://github.com/tomyrms/Drivy/actions/runs/37213508972), téléchargée et empreintes vérifiées. Fluidité, clavier et accessibilité sur appareil restent à qualifier. Aucune longue campagne native lancée. [Décision et limites](stable-sheets-20261004.md).
 
 ## 4 octobre 2026 — panneaux compacts et orientation du téléphone
 
