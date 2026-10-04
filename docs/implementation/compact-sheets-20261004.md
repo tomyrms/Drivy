@@ -31,6 +31,8 @@ Deux relectures indépendantes du composant partagé et du panneau Signaler : au
 
 ## Qualification et livraison
 
-Le porteur a demandé de privilégier l’IPA et de ne pas attendre les longues campagnes de tests/captures. Seule la compilation Release Apple de l’IPA est lancée pour cette livraison. Les cinq tests purs ajoutés sur le cap ne sont pas déclarés exécutés. Pas de capture nouvelle ni de rendu simulé présenté comme une capture native.
+Le porteur a demandé de privilégier l’IPA et de ne pas attendre les longues campagnes de tests/captures. La compilation Release Apple de l’IPA [37212556376](https://github.com/tomyrms/Drivy/actions/runs/37212556376) a réussi sur `a2dc49c246a28e5951620fa38fa9934ec4a18b69` : version 0.7.0/build99, non signée, téléchargée et empreinte vérifiée. Aucune campagne native de tests ou captures lancée. Les vérifications générales habituelles du dépôt se déclenchent automatiquement au push. Les cinq tests purs ajoutés sur le cap ne sont pas déclarés exécutés. Pas de capture nouvelle ni de rendu simulé présenté comme une capture native.
 
 À vérifier sur appareil : hauteur réelle après changement d’état, clavier, popover iPad, grands textes, VoiceOver, rotation de la carte à l’arrêt, passage nord/359°, support de téléphone et perturbations magnétiques. Aucune performance, batterie ou qualité GPS physique revendiquée. Aucun déploiement homelab.
+
+[Preuve de livraison](proofs/compact-sheets-20261004.json). IPA à signer et installer par le porteur avec iLoader.

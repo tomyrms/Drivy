@@ -2,7 +2,7 @@
 
 ## 4 octobre 2026 — panneaux compacts et orientation du téléphone
 
-Feuilles ajustées au contenu pour Démarrer, préparation/accord GPS, Signaler, préférences, période et choix d’école. Signaler passe en rangées compactes puis se réduit aux trois appréciations. La carte active reçoit le cap réel du téléphone, sans changer les positions enregistrées ni le replay. Relectures de code terminées ; compilation IPA Apple en cours de lancement. À la demande du porteur, aucune nouvelle longue campagne native/captures. Rendu réel, clavier, iPad, VoiceOver et boussole sur appareil restent à qualifier. [Décision](compact-sheets-20261004.md), [cap de la carte](live-device-heading-20261004.md).
+Feuilles ajustées au contenu pour Démarrer, préparation/accord GPS, Signaler, préférences, période et choix d’école. Signaler passe en rangées compactes puis se réduit aux trois appréciations. La carte active reçoit le cap réel du téléphone, sans changer les positions enregistrées ni le replay. Relectures de code terminées ; **IPA 0.7.0/build99 compilée avec succès** sur `a2dc49c`, [run37212556376](https://github.com/tomyrms/Drivy/actions/runs/37212556376), téléchargée et SHA-256 vérifié. À la demande du porteur, aucune nouvelle longue campagne native/captures. Rendu réel, clavier, iPad, VoiceOver et boussole sur appareil restent à qualifier. [Décision](compact-sheets-20261004.md), [cap de la carte](live-device-heading-20261004.md).
 
 ## 4 octobre 2026 — revue native, icônes et IPA livrée
 
