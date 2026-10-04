@@ -1,5 +1,7 @@
 # Feuilles ajustées au contenu — 4 octobre 2026
 
+> Historique de build99 : le porteur a ensuite signalé des hauteurs incorrectes et des saccades au glissement. Le composant de mesure décrit ci-dessous est retiré ; [la décision active emploie des feuilles natives stables](stable-sheets-20261004.md). La compilation réussie ne qualifiait pas ces interactions.
+
 ## Retour et décision
 
 Le porteur constate que Démarrer une leçon, le choix de l’élève, la préparation GPS, Signaler et plusieurs réglages occupent tout l’écran malgré leur contenu court. Il demande une proposition plus compacte, ainsi que la prise en compte de l’orientation du téléphone sur la carte active.

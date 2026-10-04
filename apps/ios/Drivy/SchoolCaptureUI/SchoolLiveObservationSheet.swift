@@ -21,7 +21,7 @@ struct SchoolLiveObservationSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            DrivySheetScrollView {
+            ScrollView {
                 VStack(spacing: DrivySpacing.l) {
                     if saved {
                         savedFeedback.transition(reduceMotion ? .opacity : .scale(scale: 0.92).combined(with: .opacity))
@@ -38,11 +38,15 @@ struct SchoolLiveObservationSheet: View {
                 .frame(maxWidth: DrivyLayout.compactColumn)
                 .frame(maxWidth: .infinity)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
         }
         .foregroundStyle(DrivyTheme.text)
         .background(DrivyTheme.surface)
         .tint(DrivyTheme.accent)
-        .drivyFittedSheet()
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationSizing(.form)
         .presentationCornerRadius(DrivyRadius.mapPanel + DrivySpacing.xs)
         .presentationBackground(DrivyTheme.surface)
         .interactiveDismissDisabled(saved)

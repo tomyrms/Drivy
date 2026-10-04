@@ -136,12 +136,13 @@ struct SchoolBrowserView: View {
 
 /// School chooser presented from the leading toolbar button of every tab.
 struct SchoolChooserSheet: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var workspace: SchoolWorkspace
     let close: () -> Void
 
     var body: some View {
         NavigationStack {
-            SchoolChooserView(workspace: workspace, onSelect: close, fitsSheet: true)
+            SchoolChooserView(workspace: workspace, onSelect: close)
                 .navigationTitle("Changer d’école")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -149,21 +150,20 @@ struct SchoolChooserSheet: View {
                 }
         }
         .tint(DrivyTheme.accent)
-        .drivyFittedSheet()
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationSizing(.form)
     }
 }
 
 struct SchoolChooserView: View {
     @Bindable var workspace: SchoolWorkspace
     var onSelect: (() -> Void)? = nil
-    var fitsSheet = false
 
     var body: some View {
-        Group {
-            if fitsSheet { DrivySheetScrollView { choices } }
-            else { ScrollView { choices } }
-        }
-        .background(DrivyTheme.surface)
+        ScrollView { choices }
+            .scrollBounceBehavior(.basedOnSize)
+            .background(DrivyTheme.surface)
     }
 
     private var choices: some View {

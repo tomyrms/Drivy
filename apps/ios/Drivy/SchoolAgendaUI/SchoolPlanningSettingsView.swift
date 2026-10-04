@@ -140,7 +140,7 @@ struct SchoolPlanningSettingsView: View {
         _model = State(initialValue: SchoolPlanningSettingsWorkspace(scope: scope, client: client, outbox: outbox))
     }
     var body: some View {
-        DrivySheetScrollView {
+        ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.m) {
                 if model.saved == nil && (model.isLoading || model.errorMessage == nil) {
                     DrivySkeletonRows(count: 2).drivySkeleton("Chargement des préférences…")
@@ -199,6 +199,8 @@ struct SchoolPlanningSettingsView: View {
             }
             .drivyPageContent(maxWidth: SchoolFormLayout.maxWidth)
         }
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDismissesKeyboard(.interactively)
         .background(DrivyTheme.surface)
         .navigationTitle("Préférences de leçon").navigationBarTitleDisplayMode(.inline)
         .toolbar {

@@ -242,7 +242,7 @@ struct SchoolStartNowView: View {
 
     var body: some View {
         NavigationStack {
-            DrivySheetScrollView {
+            ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     if let pending = model.pending {
                         DrivyPendingRequest(message: model.errorMessage ?? "Une demande attend sa confirmation.", reference: pending.id,
@@ -262,12 +262,16 @@ struct SchoolStartNowView: View {
                     primaryAction
                 }.drivyPageContent(maxWidth: DrivyLayout.compactColumn)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
             .background(DrivyTheme.canvas)
             .navigationTitle("Démarrer une leçon").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
             .task { if model.learners.isEmpty { await model.load() } }
         }
-        .drivyFittedSheet()
+        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationSizing(.form)
         .interactiveDismissDisabled(model.isBusy)
         .tint(DrivyTheme.accent)
     }

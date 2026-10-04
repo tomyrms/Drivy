@@ -306,7 +306,8 @@ struct SchoolCaptureLiveView: View {
         .accessibilityIdentifier("capture-signal-observation")
         .popover(item: $observationMoment, attachmentAnchor: .rect(.bounds)) { moment in
             SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant, anchor: moment.anchor)
-                .frame(width: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.width : nil)
+                .frame(width: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.width : nil,
+                       height: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.height : nil)
                 .presentationCompactAdaptation(.sheet)
         }
     }

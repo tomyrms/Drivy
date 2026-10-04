@@ -11,6 +11,7 @@ struct SchoolRecordingChoiceEntryView: View {
     var store: SQLCipherSchoolCaptureStore? = nil
     @State private var model: SchoolRecordingChoiceWorkspace?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var currentScope: SchoolCommandScope? {
         guard let person = schoolWorkspace.person, let membership = schoolWorkspace.membership else { return nil }
@@ -27,15 +28,19 @@ struct SchoolRecordingChoiceEntryView: View {
                 SchoolRecordingChoiceView(model: model)
             } else {
                 NavigationStack {
-                    DrivySheetScrollView {
+                    ScrollView {
                         ContentUnavailableView("Choix GPS de la leçon", systemImage: "location.slash",
                             description: Text(currentScope == nil ? "Ouvre une leçon de ton école pour retrouver ce choix." : "Vérification de la leçon…"))
                             .fixedSize(horizontal: false, vertical: true)
                             .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
                     }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .scrollDismissesKeyboard(.interactively)
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
                 }
-                .drivyFittedSheet()
+                .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationSizing(.form)
             }
         }
         .task(id: scopeKey) {
@@ -55,7 +60,7 @@ struct SchoolRecordingChoiceView: View {
 
     var body: some View {
         NavigationStack {
-            DrivySheetScrollView {
+            ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     if let learner = model.learner {
                         Text(learner.displayName).font(.drivyTitle)
@@ -81,6 +86,8 @@ struct SchoolRecordingChoiceView: View {
                 }
                 .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
             .background(DrivyTheme.surface)
             .navigationTitle("Accord GPS").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -90,7 +97,9 @@ struct SchoolRecordingChoiceView: View {
             .refreshable { await model.load() }
             .sheet(item: $document) { RecordingDocumentView(document: $0) }
         }
-        .drivyFittedSheet()
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationSizing(.form)
         .tint(DrivyTheme.accent).foregroundStyle(DrivyTheme.text)
         .interactiveDismissDisabled(model.isBusy)
     }

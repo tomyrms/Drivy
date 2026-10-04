@@ -5,6 +5,7 @@ struct SchoolCapturePreparationView: View {
     @Bindable var model: SchoolCapturePreparationWorkspace
     @Bindable var schoolWorkspace: SchoolWorkspace
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var choiceRoute: ChoiceRoute?
     @State private var resendRoute: SchoolCaptureQueuedMutation?
     @State private var confirmsResend = false
@@ -22,7 +23,7 @@ struct SchoolCapturePreparationView: View {
 
     var body: some View {
         NavigationStack {
-            DrivySheetScrollView {
+            ScrollView {
                 if currentScope == model.scope {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     heading
@@ -62,6 +63,8 @@ struct SchoolCapturePreparationView: View {
                         .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
                 }
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
             .background(DrivyTheme.surface)
             .navigationTitle("Démarrer le trajet").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -97,7 +100,9 @@ struct SchoolCapturePreparationView: View {
             .sheet(item: $startReview) { review in SchoolCaptureStartReviewView(model: model, review: review) }
             .onChange(of: model.captureStarted) { _, started in if started { dismiss() } }
         }
-        .drivyFittedSheet()
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationSizing(.form)
         .tint(DrivyTheme.accent)
         .interactiveDismissDisabled(model.isBusy)
     }
@@ -377,7 +382,7 @@ struct SchoolCapturePreparationView: View {
 
     private func resendSheet(_ queued: SchoolCaptureQueuedMutation) -> some View {
         NavigationStack {
-            DrivySheetScrollView {
+            ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     Text("Cette reprise conserve le diagnostic déjà sauvegardé. Elle ne prend aucune nouvelle mesure.")
                         .fixedSize(horizontal: false, vertical: true)
@@ -391,11 +396,15 @@ struct SchoolCapturePreparationView: View {
                 }
                 .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
             .background(DrivyTheme.surface)
             .navigationTitle("Reprendre le diagnostic").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { resendRoute = nil }.disabled(model.isBusy) } }
         }
-        .drivyFittedSheet()
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationSizing(.form)
         .interactiveDismissDisabled(model.isBusy)
     }
 
@@ -443,10 +452,11 @@ private struct SchoolCaptureStartReviewView: View {
     let review: SchoolCaptureStartReview
     @State private var acknowledged = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationStack {
-            DrivySheetScrollView {
+            ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                         Text(review.learnerName).font(.drivyScreenTitle)
@@ -488,11 +498,16 @@ private struct SchoolCaptureStartReviewView: View {
                         .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!acknowledged || !model.mayConfirmStart)
                         .accessibilityIdentifier("capture-start")
                 }.drivyPageContent(maxWidth: DrivyLayout.compactColumn)
-            }.background(DrivyTheme.surface)
-                .navigationTitle("Démarrer le GPS").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { dismiss() }.disabled(model.isBusy) } }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
+            .background(DrivyTheme.surface)
+            .navigationTitle("Démarrer le GPS").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { dismiss() }.disabled(model.isBusy) } }
         }
-        .drivyFittedSheet()
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationSizing(.form)
         .interactiveDismissDisabled(model.isBusy)
         .tint(DrivyTheme.accent)
     }

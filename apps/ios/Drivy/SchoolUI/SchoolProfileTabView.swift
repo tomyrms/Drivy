@@ -9,6 +9,7 @@ struct SchoolProfileTabView: View {
     var captureController: SchoolCaptureSessionController? = nil
     var chooseSchool: (() -> Void)? = nil
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var planningSettings: PlanningSettingsPresentation?
 
     private var scopeKey: String {
@@ -33,7 +34,9 @@ struct SchoolProfileTabView: View {
                 SchoolPlanningSettingsView(scope: presentation.scope, client: presentation.client)
             }
             .tint(DrivyTheme.accent)
-            .drivyFittedSheet()
+            .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+            .presentationDragIndicator(.visible)
+            .presentationSizing(.form)
         }
         .onChange(of: scopeKey) { _, _ in planningSettings = nil }
     }

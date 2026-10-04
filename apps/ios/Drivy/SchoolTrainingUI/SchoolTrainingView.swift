@@ -354,7 +354,7 @@ private struct SchoolTrainingContent: View {
     }
     private var periodPicker: some View {
         NavigationStack {
-            DrivySheetScrollView {
+            ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     DrivyRowGroup {
                         periodField("Mois") {
@@ -382,12 +382,16 @@ private struct SchoolTrainingContent: View {
                 }
                 .drivyPageContent(maxWidth: DrivyLayout.formColumn)
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
             .background(DrivyTheme.surface)
             .navigationTitle("Période").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Afficher") { showsPeriod = false } } }
             .task { await model.loadHistory() }
         }
-        .drivyFittedSheet()
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationSizing(.form)
     }
     private func periodField<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
