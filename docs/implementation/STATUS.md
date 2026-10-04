@@ -2,7 +2,8 @@
 
 ## 4 octobre 2026 — revue UI/UX native en cours
 
-Chantier ouvert sur demande du porteur : page Aujourd’hui, squelettes de chargement, annulation discrète pendant la leçon, mentions Apple Plans, fiabilité du tracé GPS et revue des fonctionnalités une par une avec Impeccable. Huit lots travaillent en parallèle sur des fichiers disjoints. **Rien n’est compilé, testé ni poussé à ce stade.** L’état de chaque lot, les décisions et la marche à suivre pour reprendre sont dans [le document de reprise](reprise-revue-ui-20261004.md).
+Huit lots implémentés et relus : Aujourd’hui, squelettes, navigation de la leçon, filtre GPS partagé, agenda/planification, dossiers/progression, bilan/observations et compte/invitations. Les corrections conservent les mesures originales, les droits au serveur et les commandes durables. Relecture indépendante des erreurs et des conflits en cours de clôture. **Qualification Apple en préparation : aucun résultat Swift ni physique annoncé à ce stade.** [État détaillé et reprise](reprise-revue-ui-20261004.md). Aucun déploiement du homelab.
+
 
 ## 30 septembre 2026 — diagnostic de la campagne de captures iOS
 

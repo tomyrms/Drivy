@@ -2,7 +2,7 @@
 
 Document de passation. Il permet à une autre session (Codex, Claude) de reprendre ce chantier sans l'historique de la conversation. **Il est tenu à jour à chaque étape : la section « État des lots » fait foi.**
 
-Dernière mise à jour : 4 octobre 2026, lots lancés, aucun terminé.
+Dernière mise à jour : 4 octobre 2026, huit lots implémentés et relus. Qualification Apple en préparation ; revue indépendante des accès et des conflits intégrée avant push.
 
 ## Pour reprendre (à lire en premier)
 
@@ -67,14 +67,14 @@ Chaque lot possède ses fichiers ; personne d'autre ne les modifie. Les signatur
 
 | Lot | Sujet | Fichiers possédés | État |
 |---|---|---|---|
-| 1 | Composant de squelettes ; compte, onglet Profil, liste des trajets | `UI/DrivySkeleton.swift`, `UI/DrivyDesignSystemGallery.swift`, `UI/DrivyComponents+Accueil.swift`, `SchoolUI/SchoolRootView.swift`, `SchoolUI/SchoolAccountComponents.swift`, `SchoolTripsUI/*`, tests `SchoolTripsTests`, `SchoolPresentationIdleTests` | en cours |
-| 2 | Page « Aujourd'hui », « Démarrer une leçon » | `SchoolUI/SchoolTodayView.swift`, `SchoolAgendaUI/SchoolStartNowView.swift`, tests `SchoolStartNowClientTests` | en cours |
-| 3 | Leçon en cours : actions, navigation, mentions légales ; onglets | `SchoolCaptureUI/SchoolCaptureLiveView.swift`, `SchoolLiveObservationSheet.swift`, `SchoolCaptureLiveObservations.swift`, `SchoolObservationEmblem.swift`, `UI/DrivyComponents+Seance.swift`, `SchoolUI/SchoolHomeView.swift`, tests `FieldFlowTests`, `SchoolLiveObservationRecorderTests` | en cours |
-| 4 | Fiabilité du tracé GPS ; écran de replay | `SchoolCaptureUI/SchoolCaptureLiveMap.swift`, `SchoolMapCourse.swift`, `SchoolCaptureReplayView.swift`, `SchoolCaptureReplayWorkspace.swift`, `SchoolCaptureCore/*`, `SchoolCaptureAPI/*`, tests `SchoolMapCourseTests`, `SchoolCaptureLifecycleTests`, `SchoolCaptureInteropTests`, `SchoolReplayFormattingTests`, `DrivyTimelineMarkGroupTests` | en cours |
-| 5 | Agenda et planification | `SchoolAgendaUI/SchoolAgendaView.swift`, `SchoolPlanningView.swift`, `SchoolPlanningWorkspace.swift`, `SchoolPlanningSettingsView.swift`, `UI/DrivyComponents+Agenda.swift`, tests `SchoolPlanningDefaultsTests` | en cours |
-| 6 | Élèves, dossier, formation, progression (moniteur et élève) | `SchoolUI/SchoolBrowserView.swift`, `SchoolUI/SchoolWorkspace.swift`, `SchoolTrainingUI/*`, tests `SchoolDossierTests`, `SchoolTrainingRefreshTests`, `SchoolWorkspaceTests` | en cours |
-| 7 | Fiche de leçon, bilan, observations, préparation du trajet | `SchoolLessonReportUI/*`, `SchoolObservationUI/*`, `SchoolCaptureUI/SchoolCapturePreparation*.swift`, `SchoolRecordingChoice*.swift`, tests `SchoolLessonFinishTests`, `SchoolLessonHubTests` | en cours |
-| 8 | Invitations, entrée dans une école, profil, accueil guidé | `SchoolInvitationsUI/*`, `SchoolJoinUI/*`, `SchoolProfileUI/*`, `UI/DrivyComponents+Ecole.swift`, tests `SchoolInvitation*Tests`, `SchoolProfile*Tests` | en cours |
+| 1 | Composant de squelettes ; compte, onglet Profil, liste des trajets | `UI/DrivySkeleton.swift`, `UI/DrivyDesignSystemGallery.swift`, `UI/DrivyComponents+Accueil.swift`, `SchoolUI/SchoolRootView.swift`, `SchoolUI/SchoolAccountComponents.swift`, `SchoolTripsUI/*`, tests `SchoolTripsTests`, `SchoolPresentationIdleTests` | implémenté, qualification Apple en attente |
+| 2 | Page « Aujourd'hui », « Démarrer une leçon » | `SchoolUI/SchoolTodayView.swift`, `SchoolAgendaUI/SchoolStartNowView.swift`, tests `SchoolStartNowClientTests` | implémenté, qualification Apple en attente |
+| 3 | Leçon en cours : actions, navigation, mentions légales ; onglets | `SchoolCaptureUI/SchoolCaptureLiveView.swift`, `SchoolLiveObservationSheet.swift`, `SchoolCaptureLiveObservations.swift`, `SchoolObservationEmblem.swift`, `UI/DrivyComponents+Seance.swift`, `SchoolUI/SchoolHomeView.swift`, tests `FieldFlowTests`, `SchoolLiveObservationRecorderTests` | implémenté, qualification Apple en attente |
+| 4 | Fiabilité du tracé GPS ; écran de replay | `SchoolCaptureUI/SchoolCaptureLiveMap.swift`, `SchoolMapCourse.swift`, `SchoolCaptureReplayView.swift`, `SchoolCaptureReplayWorkspace.swift`, `SchoolCaptureCore/*`, `SchoolCaptureAPI/*`, tests `SchoolMapCourseTests`, `SchoolCaptureLifecycleTests`, `SchoolCaptureInteropTests`, `SchoolReplayFormattingTests`, `DrivyTimelineMarkGroupTests` | implémenté, qualification Apple en attente |
+| 5 | Agenda et planification | `SchoolAgendaUI/SchoolAgendaView.swift`, `SchoolPlanningView.swift`, `SchoolPlanningWorkspace.swift`, `SchoolPlanningSettingsView.swift`, `UI/DrivyComponents+Agenda.swift`, tests `SchoolPlanningDefaultsTests` | implémenté, qualification Apple en attente |
+| 6 | Élèves, dossier, formation, progression (moniteur et élève) | `SchoolUI/SchoolBrowserView.swift`, `SchoolUI/SchoolWorkspace.swift`, `SchoolTrainingUI/*`, tests `SchoolDossierTests`, `SchoolTrainingRefreshTests`, `SchoolWorkspaceTests` | implémenté, qualification Apple en attente |
+| 7 | Fiche de leçon, bilan, observations, préparation du trajet | `SchoolLessonReportUI/*`, `SchoolObservationUI/*`, `SchoolCaptureUI/SchoolCapturePreparation*.swift`, `SchoolRecordingChoice*.swift`, tests `SchoolLessonFinishTests`, `SchoolLessonHubTests` | implémenté, qualification Apple en attente |
+| 8 | Invitations, entrée dans une école, profil, accueil guidé | `SchoolInvitationsUI/*`, `SchoolJoinUI/*`, `SchoolProfileUI/*`, `UI/DrivyComponents+Ecole.swift`, tests `SchoolInvitation*Tests`, `SchoolProfile*Tests` | implémenté, qualification Apple en attente |
 
 Chemins relatifs à `apps/ios/Drivy/` (tests : `apps/ios/DrivyTests/`, `apps/ios/DrivyUITests/`). Fichiers partagés sans propriétaire, à ne modifier qu'à l'intégration : `UI/DrivyComponents.swift`, `UI/DrivyTheme.swift`, `UI/*VisualReview.swift`, `DrivyTests/SchoolPresentationTests.swift`.
 
@@ -119,3 +119,7 @@ Les skills sont des dossiers `.claude/skills/<nom>/` : lire `SKILL.md` puis ses 
 ## Journal
 
 - 4 octobre 2026 : diagnostic par lecture, extraction de `SchoolCaptureLiveMap.swift`, huit lots lancés en parallèle. Rien n'est compilé ni testé.
+
+- Reprise active : trois agents travaillent sur 2/5 puis 8, 4, 6/7. Intégration 1/3 par l’agent principal. Squelettes communs repris ; erreur école visible dans Trajets ; annulation déplacée dans le menu ; onglets conservés et contrôles carte séparés du dock. Aucune compilation Swift locale. Nouveau harnais `skeletons` et fixture live dans les vrais onglets pour les captures Apple. Les tests Python de capture ne sont pas exécutables ici via le bash WSL absent ; la CI Linux les exécutera.
+
+- Intégration : lots 1–8 implémentés et committés séparément. Relecture A : disponibilités après relecture, conflit de préférences, explications ciblées de validation corrigés ; purge du démarrage après refus d’accès en finition. Relecture B indépendante en cours. Syntaxe Bash vérifiée avec Git Bash ; aucune compilation Swift locale.
