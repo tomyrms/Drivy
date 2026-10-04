@@ -2,7 +2,7 @@
 
 ## 4 octobre 2026 — dossier par pages et corrections tarif/Signaler
 
-Le tarif et le solde sont affichés directement dans la fiche de leçon, sans seconde fenêtre. Signaler gagne 40 pt et conserve trois colonnes sur petit iPhone. Le dossier ouvre une carte d’informations de l’élève, puis des pages séparées Leçons et Progression avec retour natif ; coordonnées et champs personnels suivent les droits serveur existants. Samaritains/sensibilisation restent non implémentés, sans statut inventé. Le rapprochement générique des commandes ne peut plus acquitter une annulation de signalement avec un reçu de création. Sources relues, contrôles locaux ciblés effectués ; IPA rapide en préparation, tests Apple et rendu physique non exécutés. [Décision et limites](dossier-pages-tarif-signaler-20261004.md).
+Le tarif et le solde sont affichés directement dans la fiche de leçon, sans seconde fenêtre. Signaler gagne 40 pt et conserve trois colonnes sur petit iPhone. Le dossier ouvre une carte d’informations de l’élève, puis des pages séparées Leçons et Progression avec retour natif ; coordonnées et champs personnels suivent les droits serveur existants. Samaritains/sensibilisation restent non implémentés, sans statut inventé. Le rapprochement générique des commandes ne peut plus acquitter une annulation de signalement avec un reçu de création. Sources relues et contrôles généraux réussis. **IPA 0.7.0/build103 compilée et téléchargée**, source `9603eb3` ([run37219639586](https://github.com/tomyrms/Drivy/actions/runs/37219639586)), archive et empreintes vérifiées. Tests Apple et rendu physique non exécutés à cette étape. [Décision et limites](dossier-pages-tarif-signaler-20261004.md).
 
 ## 4 octobre 2026 — retours de signalement, disponibilité et accès directs
 
