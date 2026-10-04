@@ -107,6 +107,7 @@ struct DrivyLessonRow: View {
     var details: [String] = []
     var badge: DrivyStatusBadge? = nil
     var showsChevron = true
+    var isSecondary = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -116,7 +117,7 @@ struct DrivyLessonRow: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     Text(end.map { "\(start) – \($0)" } ?? start)
                         .font(.headline.monospacedDigit())
-                        .foregroundStyle(DrivyTheme.text)
+                        .foregroundStyle(isSecondary ? DrivyTheme.muted : DrivyTheme.text)
                     summary
                     if let badge { badge }
                 }
@@ -157,8 +158,8 @@ struct DrivyLessonRow: View {
     private var summary: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             Text(title)
-                .font(.headline)
-                .foregroundStyle(DrivyTheme.text)
+                .font(isSecondary ? .body : .headline)
+                .foregroundStyle(isSecondary ? DrivyTheme.muted : DrivyTheme.text)
             ForEach(Array(details.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.enumerated()), id: \.offset) { _, line in
                 Text(line)
                     .font(.subheadline)

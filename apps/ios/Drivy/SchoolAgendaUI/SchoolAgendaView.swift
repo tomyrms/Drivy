@@ -39,7 +39,7 @@ struct SchoolAgendaView: View {
         guard loadedScope == scopeKey else { return [] }
         return dayIndex[calendar.startOfDay(for: selectedDate)] ?? []
     }
-    private var scopeKey: String { "\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(weekStart.timeIntervalSince1970):\(instructorFilter?.uuidString ?? "all")" }
+    private var scopeKey: String { "\(identityScope):\(workspace.membership?.schoolId.uuidString ?? ""):\(weekStart.timeIntervalSince1970):\(instructorFilter?.uuidString ?? "all")" }
     private var dateTitle: String {
         if calendar.isDateInToday(selectedDate) { return "Aujourd’hui" }
         return SchoolDateFormat.template("EEEEdMMMM", selectedDate, zone: calendar.timeZone.identifier).capitalizedFirst
@@ -135,23 +135,26 @@ struct SchoolAgendaView: View {
     @ViewBuilder private var dayContent: some View {
         if workspace.membership == nil {
             ContentUnavailableView("Choisis ton école", systemImage: "building.2", description: Text("Ton agenda s’affiche une fois l’école choisie."))
-        } else if isLoading || (loadedScope != scopeKey && error == nil) {
-            DrivyLoadingState(title: "Chargement de l’agenda…")
-        } else if let error {
-            SchoolErrorNotice(message: error, retry: { Task { await loadWeek() } })
-        } else if dailyLessons.isEmpty {
-            DrivyEmptyState(title: "Aucune leçon ce jour", message: "",
-                symbol: "calendar", actionTitle: mayPlan ? "Planifier une leçon" : "Voir le jour suivant") {
-                if mayPlan { planningModel = newPlanningModel() }
-                else if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
-            }
         } else {
-            LazyVStack(spacing: 0) {
-                ForEach(dailyLessons) { lesson in
-                    Button { selectedLesson = lesson } label: { lessonRow(lesson) }
-                        .buttonStyle(DrivyRowButtonStyle())
-                        .accessibilityHint("Ouvre la leçon")
-                    Divider().overlay(DrivyTheme.border)
+            if let error {
+                SchoolErrorNotice(message: error, retry: { Task { await loadWeek(keepingCurrent: true) } })
+            }
+            if loadedScope != scopeKey && error == nil {
+                DrivySkeletonRows(count: 3, leading: .time).drivySkeleton("Chargement de l’agenda…")
+            } else if loadedScope == scopeKey && dailyLessons.isEmpty {
+                DrivyEmptyState(title: "Aucune leçon ce jour", message: "",
+                    symbol: "calendar", actionTitle: mayPlan ? "Planifier une leçon" : "Voir le jour suivant") {
+                    if mayPlan { planningModel = newPlanningModel() }
+                    else if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { selectedDate = next }
+                }
+            } else if loadedScope == scopeKey {
+                LazyVStack(spacing: 0) {
+                    ForEach(dailyLessons) { lesson in
+                        Button { selectedLesson = lesson } label: { lessonRow(lesson) }
+                            .buttonStyle(DrivyRowButtonStyle())
+                            .accessibilityHint("Ouvre la leçon")
+                        Divider().overlay(DrivyTheme.border)
+                    }
                 }
             }
         }
@@ -332,7 +335,12 @@ struct SchoolAgendaView: View {
             dayIndex = Dictionary(grouping: all.filter { $0.startsAt != nil }) { calendar.startOfDay(for: $0.startsAt!) }
                 .mapValues { $0.sorted { $0.plannedStart < $1.plannedStart } }
         } catch {
-            guard !Task.isCancelled, requestID == id else { return }
+            guard !Task.isCancelled, requestID == id, scopeKey == scope else { return }
+            switch error as? SchoolAgendaFailure {
+            case .authentication, .forbidden:
+                lessons = []; dayIndex = [:]; loadedScope = nil; selectedLesson = nil
+            default: break
+            }
             self.error = (error as? LocalizedError)?.errorDescription ?? "L’agenda n’a pas pu être chargé."
         }
     }

@@ -14,6 +14,7 @@ import Foundation
     private(set) var successMessage: String?
     private(set) var pending: PendingSchoolCommand?
     private(set) var storageAvailable = false
+    private(set) var contextCurrent = false
     var trainingCategoryCode = ""
     var serviceProductKey = ""
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
@@ -29,7 +30,7 @@ import Foundation
         trainingCategoryCode != (saved?.trainingCategoryCode ?? "") || serviceProductKey != (saved?.serviceProductKey ?? "")
     }
     var canSave: Bool {
-        saved != nil && storageAvailable && !isBusy && !isLoading && pending == nil
+        saved != nil && contextCurrent && storageAvailable && !isBusy && !isLoading && pending == nil
             && (trainingCategoryCode.isEmpty || categories.contains(trainingCategoryCode))
             && (serviceProductKey.isEmpty || availableProducts.contains { $0.productKey == serviceProductKey })
             && hasChanges
@@ -37,8 +38,9 @@ import Foundation
     var canRetry: Bool { pending?.kind == .savePlanningDefaults && pending?.scope == scope && !isBusy && !isLoading }
 
     func load() async {
-        guard !isBusy else { return }
-        isLoading = true; errorMessage = nil; storageAvailable = false
+        guard !isBusy, !isLoading else { return }
+        let preservingEdits = saved != nil && hasChanges
+        isLoading = true; errorMessage = nil; storageAvailable = false; contextCurrent = false
         defer { isLoading = false }
         do {
             pending = try outbox.pending(for: scope); storageAvailable = true
@@ -61,9 +63,15 @@ import Foundation
                     && (product.durationMinutes ?? 0) > 0 && product.validFrom <= date && (product.validUntil.map { $0 >= date } ?? true)
                     && terms.contains { $0.id == product.termsVersionId && $0.approved && $0.validFrom <= date && ($0.validUntil.map { $0 >= date } ?? true) }
             }
-            saved = current; trainingCategoryCode = current.trainingCategoryCode ?? ""; serviceProductKey = current.serviceProductKey ?? ""
+            saved = current; contextCurrent = true
+            if !preservingEdits {
+                trainingCategoryCode = current.trainingCategoryCode ?? ""; serviceProductKey = current.serviceProductKey ?? ""
+            }
         } catch {
-            saved = nil
+            if error as? SchoolPlanningFailure == .forbidden || error as? SchoolPlanningFailure == .unauthorized
+                || error as? SchoolAPIError == .forbidden || error as? SchoolAPIError == .unauthorized {
+                saved = nil; offerings = []; products = []; trainingCategoryCode = ""; serviceProductKey = ""
+            }
             if !(error is CancellationError) { errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription }
         }
     }
@@ -119,7 +127,9 @@ struct SchoolPlanningSettingsView: View {
     }
     var body: some View {
         Form {
-            if model.isLoading { Section { DrivyLoadingState(title: "Chargement des préférences…") }.drivyFormRows() }
+            if model.saved == nil && (model.isLoading || model.errorMessage == nil) {
+                Section { DrivySkeletonRows(count: 2).drivySkeleton("Chargement des préférences…") }.drivyFormRows()
+            }
             if let error = model.errorMessage {
                 Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }.drivyFormRows()
             }

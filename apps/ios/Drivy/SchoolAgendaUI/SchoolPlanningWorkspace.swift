@@ -111,11 +111,13 @@ struct SchoolPlanningInstructor: Identifiable {
     var endsAt: Date { startsAt.addingTimeInterval(TimeInterval(duration * 60)) }
     /// The API trims the value then applies JavaScript's 500 UTF-16 code-unit limit.
     var meetingPointTooLong: Bool { meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count > 500 }
+    var reasonTooLong: Bool { reason.utf16.count > 1000 }
     var validBooking: Bool {
-        guard canMutate, trainingID != nil, let instructorID, assignedInstructors.contains(where: { $0.id == instructorID }),
+        guard canMutate, let training = selectedTraining, training.learnerId == learnerID,
+              learners.contains(where: { $0.id == learnerID }), let instructorID, assignedInstructors.contains(where: { $0.id == instructorID }),
               !meetingPointTooLong, (1...480).contains(duration), (0...240).contains(bufferMinutes), startsAt > Date() else { return false }
         if let originalLesson {
-            guard originalLesson.status == "PLANNED", agreementConfirmed, reason.count <= 1000 else { return false }
+            guard originalLesson.status == "PLANNED", agreementConfirmed, !reasonTooLong else { return false }
             if !changesCommercialTerms { return true }
             guard !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         }
@@ -175,30 +177,43 @@ struct SchoolPlanningInstructor: Identifiable {
             self.instructors = instructors; self.learners = learners.filter { $0.archivedAt == nil }
             originalLesson = refreshedLesson; agreementConfirmed = false
             needsReload = false; isLoading = false; errorMessage = storageError
-            if let learnerID { await selectLearner(learnerID) }
+            if let learnerID, self.learners.contains(where: { $0.id == learnerID }) { await selectLearner(learnerID) }
+            else {
+                learnerID = nil; trainingID = nil; trainings = []; assignments = []; instructorID = nil; productID = nil
+            }
         } catch { if request == generation { fail(error) } }
     }
     func selectLearner(_ id: UUID) async {
         guard !invalidated, !isBusy else { return }
         selectionGeneration = UUID(); let request = selectionGeneration
         guard learners.contains(where: { $0.id == id }) else { return }
-        learnerID = id; trainings = []; assignments = []; productID = nil; termsAccepted = false
+        let keepsSelection = learnerID == id
+        let previousTrainingID = keepsSelection ? trainingID : nil
+        let previousProductID = keepsSelection ? productID : nil
+        learnerID = id; assignments = []; productID = nil; termsAccepted = false
+        if !keepsSelection { trainings = []; instructorID = nil }
         if originalLesson == nil { trainingID = nil }
         isLoading = true
         do {
             let trainings: [SchoolTraining] = try await client.records(scope.schoolID, path: ["trainings"], query: [URLQueryItem(name: "learnerId", value: id.uuidString)])
             guard request == selectionGeneration, !invalidated, !Task.isCancelled else { return }
-            self.trainings = trainings.filter { $0.status == "ACTIVE" || $0.id == originalLesson?.trainingId }
+            self.trainings = trainings.filter { $0.learnerId == id && ($0.status == "ACTIVE" || $0.id == originalLesson?.trainingId) }
             isLoading = false
-            if originalLesson == nil { trainingID = defaults?.trainingID(in: self.trainings) }
-            if let trainingID { await selectTraining(trainingID) }
+            if originalLesson == nil {
+                trainingID = self.trainings.contains(where: { $0.id == previousTrainingID }) ? previousTrainingID : defaults?.trainingID(in: self.trainings)
+            }
+            if let trainingID {
+                if trainingID == previousTrainingID { productID = previousProductID }
+                await selectTraining(trainingID)
+            }
         } catch { guard request == selectionGeneration else { return }; isLoading = false; fail(error) }
     }
     func selectTraining(_ id: UUID) async {
         guard !invalidated, !isBusy else { return }
         guard trainings.contains(where: { $0.id == id }) else { return }
         selectionGeneration = UUID(); let request = selectionGeneration
-        trainingID = id; assignments = []; productID = nil; termsAccepted = false; isLoading = true
+        if trainingID != id { productID = nil }
+        trainingID = id; assignments = []; termsAccepted = false; isLoading = true
         do {
             let records: [SchoolAssignment] = try await client.records(scope.schoolID, path: ["trainings", id.uuidString, "assignments"])
             guard request == selectionGeneration, !invalidated, !Task.isCancelled else { return }
@@ -272,7 +287,7 @@ struct SchoolPlanningInstructor: Identifiable {
         return await submit(.createLesson, body: body, routeID: trainingID)
     }
     func cancel() async -> Bool {
-        guard let lesson = originalLesson, lesson.status == "PLANNED", reason.count <= 1000,
+        guard let lesson = originalLesson, lesson.status == "PLANNED", !reasonTooLong,
               ["LEARNER_REQUEST", "INSTRUCTOR_UNAVAILABLE", "SCHOOL_CLOSURE", "OTHER"].contains(cancellationReason) else { return false }
         return await submit(.cancelLesson, body: ["reasonCode": cancellationReason, "comment": reason], resourceID: lesson.id, version: lesson.version)
     }

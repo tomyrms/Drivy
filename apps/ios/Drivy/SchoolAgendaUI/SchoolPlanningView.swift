@@ -14,7 +14,7 @@ struct SchoolPlanningView: View {
         NavigationStack {
             Form {
                 SchoolPlanningFeedback(model: model)
-                if !model.isLoading && model.school != nil {
+                if model.school != nil {
                     if cancelling { cancellationFields }
                     else {
                         bookingFields
@@ -31,7 +31,7 @@ struct SchoolPlanningView: View {
             .scrollDismissesKeyboard(.interactively)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !typeSize.isAccessibilitySize && !cancelling && !model.isLoading && model.school != nil { bookingActionBar }
+                if !typeSize.isAccessibilitySize && !cancelling && model.school != nil { bookingActionBar }
             }
             .environment(\.timeZone, TimeZone(identifier: model.timeZone) ?? .current)
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
@@ -63,7 +63,7 @@ struct SchoolPlanningView: View {
                     Text("Choisir un élève").tag(nil as UUID?)
                     ForEach(model.learners) { learner in Text(learner.displayName).tag(Optional(learner.id)) }
                 }.disabled(!model.canMutate)
-                if model.learners.isEmpty { formNote("Aucun dossier d’élève actif n’est accessible avec ton rôle.") }
+                if model.learners.isEmpty && !model.isLoading { formNote("Aucun dossier d’élève actif n’est accessible avec ton rôle.") }
                 if model.learnerID != nil {
                     Picker("Formation", selection: Binding(get: { model.trainingID }, set: { id in
                         if let id { Task { await model.selectTraining(id) } }
@@ -71,7 +71,11 @@ struct SchoolPlanningView: View {
                         Text("Choisir une formation").tag(nil as UUID?)
                         ForEach(model.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
                     }.disabled(!model.canMutate)
-                    if model.trainings.isEmpty { formNote("Aucune formation active. L’administration peut en ouvrir une depuis le dossier de cet élève.") }
+                    if model.isLoading && model.trainings.isEmpty {
+                        DrivySkeletonRow().drivySkeleton("Chargement de la formation…")
+                    } else if model.trainings.isEmpty {
+                        formNote("Aucune formation active. L’administration peut en ouvrir une depuis le dossier de cet élève.")
+                    }
                 }
             } else {
                 LabeledContent("Élève") {
@@ -108,8 +112,8 @@ struct SchoolPlanningView: View {
                 Text("Choisir un moniteur").tag(nil as UUID?)
                 ForEach(model.assignedInstructors) { instructor in Text(instructor.displayName).tag(Optional(instructor.id)) }
             }
-            .onChange(of: model.instructorID) { _, _ in model.agreementConfirmed = false; Task { await model.loadAvailability() } }
-            if model.assignedInstructors.isEmpty {
+            .onChange(of: model.instructorID) { _, _ in model.agreementConfirmed = false }
+            if model.assignedInstructors.isEmpty && !model.isLoading {
                 formNote("Aucun moniteur affecté à cet élève.")
             }
             DatePicker("Date", selection: $model.startsAt, in: Date()..., displayedComponents: .date)
@@ -133,7 +137,13 @@ struct SchoolPlanningView: View {
             }
             if model.instructorID != nil {
                 DisclosureGroup("Disponibilités du moniteur") {
-                    if model.availability.isEmpty { formNote("Aucune disponibilité : ajoute-la sur le web.") }
+                    if model.isLoadingAvailability || (!model.availabilityLoaded && model.availabilityError == nil) {
+                        DrivySkeletonRows(count: 2).drivySkeleton("Chargement des disponibilités…")
+                    } else if let error = model.availabilityError {
+                        SchoolErrorNotice(message: error, retry: { Task { await model.loadAvailability() } })
+                    } else if model.availabilityLoaded && model.availability.isEmpty {
+                        formNote("Aucune disponibilité : ajoute-la sur le web.")
+                    }
                     ForEach(model.availability) { rule in
                         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                             Text(SchoolPlanningFormat.weekdays(rule.weekdays)).font(.subheadline.weight(.semibold))
@@ -146,6 +156,7 @@ struct SchoolPlanningView: View {
                             .font(.caption).foregroundStyle(DrivyTheme.warning)
                     }
                 }
+                .task(id: model.instructorID) { await model.loadAvailability() }
             }
         } header: { Text("Le rendez-vous").drivyFormSectionHeader() }
             .drivyFormRows()
@@ -159,7 +170,7 @@ struct SchoolPlanningView: View {
                     Text("\(product.label) · \(SchoolCatalogFormatting.price(product.unitPriceCents))").tag(Optional(product.id))
                 }
             }.onChange(of: model.productID) { _, _ in model.termsAccepted = false }
-            if model.availableProducts.isEmpty {
+            if model.availableProducts.isEmpty && !model.isLoading {
                 formNote("Aucun tarif valable à cette date.")
             }
             if let product = model.selectedProduct {
@@ -242,8 +253,10 @@ struct SchoolPlanningView: View {
             .foregroundStyle(DrivyTheme.muted)
             .accessibilityElement(children: .combine)
         }
-        if !model.validBooking {
-            DrivyActionNote(text: bookingHint)
+        if model.meetingPointTooLong {
+            DrivyActionNote(text: "Raccourcis le lieu à 500 caractères.", isError: true)
+        } else if model.reasonTooLong {
+            DrivyActionNote(text: "Raccourcis le motif à 1 000 caractères.", isError: true)
         }
         Button {
             Task { if await model.saveBooking() { dismiss() } }
@@ -268,20 +281,6 @@ struct SchoolPlanningView: View {
         return model.selectedPrice
     }
 
-    /// Helpful next-step copy only. The workspace remains the sole source of
-    /// client validation and the server still decides whether to book.
-    private var bookingHint: String {
-        if model.isBusy { return "Confirmation par l’école…" }
-        if model.pending != nil { return "Vérifie d’abord la confirmation en attente." }
-        if model.learnerID == nil { return "Commence par choisir l’élève." }
-        if model.trainingID == nil { return "Choisis sa formation." }
-        if model.instructorID == nil { return "Choisis le moniteur pour cette leçon." }
-        if model.startsAt <= Date() { return "Choisis un horaire à venir." }
-        if model.originalLesson != nil && !model.agreementConfirmed { return "Confirme que le nouvel horaire est convenu." }
-        if (model.originalLesson == nil || model.changesCommercialTerms) && model.productID == nil { return "Choisis un tarif pour fixer la durée et le prix." }
-        if (model.originalLesson == nil || model.changesCommercialTerms) && !model.termsAccepted { return "Relis puis accepte le prix et les conditions." }
-        return "Vérifie les informations du rendez-vous avant de confirmer."
-    }
     @ViewBuilder private var cancellationFields: some View {
         if let lesson = model.originalLesson {
             Section {
@@ -306,7 +305,7 @@ struct SchoolPlanningView: View {
             }
             TextField("Précision facultative", text: $model.reason, axis: .vertical).lineLimit(3...6)
             // Explication seulement en cas d’erreur : la limite n’apparaît qu’une fois dépassée.
-            if model.reason.count > 1000 {
+            if model.reasonTooLong {
                 DrivyFormMessage(text: "Raccourcis la précision à 1 000 caractères.", tone: .danger)
             }
         } header: { Text("Motif d’annulation").drivyFormSectionHeader() }
@@ -318,9 +317,7 @@ struct SchoolPlanningView: View {
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity, minHeight: 48)
             }
-            .disabled(!model.canMutate || model.cancellationReason.isEmpty || model.reason.count > 1000 || model.originalLesson?.status != "PLANNED")
-        } footer: {
-            if model.cancellationReason.isEmpty { Text("Choisis un motif pour pouvoir annuler.") }
+            .disabled(!model.canMutate || model.cancellationReason.isEmpty || model.reasonTooLong || model.originalLesson?.status != "PLANNED")
         }
             .drivyFormRows()
     }
@@ -356,7 +353,7 @@ struct SchoolMeetingPointField: View {
 struct SchoolPlanningFeedback: View {
     @Bindable var model: SchoolPlanningWorkspace
     var body: some View {
-        if model.isLoading { Section { DrivyLoadingState(title: "Ouverture du planning…") }
+        if model.school == nil && (model.isLoading || model.errorMessage == nil) { Section { DrivySkeletonRows(count: 4).drivySkeleton("Ouverture du planning…") }
             .drivyFormRows() }
         if let error = model.errorMessage {
             // Même présentation d’erreur que les pages : notice, puis « Réessayer ».

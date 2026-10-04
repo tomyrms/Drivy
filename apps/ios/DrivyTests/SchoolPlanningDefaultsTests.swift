@@ -12,6 +12,37 @@ import Testing
         #expect(defaults.trainingID(in: [a, b]) == b.id)
         #expect(defaults.trainingID(in: [b, training("B")]) == nil)
         #expect(defaults.trainingID(in: [a, training("C")]) == nil)
+        let paused = SchoolTraining(id: UUID(), schoolId: HubFixture.schoolID, learnerId: HubFixture.learnerID, offeringId: UUID(),
+            version: 1, categoryCode: "B", status: "PAUSED", startedOn: nil, closedOn: nil)
+        #expect(defaults.trainingID(in: [paused]) == nil)
+        #expect(defaults.trainingID(in: [paused, a]) == a.id)
+        #expect(defaults.trainingID(in: [paused, a, training("C")]) == nil)
+    }
+
+    @Test func settingsRetainEditsWhenRefreshFailsAndRequireAValidatedContext() async throws {
+        let server = PlanningDefaultsServer()
+        let model = SchoolPlanningSettingsWorkspace(scope: ConfigurationFixture.scope(), client: client(server), outbox: ConfigurationOutboxStub())
+        await model.load()
+        try #require(model.saved != nil && model.errorMessage == nil)
+        model.trainingCategoryCode = "B"; model.serviceProductKey = "lesson-50"
+        await server.setReadUnavailable(true)
+        await model.load()
+        #expect(model.saved != nil && model.trainingCategoryCode == "B" && model.serviceProductKey == "lesson-50")
+        #expect(!model.canSave && model.errorMessage != nil)
+        await server.setReadUnavailable(false)
+        await model.load()
+        #expect(model.canSave && model.trainingCategoryCode == "B" && model.serviceProductKey == "lesson-50")
+        #expect(await server.writes().isEmpty)
+    }
+
+    @Test func cancellationReasonUsesTheAPIsUTF16Limit() async throws {
+        let model = SchoolPlanningWorkspace(scope: ConfigurationFixture.scope(), client: client(PlanningDefaultsServer()),
+            lesson: HubFixture.lesson(), outbox: ConfigurationOutboxStub())
+        model.reason = String(repeating: "🚗", count: 500)
+        #expect(!model.reasonTooLong)
+        model.reason += "🚗"
+        #expect(model.reasonTooLong)
+        #expect(await model.cancel() == false)
     }
 
     @Test func planningPrefillsCurrentInstructorForDualRoleAndRequiresCommercialAgreementWithoutAPlace() async throws {
@@ -136,13 +167,16 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
     private var cancelled = false
     private let failReadsAfterCancellation: Bool
     private var sent: [URLRequest] = []
+    private var readUnavailable = false
     init(assigned: Bool = true, receiptAvailable: Bool = true, failReadsAfterCancellation: Bool = false) {
         self.assigned = assigned; self.receiptAvailable = receiptAvailable
         self.failReadsAfterCancellation = failReadsAfterCancellation
     }
     func writes() -> [URLRequest] { sent.filter { $0.httpMethod != "GET" } }
     func enableReceipt() { receiptAvailable = true }
+    func setReadUnavailable(_ value: Bool) { readUnavailable = value }
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        if readUnavailable && request.httpMethod == "GET" { throw URLError(.notConnectedToInternet) }
         sent.append(request)
         let url = request.url!, parts = url.pathComponents.map { $0.lowercased() }
         func ok(_ value: Any) throws -> SchoolHTTPResponse {
