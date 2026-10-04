@@ -60,7 +60,46 @@ import Testing
         let stranger = SchoolStartNowWorkspace(scope: ConfigurationFixture.scope(), client: client,
             learnerID: UUID(), outbox: ConfigurationOutboxStub())
         await stranger.load()
-        #expect(!stranger.hasPresetLearner)
+        #expect(!stranger.hasPresetLearner && stranger.learnerID == nil && !stranger.canStart)
+        #expect(stranger.errorMessage != nil)
+    }
+
+    @Test func reloadPreservesTheSelectedTrainingAndTypedMeetingPoint() async throws {
+        let server = LessonFinishServer()
+        let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+            tokenSource: HubToken(), transport: server)
+        let model = SchoolStartNowWorkspace(scope: ConfigurationFixture.scope(), client: client, outbox: ConfigurationOutboxStub())
+        await model.load()
+        let trainingID = try #require(model.trainingID)
+        model.meetingPoint = "Rendez-vous saisi"
+        await model.load()
+        #expect(model.canStart && model.trainingID == trainingID)
+        #expect(model.meetingPoint == "Rendez-vous saisi")
+    }
+
+    @Test func failedReloadKeepsTheFormButRequiresFreshContextBeforeStarting() async throws {
+        let server = StartNowAssignmentReloadServer(), outbox = ConfigurationOutboxStub()
+        let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+            tokenSource: HubToken(), transport: server)
+        let model = SchoolStartNowWorkspace(scope: ConfigurationFixture.scope(), client: client, outbox: outbox)
+        await model.load()
+        try #require(model.canStart)
+        model.meetingPoint = "Rendez-vous saisi"
+        await server.setUnavailable(true)
+        await model.load()
+        #expect(model.learnerID == HubFixture.learnerID && model.meetingPoint == "Rendez-vous saisi")
+        #expect(!model.canStart && model.errorMessage != nil && outbox.saves.isEmpty)
+        await server.setUnavailable(false)
+        await model.load()
+        #expect(model.canStart && model.meetingPoint == "Rendez-vous saisi")
+    }
+
+    @Test func todayTimeContextDoesNotClaimTheLessonHasBeenStarted() {
+        let lesson = HubFixture.lesson()
+        let start = lesson.startsAt!
+        #expect(SchoolTodayPresentation.moment(for: lesson, now: start.addingTimeInterval(-12 * 60)) == "Dans 12 min")
+        #expect(SchoolTodayPresentation.moment(for: lesson, now: start.addingTimeInterval(-75 * 60)) == "Dans 1 h 15 min")
+        #expect(SchoolTodayPresentation.moment(for: lesson, now: start) == "Horaire commencé")
     }
 
     @Test func optionalImmediatePlaceUsesTheSameTrimmedUTF16LimitAsTheAPI() async throws {
@@ -120,9 +159,12 @@ import Testing
 private actor StartNowAssignmentReloadServer: SchoolHTTPTransport {
     private let fallback = LessonFinishServer()
     private var originalRemoved = false
+    private var unavailable = false
     func removeOriginalAssignment() { originalRemoved = true }
+    func setUnavailable(_ value: Bool) { unavailable = value }
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        if unavailable { throw URLError(.notConnectedToInternet) }
         guard originalRemoved, let url = request.url, url.lastPathComponent == "learners" else {
             return try await fallback.send(request)
         }

@@ -24,6 +24,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
     var meetingPoint = ""
     private(set) var isLoading = false
     private(set) var isBusy = false
+    private(set) var contextValid = false
     private(set) var errorMessage: String?
     private(set) var pending: PendingSchoolCommand?
     /// Le serveur ne connaît pas encore « Démarrer une leçon ».
@@ -54,17 +55,16 @@ struct SchoolStartNowBody: Encodable, Sendable {
     /// Same trimmed UTF-16 length as the API and the planning form.
     var meetingPointTooLong: Bool { meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count > 500 }
     var canStart: Bool {
-        !invalidated && !isLoading && !isBusy && storageAvailable && pending == nil && started == nil
+        !invalidated && contextValid && !isLoading && !isBusy && storageAvailable && pending == nil && started == nil
             && learnerID.map { id in learners.contains { $0.id == id } } == true
             && trainingID.map { id in trainings.contains { $0.id == id && $0.learnerId == learnerID } } == true && !meetingPointTooLong
     }
 
     func load() async {
-        guard !invalidated else { return }
+        guard !invalidated, !isBusy else { return }
         generation = UUID(); let request = generation
         let previousLearnerID = learnerID
-        learners = []; learnerID = nil; trainings = []; trainingID = nil; meetingPoint = ""
-        isLoading = true; errorMessage = nil
+        isLoading = true; contextValid = false; errorMessage = nil
         do { pending = try outbox.pending(for: scope); storageAvailable = true }
         catch { storageAvailable = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         do {
@@ -77,15 +77,22 @@ struct SchoolStartNowBody: Encodable, Sendable {
                 guard all.count <= 10_000 else { throw SchoolPlanningFailure.invalidResponse }
                 if let cursor, !seen.insert(cursor).inserted { throw SchoolPlanningFailure.invalidResponse }
             } while cursor != nil
-            guard request == generation else { return }
+            guard request == generation, !Task.isCancelled else { return }
             self.defaults = defaults
             learners = all.filter { $0.archivedAt == nil }
                 .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
             if learners.isEmpty { setContextError("Aucun élève ne t’est affecté. Demande à l’administration de vérifier les affectations.") }
             isLoading = false
-            if let preset = presetLearnerID, learners.contains(where: { $0.id == preset }) { await select(preset) }
+            if let preset = presetLearnerID {
+                if learners.contains(where: { $0.id == preset }) { await select(preset) }
+                else {
+                    learnerID = nil; trainings = []; trainingID = nil; meetingPoint = ""
+                    setContextError("Cet élève n’est plus disponible avec tes affectations. Actualise son dossier avant de démarrer.")
+                }
+            }
             else if let previousLearnerID, learners.contains(where: { $0.id == previousLearnerID }) { await select(previousLearnerID) }
             else if learners.count == 1, let only = learners.first { await select(only.id) }
+            else { learnerID = nil; trainings = []; trainingID = nil; meetingPoint = "" }
         } catch {
             guard request == generation else { return }
             isLoading = false
@@ -97,22 +104,26 @@ struct SchoolStartNowBody: Encodable, Sendable {
     func select(_ id: UUID) async {
         guard !invalidated, learners.contains(where: { $0.id == id }), !isBusy else { return }
         generation = UUID(); let request = generation
-        learnerID = id; trainings = []; trainingID = nil; meetingPoint = ""; setContextError(nil); isLoading = true
+        let previousTrainingID = learnerID == id ? trainingID : nil
+        let previousMeetingPoint = meetingPoint
+        if learnerID != id { trainings = []; trainingID = nil; meetingPoint = "" }
+        learnerID = id; contextValid = false; setContextError(nil); isLoading = true
         do {
             let values: [SchoolTraining] = try await client.records(scope.schoolID, path: ["trainings"],
                 query: [URLQueryItem(name: "learnerId", value: id.uuidString)])
-            guard request == generation else { return }
+            guard request == generation, !Task.isCancelled else { return }
             let active = values.filter { $0.learnerId == id && $0.status == "ACTIVE" }
             trainings = active.filter { $0.startNowBlockerCode == nil }
-            trainingID = defaults?.trainingID(in: trainings)
+            trainingID = trainings.contains(where: { $0.id == previousTrainingID }) ? previousTrainingID : defaults?.trainingID(in: trainings)
             if trainings.isEmpty { setContextError(Self.startBlockerMessage(active.first?.startNowBlockerCode)) }
-            if let training = trainingID {
+            if let training = trainingID, training != previousTrainingID {
                 let lessons: [SchoolLesson] = (try? await client.records(scope.schoolID, path: ["lessons"],
                     query: [URLQueryItem(name: "trainingId", value: training.uuidString)])) ?? []
                 guard request == generation else { return }
                 meetingPoint = SchoolStartNowWorkspace.lastMeetingPoint(lessons, trainingID: training) ?? ""
             }
-            isLoading = false
+            if trainingID != nil && trainingID == previousTrainingID { meetingPoint = previousMeetingPoint }
+            contextValid = true; isLoading = false
         } catch {
             guard request == generation else { return }
             isLoading = false
@@ -170,7 +181,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
 
     func invalidate() {
         invalidated = true; generation = UUID(); learners = []; trainings = []; learnerID = nil; trainingID = nil
-        pending = nil; started = nil; isBusy = false; isLoading = false; storageAvailable = false; meetingPoint = ""
+        pending = nil; started = nil; isBusy = false; isLoading = false; contextValid = false; storageAvailable = false; meetingPoint = ""
     }
 
     private func send(_ command: PendingSchoolCommand, fresh: Bool) async -> SchoolLesson? {
@@ -216,13 +227,18 @@ struct SchoolStartNowView: View {
                     .drivyFormRows()
                 } else if let error = model.errorMessage {
                     Section {
-                        SchoolErrorNotice(message: error, retry: model.learners.isEmpty || model.trainings.isEmpty || !model.storageAvailable
+                        SchoolErrorNotice(message: error, retry: !model.contextValid || model.learners.isEmpty || model.trainings.isEmpty || !model.storageAvailable
                             ? { Task { await reloadContext() } } : nil)
                         .disabled(model.isBusy || model.isLoading)
                     }
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                 }
+                if model.learners.isEmpty && (model.isLoading || (model.defaults == nil && model.errorMessage == nil)) {
+                    Section {
+                        DrivySkeletonRows(count: 3).drivySkeleton("Chargement des élèves…")
+                    }.drivyFormRows()
+                } else {
                 Section {
                     if model.hasPresetLearner, let name = model.learnerName {
                         LabeledContent("Élève", value: name)
@@ -234,7 +250,9 @@ struct SchoolStartNowView: View {
                             ForEach(model.learners) { learner in Text(learner.displayName).tag(Optional(learner.id)) }
                         }
                     }
-                    if model.trainings.count > 1 {
+                    if model.isLoading && model.trainings.isEmpty && model.learnerID != nil {
+                        DrivySkeletonRow().drivySkeleton("Chargement de la formation…")
+                    } else if model.trainings.count > 1 {
                         Picker("Formation", selection: $model.trainingID) {
                             Text("Choisir une formation").tag(nil as UUID?)
                             ForEach(model.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
@@ -249,9 +267,6 @@ struct SchoolStartNowView: View {
                 }
                     .drivyFormRows()
                 .disabled(model.isBusy || model.isLoading || model.pending != nil)
-                if model.isLoading {
-                    Section { DrivyLoadingState(title: model.learnerID == nil ? "Chargement des élèves…" : "Chargement de la formation…") }
-                        .drivyFormRows()
                 }
             }
             .scrollContentBackground(.hidden)
@@ -290,10 +305,7 @@ struct SchoolStartNowView: View {
     }
 
     @MainActor private func reloadContext() async {
-        let learnerID = model.learnerID, meetingPoint = model.meetingPoint
-        if !model.storageAvailable || model.learners.isEmpty { await model.load() }
-        else if let learnerID { await model.select(learnerID) }
-        if model.learnerID == learnerID { model.meetingPoint = meetingPoint }
+        await model.load()
     }
 }
 

@@ -1,5 +1,7 @@
 import MapKit
+import Observation
 import SwiftUI
+import UIKit
 
 /// Aujourd’hui : la carte et la leçon qui compte maintenant. Une leçon passée sans résultat passe en premier
 /// (« À terminer ») ; sinon la prochaine, avec son départ. Un trajet se lance toujours depuis une leçon et son élève ;
@@ -10,16 +12,17 @@ struct SchoolTodayView: View {
     let agendaClient: SchoolAgendaClient?
     let captureController: SchoolCaptureSessionController?
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.scenePhase) private var scenePhase
     @State private var lessons: [SchoolLesson] = []
     @State private var loadedKey: String?
     @State private var isLoading = false
+    @State private var requestID = UUID()
     @State private var error: String?
     @State private var preparation: SchoolCapturePreparationWorkspace?
     @State private var opened: OpenedLesson?
     @State private var showsDay = false
     @State private var cardHeight: CGFloat = 0
-    /// Lu à chaque rendu (la minuterie de la vue le rafraîchit) : sans autorisation, pas de carte inventée.
-    @State private var locationManager = CLLocationManager()
+    @State private var location = SchoolTodayLocationPermission()
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
 
     private struct OpenedLesson: Identifiable {
@@ -72,8 +75,15 @@ struct SchoolTodayView: View {
                     }
                 }
             }
+            .task(id: dayKey(context.date)) { await load() }
         }
-        .task(id: scopeKey) { await load() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { location.refresh(); Task { await load() } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { notification in
+            if let change = notification.object as? SchoolLessonChange, change.schoolID != workspace.membership?.schoolId { return }
+            if preparation == nil && opened == nil { Task { await load() } }
+        }
         .onChange(of: scopeKey) { _, _ in
             preparation?.invalidate(); preparation = nil; opened = nil
         }
@@ -92,19 +102,38 @@ struct SchoolTodayView: View {
         }
     }
 
-    private var locationPermitted: Bool {
-        locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways
+    private func dayKey(_ date: Date) -> String {
+        "\(scopeKey):\(SchoolDateFormat.template("yyyyMMdd", date, zone: workspace.school?.timeZone ?? "Europe/Zurich"))"
     }
 
     /// Sans position autorisée, un état honnête plutôt qu’une vue du pays entier.
     @ViewBuilder private var map: some View {
-        if locationPermitted {
+        if location.permitted {
             Map(position: $camera) { UserAnnotation() }
                 .mapStyle(.standard(pointsOfInterest: .excludingAll))
                 .mapControls { MapUserLocationButton() }
         } else {
-            DrivyMapPlaceholder(title: "Position indisponible",
-                message: "Autorise la localisation de Drivy dans Réglages pour voir la carte.")
+            VStack(spacing: DrivySpacing.s) {
+                Image(systemName: "location.slash").font(.title).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
+                Text("Position indisponible").font(.headline).foregroundStyle(DrivyTheme.text)
+                if location.status == .notDetermined {
+                    Button("Autoriser la localisation") { location.request() }
+                        .buttonStyle(DrivySecondaryButtonStyle())
+                        .accessibilityIdentifier("today-location-authorize")
+                } else if location.status == .denied {
+                    Button("Ouvrir Réglages") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    }
+                    .buttonStyle(DrivySecondaryButtonStyle())
+                    .accessibilityIdentifier("today-location-settings")
+                } else if location.status == .restricted {
+                    Text("La localisation est limitée sur cet appareil.").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(DrivySpacing.l)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(DrivyTheme.canvas)
         }
     }
 
@@ -113,8 +142,12 @@ struct SchoolTodayView: View {
         let toFinish = planned.filter { ($0.endsAt ?? .distantFuture) <= now }
         let next = planned.first { ($0.endsAt ?? .distantPast) > now }
         DrivyMapDock(floating: floating) {
+            Text(SchoolDateFormat.template("EEEEdMMMM", now, zone: workspace.school?.timeZone ?? "Europe/Zurich").capitalizedFirst)
+                .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
             if let lesson = toFinish.first {
-                lessonSummary(lesson, badge: lesson.drivyState(now: now).badge)
+                lessonSummary(lesson, badge: lesson.drivyState(now: now).badge, moment: nil)
                 if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId {
                     Button { opened = OpenedLesson(lesson: lesson, completing: true) } label: {
                         Label("Terminer la leçon", systemImage: "checkmark.circle")
@@ -122,8 +155,12 @@ struct SchoolTodayView: View {
                     .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                     .accessibilityIdentifier("today-finish-lesson")
                 }
+                if let next {
+                    Divider().overlay(DrivyTheme.border)
+                    upcomingLesson(next, now: now)
+                }
             } else if let next {
-                lessonSummary(next, badge: nil)
+                lessonSummary(next, badge: nil, moment: SchoolTodayPresentation.moment(for: next, now: now))
                 if mayStart(next, now: now) {
                     Button { start(next) } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
                         .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
@@ -139,8 +176,12 @@ struct SchoolTodayView: View {
                     // Ni en cours ni imminente : le moniteur peut lancer une autre leçon sans la planifier.
                     if instructs, (next.startsAt ?? .distantPast) > now { startNowButton(prominent: false) }
                 }
-            } else if isLoading && loadedKey != scopeKey {
-                DrivyLoadingState(title: "Chargement de la journée…")
+            } else if loadedKey != dayKey(now) && error == nil {
+                VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                    DrivySkeletonBlock(width: 180, height: 32)
+                    DrivySkeletonRow(leading: .avatar)
+                    DrivySkeletonBlock(height: 52, radius: DrivyRadius.content)
+                }.drivySkeleton("Chargement de la journée…")
             } else if error == nil {
                 Text(lessons.isEmpty ? "Aucune leçon aujourd’hui" : "Aucune autre leçon aujourd’hui")
                     .font(.headline).foregroundStyle(DrivyTheme.text)
@@ -148,18 +189,22 @@ struct SchoolTodayView: View {
                 if instructs { startNowButton(prominent: true) }
             }
             if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
-            dayList(now: now, focus: toFinish.first?.id ?? next?.id)
+            dayList(now: now, excluding: Set([toFinish.first?.id, next?.id].compactMap { $0 }))
         }
     }
 
     /// Point focal du panneau : l’heure de départ en grand chiffre tabulaire, puis l’élève (avatar, nom, lieu).
-    private func lessonSummary(_ lesson: SchoolLesson, badge: DrivyStatusBadge?) -> some View {
+    private func lessonSummary(_ lesson: SchoolLesson, badge: DrivyStatusBadge?, moment: String?) -> some View {
         let stacked = typeSize.isAccessibilitySize
         let layout = stacked
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.xs))
         return Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                if let moment {
+                    Text(moment).font(.headline).foregroundStyle(DrivyTheme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 layout {
                     Text(startTime(lesson)).font(.drivyScreenTitle.monospacedDigit()).foregroundStyle(DrivyTheme.text)
                     Text("– \(endTime(lesson))").font(.title3.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
@@ -191,8 +236,21 @@ struct SchoolTodayView: View {
     }
 
     /// Les autres leçons du jour, repliées : une ligne par leçon, un badge seulement pour l’inhabituel.
-    @ViewBuilder private func dayList(now: Date, focus: UUID?) -> some View {
-        let others = lessons.filter { $0.id != focus }.sorted { $0.plannedStart < $1.plannedStart }
+    private func upcomingLesson(_ lesson: SchoolLesson, now: Date) -> some View {
+        Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(SchoolTodayPresentation.moment(for: lesson, now: now))
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson), details: [])
+            }
+        }
+        .buttonStyle(DrivyRowButtonStyle())
+        .accessibilityIdentifier("today-next-lesson")
+        .accessibilityHint("Ouvre la prochaine leçon")
+    }
+
+    @ViewBuilder private func dayList(now: Date, excluding: Set<UUID>) -> some View {
+        let others = lessons.filter { !excluding.contains($0.id) }.sorted { $0.plannedStart < $1.plannedStart }
         if !others.isEmpty {
           VStack(spacing: 0) {
             // Filet entre la leçon qui compte et le reste du jour : deux groupes, pas une pile.
@@ -202,7 +260,8 @@ struct SchoolTodayView: View {
                     ForEach(others) { lesson in
                         Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
                             DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                                details: [lesson.meetingPoint], badge: lesson.drivyState(now: now).rowBadge, showsChevron: false)
+                                details: [lesson.meetingPoint], badge: lesson.drivyState(now: now).rowBadge, showsChevron: false,
+                                isSecondary: lesson.status == "COMPLETED" || lesson.status == "CANCELLED" || lesson.status == "NO_SHOW")
                         }
                         .buttonStyle(DrivyRowButtonStyle())
                         .accessibilityHint("Ouvre la leçon")
@@ -210,7 +269,7 @@ struct SchoolTodayView: View {
                     }
                 }
             } label: {
-                (Text("Leçons du jour ") + Text("\(lessons.count)").foregroundStyle(DrivyTheme.muted))
+                Text(others.count == 1 ? "1 autre leçon" : "\(others.count) autres leçons")
                     .font(.subheadline.weight(.semibold)).monospacedDigit()
                     .frame(minHeight: 44, alignment: .leading)
             }
@@ -270,11 +329,15 @@ struct SchoolTodayView: View {
 
     /// Relit la journée sans effacer ce qui est affiché.
     @MainActor private func load() async {
-        guard let agendaClient, let membership = workspace.membership else { lessons = []; loadedKey = nil; return }
-        let key = scopeKey
+        guard let agendaClient, let membership = workspace.membership else {
+            lessons = []; loadedKey = nil; error = "L’agenda n’est pas disponible. Actualise ton école."
+            return
+        }
+        let key = dayKey(Date()), request = UUID()
+        requestID = request
         if loadedKey != key { lessons = [] }
         isLoading = true; error = nil
-        defer { if key == scopeKey { isLoading = false } }
+        defer { if requestID == request { isLoading = false } }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: workspace.school?.timeZone ?? "") ?? .current
         let dayStart = calendar.startOfDay(for: Date())
@@ -286,17 +349,51 @@ struct SchoolTodayView: View {
                 let page = try await agendaClient.lessons(schoolID: membership.schoolId, from: dayStart, to: dayEnd, cursor: cursor,
                     instructorMembershipID: instructorFilter)
                 all.append(contentsOf: page.items); cursor = page.nextCursor
-                if let cursor, !seen.insert(cursor).inserted { break }
-            } while cursor != nil && pages < 10
-            guard key == scopeKey, !Task.isCancelled else { return }
+                if let cursor, !seen.insert(cursor).inserted { throw SchoolAgendaFailure.invalidResponse }
+                if all.count > 10_000 || (pages >= 100 && cursor != nil) { throw SchoolAgendaFailure.invalidResponse }
+            } while cursor != nil
+            guard key == dayKey(Date()), requestID == request, !Task.isCancelled else { return }
             var unique: [UUID: SchoolLesson] = [:]
             for lesson in all { unique[lesson.id] = lesson }
             lessons = Array(unique.values); loadedKey = key
         } catch {
-            guard key == scopeKey, !Task.isCancelled, !(error is CancellationError) else { return }
+            guard key == dayKey(Date()), requestID == request, !Task.isCancelled, !(error is CancellationError) else { return }
+            switch error as? SchoolAgendaFailure {
+            case .authentication, .forbidden:
+                lessons = []; loadedKey = nil; opened = nil
+                preparation?.invalidate(); preparation = nil
+            default: break
+            }
             self.error = (error as? LocalizedError)?.errorDescription ?? "Les leçons du jour n’ont pas pu être chargées."
         }
     }
+}
+
+enum SchoolTodayPresentation {
+    /// Un horaire écoulé ne prouve pas que la conduite a démarré.
+    static func moment(for lesson: SchoolLesson, now: Date) -> String {
+        guard let start = lesson.startsAt else { return "Prochaine leçon" }
+        let minutes = Int(ceil(start.timeIntervalSince(now) / 60))
+        if minutes <= 0 { return "Horaire commencé" }
+        if minutes < 60 { return "Dans \(minutes) min" }
+        let hours = minutes / 60, remainder = minutes % 60
+        return remainder == 0 ? "Dans \(hours) h" : "Dans \(hours) h \(remainder) min"
+    }
+}
+
+/// Observe seulement l’autorisation : aucune collecte ni position conservée par cet écran.
+@MainActor @Observable private final class SchoolTodayLocationPermission: NSObject, @preconcurrency CLLocationManagerDelegate {
+    private(set) var status: CLAuthorizationStatus = .notDetermined
+    @ObservationIgnored private let manager = CLLocationManager()
+    var permitted: Bool { status == .authorizedWhenInUse || status == .authorizedAlways }
+    override init() {
+        super.init()
+        status = manager.authorizationStatus
+        manager.delegate = self
+    }
+    func refresh() { status = manager.authorizationStatus }
+    func request() { if status == .notDetermined { manager.requestWhenInUseAuthorization() } }
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) { status = manager.authorizationStatus }
 }
 
 /// Seuils d’Aujourd’hui : panneau latéral dès 960 pt (380 pt de leçon, au moins 580 pt de carte),
