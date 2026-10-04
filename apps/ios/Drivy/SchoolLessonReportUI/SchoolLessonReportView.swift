@@ -37,9 +37,10 @@ struct SchoolLessonReportView: View {
                 SchoolLessonReportContent(model: model, learnerName: learnerName, schoolWorkspace: schoolWorkspace, agenda: client.agenda,
                     opensCompletion: opensCompletion, isNextPlanned: isNextPlanned)
             } else if schoolWorkspace.membership != nil {
-                ProgressView("Chargement de la leçon…")
-                    .foregroundStyle(DrivyTheme.muted)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity).background(DrivyTheme.canvas)
+                DrivySkeletonRows(count: 4)
+                    .drivySkeleton("Chargement de la leçon…")
+                    .drivyPageContent()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).background(DrivyTheme.canvas)
             } else {
                 ContentUnavailableView("Choisis ton école", systemImage: "building.2")
             }
@@ -351,8 +352,11 @@ private struct SchoolLessonReportContent: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            if model.isLoading || model.isBusy {
-                DrivyLoadingState(title: model.isLoading ? "Chargement de la leçon…" : "Enregistrement…")
+            if model.isLoading && model.lesson == nil {
+                DrivySkeletonRows(count: 4)
+                    .drivySkeleton("Chargement de la leçon…")
+            } else if model.isBusy {
+                DrivyLoadingState(title: "Enregistrement…")
             }
             if let error = model.errorMessage {
                 SchoolErrorNotice(message: error, retry: model.isBusy || model.isLoading ? nil : { Task { await model.load() } })

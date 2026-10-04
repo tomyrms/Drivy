@@ -65,6 +65,7 @@ struct SchoolCapturePreparationView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Fermer") { model.invalidate(); dismiss() }
+                        .disabled(model.isBusy)
                 }
             }
             // Clé sur la validité de la portée : si les droits ne sont pas encore lisibles à l’ouverture
@@ -93,7 +94,9 @@ struct SchoolCapturePreparationView: View {
             .sheet(item: $resendRoute) { queued in resendSheet(queued) }
             .sheet(item: $startReview) { review in SchoolCaptureStartReviewView(model: model, review: review) }
             .onChange(of: model.captureStarted) { _, started in if started { dismiss() } }
-        }.tint(DrivyTheme.accent)
+        }
+        .tint(DrivyTheme.accent)
+        .interactiveDismissDisabled(model.isBusy)
     }
 
     private var heading: some View {

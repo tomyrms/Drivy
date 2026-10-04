@@ -21,8 +21,10 @@ struct SchoolObservationEntryView: View {
                 SchoolObservationView(model: model, schoolWorkspace: schoolWorkspace)
             } else {
                 NavigationStack {
-                    ProgressView("Vérification de la leçon…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    DrivySkeletonRows(count: 4)
+                        .drivySkeleton("Vérification de la leçon…")
+                        .drivyPageContent()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .background(DrivyTheme.surface)
                         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
                 }
@@ -72,7 +74,7 @@ struct SchoolObservationView: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     heading
                     feedback
-                    if model.loaded {
+                    if model.loaded || model.lesson != nil {
                         observationList
                     }
                     if let pending = model.pending { pendingCard(pending) }
@@ -118,7 +120,10 @@ struct SchoolObservationView: View {
         }
     }
     @ViewBuilder private var feedback: some View {
-        if model.isLoading { DrivyLoadingState(title: "Chargement des observations…") }
+        if model.isLoading && model.lesson == nil {
+            DrivySkeletonRows(count: 4)
+                .drivySkeleton("Chargement des observations…")
+        }
         if let error = model.errorMessage {
             SchoolErrorNotice(message: error, retry: model.accessRevoked || model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
         }
@@ -263,6 +268,7 @@ private struct SchoolObservationComposer: View {
                         .drivyFormRows()
                 }
             }
+            .disabled(model.isBusy || model.pending != nil)
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -339,6 +345,8 @@ private struct SchoolObservationRemoval: View {
     @Environment(\.dismiss) private var dismiss
     @State private var reason = ""
     @State private var acknowledged = false
+    @State private var confirmsDiscard = false
+    private var hasChanges: Bool { !reason.isEmpty || acknowledged }
     var body: some View {
         NavigationStack {
             Form {
@@ -359,6 +367,7 @@ private struct SchoolObservationRemoval: View {
                         .drivyFormRows()
                 }
             }
+            .disabled(model.isBusy || model.pending != nil)
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -376,9 +385,17 @@ private struct SchoolObservationRemoval: View {
             }
             .navigationTitle("Retirer l’observation").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(model.isBusy) }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler") {
+                        if hasChanges && model.pending == nil { confirmsDiscard = true } else { dismiss() }
+                    }.disabled(model.isBusy)
+                }
             }
-        }.tint(DrivyTheme.accent).interactiveDismissDisabled(model.isBusy)
+            .confirmationDialog("Quitter sans enregistrer ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+                Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
+                Button("Continuer", role: .cancel) { }
+            }
+        }.tint(DrivyTheme.accent).interactiveDismissDisabled(hasChanges || model.isBusy)
     }
 }
 

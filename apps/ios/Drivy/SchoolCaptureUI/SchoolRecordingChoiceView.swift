@@ -56,8 +56,14 @@ struct SchoolRecordingChoiceView: View {
                         Text(learner.displayName).font(.drivyTitle)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    if model.isLoading { DrivyLoadingState(title: "Chargement du choix…") }
-                    if let error = model.errorMessage { SchoolErrorNotice(message: error) }
+                    if model.isLoading && model.notice == nil {
+                        DrivySkeletonRows(count: 2)
+                            .drivySkeleton("Chargement du choix…")
+                    }
+                    if let error = model.errorMessage {
+                        SchoolErrorNotice(message: error,
+                            retry: model.accessRevoked || model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
+                    }
                     if let error = model.storageError { SchoolErrorNotice(message: error) }
                     if model.notice != nil, !model.accessRevoked {
                         if model.relatedPending.isEmpty { choiceControls }
@@ -133,6 +139,7 @@ struct SchoolRecordingChoiceView: View {
         }
         .buttonStyle(DrivySelectionCardStyle(isSelected: model.choice?.status == status))
         .disabled(!isEnabled)
+        .accessibilityAddTraits(model.choice?.status == status ? .isSelected : [])
         .accessibilityHint(status == .allowed ? "Enregistrer l’accord et continuer" : "Enregistrer le refus et continuer sans GPS")
         .accessibilityIdentifier(status == .allowed ? "recording-allow" : "recording-refuse")
     }
