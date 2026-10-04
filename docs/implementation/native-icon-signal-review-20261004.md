@@ -12,7 +12,7 @@ Les fichiers sont dans [assets/native-icons-20261004](assets/native-icons-202610
 
 | Usage | Choix | Motif |
 |---|---|---|
-| Application et accueil | 01, d routier blanc sur cobalt, puis raffiné | Monogramme compact et distinctif ; les propositions 2 et 3 étaient plus génériques, 4 pouvait se lire comme un 5, 5 comportait trop de courbes fines. |
+| Application et accueil — première exploration | 01, d routier blanc sur cobalt, puis raffiné | Monogramme compact et distinctif ; les propositions 2 et 3 étaient plus génériques, 4 pouvait se lire comme un 5, 5 comportait trop de courbes fines. |
 | Maîtrise du véhicule | 04, volant | Relation directe avec les commandes ; centre simplifié pendant la finition. |
 | Observation | 01, œil | Silhouette lisible sans détails accessoires. |
 | Priorité à droite | 03, intersection et arrivée de droite | La direction porte le sens ; évite de confondre ce thème avec le cédez-le-passage. |
@@ -28,13 +28,15 @@ Les fichiers sont dans [assets/native-icons-20261004](assets/native-icons-202610
 
 Les formes partagent un canevas 64 × 64, un trait 3,2 à extrémités et raccords arrondis et un fond transparent. Le catalogue les teinte avec les couleurs sémantiques existantes. La comparaison porte sur les silhouettes à 96, 40 et 24 pixels, puis sur les captures Apple ; aucune perfection n’est déduite du seul contrôle des bornes SVG.
 
+La demande ultérieure du porteur d’utiliser le skill logo-design aboutit au [d continu vectoriel](drivy-logo-skill-20261004.md), qui remplace cette première image dans l’application. Les cinq originaux et leurs planches restent conservés.
+
 ## Interface
 
 « Signaler » présente les thèmes sur une grille aérée avec pictogramme et libellé, sans disque ni bordure permanente par case. L’appui reçoit une réponse discrète, compatible avec Réduire les animations. Les grandes tailles d’accessibilité passent à une colonne et les textes gardent leur hauteur.
 
 « Marquer un moment » est une action distincte sous la grille. Après choix du thème, les trois appréciations restent explicites et non présélectionnées. Le thème choisi et son icône sont dans le contenu défilant ; le titre de feuille reste « Signaler ». La confirmation « Ajouté à la leçon » apparaît uniquement après l’écriture durable déjà contrôlée par le parcours.
 
-L’icône de l’application et son image d’accueil utilisent la même exportation PNG 1024 × 1024 opaque. Les originaux ImageGen sont conservés à leur résolution de sortie ; l’export ne change que les dimensions.
+L’icône de l’application et son image d’accueil utilisent la même exportation PNG 1024 × 1024 opaque. Les originaux ImageGen sont conservés à leur résolution de sortie. L’export courant provient du master vectoriel du d continu décrit dans la reprise logo-design.
 
 ## Skills et vérification
 

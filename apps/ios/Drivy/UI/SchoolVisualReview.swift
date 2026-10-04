@@ -471,10 +471,34 @@ struct SchoolVisualTransport: SchoolHTTPTransport {
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         guard let url = request.url, url.host == "visual.drivy.invalid", (request.httpMethod ?? "GET") == "GET"
         else { throw SchoolAPIError.invalidResponse }
-        let window = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains { $0.name == "from" } == true
-        guard let bytes = (window ? responses[url.path + Self.agendaSuffix] : nil) ?? responses[url.path]
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let window = url.lastPathComponent == "lessons" && query.contains { $0.name == "from" || $0.name == "to" }
+        guard var bytes = (window ? responses[url.path + Self.agendaSuffix] : nil) ?? responses[url.path]
         else { throw SchoolAPIError.invalidResponse }
+        if window { bytes = try filteredAgenda(bytes, query: query) }
         return SchoolHTTPResponse(data: bytes, status: 200, url: url, contentType: "application/json")
+    }
+
+    private func filteredAgenda(_ bytes: Data, query: [URLQueryItem]) throws -> Data {
+        func boundary(_ name: String) throws -> Date? {
+            guard let item = query.first(where: { $0.name == name }) else { return nil }
+            guard let value = item.value, let date = SchoolLesson.date(value) else { throw SchoolAPIError.invalidResponse }
+            return date
+        }
+        let from = try boundary("from"), to = try boundary("to")
+        if let from, let to, to <= from { throw SchoolAPIError.invalidResponse }
+        guard var envelope = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+              var page = envelope["data"] as? [String: Any], let lessons = page["items"] as? [[String: Any]]
+        else { throw SchoolAPIError.invalidResponse }
+        page["items"] = try lessons.filter { lesson in
+            guard let startValue = lesson["plannedStart"] as? String, let start = SchoolLesson.date(startValue),
+                  let endValue = lesson["plannedEnd"] as? String, let end = SchoolLesson.date(endValue)
+            else { throw SchoolAPIError.invalidResponse }
+            // Same strict overlap as GET /lessons: include crossings, exclude touching bounds.
+            return (from.map { end > $0 } ?? true) && (to.map { start < $0 } ?? true)
+        }
+        envelope["data"] = page
+        return try JSONSerialization.data(withJSONObject: envelope)
     }
 }
 

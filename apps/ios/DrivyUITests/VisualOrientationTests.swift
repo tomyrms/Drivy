@@ -77,6 +77,11 @@ import XCTest
                     case "account": "account-heading"
                     case "profile-tab": "profile-open-trips"
                     case "onboarding-staff": "onboarding-start"
+                    case "home-tabs": "today-day-list"
+                    case "live", "live-waiting": "capture-signal-observation"
+                    case "replay": "replay-play"
+                    case "signal": "live-observation-theme-Priorité à droite"
+                    case "sign-in": "school-sign-in"
                     default: nil
                     }
                     if let readyIdentifier {
