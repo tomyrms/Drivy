@@ -244,7 +244,7 @@ private struct SchoolAppraisalTile: View {
         Button(action: action) {
             HStack(spacing: DrivySpacing.m) {
                 Image(systemName: status.symbol)
-                    .font(.headline.weight(.bold))
+                    .font(DrivyMapGlyph.observation)
                     .foregroundStyle(tone.foreground)
                     .frame(width: 40, height: 40)
                     .accessibilityHidden(true)
