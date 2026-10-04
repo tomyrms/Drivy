@@ -309,7 +309,11 @@ struct SchoolProfileStatusSections: View {
 extension SchoolProfileStatusSections {
     fileprivate func pendingNotes(_ pending: PendingSchoolCommand) -> [String] {
         var notes: [String] = []
-        if !pending.kind.isProfile { notes.append("Cette demande vient d’un autre écran de l’école.") }
+        if pending.observationUndoOperationID != nil {
+            notes.append("L’annulation du signalement doit être vérifiée depuis la leçon.")
+        } else if !pending.kind.isProfile {
+            notes.append("Cette demande vient d’un autre écran de l’école.")
+        }
         if pending.scope != model.scope { notes.append("Tes accès ont changé depuis l’envoi. Le renvoi reste désactivé.") }
         return notes
     }

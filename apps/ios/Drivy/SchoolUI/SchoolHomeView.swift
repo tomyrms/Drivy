@@ -12,6 +12,7 @@ struct SchoolHomeView: View {
     var account: SchoolAccountActions? = nil
     var inviteLearner: (() -> Void)? = nil
     var openProfile: ((SchoolLearner) -> Void)? = nil
+    var makeLearnerProfile: ((SchoolLearner) -> SchoolProfileWorkspace?)? = nil
     var agendaClient: SchoolAgendaClient? = nil
     var trainingClient: SchoolTrainingClient? = nil
     var captureController: SchoolCaptureSessionController? = nil
@@ -96,7 +97,8 @@ struct SchoolHomeView: View {
                 .tag(SchoolHomeTab.agenda)
             }
             SchoolBrowserView(workspace: workspace, openAccount: nil, chooseSchool: chooseSchoolAction,
-                inviteLearner: inviteLearner, openProfile: openProfile, openPlanning: planningAction, trainingClient: trainingClient,
+                inviteLearner: inviteLearner, openProfile: openProfile, makeLearnerProfile: makeLearnerProfile,
+                openPlanning: planningAction, trainingClient: trainingClient,
                 agendaClient: agendaClient, captureController: captureController)
                 .tabItem { Label("Élèves", systemImage: "person.2") }
                 .tag(SchoolHomeTab.learners)

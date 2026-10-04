@@ -73,7 +73,7 @@ import XCTest
                     // Même délai de stabilisation des fixtures/MapKit que la voie simctl.
                     RunLoop.current.run(until: Date().addingTimeInterval(10))
                     let readyIdentifier: String? = switch screen {
-                    case "learner", "dossier": "training-lessons-menu"
+                    case "learner", "dossier": "learner-dossier"
                     case "account": "account-heading"
                     case "profile-tab": "profile-open-trips"
                     case "onboarding-staff": "onboarding-start"
@@ -88,10 +88,38 @@ import XCTest
                         guard requireVisual(app.descendants(matching: .any)[readyIdentifier].waitForExistence(timeout: 30),
                             "Élément de l’écran absent : \(readyIdentifier).", app: app, name: captureName) else { return }
                     }
+                    if screen == "learner" || screen == "dossier" {
+                        let firstName = app.descendants(matching: .any)["learner-profile-first-name"]
+                        guard requireVisual(firstName.waitForExistence(timeout: 30) && firstName.label.contains("Camille"),
+                            "Le profil administratif de l’élève n’est pas chargé.", app: app, name: captureName) else { return }
+                        for identifier in ["learner-lessons-10000000-0000-4000-8000-000000000005",
+                                           "learner-progress-10000000-0000-4000-8000-000000000005"] {
+                            guard requireVisual(app.descendants(matching: .any)[identifier].exists,
+                                "Entrée du dossier absente : \(identifier).", app: app, name: captureName) else { return }
+                        }
+                        guard requireVisual(!app.segmentedControls.buttons["Leçons"].exists,
+                            "Les leçons remplacent encore le profil à la racine du dossier.", app: app, name: captureName) else { return }
+                    }
                     if screen == "progression" {
                         guard requireVisual(app.descendants(matching: .any).matching(NSPredicate(
                             format: "label CONTAINS %@", "Avec accompagnement")).firstMatch.waitForExistence(timeout: 30),
                             "La progression n’est pas chargée.", app: app, name: captureName) else { return }
+                    }
+                    if screen == "lesson-tariff" {
+                        let tariff = app.descendants(matching: .any)["lesson-tariff"]
+                        let balance = app.descendants(matching: .any)["lesson-balance"]
+                        let form = app.collectionViews.firstMatch
+                        guard requireVisual(form.waitForExistence(timeout: 30),
+                            "La fiche leçon n’est pas chargée.", app: app, name: captureName) else { return }
+                        for _ in 0..<10 {
+                            if tariff.exists && balance.exists && balance.isHittable { break }
+                            form.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.8))
+                                .press(forDuration: 0.05, thenDragTo: form.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.3)))
+                        }
+                        guard requireVisual(!app.buttons["lesson-tariff"].exists && !app.navigationBars["Tarif"].exists,
+                            "Le tarif ouvre encore un écran secondaire.", app: app, name: captureName) else { return }
+                        guard requireVisual(tariff.exists && balance.exists && balance.isHittable,
+                            "Le tarif ou le solde disponible n’est pas affiché dans la fiche.", app: app, name: captureName) else { return }
                     }
                     if interactiveSignal {
                         let signal = app.buttons["capture-signal-observation"]

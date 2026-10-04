@@ -24,7 +24,11 @@ struct SchoolOfficeVisualReview: View {
                     }
                 case "invitation-create": InvitationCreationView(model: models.invitations)
                 case "invitations", "invitation-detail": SchoolInvitationsView(model: models.invitations)
-                case "lesson-tariff": SchoolLessonTariffSheet(model: models.tariff)
+                case "lesson-tariff":
+                    NavigationStack {
+                        SchoolLessonReportView(client: models.agenda.reportClient, schoolWorkspace: context.workspace,
+                            lessonID: SchoolVisualData.lessonID, learnerName: context.learner.displayName, outbox: models.outbox)
+                    }
                 default:
                     NavigationStack {
                         VStack(spacing: DrivySpacing.l) {
@@ -64,7 +68,6 @@ struct SchoolOfficeVisualReview: View {
     let planning: SchoolPlanningWorkspace
     let startNow: SchoolStartNowWorkspace
     let invitations: SchoolInvitationWorkspace
-    let tariff: SchoolLessonReportWorkspace
     let outbox: SchoolOfficeVisualOutbox
 
     init(context: SchoolVisualContext, permitWarning: Bool = false) throws {
@@ -82,8 +85,6 @@ struct SchoolOfficeVisualReview: View {
             learnerID: SchoolVisualData.learnerID, outbox: outbox)
         invitations = SchoolInvitationWorkspace(scope: scope, roles: membership.roles,
             api: SchoolInvitationClient(baseURL: baseURL, tokenSource: token, transport: transport), outbox: outbox)
-        tariff = SchoolLessonReportWorkspace(scope: scope, membership: membership, lessonID: SchoolVisualData.lessonID,
-            client: agenda.reportClient, outbox: outbox)
     }
 
     func prepare(screen: String) async {
@@ -99,7 +100,6 @@ struct SchoolOfficeVisualReview: View {
         case "invitations", "invitation-create", "invitation-detail":
             await invitations.load()
             if screen == "invitation-detail" { invitations.selectedID = invitations.invitations.first?.id }
-        case "lesson-tariff": await tariff.load()
         default: break
         }
     }

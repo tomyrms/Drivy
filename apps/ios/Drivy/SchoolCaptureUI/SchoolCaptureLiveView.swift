@@ -81,7 +81,7 @@ struct SchoolCaptureLiveView: View {
                             SchoolLiveObservationPalette(recorder: moment.recorder, observedAt: moment.instant,
                                 anchor: moment.anchor, onRecorded: { showObservationNotice(moment.recorder) }, onClose: closeObservation)
                                 .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
-                                .frame(height: min(480, max(0, geometry.size.height - DrivySpacing.xl)))
+                                .frame(height: min(DrivyMapLayout.reportPaletteHeight, max(0, geometry.size.height - DrivySpacing.xl)))
                                 .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel))
                                 .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel))
                                 .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 8)

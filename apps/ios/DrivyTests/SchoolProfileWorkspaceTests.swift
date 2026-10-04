@@ -78,6 +78,24 @@ struct SchoolProfileWorkspaceTests {
         #expect(await model.saveProfileAfterConfirmation() == false)
         #expect(api.commands.isEmpty)
     }
+    @Test func anObservationWithdrawalCannotBeVerifiedOrAcknowledgedFromTheProfile() async throws {
+        let operation = UUID()
+        let body = SchoolObservationBody(operationId: operation, draftId: nil, captureId: nil, segmentId: nil,
+            pointSequence: nil, competencyId: nil, text: "Moment marqué", origin: "LIVE",
+            observedAt: ConfigurationFixture.timestamp, eventKind: "MARKER", eventStatus: nil)
+        let original = PendingSchoolCommand(id: operation, scope: ConfigurationFixture.scope(), kind: .createObservation,
+            resourceVersion: 0, createdAt: Date(), body: try JSONEncoder().encode(body), routeResourceID: UUID())
+        let withdrawal = original.requestingObservationUndo(operationID: UUID())
+        let api = ProfileAPIStub(), box = ConfigurationOutboxStub(value: withdrawal)
+        api.receipt = ProfileFixture.receipt(original)
+        let model = ProfileFixture.workspace(api: api, box: box)
+        await model.load()
+        #expect(model.profile != nil && !model.canVerifyPending && !model.canRetryPending && !model.canMutate)
+        await model.verifyPending()
+        #expect(api.operationRequests.isEmpty && api.commands.isEmpty)
+        #expect(model.pending == withdrawal && box.value == withdrawal)
+        #expect(model.errorMessage == nil && model.successMessage == nil)
+    }
     @Test func policyCreationUsesSchoolVersionAndDoesNotPublishAutomatically() async throws {
         let api = ProfileAPIStub(); let box = ConfigurationOutboxStub()
         let model = SchoolProfileWorkspace(scope: ConfigurationFixture.scope(), roles: ["ADMIN"], api: api, outbox: box)
@@ -198,6 +216,7 @@ final class ProfileAPIStub: SchoolProfileAPI {
     var commands: [PendingSchoolCommand] = []
     var cursors: [String?] = []
     var noticeRequests: [UUID?] = []
+    var operationRequests: [UUID] = []
     func school(id: UUID) async throws -> SchoolDetails {
         if let readFailure { throw readFailure }
         if let schoolHandler { return await schoolHandler() }
@@ -218,6 +237,7 @@ final class ProfileAPIStub: SchoolProfileAPI {
         return onboardingValue
     }
     func operation(schoolID: UUID, id: UUID) async throws -> SchoolOperationReceipt {
+        operationRequests.append(id)
         guard let receipt else { throw SchoolProfileFailure.operationUnknown }; return receipt
     }
     func send(_ command: PendingSchoolCommand) async throws -> SchoolProfileResult {

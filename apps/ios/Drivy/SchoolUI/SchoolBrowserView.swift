@@ -8,6 +8,7 @@ struct SchoolBrowserView: View {
     var chooseSchool: (() -> Void)? = nil
     var inviteLearner: (() -> Void)? = nil
     var openProfile: ((SchoolLearner) -> Void)? = nil
+    var makeLearnerProfile: ((SchoolLearner) -> SchoolProfileWorkspace?)? = nil
     var openPlanning: ((SchoolLearner) -> Void)? = nil
     var trainingClient: SchoolTrainingClient? = nil
     var agendaClient: SchoolAgendaClient? = nil
@@ -37,14 +38,21 @@ struct SchoolBrowserView: View {
                 max: DrivyLayout.splitListMaxWidth)
         } detail: {
             if workspace.selectedLearnerID != nil {
-                SchoolLearnerDetailView(workspace: workspace, openProfile: openProfile, openPlanning: openPlanning, trainingClient: trainingClient,
+                SchoolLearnerDossierView(workspace: workspace, openProfile: openProfile, makeLearnerProfile: makeLearnerProfile,
+                    openPlanning: openPlanning, trainingClient: trainingClient,
                     agendaClient: agendaClient, captureController: captureController)
+                    .id(detailScopeKey)
             } else {
                 SchoolOverviewView(workspace: workspace)
             }
         }
         .navigationSplitViewStyle(.balanced)
         .tint(DrivyTheme.accent)
+    }
+
+    /// A pushed page always belongs to the selected learner and the current school rights.
+    private var detailScopeKey: String {
+        "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.joined(separator: ",") ?? ""):\(workspace.membership?.grants.joined(separator: ",") ?? ""):\(workspace.selectedLearnerID?.uuidString ?? "")"
     }
 
     @ViewBuilder private var searchableMaster: some View {
@@ -243,228 +251,6 @@ private struct SchoolOverviewView: View {
     }
 }
 
-private struct SchoolLearnerDetailView: View {
-    @Bindable var workspace: SchoolWorkspace
-    let openProfile: ((SchoolLearner) -> Void)?
-    let openPlanning: ((SchoolLearner) -> Void)?
-    let trainingClient: SchoolTrainingClient?
-    let agendaClient: SchoolAgendaClient?
-    let captureController: SchoolCaptureSessionController?
-    @State private var presentedTraining: TrainingPresentation?
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    /// A learner with one training: its lessons and progression are the dossier itself.
-    private var singleTraining: SchoolTraining? {
-        // Pendant une relecture du même élève, la formation affichée reste en place : l’écran (et ses feuilles) n’est pas retiré.
-        guard trainingClient != nil,
-              workspace.nextTrainingsCursor == nil, workspace.trainings.count == 1,
-              let training = workspace.trainings.first, training.learnerId == workspace.learner?.id else { return nil }
-        return training
-    }
-
-    var body: some View {
-        Group {
-            if let learner = workspace.learner, let training = singleTraining, let trainingClient {
-                SchoolTrainingScreen(client: trainingClient, workspace: workspace, learner: learner, trainingID: training.id,
-                    openProfile: openProfile.map { action in { action(learner) } })
-                    .safeAreaInset(edge: .top, spacing: 0) {
-                        // Une panne de relecture reste visible sans retirer la formation ni la feuille qu’elle porte.
-                        if let error = workspace.learnerError {
-                            SchoolErrorNotice(message: error, retry: { Task { await workspace.loadSelectedLearner() } })
-                                .drivyPageContent()
-                        } else if let error = workspace.trainingsError {
-                            SchoolErrorNotice(message: error, retry: { Task { await workspace.loadTrainings() } })
-                                .drivyPageContent()
-                        }
-                    }
-            } else {
-                dossier
-            }
-        }
-        .background(DrivyTheme.surface)
-        .navigationTitle("Dossier")
-        .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let learner = workspace.learner, let openPlanning, learner.archivedAt == nil {
-                DrivyStickyActionBar {
-                    let layout = dynamicTypeSize.isAccessibilitySize
-                        ? AnyLayout(VStackLayout(spacing: DrivySpacing.s))
-                        : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
-                    layout {
-                        if agendaClient != nil { startNowButton(learner) }
-                        planButton(learner, openPlanning: openPlanning, isSecondary: agendaClient != nil)
-                    }
-                }
-            }
-        }
-        .task(id: workspace.selectedLearnerID) { await workspace.loadSelectedLearner() }
-        .sheet(item: $presentedTraining, onDismiss: { workspace.selectTraining(nil) }) { presentation in
-            SchoolTrainingView(client: presentation.client, workspace: workspace,
-                learner: presentation.learner, trainingID: presentation.trainingID)
-        }
-    }
-
-    @ViewBuilder
-    private func planButton(_ learner: SchoolLearner, openPlanning: @escaping (SchoolLearner) -> Void, isSecondary: Bool = false) -> some View {
-        let button = Button { openPlanning(learner) } label: { Label("Planifier", systemImage: "calendar.badge.plus") }
-            .accessibilityLabel("Planifier une leçon")
-            .accessibilityIdentifier("learner-plan-lesson")
-        if isSecondary { button.buttonStyle(DrivySecondaryButtonStyle()) } else { button.buttonStyle(DrivyPrimaryButtonStyle()) }
-    }
-
-    /// Une leçon tout de suite avec cet élève ; le serveur refuse si le planning ne le permet pas.
-    private func startNowButton(_ learner: SchoolLearner) -> some View {
-        SchoolStartNowButton(workspace: workspace, agendaClient: agendaClient, captureController: captureController,
-                             learnerID: learner.id, onFinished: { Task { await workspace.loadTrainings() } }) {
-            Label("Démarrer", systemImage: "location.fill")
-        }
-        .buttonStyle(DrivyPrimaryButtonStyle())
-        .accessibilityLabel("Démarrer une leçon")
-        .accessibilityIdentifier("learner-start-now")
-    }
-
-    private var dossier: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DrivySpacing.xl) {
-                if workspace.isLoadingLearner && workspace.learner == nil {
-                    DrivySkeletonRows(count: 3, leading: .avatar)
-                        .drivySkeleton("Chargement du dossier…")
-                }
-                if let error = workspace.learnerError {
-                    SchoolErrorNotice(message: error, retry: { Task { await workspace.loadSelectedLearner() } })
-                }
-                if let learner = workspace.learner {
-                    VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                        learnerHeading(learner)
-                        SchoolLearnerActions(learner: learner,
-                            openProfile: openProfile.map { action in { action(learner) } })
-                    }
-                    trainings
-                    if learner.contactEmail != nil || learner.contactPhone != nil {
-                        DrivyRowGroup(title: "Coordonnées") {
-                            if let email = learner.contactEmail {
-                                SchoolContactActionRow(title: "E-mail", value: email, symbol: "envelope",
-                                    actions: SchoolContactActionRow.actions(email: email, name: learner.displayName))
-                            }
-                            if let phone = learner.contactPhone {
-                                SchoolContactActionRow(title: "Téléphone", value: phone, symbol: "phone",
-                                    actions: SchoolContactActionRow.actions(phone: phone, name: learner.displayName))
-                            }
-                        }
-                    }
-                }
-            }
-            .drivyPageContent()
-        }
-    }
-
-    private func learnerHeading(_ learner: SchoolLearner) -> some View {
-        HStack(alignment: .center, spacing: DrivySpacing.m) {
-            if !dynamicTypeSize.isAccessibilitySize {
-                DrivyAvatar(name: learner.displayName, size: 60)
-            }
-            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                Text(learner.displayName)
-                    .font(.drivyScreenTitle)
-                    .foregroundStyle(DrivyTheme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
-                if learner.archivedAt != nil {
-                    DrivyStatusBadge(title: "Archivé", symbol: "archivebox")
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var trainings: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if workspace.isLoadingTrainings && workspace.trainings.isEmpty {
-                DrivySkeletonRows(count: 2)
-                    .drivySkeleton("Chargement des formations…")
-            }
-            if let error = workspace.trainingsError {
-                SchoolErrorNotice(message: error, retry: { Task { await workspace.loadTrainings() } })
-                    .padding(.vertical, DrivySpacing.xs)
-            }
-            if !workspace.isLoadingTrainings && workspace.trainings.isEmpty && workspace.trainingsError == nil {
-                DrivyEmptyState(title: "Aucune formation", message: "Ouvre-la sur le web.", symbol: "steeringwheel")
-            }
-            DrivyRowGroup(title: workspace.trainings.isEmpty ? nil : "Formation") {
-                ForEach(workspace.trainings) { training in
-                    DrivyNavigationRow(title: "Permis \(training.categoryCode)", symbol: "steeringwheel",
-                        badge: training.status == "ACTIVE" ? nil : DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status)),
-                        action: {
-                            guard let trainingClient, let learner = workspace.learner else { return }
-                            workspace.selectTraining(training.id)
-                            presentedTraining = TrainingPresentation(client: trainingClient, learner: learner, trainingID: training.id)
-                        })
-                        .disabled(trainingClient == nil || workspace.learner == nil)
-                        .accessibilityIdentifier("school-training-\(training.id.uuidString)")
-                }
-            }
-            if workspace.nextTrainingsCursor != nil {
-                Button { Task { await workspace.loadMoreTrainings() } } label: {
-                    DrivyBusyLabel(title: "Afficher les autres formations", busyTitle: "Chargement…", isBusy: workspace.isLoadingMoreTrainings)
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .contentShape(Rectangle())
-                }
-                .disabled(workspace.isLoadingMoreTrainings || workspace.isLoadingTrainings)
-            }
-        }
-    }
-}
-
-/// Contact value with its actions (call, message, e-mail) as 44 pt round buttons.
-private struct SchoolContactActionRow: View {
-    struct Action: Identifiable {
-        let label: String
-        let symbol: String
-        let url: URL
-        var id: String { url.absoluteString }
-    }
-    let title: String
-    let value: String
-    let symbol: String
-    let actions: [Action]
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    static func actions(email: String, name: String) -> [Action] {
-        guard let url = SchoolContactLinks.mail(email) else { return [] }
-        return [Action(label: "Envoyer un e-mail à \(name)", symbol: "envelope.fill", url: url)]
-    }
-    static func actions(phone: String, name: String) -> [Action] {
-        var result: [Action] = []
-        if let url = SchoolContactLinks.message(phone) { result.append(Action(label: "Envoyer un message à \(name)", symbol: "message.fill", url: url)) }
-        if let url = SchoolContactLinks.call(phone) { result.append(Action(label: "Appeler \(name)", symbol: "phone.fill", url: url)) }
-        return result
-    }
-
-    var body: some View {
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.s))
-        return layout {
-            DrivyContactRow(title: title, value: value, symbol: symbol)
-            HStack(spacing: DrivySpacing.s) {
-                ForEach(actions) { action in
-                    Link(destination: action.url) {
-                        Image(systemName: action.symbol)
-                            .font(.body.weight(.semibold))
-                            .frame(width: 44, height: 44)
-                            .background(DrivyTheme.accentSoft, in: Circle())
-                            .contentShape(Circle())
-                    }
-                    .foregroundStyle(DrivyTheme.accent)
-                    .accessibilityLabel(action.label)
-                }
-            }
-        }
-    }
-}
-
 /// `tel:`, `sms:` and `mailto:` links built from what the school recorded, never guessed.
 enum SchoolContactLinks {
     private static func dialable(_ phone: String) -> String? {
@@ -483,13 +269,6 @@ enum SchoolContactLinks {
         components.path = value
         return components.url
     }
-}
-
-private struct TrainingPresentation: Identifiable {
-    let client: SchoolTrainingClient
-    let learner: SchoolLearner
-    let trainingID: UUID
-    var id: UUID { trainingID }
 }
 
 struct SchoolErrorNotice: View {

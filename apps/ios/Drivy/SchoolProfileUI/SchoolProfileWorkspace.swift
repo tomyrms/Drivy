@@ -69,7 +69,9 @@ final class SchoolProfileWorkspace: Identifiable {
         return pending.kind.isProfile && pending.scope == scope && !pendingRequiresReview && !invalidated && !isBusy && !isLoading
             && ownsRoute(pending)
     }
-    var canVerifyPending: Bool { pending != nil && !invalidated && !isBusy && !isLoading }
+    var canVerifyPending: Bool {
+        pending != nil && pending?.observationUndoOperationID == nil && !invalidated && !isBusy && !isLoading
+    }
 
     func invalidate() {
         generation = UUID(); invalidated = true; school = nil; policies = []; notice = nil; profile = nil

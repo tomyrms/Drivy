@@ -4,6 +4,8 @@ Document de passation. Il permet à une autre session (Codex, Claude) de reprend
 
 Dernière mise à jour : 4 octobre 2026, après essai de build100. Les huit lots sont intégrés, le logo et les icônes livrés ; les longues campagnes Apple restantes ont été arrêtées à la demande du porteur. Les feuilles natives stables de build100 sont validées par son retour. IPA build101 compilée et livrée : [prochaines leçons, palette Signaler et confirmation de fin](today-signal-finish-20261004.md). Voir [STATUS](STATUS.md) pour la dernière IPA et les limites, [résultats de la revue initiale](native-ui-review-20261004.md) et [icônes](native-icon-signal-review-20261004.md).
 
+Dernier retour : après build102, le dossier commence par la fiche de l’élève puis ouvre Leçons/Progression sur des pages séparées ; tarif affiché sans fenêtre, Signaler légèrement agrandi. [Décision courante](dossier-pages-tarif-signaler-20261004.md). IPA rapide en préparation ; STATUS indique la livraison vérifiée. Le suivi samaritains/sensibilisation reste une tranche métier à implémenter.
+
 ## Pour reprendre (à lire en premier)
 
 1. Lire `AGENTS.md`, puis ce document en entier.

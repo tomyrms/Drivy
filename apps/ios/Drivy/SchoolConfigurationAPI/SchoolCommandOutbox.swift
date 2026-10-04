@@ -225,7 +225,9 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
     }
 
     func matches(_ receipt: SchoolOperationReceipt) -> Bool {
-        guard hasValidTarget else { return false }
+        // A generic verifier must not settle a CREATE while its durable withdrawal is pending.
+        // SchoolObservationClient reconciles the original CREATE and the distinct REMOVE receipt.
+        guard hasValidTarget, observationUndoOperationID == nil else { return false }
         let expectedID = kind.isConfiguration ? scope.schoolID : resourceID
         return receipt.operationId == id && receipt.commandType == kind.operationType
             && receipt.resourceType == kind.resourceType && receipt.resourceVersion > resourceVersion

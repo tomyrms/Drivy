@@ -267,6 +267,31 @@ struct SchoolCommandOutboxTests {
         }
     }
 
+    @Test func aCreationReceiptCannotSettleAnObservationWithADurableWithdrawal() throws {
+        try inDirectory { directory in
+            let original = try observationCommand()
+            let requested = original.requestingObservationUndo(operationID: UUID())
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(original)
+            try store.save(requested)
+            let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            let restored = try #require(reopened.pending(for: original.scope))
+            let receipt = SchoolOperationReceipt(operationId: original.id, commandType: original.kind.operationType,
+                resourceType: original.kind.resourceType, resourceId: UUID(),
+                committedAt: "2026-10-04T10:00:01Z", resourceVersion: 1)
+            #expect(original.matches(receipt))
+            #expect(restored.withoutObservationUndo.matches(receipt))
+            #expect(!restored.matches(receipt))
+
+            // The profile, planning and report verifiers all use this gate before removal.
+            let file = directory.appendingPathComponent("pending-v1.bin")
+            let before = try Data(contentsOf: file)
+            if restored.matches(receipt) { try reopened.remove(restored) }
+            #expect(try store.pending(for: original.scope) == requested)
+            #expect(try Data(contentsOf: file) == before)
+        }
+    }
+
     @Test func staleObservationCompletionCannotEraseOrReplaceTheDurableUndo() throws {
         try inDirectory { directory in
             let original = try observationCommand()

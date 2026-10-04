@@ -10,7 +10,7 @@ struct SchoolLiveObservationSheet: View {
 
     var body: some View {
         SchoolLiveObservationPalette(recorder: recorder, observedAt: observedAt, anchor: anchor, onRecorded: onRecorded)
-            .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+            .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(DrivyMapLayout.reportPaletteHeight), .large])
             .presentationDragIndicator(.visible)
             .presentationSizing(.form)
             .presentationCornerRadius(DrivyRadius.mapPanel + DrivySpacing.xs)
@@ -167,7 +167,8 @@ struct SchoolLiveObservationPalette: View {
 
     private var themeColumns: [GridItem] {
         if dynamicTypeSize.isAccessibilitySize { return [GridItem(.flexible())] }
-        return [GridItem(.adaptive(minimum: dynamicTypeSize >= .xxLarge ? 148 : 104), spacing: DrivySpacing.xxs)]
+        // Three columns still fit a 375 pt iPhone after the panel and content gutters.
+        return [GridItem(.adaptive(minimum: dynamicTypeSize >= .xxLarge ? 148 : 100), spacing: DrivySpacing.xxs)]
     }
 
     private func themeButton(_ theme: SchoolLiveObservationTheme) -> some View {

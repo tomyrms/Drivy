@@ -5,7 +5,7 @@ import SwiftUI
 /// No production credentials, persistent school store or network transport is created.
 struct SchoolVisualReview: View {
     /// Shell screens routed here directly by DrivyApp, with the real tab bar.
-    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner", "profile-tab", "learner-home", "learner-progress", "live", "live-waiting"]
+    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "live", "live-waiting"]
 
     let screen: String
     @State private var context: SchoolVisualContext?
@@ -68,7 +68,7 @@ struct SchoolVisualReview: View {
                     SchoolVisualShell(context: context, tab: .agenda)
                 case "learners":
                     SchoolVisualShell(context: context, tab: .learners)
-                case "learner":
+                case "learner", "dossier":
                     SchoolVisualShell(context: context, tab: .learners, learnerID: SchoolVisualData.learnerID)
                 default:
                     SchoolTrainingView(client: context.client, workspace: context.workspace,
@@ -120,8 +120,8 @@ struct SchoolVisualShell: View {
             account: SchoolAccountActions(manageURL: nil, openProfile: nil, openInvitations: {}, openJoinSchool: {}, signOut: {},
                 resumeOnboarding: { showsWelcome = true }),
             inviteLearner: {},
-            openProfile: { _ in }, agendaClient: context.agenda,
-            trainingClient: context.client, captureController: nil,
+            openProfile: { _ in }, makeLearnerProfile: { context.makeLearnerProfile($0) },
+            agendaClient: context.agenda, trainingClient: context.client, captureController: nil,
             selectedTab: $selectedTab)
         .sheet(isPresented: $showsWelcome) {
             SchoolAccountVisualReview(screen: "onboarding-staff")
@@ -137,9 +137,18 @@ struct SchoolVisualShell: View {
 @MainActor struct SchoolVisualContext {
     let workspace: SchoolWorkspace
     let client: SchoolTrainingClient
+    let profile: SchoolProfileClient
     let agenda: SchoolAgendaClient
     let learner: SchoolLearner
     let replay: SchoolCaptureReplayWorkspace
+
+    func makeLearnerProfile(_ learner: SchoolLearner) -> SchoolProfileWorkspace? {
+        guard let person = workspace.person, let membership = workspace.membership,
+              membership.schoolId == learner.schoolId else { return nil }
+        return SchoolProfileWorkspace(scope: agenda.scope(person: person, membership: membership),
+            roles: membership.roles, learnerID: learner.id, isOwnProfile: learner.personId == person.personId,
+            api: profile, outbox: SchoolVisualOutbox())
+    }
 }
 
 @MainActor enum SchoolVisualData {
@@ -163,6 +172,7 @@ struct SchoolVisualShell: View {
         let transport = SchoolVisualTransport(responses: fixtures)
         let token = SchoolVisualToken()
         let client = SchoolTrainingClient(baseURL: baseURL, tokenSource: token, transport: transport)
+        let profile = SchoolProfileClient(baseURL: baseURL, tokenSource: token, transport: transport)
         let agenda = SchoolAgendaClient(baseURL: baseURL, tokenSource: token, transport: transport)
         let workspace = SchoolWorkspace(api: client.reader)
         await workspace.loadAccount()
@@ -170,7 +180,7 @@ struct SchoolVisualShell: View {
         let learner: SchoolLearner = try decode(learnerObject)
         let replay = SchoolCaptureReplayWorkspace(scope: agenda.scope(person: person, membership: membership),
             client: agenda.captureClient, captureID: captureID)
-        return SchoolVisualContext(workspace: workspace, client: client, agenda: agenda,
+        return SchoolVisualContext(workspace: workspace, client: client, profile: profile, agenda: agenda,
             learner: learner, replay: replay)
     }
 
@@ -407,6 +417,33 @@ struct SchoolVisualShell: View {
             "\(root)/report-revisions/\(revisionID.uuidString)": revision,
             "\(root)/lessons/\(lessonID.uuidString)/reports": page([revision])
         ]
+        // AP175 and its exact published policy: entirely synthetic, with the same read-only transport.
+        let profilePolicyID = identifier(200), profileNoticeID = identifier(201)
+        let profileFields: [[String: Any]] = SchoolProfileField.allCases.map { field in
+            ["field": field.rawValue, "requirement": field.isName ? "REQUIRED" : "OPTIONAL",
+             "stage": field.isName ? "JOIN" : "OPTIONAL", "purposeCode": field.purposes[0].rawValue,
+             "explanation": "Champ fictif du contrôle de rendu."]
+        }
+        objects["\(root)/profile-field-policies"] = page([["id": profilePolicyID.uuidString,
+            "schoolId": schoolID.uuidString, "version": 1, "status": "PUBLISHED", "effectiveFrom": "2020-01-01T00:00:00Z",
+            "fields": profileFields, "noticeVersionId": profileNoticeID.uuidString,
+            "approvedByMembershipId": membershipID.uuidString]])
+        objects["\(root)/learners/\(learnerID.uuidString)/administrative-profile"] = [
+            "id": identifier(202).uuidString, "schoolId": schoolID.uuidString, "version": 1, "learnerId": learnerID.uuidString,
+            "firstName": "Camille", "lastName": "Exemple", "birthDate": "2005-07-12",
+            "postalAddress": ["line1": "Rue des Exemples 12", "line2": null, "postalCode": "2053",
+                "locality": "Cernier", "countryCode": "CH"] as [String: Any],
+            "contactEmail": "camille@example.invalid", "contactPhone": "+41 00 000 00 00", "profilePhotoDocumentId": null,
+            "updatedAt": time, "enteredByMembershipId": membershipID.uuidString, "entrySource": "STAFF_ASSISTED",
+            "policyVersionId": profilePolicyID.uuidString]
+        objects["\(root)/learners/\(learnerID.uuidString)/action-readiness"] = ["learnerId": learnerID.uuidString,
+            "action": "ENTER", "resourceId": null, "ready": true, "blockers": [] as [Any],
+            "policyVersionId": profilePolicyID.uuidString, "computedAt": time]
+        objects["\(root)/data-policy"] = ["id": identifier(203).uuidString, "schoolId": schoolID.uuidString,
+            "version": 1, "status": "APPROVED", "noticeVersionId": profileNoticeID.uuidString,
+            "noticeText": "Notice fictive du contrôle de rendu du dossier.",
+            "retentionText": "Aucune donnée réelle n’est utilisée dans ce contrôle.", "contactEmail": "contact@example.invalid",
+            "approvedAt": time, "approvedByMembershipId": membershipID.uuidString]
         objects["\(root)/recording-notice"] = ["noticeVersionId": identifier(91).uuidString,
             "noticeText": "Document de contrôle : le trajet sert à revoir la leçon avec l’élève et son moniteur. Les positions ne sont pas publiques.",
             "retentionText": "Document de contrôle : la durée de conservation et les modalités d’effacement sont fixées par l’école.",

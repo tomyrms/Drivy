@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum SchoolTrainingSection: String, CaseIterable { case lessons = "Leçons", progress = "Progression" }
+enum SchoolTrainingSection: String, CaseIterable, Hashable { case lessons = "Leçons", progress = "Progression" }
 
 /// Le calendrier de la leçon fait foi, même près de minuit ou d'un changement d'année UTC.
 struct SchoolLessonPeriod: Equatable {
@@ -56,6 +56,7 @@ struct SchoolTrainingScreen: View {
     let learner: SchoolLearner
     let trainingID: UUID
     var section: SchoolTrainingSection? = nil
+    var showsHeading = false
     var openProfile: (() -> Void)? = nil
     @State private var model: SchoolTrainingWorkspace?
     /// La leçon ouverte vit ici, hors du contenu conditionnel et de `.id` : une relecture ou un changement
@@ -69,7 +70,7 @@ struct SchoolTrainingScreen: View {
     var body: some View {
         Group {
             if let model, matches(model) {
-                SchoolTrainingContent(model: model, workspace: workspace, learner: learner, fixedSection: section,
+                SchoolTrainingContent(model: model, workspace: workspace, learner: learner, fixedSection: section, showsHeading: showsHeading,
                     openProfile: openProfile, opened: $opened)
             } else {
                 DrivySkeletonRows(count: 4, leading: .time)
@@ -191,6 +192,7 @@ private struct SchoolTrainingContent: View {
     @Bindable var workspace: SchoolWorkspace
     let learner: SchoolLearner
     let fixedSection: SchoolTrainingSection?
+    let showsHeading: Bool
     let openProfile: (() -> Void)?
     @Binding var opened: OpenedLesson?
     @State private var chosenSection: SchoolTrainingSection = .lessons
@@ -237,7 +239,7 @@ private struct SchoolTrainingContent: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                        if fixedSection == nil { heading }
+                        if fixedSection == nil || showsHeading { heading }
                         if model.isLoading && model.training == nil {
                             DrivySkeletonRows(count: 4, leading: .time)
                                 .drivySkeleton("Chargement de la formation…")
@@ -266,7 +268,7 @@ private struct SchoolTrainingContent: View {
     private var heading: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             identity
-            if openProfile != nil || learner.contactPhone != nil || learner.contactEmail != nil {
+            if fixedSection == nil && (openProfile != nil || learner.contactPhone != nil || learner.contactEmail != nil) {
                 SchoolLearnerActions(learner: learner, openProfile: openProfile)
             }
         }

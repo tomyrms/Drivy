@@ -63,7 +63,8 @@ struct SchoolRootView: View {
         if identity.isAuthenticated, let workspace {
             if workspace.person != nil {
                 SchoolHomeView(workspace: workspace, openAccount: { showsAccount = true },
-                    account: accountActions, inviteLearner: inviteAction, openProfile: profileAction, agendaClient: homeAgendaClient,
+                    account: accountActions, inviteLearner: inviteAction, openProfile: profileAction,
+                    makeLearnerProfile: { makeProfileWorkspace(learner: $0) }, agendaClient: homeAgendaClient,
                     trainingClient: homeTrainingClient, captureController: captureController,
                     joinSchool: joinByCodeAction, selectedTab: $selectedHomeTab)
             } else {

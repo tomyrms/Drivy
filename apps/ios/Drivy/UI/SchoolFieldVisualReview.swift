@@ -16,6 +16,7 @@ struct SchoolFieldVisualReview: View {
             if let models {
                 if screen == "live" || screen == "live-waiting" {
                     SchoolHomeView(workspace: context.workspace, openAccount: {},
+                        makeLearnerProfile: { context.makeLearnerProfile($0) },
                         agendaClient: context.agenda, trainingClient: context.client,
                         captureController: screen == "live" ? models.live : models.waiting,
                         selectedTab: $selectedTab)

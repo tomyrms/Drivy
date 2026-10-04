@@ -140,7 +140,7 @@ private struct SchoolLessonReportContent: View {
     @State private var expandedCompetencies = Set<UUID>()
 
     private enum LessonSheet: String, Identifiable {
-        case permit, tariff
+        case permit
         var id: String { rawValue }
     }
 
@@ -193,7 +193,6 @@ private struct SchoolLessonReportContent: View {
         .sheet(item: $lessonSheet) { sheet in
             switch sheet {
             case .permit: SchoolLessonCompletionSheet(model: model, finish: finishLesson)
-            case .tariff: SchoolLessonTariffSheet(model: model)
             }
         }
         .fullScreenCover(item: $replay) { route in
@@ -403,7 +402,14 @@ private struct SchoolLessonReportContent: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            if let lesson = model.lesson { tariffButton(lesson) }
+            if let lesson = model.lesson {
+                amountRow("Tarif", cents: lesson.priceCentsSnapshot)
+                    .accessibilityIdentifier("lesson-tariff")
+                if let account = model.account {
+                    amountRow("À payer", cents: account.balanceCents)
+                        .accessibilityIdentifier("lesson-balance")
+                }
+            }
             if model.isLoading && model.lesson == nil {
                 DrivySkeletonRows(count: 4)
                     .drivySkeleton("Chargement de la leçon…")
@@ -422,28 +428,20 @@ private struct SchoolLessonReportContent: View {
         .listRowSeparator(.hidden)
     }
 
-    /// Le prix convenu est visible et ouvre son détail depuis le contexte de la leçon.
-    private func tariffButton(_ lesson: SchoolLesson) -> some View {
-        Button { lessonSheet = .tariff } label: {
-            let layout = typeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xxs))
-                : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
-            layout {
-                Label("Tarif", systemImage: "creditcard")
-                if !typeSize.isAccessibilitySize { Spacer(minLength: 0) }
-                HStack(spacing: DrivySpacing.s) {
-                    Text(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot)).monospacedDigit()
-                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                        .accessibilityHidden(true)
-                }
-            }
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(DrivyTheme.accent)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .contentShape(Rectangle())
+    /// Montants lus directement dans la fiche, sans action ni écran financier secondaire.
+    private func amountRow(_ title: String, cents: Int64) -> some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xxs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.s))
+        return layout {
+            Text(title).foregroundStyle(DrivyTheme.muted)
+            if !typeSize.isAccessibilitySize { Spacer(minLength: DrivySpacing.s) }
+            Text(SchoolCatalogFormatting.price(cents))
+                .fontWeight(.medium).monospacedDigit().foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("lesson-tariff")
+        .font(.subheadline)
+        .accessibilityElement(children: .combine)
     }
 
     /// Date, horaire et lieu : sur une ligne quand la colonne le permet, sinon la date, l’horaire puis le lieu.
