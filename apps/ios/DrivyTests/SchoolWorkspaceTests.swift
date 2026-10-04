@@ -276,6 +276,27 @@ struct SchoolWorkspaceTests {
         #expect(!workspace.accessRevoked)
     }
 
+    @Test func refreshingAPartialTrainingListNeverMakesItLookComplete() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        api.trainingsHandler = { school, learner, _ in
+            .init(items: [WorkspaceFixture.training(school: school, learner: learner)], nextCursor: "more-trainings")
+        }
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        let held = WorkspaceResponse<SchoolPage<SchoolTraining>>()
+        api.trainingsHandler = { _, _, _ in try await held.value() }
+        let reload = Task { await workspace.loadTrainings() }
+        await held.waitUntilRequested()
+        // Le dossier ne doit pas basculer vers une formation unique tant qu'une autre page est connue.
+        #expect(workspace.trainings.count == 1 && workspace.nextTrainingsCursor == "more-trainings")
+        held.fail(SchoolAPIError.unavailable)
+        await reload.value
+        #expect(workspace.trainings.count == 1 && workspace.nextTrainingsCursor == "more-trainings")
+        #expect(workspace.trainingsError != nil && !workspace.isLoadingTrainings)
+    }
+
     @Test func reopeningTheOpenDossierShowsNoLoadingScreen() async throws {
         let api = WorkspaceAPIStub()
         let workspace = SchoolWorkspace(api: api)

@@ -34,7 +34,12 @@ import Observation
     // L’ouverture déclenche sa propre lecture autorisée. AP58 n’est pas une permission
     // pour AP55/56 : une indisponibilité de la progression ne doit pas masquer les bilans.
     var canOpenPedagogicalContent: Bool { hasPedagogicalRole && training != nil && !invalidated && !accessRevoked && !isLoading }
-    var upcomingLessons: [SchoolLesson] { lessons.filter { $0.status == "PLANNED" }.sorted { $0.plannedStart < $1.plannedStart } }
+    var upcomingLessons: [SchoolLesson] { upcomingLessons(at: Date()) }
+    /// Une leçon passée sans constat reste à terminer ; elle ne prend pas la place du prochain rendez-vous.
+    func upcomingLessons(at now: Date) -> [SchoolLesson] {
+        lessons.filter { $0.status == "PLANNED" && ($0.endsAt.map { $0 > now } ?? false) }
+            .sorted { $0.plannedStart < $1.plannedStart }
+    }
     var pastLessons: [SchoolLesson] { lessons.filter { $0.status != "PLANNED" }.sorted { $0.plannedStart > $1.plannedStart } }
     var unobservedCompetencies: [SchoolCatalogCompetency] {
         guard let progress else { return [] }
@@ -82,7 +87,7 @@ import Observation
         }
         guard request == generation, !invalidated, !accessRevoked else { return }
         isLoading = false
-        if hasPedagogicalRole { await loadProgress(keepingCurrent: keepingCurrent) }
+        if hasPedagogicalRole { await loadProgress() }
         if historyRequested { await loadHistory() }
     }
     func loadMore() async {
@@ -129,7 +134,7 @@ import Observation
             if nextCursor == cursor || errorMessage != nil { return }
         }
     }
-    func loadProgress(keepingCurrent: Bool = false) async {
+    func loadProgress(keepingCurrent: Bool = true) async {
         guard !invalidated, !accessRevoked, hasPedagogicalRole, let training else { return }
         let request = generation; progressRequest = UUID(); let detailRequest = progressRequest
         progressError = nil
@@ -153,8 +158,16 @@ import Observation
             guard request == generation, detailRequest == progressRequest, !invalidated else { return }
             if error is CancellationError { return }
             // Un refus sur la seule progression ne ferme pas le dossier : seule une session perdue le fait.
-            if let apiError = error as? SchoolAPIError, case .unauthorized = apiError { fail(error) }
-            else { progressError = SchoolTrainingAccess.message(error) }
+            if error as? SchoolAPIError == .unauthorized || error as? SchoolAPIError == .identityNotLinked
+                || error as? SchoolReportFailure == .unauthorized || error as? SchoolCatalogFailure == .unauthorized { fail(error) }
+            else {
+                // Une panne conserve la lecture ; un refus retire immédiatement la projection concernée.
+                if SchoolTrainingAccess.isRevoked(error) || error as? SchoolAPIError == .notFound
+                    || error as? SchoolReportFailure == .notFound {
+                    progress = nil; competencies = []
+                }
+                progressError = SchoolTrainingAccess.message(error)
+            }
         }
     }
     private func fail(_ error: Error) {

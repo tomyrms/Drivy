@@ -36,6 +36,35 @@ import Testing
         #expect(model.lessons.count == 2 && model.nextCursor == nil && model.errorMessage == nil)
     }
 
+    @Test func failedProgressRefreshKeepsTheLastReadUntilAccessIsRefused() async throws {
+        let server = HistoryServer(), model = workspace(server)
+        await model.load()
+        let before = try #require(model.progress)
+        let competencies = model.competencies
+        await server.setProgressStatus(503)
+        await model.loadProgress()
+        #expect(model.progress?.items == before.items)
+        #expect(model.competencies == competencies)
+        #expect(model.progressError != nil)
+        await server.setProgressStatus(403)
+        await model.loadProgress()
+        #expect(model.progress == nil && model.competencies.isEmpty)
+        #expect(model.progressError != nil)
+        #expect(model.training != nil && !model.accessRevoked)
+        await server.setProgressStatus(401)
+        await model.loadProgress()
+        #expect(model.training == nil && model.lessons.isEmpty && model.accessRevoked)
+    }
+
+    @Test func anUnfinishedPastLessonDoesNotTakeTheNextLearnerWish() async {
+        let model = workspace(HistoryServer())
+        await model.load()
+        await model.loadHistory()
+        #expect(model.upcomingLessons(at: HubFixture.date("2026-09-28T11:00:00Z")).map(\.id) == [HubFixture.lessonID])
+        #expect(model.upcomingLessons(at: HubFixture.date("2026-09-28T12:49:59Z")).map(\.id) == [HubFixture.lessonID])
+        #expect(model.upcomingLessons(at: HubFixture.date("2026-09-28T12:50:00Z")).isEmpty)
+    }
+
     @Test func publishedCompetencyWithNoContextRemainsReadable() async throws {
         let client = client(HistoryServer())
         let revision = try await client.revision(schoolID: HubFixture.schoolID, id: HistoryServer.revisionID)
@@ -125,10 +154,12 @@ private actor HistoryServer: SchoolHTTPTransport {
     static let revisionID = UUID(uuidString: "70000000-0000-4000-8000-000000000080")!
     private let fallback = LessonFinishServer()
     private var pageUnavailable = false
+    private var progressStatus: Int?
     private var shouldPause = false
     private var suspended: CheckedContinuation<Void, Never>?
     private var pauseWaiter: CheckedContinuation<Void, Never>?
     func setPageUnavailable(_ value: Bool) { pageUnavailable = value }
+    func setProgressStatus(_ value: Int?) { progressStatus = value }
     func pauseNextPage() { shouldPause = true }
     func waitUntilPaused() async {
         if suspended != nil { return }
@@ -143,6 +174,9 @@ private actor HistoryServer: SchoolHTTPTransport {
     }
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         let url = request.url!
+        if url.lastPathComponent == "progress", let progressStatus {
+            return SchoolHTTPResponse(data: Data("{}".utf8), status: progressStatus, url: url, contentType: "application/problem+json")
+        }
         func ok(_ data: [String: Any]) throws -> SchoolHTTPResponse {
             let value: [String: Any] = ["data": data, "requestId": UUID().uuidString, "serverTime": "2026-09-30T10:00:00Z"]
             return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: value), status: 200, url: url, contentType: "application/json")

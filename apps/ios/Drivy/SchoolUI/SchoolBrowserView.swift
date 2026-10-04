@@ -60,8 +60,9 @@ struct SchoolBrowserView: View {
 
     private var learnerList: some View {
         List(selection: Binding(get: { workspace.selectedLearnerID }, set: { workspace.selectLearner($0) })) {
-            if workspace.isLoadingSchool || workspace.isSearching {
-                DrivyLoadingState(title: workspace.isSearching ? "Recherche des élèves…" : "Chargement des élèves…")
+            if (workspace.isLoadingSchool || workspace.isSearching) && workspace.learners.isEmpty {
+                DrivySkeletonRows(count: 5, leading: .avatar)
+                    .drivySkeleton(workspace.isSearching ? "Recherche des élèves…" : "Chargement des élèves…")
                     .listRowSeparator(.hidden)
                     .drivyFormRows()
             }
@@ -219,7 +220,9 @@ private struct SchoolOverviewView: View {
             if workspace.school != nil {
                 ContentUnavailableView("Sélectionne un élève", systemImage: "person.text.rectangle")
             } else if workspace.isLoadingSchool {
-                ProgressView("Chargement de l’école…")
+                DrivySkeletonRows(count: 3, leading: .avatar)
+                    .drivySkeleton("Chargement de l’école…")
+                    .drivyPageContent()
             } else if let error = workspace.schoolError {
                 SchoolErrorNotice(message: error, retry: {
                     if let membership = workspace.membership { Task { await workspace.selectSchool(membership) } }
@@ -342,11 +345,14 @@ private struct SchoolLearnerDetailView: View {
     private var dossier: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.xl) {
-                if workspace.isLoadingLearner {
-                    DrivyLoadingState(title: "Chargement du dossier…")
-                } else if let error = workspace.learnerError {
+                if workspace.isLoadingLearner && workspace.learner == nil {
+                    DrivySkeletonRows(count: 3, leading: .avatar)
+                        .drivySkeleton("Chargement du dossier…")
+                }
+                if let error = workspace.learnerError {
                     SchoolErrorNotice(message: error, retry: { Task { await workspace.loadSelectedLearner() } })
-                } else if let learner = workspace.learner {
+                }
+                if let learner = workspace.learner {
                     learnerHeading(learner)
                     trainings
                     if let openProfile {
@@ -398,8 +404,9 @@ private struct SchoolLearnerDetailView: View {
 
     private var trainings: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if workspace.isLoadingTrainings {
-                DrivyLoadingState(title: "Chargement des formations…")
+            if workspace.isLoadingTrainings && workspace.trainings.isEmpty {
+                DrivySkeletonRows(count: 2)
+                    .drivySkeleton("Chargement des formations…")
             }
             if let error = workspace.trainingsError {
                 SchoolErrorNotice(message: error, retry: { Task { await workspace.loadTrainings() } })
@@ -428,7 +435,7 @@ private struct SchoolLearnerDetailView: View {
                         .frame(maxWidth: .infinity, minHeight: 48)
                         .contentShape(Rectangle())
                 }
-                .disabled(workspace.isLoadingMoreTrainings)
+                .disabled(workspace.isLoadingMoreTrainings || workspace.isLoadingTrainings)
             }
         }
     }

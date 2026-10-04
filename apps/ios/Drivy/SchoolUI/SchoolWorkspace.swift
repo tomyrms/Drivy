@@ -272,8 +272,6 @@ final class SchoolWorkspace {
         // screen (and the sheets it carries) that depends on it: the rows already read stay until the
         // answer replaces them. They always belong to this learner (changing learner clears them).
         // Its independent detail request remains bound to its selection and schoolScope.
-        trainingCursors = []
-        nextTrainingsCursor = nil
         trainingsError = nil
         isLoadingMoreTrainings = false
         isLoadingTrainings = true
@@ -284,6 +282,7 @@ final class SchoolWorkspace {
             var fresh: [SchoolTraining] = []
             Self.merge(page.items, into: &fresh)
             trainings = fresh
+            trainingCursors = []
             nextTrainingsCursor = page.nextCursor
             isLoadingTrainings = false
         } catch {

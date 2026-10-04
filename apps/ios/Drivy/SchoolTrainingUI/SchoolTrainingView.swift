@@ -70,8 +70,10 @@ struct SchoolTrainingScreen: View {
             if let model, matches(model) {
                 SchoolTrainingContent(model: model, workspace: workspace, learner: learner, fixedSection: section, opened: $opened)
             } else {
-                ProgressView("Chargement de la formation…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                DrivySkeletonRows(count: 4, leading: .time)
+                    .drivySkeleton("Chargement de la formation…")
+                    .drivyPageContent()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .background(DrivyTheme.surface)
             }
         }
@@ -233,7 +235,10 @@ private struct SchoolTrainingContent: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: DrivySpacing.m) {
                         if fixedSection == nil { heading }
-                        if model.isLoading && model.training == nil { DrivyLoadingState(title: "Chargement de la formation…") }
+                        if model.isLoading && model.training == nil {
+                            DrivySkeletonRows(count: 4, leading: .time)
+                                .drivySkeleton("Chargement de la formation…")
+                        }
                         if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
                         if model.training != nil {
                             if fixedSection == nil && model.hasPedagogicalRole { sectionPicker }
@@ -294,6 +299,10 @@ private struct SchoolTrainingContent: View {
     private var lessons: some View {
         let visible = model.lessons.filter { filter.includes($0) && period.includes($0) }
         return VStack(alignment: .leading, spacing: DrivySpacing.m) {
+            if model.isLoading && !model.lessonsLoaded {
+                DrivySkeletonRows(count: 4, leading: .time)
+                    .drivySkeleton("Chargement des leçons…")
+            }
             if model.lessonsLoaded && model.lessons.isEmpty && !model.isLoading {
                 DrivyEmptyState(title: "Aucune leçon", symbol: "calendar")
             }
@@ -457,7 +466,8 @@ private struct SchoolTrainingContent: View {
             } else if let error = model.progressError {
                 SchoolErrorNotice(message: error, retry: { Task { await model.loadProgress() } })
             } else {
-                DrivyLoadingState(title: "Chargement de la progression…")
+                DrivySkeletonRows(count: 5)
+                    .drivySkeleton("Chargement de la progression…")
             }
         }
     }
