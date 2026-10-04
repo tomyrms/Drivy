@@ -510,9 +510,13 @@ struct SchoolRootView: View {
             }
             .background(DrivyTheme.surface)
         } else {
-            ProgressView("Chargement du compte…")
-                .foregroundStyle(DrivyTheme.muted)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                DrivySkeletonRow(leading: .avatar, lines: 3)
+                DrivySkeletonRows(count: 3)
+            }
+                .drivySkeleton("Chargement du compte…")
+                .drivyPageContent(maxWidth: DrivyLayout.formColumn)
+                .frame(maxHeight: .infinity, alignment: .top)
                 .background(DrivyTheme.canvas)
         }
     }

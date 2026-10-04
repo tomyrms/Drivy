@@ -9,13 +9,17 @@ import SwiftUI
 /// All names and texts are fictitious samples: no real person, school or position.
 struct DrivyDesignSystemGallery: View {
     @State private var selectedOption = 0
+    let loadingOnly: Bool
 
-    init() {}
+    init(loadingOnly: Bool = false) { self.loadingOnly = loadingOnly }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.xl) {
+                    if loadingOnly {
+                        loadingSection
+                    } else {
                     colorsSection
                     typographySection
                     spacingSection
@@ -23,11 +27,13 @@ struct DrivyDesignSystemGallery: View {
                     statusSection
                     rowsSection
                     statesSection
+                    loadingSection
                     messagesSection
                     containersSection
                     selectionSection
                     buttonsSection
                     illustrationSection
+                    }
                 }
                 .drivyPageContent()
             }
@@ -191,6 +197,45 @@ struct DrivyDesignSystemGallery: View {
                 SchoolErrorNotice(message: "L’agenda n’a pas pu être chargé. Vérifie la connexion puis réessaie.") {}
                 SchoolErrorNotice(message: "Erreur sans reprise possible.")
                 InlineErrorView(message: "L’observation n’a pas encore été enregistrée.") {}
+            }
+        }
+    }
+
+    /// Skeleton for a first load whose shape is known; the named spinner stays
+    /// for an operation in progress and for « charger la suite ».
+    private var loadingSection: some View {
+        GallerySection(title: "Chargement") {
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                LoadingSample(usage: "DrivySkeletonRows(leading: .time) · agenda, leçons, trajets") {
+                    DrivySkeletonRows(count: 3, leading: .time)
+                        .drivySkeleton("Chargement de l’agenda…")
+                }
+                LoadingSample(usage: "DrivySkeletonRows(leading: .avatar) · élèves, équipe") {
+                    DrivySkeletonRows(count: 2, leading: .avatar)
+                        .drivySkeleton("Chargement des élèves…")
+                }
+                LoadingSample(usage: "DrivySkeletonRows() · lignes de navigation") {
+                    DrivySkeletonRows(count: 2)
+                        .drivySkeleton("Chargement du dossier…")
+                }
+                LoadingSample(usage: "DrivySkeletonRow(lines: 3) · ligne à deux précisions") {
+                    DrivySkeletonRow(leading: .time, lines: 3)
+                        .drivySkeleton("Chargement de la leçon…")
+                }
+                LoadingSample(usage: "DrivySkeletonBlock · fiche composée à la main") {
+                    DrivyCard {
+                        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                            DrivySkeletonBlock(width: 96, height: 12)
+                            DrivySkeletonBlock(width: 200, height: 22)
+                            DrivySkeletonBlock()
+                            DrivySkeletonBlock(width: 220)
+                        }
+                    }
+                    .drivySkeleton("Chargement de la prochaine leçon…")
+                }
+                LoadingSample(usage: "DrivyLoadingState · opération en cours, charger la suite") {
+                    DrivyLoadingState(title: "Chargement de la suite…")
+                }
             }
         }
     }
@@ -445,6 +490,21 @@ private struct ColorSwatch: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct LoadingSample<Sample: View>: View {
+    let usage: String
+    @ViewBuilder let sample: Sample
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            sample
+            Text(usage)
+                .font(.caption)
+                .foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

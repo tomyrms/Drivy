@@ -41,7 +41,17 @@ struct SchoolTripsView<Header: View>: View {
                 // The account stays reachable while the school loads or when it cannot be read.
                 List {
                     header
-                    Section { DrivyLoadingState(title: "Chargement des trajets…") }
+                    Section {
+                        if let error = workspace.schoolError {
+                            SchoolErrorNotice(message: error, retry: {
+                                guard let membership = workspace.membership else { return }
+                                Task { await workspace.selectSchool(membership) }
+                            })
+                        } else {
+                            DrivySkeletonRows(count: 4, leading: .time)
+                                .drivySkeleton("Chargement des trajets…")
+                        }
+                    }
                         .drivyFormRows()
                 }
                 .listStyle(.insetGrouped)
@@ -211,7 +221,10 @@ private struct SchoolTripsList<Header: View>: View {
                 .listRowBackground(Color.clear)
             }
             if model.isLoading && model.trips.isEmpty {
-                Section { DrivyLoadingState(title: "Chargement des trajets…") }
+                Section {
+                    DrivySkeletonRows(count: 4, leading: .time)
+                        .drivySkeleton("Chargement des trajets…")
+                }
                     .drivyFormRows()
             }
             ForEach(days) { day in
