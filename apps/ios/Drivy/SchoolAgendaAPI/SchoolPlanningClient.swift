@@ -49,6 +49,38 @@ struct SchoolClosure: SchoolCatalogRecord {
     let reason: String?
 }
 
+/// The learner participates in local response identity; the server resolves it from the training.
+struct SchoolPlanningSlotRequest: Equatable {
+    let learnerID: UUID, trainingID: UUID, instructorID: UUID
+    let startsAt: Date, endsAt: Date
+    let timeZone: String
+    let bufferMinutes: Int
+    let excludedLessonID: UUID?
+}
+
+struct SchoolPlanningSlotAvailability: Decodable, Equatable {
+    let available: Bool
+    let reasonCode: String?
+
+    private enum CodingKeys: String, CodingKey { case available, reasonCode }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        available = try values.decode(Bool.self, forKey: .available)
+        guard values.contains(.reasonCode) else { throw SchoolPlanningFailure.invalidResponse }
+        reasonCode = try values.decodeIfPresent(String.self, forKey: .reasonCode)
+        guard available ? reasonCode == nil : ["SLOT_UNAVAILABLE", "SLOT_CONFLICT"].contains(reasonCode ?? "") else {
+            throw SchoolPlanningFailure.invalidResponse
+        }
+    }
+    var refusalMessage: String? {
+        switch reasonCode {
+        case "SLOT_UNAVAILABLE": "Le moniteur n’est pas disponible à cet horaire."
+        case "SLOT_CONFLICT": "Le moniteur ou l’élève a déjà un rendez-vous sur ce créneau."
+        default: nil
+        }
+    }
+}
+
 enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
     case unauthorized, forbidden, unavailable, invalidResponse, notFound, conflict, rejected(String)
     var errorDescription: String? {
@@ -107,6 +139,17 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         let result: SchoolPlanningDefaults = try await request(schoolID, ["planning-defaults"])
         guard result.schoolId == schoolID, result.id == membershipID, result.version > 0 else { throw SchoolPlanningFailure.invalidResponse }
         return result
+    }
+    func availability(schoolID: UUID, slot: SchoolPlanningSlotRequest) async throws -> SchoolPlanningSlotAvailability {
+        let iso = ISO8601DateFormatter()
+        var query = [URLQueryItem(name: "trainingId", value: slot.trainingID.uuidString),
+            URLQueryItem(name: "instructorMembershipId", value: slot.instructorID.uuidString),
+            URLQueryItem(name: "plannedStart", value: iso.string(from: slot.startsAt)),
+            URLQueryItem(name: "plannedEnd", value: iso.string(from: slot.endsAt)),
+            URLQueryItem(name: "timeZone", value: slot.timeZone),
+            URLQueryItem(name: "bufferMinutes", value: String(slot.bufferMinutes))]
+        if let id = slot.excludedLessonID { query.append(URLQueryItem(name: "excludeLessonId", value: id.uuidString)) }
+        return try await request(schoolID, ["lessons", "availability"], query: query)
     }
     func send(_ command: PendingSchoolCommand) async throws {
         guard command.kind.isPlanning, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,

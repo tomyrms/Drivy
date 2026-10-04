@@ -16,8 +16,9 @@ struct SchoolCaptureLiveView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var resetCameraID = UUID()
-    @State private var followsPosition = true
+    @State private var followMode: DrivyMapFollowMode = .free
     @State private var observationMoment: ObservationMoment?
+    @State private var observationNotice: ObservationNotice?
     @State private var isFinishing = false
     @State private var confirmsFinish = false
     @State private var cancellationModel: SchoolPlanningWorkspace?
@@ -28,6 +29,12 @@ struct SchoolCaptureLiveView: View {
         let instant: Date
         let recorder: SchoolLiveObservationRecorder
         let anchor: SchoolLiveObservationAnchor?
+    }
+
+    private struct ObservationNotice: Identifiable {
+        let receipt: SchoolLiveObservationReceipt
+        let recorder: SchoolLiveObservationRecorder
+        var id: UUID { receipt.id }
     }
 
     private enum Command { case pause, resume, retrySaving }
@@ -72,7 +79,7 @@ struct SchoolCaptureLiveView: View {
                                 .onTapGesture { closeObservation() }
                                 .accessibilityHidden(true)
                             SchoolLiveObservationPalette(recorder: moment.recorder, observedAt: moment.instant,
-                                anchor: moment.anchor, onClose: closeObservation)
+                                anchor: moment.anchor, onRecorded: { showObservationNotice(moment.recorder) }, onClose: closeObservation)
                                 .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
                                 .frame(height: min(480, max(0, geometry.size.height - DrivySpacing.xl)))
                                 .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel))
@@ -91,10 +98,11 @@ struct SchoolCaptureLiveView: View {
         .tint(DrivyTheme.accent)
         .toolbar(.hidden, for: .navigationBar)
         .interactiveDismissDisabled(isFinishing)
-        .confirmationDialog("Terminer la leçon ?", isPresented: $confirmsFinish, titleVisibility: .visible) {
-            Button("Terminer et ouvrir le bilan") { finishLesson() }
+        .sensoryFeedback(.success, trigger: observationNotice?.id) { _, newValue in newValue != nil }
+        .alert("Terminer la leçon ?", isPresented: $confirmsFinish) {
+            Button("Terminer") { finishLesson() }
                 .accessibilityIdentifier("capture-confirm-finish")
-            Button("Continuer la leçon", role: .cancel) { }
+            Button("Continuer", role: .cancel) { }
         }
         .task(id: controller.captureID) {
             if let observationClient { controller.prepareLiveObservations(client: observationClient) }
@@ -102,11 +110,12 @@ struct SchoolCaptureLiveView: View {
         }
         .onChange(of: controller.captureID) { _, _ in
             observationMoment = nil
+            observationNotice = nil
             confirmsFinish = false
             resetCameraID = UUID()
-            followsPosition = true
+            followMode = .free
         }
-        .onDisappear { observationMoment = nil }
+        .onDisappear { observationMoment = nil; observationNotice = nil }
         .sheet(item: $cancellationModel) { model in
             SchoolPlanningView(model: model, cancelling: true, beforeCancellation: {
                 await controller.stopAndSynchronize()
@@ -121,11 +130,6 @@ struct SchoolCaptureLiveView: View {
 
     private var compactContent: some View {
         routeMap
-            .overlay(alignment: .bottomTrailing) {
-                if controller.displayedPointCount > 0 {
-                    mapControls(axis: .horizontal).padding(DrivySpacing.m)
-                }
-            }
             .safeAreaInset(edge: .top, spacing: 0) {
                 heading()
                     .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
@@ -133,7 +137,7 @@ struct SchoolCaptureLiveView: View {
                     .frame(maxWidth: .infinity)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                commandPanel()
+                commandDock()
                 .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
                 .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.s)
                 .frame(maxWidth: .infinity)
@@ -148,8 +152,8 @@ struct SchoolCaptureLiveView: View {
                 // au titre ; elles défilent seulement si la colonne est trop basse.
                 Spacer(minLength: 0)
                 ViewThatFits(in: .vertical) {
-                    commandPanel(floating: false)
-                    ScrollView { commandPanel(floating: false) }
+                    wideCommands
+                    ScrollView { wideCommands }
                         .scrollBounceBehavior(.basedOnSize)
                 }
             }
@@ -179,7 +183,10 @@ struct SchoolCaptureLiveView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: DrivySpacing.s) { actions }
+                VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                    observationNoticeView
+                    actions
+                }
                     .padding(DrivySpacing.m)
                     .frame(maxWidth: DrivyMapLayout.accessibleMaxWidth)
                     .frame(maxWidth: .infinity)
@@ -195,7 +202,7 @@ struct SchoolCaptureLiveView: View {
             SchoolCaptureLiveMap(segments: controller.segments,
                 observations: controller.liveObservations?.mapObservations ?? [],
                 resetCameraID: resetCameraID, isRecording: controller.state == .recording,
-                followsPosition: $followsPosition)
+                followMode: $followMode)
         } else {
             DrivyMapPlaceholder(title: placeholderTitle, message: placeholderMessage, symbol: "location",
                 isSearching: controller.state == .preparing || controller.state == .recording)
@@ -350,7 +357,8 @@ struct SchoolCaptureLiveView: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: observationMoment?.id)
         .accessibilityIdentifier("capture-signal-observation")
         .popover(item: observationPopover, attachmentAnchor: .rect(.bounds)) { moment in
-            SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant, anchor: moment.anchor)
+            SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant, anchor: moment.anchor,
+                onRecorded: { showObservationNotice(moment.recorder) })
                 .frame(width: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.width : nil,
                        height: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.height : nil)
                 .presentationCompactAdaptation(.sheet)
@@ -361,8 +369,46 @@ struct SchoolCaptureLiveView: View {
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.24, extraBounce: 0)) { observationMoment = nil }
     }
 
+    private func showObservationNotice(_ recorder: SchoolLiveObservationRecorder) {
+        guard let receipt = recorder.lastAdded else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+            observationNotice = ObservationNotice(receipt: receipt, recorder: recorder)
+        }
+    }
+
+    @ViewBuilder private var observationNoticeView: some View {
+        if let notice = observationNotice {
+            SchoolObservationUndoBanner(recorder: notice.recorder, receipt: notice.receipt) {
+                guard observationNotice?.id == notice.id else { return }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { observationNotice = nil }
+            }
+        }
+    }
+
+    private func commandDock(floating: Bool = true) -> some View {
+        commandPanel(floating: floating)
+            .overlay(alignment: .top) {
+                VStack(alignment: .trailing, spacing: DrivySpacing.s) {
+                    if controller.displayedPointCount > 0 { mapControls(axis: .horizontal) }
+                    observationNoticeView
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                // Le bandeau laisse aussi la ligne des mentions Apple Plans visible au bas de la carte.
+                .alignmentGuide(.top) { $0[.bottom] + (observationNotice == nil ? DrivySpacing.s : DrivySpacing.xl) }
+            }
+    }
+
+    private var wideCommands: some View {
+        VStack(spacing: DrivySpacing.s) {
+            observationNoticeView
+            commandPanel(floating: false)
+        }
+    }
+
     @ViewBuilder private func observationFeedback(_ recorder: SchoolLiveObservationRecorder) -> some View {
-        if recorder.isSending { DrivyLoadingState(title: "Envoi de l’observation…") }
+        if recorder.isSending {
+            if observationNotice == nil { DrivyLoadingState(title: "Envoi de l’observation…") }
+        }
         else if recorder.pending != nil {
             DrivyInlineMessage(text: recorder.errorMessage
                 ?? (recorder.pendingIsForeign
@@ -519,8 +565,8 @@ struct SchoolCaptureLiveView: View {
     }
 
     private func mapControls(axis: Axis) -> some View {
-        DrivyMapControls(followsPosition: $followsPosition, axis: axis) {
-            followsPosition = false
+        DrivyMapControls(followMode: $followMode, axis: axis) {
+            followMode = .free
             resetCameraID = UUID()
         }
     }

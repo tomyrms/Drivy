@@ -15,6 +15,13 @@ struct SchoolLiveMapObservation: Identifiable {
     var isPending: Bool
 }
 
+struct SchoolLiveObservationReceipt: Identifiable, Equatable {
+    let id: UUID
+    let displayTitle: String
+}
+
+enum SchoolLiveObservationUndoState: Equatable { case none, pending, confirmed }
+
 /// Les sous-thèmes précisent une compétence existante, sans créer de référentiel parallèle.
 struct SchoolLiveObservationTheme: Identifiable, Equatable {
     let competency: SchoolCatalogCompetency
@@ -58,6 +65,9 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     private(set) var pending: PendingSchoolCommand?
     private(set) var isSending = false
     private(set) var mapObservations: [SchoolLiveMapObservation] = []
+    private(set) var lastAdded: SchoolLiveObservationReceipt?
+    private(set) var undoState: SchoolLiveObservationUndoState = .none
+    private(set) var undoErrorMessage: String?
     var themes: [SchoolLiveObservationTheme] { competencies.flatMap(SchoolLiveObservationTheme.choices) }
     var canRecord: Bool { !stopped && !isSending && pending == nil }
     /// La file chiffrée n’accepte qu’une demande par école : une autre demande en attente (départ de
@@ -72,6 +82,8 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     @ObservationIgnored private let permitsAnchor: (@MainActor (SchoolLiveObservationAnchor) -> Bool)?
     @ObservationIgnored private let prepareAnchor: (@MainActor (SchoolLiveObservationAnchor) async throws -> Void)?
     @ObservationIgnored private var stopped = false
+    @ObservationIgnored private var lastAddedCommand: PendingSchoolCommand?
+    @ObservationIgnored private var lastAddedWasConfirmed = false
 
     init(scope: SchoolCommandScope, lessonID: UUID, client: SchoolObservationClient,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(),
@@ -83,9 +95,14 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         self.permitsAnchor = permitsAnchor; self.prepareAnchor = prepareAnchor
         do { pending = try outbox.pending(for: scope) }
         catch { stopped = true; errorMessage = "Le stockage protégé est indisponible. Aucune observation n’a été ajoutée." }
-        if let pending, pending.kind == .createObservation, pending.routeResourceID == lessonID,
+        if let pending, pending.scope == scope, pending.kind == .createObservation, pending.routeResourceID == lessonID,
            let body = try? JSONDecoder().decode(SchoolObservationBody.self, from: pending.body) {
             mapObservations = [.init(id: pending.id, body: body, isPending: true)]
+            if body.origin == "LIVE" {
+                lastAddedCommand = pending.withoutObservationUndo
+                lastAdded = .init(id: pending.id, displayTitle: body.eventKind == "MARKER" ? "Moment ajouté" : "Observation ajoutée")
+                if pending.observationUndoOperationID != nil { undoState = .pending }
+            }
         }
     }
 
@@ -138,6 +155,9 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
             try outbox.save(command)
             pending = command; errorMessage = nil
             mapObservations.append(.init(id: operation, body: value, isPending: true))
+            lastAddedCommand = command; lastAddedWasConfirmed = false
+            lastAdded = .init(id: operation, displayTitle: theme == nil ? "Moment ajouté" : "Observation ajoutée")
+            undoState = .none; undoErrorMessage = nil
             Task { await retry() }
             return true
         } catch {
@@ -148,7 +168,37 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
 
     /// Accès changé ou trajet remplacé : plus aucun envoi depuis cette instance. Une demande déjà durable reste
     /// dans la file chiffrée et se vérifie depuis les observations de la leçon.
-    func stop() { stopped = true }
+    func stop() {
+        stopped = true
+        lastAdded = nil; lastAddedCommand = nil; undoState = .none; undoErrorMessage = nil
+    }
+
+    /// Sending the CREATE does not remove the right to request its durable withdrawal.
+    func canUndo(_ id: UUID) -> Bool {
+        !stopped && lastAdded?.id == id && lastAddedCommand?.id == id && undoState == .none
+            && (pending == nil || (pending?.id == id && pending?.scope == scope))
+    }
+
+    /// True means the withdrawal intent is durable, not that the service has removed the observation.
+    @discardableResult func undoLastAdded(id: UUID) async -> Bool {
+        guard canUndo(id), let original = lastAddedCommand else { return false }
+        let withdrawal = original.requestingObservationUndo(operationID: UUID())
+        do {
+            try outbox.save(withdrawal)
+            pending = withdrawal; undoState = .pending; undoErrorMessage = nil; errorMessage = nil
+            // A send already in flight will reread the upgraded command before acknowledging it.
+            if !isSending { Task { await retry() } }
+            return true
+        } catch {
+            // An atomic write can have happened before a storage barrier failed. Keep that exact ID.
+            if let stored = try? outbox.pending(for: scope), stored.id == original.id,
+               stored.observationUndoOperationID != nil {
+                pending = stored; undoState = .pending
+            }
+            undoErrorMessage = "L’annulation n’a pas pu être confirmée sur cet appareil. Réessaie."
+            return false
+        }
+    }
 
     func refreshPending() {
         guard !stopped, !isSending else { return }
@@ -157,32 +207,76 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     }
 
     var canRetry: Bool {
-        !stopped && !isSending && pending?.kind == .createObservation && pending?.routeResourceID == lessonID
+        !stopped && !isSending && pending?.scope == scope
+            && pending?.kind == .createObservation && pending?.routeResourceID == lessonID
     }
     func retry() async {
-        guard canRetry, let command = pending else { return }
+        guard canRetry, let initial = pending else { return }
         isSending = true
-        do {
-            try outbox.save(command)
-            let body = try JSONDecoder().decode(SchoolObservationBody.self, from: command.body)
-            if let captureID = body.captureId, let segmentID = body.segmentId, let sequence = body.pointSequence {
-                // Make the durable point available before asking the service to anchor it.
-                try await prepareAnchor?(.init(captureID: captureID, segmentID: segmentID, pointSequence: sequence))
-            }
-            guard !stopped else { throw CancellationError() }
-            _ = try await client.send(command)
-            try outbox.remove(command)
-            if !stopped {
-                pending = nil; confirmed += 1; errorMessage = nil
-                if let index = mapObservations.firstIndex(where: { $0.id == command.id }) { mapObservations[index].isPending = false }
-            }
-        } catch {
-            if !stopped {
-                // Même un refus conserve le geste pour une relecture explicite depuis la leçon.
-                errorMessage = "Observation conservée sur cet appareil. Son envoi reste à confirmer."
-                if error as? SchoolObservationFailure == .unauthorized || error as? SchoolObservationFailure == .forbidden {
-                    stop(); errorMessage = "Ton accès a changé. L’observation reste conservée dans le compte d’origine."
+        var command = initial
+        while true {
+            do {
+                // Another observation screen may have upgraded this same command while we were idle.
+                if let current = try outbox.pending(for: scope), current.withoutObservationUndo == command.withoutObservationUndo {
+                    command = current; pending = current
                 }
+                try outbox.save(command)
+                let body = try JSONDecoder().decode(SchoolObservationBody.self, from: command.body)
+                guard !stopped else { throw CancellationError() }
+                let result = try await client.send(command, beforeCreation: { [self] in
+                    guard !stopped else { throw CancellationError() }
+                    if let captureID = body.captureId, let segmentID = body.segmentId, let sequence = body.pointSequence {
+                        try await prepareAnchor?(.init(captureID: captureID, segmentID: segmentID, pointSequence: sequence))
+                    }
+                }, validateContinuation: { [self] in
+                    guard !stopped else { throw CancellationError() }
+                })
+                if let current = try outbox.pending(for: scope), current != command {
+                    guard current.withoutObservationUndo == command, current.observationUndoOperationID != nil else {
+                        throw SchoolConfigurationFailure.storage
+                    }
+                    // The CREATE succeeded, but its withdrawal now owns the durable slot.
+                    if stopped { break }
+                    command = current; pending = current; undoState = .pending
+                    continue
+                }
+                try outbox.remove(command)
+                if !stopped {
+                    pending = nil; errorMessage = nil
+                    switch result {
+                    case .observation:
+                        confirmed += 1
+                        if lastAdded?.id == command.id { lastAddedWasConfirmed = true }
+                        if let index = mapObservations.firstIndex(where: { $0.id == command.id }) { mapObservations[index].isPending = false }
+                    case .removed:
+                        mapObservations.removeAll { $0.id == command.id }
+                        if lastAdded?.id == command.id {
+                            if lastAddedWasConfirmed { confirmed = max(0, confirmed - 1) }
+                            undoState = .confirmed; undoErrorMessage = nil
+                        }
+                    }
+                }
+                break
+            } catch {
+                // A concurrent undo must survive both a late response and an uncertain CREATE failure.
+                if !stopped, command.observationUndoOperationID == nil,
+                   let current = try? outbox.pending(for: scope), current.withoutObservationUndo == command,
+                   current.observationUndoOperationID != nil {
+                    command = current; pending = current; undoState = .pending
+                    continue
+                }
+                if !stopped {
+                    errorMessage = command.observationUndoOperationID == nil
+                        ? "Observation conservée sur cet appareil. Son envoi reste à confirmer."
+                        : "Annulation conservée sur cet appareil. Son retrait reste à confirmer."
+                    if command.observationUndoOperationID != nil {
+                        undoErrorMessage = (error as? SchoolObservationFailure)?.errorDescription ?? errorMessage
+                    }
+                    if error as? SchoolObservationFailure == .unauthorized || error as? SchoolObservationFailure == .forbidden {
+                        stop(); errorMessage = "Ton accès a changé. La demande reste conservée dans le compte d’origine."
+                    }
+                }
+                break
             }
         }
         isSending = false

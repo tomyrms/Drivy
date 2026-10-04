@@ -7,7 +7,7 @@ struct SchoolCaptureLiveMap: View {
     let observations: [SchoolLiveMapObservation]
     let resetCameraID: UUID
     let isRecording: Bool
-    @Binding var followsPosition: Bool
+    @Binding var followMode: DrivyMapFollowMode
     @State private var camera: MapCameraPosition = .automatic
     @State private var mapHeading = 0.0
     @State private var followDistance = 650.0
@@ -23,7 +23,7 @@ struct SchoolCaptureLiveMap: View {
 
     private var count: Int { segments.reduce(0) { $0 + $1.measurements.count } }
     private var contentKey: String { segments.map { "\($0.id):\($0.measurements.count)" }.joined(separator: ",") }
-    private var compassIsActive: Bool { isVisible && isRecording && scenePhase == .active }
+    private var compassIsActive: Bool { followMode == .heading && isVisible && isRecording && scenePhase == .active }
     private var displayedHeading: Double? { compass.degrees ?? heading }
 
     var body: some View {
@@ -62,35 +62,34 @@ struct SchoolCaptureLiveMap: View {
             isVisible = true
             updateRoute(); updateCourse()
             compass.setActive(compassIsActive)
-            if followsPosition { followPoint() } else if count > 0 { camera = .automatic }
+            if followMode.followsPosition { followPoint() } else if count > 0 { camera = .automatic }
         }
         .onDisappear { isVisible = false; compass.stop() }
         .onChange(of: compassIsActive) { _, active in compass.setActive(active) }
         .onChange(of: compass.degrees) { _, degrees in
-            guard degrees != nil, followsPosition, !camera.positionedByUser else { return }
+            guard degrees != nil, followMode == .heading, !camera.positionedByUser else { return }
             followPoint()
         }
         .onMapCameraChange(frequency: .continuous) { context in
             mapHeading = context.camera.heading
             if camera.positionedByUser { followDistance = min(2500, max(180, context.camera.distance)) }
         }
-        .onChange(of: camera.positionedByUser) { _, byUser in if byUser { followsPosition = false } }
-        .onChange(of: followsPosition) { _, follows in if follows { followPoint() } }
+        .onChange(of: camera.positionedByUser) { _, byUser in if byUser { followMode = .free } }
+        .onChange(of: followMode) { _, mode in if mode.followsPosition { followPoint() } }
         .onChange(of: contentKey) { _, _ in
             let hadPosition = last != nil
             updateRoute()
             updateCourse()
-            if followsPosition && !camera.positionedByUser { followPoint() }
-            else if !hadPosition && last != nil { camera = .automatic }
+            if followMode.followsPosition && !camera.positionedByUser { followPoint() }
+            else if !hadPosition && last != nil && !camera.positionedByUser { camera = .automatic }
         }
         .onChange(of: resetCameraID) { _, _ in
-            if followsPosition { followPoint() }
+            if followMode.followsPosition { followPoint() }
             else { camera = .automatic }
         }
         .accessibilityLabel("Carte du trajet enregistré")
-        .accessibilityValue(followsPosition
-            ? (compass.degrees == nil ? "Suivi dans le sens du trajet" : "Suivi de la position et du cap de l’appareil")
-            : "Carte libre")
+        .accessibilityValue(followMode == .heading && compass.degrees == nil
+            ? "Suivi de position, orientation du téléphone indisponible" : followMode.label)
     }
 
     private func coordinate(for observation: SchoolLiveMapObservation) -> CLLocationCoordinate2D? {
@@ -154,10 +153,10 @@ struct SchoolCaptureLiveMap: View {
     }
 
     private func followPoint() {
-        guard let last else { return }
+        guard followMode.followsPosition, let last else { return }
         withAnimation(reduceMotion ? nil : .linear(duration: 0.35)) {
             camera = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude),
-                distance: followDistance, heading: displayedHeading ?? mapHeading, pitch: 0))
+                distance: followDistance, heading: followMode.cameraHeading(deviceHeading: compass.degrees) ?? mapHeading, pitch: 0))
         }
     }
 }

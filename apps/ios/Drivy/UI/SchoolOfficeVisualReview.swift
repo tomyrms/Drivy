@@ -130,6 +130,8 @@ struct SchoolOfficeVisualReview: View {
             "instructorMembershipId": member, "weekdays": [1, 2, 3, 4, 5, 6, 7], "localStart": "07:00", "localEnd": "20:00",
             "validFrom": "2026-01-01", "validUntil": NSNull()]]))
         responses["\(root)/closures"] = try envelope(page([]))
+        // Réponse explicitement synthétique : le rendu ne qualifie pas le contrôle de réservation serveur.
+        responses["\(root)/lessons/availability"] = try envelope(["available": true, "reasonCode": NSNull()])
         let invitations: [[String: Any]] = ["PENDING", "ACCEPTED", "EXPIRED"].map { status in
             ["id": UUID().uuidString, "schoolId": school, "version": 1, "maskedEmail": NSNull(), "roles": ["LEARNER"],
                 "status": status, "expiresAt": "2026-10-06T10:00:00Z", "delivery": "CODE", "trainingCategoryCode": "B",

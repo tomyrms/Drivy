@@ -24,6 +24,7 @@ struct SchoolTodayView: View {
     @State private var cardHeight: CGFloat = 0
     @State private var location = SchoolTodayLocationPermission()
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
+    @Namespace private var mapScope
 
     private struct OpenedLesson: Identifiable {
         let lesson: SchoolLesson
@@ -133,9 +134,16 @@ struct SchoolTodayView: View {
     /// Sans position autorisée, un état honnête plutôt qu’une vue du pays entier.
     @ViewBuilder private var map: some View {
         if location.permitted {
-            Map(position: $camera) { UserAnnotation() }
+            Map(position: $camera, scope: mapScope) { UserAnnotation() }
                 .mapStyle(.standard(pointsOfInterest: .excludingAll))
-                .mapControls { MapUserLocationButton() }
+                .mapControls { }
+                // Avant les insets du panneau : le contrôle suit la carte visible sans déplacer ses mentions.
+                .overlay(alignment: .bottomTrailing) {
+                    MapUserLocationButton(scope: mapScope)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .padding(.trailing, DrivySpacing.m)
+                        .padding(.bottom, DrivySpacing.l)
+                }
         } else {
             locationPlaceholder
                 .frame(maxHeight: .infinity)

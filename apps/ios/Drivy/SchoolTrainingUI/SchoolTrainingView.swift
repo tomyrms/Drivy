@@ -56,6 +56,7 @@ struct SchoolTrainingScreen: View {
     let learner: SchoolLearner
     let trainingID: UUID
     var section: SchoolTrainingSection? = nil
+    var openProfile: (() -> Void)? = nil
     @State private var model: SchoolTrainingWorkspace?
     /// La leçon ouverte vit ici, hors du contenu conditionnel et de `.id` : une relecture ou un changement
     /// de portée recrée le contenu, jamais la feuille qui le surplombe.
@@ -68,7 +69,8 @@ struct SchoolTrainingScreen: View {
     var body: some View {
         Group {
             if let model, matches(model) {
-                SchoolTrainingContent(model: model, workspace: workspace, learner: learner, fixedSection: section, opened: $opened)
+                SchoolTrainingContent(model: model, workspace: workspace, learner: learner, fixedSection: section,
+                    openProfile: openProfile, opened: $opened)
             } else {
                 DrivySkeletonRows(count: 4, leading: .time)
                     .drivySkeleton("Chargement de la formation…")
@@ -189,6 +191,7 @@ private struct SchoolTrainingContent: View {
     @Bindable var workspace: SchoolWorkspace
     let learner: SchoolLearner
     let fixedSection: SchoolTrainingSection?
+    let openProfile: (() -> Void)?
     @Binding var opened: OpenedLesson?
     @State private var chosenSection: SchoolTrainingSection = .lessons
     /// Le tri et le filtre survivent aux changements d’onglet et de dossier pendant la session de la scène.
@@ -261,6 +264,15 @@ private struct SchoolTrainingContent: View {
         }
     }
     private var heading: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            identity
+            if openProfile != nil || learner.contactPhone != nil || learner.contactEmail != nil {
+                SchoolLearnerActions(learner: learner, openProfile: openProfile)
+            }
+        }
+    }
+
+    private var identity: some View {
         // Le dossier est celui d’une personne : son nom est le titre, la formation la précise.
         HStack(spacing: DrivySpacing.m) {
             if !dynamicTypeSize.isAccessibilitySize {

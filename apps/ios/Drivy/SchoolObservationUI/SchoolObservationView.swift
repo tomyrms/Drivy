@@ -44,6 +44,14 @@ struct SchoolObservationView: View {
     @Bindable var schoolWorkspace: SchoolWorkspace
     @Environment(\.dismiss) private var dismiss
     @State private var route: ObservationRoute?
+    @State private var observationNotice: ObservationNotice?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private struct ObservationNotice: Identifiable {
+        let receipt: SchoolLiveObservationReceipt
+        let recorder: SchoolLiveObservationRecorder
+        var id: UUID { receipt.id }
+    }
 
     private enum ObservationRoute: Identifiable {
         case signal(SignalRoute)
@@ -83,7 +91,18 @@ struct SchoolObservationView: View {
             }
             .background(DrivyTheme.surface)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if model.loaded && model.canAdd { DrivyStickyActionBar { actions } }
+                VStack(spacing: 0) {
+                    if let notice = observationNotice {
+                        SchoolObservationUndoBanner(recorder: notice.recorder, receipt: notice.receipt) {
+                            guard observationNotice?.id == notice.id else { return }
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { observationNotice = nil }
+                        }
+                        .padding(.horizontal, DrivySpacing.m)
+                        .padding(.vertical, DrivySpacing.xs)
+                    }
+                    if model.loaded && model.canAdd { DrivyStickyActionBar { actions } }
+                }
+                .background(DrivyTheme.surface)
             }
             .navigationTitle("Observations").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -96,19 +115,37 @@ struct SchoolObservationView: View {
             .task { await model.load() }
             .sheet(item: $route, onDismiss: { Task { await model.load() } }) { route in
                 switch route {
-                case .signal(let value): SchoolLiveObservationSheet(recorder: value.recorder, observedAt: value.observedAt)
+                case .signal(let value):
+                    SchoolLiveObservationSheet(recorder: value.recorder, observedAt: value.observedAt,
+                        onRecorded: { showObservationNotice(value.recorder) })
                 case .edit(let editor): SchoolObservationComposer(model: model, editor: editor)
                 case .remove(let observation): SchoolObservationRemoval(model: model, observation: observation)
                 case .pending(let command): SchoolObservationPendingView(model: model, command: command)
                 }
             }
             .onChange(of: scopeMatches) { _, matches in
-                if !matches { route = nil; model.invalidate(); dismiss() }
+                if !matches { stopObservationFeedback(); route = nil; model.invalidate(); dismiss() }
             }
-            .onChange(of: model.accessRevoked) { _, revoked in if revoked { route = nil } }
+            .onChange(of: model.accessRevoked) { _, revoked in
+                if revoked { stopObservationFeedback(); route = nil }
+            }
         }
         .tint(DrivyTheme.accent).foregroundStyle(DrivyTheme.text)
         .interactiveDismissDisabled(model.isBusy)
+        .sensoryFeedback(.success, trigger: observationNotice?.id) { _, newValue in newValue != nil }
+    }
+
+    private func showObservationNotice(_ recorder: SchoolLiveObservationRecorder) {
+        guard let receipt = recorder.lastAdded else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+            observationNotice = .init(receipt: receipt, recorder: recorder)
+        }
+    }
+
+    private func stopObservationFeedback() {
+        if let route, case .signal(let value) = route { value.recorder.stop() }
+        observationNotice?.recorder.stop()
+        observationNotice = nil
     }
     private var heading: some View {
         // Partage automatique (28 septembre 2026) : l’élève voit les observations d’une leçon terminée,
@@ -292,7 +329,7 @@ private struct SchoolObservationComposer: View {
                     Button("Annuler") { if changed && model.pending == nil { confirmsDiscard = true } else { dismiss() } }.disabled(model.isBusy)
                 }
             }
-            .confirmationDialog("Quitter sans enregistrer ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+            .alert("Quitter sans enregistrer ?", isPresented: $confirmsDiscard) {
                 Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
                 Button("Continuer", role: .cancel) { }
             }
@@ -391,7 +428,7 @@ private struct SchoolObservationRemoval: View {
                     }.disabled(model.isBusy)
                 }
             }
-            .confirmationDialog("Quitter sans enregistrer ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+            .alert("Quitter sans enregistrer ?", isPresented: $confirmsDiscard) {
                 Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
                 Button("Continuer", role: .cancel) { }
             }

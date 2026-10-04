@@ -313,14 +313,72 @@ struct DrivyMapDock<Content: View>: View {
     }
 }
 
+/// Live following separates centering from device orientation. A manual gesture returns to free.
+enum DrivyMapFollowMode: Equatable {
+    case free, position, heading
+
+    var next: Self {
+        switch self { case .free: .position; case .position: .heading; case .heading: .free }
+    }
+    var followsPosition: Bool { self != .free }
+    var symbol: String {
+        switch self { case .free: "location"; case .position: "location.fill"; case .heading: "location.north.line.fill" }
+    }
+    var label: String {
+        switch self {
+        case .free: "Carte libre"
+        case .position: "Suivi de position, nord en haut"
+        case .heading: "Suivi de position et orientation du téléphone"
+        }
+    }
+    var nextActionLabel: String {
+        switch self {
+        case .free: "Recentrer sur la position"
+        case .position: "Suivre l’orientation du téléphone"
+        case .heading: "Arrêter le suivi"
+        }
+    }
+
+    /// Nil leaves the existing camera orientation alone; it never invents a device heading.
+    func cameraHeading(deviceHeading: Double?) -> Double? {
+        switch self {
+        case .free: return nil
+        case .position: return 0
+        case .heading:
+            guard let deviceHeading, deviceHeading.isFinite, (0..<360).contains(deviceHeading) else { return nil }
+            return deviceHeading
+        }
+    }
+}
+
 /// Follow / show-whole-route commands floating on the map. Tinted Liquid Glass so
 /// they stay legible over any background; grouped so the two circles blend.
 struct DrivyMapControls: View {
-    @Binding var followsPosition: Bool
-    var followLabel = "Recentrer dans le sens du trajet"
-    var canFollow = true
-    var axis: Axis = .vertical
+    @Binding private var followMode: DrivyMapFollowMode
+    private let legacyFollowLabel: String?
+    let canFollow: Bool
+    let axis: Axis
     let showWholeRoute: () -> Void
+
+    init(followMode: Binding<DrivyMapFollowMode>, canFollow: Bool = true, axis: Axis = .vertical,
+         showWholeRoute: @escaping () -> Void) {
+        _followMode = followMode; legacyFollowLabel = nil
+        self.canFollow = canFollow; self.axis = axis; self.showWholeRoute = showWholeRoute
+    }
+
+    /// Replay keeps its existing two-state route-direction control; no device-heading mode is added.
+    init(followsPosition: Binding<Bool>, followLabel: String = "Recentrer dans le sens du trajet",
+         canFollow: Bool = true, axis: Axis = .vertical, showWholeRoute: @escaping () -> Void) {
+        _followMode = Binding(get: { followsPosition.wrappedValue ? .heading : .free },
+                              set: { followsPosition.wrappedValue = $0.followsPosition })
+        legacyFollowLabel = followLabel
+        self.canFollow = canFollow; self.axis = axis; self.showWholeRoute = showWholeRoute
+    }
+
+    private var actionLabel: String {
+        if let legacyFollowLabel { return followMode.followsPosition ? "Arrêter le suivi de position" : legacyFollowLabel }
+        return followMode.nextActionLabel
+    }
 
     var body: some View {
         GlassEffectContainer(spacing: DrivySpacing.xs) {
@@ -328,18 +386,20 @@ struct DrivyMapControls: View {
                 ? AnyLayout(VStackLayout(spacing: DrivySpacing.xs))
                 : AnyLayout(HStackLayout(spacing: DrivySpacing.xs))
             layout {
-                Button { followsPosition.toggle() } label: {
-                    Image(systemName: followsPosition ? "location.north.line.fill" : "location")
+                Button {
+                    followMode = legacyFollowLabel == nil ? followMode.next : (followMode.followsPosition ? .free : .heading)
+                } label: {
+                    Image(systemName: followMode.symbol)
                         .font(DrivyMapGlyph.primaryControl)
-                        .foregroundStyle(followsPosition ? DrivyTheme.accent : canFollow ? DrivyTheme.text : DrivyTheme.disabledText)
+                        .foregroundStyle(followMode.followsPosition ? DrivyTheme.accent : canFollow ? DrivyTheme.text : DrivyTheme.disabledText)
                         .frame(width: 48, height: 48)
                         .drivyLegibleMapControl(in: Circle())
                 }
-                .disabled(!canFollow && !followsPosition)
-                .accessibilityLabel(followsPosition ? "Arrêter le suivi de position" : followLabel)
-                .accessibilityValue(followsPosition ? "Suivi avec orientation" : "Carte libre")
+                .disabled(!canFollow && !followMode.followsPosition)
+                .accessibilityLabel(actionLabel)
+                .accessibilityValue(legacyFollowLabel != nil && followMode.followsPosition ? "Suivi dans le sens du trajet" : followMode.label)
                 .accessibilityIdentifier("map-follow-position")
-                .accessibilityAddTraits(followsPosition ? [.isSelected] : [])
+                .accessibilityAddTraits(followMode.followsPosition ? [.isSelected] : [])
                 Button(action: showWholeRoute) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(DrivyMapGlyph.primaryControl)

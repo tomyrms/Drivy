@@ -38,10 +38,16 @@ struct SchoolPlanningInstructor: Identifiable {
     private(set) var successMessage: String?
     private(set) var pendingRequiresReview = false
     private(set) var accessRevoked = false
+    private(set) var isCheckingSlot = false
+    private(set) var slotError: String?
+    private(set) var slotAvailability: SchoolPlanningSlotAvailability?
+    private(set) var checkedSlotRequest: SchoolPlanningSlotRequest?
+    private(set) var selectedDurationMinutes: Int?
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var selectionGeneration = UUID()
     @ObservationIgnored private var availabilityGeneration = UUID()
+    @ObservationIgnored private var slotGeneration = UUID()
     @ObservationIgnored private var invalidated = false
     @ObservationIgnored private var storageAvailable = false
     var learnerID: UUID?
@@ -54,16 +60,35 @@ struct SchoolPlanningInstructor: Identifiable {
             }
         }
     }
-    var productID: UUID?
+    var productID: UUID? {
+        didSet {
+            if productID != oldValue {
+                agreementConfirmed = false
+                if let minutes = selectedProduct?.durationMinutes, minutes > 0, duration % minutes == 0 {
+                    quantity = duration / minutes
+                }
+            }
+        }
+    }
     var startsAt: Date {
-        didSet { if startsAt != oldValue { refreshProductSelection(); termsAccepted = false; agreementConfirmed = false } }
+        didSet { if startsAt != oldValue { refreshProductSelection(); agreementConfirmed = false } }
     }
     var meetingPoint = ""
     var bufferMinutes = 10
-    var quantity = 1
-    var termsAccepted = false
+    var quantity = 1 {
+        didSet {
+            if quantity != oldValue {
+                agreementConfirmed = false
+                if let minutes = selectedProduct?.durationMinutes, (1...100).contains(quantity) {
+                    selectedDurationMinutes = minutes * quantity
+                }
+            }
+        }
+    }
     var agreementConfirmed = false
-    var changesCommercialTerms = false
+    var changesCommercialTerms = false {
+        didSet { if changesCommercialTerms != oldValue { agreementConfirmed = false } }
+    }
     var reason = ""
     var cancellationReason = ""
 
@@ -106,14 +131,62 @@ struct SchoolPlanningInstructor: Identifiable {
     }
     var duration: Int {
         if let originalLesson, !changesCommercialTerms { return originalLesson.durationMinutes }
-        return (selectedProduct?.durationMinutes ?? 0) * quantity
+        if let selectedDurationMinutes { return selectedDurationMinutes }
+        guard let minutes = selectedOffering?.defaultDurationMinutes, (1...480).contains(minutes) else { return 0 }
+        return minutes
+    }
+    /// Duration remains editable before choosing a price, including after an unavailable slot.
+    var durationChoices: [Int] {
+        var values = Set<Int>()
+        if (1...480).contains(duration) { values.insert(duration) }
+        if let minutes = selectedOffering?.defaultDurationMinutes, (1...480).contains(minutes) { values.insert(minutes) }
+        for product in availableProducts {
+            guard let minutes = product.durationMinutes, (1...480).contains(minutes) else { continue }
+            for quantity in 1...min(100, 480 / minutes) { values.insert(minutes * quantity) }
+        }
+        return values.sorted()
+    }
+    var compatibleProducts: [SchoolServiceProduct] {
+        let date = SchoolCatalogFormatting.civilDate(startsAt, timeZone: timeZone)
+        return availableProducts.filter { product in
+            guard let minutes = product.durationMinutes, minutes > 0 else { return false }
+            return duration > 0 && duration % minutes == 0 && (1...100).contains(duration / minutes)
+                && terms.contains { $0.id == product.termsVersionId && $0.approved && $0.validFrom <= date && ($0.validUntil.map { $0 >= date } ?? true) }
+        }
+    }
+    func selectDuration(_ minutes: Int) {
+        guard (1...480).contains(minutes) else { return }
+        selectedDurationMinutes = minutes; agreementConfirmed = false
+        refreshProductSelection()
     }
     var endsAt: Date { startsAt.addingTimeInterval(TimeInterval(duration * 60)) }
+    var slotInputMessage: String? {
+        guard trainingID != nil, !isLoading else { return nil }
+        if startsAt <= Date() { return "Choisis un horaire à venir." }
+        if !(1...480).contains(duration) { return "Choisis une durée de 1 à 480 minutes." }
+        if !(0...240).contains(bufferMinutes) { return "Choisis un intervalle entre les leçons de 0 à 240 minutes." }
+        if let instructorID, !assignedInstructors.contains(where: { $0.id == instructorID }) {
+            return "L’affectation du moniteur doit couvrir toute la leçon. Choisis un autre horaire ou moniteur."
+        }
+        return nil
+    }
+    var slotRequest: SchoolPlanningSlotRequest? {
+        guard !invalidated, !accessRevoked, !isLoading, !needsReload, school?.status == "ACTIVE",
+              let learnerID, learners.contains(where: { $0.id == learnerID }), let training = selectedTraining,
+              training.learnerId == learnerID, let instructorID,
+              assignedInstructors.contains(where: { $0.id == instructorID }), slotInputMessage == nil else { return nil }
+        return SchoolPlanningSlotRequest(learnerID: learnerID, trainingID: training.id, instructorID: instructorID,
+            startsAt: startsAt, endsAt: endsAt, timeZone: timeZone, bufferMinutes: bufferMinutes, excludedLessonID: originalLesson?.id)
+    }
+    var slotIsAvailable: Bool {
+        slotRequest != nil && checkedSlotRequest == slotRequest && !isCheckingSlot && slotAvailability?.available == true
+    }
+    var slotValidationRequest: SchoolPlanningSlotRequest? { canMutate ? slotRequest : nil }
     /// The API trims the value then applies JavaScript's 500 UTF-16 code-unit limit.
     var meetingPointTooLong: Bool { meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count > 500 }
     var reasonTooLong: Bool { reason.utf16.count > 1000 }
     var validBooking: Bool {
-        guard canMutate, let training = selectedTraining, training.learnerId == learnerID,
+        guard canMutate, slotIsAvailable, let training = selectedTraining, training.learnerId == learnerID,
               learners.contains(where: { $0.id == learnerID }), let instructorID, assignedInstructors.contains(where: { $0.id == instructorID }),
               !meetingPointTooLong, (1...480).contains(duration), (0...240).contains(bufferMinutes), startsAt > Date() else { return false }
         if let originalLesson {
@@ -122,8 +195,9 @@ struct SchoolPlanningInstructor: Identifiable {
             guard !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         }
         let date = SchoolCatalogFormatting.civilDate(startsAt, timeZone: timeZone)
-        return selectedOffering?.enabled == true && selectedPolicy?.approved == true && selectedPrice != nil && termsAccepted
-            && selectedTerms?.approved == true && availableProducts.contains { $0.id == productID }
+        return selectedOffering?.enabled == true && selectedPolicy?.approved == true && selectedPrice != nil
+            && selectedTerms?.approved == true && compatibleProducts.contains { $0.id == productID }
+            && selectedProduct.map { ($0.durationMinutes ?? 0) * quantity == duration } == true
             && selectedTerms.map { $0.validFrom <= date && ($0.validUntil.map { $0 >= date } ?? true) } == true
     }
     func invalidate() {
@@ -131,13 +205,14 @@ struct SchoolPlanningInstructor: Identifiable {
     }
     private func clear() {
         school = nil; defaults = nil; learners = []; trainings = []; offerings = []; policies = []; products = []; terms = []
-        instructors = []; assignments = []; clearAvailability(); pending = nil
+        instructors = []; assignments = []; clearAvailability(); clearSlot(); pending = nil
         storageAvailable = false; needsReload = true; isBusy = false; isLoading = false
     }
     func load() async {
         guard !invalidated, !isBusy else { return }
         let previousInstructorID = instructorID
         generation = UUID(); selectionGeneration = UUID(); availabilityGeneration = UUID(); let request = generation
+        clearSlot()
         // Keep this instructor's last confirmed data while the same scope is reread.
         // A changed instructor or revoked access still clears it immediately.
         isLoadingAvailability = false; availabilityError = nil
@@ -197,8 +272,8 @@ struct SchoolPlanningInstructor: Identifiable {
         let keepsSelection = learnerID == id
         let previousTrainingID = keepsSelection ? trainingID : nil
         let previousProductID = keepsSelection ? productID : nil
-        learnerID = id; assignments = []; productID = nil; termsAccepted = false
-        if !keepsSelection { trainings = []; instructorID = nil }
+        learnerID = id; assignments = []; productID = nil
+        if !keepsSelection { trainings = []; instructorID = nil; selectedDurationMinutes = nil }
         if originalLesson == nil { trainingID = nil }
         isLoading = true
         do {
@@ -220,12 +295,23 @@ struct SchoolPlanningInstructor: Identifiable {
         guard trainings.contains(where: { $0.id == id }) else { return }
         selectionGeneration = UUID(); let request = selectionGeneration
         let previousInstructorID = trainingID == id ? instructorID : nil
-        if trainingID != id { productID = nil }
-        trainingID = id; assignments = []; termsAccepted = false; isLoading = true
+        if trainingID != id { productID = nil; selectedDurationMinutes = nil }
+        trainingID = id; assignments = []; isLoading = true
         do {
             let records: [SchoolAssignment] = try await client.records(scope.schoolID, path: ["trainings", id.uuidString, "assignments"])
             guard request == selectionGeneration, !invalidated, !Task.isCancelled else { return }
             assignments = records; isLoading = false
+            if selectedDurationMinutes == nil {
+                let date = SchoolCatalogFormatting.civilDate(startsAt, timeZone: timeZone)
+                let valid = availableProducts.filter { product in
+                    (1...480).contains(product.durationMinutes ?? 0) && terms.contains {
+                        $0.id == product.termsVersionId && $0.approved && $0.validFrom <= date && ($0.validUntil.map { $0 >= date } ?? true)
+                    }
+                }
+                let preferred = valid.filter { $0.productKey == defaults?.serviceProductKey }
+                let initial = preferred.count == 1 ? preferred.first : valid.count == 1 ? valid.first : nil
+                selectedDurationMinutes = initial?.durationMinutes
+            }
             refreshProductSelection()
             if originalLesson == nil {
                 if let previousInstructorID, assignedInstructors.contains(where: { $0.id == previousInstructorID }) {
@@ -237,14 +323,37 @@ struct SchoolPlanningInstructor: Identifiable {
         } catch { guard request == selectionGeneration else { return }; isLoading = false; fail(error) }
     }
     private func refreshProductSelection() {
-        let valid = availableProducts.filter { product in
-            let date = SchoolCatalogFormatting.civilDate(startsAt, timeZone: timeZone)
-            return terms.contains { $0.id == product.termsVersionId && $0.approved && $0.validFrom <= date && ($0.validUntil.map { $0 >= date } ?? true) }
+        let valid = compatibleProducts
+        if let product = valid.first(where: { $0.id == productID }), let minutes = product.durationMinutes {
+            quantity = duration / minutes; return
         }
-        if valid.contains(where: { $0.id == productID }) { return }
         let preferred = valid.filter { $0.productKey == defaults?.serviceProductKey }
         productID = preferred.count == 1 ? preferred.first?.id : valid.count == 1 ? valid.first?.id : nil
-        termsAccepted = false
+    }
+    /// This read is advisory; the write still atomically rechecks the reservation on the server.
+    func validateSlot(debounced: Bool = false) async {
+        slotGeneration = UUID(); let requestGeneration = slotGeneration
+        slotAvailability = nil; slotError = nil; checkedSlotRequest = nil; isCheckingSlot = false
+        guard canMutate, let slot = slotRequest else { return }
+        checkedSlotRequest = slot; isCheckingSlot = true
+        defer { if requestGeneration == slotGeneration { isCheckingSlot = false } }
+        do {
+            if debounced { try await Task.sleep(for: .milliseconds(300)) }
+            try Task.checkCancellation()
+            let result = try await client.availability(schoolID: scope.schoolID, slot: slot)
+            guard requestGeneration == slotGeneration, slot == slotRequest, !Task.isCancelled else { return }
+            slotAvailability = result
+        } catch {
+            guard requestGeneration == slotGeneration, slot == slotRequest, !Task.isCancelled else { return }
+            if error as? SchoolPlanningFailure == .forbidden || error as? SchoolPlanningFailure == .unauthorized {
+                fail(error)
+            } else {
+                slotError = (error as? LocalizedError)?.errorDescription ?? "La disponibilité n’a pas pu être vérifiée. Réessaie."
+            }
+        }
+    }
+    private func clearSlot() {
+        slotGeneration = UUID(); checkedSlotRequest = nil; slotAvailability = nil; slotError = nil; isCheckingSlot = false
     }
     func loadAvailability() async {
         guard let instructorID, !invalidated, !accessRevoked else { clearAvailability(); return }
@@ -280,6 +389,8 @@ struct SchoolPlanningInstructor: Identifiable {
     }
     func saveBooking() async -> Bool {
         guard validBooking, let instructorID, let trainingID else { return false }
+        // « Planifier » confirme le prix affiché et les versions alors sélectionnées.
+        // Aucun accord n’est enregistré pendant la simple consultation du formulaire.
         let iso = ISO8601DateFormatter()
         var body: [String: Any] = ["plannedStart": iso.string(from: startsAt), "plannedEnd": iso.string(from: endsAt),
             "timeZone": timeZone, "meetingPoint": meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines), "instructorMembershipId": instructorID.uuidString]

@@ -5,10 +5,11 @@ struct SchoolLiveObservationSheet: View {
     @Bindable var recorder: SchoolLiveObservationRecorder
     let observedAt: Date
     var anchor: SchoolLiveObservationAnchor? = nil
+    var onRecorded: (() -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        SchoolLiveObservationPalette(recorder: recorder, observedAt: observedAt, anchor: anchor)
+        SchoolLiveObservationPalette(recorder: recorder, observedAt: observedAt, anchor: anchor, onRecorded: onRecorded)
             .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
             .presentationDragIndicator(.visible)
             .presentationSizing(.form)
@@ -23,10 +24,9 @@ struct SchoolLiveObservationPalette: View {
     @Bindable var recorder: SchoolLiveObservationRecorder
     let observedAt: Date
     var anchor: SchoolLiveObservationAnchor? = nil
+    var onRecorded: (() -> Void)? = nil
     var onClose: (() -> Void)? = nil
     @State private var selected: SchoolLiveObservationTheme?
-    @State private var saved = false
-    @State private var savedStatus: SchoolObservationStatus?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -43,26 +43,11 @@ struct SchoolLiveObservationPalette: View {
                     if error != nil { scroll.scrollTo("live-observation-error", anchor: .bottom) }
                 }
         }
-        // Keeping the chooser mounted preserves its height and scroll position during confirmation.
-        .opacity(saved ? 0 : 1)
-        .accessibilityHidden(saved)
-        .disabled(saved)
-        .overlay {
-            if saved { savedFeedback.transition(.opacity) }
-        }
         .foregroundStyle(DrivyTheme.text)
         .background(DrivyTheme.surface)
         .tint(DrivyTheme.accent)
         .sensoryFeedback(.selection, trigger: selected?.id)
-        .sensoryFeedback(.success, trigger: saved)
         .task { await recorder.loadCompetencies() }
-        .task(id: saved) {
-            guard saved else { return }
-            // The recorder returns true only after the encrypted local write succeeds.
-            do { try await Task.sleep(for: .milliseconds(reduceMotion ? 250 : 420)) }
-            catch { return }
-            close()
-        }
     }
 
     @ViewBuilder private var paletteContents: some View {
@@ -131,7 +116,7 @@ struct SchoolLiveObservationPalette: View {
             .accessibilityIdentifier("live-observation-back")
             Button {
                 guard recorder.markMoment(at: observedAt, anchor: anchor) else { return }
-                withAnimation(motion) { savedStatus = nil; saved = true }
+                recorded()
             } label: {
                 SchoolMarkerEmblem(size: 28)
                     .frame(width: 44, height: 44)
@@ -246,7 +231,7 @@ struct SchoolLiveObservationPalette: View {
         Button {
             guard let selected,
                   recorder.record(theme: selected, status: status, at: observedAt, anchor: anchor) else { return }
-            withAnimation(motion) { savedStatus = status; saved = true }
+            recorded()
         } label: {
             SchoolAppraisalLabel(status: status, tone: tone(status), isVertical: !dynamicTypeSize.isAccessibilitySize)
         }
@@ -261,20 +246,9 @@ struct SchoolLiveObservationPalette: View {
         .accessibilityFocused($focusedStatus, equals: status.rawValue)
     }
 
-    private var savedFeedback: some View {
-        VStack(spacing: DrivySpacing.s) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 40, weight: .medium))
-                .foregroundStyle(DrivyTheme.success)
-                .accessibilityHidden(true)
-            Text("Ajouté à la leçon").font(.headline)
-            if let savedStatus {
-                Text(savedStatus.label).font(.subheadline).foregroundStyle(tone(savedStatus).foreground)
-            }
-        }
-        .padding(DrivySpacing.m)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(savedStatus == nil ? "Moment ajouté à la leçon" : "Observation ajoutée à la leçon")
+    private func recorded() {
+        onRecorded?()
+        close()
     }
 
     private func close() {

@@ -1,5 +1,9 @@
 # État de la réalisation
 
+## 4 octobre 2026 — retours de signalement, disponibilité et accès directs
+
+Implémentation native en cours de compilation : bandeau Signaler avec annulation durable, modes carte libre/centré/orienté, profil et tarif visibles, alertes compactes. La planification vérifie le créneau avant le tarif et retire la case d’acceptation locale. **Serveur déployé après sauvegarde vérifiée** : release `52c355f`, migration022, services actifs et contrôles HTTPS conformes. **234 tests API dont dix nouveaux sur PostgreSQL, 104 web, types et builds réussis** (run37217180774). Tests Apple ajoutés/adaptés non exécutés ; rendu, gestes, GPS et VoiceOver sur appareil restent à qualifier. [Décisions et vérifications](live-feedback-planning-20261004.md).
+
 ## 4 octobre 2026 — prochaines leçons, palette Signaler et confirmation de fin
 
 Le porteur valide les feuilles stables de build100. La liste secondaire d’Aujourd’hui conserve les prochaines leçons PLANNED uniquement (créneau en cours inclus), sans terminées/annulées/absences ni doublon du focus. Signaler devient une palette sur la carte iPhone, avec ses catégories et appréciations réunies ; iPad et grand texte gardent une présentation native. La fin de leçon demande confirmation avant toute mutation et conserve une attente neutre jusqu’au bilan, sans formulaire planifié fugitif. **IPA 0.7.0/build101 compilée avec succès** sur `ffd860c`, [run37215218985](https://github.com/tomyrms/Drivy/actions/runs/37215218985), téléchargée et empreintes vérifiées. Tests ciblés adaptés mais non exécutés ; aucune longue campagne native. Rendu et transitions sur appareil restent à qualifier. [Décision et limites](today-signal-finish-20261004.md).

@@ -162,17 +162,33 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
     let resourceID: UUID?
     let routeResourceID: UUID?
     let expectedVersion: Int?
+    /// Local-only follow-up intent. The original request bytes and operation remain immutable.
+    let observationUndoOperationID: UUID?
 
     var ifMatchVersion: Int { expectedVersion ?? resourceVersion }
 
     init(id: UUID, scope: SchoolCommandScope, kind: SchoolCommandKind, resourceVersion: Int,
-         createdAt: Date, body: Data, resourceID: UUID? = nil, routeResourceID: UUID? = nil, expectedVersion: Int? = nil) {
+         createdAt: Date, body: Data, resourceID: UUID? = nil, routeResourceID: UUID? = nil, expectedVersion: Int? = nil,
+         observationUndoOperationID: UUID? = nil) {
         self.id = id; self.scope = scope; self.kind = kind; self.resourceVersion = resourceVersion
         self.createdAt = createdAt; self.body = body; self.resourceID = resourceID
         self.routeResourceID = routeResourceID; self.expectedVersion = expectedVersion
+        self.observationUndoOperationID = observationUndoOperationID
+    }
+
+    func requestingObservationUndo(operationID: UUID) -> Self {
+        .init(id: id, scope: scope, kind: kind, resourceVersion: resourceVersion, createdAt: createdAt,
+              body: body, resourceID: resourceID, routeResourceID: routeResourceID, expectedVersion: expectedVersion,
+              observationUndoOperationID: operationID)
+    }
+
+    var withoutObservationUndo: Self {
+        .init(id: id, scope: scope, kind: kind, resourceVersion: resourceVersion, createdAt: createdAt,
+              body: body, resourceID: resourceID, routeResourceID: routeResourceID, expectedVersion: expectedVersion)
     }
 
     var hasValidTarget: Bool {
+        if let observationUndoOperationID, kind != .createObservation || observationUndoOperationID == id { return false }
         if !kind.isProfile && !kind.isCatalog && !kind.isPlanning && !kind.isReport && !kind.isObservation && (routeResourceID != nil || expectedVersion != nil) { return false }
         switch kind {
         case .savePlanningDefaults:
@@ -252,8 +268,16 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
     func save(_ command: PendingSchoolCommand) throws {
         try validate(command)
         var commands = try read()
-        if let existing = commands.first(where: { $0.scope.belongsToWorkspace(command.scope) || $0.id == command.id }) {
-            guard existing == command else { throw SchoolConfigurationFailure.pendingCommand }
+        if let index = commands.firstIndex(where: { $0.scope.belongsToWorkspace(command.scope) || $0.id == command.id }) {
+            let existing = commands[index]
+            if existing != command {
+                // One atomic encrypted replacement: a late CREATE acknowledgement cannot erase this intent.
+                guard existing.observationUndoOperationID == nil, command.observationUndoOperationID != nil,
+                      command.withoutObservationUndo == existing else { throw SchoolConfigurationFailure.pendingCommand }
+                commands[index] = command
+                try write(commands)
+                return
+            }
             try synchronize()
             return
         }
@@ -288,7 +312,7 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
             let box = try AES.GCM.SealedBox(combined: encrypted)
             let clear = try AES.GCM.open(box, using: key(create: false), authenticating: authenticatedData)
             let archive = try JSONDecoder().decode(Archive.self, from: clear)
-            guard archive.version == 1, archive.commands.count <= 50,
+            guard (archive.version == 1 || archive.version == 2), archive.commands.count <= 50,
                   Set(archive.commands.map(\.id)).count == archive.commands.count else { throw SchoolConfigurationFailure.storage }
             for (index, command) in archive.commands.enumerated() {
                 try validate(command)
@@ -302,7 +326,9 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
 
     private func write(_ commands: [PendingSchoolCommand]) throws {
         do {
-            let data = try JSONEncoder().encode(Archive(version: 1, commands: commands))
+            // Older binaries must fail closed instead of ignoring a durable withdrawal intent.
+            let version = commands.contains { $0.observationUndoOperationID != nil } ? 2 : 1
+            let data = try JSONEncoder().encode(Archive(version: version, commands: commands))
             guard data.count + 28 <= maximumArchiveBytes else { throw SchoolConfigurationFailure.storage }
             let box = try AES.GCM.seal(data, using: key(create: true), authenticating: authenticatedData)
             guard let encrypted = box.combined else { throw SchoolConfigurationFailure.storage }

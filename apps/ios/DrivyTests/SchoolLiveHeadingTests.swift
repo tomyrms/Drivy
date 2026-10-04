@@ -42,6 +42,21 @@ struct SchoolLiveHeadingTests {
         #expect(SchoolLiveHeading.orientation(for: .unknown) == nil)
     }
 
+    @Test func centeringFirstKeepsNorthUpAndOnlyTheSecondTapUsesDeviceHeading() {
+        let centered = DrivyMapFollowMode.free.next
+        #expect(centered == .position && centered.cameraHeading(deviceHeading: 270) == 0)
+        let oriented = centered.next
+        #expect(oriented == .heading && oriented.cameraHeading(deviceHeading: 270) == 270)
+        #expect(oriented.next == .free && !oriented.next.followsPosition)
+        #expect(oriented.next.cameraHeading(deviceHeading: 270) == nil)
+    }
+
+    @Test func unavailableCompassDoesNotInventAnOrientationForHeadingMode() {
+        #expect(DrivyMapFollowMode.heading.cameraHeading(deviceHeading: nil) == nil)
+        #expect(DrivyMapFollowMode.heading.cameraHeading(deviceHeading: .nan) == nil)
+        #expect(DrivyMapFollowMode.heading.cameraHeading(deviceHeading: 360) == nil)
+    }
+
     private func value(trueHeading: Double = 90, magnetic: Double = 85,
                        accuracy: Double = 5, age: TimeInterval = 0) -> Double? {
         SchoolLiveHeading.degrees(trueHeading: trueHeading, magneticHeading: magnetic,

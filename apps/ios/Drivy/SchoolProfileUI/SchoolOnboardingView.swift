@@ -38,7 +38,7 @@ struct SchoolOnboardingView: View {
                     if startsWithInformation { hasStarted = true }
                     if loadsOnAppear { await model.load() }
                 }
-                .confirmationDialog("Quitter sans enregistrer tes informations ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+                .alert("Quitter sans enregistrer tes informations ?", isPresented: $confirmsDiscard) {
                     Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
                 } message: {
                     Text("Les étapes déjà confirmées par l’école restent enregistrées. Tu pourras reprendre plus tard.")

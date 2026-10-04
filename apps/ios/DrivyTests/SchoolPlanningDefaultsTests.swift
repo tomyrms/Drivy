@@ -64,7 +64,7 @@ import Testing
         #expect(await model.cancel() == false)
     }
 
-    @Test func planningPrefillsCurrentInstructorForDualRoleAndRequiresCommercialAgreementWithoutAPlace() async throws {
+    @Test func planningPrefillsCurrentInstructorAndCanBeConfirmedWithoutAnotherAgreementOrPlace() async throws {
         let server = PlanningDefaultsServer()
         let model = planning(server)
         await model.load()
@@ -73,9 +73,10 @@ import Testing
         #expect(model.trainingID == HubFixture.trainingID)
         #expect(model.instructorID == ConfigurationFixture.membershipID)
         #expect(model.productID == PlanningDefaultsServer.productID)
-        #expect(model.meetingPoint.isEmpty && !model.termsAccepted && !model.validBooking)
-        model.termsAccepted = true
-        #expect(model.validBooking)
+        #expect(!model.validBooking)
+        await model.validateSlot()
+        #expect(model.meetingPoint.isEmpty && model.validBooking)
+        #expect(await server.writes().isEmpty)
     }
 
     @Test func currentMemberIsNotPrefilledWithoutAnAssignment() async throws {
@@ -85,7 +86,6 @@ import Testing
         try #require(model.errorMessage == nil && !model.needsReload)
         await model.selectLearner(HubFixture.learnerID)
         #expect(model.trainingID == HubFixture.trainingID && model.instructorID == nil)
-        model.termsAccepted = true
         #expect(!model.validBooking)
     }
 
@@ -94,7 +94,7 @@ import Testing
         let model = planning(server)
         await model.load()
         await model.selectLearner(HubFixture.learnerID)
-        model.termsAccepted = true
+        await model.validateSlot()
         try #require(model.validBooking)
 
         for value in ["", " \n\t ", String(repeating: "a", count: 500), "  \(String(repeating: "a", count: 500))\n", String(repeating: "🚗", count: 250)] {
@@ -298,6 +298,9 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
             return try ok(["personId": ConfigurationFixture.personID.uuidString, "version": 1, "displayName": "Moniteur de test", "locale": "fr",
                 "memberships": [["membershipId": ConfigurationFixture.membershipID.uuidString, "schoolId": HubFixture.schoolID.uuidString,
                     "schoolName": "École de test", "roles": ["ADMIN", "INSTRUCTOR"], "grants": [], "accessEpoch": 1] as [String: Any]]])
+        }
+        if parts.last == "availability", parts.dropLast().last == "lessons" {
+            return try ok(["available": true, "reasonCode": NSNull()])
         }
         if parts.last == HubFixture.schoolID.uuidString.lowercased() {
             var school = try JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.school(gps: true))) as! [String: Any]

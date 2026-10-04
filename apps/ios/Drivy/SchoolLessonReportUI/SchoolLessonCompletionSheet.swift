@@ -85,7 +85,7 @@ struct SchoolLessonCompletionSheet: View {
                     }.disabled(model.isBusy || isSubmitting)
                 }
             }
-            .confirmationDialog("Quitter sans enregistrer ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+            .alert("Quitter sans enregistrer ?", isPresented: $confirmsDiscard) {
                 Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
                 Button("Continuer", role: .cancel) { }
             }

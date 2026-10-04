@@ -63,13 +63,9 @@ import XCTest
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), app.debugDescription)
         let save = app.buttons["lesson-save-report"]
         XCTAssertFalse(save.exists)
-        let keepLesson = app.buttons["Continuer la leçon"]
-        if keepLesson.waitForExistence(timeout: 2) {
-            keepLesson.tap()
-        } else {
-            // Sur iPad, l’annulation native du popover peut se faire uniquement à l’extérieur.
-            app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.45)).tap()
-        }
+        let keepLesson = app.buttons["Continuer"]
+        XCTAssertTrue(keepLesson.waitForExistence(timeout: 5), app.debugDescription)
+        keepLesson.tap()
         XCTAssertTrue(confirm.waitForNonExistence(timeout: 5))
         XCTAssertTrue(finish.exists && finish.isEnabled)
         XCTAssertFalse(save.exists)
@@ -174,7 +170,7 @@ import XCTest
     private func completionConfirmation(in app: XCUIApplication) -> XCUIElement {
         // Le libellé reste la référence si iOS n’expose pas l’identifiant de l’action native.
         app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@",
-            "lesson-confirm-completion", "Terminer et ouvrir le bilan")).firstMatch
+            "lesson-confirm-completion", "Terminer")).firstMatch
     }
 
     private func nativeTab(_ title: String, in app: XCUIApplication,

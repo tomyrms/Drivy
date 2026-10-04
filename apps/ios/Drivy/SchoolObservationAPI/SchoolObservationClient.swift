@@ -68,21 +68,69 @@ import Foundation
 
     func receipt(for command: PendingSchoolCommand) async throws -> SchoolOperationReceipt {
         guard command.kind.isObservation, command.hasValidTarget else { throw SchoolObservationFailure.invalidResponse }
+        if command.observationUndoOperationID != nil {
+            // A CREATE receipt alone is not evidence that its requested withdrawal succeeded.
+            let created = try await receipt(for: command.withoutObservationUndo)
+            return try await receipt(for: removalCommand(for: command, observationID: created.resourceId, version: created.resourceVersion))
+        }
         let value: SchoolOperationReceipt = try await request(command.scope, ["operations", command.id.uuidString])
         guard command.matches(value), SchoolLesson.date(value.committedAt) != nil else { throw SchoolObservationFailure.invalidResponse }
         return value
     }
 
     /// L'appelant fournit l'intention relue dans l'outbox chiffrée et acquitte seulement ce résultat.
-    func send(_ command: PendingSchoolCommand) async throws -> SchoolObservationMutationResult {
+    func send(_ command: PendingSchoolCommand,
+              beforeCreation: (@MainActor () async throws -> Void)? = nil,
+              validateContinuation: (@MainActor () throws -> Void)? = nil) async throws -> SchoolObservationMutationResult {
+        try validateContinuation?()
         guard command.kind.isObservation, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,
               command.body.count <= 24_000, let lessonID = command.routeResourceID,
               let payload = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any],
               UUID(uuidString: payload["operationId"] as? String ?? "") == command.id else { throw SchoolObservationFailure.invalidResponse }
+        if command.observationUndoOperationID != nil {
+            guard let body = try? JSONDecoder().decode(SchoolObservationBody.self, from: command.body),
+                  body.isValid, body.origin == "LIVE" else { throw SchoolObservationFailure.invalidResponse }
+            let original = command.withoutObservationUndo
+            let observationID: UUID, version: Int
+            do {
+                let created = try await receipt(for: original)
+                observationID = created.resourceId; version = created.resourceVersion
+            } catch SchoolObservationFailure.notFound {
+                // The original may never have reached the service, or may still be in flight.
+                // Reconcile with the exact same key/body; never manufacture a second creation.
+                guard case .observation(let created) = try await send(original, beforeCreation: beforeCreation,
+                    validateContinuation: validateContinuation) else { throw SchoolObservationFailure.invalidResponse }
+                observationID = created.id; version = created.version
+            }
+            // The creation receipt keeps its original version. Finalization and draft attachment can
+            // advance the observation meanwhile; only its identifier remains the withdrawal target.
+            let receiptCommand = try removalCommand(for: command, observationID: observationID, version: version)
+            for attempt in 0..<2 {
+                try validateContinuation?()
+                do {
+                    _ = try await receipt(for: receiptCommand)
+                    return .removed(observationID)
+                } catch SchoolObservationFailure.notFound { }
+
+                let current = try await observationForWithdrawal(scope: command.scope, lessonID: lessonID,
+                                                                 observationID: observationID)
+                try validateContinuation?()
+                do {
+                    return try await send(removalCommand(for: command, observationID: observationID, version: current.version),
+                                          validateContinuation: validateContinuation)
+                } catch SchoolObservationFailure.conflict where attempt == 0 {
+                    // The service checks the operation hash before the version: a 412 committed
+                    // nothing. Keep the withdrawal UUID and recheck its receipt before one retry.
+                    // An uncertain response or hash mismatch keeps the durable intent untouched.
+                }
+            }
+            throw SchoolObservationFailure.conflict
+        }
         if command.kind == .removeObservation {
             guard let id = command.resourceID, let body = try? JSONDecoder().decode(SchoolRemoveObservationBody.self, from: command.body),
                   body.isValid, body.operationId == command.id, Set(payload.keys) == ["operationId", "reason"] else { throw SchoolObservationFailure.invalidResponse }
-            let value: Removal = try await request(command.scope, ["geo-observations", id.uuidString, "remove"], method: "POST", command: command)
+            let value: Removal = try await request(command.scope, ["geo-observations", id.uuidString, "remove"],
+                method: "POST", command: command, validateContinuation: validateContinuation)
             guard value.operationId == command.id, value.accepted else { throw SchoolObservationFailure.invalidResponse }
             return .removed(id)
         }
@@ -91,14 +139,38 @@ import Foundation
         guard let body = try? JSONDecoder().decode(SchoolObservationBody.self, from: command.body), body.isValid, body.operationId == command.id,
               required.isSubset(of: Set(payload.keys)), Set(payload.keys).isSubset(of: allowed) else { throw SchoolObservationFailure.invalidResponse }
         let path: [String], method: String
-        if command.kind == .createObservation { path = ["lessons", lessonID.uuidString, "geo-observations"]; method = "POST" }
+        if command.kind == .createObservation {
+            try await beforeCreation?()
+            path = ["lessons", lessonID.uuidString, "geo-observations"]; method = "POST"
+        }
         else if let id = command.resourceID { path = ["geo-observations", id.uuidString]; method = "PUT" }
         else { throw SchoolObservationFailure.invalidResponse }
-        let value: SchoolObservation = try await request(command.scope, path, method: method, command: command)
+        let value: SchoolObservation = try await request(command.scope, path, method: method, command: command,
+                                                       validateContinuation: validateContinuation)
         guard value.hasValidObservation, value.schoolId == command.scope.schoolID, value.lessonId == lessonID,
               value.authorMembershipId == command.scope.membershipID, value.version > command.resourceVersion,
               command.resourceID == nil || command.resourceID == value.id else { throw SchoolObservationFailure.invalidResponse }
         return .observation(value)
+    }
+
+    private func observationForWithdrawal(scope: SchoolCommandScope, lessonID: UUID,
+                                          observationID: UUID) async throws -> SchoolObservation {
+        let lesson: SchoolLesson = try await request(scope, ["lessons", lessonID.uuidString])
+        guard lesson.schoolId == scope.schoolID, lesson.id == lessonID, lesson.version > 0,
+              lesson.instructorMembershipId == scope.membershipID else { throw SchoolObservationFailure.forbidden }
+        let values = try await observations(scope: scope, lessonID: lessonID, trainingID: lesson.trainingId)
+        guard let value = values.first(where: { $0.id == observationID }) else { throw SchoolObservationFailure.notFound }
+        return value
+    }
+
+    private func removalCommand(for command: PendingSchoolCommand, observationID: UUID, version: Int) throws -> PendingSchoolCommand {
+        guard let operationID = command.observationUndoOperationID, command.kind == .createObservation,
+              command.hasValidTarget, (1...2_147_483_647).contains(version) else { throw SchoolObservationFailure.invalidResponse }
+        let body = SchoolRemoveObservationBody(operationId: operationID, reason: "Annulation du dernier signalement")
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        return .init(id: operationID, scope: command.scope, kind: .removeObservation, resourceVersion: version,
+                     createdAt: command.createdAt, body: try encoder.encode(body), resourceID: observationID,
+                     routeResourceID: command.routeResourceID)
     }
 
     private func catalogPages<Value: SchoolCatalogRecord>(_ scope: SchoolCommandScope, _ path: [String]) async throws -> [Value] {
@@ -149,7 +221,8 @@ import Foundation
         }) else { throw SchoolObservationFailure.forbidden }
     }
     private func request<Value: Decodable>(_ scope: SchoolCommandScope, _ path: [String], query: [URLQueryItem] = [],
-                                          method: String = "GET", command: PendingSchoolCommand? = nil) async throws -> Value {
+                                          method: String = "GET", command: PendingSchoolCommand? = nil,
+                                          validateContinuation: (@MainActor () throws -> Void)? = nil) async throws -> Value {
         guard DrivyAPIClient.permits(baseURL), scope.apiBaseURL == baseURL.absoluteString, scope.accessEpoch > 0 else { throw SchoolObservationFailure.forbidden }
         var url = baseURL
         for part in ["v1", "schools", scope.schoolID.uuidString] + path { url.appendPathComponent(part) }
@@ -160,6 +233,7 @@ import Foundation
         // Le même jeton sert à vérifier /me puis à envoyer ; aucun changement de compte entre les deux appels.
         try await verify(scope, token: token)
         try Task.checkCancellation()
+        try validateContinuation?()
         var request = URLRequest(url: target); request.httpMethod = method
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("no-store", forHTTPHeaderField: "Cache-Control")

@@ -75,7 +75,7 @@ struct SchoolLessonReportView: View {
             model?.invalidate()
             dismiss()
         }
-        .confirmationDialog("Quitter sans enregistrer ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+        .alert("Quitter sans enregistrer ?", isPresented: $confirmsDiscard) {
             Button("Quitter sans enregistrer", role: .destructive) { model?.invalidate(); dismiss() }
             Button("Continuer", role: .cancel) { }
         }
@@ -177,16 +177,16 @@ private struct SchoolLessonReportContent: View {
             }
         }
         .tint(DrivyTheme.accent)
-        .confirmationDialog("Terminer la leçon ?", isPresented: $confirmsCompletion, titleVisibility: .visible) {
-            Button("Terminer et ouvrir le bilan") { beginCompletion() }
+        .alert("Terminer la leçon ?", isPresented: $confirmsCompletion) {
+            Button("Terminer") { beginCompletion() }
                 .accessibilityIdentifier("lesson-confirm-completion")
-            Button("Continuer la leçon", role: .cancel) { }
+            Button("Continuer", role: .cancel) { }
         }
-        .confirmationDialog("Recharger et perdre la saisie ?", isPresented: $showReloadConfirmation, titleVisibility: .visible) {
+        .alert("Recharger et perdre la saisie ?", isPresented: $showReloadConfirmation) {
             Button("Recharger", role: .destructive) { Task { await model.load(discardingEdits: true) } }
             Button("Annuler", role: .cancel) {}
         }
-        .confirmationDialog("L’élève est absent ?", isPresented: $confirmsNoShow, titleVisibility: .visible) {
+        .alert("L’élève est absent ?", isPresented: $confirmsNoShow) {
             Button("Élève absent", role: .destructive) { Task { _ = await model.markNoShow(reason: "Élève absent au rendez-vous.") } }
             Button("Annuler", role: .cancel) {}
         }
@@ -403,6 +403,7 @@ private struct SchoolLessonReportContent: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
+            if let lesson = model.lesson { tariffButton(lesson) }
             if model.isLoading && model.lesson == nil {
                 DrivySkeletonRows(count: 4)
                     .drivySkeleton("Chargement de la leçon…")
@@ -419,6 +420,30 @@ private struct SchoolLessonReportContent: View {
         .listRowBackground(Color.clear)
         // En-tête posé sur le canevas : aucun filet entre le nom, l’état et les messages.
         .listRowSeparator(.hidden)
+    }
+
+    /// Le prix convenu est visible et ouvre son détail depuis le contexte de la leçon.
+    private func tariffButton(_ lesson: SchoolLesson) -> some View {
+        Button { lessonSheet = .tariff } label: {
+            let layout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xxs))
+                : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
+            layout {
+                Label("Tarif", systemImage: "creditcard")
+                if !typeSize.isAccessibilitySize { Spacer(minLength: 0) }
+                HStack(spacing: DrivySpacing.s) {
+                    Text(SchoolCatalogFormatting.price(lesson.priceCentsSnapshot)).monospacedDigit()
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                        .accessibilityHidden(true)
+                }
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(DrivyTheme.accent)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("lesson-tariff")
     }
 
     /// Date, horaire et lieu : sur une ligne quand la colonne le permet, sinon la date, l’horaire puis le lieu.
@@ -488,8 +513,8 @@ private struct SchoolLessonReportContent: View {
             let moves = SchoolLessonHubRules.mayMove(lesson, roles: model.membership.roles, now: now)
             let cancels = SchoolLessonHubRules.mayCancel(lesson, roles: model.membership.roles)
             let absent = model.mayMarkNoShow(now: now)
+            if moves || cancels || absent {
                 Menu {
-                    Button("Tarif", systemImage: "creditcard") { lessonSheet = .tariff }
                     if absent {
                         Button("Élève absent", systemImage: "person.crop.circle.badge.xmark") { confirmsNoShow = true }
                             .disabled(!model.canMutate || isFinishing)
@@ -506,6 +531,7 @@ private struct SchoolLessonReportContent: View {
                     Label("Plus d’actions", systemImage: "ellipsis.circle")
                 }
                 .accessibilityIdentifier("lesson-more-actions")
+            }
         }
     }
 

@@ -55,6 +55,7 @@ struct SchoolObservationEditor: Identifiable {
     var pendingBelongsHere: Bool { pending?.kind.isObservation == true && pending?.routeResourceID == lessonID }
     var pendingText: String {
         guard let pending, pendingBelongsHere else { return "Une demande d’un autre écran est conservée pour cette école. Retrouve cet écran pour vérifier son résultat." }
+        if pending.observationUndoOperationID != nil { return "Annulation du signalement en attente. La création sera vérifiée avant son retrait." }
         if pending.kind == .removeObservation,
            let body = try? JSONDecoder().decode(SchoolRemoveObservationBody.self, from: pending.body) { return "Retrait demandé\n\nMotif : \(body.reason)" }
         guard let body = try? JSONDecoder().decode(SchoolObservationBody.self, from: pending.body) else { return "Demande conservée. Son résultat reste à vérifier." }
@@ -182,7 +183,7 @@ struct SchoolObservationEditor: Identifiable {
                             kind: .removeObservation, resourceID: observation.id, version: observation.version)
     }
     func verifyPending() async {
-        guard canRetry, let command = pending else { return }
+        guard canRetry, let command = rereadPending() else { return }
         let request = generation; isBusy = true; errorMessage = nil
         do {
             try await client.verifyScope(scope)
@@ -191,13 +192,23 @@ struct SchoolObservationEditor: Identifiable {
             // Une preuve vérifiée reste acquittable même si l’écran a été fermé entre-temps.
             try outbox.remove(command)
             guard valid(request) else { return }
-            pending = nil; isBusy = false; confirmation = "L’école confirme l’enregistrement de la demande."
+            pending = nil; isBusy = false
+            confirmation = command.observationUndoOperationID != nil ? "Observation retirée." : "L’école confirme l’enregistrement de la demande."
             await load()
         } catch { guard valid(request) else { return }; isBusy = false; fail(error) }
     }
     func retryPending() async -> Bool {
-        guard canRetry, let command = pending else { return false }
+        guard canRetry, let command = rereadPending() else { return false }
         return await transmit(command, fresh: false)
+    }
+
+    private func rereadPending() -> PendingSchoolCommand? {
+        do {
+            guard let current = try outbox.pending(for: scope), current.scope == scope,
+                  current.kind.isObservation, current.routeResourceID == lessonID else { return nil }
+            pending = current
+            return current
+        } catch { fail(error); return nil }
     }
 
     private func submit<Value: Encodable>(_ value: Value, operation: UUID, kind: SchoolCommandKind, resourceID: UUID?, version: Int) async -> Bool {
@@ -225,11 +236,14 @@ struct SchoolObservationEditor: Identifiable {
             guard valid(request) else { return false }
             try outbox.save(command) // Barrière de durabilité aussi avant chaque reprise.
             sent = true
-            _ = try await client.send(command)
+            _ = try await client.send(command, validateContinuation: { [self] in
+                guard valid(request) else { throw CancellationError() }
+            })
             try outbox.remove(command)
             guard valid(request) else { return true }
             pending = nil; isBusy = false
-            confirmation = command.kind == .removeObservation ? "Observation retirée." : "Observation privée enregistrée."
+            confirmation = command.kind == .removeObservation || command.observationUndoOperationID != nil
+                ? "Observation retirée." : "Observation privée enregistrée."
             await load(); return true
         } catch {
             if fresh && sent, let refusal = error as? SchoolObservationFailure, refusal.permitsFreshCorrection {

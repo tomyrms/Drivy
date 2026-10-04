@@ -126,3 +126,6 @@ L’IPA **0.7.0/build98** (`e36b0d4`) a compilé avec succès dans `37210789141`
 - Suite : skill logo-design installé et appliqué ; logo d continu intégré dans `e36b0d4`. Les 24 captures AX de `10f1d12` sont inspectées. Correction de la note initiale sur Python : les 11 tests de capture passent localement avec Git Bash et PYTHONUTF8=1 ; ils ne sont pas câblés dans la CI générale.
 
 - Livraison : à la demande du porteur, arrêt des campagnes restantes et retrait du brouillon PR5 ; IPA 0.7.0/build98 fournie immédiatement, sans attendre les tests.
+
+
+- Suite retours terrain : tarif et profil accessibles directement, alertes natives centrales, bandeau après Signaler avec annulation durable y compris hors ligne et sans GPS, trois modes carte. Planification : prévalidation anonyme du créneau avant tarif ; serveur `52c355f` déployé après sauvegarde, migration022 et services vérifiés. 234 tests API/104 web passent dans run37217180774. Tests Swift ajoutés mais non exécutés conformément au choix d’IPA rapide. Décision courante : `live-feedback-planning-20261004.md` ; source et compilation IPA à compléter après livraison.

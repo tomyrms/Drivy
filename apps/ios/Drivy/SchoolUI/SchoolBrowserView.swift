@@ -265,7 +265,8 @@ private struct SchoolLearnerDetailView: View {
     var body: some View {
         Group {
             if let learner = workspace.learner, let training = singleTraining, let trainingClient {
-                SchoolTrainingScreen(client: trainingClient, workspace: workspace, learner: learner, trainingID: training.id)
+                SchoolTrainingScreen(client: trainingClient, workspace: workspace, learner: learner, trainingID: training.id,
+                    openProfile: openProfile.map { action in { action(learner) } })
                     .safeAreaInset(edge: .top, spacing: 0) {
                         // Une panne de relecture reste visible sans retirer la formation ni la feuille qu’elle porte.
                         if let error = workspace.learnerError {
@@ -274,11 +275,6 @@ private struct SchoolLearnerDetailView: View {
                         } else if let error = workspace.trainingsError {
                             SchoolErrorNotice(message: error, retry: { Task { await workspace.loadTrainings() } })
                                 .drivyPageContent()
-                        }
-                    }
-                    .toolbar {
-                        if openProfile != nil || learner.contactEmail != nil || learner.contactPhone != nil {
-                            ToolbarItem(placement: .topBarTrailing) { dossierMenu(learner) }
                         }
                     }
             } else {
@@ -327,27 +323,6 @@ private struct SchoolLearnerDetailView: View {
         .accessibilityIdentifier("learner-start-now")
     }
 
-    /// Profile and contacts of a single-training dossier, whose page is the training itself.
-    private func dossierMenu(_ learner: SchoolLearner) -> some View {
-        Menu {
-            if let openProfile {
-                Button { openProfile(learner) } label: {
-                    Label(learner.profileReadiness == "ACTION_REQUIRED" ? "Profil · à vérifier" : "Profil", systemImage: "person.text.rectangle")
-                }
-            }
-            if let phone = learner.contactPhone {
-                if let url = SchoolContactLinks.call(phone) { Link(destination: url) { Label("Appeler", systemImage: "phone") } }
-                if let url = SchoolContactLinks.message(phone) { Link(destination: url) { Label("Envoyer un message", systemImage: "message") } }
-            }
-            if let email = learner.contactEmail, let url = SchoolContactLinks.mail(email) {
-                Link(destination: url) { Label("Envoyer un e-mail", systemImage: "envelope") }
-            }
-        } label: {
-            Label("Profil et coordonnées", systemImage: learner.profileReadiness == "ACTION_REQUIRED" ? "exclamationmark.circle" : "ellipsis.circle")
-        }
-        .accessibilityIdentifier("learner-dossier-menu")
-    }
-
     private var dossier: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.xl) {
@@ -359,17 +334,12 @@ private struct SchoolLearnerDetailView: View {
                     SchoolErrorNotice(message: error, retry: { Task { await workspace.loadSelectedLearner() } })
                 }
                 if let learner = workspace.learner {
-                    learnerHeading(learner)
-                    trainings
-                    if let openProfile {
-                        DrivyRowGroup {
-                            DrivyNavigationRow(title: "Profil", symbol: "person.text.rectangle",
-                                badge: learner.profileReadiness == "ACTION_REQUIRED"
-                                    ? DrivyStatusBadge(title: "À vérifier", symbol: "exclamationmark.triangle", tone: .warning) : nil,
-                                action: { openProfile(learner) })
-                                .accessibilityIdentifier("open-learner-profile")
-                        }
+                    VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                        learnerHeading(learner)
+                        SchoolLearnerActions(learner: learner,
+                            openProfile: openProfile.map { action in { action(learner) } })
                     }
+                    trainings
                     if learner.contactEmail != nil || learner.contactPhone != nil {
                         DrivyRowGroup(title: "Coordonnées") {
                             if let email = learner.contactEmail {

@@ -7,6 +7,8 @@ struct SchoolPlanningView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var confirmsCancellation = false
+    @State private var isPreparingCancellation = false
+    @State private var cancellationPreparationError: String?
     @State private var document: SchoolPlanningDocument?
 
     private var title: String { cancelling ? "Annuler la leçon" : model.originalLesson == nil ? "Planifier une leçon" : "Déplacer la leçon" }
@@ -14,11 +16,16 @@ struct SchoolPlanningView: View {
         NavigationStack {
             Form {
                 SchoolPlanningFeedback(model: model)
+                if let cancellationPreparationError {
+                    Section { DrivyFormMessage(text: cancellationPreparationError, tone: .danger) }.drivyFormRows()
+                } else if isPreparingCancellation {
+                    Section { ProgressView("Arrêt du trajet…") }.drivyFormRows()
+                }
                 if model.school != nil {
                     if cancelling { cancellationFields }
                     else {
                         bookingFields
-                        if typeSize.isAccessibilitySize {
+                        if typeSize.isAccessibilitySize && model.slotIsAvailable {
                             Section {
                                 VStack(alignment: .leading, spacing: DrivySpacing.xs) { bookingActionContent }
                             }
@@ -31,26 +38,36 @@ struct SchoolPlanningView: View {
             .scrollDismissesKeyboard(.interactively)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !typeSize.isAccessibilitySize && !cancelling && model.school != nil { bookingActionBar }
+                if !typeSize.isAccessibilitySize && !cancelling && model.slotIsAvailable { bookingActionBar }
             }
             .environment(\.timeZone, TimeZone(identifier: model.timeZone) ?? .current)
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
+                ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy || isPreparingCancellation) }
             }
             .task { if model.school == nil { await model.load() } }
+            .task(id: model.slotValidationRequest) {
+                if !cancelling, model.slotValidationRequest != nil { await model.validateSlot(debounced: true) }
+            }
             .sheet(item: $document) { SchoolPlanningDocumentView(document: $0) }
-            .confirmationDialog("Annuler cette leçon ?", isPresented: $confirmsCancellation, titleVisibility: .visible) {
+            .alert("Annuler cette leçon ?", isPresented: $confirmsCancellation) {
                 Button("Annuler la leçon", role: .destructive) {
                     Task {
-                        guard await beforeCancellation?() ?? true else { return }
+                        guard !isPreparingCancellation, model.canMutate else { return }
+                        cancellationPreparationError = nil; isPreparingCancellation = true
+                        defer { isPreparingCancellation = false }
+                        guard await beforeCancellation?() ?? true else {
+                            cancellationPreparationError = "Le trajet n’a pas pu être arrêté. Réessaie avant d’annuler la leçon."
+                            return
+                        }
+                        isPreparingCancellation = false
                         if await model.cancel() { dismiss() }
                     }
                 }
-                Button("Conserver la leçon", role: .cancel) { }
-            } message: { Text("L’élève et le moniteur n’auront plus ce rendez-vous dans leur planning actif.") }
+                Button("Conserver", role: .cancel) { }
+            } message: { Text("Ce rendez-vous sera retiré du planning.") }
         }
-        .interactiveDismissDisabled(model.isBusy)
+        .interactiveDismissDisabled(model.isBusy || isPreparingCancellation)
         .tint(DrivyTheme.accent)
     }
 
@@ -101,9 +118,11 @@ struct SchoolPlanningView: View {
                 } header: { Text("Durée et prix").drivyFormSectionHeader() }
                     .drivyFormRows()
             }
-            if model.originalLesson == nil || model.changesCommercialTerms { commercialFields }
-            reviewFields
-            documentLinks
+            if model.slotIsAvailable {
+                if model.originalLesson == nil || model.changesCommercialTerms { commercialFields }
+                reviewFields
+                documentLinks
+            }
         }
     }
     private var scheduleFields: some View {
@@ -111,18 +130,27 @@ struct SchoolPlanningView: View {
             Picker("Moniteur", selection: $model.instructorID) {
                 Text("Choisir un moniteur").tag(nil as UUID?)
                 ForEach(model.assignedInstructors) { instructor in Text(instructor.displayName).tag(Optional(instructor.id)) }
+                if let selected = model.instructors.first(where: { $0.id == model.instructorID }),
+                   !model.assignedInstructors.contains(where: { $0.id == selected.id }) {
+                    Text(selected.displayName).tag(Optional(selected.id)).disabled(true)
+                }
             }
             .onChange(of: model.instructorID) { _, _ in model.agreementConfirmed = false }
             if model.assignedInstructors.isEmpty && !model.isLoading {
-                formNote("Aucun moniteur affecté à cet élève.")
+                formNote("Aucun moniteur affecté ne couvre ce créneau.")
             }
             DatePicker("Date", selection: $model.startsAt, in: Date()..., displayedComponents: .date)
-                .onChange(of: model.startsAt) { _, _ in model.termsAccepted = false; model.agreementConfirmed = false }
             DatePicker("Heure", selection: $model.startsAt, displayedComponents: .hourAndMinute)
-                .onChange(of: model.startsAt) { _, _ in model.termsAccepted = false; model.agreementConfirmed = false }
+            if model.originalLesson == nil || model.changesCommercialTerms {
+                Picker("Durée", selection: Binding(get: { model.duration }, set: { model.selectDuration($0) })) {
+                    ForEach(model.durationChoices, id: \.self) { minutes in Text("\(minutes) min").tag(minutes) }
+                }
+                .accessibilityIdentifier("planning-duration")
+            }
             if model.duration > 0 {
                 LabeledContent("Fin prévue") { Text(SchoolPlanningFormat.instant(model.endsAt, zone: model.timeZone)).monospacedDigit().foregroundStyle(DrivyTheme.muted) }
             }
+            slotFeedback
             DisclosureGroup("Détails du rendez-vous") {
                 SchoolMeetingPointField(text: $model.meetingPoint)
                 .onChange(of: model.meetingPoint) { _, _ in model.agreementConfirmed = false }
@@ -166,33 +194,40 @@ struct SchoolPlanningView: View {
             .drivyFormRows()
         .disabled(!model.canMutate)
     }
+    @ViewBuilder private var slotFeedback: some View {
+        if let message = model.slotInputMessage {
+            DrivyFormMessage(text: message, tone: .danger)
+        } else if model.checkedSlotRequest == model.slotRequest, model.slotRequest != nil {
+            if model.isCheckingSlot {
+                ProgressView("Vérification du créneau…")
+                    .accessibilityIdentifier("planning-slot-checking")
+            } else if let error = model.slotError {
+                SchoolErrorNotice(message: error, retry: { Task { await model.validateSlot() } })
+                    .accessibilityIdentifier("planning-slot-error")
+            } else if let message = model.slotAvailability?.refusalMessage {
+                DrivyFormMessage(text: message, tone: .danger)
+                    .accessibilityIdentifier("planning-slot-unavailable")
+            }
+        }
+    }
     private var commercialFields: some View {
         Section {
             Picker("Tarif", selection: $model.productID) {
                 Text("Choisir un tarif").tag(nil as UUID?)
-                ForEach(model.availableProducts) { product in
+                ForEach(model.compatibleProducts) { product in
                     Text("\(product.label) · \(SchoolCatalogFormatting.price(product.unitPriceCents))").tag(Optional(product.id))
                 }
-            }.onChange(of: model.productID) { _, _ in model.termsAccepted = false }
-            if model.availableProducts.isEmpty && !model.isLoading {
-                formNote("Aucun tarif valable à cette date.")
+            }
+            if model.compatibleProducts.isEmpty && !model.isLoading {
+                formNote("Aucun tarif ne correspond à cette durée et à cette date.")
             }
             if let product = model.selectedProduct {
-                Stepper(value: $model.quantity, in: 1...100) {
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Text("Quantité : \(model.quantity)").monospacedDigit()
-                        Text("Durée : \(model.duration) min").font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-                    }
-                }
-                .onChange(of: model.quantity) { _, _ in model.termsAccepted = false }
                 // Le prix unitaire n’apporte rien quand il est déjà le prix convenu.
                 if model.quantity > 1 {
+                    LabeledContent("Quantité") { Text("\(model.quantity)").monospacedDigit().foregroundStyle(DrivyTheme.muted) }
                     LabeledContent("Prix par \(product.unitLabel)") {
                         Text(SchoolCatalogFormatting.price(product.unitPriceCents)).monospacedDigit().foregroundStyle(DrivyTheme.muted)
                     }
-                }
-                if model.selectedTerms != nil {
-                    Toggle("Prix et conditions acceptés", isOn: $model.termsAccepted)
                 }
             }
         } header: { Text("Le tarif").drivyFormSectionHeader() }
@@ -272,7 +307,7 @@ struct SchoolPlanningView: View {
         } label: {
             HStack(spacing: DrivySpacing.xs) {
                 if model.isBusy { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
-                Label(model.originalLesson == nil ? "Confirmer la leçon" : "Confirmer le déplacement", systemImage: "calendar.badge.checkmark")
+                Label(model.originalLesson == nil ? "Planifier" : "Confirmer le déplacement", systemImage: "calendar.badge.checkmark")
             }
         }
         .buttonStyle(DrivyPrimaryButtonStyle())
@@ -319,14 +354,14 @@ struct SchoolPlanningView: View {
             }
         } header: { Text("Motif d’annulation").drivyFormSectionHeader() }
             .drivyFormRows()
-            .disabled(!model.canMutate)
+            .disabled(!model.canMutate || isPreparingCancellation)
         Section {
             Button(role: .destructive) { confirmsCancellation = true } label: {
                 Label("Annuler la leçon", systemImage: "calendar.badge.minus")
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity, minHeight: 48)
             }
-            .disabled(!model.canMutate || model.cancellationReason.isEmpty || model.reasonTooLong || model.originalLesson?.status != "PLANNED")
+            .disabled(isPreparingCancellation || !model.canMutate || model.cancellationReason.isEmpty || model.reasonTooLong || model.originalLesson?.status != "PLANNED")
         }
             .drivyFormRows()
     }
@@ -364,6 +399,7 @@ struct SchoolPlanningFeedback: View {
     var body: some View {
         if model.school == nil && (model.isLoading || model.errorMessage == nil) { Section { DrivySkeletonRows(count: 4).drivySkeleton("Ouverture du planning…") }
             .drivyFormRows() }
+        if model.school != nil && model.isLoading { Section { ProgressView("Actualisation du planning…") }.drivyFormRows() }
         if let error = model.errorMessage {
             // Même présentation d’erreur que les pages : notice, puis « Réessayer ».
             Section {

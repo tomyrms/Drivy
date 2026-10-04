@@ -129,7 +129,7 @@ import XCTest
                     }
                     if screen == "lesson-permit" {
                         let confirm = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@",
-                            "lesson-confirm-completion", "Terminer et ouvrir le bilan")).firstMatch
+                            "lesson-confirm-completion", "Terminer")).firstMatch
                         guard requireVisual(confirm.waitForExistence(timeout: 10),
                             "Confirmation de fin de leçon absente.", app: app, name: captureName) else { return }
                         confirm.tap()
@@ -157,8 +157,10 @@ import XCTest
                         guard requireVisual(target.exists && target.isHittable,
                             "Action de planification absente ou inaccessible.", app: app, name: captureName) else { return }
                         if screen == "planning-details" {
-                            guard requireVisual(app.switches["Prix et conditions acceptés"].exists,
-                                "Acceptation des conditions tarifaires absente.", app: app, name: captureName) else { return }
+                            guard requireVisual(!app.switches["Prix et conditions acceptés"].exists,
+                                "La planification demande encore une acceptation supplémentaire.", app: app, name: captureName) else { return }
+                            guard requireVisual(app.buttons["planning-confirm"].isEnabled,
+                                "Planifier devrait être disponible avec ce tarif valable.", app: app, name: captureName) else { return }
                         }
                     }
                     guard requireVisual(XCUIDevice.shared.orientation.isLandscape == landscape,

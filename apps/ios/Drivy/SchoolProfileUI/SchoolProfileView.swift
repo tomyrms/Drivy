@@ -23,7 +23,7 @@ struct SchoolProfileView: View {
                 }
                 .task { if loadsOnAppear { await model.load() } }
                 .sheet(isPresented: $showsGuidedWelcome) { SchoolOnboardingView(model: model) }
-                .confirmationDialog("Quitter sans enregistrer tes changements ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+                .alert("Quitter sans enregistrer tes changements ?", isPresented: $confirmsDiscard) {
                     Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
                 } message: {
                     Text("Une demande déjà envoyée reste conservée sur cet appareil jusqu’à confirmation.")
