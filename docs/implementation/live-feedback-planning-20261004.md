@@ -34,3 +34,12 @@ Le choix du créneau déclenche une lecture serveur avec temporisation de 300 ms
 ## Déploiement serveur
 
 La release `52c355f5e71028866ae9bdf6a7dd83d07ad66f9c` a été déployée après sauvegarde privée de `drivy_refonte` et vérification de l’archive par pg_restore. Les empreintes des 22 migrations correspondent au commit. API, web et identité sont actifs ; processus dans la bonne release, readiness interne 200, contrôles HTTPS attendus réussis. Configuration privée API et profil d’essai iPad conservés. Preuve : `proofs/deployment-availability-20261004.json`. Mandat de déploiement phase2 du 28 septembre, rappelé dans AGENTS.md.
+
+
+## Livraison native
+
+**IPA 0.7.0/build102** compilée Release avec succès sur `9dcad86e6bda6c303b9379040ee31b2c6d4b52bb` ([run37217708082](https://github.com/tomyrms/Drivy/actions/runs/37217708082)). Archive téléchargée ; les trois fichiers du manifeste, le ZIP, les binaires et la configuration de production sont vérifiés. SHA-256 IPA : `adff60719ab2e24cc4f0269be79c72d92f286fe5c4a6d33b2a61cb9a51575f26`. Emplacement local : `artifacts/ipa-20261004-feedback-planning/Drivy.ipa`.
+
+La relecture indépendante a corrigé le retrait différé après finalisation : le reçu REMOVE est vérifié d’abord, puis la version courante est relue ; un conflit de version autorise une seule reprise, avec le même UUID. Les liens de contact restent visibles sans callback de profil et le bandeau existe aussi sans GPS. Sur la carte compacte, les commandes de suivi restent accessibles au-dessus du bandeau, avec un espace réservé à la ligne des mentions Apple Plans.
+
+Les contrôles généraux passent sur ce commit ([run37217708094](https://github.com/tomyrms/Drivy/actions/runs/37217708094)). À la demande du porteur, aucune longue campagne Apple ni capture supplémentaire : tests Swift préparés mais non exécutés. Rendu, fluidité, VoiceOver et cap physique restent à qualifier sur l’appareil. L’IPA est non signée, à signer/installer avec iLoader. Preuve : `proofs/live-feedback-planning-20261004.json`.
