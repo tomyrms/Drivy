@@ -1,6 +1,24 @@
 import XCTest
 
 @MainActor final class FieldFlowTests: XCTestCase {
+    func testLeavingLiveThroughTabsKeepsTheLessonAndCancellationIsInTheMenu() {
+        let app = launch("live")
+        let signal = app.buttons["capture-signal-observation"]
+        XCTAssertTrue(signal.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertFalse(app.buttons["capture-cancel-lesson"].exists)
+        XCTAssertFalse(app.buttons["Revenir à la leçon"].exists)
+        app.buttons["capture-more"].tap()
+        XCTAssertTrue(app.buttons["Annuler la leçon"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.buttons["Voir la leçon"].exists)
+        // Dismiss the menu outside its actions, then leave through the actual tab bar.
+        app.tabBars.buttons["Agenda"].tap()
+        if signal.exists { app.tabBars.buttons["Agenda"].tap() }
+        XCTAssertTrue(signal.waitForNonExistence(timeout: 5))
+        app.tabBars.buttons["Aujourd’hui"].tap()
+        XCTAssertTrue(signal.waitForExistence(timeout: 5))
+        XCTAssertTrue(signal.isEnabled)
+    }
+
     func testGPSChoiceShowsDocumentsOnDemandAndClosesAfterOneChoice() {
         let app = launch("gps-choice")
         let allow = app.buttons["recording-allow"]

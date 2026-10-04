@@ -5,7 +5,7 @@ import SwiftUI
 /// No production credentials, persistent school store or network transport is created.
 struct SchoolVisualReview: View {
     /// Shell screens routed here directly by DrivyApp, with the real tab bar.
-    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner", "profile-tab", "learner-home", "learner-progress"]
+    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner", "profile-tab", "learner-home", "learner-progress", "live", "live-waiting"]
 
     let screen: String
     @State private var context: SchoolVisualContext?

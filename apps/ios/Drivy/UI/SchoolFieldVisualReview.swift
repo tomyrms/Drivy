@@ -8,14 +8,17 @@ struct SchoolFieldVisualReview: View {
     @State private var models: SchoolFieldVisualModels?
     @State private var route: FieldRoute?
     @State private var error: String?
+    @State private var selectedTab: SchoolHomeTab = .session
     private enum FieldRoute: String, Identifiable { case choice, signal; var id: String { rawValue } }
 
     var body: some View {
         Group {
             if let models {
                 if screen == "live" || screen == "live-waiting" {
-                    SchoolCaptureLiveView(controller: screen == "live" ? models.live : models.waiting,
-                        learnerName: context.learner.displayName)
+                    SchoolHomeView(workspace: context.workspace, openAccount: {},
+                        agendaClient: context.agenda, trainingClient: context.client,
+                        captureController: screen == "live" ? models.live : models.waiting,
+                        selectedTab: $selectedTab)
                 } else if screen == "observations" {
                     SchoolObservationView(model: models.observations, schoolWorkspace: context.workspace)
                 } else if screen == "capture-preparation" {

@@ -29,9 +29,10 @@ struct DrivyApp: App {
         WindowGroup {
             #if DEBUG && targetEnvironment(simulator)
             if let screen = ProcessInfo.processInfo.environment["DRIVY_VISUAL_SCREEN"] {
-                if screen == "design-system" {
-                    DrivyDesignSystemGallery()
+                if screen == "design-system" || screen == "skeletons" {
+                    DrivyDesignSystemGallery(loadingOnly: screen == "skeletons")
                         .environment(\.locale, Locale(identifier: "fr_CH"))
+                        .dynamicTypeSize(ProcessInfo.processInfo.environment["DRIVY_VISUAL_LARGE_TEXT"] == "1" ? .accessibility3 : .large)
                         .tint(DrivyTheme.accent)
                 } else {
                     SchoolVisualReview(screen: screen)

@@ -9,7 +9,7 @@ import XCTest
         "profile-tab", "learner-home", "learner-progress", "start-now", "planning-settings",
         "agenda", "learners", "learner", "lesson", "lesson-planned",
         "lesson-observations", "lesson-evidence", "lesson-permit", "invitation-code", "trips",
-        "replay", "design-system", "gps-choice", "signal", "live-signal",
+        "replay", "design-system", "skeletons", "gps-choice", "signal", "live-signal",
         "signal-status", "observations", "capture-preparation", "live", "live-waiting",
         "planning", "planning-details", "planning-confirmation", "invitations", "invitation-create",
         "invitation-detail", "lesson-finish", "lesson-modal", "lesson-tariff", "sign-in",
