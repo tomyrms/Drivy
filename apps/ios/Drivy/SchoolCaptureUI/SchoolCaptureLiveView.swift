@@ -403,7 +403,7 @@ struct SchoolCaptureLiveView: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.body.weight(.semibold))
+                .font(DrivyMapGlyph.control)
                 .foregroundStyle(DrivyTheme.text)
                 .frame(width: 48, height: 48)
                 .background(DrivyTheme.surfaceMuted, in: Circle())

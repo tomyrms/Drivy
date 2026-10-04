@@ -1,0 +1,6 @@
+{
+  "source": "01-road-d.png",
+  "result": "01-road-d-polished.png",
+  "method": "ImageGen edit",
+  "brief": "Conserver le d routier blanc et le fond cobalt ; harmoniser la courbe de la boucle, les raccords, la largeur du ruban et les cinq tirets. Dessin plat, sans ombre, texture ni relief. Cadrage carré, opaque."
+}

@@ -86,7 +86,7 @@ struct SchoolLiveObservationSheet: View {
     private func roundControl(_ label: String, symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.body.weight(.semibold))
+                .font(DrivyMapGlyph.control)
                 .foregroundStyle(DrivyTheme.muted)
                 .frame(width: 48, height: 48)
                 .background(DrivyTheme.surfaceMuted, in: Circle())

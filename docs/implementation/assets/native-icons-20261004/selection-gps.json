@@ -61,7 +61,8 @@
           "file": "candidates/speed-05.svg",
           "assessment": "La flèche d’élan reste lisible, mais pourrait signifier suivant ou accélérer."
         }
-      ]
+      ],
+      "optical_refinement": "Graduation supérieure droite supprimée : elle fusionnait avec l’aiguille. Aiguille conservée à sa longueur originale, pivot plein de rayon 2,4 ; séparation plus nette à 40 et 24 px."
     },
     "placement": {
       "selected_variant": 1,
@@ -98,7 +99,8 @@
           "file": "candidates/placement-05.svg",
           "assessment": "L’intersection et le virage évoquent davantage un changement de direction."
         }
-      ]
+      ],
+      "optical_refinement": "Vitres centrées ramenées de 8 à 6 unités : leurs extrémités se détachent mieux du contour de la voiture à 40 et 24 px. Aucun autre changement."
     },
     "manoeuvres": {
       "selected_variant": 1,
@@ -135,7 +137,8 @@
           "file": "candidates/manoeuvres-05.svg",
           "assessment": "Le recul en angle est concret, mais la place et la trajectoire se chevauchent davantage à 40 px."
         }
-      ]
+      ],
+      "optical_refinement": "Voiture harmonisée au gabarit 16 × 23 de placement, avec vitres de 6 unités espacées de 11. Flèche raccourcie pour garder un espace devant le véhicule. Moins d’empâtement à 24 px."
     },
     "motorway": {
       "selected_variant": 1,
@@ -172,7 +175,8 @@
           "file": "candidates/motorway-05.svg",
           "assessment": "La jonction représente l’insertion plutôt que l’ensemble du parcours autoroutier."
         }
-      ]
+      ],
+      "optical_refinement": "Supports sous la traverse et minuscule tiret inférieur supprimés après comparaison : le pont et les deux bords de chaussée restent identifiables, sans petits amas à 24 px."
     },
     "anticipation": {
       "selected_variant": 2,
@@ -209,7 +213,8 @@
           "file": "candidates/anticipation-05.svg",
           "assessment": "Le radar exprime la surveillance, avec une connotation technique éloignée du partage de la route."
         }
-      ]
+      ],
+      "optical_refinement": "Voiture légèrement moins large et à gauche ; piéton décalé de 2 unités à droite, tête relevée de 1. Phares supprimés : silhouettes séparées et moins de bruit à 40 et 24 px."
     },
     "marker": {
       "selected_variant": 2,
@@ -246,7 +251,10 @@
           "file": "candidates/marker-05.svg",
           "assessment": "Le chronomètre suggère le lancement ou la mesure d’une durée."
         }
-      ]
+      ],
+      "optical_refinement": "Conservé intégralement après confrontation à la critique A : la silhouette originale reste simple et lisible ; son emploi à 28 px et en teinte muted dans la commande assure déjà son poids secondaire. La réduction supplémentaire du SVG n’améliore pas suffisamment la lecture."
     }
-  }
+  },
+  "refinement_report": "polish-gps.json",
+  "refinement_comparison": "gps-polish-before-after.png"
 }

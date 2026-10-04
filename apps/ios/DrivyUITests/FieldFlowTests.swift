@@ -2,6 +2,7 @@ import XCTest
 
 @MainActor final class FieldFlowTests: XCTestCase {
     func testLeavingLiveThroughTabsKeepsTheLessonAndCancellationIsInTheMenu() {
+        continueAfterFailure = false
         let app = launch("live")
         let signal = app.buttons["capture-signal-observation"]
         XCTAssertTrue(signal.waitForExistence(timeout: 20), app.debugDescription)
@@ -11,10 +12,10 @@ import XCTest
         XCTAssertTrue(app.buttons["Annuler la leçon"].waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(app.buttons["Voir la leçon"].exists)
         // Dismiss the menu outside its actions, then leave through the actual tab bar.
-        app.tabBars.buttons["Agenda"].tap()
-        if signal.exists { app.tabBars.buttons["Agenda"].tap() }
+        nativeTab("Agenda", in: app).tap()
+        if signal.exists { nativeTab("Agenda", in: app).tap() }
         XCTAssertTrue(signal.waitForNonExistence(timeout: 5))
-        app.tabBars.buttons["Aujourd’hui"].tap()
+        nativeTab("Aujourd’hui", in: app).tap()
         XCTAssertTrue(signal.waitForExistence(timeout: 5))
         XCTAssertTrue(signal.isEnabled)
     }
@@ -131,6 +132,17 @@ import XCTest
         capture(app, name: "lesson-permit-reopened-empty")
         // Aucune confirmation de fin n’est envoyée ; ce cas refuse aussi toute écriture fictive.
         app.terminate()
+    }
+
+    private func nativeTab(_ title: String, in app: XCUIApplication,
+        file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        // iPhone exposes a Button; iPad's _UIFloatingTabBarItemCell is a Cell, without a TabBar ancestor.
+        let tab = app.descendants(matching: .any).matching(NSPredicate(
+            format: "label == %@ AND (elementType == %lu OR elementType == %lu)",
+            title, XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.cell.rawValue
+        )).firstMatch
+        XCTAssertTrue(tab.waitForExistence(timeout: 5), app.debugDescription, file: file, line: line)
+        return tab
     }
 
     private func launch(_ screen: String) -> XCUIApplication {

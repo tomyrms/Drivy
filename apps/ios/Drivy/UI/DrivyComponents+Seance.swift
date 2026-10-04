@@ -13,6 +13,15 @@ struct DrivyMapStatus: Equatable {
     var tone: DrivyTone = .neutral
 }
 
+/// Symbols inside fixed map controls and status discs keep their optical size.
+/// Only the glyph uses these fonts; labels and reading content still follow Dynamic Type.
+enum DrivyMapGlyph {
+    static let control = Font.system(size: 20, weight: .semibold)
+    static let primaryControl = Font.system(size: 22, weight: .semibold)
+    static let observation = Font.system(size: 20, weight: .bold)
+    static let compactObservation = Font.system(size: 12, weight: .bold)
+}
+
 extension GPSStatus {
     /// Same vocabulary as the school GPS: « GPS actif », « En attente de position »…
     /// A refusal or an interruption is a warning, never a red alert.
@@ -90,7 +99,7 @@ private struct DrivyMapLeadingButton: View {
     var body: some View {
         Button(action: action.action) {
             Image(systemName: action.symbol)
-                .font(.body.weight(.semibold))
+                .font(DrivyMapGlyph.control)
                 .foregroundStyle(action.isDisabled ? DrivyTheme.disabledText : DrivyTheme.text)
                 .frame(width: 48, height: 48)
                 .background(DrivyTheme.surfaceMuted, in: Circle())
@@ -321,7 +330,7 @@ struct DrivyMapControls: View {
             layout {
                 Button { followsPosition.toggle() } label: {
                     Image(systemName: followsPosition ? "location.north.line.fill" : "location")
-                        .font(.title3.weight(.semibold))
+                        .font(DrivyMapGlyph.primaryControl)
                         .foregroundStyle(followsPosition ? DrivyTheme.accent : canFollow ? DrivyTheme.text : DrivyTheme.disabledText)
                         .frame(width: 48, height: 48)
                         .drivyLegibleMapControl(in: Circle())
@@ -333,7 +342,7 @@ struct DrivyMapControls: View {
                 .accessibilityAddTraits(followsPosition ? [.isSelected] : [])
                 Button(action: showWholeRoute) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.title3.weight(.semibold))
+                        .font(DrivyMapGlyph.primaryControl)
                         .foregroundStyle(DrivyTheme.text)
                         .frame(width: 48, height: 48)
                         .drivyLegibleMapControl(in: Circle())
@@ -668,7 +677,9 @@ struct DrivyReplayTransport: View {
             Button(action: cycleSpeed) {
                 Text("×\(speed)")
                     .font(.headline.monospacedDigit())
-                    .frame(width: 48, height: 48)
+                    .padding(.horizontal, DrivySpacing.xs)
+                    .frame(minWidth: 48, minHeight: 48)
+                    .fixedSize()
                     .background(DrivyTheme.surfaceMuted, in: Capsule())
                     .contentShape(Capsule())
             }
@@ -684,7 +695,7 @@ struct DrivyReplayTransport: View {
                 .accessibilityIdentifier("replay-previous")
             Button(action: togglePlay) {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.title2)
+                    .font(DrivyMapGlyph.primaryControl)
                     .foregroundStyle(DrivyTheme.onAccent)
                     .frame(width: 60, height: 60)
                     .background(DrivyTheme.accent, in: Circle())
@@ -702,7 +713,7 @@ struct DrivyReplayTransport: View {
             if let openList {
                 Button(action: openList) {
                     Image(systemName: "list.bullet")
-                        .font(.headline)
+                        .font(DrivyMapGlyph.control)
                         .frame(width: 48, height: 48)
                         .background(DrivyTheme.surfaceMuted, in: Capsule())
                         .contentShape(Capsule())
@@ -717,7 +728,7 @@ struct DrivyReplayTransport: View {
     private func roundButton(_ symbol: String, label: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.headline)
+                .font(DrivyMapGlyph.control)
                 .foregroundStyle(isEnabled ? DrivyTheme.text : DrivyTheme.disabledText)
                 .frame(width: 48, height: 48)
                 .background(isEnabled ? DrivyTheme.surfaceMuted : DrivyTheme.disabledSurface, in: Circle())

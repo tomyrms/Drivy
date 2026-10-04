@@ -1,0 +1,61 @@
+{
+  "scope": "gps",
+  "comparison": "gps-polish-before-after.png",
+  "sizes_px": [
+    96,
+    40,
+    24
+  ],
+  "method": "Inspection réelle sharp/librsvg avant, premier essai et proposition issue de la critique A : tailles 40/24 px et zoom pixel. Cinq améliorations retenues, signet original conservé ; candidats originaux intacts.",
+  "changes": {
+    "speed": {
+      "changed": true,
+      "reason": "Graduation supérieure droite supprimée : elle fusionnait avec l’aiguille. Aiguille conservée à sa longueur originale, pivot plein de rayon 2,4 ; séparation plus nette à 40 et 24 px.",
+      "before": "candidates/speed-01.svg",
+      "after": "selected/speed.svg",
+      "before_sha256": "3e0968e890a3b9fb6a06b33a667b05f800ca641ba10f59aae65be1d88372c0f9",
+      "after_sha256": "c1c8c88f162dfc5e657f436dffc5d138162906991b00456bd06df282c9eb230b"
+    },
+    "placement": {
+      "changed": true,
+      "reason": "Vitres centrées ramenées de 8 à 6 unités : leurs extrémités se détachent mieux du contour de la voiture à 40 et 24 px. Aucun autre changement.",
+      "before": "candidates/placement-01.svg",
+      "after": "selected/placement.svg",
+      "before_sha256": "1e621d04c87cfc8a91f015340b37097a4b09df117e5a71ebc97fd5bf1523bcdc",
+      "after_sha256": "8fd232a1bd8c4641eca2ae808a28f1d0d0594defec2f2172f10ee014b0ef27da"
+    },
+    "manoeuvres": {
+      "changed": true,
+      "reason": "Voiture harmonisée au gabarit 16 × 23 de placement, avec vitres de 6 unités espacées de 11. Flèche raccourcie pour garder un espace devant le véhicule. Moins d’empâtement à 24 px.",
+      "before": "candidates/manoeuvres-01.svg",
+      "after": "selected/manoeuvres.svg",
+      "before_sha256": "b418564df33bc6f80940e9c7e2bbd298abb25dd7b6a55f637853f5c7babae3f1",
+      "after_sha256": "08c92310a1c5c42afdb2d981ec2c4b1ed7aac29c35e49bffa1a9421b2a6ebeb4"
+    },
+    "motorway": {
+      "changed": true,
+      "reason": "Supports sous la traverse et minuscule tiret inférieur supprimés après comparaison : le pont et les deux bords de chaussée restent identifiables, sans petits amas à 24 px.",
+      "before": "candidates/motorway-01.svg",
+      "after": "selected/motorway.svg",
+      "before_sha256": "8bfd4de6a506704dd65f5c4d6bab251ef97a053358153ff63d4a8626ffd83756",
+      "after_sha256": "7253b1caa812084e74dfb79bae6de57fabd62796f1d5100e1f94ca2c6994d400"
+    },
+    "anticipation": {
+      "changed": true,
+      "reason": "Voiture légèrement moins large et à gauche ; piéton décalé de 2 unités à droite, tête relevée de 1. Phares supprimés : silhouettes séparées et moins de bruit à 40 et 24 px.",
+      "before": "candidates/anticipation-02.svg",
+      "after": "selected/anticipation.svg",
+      "before_sha256": "f95a8af794ab792967c1585fea23b2d32765acb90f3de4519e28790b1d2820e5",
+      "after_sha256": "137cee70e2c3031034160c2e6989a7f11963e8b2173463976ca8e2ac8e63bd5a"
+    },
+    "marker": {
+      "changed": false,
+      "reason": "Conservé intégralement après confrontation à la critique A : la silhouette originale reste simple et lisible ; son emploi à 28 px et en teinte muted dans la commande assure déjà son poids secondaire. La réduction supplémentaire du SVG n’améliore pas suffisamment la lecture.",
+      "before": "candidates/marker-02.svg",
+      "after": "selected/marker.svg",
+      "before_sha256": "333e1d218ec3cb7f173490cda74ab9727b5817a01f1e6e7d83d45814b787e2a4",
+      "after_sha256": "333e1d218ec3cb7f173490cda74ab9727b5817a01f1e6e7d83d45814b787e2a4"
+    }
+  },
+  "critique_comparison": "gps-polish-critique-a.png"
+}

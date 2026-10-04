@@ -85,7 +85,7 @@ struct SchoolCaptureLiveMap: View {
         case nil: DrivyTheme.text
         }
         return Image(systemName: status?.symbol ?? "bookmark.fill")
-            .font(.caption.weight(.bold))
+            .font(DrivyMapGlyph.compactObservation)
             .foregroundStyle(color)
             .frame(width: 28, height: 28)
             .background(DrivyTheme.surface, in: Circle())

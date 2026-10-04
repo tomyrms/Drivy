@@ -50,7 +50,9 @@ struct SchoolTodayView: View {
             GeometryReader { geometry in
                 // 380 pt pour la leçon et au moins 580 pt de carte ; une fenêtre étroite
                 // conserve le panneau du bas, indépendamment du modèle d’iPad.
-                if geometry.size.width >= TodayLayout.sidebarBreakpoint && !typeSize.isAccessibilitySize {
+                if typeSize.isAccessibilitySize {
+                    accessibleDay(now: context.date, availableHeight: geometry.size.height)
+                } else if geometry.size.width >= TodayLayout.sidebarBreakpoint {
                     // Hors de la carte, le panneau latéral est posé sur le fond : filet, pas d’ombre.
                     map
                         .safeAreaInset(edge: .leading, spacing: 0) {
@@ -106,6 +108,28 @@ struct SchoolTodayView: View {
         "\(scopeKey):\(SchoolDateFormat.template("yyyyMMdd", date, zone: workspace.school?.timeZone ?? "Europe/Zurich"))"
     }
 
+    /// Le grand texte garde toute sa hauteur : une seule lecture verticale, sans panneau borné au-dessus des onglets.
+    private func accessibleDay(now: Date, availableHeight: CGFloat) -> some View {
+        ScrollView {
+            VStack(spacing: DrivySpacing.l) {
+                card(now: now, floating: false)
+                if location.permitted {
+                    map
+                        .frame(height: min(max(availableHeight * 0.45, 240), 420))
+                        .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                } else {
+                    locationPlaceholder
+                }
+            }
+            .padding(DrivySpacing.m)
+            .frame(maxWidth: TodayLayout.bottomPanelMaxWidth)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .safeAreaPadding(.bottom, DrivySpacing.l)
+        .background(DrivyTheme.canvas)
+    }
+
     /// Sans position autorisée, un état honnête plutôt qu’une vue du pays entier.
     @ViewBuilder private var map: some View {
         if location.permitted {
@@ -113,28 +137,39 @@ struct SchoolTodayView: View {
                 .mapStyle(.standard(pointsOfInterest: .excludingAll))
                 .mapControls { MapUserLocationButton() }
         } else {
-            VStack(spacing: DrivySpacing.s) {
-                Image(systemName: "location.slash").font(.title).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
-                Text("Position indisponible").font(.headline).foregroundStyle(DrivyTheme.text)
-                if location.status == .notDetermined {
-                    Button("Autoriser la localisation") { location.request() }
-                        .buttonStyle(DrivySecondaryButtonStyle())
-                        .accessibilityIdentifier("today-location-authorize")
-                } else if location.status == .denied {
-                    Button("Ouvrir Réglages") {
-                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-                    }
+            locationPlaceholder
+                .frame(maxHeight: .infinity)
+                .background(DrivyTheme.canvas)
+        }
+    }
+
+    private var locationPlaceholder: some View {
+        VStack(spacing: DrivySpacing.s) {
+            Image(systemName: "location.slash").font(.title).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
+            Text("Position indisponible").font(.headline).foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            if location.status == .notDetermined {
+                Button { location.request() } label: {
+                    Text("Autoriser la localisation").fixedSize(horizontal: false, vertical: true)
+                }
+                    .buttonStyle(DrivySecondaryButtonStyle())
+                    .accessibilityIdentifier("today-location-authorize")
+            } else if location.status == .denied {
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                } label: {
+                    Text("Ouvrir Réglages").fixedSize(horizontal: false, vertical: true)
+                }
                     .buttonStyle(DrivySecondaryButtonStyle())
                     .accessibilityIdentifier("today-location-settings")
-                } else if location.status == .restricted {
-                    Text("La localisation est limitée sur cet appareil.").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            } else if location.status == .restricted {
+                Text("La localisation est limitée sur cet appareil.").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(DrivySpacing.l)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(DrivyTheme.canvas)
         }
+        .multilineTextAlignment(.center)
+        .padding(DrivySpacing.l)
+        .frame(maxWidth: .infinity)
     }
 
     /// Panneau de la journée : la leçon qui compte maintenant et son action dominante, puis le reste du jour.

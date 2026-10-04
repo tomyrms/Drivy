@@ -404,7 +404,7 @@ struct SchoolCaptureReplayView: View {
             HStack(alignment: .top, spacing: DrivySpacing.s) {
                 // Focus du dock : pastille pleine, comme les tuiles du signalement.
                 Image(systemName: item.symbol)
-                    .font(.headline.weight(.bold))
+                    .font(DrivyMapGlyph.observation)
                     .foregroundStyle(item.tone == .neutral ? DrivyTheme.text : item.tone.background)
                     .frame(width: 44, height: 44)
                     .background(item.tone == .neutral ? item.tone.background : item.tone.foreground, in: Circle())
@@ -429,7 +429,7 @@ struct SchoolCaptureReplayView: View {
                 .accessibilityElement(children: .combine)
                 Button { selectedID = nil } label: {
                     Image(systemName: "xmark")
-                        .font(.subheadline.weight(.semibold))
+                        .font(DrivyMapGlyph.control)
                         .foregroundStyle(DrivyTheme.muted)
                         .frame(width: 44, height: 44)
                         .background(DrivyTheme.surfaceMuted, in: Circle())
@@ -482,7 +482,7 @@ struct SchoolCaptureReplayView: View {
         Button(action: action) {
             HStack(spacing: DrivySpacing.xs) {
                 Image(systemName: item.symbol)
-                    .font(.caption.weight(.bold))
+                    .font(DrivyMapGlyph.compactObservation)
                     .foregroundStyle(item.tone.foreground)
                     .frame(width: 24, height: 24)
                     .background(item.tone.background, in: Circle())
@@ -571,7 +571,7 @@ struct SchoolCaptureReplayView: View {
                         } label: {
                             HStack(alignment: .top, spacing: DrivySpacing.s) {
                                 Image(systemName: item.symbol)
-                                    .font(.headline)
+                                    .font(DrivyMapGlyph.observation)
                                     .foregroundStyle(item.tone.foreground)
                                     .frame(width: 36, height: 36)
                                     .background(item.tone.background, in: Circle())
