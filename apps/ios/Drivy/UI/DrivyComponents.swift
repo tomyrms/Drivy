@@ -406,6 +406,17 @@ extension String {
     var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }
 
+/// Selected app identity, shared with the Home Screen icon.
+struct DrivyBrandMark: View {
+    var body: some View {
+        Image("DrivyBrand")
+            .resizable()
+            .scaledToFit()
+            .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
 /// Schematic route line from the mockups: a stepped path with start and end
 /// dots. Illustrative only, never a recorded position. Hidden from VoiceOver.
 struct DrivyRouteGlyph: View {

@@ -1,0 +1,278 @@
+{
+  "renderer": "sharp/librsvg",
+  "scale": 10,
+  "files": 30,
+  "failures": [],
+  "bounds": [
+    {
+      "file": "speed-01.svg",
+      "bounds": [
+        8.4,
+        9.7,
+        55.6,
+        50.6
+      ]
+    },
+    {
+      "file": "speed-02.svg",
+      "bounds": [
+        8.4,
+        8.4,
+        55.6,
+        55.6
+      ]
+    },
+    {
+      "file": "speed-03.svg",
+      "bounds": [
+        8.4,
+        22.4,
+        55.6,
+        48.6
+      ]
+    },
+    {
+      "file": "speed-04.svg",
+      "bounds": [
+        12.4,
+        8.4,
+        51.6,
+        55.6
+      ]
+    },
+    {
+      "file": "speed-05.svg",
+      "bounds": [
+        10.4,
+        18.4,
+        53.6,
+        45.6
+      ]
+    },
+    {
+      "file": "placement-01.svg",
+      "bounds": [
+        12.4,
+        8.4,
+        51.6,
+        55.6
+      ]
+    },
+    {
+      "file": "placement-02.svg",
+      "bounds": [
+        10.4,
+        8.4,
+        53.6,
+        55.6
+      ]
+    },
+    {
+      "file": "placement-03.svg",
+      "bounds": [
+        10.4,
+        8.4,
+        53.6,
+        55.6
+      ]
+    },
+    {
+      "file": "placement-04.svg",
+      "bounds": [
+        12.4,
+        8.4,
+        51.6,
+        55.6
+      ]
+    },
+    {
+      "file": "placement-05.svg",
+      "bounds": [
+        8.4,
+        8.4,
+        55.6,
+        55.6
+      ]
+    },
+    {
+      "file": "manoeuvres-01.svg",
+      "bounds": [
+        11.4,
+        8.4,
+        52.6,
+        55.6
+      ]
+    },
+    {
+      "file": "manoeuvres-02.svg",
+      "bounds": [
+        9.4,
+        8.9,
+        55.6,
+        54.6
+      ]
+    },
+    {
+      "file": "manoeuvres-03.svg",
+      "bounds": [
+        14.4,
+        10.4,
+        55.6,
+        54.6
+      ]
+    },
+    {
+      "file": "manoeuvres-04.svg",
+      "bounds": [
+        13.4,
+        9.7,
+        53.6,
+        54.6
+      ]
+    },
+    {
+      "file": "manoeuvres-05.svg",
+      "bounds": [
+        8.4,
+        11.4,
+        55.6,
+        55.6
+      ]
+    },
+    {
+      "file": "motorway-01.svg",
+      "bounds": [
+        8.4,
+        8.4,
+        55.6,
+        55.6
+      ]
+    },
+    {
+      "file": "motorway-02.svg",
+      "bounds": [
+        11.4,
+        8.4,
+        55.6,
+        55.6
+      ]
+    },
+    {
+      "file": "motorway-03.svg",
+      "bounds": [
+        10.4,
+        8.4,
+        53.6,
+        55.6
+      ]
+    },
+    {
+      "file": "motorway-04.svg",
+      "bounds": [
+        10.4,
+        8.4,
+        53.6,
+        55.6
+      ]
+    },
+    {
+      "file": "motorway-05.svg",
+      "bounds": [
+        8.4,
+        8.4,
+        43.6,
+        55.6
+      ]
+    },
+    {
+      "file": "anticipation-01.svg",
+      "bounds": [
+        9.4,
+        10.4,
+        54.6,
+        55.6
+      ]
+    },
+    {
+      "file": "anticipation-02.svg",
+      "bounds": [
+        9.4,
+        9.4,
+        53.6,
+        53.6
+      ]
+    },
+    {
+      "file": "anticipation-03.svg",
+      "bounds": [
+        8.4,
+        12.4,
+        55.6,
+        52.6
+      ]
+    },
+    {
+      "file": "anticipation-04.svg",
+      "bounds": [
+        8.4,
+        8.4,
+        55.6,
+        54.6
+      ]
+    },
+    {
+      "file": "anticipation-05.svg",
+      "bounds": [
+        10.4,
+        10.4,
+        53.6,
+        53.6
+      ]
+    },
+    {
+      "file": "marker-01.svg",
+      "bounds": [
+        17.4,
+        10,
+        52.6,
+        55.6
+      ]
+    },
+    {
+      "file": "marker-02.svg",
+      "bounds": [
+        17.4,
+        8.4,
+        46.6,
+        55.6
+      ]
+    },
+    {
+      "file": "marker-03.svg",
+      "bounds": [
+        13.4,
+        8.4,
+        50.6,
+        55.6
+      ]
+    },
+    {
+      "file": "marker-04.svg",
+      "bounds": [
+        8.4,
+        18.4,
+        55.6,
+        45.6
+      ]
+    },
+    {
+      "file": "marker-05.svg",
+      "bounds": [
+        12.4,
+        8.4,
+        52.6,
+        55.6
+      ]
+    }
+  ]
+}

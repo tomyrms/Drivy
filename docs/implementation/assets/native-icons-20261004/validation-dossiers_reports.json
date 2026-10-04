@@ -1,0 +1,311 @@
+{
+  "resolution": 640,
+  "coordinateRegion": [
+    8,
+    8,
+    56,
+    56
+  ],
+  "results": [
+    {
+      "file": "vehicle-01.svg",
+      "bounds": [
+        9.4,
+        9.4,
+        54.6,
+        54.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "vehicle-02.svg",
+      "bounds": [
+        8.4,
+        12.4,
+        55.6,
+        53.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "vehicle-03.svg",
+      "bounds": [
+        14.4,
+        8.4,
+        49.6,
+        51.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "vehicle-04.svg",
+      "bounds": [
+        10.4,
+        10.4,
+        53.6,
+        53.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "vehicle-05.svg",
+      "bounds": [
+        11.4,
+        16.4,
+        52.6,
+        52.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "observation-01.svg",
+      "bounds": [
+        8.4,
+        15.4,
+        55.6,
+        48.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "observation-02.svg",
+      "bounds": [
+        9.4,
+        9.4,
+        54.6,
+        52.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "observation-03.svg",
+      "bounds": [
+        8.4,
+        11.4,
+        55.6,
+        50.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "observation-04.svg",
+      "bounds": [
+        8.4,
+        11.4,
+        55.6,
+        52.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "observation-05.svg",
+      "bounds": [
+        9.4,
+        15.6,
+        54.6,
+        47.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "right-priority-01.svg",
+      "bounds": [
+        9.4,
+        9.4,
+        54.6,
+        54.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "right-priority-02.svg",
+      "bounds": [
+        8.4,
+        8.4,
+        55.6,
+        53.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "right-priority-03.svg",
+      "bounds": [
+        9.4,
+        9.4,
+        54.6,
+        54.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "right-priority-04.svg",
+      "bounds": [
+        8.4,
+        8.4,
+        55.6,
+        55.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "right-priority-05.svg",
+      "bounds": [
+        8.4,
+        8.4,
+        55.6,
+        55.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "signage-01.svg",
+      "bounds": [
+        9.4,
+        8.4,
+        54.6,
+        55.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "signage-02.svg",
+      "bounds": [
+        11.4,
+        8.4,
+        52.6,
+        55.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "signage-03.svg",
+      "bounds": [
+        14.4,
+        8.4,
+        49.6,
+        55.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "signage-04.svg",
+      "bounds": [
+        8.7,
+        9.4,
+        55.3,
+        55.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "signage-05.svg",
+      "bounds": [
+        13.4,
+        9.4,
+        55.6,
+        54.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "give-way-01.svg",
+      "bounds": [
+        9.7,
+        11.4,
+        54.3,
+        53.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "give-way-02.svg",
+      "bounds": [
+        14.4,
+        9.4,
+        49.6,
+        55.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "give-way-03.svg",
+      "bounds": [
+        9.4,
+        11.4,
+        54.6,
+        53.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "give-way-04.svg",
+      "bounds": [
+        9.4,
+        10.4,
+        54.6,
+        55.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "give-way-05.svg",
+      "bounds": [
+        11.4,
+        9.4,
+        52.6,
+        55.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "intersections-01.svg",
+      "bounds": [
+        9.4,
+        8.8,
+        51.6,
+        51.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "intersections-02.svg",
+      "bounds": [
+        8.4,
+        8.4,
+        55.6,
+        55.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "intersections-03.svg",
+      "bounds": [
+        10.1,
+        8.1,
+        54,
+        55.6
+      ],
+      "pass": true
+    },
+    {
+      "file": "intersections-04.svg",
+      "bounds": [
+        8.4,
+        12.3,
+        51.6,
+        53.7
+      ],
+      "pass": true
+    },
+    {
+      "file": "intersections-05.svg",
+      "bounds": [
+        8.4,
+        8,
+        55.7,
+        55.6
+      ],
+      "pass": true
+    }
+  ]
+}

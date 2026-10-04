@@ -251,7 +251,11 @@ struct SchoolVisualShell: View {
             ("Stationnement", "Choisir les repères et contrôler l’environnement.", "parking"),
             ("Autoroute", "Préparer l’insertion et adapter les distances.", "motorway"),
             ("Adaptation de la vitesse", "Vitesse adaptée aux limites, à la visibilité et au trafic.", "vitesse"),
-            ("Anticipation", "Préparer les situations de conduite.", "anticipation")
+            ("Anticipation", "Préparer les situations de conduite.", "anticipation"),
+            ("Maîtrise du véhicule", "Démarrer, s’arrêter et diriger.", "vehicule"),
+            ("Observation et contrôles", "Rétroviseurs et angles morts.", "observation"),
+            ("Intersections et giratoires", "Choix de voie, placement et sortie.", "intersections"),
+            ("Placement sur la chaussée", "Position dans la voie et les virages.", "placement")
         ].enumerated().map { index, value in
             ["id": identifier(30 + index).uuidString, "schoolId": schoolID.uuidString, "version": 1,
              "curriculumVersionId": curriculumID.uuidString, "key": value.2,

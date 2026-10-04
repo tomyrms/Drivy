@@ -1,0 +1,13 @@
+{
+  "selected": "01-road-d.png",
+  "method": "ImageGen built-in, five independent generations",
+  "reason": "Le d minuscule se lit sans ambiguïté ; contour compact et route interne reconnaissable en petite taille. Les propositions 2 et 3 sont plus génériques, 4 se lit comme un 5, 5 accumule trois courbes fines.",
+  "originalSize": [
+    1254,
+    1254
+  ],
+  "iosExportSize": [
+    1024,
+    1024
+  ]
+}

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Présentation de connexion ; l'identité et l'autorisation restent dans la racine.
 /// Les quatre états (prêt, connexion en cours, échec, non configuré) gardent la même
-/// charpente : la trace sur son aplat de marque, la promesse, puis au plus un message
+/// charpente : la marque, la promesse, puis au plus un message
 /// au-dessus des actions. L'ensemble est centré dans l'espace au-dessus des boutons.
 struct SchoolSignInLanding: View {
     let isConfigured: Bool
@@ -59,16 +59,10 @@ struct SchoolSignInLanding: View {
         }
     }
 
-    /// Aplat de marque doux, trace au centre : le trajet est l'image de l'app. Profondeur par filet, sans ombre ni dégradé.
+    /// The same mark on the Home Screen and at sign-in.
     private func hero(height: CGFloat) -> some View {
-        let shape = RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous)
-        return DrivyRouteGlyph()
-            .frame(height: height)
-            .padding(.vertical, DrivySpacing.xl)
-            .padding(.horizontal, DrivySpacing.l)
-            .frame(maxWidth: .infinity)
-            .background(DrivyTheme.accentSoft, in: shape)
-            .overlay { shape.strokeBorder(DrivyTheme.border, lineWidth: 0.5) }
-            .accessibilityHidden(true)
+        DrivyBrandMark()
+            .frame(width: height, height: height)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
