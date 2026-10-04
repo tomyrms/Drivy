@@ -1,5 +1,9 @@
 # État de la réalisation
 
+## 4 octobre 2026 — revue UI/UX native en cours
+
+Chantier ouvert sur demande du porteur : page Aujourd’hui, squelettes de chargement, annulation discrète pendant la leçon, mentions Apple Plans, fiabilité du tracé GPS et revue des fonctionnalités une par une avec Impeccable. Huit lots travaillent en parallèle sur des fichiers disjoints. **Rien n’est compilé, testé ni poussé à ce stade.** L’état de chaque lot, les décisions et la marche à suivre pour reprendre sont dans [le document de reprise](reprise-revue-ui-20261004.md).
+
 ## 30 septembre 2026 — diagnostic de la campagne de captures iOS
 
 Correctif local de l’archive jointe : noms de captures validés avant lancement, diagnostics explicites avant les assertions, attente du compte sur son identifiant existant et export des pièces jointes même après échec. Le code 65 reste propagé ; les contrôles de rotation et de complétude restent obligatoires. **Le journal d’échec et l’archive sont des versions différentes** : l’ancien écran `student-file` n’existe pas dans cette campagne. Aucune équivalence avec un autre écran ni résolution de l’ancien parcours n’est revendiquée.
