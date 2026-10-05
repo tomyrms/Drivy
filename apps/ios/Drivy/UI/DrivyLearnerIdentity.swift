@@ -39,8 +39,13 @@ struct DrivyLearnerIdentity<Accessory: View>: View {
     }
 
     private var block: some View {
-        HStack(alignment: .center, spacing: DrivySpacing.s) {
-            if !typeSize.isAccessibilitySize {
+        // Aux très grandes tailles, l’accessoire passe sous le nom au lieu de lui disputer la largeur.
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.s))
+        return layout {
+            if !stacked {
                 DrivyAvatar(name: name, size: variant == .page ? 48 : 36)
             }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
