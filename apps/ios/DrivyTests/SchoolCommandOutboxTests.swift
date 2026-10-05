@@ -237,7 +237,7 @@ struct SchoolCommandOutboxTests {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try encrypted.write(to: directory.appendingPathComponent("pending-v1.bin"))
             let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
-            let restored = try #require(store.pending(for: original.scope))
+            let restored = try #require(try store.pending(for: original.scope))
             #expect(restored == original && restored.observationUndoOperationID == nil)
             try store.save(restored)
         }
@@ -259,7 +259,7 @@ struct SchoolCommandOutboxTests {
             let archive = try #require(JSONSerialization.jsonObject(with: clear) as? [String: Any])
             #expect(archive["version"] as? Int == 2) // A v1 binary cannot silently discard the undo metadata.
             let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
-            let restored = try #require(reopened.pending(for: original.scope))
+            let restored = try #require(try reopened.pending(for: original.scope))
             #expect(restored == requested && restored.observationUndoOperationID == undoID)
             #expect(restored.withoutObservationUndo == original)
             try reopened.save(restored)
@@ -275,7 +275,7 @@ struct SchoolCommandOutboxTests {
             try store.save(original)
             try store.save(requested)
             let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
-            let restored = try #require(reopened.pending(for: original.scope))
+            let restored = try #require(try reopened.pending(for: original.scope))
             let receipt = SchoolOperationReceipt(operationId: original.id, commandType: original.kind.operationType,
                 resourceType: original.kind.resourceType, resourceId: UUID(),
                 committedAt: "2026-10-04T10:00:01Z", resourceVersion: 1)
