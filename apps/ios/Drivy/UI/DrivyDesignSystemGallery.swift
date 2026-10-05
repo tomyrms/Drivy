@@ -144,7 +144,7 @@ struct DrivyDesignSystemGallery: View {
                     }
                 }
                 DrivyStatusBadge(title: "Pastille sans symbole")
-                DrivyContextHeader(context: "École de conduite (exemple)", detail: "Lundi 21 septembre")
+                DrivyContextHeader(context: "Auto-école du Val-de-Ruz", detail: "Lundi 21 septembre")
                 HStack(spacing: DrivySpacing.m) {
                     DrivyAvatar(name: "Camille Martin", size: 36)
                     DrivyAvatar(name: "Camille Martin")
