@@ -82,6 +82,29 @@ struct SchoolProfileDraft: Equatable {
     }
 }
 
+/// Pays d’une adresse postale : le code ISO à deux lettres attendu par le serveur, nommé dans la langue de l’app.
+struct SchoolProfileCountry: Identifiable, Hashable, Sendable {
+    let code: String
+    let name: String
+    var id: String { code }
+
+    /// Tous les pays, dans l’ordre alphabétique de leur nom.
+    static let all: [SchoolProfileCountry] = {
+        let locale = Locale.current
+        let countries = NSLocale.isoCountryCodes.compactMap { code -> SchoolProfileCountry? in
+            guard code.range(of: "^[A-Z]{2}$", options: .regularExpression) != nil,
+                  let name = locale.localizedString(forRegionCode: code) else { return nil }
+            return SchoolProfileCountry(code: code, name: name)
+        }
+        return countries.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }()
+    /// Pays de la région de l’appareil, proposé en tête de liste. Il n’est jamais choisi à la place de la personne.
+    static var local: SchoolProfileCountry? {
+        guard let code = Locale.current.region?.identifier else { return nil }
+        return all.first { $0.code == code }
+    }
+}
+
 struct SchoolProfilePolicyDraft {
     var effectiveFrom = Date()
     var included: Set<SchoolProfileField> = [.firstName, .lastName]

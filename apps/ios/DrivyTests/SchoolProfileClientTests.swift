@@ -102,6 +102,18 @@ struct SchoolProfileClientTests {
         let other = SchoolProfileClient(baseURL: base, tokenSource: ProfileTokenStub(), transport: mismatch)
         await #expect(throws: SchoolProfileFailure.pendingCommand) { try await other.send(command) }
     }
+    @Test func refusedFieldIsACorrectableRejectionWhileLostAccessStaysForbidden() async throws {
+        let command = try ProfileFixture.command()
+        let field = ProfileTransportStub(data: Data("{\"code\":\"PROFILE_FIELD_FORBIDDEN\"}".utf8), status: 403, media: "application/problem+json")
+        let client = SchoolProfileClient(baseURL: base, tokenSource: ProfileTokenStub(), transport: field)
+        let refusal = SchoolProfileFailure.rejected(SchoolProfileClient.fieldForbiddenMessage)
+        await #expect(throws: refusal) { try await client.send(command) }
+        #expect(refusal.permitsFreshCorrection)
+        let access = ProfileTransportStub(data: Data("{\"code\":\"ACCESS_DENIED\"}".utf8), status: 403, media: "application/problem+json")
+        let other = SchoolProfileClient(baseURL: base, tokenSource: ProfileTokenStub(), transport: access)
+        await #expect(throws: SchoolProfileFailure.forbidden) { try await other.send(command) }
+        #expect(!SchoolProfileFailure.forbidden.permitsFreshCorrection)
+    }
     @Test func policyConflictIsSpecificAndOptionalPhotoRuleCannotBeRequired() async throws {
         let command = try ProfileFixture.command()
         let transport = ProfileTransportStub(data: Data("{\"code\":\"PROFILE_POLICY_CHANGED\"}".utf8), status: 409, media: "application/problem+json")

@@ -78,8 +78,7 @@ struct SchoolProfileView: View {
     private var saveHint: (text: String?, tone: DrivyTone) {
         if attemptedSave, let error = model.errorMessage { return (error, .danger) }
         guard model.hasEdits else { return (nil, .neutral) }
-        return (model.draft.isValid(allowed: model.editableFields, timeZone: model.school?.timeZone ?? "Europe/Zurich")
-            ? nil : "Vérifie les champs signalés.", .neutral)
+        return (model.invalidFields.isEmpty ? nil : "Vérifie les champs signalés.", .neutral)
     }
 
     /// Même tête que l’écran Compte : avatar, nom, école. Elle ne redit pas les champs, elle nomme la personne.
@@ -166,17 +165,36 @@ struct SchoolProfileView: View {
                     .textContentType(.streetAddressLine2)
                 profileField("Code postal", text: $model.draft.address.postalCode).textContentType(.postalCode)
                 profileField("Localité", text: $model.draft.address.locality).textContentType(.addressCity)
-                profileField("Code pays · deux lettres", text: $model.draft.address.countryCode)
-                    .textInputAutocapitalization(.characters).autocorrectionDisabled()
+                countryPicker
             }
             fieldExplanation(.postalAddress)
         } header: { Text("Adresse postale").drivyFormSectionHeader() }
             .drivyFormRows()
         .disabled(!model.canMutate)
     }
+    /// Le serveur attend un code à deux lettres : la personne choisit un pays, elle ne tape pas un code.
+    /// Le pays de la région de l’appareil vient en tête ; rien n’est présélectionné. Un code déjà enregistré
+    /// mais absent de la liste garde sa ligne, pour ne jamais afficher une sélection vide.
+    private var countryPicker: some View {
+        let code = model.draft.address.countryCode
+        let local = SchoolProfileCountry.local
+        return Picker("Pays", selection: $model.draft.address.countryCode) {
+            if !SchoolProfileCountry.all.contains(where: { $0.code == code }) {
+                Text(code.isEmpty ? "Choisir" : code).tag(code)
+            }
+            if let local {
+                Text(local.name).tag(local.code)
+                Divider()
+            }
+            ForEach(SchoolProfileCountry.all.filter { $0.code != local?.code }) { country in
+                Text(country.name).tag(country.code)
+            }
+        }
+        .frame(minHeight: 44)
+        .accessibilityIdentifier("profile-country")
+    }
     @ViewBuilder private func fieldExplanation(_ field: SchoolProfileField) -> some View {
-        if model.hasEdits, model.editableFields.contains(field),
-           !model.draft.isValid(allowed: [field], timeZone: model.school?.timeZone ?? "Europe/Zurich") {
+        if model.hasEdits, model.invalidFields.contains(field) {
             Label(fieldError(field), systemImage: "exclamationmark.triangle.fill")
                 .font(.footnote).foregroundStyle(DrivyTheme.danger)
                 .fixedSize(horizontal: false, vertical: true)
@@ -189,7 +207,7 @@ struct SchoolProfileView: View {
         case .contactEmail: "Vérifie le format de l’adresse e-mail."
         case .contactPhone: "Le téléphone est limité à 32 caractères."
         case .birthDate: "Utilise JJ.MM.AAAA pour une date réelle, non future."
-        case .postalAddress: "Vérifie la rue, le code postal, la localité et le code pays à deux lettres."
+        case .postalAddress: "Renseigne la rue, le code postal, la localité et le pays."
         case .profilePhotoDocumentId: "Vérifie la photo du profil."
         }
     }

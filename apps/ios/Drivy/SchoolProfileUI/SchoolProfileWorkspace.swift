@@ -53,16 +53,39 @@ final class SchoolProfileWorkspace: Identifiable {
     var canMutate: Bool {
         !invalidated && !isLoading && !isBusy && !needsReload && storageAccessible && pending == nil && school?.status != "ARCHIVED" && school != nil
     }
+    /// Champs écrits en accès complet (`drivy.profile_access` = FULL).
+    static let fullAccessFields: Set<SchoolProfileField> = [.firstName, .lastName, .birthDate, .postalAddress, .contactEmail, .contactPhone]
+    /// Champs écrits par le moniteur affecté (CONTACT) : le serveur refuse tout autre champ par un 403.
+    static let contactFields: Set<SchoolProfileField> = [.contactEmail, .contactPhone]
+    /// Même décision que `drivy.profile_access` : accès complet pour l’administration et pour l’élève sur son
+    /// propre dossier ; tout autre lecteur d’un dossier chargé est un moniteur affecté, limité aux coordonnées.
+    var hasFullAccess: Bool { isOwnProfile || roles.contains("ADMIN") }
+    /// Les champs modifiables suivent les droits relus par le serveur, pas la liste de la politique : celle-ci dit
+    /// ce qui est requis et pourquoi. Sans politique applicable, le serveur n’accepte aucune écriture de profil.
+    /// La photo suit son propre parcours de dépôt.
     var editableFields: Set<SchoolProfileField> {
-        guard let policy = applicablePolicy else { return [] }
-        var fields = Set(policy.fields.map(\.field)); fields.remove(.profilePhotoDocumentId)
-        if !isOwnProfile && !roles.contains("ADMIN") { fields.formIntersection([.contactEmail, .contactPhone]) }
+        guard applicablePolicy != nil else { return [] }
+        return hasFullAccess ? Self.fullAccessFields : Self.contactFields
+    }
+    /// Champs que la politique publiée cite : ceux que l’accueil guidé demande, sans la photo.
+    var requestedFields: Set<SchoolProfileField> {
+        var fields = Set<SchoolProfileField>((applicablePolicy?.fields ?? []).map(\.field))
+        fields.remove(.profilePhotoDocumentId)
         return fields
     }
     var hasEdits: Bool { profile.map { !draft.changes(from: $0, allowed: editableFields).isEmpty } ?? false }
-    var canSaveProfile: Bool {
-        canMutate && hasEdits && draft.isValid(allowed: editableFields, timeZone: school?.timeZone ?? "Europe/Zurich")
+    /// Champs à corriger avant l’envoi : ceux que la saisie change, et le prénom et le nom dès qu’ils sont
+    /// modifiables. Une valeur inchangée vient du serveur ; elle n’est ni renvoyée ni recontrôlée ici.
+    var invalidFields: Set<SchoolProfileField> {
+        guard let profile else { return [] }
+        let zone = school?.timeZone ?? "Europe/Zurich"
+        var checked = editableFields.intersection([.firstName, .lastName])
+        for key in draft.changes(from: profile, allowed: editableFields).keys {
+            if let field = SchoolProfileField(rawValue: key) { checked.insert(field) }
+        }
+        return checked.filter { field in !draft.isValid(allowed: [field], timeZone: zone) }
     }
+    var canSaveProfile: Bool { canMutate && hasEdits && invalidFields.isEmpty }
     var canCreatePolicy: Bool { canMutate && roles.contains("ADMIN") && notice?.status == "APPROVED" && notice?.noticeVersionId != nil }
     var canRetryPending: Bool {
         guard let pending else { return false }

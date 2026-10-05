@@ -26,6 +26,86 @@ struct SchoolProfileWorkspaceTests {
         #expect(command.resourceVersion == 1 && box.saves == [command, command])
         #expect(box.value == nil)
     }
+    @Test func editableFieldsFollowServerRightsNotThePolicyList() async {
+        // Politique limitée au prénom et au nom, comme celle de l’école d’essai.
+        let api = ProfileAPIStub(); api.policyValues = [ProfileFixture.policy(fields: [.firstName, .lastName])]
+        let admin = ProfileFixture.workspace(api: api)
+        await admin.load()
+        #expect(admin.editableFields == [.firstName, .lastName, .birthDate, .postalAddress, .contactEmail, .contactPhone])
+        #expect(admin.requestedFields == [.firstName, .lastName])
+        let own = SchoolProfileWorkspace(scope: ConfigurationFixture.scope(), roles: ["LEARNER"], learnerID: ProfileFixture.learnerID,
+            isOwnProfile: true, api: api, outbox: ConfigurationOutboxStub())
+        await own.load()
+        #expect(own.editableFields == SchoolProfileWorkspace.fullAccessFields)
+        let instructor = ProfileFixture.workspace(api: api, roles: ["INSTRUCTOR"])
+        await instructor.load()
+        #expect(instructor.editableFields == [.contactEmail, .contactPhone])
+        // Sans politique applicable, le serveur refuse toute écriture : rien n’est proposé.
+        let unread = ProfileFixture.workspace(api: api)
+        #expect(unread.editableFields.isEmpty && unread.requestedFields.isEmpty)
+    }
+    @Test func fullAccessSavesFieldsOutsideThePolicyAndReadsBackTheServerAnswer() async throws {
+        let api = ProfileAPIStub(); api.policyValues = [ProfileFixture.policy(fields: [.firstName, .lastName])]
+        let box = ConfigurationOutboxStub(); let model = ProfileFixture.workspace(api: api, box: box)
+        await model.load()
+        let address = SchoolPostalAddress(line1: "Rue des Exemples 12", line2: nil, postalCode: "2053", locality: "Cernier", countryCode: "CH")
+        model.draft.lastName = "Modèle"; model.draft.birthDate = "12.07.2005"
+        model.draft.contactEmail = "contact@example.invalid"; model.draft.contactPhone = "+41 00 000 00 00"
+        model.draft.hasAddress = true; model.draft.address = address
+        #expect(model.invalidFields.isEmpty && model.canSaveProfile)
+        #expect(await model.saveProfileAfterConfirmation())
+        let command = try #require(api.commands.first)
+        let body = try JSONDecoder().decode([String: SchoolProfileValue].self, from: command.body)
+        #expect(Set(body.keys) == ["operationId", "policyVersionId", "lastName", "birthDate", "postalAddress", "contactEmail", "contactPhone"])
+        #expect(body["birthDate"] == SchoolProfileValue.text("2005-07-12") && body["postalAddress"] == SchoolProfileValue.address(address))
+        // Après l’accusé du serveur : la demande quitte la file, le dossier est relu et le brouillon repart de la réponse.
+        #expect(box.value == nil && model.pending == nil && !model.hasEdits)
+        #expect(model.profile == api.profileValue && model.profile?.version == 2)
+        #expect(model.profile?.lastName == "Modèle" && model.profile?.birthDate == "2005-07-12")
+        #expect(model.profile?.postalAddress == address && model.profile?.contactPhone == "+41 00 000 00 00")
+        #expect(model.draft == SchoolProfileDraft(api.profileValue) && model.draft.birthDate == "12.07.2005")
+        // Effacer une valeur enregistrée envoie un null explicite, pas une chaîne vide.
+        model.draft.birthDate = ""; model.draft.hasAddress = false
+        #expect(await model.saveProfileAfterConfirmation())
+        let second = try #require(api.commands.last)
+        let clearing = try JSONDecoder().decode([String: SchoolProfileValue].self, from: second.body)
+        #expect(api.commands.count == 2 && second.resourceVersion == 2)
+        #expect(clearing["birthDate"] == SchoolProfileValue.null && clearing["postalAddress"] == SchoolProfileValue.null)
+        #expect(model.profile?.birthDate == nil && model.profile?.postalAddress == nil && model.profile?.version == 3)
+    }
+    @Test func onlyChangedFieldsAndEditableNamesCanBlockASave() async throws {
+        // Une valeur inchangée vient du serveur : elle n’est ni renvoyée ni recontrôlée, même si l’app la jugerait mal formée.
+        let api = ProfileAPIStub(); api.profileValue = ProfileFixture.profile(email: "alice@invalid")
+        let model = ProfileFixture.workspace(api: api)
+        await model.load(); model.draft.contactPhone = "0123456"
+        #expect(model.invalidFields.isEmpty && model.canSaveProfile)
+        model.draft.birthDate = "31.02.2005"
+        #expect(model.invalidFields == [.birthDate] && !model.canSaveProfile)
+        model.draft.birthDate = ""; model.draft.contactEmail = "sans-arobase"
+        #expect(model.invalidFields == [.contactEmail] && !model.canSaveProfile)
+        model.draft.contactEmail = "alice@invalid"
+        #expect(await model.saveProfileAfterConfirmation())
+        let command = try #require(api.commands.first)
+        let body = try JSONDecoder().decode([String: SchoolProfileValue].self, from: command.body)
+        #expect(Set(body.keys) == ["operationId", "policyVersionId", "contactPhone"])
+        // Prénom et nom restent exigés dès qu’ils sont modifiables ; le moniteur affecté n’y est pas tenu.
+        let unnamed = ProfileAPIStub(); unnamed.profileValue = ProfileFixture.profile(firstName: nil, lastName: nil)
+        let admin = ProfileFixture.workspace(api: unnamed)
+        await admin.load(); admin.draft.contactPhone = "0123456"
+        #expect(admin.invalidFields == [.firstName, .lastName] && !admin.canSaveProfile)
+        let instructor = ProfileFixture.workspace(api: unnamed, roles: ["INSTRUCTOR"])
+        await instructor.load(); instructor.draft.contactPhone = "0123456"
+        #expect(instructor.invalidFields.isEmpty && instructor.canSaveProfile)
+    }
+    @Test func refusedFieldLeavesNoPendingCommandAndKeepsTheDraftForCorrection() async {
+        let api = ProfileAPIStub(); let box = ConfigurationOutboxStub(); let model = ProfileFixture.workspace(api: api, box: box)
+        await model.load(); model.draft.birthDate = "12.07.2005"
+        api.sendFailure = .rejected(SchoolProfileClient.fieldForbiddenMessage)
+        #expect(await model.saveProfileAfterConfirmation() == false)
+        #expect(api.commands.count == 1 && box.value == nil && model.pending == nil)
+        #expect(model.errorMessage == SchoolProfileClient.fieldForbiddenMessage && model.accessFailure == nil)
+        #expect(model.profile != nil && model.draft.birthDate == "12.07.2005" && model.needsReload && !model.canMutate)
+    }
     @Test func uncertainMutationSurvivesRestartWithOriginalBytesAndScope() async throws {
         let api = ProfileAPIStub(); api.sendFailure = .unavailable
         let box = ConfigurationOutboxStub(); let model = ProfileFixture.workspace(api: api, box: box)
@@ -181,6 +261,17 @@ struct SchoolProfileWorkspaceTests {
         var draft = SchoolProfileDraft(ProfileFixture.profile()); draft.birthDate = "01.01.2999"
         #expect(!draft.isValid(allowed: [.birthDate], timeZone: "Europe/Zurich"))
     }
+    @Test func countriesCarryTheTwoLetterCodesTheServerExpects() {
+        let countries = SchoolProfileCountry.all
+        let codes = Set(countries.map(\.code))
+        #expect(codes.contains("CH") && codes.count == countries.count)
+        let malformed = countries.filter { $0.name.isEmpty || $0.code.range(of: "^[A-Z]{2}$", options: .regularExpression) == nil }
+        #expect(malformed.isEmpty)
+        var address = SchoolPostalAddress(line1: "Rue des Exemples 12", line2: nil, postalCode: "2053", locality: "Cernier", countryCode: "")
+        #expect(!address.isValid)
+        address.countryCode = "CH"
+        #expect(address.isValid)
+    }
     @Test func staffWelcomeResumeRequiresAnUnfinishedResponseForTheCurrentAccount() async {
         let api = ProfileAPIStub(), scope = ConfigurationFixture.scope()
         api.onboardingValue = ProfileFixture.onboarding(kind: .staff)
@@ -245,10 +336,21 @@ final class ProfileAPIStub: SchoolProfileAPI {
         if let sendFailure { throw sendFailure }
         switch command.kind {
         case .updateProfile:
+            // Comme le serveur : chaque champ transmis remplace la valeur, null l’efface, un champ absent est conservé.
             let body = try JSONDecoder().decode([String: SchoolProfileValue].self, from: command.body)
-            var phone = profileValue.contactPhone
-            if case .text(let value)? = body["contactPhone"] { phone = value }
-            profileValue = ProfileFixture.profile(version: command.resourceVersion + 1, phone: phone)
+            func text(_ field: SchoolProfileField, _ current: String?) -> String? {
+                guard let sent = body[field.rawValue] else { return current }
+                if case .text(let value) = sent { return value }
+                return nil
+            }
+            var address = profileValue.postalAddress
+            if let sent = body[SchoolProfileField.postalAddress.rawValue] {
+                if case .address(let value) = sent { address = value } else { address = nil }
+            }
+            profileValue = ProfileFixture.profile(version: command.resourceVersion + 1,
+                firstName: text(.firstName, profileValue.firstName), lastName: text(.lastName, profileValue.lastName),
+                email: text(.contactEmail, profileValue.contactEmail), phone: text(.contactPhone, profileValue.contactPhone),
+                birthDate: text(.birthDate, profileValue.birthDate), address: address)
             return .profile(profileValue)
         case .createProfilePolicy:
             let value = ProfileFixture.policy(id: UUID(), status: "DRAFT", version: 1)
@@ -273,15 +375,19 @@ enum ProfileFixture {
     static let noticeID = UUID(uuidString: "41000000-0000-4000-8000-000000000004")!
     static let onboardingID = UUID(uuidString: "41000000-0000-4000-8000-000000000005")!
     static func profile(version: Int = 1, firstName: String? = "Alice", lastName: String? = "Exemple",
-        email: String? = "alice@example.invalid", phone: String? = nil) -> SchoolAdministrativeProfile {
+        email: String? = "alice@example.invalid", phone: String? = nil, birthDate: String? = nil,
+        address: SchoolPostalAddress? = nil) -> SchoolAdministrativeProfile {
         .init(id: profileID, schoolId: ConfigurationFixture.schoolID, version: version, learnerId: learnerID,
-            firstName: firstName, lastName: lastName, birthDate: nil, postalAddress: nil, contactEmail: email,
+            firstName: firstName, lastName: lastName, birthDate: birthDate, postalAddress: address, contactEmail: email,
             contactPhone: phone, profilePhotoDocumentId: nil, updatedAt: ConfigurationFixture.timestamp,
             enteredByMembershipId: ConfigurationFixture.membershipID, entrySource: "SELF", policyVersionId: policyID)
     }
-    static func policy(id: UUID = policyID, status: String = "PUBLISHED", version: Int = 2) -> SchoolProfilePolicy {
-        .init(id: id, schoolId: ConfigurationFixture.schoolID, version: version, status: status, effectiveFrom: "2020-01-01T00:00:00Z",
-            fields: policyDraft().selectedRules, noticeVersionId: noticeID, approvedByMembershipId: status == "DRAFT" ? nil : ConfigurationFixture.membershipID)
+    /// `fields` restreint la politique à certains champs ; sans lui, elle cite prénom, nom, e-mail et téléphone.
+    static func policy(id: UUID = policyID, status: String = "PUBLISHED", version: Int = 2,
+        fields: Set<SchoolProfileField>? = nil) -> SchoolProfilePolicy {
+        let rules = policyDraft().selectedRules.filter { rule in fields?.contains(rule.field) ?? true }
+        return .init(id: id, schoolId: ConfigurationFixture.schoolID, version: version, status: status, effectiveFrom: "2020-01-01T00:00:00Z",
+            fields: rules, noticeVersionId: noticeID, approvedByMembershipId: status == "DRAFT" ? nil : ConfigurationFixture.membershipID)
     }
     static func policyDraft() -> SchoolProfilePolicyDraft {
         var draft = SchoolProfilePolicyDraft(); draft.included = [.firstName, .lastName, .contactEmail, .contactPhone]

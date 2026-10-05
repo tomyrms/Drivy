@@ -6,6 +6,8 @@ final class SchoolProfileClient: SchoolProfileAPI {
     private let tokenSource: any AccessTokenSource
     private let transport: any SchoolHTTPTransport
     private let reader: DrivyAPIClient
+    /// Réponse au 403 PROFILE_FIELD_FORBIDDEN : l’accès du moniteur affecté ne couvre que les coordonnées.
+    static let fieldForbiddenMessage = "L’école a refusé ces champs : tes droits permettent de modifier seulement l’e-mail et le téléphone."
     init(baseURL: URL, tokenSource: any AccessTokenSource, transport: any SchoolHTTPTransport = SchoolURLSessionTransport()) {
         self.baseURL = baseURL; self.tokenSource = tokenSource; self.transport = transport
         reader = DrivyAPIClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport)
@@ -141,6 +143,8 @@ final class SchoolProfileClient: SchoolProfileAPI {
         guard response.status == expected else {
             switch response.status {
             case 401: throw SchoolProfileFailure.unauthorized
+            // Refus d’un champ, pas de l’accès : rien n’est écrit, la demande ne reste donc pas en attente.
+            case 403 where problem?.code == "PROFILE_FIELD_FORBIDDEN": throw SchoolProfileFailure.rejected(Self.fieldForbiddenMessage)
             case 403: throw SchoolProfileFailure.forbidden
             case 404 where path.first == "operations": throw SchoolProfileFailure.operationUnknown
             case 404: throw SchoolProfileFailure.notFound

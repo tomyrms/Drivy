@@ -172,13 +172,13 @@ struct SchoolOnboardingView: View {
                         .textContentType(.givenName)
                     nameField(.lastName, text: $model.draft.lastName, value: profile.lastName, identifier: "profile-last-name")
                         .textContentType(.familyName)
-                    if model.editableFields.contains(.contactEmail) {
+                    if asks(.contactEmail) {
                         DrivyGuidedTextField(label: "E-mail de contact", text: $model.draft.contactEmail,
                             note: note(.contactEmail), error: fieldError(.contactEmail), identifier: "profile-email")
                             .textContentType(.emailAddress).keyboardType(.emailAddress)
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
                     }
-                    if model.editableFields.contains(.contactPhone) {
+                    if asks(.contactPhone) {
                         DrivyGuidedTextField(label: "Téléphone", text: $model.draft.contactPhone,
                             note: note(.contactPhone), error: fieldError(.contactPhone), identifier: "profile-phone")
                             .textContentType(.telephoneNumber).keyboardType(.phonePad)
@@ -514,13 +514,17 @@ struct SchoolOnboardingView: View {
             DrivyKeyValueRow(title: field.label, value: value ?? "Non renseigné")
         }
     }
+    /// L’accueil ne demande que les coordonnées citées par la politique de l’école. Les droits en ouvrent
+    /// davantage ; le reste se complète ensuite dans « Mes informations ».
+    private func asks(_ field: SchoolProfileField) -> Bool {
+        model.editableFields.contains(field) && model.requestedFields.contains(field)
+    }
     private func note(_ field: SchoolProfileField) -> String? {
         guard let rule = model.applicablePolicy?.fields.first(where: { $0.field == field }) else { return nil }
         return rule.requirement == .optional ? "Facultatif" : nil
     }
     private func fieldError(_ field: SchoolProfileField) -> String? {
-        guard model.hasEdits, model.editableFields.contains(field),
-              !model.draft.isValid(allowed: [field], timeZone: timeZone) else { return nil }
+        guard model.hasEdits, model.invalidFields.contains(field) else { return nil }
         switch field {
         case .firstName: return "Renseigne ton prénom (150 caractères au plus)."
         case .lastName: return "Renseigne ton nom (150 caractères au plus)."
