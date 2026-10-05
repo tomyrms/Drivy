@@ -64,12 +64,18 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     private(set) var errorMessage: String?
     private(set) var pending: PendingSchoolCommand?
     private(set) var isSending = false
+    /// Envoi qui suit le geste lui-même (signalement ou son annulation), jamais un nouvel essai. Bref et déjà
+    /// confirmé par le bandeau, il ne ferme pas « Signaler » : seule l’écriture suivante l’attend.
+    private(set) var isSettlingGesture = false
     private(set) var mapObservations: [SchoolLiveMapObservation] = []
     private(set) var lastAdded: SchoolLiveObservationReceipt?
     private(set) var undoState: SchoolLiveObservationUndoState = .none
     private(set) var undoErrorMessage: String?
     var themes: [SchoolLiveObservationTheme] { competencies.flatMap(SchoolLiveObservationTheme.choices) }
     var canRecord: Bool { !stopped && !isSending && pending == nil }
+    /// Rien de durable n’empêche d’ouvrir un signalement : ni arrêt, ni demande à vérifier ou à renvoyer.
+    /// L’écriture elle-même reste gardée par `canRecord`, une demande à la fois.
+    var acceptsSignal: Bool { !stopped && (pending == nil || isSettlingGesture) }
     /// La file chiffrée n’accepte qu’une demande par école : une autre demande en attente (départ de
     /// leçon, fin de leçon, note…) bloque « Signaler » sans être une observation de cette leçon.
     var pendingIsForeign: Bool {
@@ -158,7 +164,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
             lastAddedCommand = command; lastAddedWasConfirmed = false
             lastAdded = .init(id: operation, displayTitle: theme == nil ? "Moment ajouté" : "Observation ajoutée")
             undoState = .none; undoErrorMessage = nil
-            Task { await retry() }
+            sendAfterGesture(command)
             return true
         } catch {
             errorMessage = "L’observation n’a pas été enregistrée. Vérifie les demandes en attente de la leçon."
@@ -187,7 +193,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
             try outbox.save(withdrawal)
             pending = withdrawal; undoState = .pending; undoErrorMessage = nil; errorMessage = nil
             // A send already in flight will reread the upgraded command before acknowledging it.
-            if !isSending { Task { await retry() } }
+            if !isSending { sendAfterGesture(withdrawal) }
             return true
         } catch {
             // An atomic write can have happened before a storage barrier failed. Keep that exact ID.
@@ -213,6 +219,20 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     func retry() async {
         guard canRetry, let initial = pending else { return }
         isSending = true
+        await transmit(initial)
+    }
+
+    /// L’envoi est réclamé dans le tour même de l’écriture durable : aucune image ne montre « attend son
+    /// envoi » pour une demande qui part aussitôt.
+    private func sendAfterGesture(_ command: PendingSchoolCommand) {
+        isSending = true; isSettlingGesture = true
+        Task { await transmit(command) }
+    }
+
+    /// `isSending` est déjà vrai. La demande relue dans la file chiffrée fait foi à chaque tour.
+    private func transmit(_ initial: PendingSchoolCommand) async {
+        // Arrêt survenu entre le geste et le départ : la demande reste dans la file, sans réécriture.
+        guard !stopped else { isSending = false; isSettlingGesture = false; return }
         var command = initial
         while true {
             do {
@@ -279,7 +299,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
                 break
             }
         }
-        isSending = false
+        isSending = false; isSettlingGesture = false
         // La feuille peut déjà être fermée : avertir son propriétaire après le résultat réseau,
         // sans confondre la sauvegarde du geste et la confirmation de l’école.
         await onSettlement?()

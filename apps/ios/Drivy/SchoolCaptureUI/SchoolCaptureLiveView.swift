@@ -1,5 +1,6 @@
 import MapKit
 import SwiftUI
+import UIKit
 
 /// Displays the school session owned by the app. Leaving this view never starts
 /// or stops location collection; every command is an explicit user action.
@@ -23,6 +24,12 @@ struct SchoolCaptureLiveView: View {
     @State private var confirmsFinish = false
     @State private var cancellationModel: SchoolPlanningWorkspace?
     @State private var cancellationError: String?
+    @State private var isOpeningCancellation = false
+    /// Passage (pause, reprise) qui dure assez pour être nommé sur sa commande ; un passage bref ne montre rien.
+    @State private var slowTransition: SchoolCaptureSessionController.Transition?
+
+    /// Délai avant de nommer un passage en cours. Il retarde un indicateur, jamais un résultat.
+    private static let slowTransitionDelay = Duration.milliseconds(400)
 
     private struct ObservationMoment: Identifiable {
         let id = UUID()
@@ -46,6 +53,10 @@ struct SchoolCaptureLiveView: View {
     private var observationPopover: Binding<ObservationMoment?> {
         Binding(get: { usesInlineObservation ? nil : observationMoment }, set: { observationMoment = $0 })
     }
+
+    /// État dont l’écran garde la disposition : pendant une mise en pause, une reprise ou une perte de signal
+    /// récupérée, celui que l’on quitte, jusqu’au résultat durable. La carte, le panneau et les commandes restent en place.
+    private var shownState: SchoolCaptureSessionController.State { controller.presentedState }
 
     var body: some View {
         Group {
@@ -73,6 +84,8 @@ struct SchoolCaptureLiveView: View {
                         }
                         .allowsHitTesting(!(usesInlineObservation && observationMoment != nil))
                         .accessibilityHidden(usesInlineObservation && observationMoment != nil)
+                        // Pause et reprise : seuls les éléments qui en dépendent changent, par une transition courte.
+                        .animation(DrivyMotion.context(reduceMotion), value: shownState == .paused)
                         if usesInlineObservation, let moment = observationMoment {
                             Color.black.opacity(0.16)
                                 .ignoresSafeArea(edges: .top)
@@ -107,6 +120,16 @@ struct SchoolCaptureLiveView: View {
         .task(id: controller.captureID) {
             if let observationClient { controller.prepareLiveObservations(client: observationClient) }
             await controller.liveObservations?.loadCompetencies()
+        }
+        .task(id: controller.transition) {
+            slowTransition = nil
+            guard let transition = controller.transition else { return }
+            do { try await Task.sleep(for: Self.slowTransitionDelay) } catch { return }
+            slowTransition = transition
+        }
+        .onChange(of: shownState == .paused) { _, _ in
+            // La commande activée vient d’être remplacée : VoiceOver entend le résultat de la pause ou de la reprise.
+            UIAccessibility.post(notification: .announcement, argument: status.title)
         }
         .onChange(of: controller.captureID) { _, _ in
             observationMoment = nil
@@ -201,16 +224,16 @@ struct SchoolCaptureLiveView: View {
         if controller.displayedPointCount > 0 {
             SchoolCaptureLiveMap(segments: controller.segments,
                 observations: controller.liveObservations?.mapObservations ?? [],
-                resetCameraID: resetCameraID, isRecording: controller.state == .recording,
+                resetCameraID: resetCameraID, isRecording: shownState == .recording,
                 followMode: $followMode)
         } else {
             DrivyMapPlaceholder(title: placeholderTitle, message: placeholderMessage, symbol: "location",
-                isSearching: controller.state == .preparing || controller.state == .recording)
+                isSearching: shownState == .preparing || shownState == .recording)
         }
     }
 
     private var placeholderTitle: String {
-        switch controller.state {
+        switch shownState {
         case .preparing: "Préparation du GPS"
         case .recording: "En attente de position"
         case .paused: "GPS en pause"
@@ -220,7 +243,7 @@ struct SchoolCaptureLiveView: View {
 
     private var placeholderMessage: String {
         if let message = controller.locationMessage { return message }
-        return switch controller.state {
+        return switch shownState {
         case .preparing, .recording: "Recherche du signal GPS…"
         case .paused: "Aucune position n’est enregistrée pendant la pause."
         default: "Le GPS n’a enregistré aucune position pendant cette leçon."
@@ -236,7 +259,7 @@ struct SchoolCaptureLiveView: View {
                 elapsedLabel: "Temps écoulé depuis le départ GPS",
                 status: status,
                 leading: isTabRoot ? nil : .back(label: "Revenir à la leçon",
-                    hint: controller.canStop ? "Le GPS conserve son état actuel" : "Fermer le trajet",
+                    hint: controller.presentsStopEnabled ? "Le GPS conserve son état actuel" : "Fermer le trajet",
                     isDisabled: isFinishing) { close() },
                 floating: floating
             ) { lessonMenu }
@@ -280,19 +303,10 @@ struct SchoolCaptureLiveView: View {
         if isFinishing {
             DrivyLoadingState(title: "Préparation du bilan…")
         } else {
-            switch controller.state {
-            case .recording:
+            switch shownState {
+            case .recording, .paused:
+                // Un seul bloc en route et en pause : ses commandes changent, le panneau reste en place.
                 collectingActions
-            case .paused:
-                TimelineView(.periodic(from: .now, by: 1)) { _ in
-                    VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                        collectingActions
-                        if !controller.canResume {
-                            DrivyInlineMessage(text: "La reprise du GPS n’est plus autorisée. Tu peux arrêter le GPS et poursuivre la leçon.",
-                                tone: .warning)
-                        }
-                    }
-                }
             case .preparing:
                 DrivyLoadingState(title: "Préparation du GPS…")
             case .stopping:
@@ -314,12 +328,13 @@ struct SchoolCaptureLiveView: View {
     }
 
     private var collectingActions: some View {
-        let paused = controller.state == .paused
+        let paused = shownState == .paused
         return VStack(spacing: DrivySpacing.s) {
             // Une seule action principale, en grand format terrain : « Signaler » en route,
             // « Reprendre » en pause. L’autre geste garde sa place en second rang.
-            if paused { resumeButton }
-            else if let recorder = controller.liveObservations { signalButton(recorder, isDominant: true) }
+            // L’aplat bleu ne se fond pas : seul son libellé change d’un état à l’autre.
+            if paused { resumeControls.transition(.identity) }
+            else if let recorder = controller.liveObservations { signalButton(recorder, isDominant: true).transition(.identity) }
             if let recorder = controller.liveObservations { observationFeedback(recorder) }
             // Côte à côte quand les deux libellés tiennent sur une ligne ; sinon empilés
             // (colonne iPad de 380 pt, grand texte) plutôt qu’un « Terminer / la leçon » coupé.
@@ -353,7 +368,9 @@ struct SchoolCaptureLiveView: View {
                 signal.buttonStyle(DrivySecondaryButtonStyle())
             }
         }
-        .disabled(!recorder.canRecord || isFinishing)
+        // L’envoi qui suit un signalement est bref : il ne grise pas la commande. La palette s’ouvre, l’écriture
+        // suivante attend la fin de cet envoi et le double envoi reste refusé par l’enregistreur.
+        .disabled(!recorder.acceptsSignal || isFinishing)
         .sensoryFeedback(.impact(weight: .medium), trigger: observationMoment?.id)
         .accessibilityIdentifier("capture-signal-observation")
         .popover(item: observationPopover, attachmentAnchor: .rect(.bounds)) { moment in
@@ -407,7 +424,8 @@ struct SchoolCaptureLiveView: View {
 
     @ViewBuilder private func observationFeedback(_ recorder: SchoolLiveObservationRecorder) -> some View {
         if recorder.isSending {
-            if observationNotice == nil { DrivyLoadingState(title: "Envoi de l’observation…") }
+            // L’envoi qui suit le geste est bref : seul un nouvel essai demandé nomme son attente dans le panneau.
+            if observationNotice == nil, !recorder.isSettlingGesture { DrivyLoadingState(title: "Envoi de l’observation…") }
         }
         else if recorder.pending != nil {
             DrivyInlineMessage(text: recorder.errorMessage
@@ -428,7 +446,7 @@ struct SchoolCaptureLiveView: View {
 
     /// Second rang : le geste qui n’est pas dominant (Pause en route, Signaler en pause) et « Terminer la leçon ».
     @ViewBuilder private func secondaryCommands(hugsFirst: Bool) -> some View {
-        if controller.state == .paused {
+        if shownState == .paused {
             if let recorder = controller.liveObservations {
                 signalButton(recorder, isDominant: false)
                     .fixedSize(horizontal: hugsFirst, vertical: false)
@@ -444,35 +462,60 @@ struct SchoolCaptureLiveView: View {
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
         }
         .buttonStyle(DrivySecondaryButtonStyle())
-        .disabled(isFinishing || !controller.canStop)
+        .disabled(isFinishing || !controller.presentsStopEnabled)
         .accessibilityIdentifier("capture-finish-lesson")
     }
 
+    /// L’apparence ne change pas pendant l’écriture de la pause ; un second appui reste sans effet,
+    /// parce que `pause()` relit l’état réel.
     private var pauseButton: some View {
-        Button {
+        let isSlow = controller.transition == .pausing && slowTransition == .pausing
+        return Button {
             run(.pause)
         } label: {
-            Label("Pause", systemImage: "pause.fill")
+            Label { Text("Pause") } icon: { commandIcon("pause.fill", isBusy: isSlow, tint: DrivyTheme.accent) }
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
         }
         .buttonStyle(DrivySecondaryButtonStyle())
-        .disabled(!controller.canPause)
+        .disabled(!controller.presentsPauseEnabled)
         .accessibilityLabel("Mettre le GPS en pause")
+        .accessibilityValue(isSlow ? "Mise en pause en cours" : "")
         .accessibilityIdentifier("school-capture-pause-resume")
     }
 
-    /// La reprise est le prochain geste d’un trajet en pause : seule action principale.
+    /// La reprise est le prochain geste d’un trajet en pause : seule action principale. Elle garde son
+    /// apparence pendant la relecture de l’école ; un second appui reste sans effet (`resume()` relit l’état).
     private var resumeButton: some View {
-        Button {
+        let isSlow = controller.transition == .resuming && slowTransition == .resuming
+        return Button {
             run(.resume)
         } label: {
-            Label("Reprendre", systemImage: "play.fill")
+            Label { Text("Reprendre") } icon: { commandIcon("play.fill", isBusy: isSlow, tint: DrivyTheme.onAccent) }
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
         }
         .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
-        .disabled(!controller.canResume)
+        .disabled(!controller.presentsResumeEnabled)
         .accessibilityLabel("Reprendre le GPS")
+        .accessibilityValue(isSlow ? "Reprise en cours" : "")
         .accessibilityIdentifier("school-capture-pause-resume")
+    }
+
+    /// La reprise dépend d’une autorisation qui expire : elle seule est relue chaque seconde.
+    private var resumeControls: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                resumeButton
+                if !controller.presentsResumeEnabled {
+                    DrivyInlineMessage(text: "La reprise du GPS n’est plus autorisée. Tu peux arrêter le GPS et poursuivre la leçon.",
+                        tone: .warning)
+                }
+            }
+        }
+    }
+
+    /// L’icône d’une commande ne devient un indicateur que si son passage dure.
+    @ViewBuilder private func commandIcon(_ symbol: String, isBusy: Bool, tint: Color) -> some View {
+        if isBusy { ProgressView().tint(tint) } else { Image(systemName: symbol) }
     }
 
     private var savedActions: some View {
@@ -494,35 +537,49 @@ struct SchoolCaptureLiveView: View {
             Button("Voir la leçon", systemImage: "doc.text") { close() }
             if observationClient != nil {
                 Button("Annuler la leçon", systemImage: "xmark.circle", role: .destructive) { openCancellation() }
-                    .disabled(!controller.canStop && controller.state != .saved)
+                    .disabled(!controller.presentsStopEnabled && controller.state != .saved)
                     .accessibilityIdentifier("capture-cancel-lesson")
             }
         } label: {
-            Image(systemName: "ellipsis")
-                .font(DrivyMapGlyph.control)
-                .foregroundStyle(DrivyTheme.text)
-                .frame(width: 48, height: 48)
-                .background(DrivyTheme.surfaceMuted, in: Circle())
-                .contentShape(Circle())
+            // La lecture de la leçon à annuler se signale là où le geste a eu lieu : le panneau reste en place.
+            Group {
+                if isOpeningCancellation {
+                    ProgressView()
+                } else {
+                    Image(systemName: "ellipsis")
+                        .font(DrivyMapGlyph.control)
+                        .foregroundStyle(DrivyTheme.text)
+                }
+            }
+            .frame(width: 48, height: 48)
+            .background(DrivyTheme.surfaceMuted, in: Circle())
+            .contentShape(Circle())
         }
         .disabled(isFinishing)
         .accessibilityLabel("Plus d’actions")
+        .accessibilityValue(isOpeningCancellation ? "Ouverture de l’annulation" : "")
         .accessibilityIdentifier("capture-more")
     }
 
     private func openCancellation() {
-        guard !isFinishing, let client = observationClient?.agenda.planningClient else { return }
-        isFinishing = true; cancellationError = nil
+        guard !isFinishing, !isOpeningCancellation, let client = observationClient?.agenda.planningClient else { return }
+        isOpeningCancellation = true; cancellationError = nil
         Task { @MainActor in
-            defer { isFinishing = false }
-            do { cancellationModel = try await controller.cancellationWorkspace(client: client) }
+            defer { isOpeningCancellation = false }
+            do {
+                let model = try await controller.cancellationWorkspace(client: client)
+                // Un geste engagé pendant la lecture (fin de leçon, signalement) garde la main :
+                // l’annulation ne s’ouvre pas par-dessus.
+                guard !isFinishing, !confirmsFinish, observationMoment == nil else { return }
+                cancellationModel = model
+            }
             catch { cancellationError = (error as? LocalizedError)?.errorDescription ?? "Impossible d’ouvrir l’annulation. Vérifie la connexion et réessaie." }
         }
     }
 
     private func finishLesson() {
         guard !isFinishing, let lessonID = controller.lessonID, let captureID = controller.captureID,
-              controller.canStop || controller.state == .saved else { return }
+              controller.presentsStopEnabled || controller.state == .saved else { return }
         isFinishing = true
         Task { @MainActor in
             let saved = await controller.stopAndSynchronize()
@@ -573,7 +630,7 @@ struct SchoolCaptureLiveView: View {
 
     /// Same state vocabulary as the personal journey (« GPS actif », « En attente de position »).
     private var status: DrivyMapStatus {
-        switch controller.state {
+        switch shownState {
         case .idle: DrivyMapStatus(title: "Aucun trajet en cours", symbol: "location.slash")
         case .preparing: DrivyMapStatus(title: "Préparation du GPS", symbol: "clock")
         case .recording:

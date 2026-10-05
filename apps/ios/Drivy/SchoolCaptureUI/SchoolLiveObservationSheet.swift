@@ -27,6 +27,8 @@ struct SchoolLiveObservationPalette: View {
     var onRecorded: (() -> Void)? = nil
     var onClose: (() -> Void)? = nil
     @State private var selected: SchoolLiveObservationTheme?
+    /// Son propre enregistrement ferme la palette : elle ne change plus d’apparence pendant sa sortie.
+    @State private var isClosingAfterRecord = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -35,6 +37,10 @@ struct SchoolLiveObservationPalette: View {
 
     private var motion: Animation? { reduceMotion ? nil : .easeOut(duration: 0.16) }
     private let statuses: [SchoolObservationStatus] = [.toWorkOn, .attention, .positive]
+    /// Une écriture attend : demande à vérifier, ou signalement précédent encore en cours d’envoi.
+    private var writesWait: Bool { !recorder.canRecord && !isClosingAfterRecord }
+    /// Cas bref de cette attente, nommé près des appréciations une fois le thème choisi.
+    private var waitsForPreviousSignal: Bool { selected != nil && recorder.isSettlingGesture && !isClosingAfterRecord }
 
     var body: some View {
         ScrollViewReader { scroll in
@@ -92,6 +98,10 @@ struct SchoolLiveObservationPalette: View {
     private var appraisalBar: some View {
         VStack(spacing: 0) {
             Divider().overlay(DrivyTheme.border)
+            if waitsForPreviousSignal {
+                DrivyLoadingState(title: "Envoi précédent en cours…")
+                    .padding(.horizontal, DrivySpacing.m)
+            }
             appraisals
                 .padding(.horizontal, DrivySpacing.s)
                 .padding(.vertical, DrivySpacing.xs)
@@ -124,7 +134,8 @@ struct SchoolLiveObservationPalette: View {
             }
             .buttonStyle(DrivyTileButtonStyle())
             .disabled(!recorder.canRecord)
-            .opacity(recorder.canRecord ? 1 : 0.45)
+            .opacity(writesWait ? 0.45 : 1)
+            .animation(DrivyMotion.feedback(reduceMotion), value: writesWait)
             .accessibilityLabel("Marquer un moment")
             .accessibilityIdentifier("live-observation-marker")
             roundControl("Annuler le signalement", symbol: "xmark", action: close)
@@ -202,7 +213,8 @@ struct SchoolLiveObservationPalette: View {
             .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field))
         }
         .buttonStyle(SchoolObservationChoiceStyle())
-        .disabled(!recorder.canRecord)
+        // Choisir un thème n’écrit rien : le choix reste possible pendant l’envoi du signalement précédent.
+        .disabled(!recorder.acceptsSignal)
         .accessibilityLabel(theme.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier("live-observation-theme-\(theme.title)")
@@ -238,7 +250,8 @@ struct SchoolLiveObservationPalette: View {
         }
         .buttonStyle(SchoolObservationChoiceStyle())
         .disabled(selected == nil || !recorder.canRecord)
-        .opacity(selected == nil || !recorder.canRecord ? 0.45 : 1)
+        .opacity(selected == nil || writesWait ? 0.45 : 1)
+        .animation(DrivyMotion.feedback(reduceMotion), value: writesWait)
         // The reserved choices are not actionable until a theme has been chosen.
         .accessibilityHidden(selected == nil)
         .accessibilityLabel(status.label)
@@ -248,6 +261,7 @@ struct SchoolLiveObservationPalette: View {
     }
 
     private func recorded() {
+        isClosingAfterRecord = true
         onRecorded?()
         close()
     }

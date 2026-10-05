@@ -38,7 +38,11 @@ struct SchoolCaptureLessonTimes {
 @MainActor @Observable
 final class SchoolCaptureSessionController {
     enum State { case idle, preparing, recording, paused, stopping, saved, failed }
+    /// Passage bref entre deux états stables : mise en pause, reprise, nouveau segment après une perte de signal.
+    enum Transition: Equatable { case pausing, resuming, recoveringSignal }
     private(set) var state: State = .idle
+    /// Renseigné pendant le seul passage en cours ; un arrêt définitif ou un autre trajet l’efface.
+    private(set) var transition: Transition?
     private(set) var captureID: UUID?
     private(set) var lessonID: UUID?
     private(set) var segments: [SchoolCaptureMapSegment] = []
@@ -112,10 +116,25 @@ final class SchoolCaptureSessionController {
 
     var pointCount: Int { segments.reduce(0) { $0 + $1.measurements.count } }
     var displayedPointCount: Int { segments.reduce(0) { $0 + $1.displaySamples.count } }
-    var isCollecting: Bool { state == .recording }
+    /// État que l’écran présente. Pendant un passage bref, c’est l’état stable que l’on quitte, jusqu’au
+    /// résultat durable : ni « sauvegarde » ni « préparation » ne remplacent les commandes ou la carte.
+    var presentedState: State {
+        switch (transition, state) {
+        case (.pausing?, .stopping), (.recoveringSignal?, .stopping), (.recoveringSignal?, .preparing): return .recording
+        case (.resuming?, .preparing): return .paused
+        default: return state
+        }
+    }
+    /// Une perte de signal récupérée ne se lit pas comme un nouveau départ.
+    var isCollecting: Bool { presentedState == .recording }
     var canPause: Bool { state == .recording }
     var canResume: Bool { state == .paused && context?.terminalRequested == false && context?.lease.permitsCollection() == true }
     var canStop: Bool { state == .recording || state == .paused || state == .preparing }
+    /// Disponibilité montrée à l’écran : un passage bref ne grise aucune commande. L’appui y reste sans
+    /// effet, parce que `pause()` et `resume()` relisent l’état réel ; la fin de leçon attend le scellement.
+    var presentsPauseEnabled: Bool { presentedState == .recording }
+    var presentsResumeEnabled: Bool { canResume || (transition == .resuming && state == .preparing) }
+    var presentsStopEnabled: Bool { canStop || presentedState == .recording }
     var canRetrySaving: Bool { state == .failed && context != nil }
     var learnerID: UUID? { context?.session.serverCapture.learnerId }
     var canPrepareCapture: Bool { captureID == nil || state == .saved }
@@ -204,7 +223,7 @@ final class SchoolCaptureSessionController {
               state != .saved else { return }
         let request = generation, boundary = active.stopBoundary()
         active.terminalRequested = true
-        active.local.halt(); state = .stopping
+        active.local.halt(); transition = nil; state = .stopping
         Task { await finish(active, request: request, boundary: boundary, reason: .learnerRefusal) }
     }
 
@@ -220,7 +239,7 @@ final class SchoolCaptureSessionController {
         liveObservations?.stop(); liveObservations = nil
         context?.source.onEvent = nil
         context = nil; generation = UUID()
-        state = .idle; captureID = nil; lessonID = nil; segments = []
+        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false
         finalizedSyncState = nil
         beginning = nil; endedAt = nil
@@ -264,7 +283,7 @@ final class SchoolCaptureSessionController {
         context = nil
         generation = UUID()
         old?.transfer.invalidate()
-        state = .idle; captureID = nil; lessonID = nil; segments = []
+        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false; beginning = nil; endedAt = nil
         finalizedSyncState = nil
         if let old, let boundary {
@@ -309,7 +328,7 @@ final class SchoolCaptureSessionController {
             session: session, authorization: authorization, lease: lease, clock: clock, policy: policy)
         context = active
         captureID = session.id; lessonID = session.serverCapture.lessonId
-        segments = []; beginning = nil; endedAt = nil; state = .preparing
+        segments = []; beginning = nil; endedAt = nil; transition = nil; state = .preparing
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false
         finalizedSyncState = nil
         source.updateScope(transfer.scope)
@@ -346,7 +365,7 @@ final class SchoolCaptureSessionController {
     private func discardUnstartedContext(_ active: Context) {
         active.source.onEvent = nil
         context = nil; generation = UUID()
-        state = .idle; captureID = nil; lessonID = nil; segments = []
+        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false
         synchronizationNeedsRetry = false; finalizedSyncState = nil
         beginning = nil; endedAt = nil
@@ -355,7 +374,8 @@ final class SchoolCaptureSessionController {
     func pause() async {
         guard let active = context, state == .recording, let handle = active.handle else { return }
         let request = generation, boundary = active.stopBoundary()
-        state = .stopping
+        state = .stopping; transition = .pausing
+        defer { endTransition(.pausing, request: request) }
         do {
             try await active.local.pause(handle: handle, endedAt: boundary, reason: .pause)
             guard generation == request, !active.terminalRequested else { return }
@@ -369,7 +389,8 @@ final class SchoolCaptureSessionController {
     func resume() async {
         guard let active = context, canResume else { return }
         let request = generation
-        state = .preparing; errorMessage = nil
+        state = .preparing; transition = .resuming; errorMessage = nil
+        defer { endTransition(.resuming, request: request) }
         do {
             let current = try await active.transfer.refresh(captureID: active.session.id)
             guard generation == request, state == .preparing, !active.terminalRequested else { return }
@@ -640,7 +661,7 @@ final class SchoolCaptureSessionController {
                 return
             }
             active.terminalRequested = true; active.local.halt()
-            state = .stopping
+            transition = nil; state = .stopping
             locationMessage = nil
             errorMessage = reason.message
             Task { await finish(active, request: request, boundary: stop.stoppedAt, reason: reason.stopReason) }
@@ -651,9 +672,10 @@ final class SchoolCaptureSessionController {
     /// permet la reprise locale, y compris hors réseau ; ce n'est pas un nouveau départ.
     private func recoverSignal(_ active: Context, request: UUID, stop: SchoolCaptureLocationStop) {
         guard let handle = active.handle, !active.terminalRequested else { return }
-        state = .stopping
+        state = .stopping; transition = .recoveringSignal
         locationMessage = SchoolCaptureLocationInterruption.signalLost.message
         Task {
+            defer { endTransition(.recoveringSignal, request: request) }
             do {
                 try await active.local.pause(handle: handle, endedAt: stop.stoppedAt, reason: .signalLost)
                 guard generation == request, permittedScope == active.scope, !active.terminalRequested else { return }
@@ -667,18 +689,23 @@ final class SchoolCaptureSessionController {
         }
     }
 
+    /// Seul le passage qui l’a ouvert, dans le même trajet, le referme.
+    private func endTransition(_ value: Transition, request: UUID) {
+        if generation == request, transition == value { transition = nil }
+    }
+
     private func remoteStop(captureID id: UUID?, request: UUID) {
         guard generation == request, let active = context, id == nil || id == active.session.id,
               state != .saved, !active.terminalRequested else { return }
         let boundary = active.stopBoundary()
-        active.terminalRequested = true; active.local.halt(); state = .stopping
+        active.terminalRequested = true; active.local.halt(); transition = nil; state = .stopping
         Task { await finish(active, request: request, boundary: boundary, reason: .deviceError) }
     }
 
     private func failCollector(_ active: Context, request: UUID, error: Error) {
         guard generation == request, state != .stopping, state != .saved, state != .failed else { return }
         let boundary = active.stopBoundary()
-        active.terminalRequested = true; active.local.halt(); state = .stopping; errorMessage = message(error)
+        active.terminalRequested = true; active.local.halt(); transition = nil; state = .stopping; errorMessage = message(error)
         Task { await finish(active, request: request, boundary: boundary, reason: .deviceError) }
     }
 
@@ -695,7 +722,8 @@ final class SchoolCaptureSessionController {
     private func finishOnce(_ active: Context, request: UUID, boundary: String, reason: SchoolCaptureLocalStopReason) async -> Bool {
         active.terminalRequested = true
         if generation == request {
-            state = .stopping
+            // Un arrêt définitif remplace tout passage bref : l’écran montre la sauvegarde.
+            transition = nil; state = .stopping
             if endedAt == nil { endedAt = min(.now, active.lease.collectionDeadline) }
         }
         do {

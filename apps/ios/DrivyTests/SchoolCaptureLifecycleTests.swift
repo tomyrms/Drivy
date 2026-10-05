@@ -224,6 +224,77 @@ import Testing
         let pending = try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId)
         #expect(pending.contains { $0.mutation.kind == .finalizeCapture })
     }
+
+    @Test func pauseThenResumeNeverPresentAnIntermediateState() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        let controller = fixture.controller
+        #expect(controller.presentedState == .recording && controller.transition == nil)
+        let pausing = Task { await controller.pause() }
+        var deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while controller.state != .paused, ContinuousClock.now < deadline {
+            // Pause pas encore écrite : l’écran garde « en route », sans « sauvegarde » ni commande grisée.
+            #expect(controller.presentedState == .recording && controller.isCollecting)
+            #expect(controller.presentsPauseEnabled && controller.presentsStopEnabled)
+            await Task.yield()
+        }
+        await pausing.value
+        #expect(controller.state == .paused && controller.presentedState == .paused && controller.transition == nil)
+        #expect(controller.presentsResumeEnabled && !controller.presentsPauseEnabled && controller.presentsStopEnabled)
+        #expect(!fixture.source.isRunning && controller.segments.count == 1)
+
+        let resuming = Task { await controller.resume() }
+        deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while controller.state != .recording, ContinuousClock.now < deadline {
+            // Reprise pas encore confirmée : l’écran garde « en pause », sans « préparation ».
+            #expect(controller.presentedState == .paused && !controller.isCollecting)
+            #expect(controller.presentsResumeEnabled && controller.presentsStopEnabled)
+            await Task.yield()
+        }
+        await resuming.value
+        #expect(controller.state == .recording && controller.presentedState == .recording && controller.transition == nil)
+        #expect(fixture.source.isRunning && controller.segments.count == 2)
+        #expect(await controller.stopAndSynchronize())
+        await fixture.waitUntilSettled()
+    }
+
+    @Test func aSignalGapKeepsTheRecordingStateOnScreenWhileItsNewSegmentOpens() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        let controller = fixture.controller
+        let boundary = try #require(fixture.source.stop())
+        fixture.source.onEvent?(.interrupted(.signalLost, boundary))
+        // État réel protégé (aucune mesure admise), état présenté inchangé.
+        #expect(controller.state == .stopping && controller.transition == .recoveringSignal)
+        #expect(!controller.canPause && controller.observationAnchor(at: Date()) == nil)
+        #expect(controller.presentedState == .recording && controller.isCollecting)
+        #expect(controller.presentsPauseEnabled && controller.presentsStopEnabled)
+        for _ in 0..<300 {
+            #expect(controller.presentedState == .recording)
+            if controller.segments.count == 2 && controller.transition == nil { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(controller.state == .recording && controller.transition == nil && controller.segments.count == 2)
+        #expect(await controller.stopAndSynchronize())
+        await fixture.waitUntilSettled()
+    }
+
+    @Test func endingTheLessonDuringAResumeReplacesTheTransitionOnScreen() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        let controller = fixture.controller
+        await controller.pause()
+        #expect(controller.state == .paused)
+        await fixture.server.holdTransfers()
+        let resuming = Task { await controller.resume() }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while controller.transition != .resuming, ContinuousClock.now < deadline { await Task.yield() }
+        #expect(controller.state == .preparing && controller.presentedState == .paused && controller.presentsStopEnabled)
+        // La fin de leçon n’attend pas la relecture de l’école ; l’écran quitte aussitôt l’état « en pause ».
+        #expect(await controller.stopAndSynchronize())
+        #expect(controller.state == .saved && controller.presentedState == .saved && controller.transition == nil)
+        await fixture.server.releaseTransfers()
+        await resuming.value
+        await fixture.waitUntilSettled()
+        #expect(controller.state == .saved && controller.transition == nil && !fixture.source.isRunning)
+    }
 }
 
 @MainActor private struct CaptureLifecycleFixture {

@@ -202,6 +202,38 @@ import Testing
         model.stop()
     }
 
+    @Test func theSendThatFollowsAGestureKeepsSignalOpenAndStillRefusesASecondWrite() async throws {
+        let transport = DelayedLiveObservationTransport(), outbox = ConfigurationOutboxStub()
+        let client = SchoolObservationClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+            tokenSource: HubToken(), transport: transport)
+        let model = SchoolLiveObservationRecorder(scope: ConfigurationFixture.scope(), lessonID: HubFixture.lessonID,
+            client: client, outbox: outbox)
+        #expect(model.acceptsSignal && model.canRecord && !model.isSettlingGesture)
+        #expect(model.markMoment(at: HubFixture.date("2026-09-28T12:11:00Z")))
+        // Dès le retour du geste : l’envoi est réclamé, « Signaler » reste ouvert, l’écriture reste gardée.
+        #expect(model.isSending && model.isSettlingGesture && model.acceptsSignal)
+        #expect(!model.canRecord && !model.canRetry)
+        #expect(!model.markMoment() && outbox.saves.count == 1 && model.mapObservations.count == 1)
+        await transport.releasePost()
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while model.isSending, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(!model.isSending && !model.isSettlingGesture && model.acceptsSignal && model.canRecord)
+        #expect(model.confirmed == 1 && outbox.value == nil)
+        model.stop()
+    }
+
+    @Test func aRequestLeftFromAnEarlierSessionClosesSignalUntilItIsSettled() throws {
+        let outbox = ConfigurationOutboxStub()
+        let first = recorder(outbox: outbox)
+        #expect(first.markMoment()); first.stop()
+        #expect(!first.acceptsSignal)
+        let restored = recorder(outbox: outbox)
+        // Aucun envoi n’est en cours : ce blocage dure, il se montre et s’explique.
+        #expect(restored.pending != nil && !restored.isSending && !restored.isSettlingGesture)
+        #expect(!restored.acceptsSignal && !restored.canRecord && restored.canRetry)
+        restored.stop()
+    }
+
     private func recorder(outbox: ConfigurationOutboxStub,
                           permitsAnchor: (@MainActor (SchoolLiveObservationAnchor) -> Bool)? = nil) -> SchoolLiveObservationRecorder {
         let client = SchoolObservationClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
