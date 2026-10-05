@@ -130,6 +130,32 @@ describe('G1D1 · politique versionnée et profil minimal',()=>{
     expect((await call('GET',profilePath)).json().data.contactPhone).toBeNull();
     expect((await call('PATCH',profilePath,{operationId:randomUUID(),policyVersionId,contactPhone:'021'},2,'demo-alice')).statusCode).toBe(200);
   });
+  it('droits et non liste de la politique : les six champs en accès complet, puis le nom affiché suit l’identité complète',async()=>{
+    const policyVersionId=await publish(names());const learnerPath=`${school}/learners/${id.aliceLearner}`;
+    const postalAddress={line1:'Rue des Exemples 12',line2:null,postalCode:'2053',locality:'Cernier',countryCode:'CH'};
+    // La politique ne cite que prénom et nom : elle dit ce qui est requis, pas ce qui est permis.
+    const outside=await call('PATCH',profilePath,{operationId:randomUUID(),policyVersionId,birthDate:'2005-07-12',postalAddress,contactEmail:'contact@example.invalid',contactPhone:'+41 00 000 00 00'},1);
+    expect(outside.statusCode,outside.body).toBe(200);conforms('AdministrativeProfileEnvelopeV3',outside.json());
+    expect(outside.json().data).toMatchObject({version:2,birthDate:'2005-07-12',postalAddress,contactEmail:'contact@example.invalid',contactPhone:'+41 00 000 00 00'});
+    expect((await call('GET',learnerPath)).json().data).toMatchObject({version:2,displayName:'Alice Exemple',contactEmail:'contact@example.invalid',contactPhone:'+41 00 000 00 00'});
+    // Un prénom seul laisse l’identité incomplète : le nom affiché ne bouge pas.
+    expect((await call('PATCH',profilePath,{operationId:randomUUID(),policyVersionId,firstName:'Élodie'},2)).statusCode).toBe(200);
+    expect((await call('GET',learnerPath)).json().data.displayName).toBe('Alice Exemple');
+    const named={operationId:randomUUID(),policyVersionId,lastName:'Modèle'};
+    const own=await call('PATCH',profilePath,named,3,'demo-alice');expect(own.statusCode,own.body).toBe(200);conforms('AdministrativeProfileEnvelopeV3',own.json());
+    const learner=await call('GET',learnerPath,undefined,undefined,'demo-instructor');conforms('LearnerEnvelope',learner.json());
+    expect(learner.json().data).toMatchObject({version:4,displayName:'Élodie Modèle'});
+    expect((await call('GET',`${school}/learners?q=${encodeURIComponent('Modèle')}`)).json().data.items.map((item:{id:string})=>item.id)).toEqual([id.aliceLearner]);
+    expect((await pool.query('SELECT changed_fields FROM drivy.audit_event WHERE operation_id=$1',[named.operationId])).rows[0].changed_fields).toEqual(['lastName','displayName']);
+    // L’identité de connexion reste celle de la personne ; le rejeu ne recompose rien une seconde fois.
+    expect((await pool.query('SELECT display_name FROM drivy.person WHERE id=$1',[id.alice])).rows[0].display_name).toBe('Alice Exemple');
+    expect((await call('PATCH',profilePath,named,3,'demo-alice')).json().data).toEqual(own.json().data);
+    // Le moniteur affecté écrit encore les coordonnées sous RLS, et AP16 garde son nom d’affichage distinct.
+    expect((await call('PATCH',profilePath,{operationId:randomUUID(),policyVersionId,contactPhone:'021'},4,'demo-instructor')).statusCode).toBe(200);
+    expect((await call('PATCH',learnerPath,{operationId:randomUUID(),displayName:'Nom public distinct'},5)).statusCode).toBe(200);
+    expect((await call('GET',learnerPath)).json().data).toMatchObject({version:6,displayName:'Nom public distinct',contactPhone:'021'});
+    expect((await call('GET',profilePath)).json().data).toMatchObject({firstName:'Élodie',lastName:'Modèle',birthDate:'2005-07-12'});
+  });
   it('refus explicites : photos non déposées, dates futures, champs inconnus, archives et versions',async()=>{
     const policyVersionId=await publish();const before=await counts();
     for(const [change,code] of [[{profilePhotoDocumentId:randomUUID()},'DOCUMENT_NOT_READY'],[{birthDate:'2999-01-01'},'INVALID_BIRTH_DATE'],[{arbitraryMedicalField:'x'},'INVALID_REQUEST']] as const)

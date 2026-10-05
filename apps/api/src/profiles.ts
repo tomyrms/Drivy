@@ -76,6 +76,13 @@ function fieldPermission(level:'FULL'|'CONTACT',body:object) {
   if(level==='CONTACT' && writableFields(body).some(field=>!['contactEmail','contactPhone'].includes(field)))
     throw new ApiError(403,'PROFILE_FIELD_FORBIDDEN','Votre affectation autorise uniquement la modification des coordonnées de contact.');
 }
+/** « Prénom Nom » après la commande, ou null si elle n’écrit aucun nom ou si l’identité reste incomplète. */
+function identityDisplayName(row:ProfileRow,body:object):string|null {
+  const names=body as {firstName?:string;lastName?:string};
+  if(names.firstName===undefined && names.lastName===undefined) return null;
+  const first=names.firstName ?? row.first_name,last=names.lastName ?? row.last_name;
+  return first && last?`${first} ${last}`:null;
+}
 function activeSchool(school:SchoolRow) {if(school.status!=='ACTIVE') throw new ApiError(409,'SCHOOL_NOT_ACTIVE','Cette école doit être active pour modifier un profil.');}
 function profileGuards<T>(learnerId:string,body:object):CommandGuards<T> {
   return {
@@ -106,6 +113,10 @@ async function saveProfile(db:PoolClient,actor:CommandActor,school:SchoolRow,lea
   const map:Record<string,string>={displayName:'display_name',firstName:'first_name',lastName:'last_name',birthDate:'birth_date',postalAddress:'postal_address',contactEmail:'contact_email',contactPhone:'contact_phone',profilePhotoDocumentId:'profile_photo_document_id'};
   const values:unknown[]=[learnerId,school.id,policy.id,actor.membershipId,row.person_id===actor.personId?'SELF':'STAFF_ASSISTED'];
   const assignments=writableFields(body).map(field=>{values.push((body as Record<string,unknown>)[field]);return `${map[field]}=$${values.length}`;});
+  // Listes, leçons et trajets lisent display_name : il suit l’identité dès qu’AP176 l’écrit et qu’elle est complète.
+  // Seul l’accès FULL écrit un nom ; AP16 peut encore poser un nom d’affichage distinct, Person.displayName ne change pas.
+  const displayName=legacy?null:identityDisplayName(row,body);
+  if(displayName!==null) {values.push(displayName);assignments.push(`display_name=$${values.length}`);}
   await db.query(`UPDATE drivy.learner_profile SET ${assignments.join(',')},version=version+1,administrative_policy_id=$3,entered_by_membership_id=$4,entry_source=$5,profile_updated_at=now() WHERE id=$1 AND school_id=$2`,values);
   const updated=await profile(db,school.id,learnerId);
   const ready=missingProfileFields(updated,policy,['JOIN']).length===0;
@@ -114,7 +125,8 @@ async function saveProfile(db:PoolClient,actor:CommandActor,school:SchoolRow,lea
     const value=await getLearner(db,school.id,{personId:actor.personId,displayName:'',locale:'',version:1},{id:actor.membershipId,roles:actor.roles,grants:[],accessEpoch:1},learnerId);
     return {data:value,action:'LearnerUpdated',resourceType:'Learner',resourceId:learnerId,changedFields:writableFields(body)};
   }
-  return {data:profileDTO(updated,policy,level),action:'AdministrativeProfileUpdated',resourceType:'AdministrativeProfile',resourceId:row.profile_id,changedFields:writableFields(body)};
+  return {data:profileDTO(updated,policy,level),action:'AdministrativeProfileUpdated',resourceType:'AdministrativeProfile',resourceId:row.profile_id,
+    changedFields:displayName===null?writableFields(body):[...writableFields(body),'displayName']};
 }
 function kindAllowed(kind:Kind,roles:string[]) {if(!(kind==='STUDENT'?roles.includes('LEARNER'):roles.some(role=>['ADMIN','INSTRUCTOR'].includes(role)))) throw forbidden();}
 async function progress(db:PoolClient,schoolId:string,memberId:string,kind:Kind,lock=false):Promise<ProgressRow> {
