@@ -30,7 +30,82 @@ struct SchoolVisualTransportTests {
         #expect(try identifiers(response) == ["history"])
     }
 
+    @Test func trainingReadKeepsOnlyTheLessonsOfItsTraining() async throws {
+        let transport = try trainingFixture()
+        let first = try await transport.send(request([
+            URLQueryItem(name: "trainingId", value: "10000000-0000-4000-8000-0000000000aa"),
+            URLQueryItem(name: "limit", value: "100")
+        ]))
+        #expect(try identifiers(first) == ["first", "third"])
+        let second = try await transport.send(request([
+            URLQueryItem(name: "trainingId", value: "10000000-0000-4000-8000-0000000000BB")
+        ]))
+        #expect(try identifiers(second) == ["second"])
+        let none = try await transport.send(request([
+            URLQueryItem(name: "trainingId", value: "10000000-0000-4000-8000-0000000000cc")
+        ]))
+        #expect(try identifiers(none) == [])
+    }
+
+    @MainActor @Test func defaultFixtureKeepsOneTrainingAndTwoLessons() async throws {
+        let context = try await SchoolVisualData.prepare()
+        let schoolID = SchoolVisualData.schoolID
+        let trainings = try await context.client.reader.trainings(schoolID: schoolID, learnerID: SchoolVisualData.learnerID, cursor: nil)
+        #expect(trainings.items.count == 1)
+        let lessons = try await context.client.lessons(schoolID: schoolID, trainingID: SchoolVisualData.trainingID, cursor: nil)
+        #expect(lessons.items.count == 2)
+    }
+
+    @MainActor @Test func threePermitFixtureIsAcceptedByTheClients() async throws {
+        let context = try await SchoolVisualData.prepare(permitCount: 3)
+        let schoolID = SchoolVisualData.schoolID
+        let trainings = try await context.client.reader.trainings(schoolID: schoolID, learnerID: SchoolVisualData.learnerID, cursor: nil)
+        #expect(trainings.items.map(\.categoryCode) == ["B", "A", "BE"])
+        #expect(trainings.items.map(\.status) == ["ACTIVE", "PAUSED", "COMPLETED"])
+        var states = Set<String>()
+        for training in trainings.items {
+            let lessons = try await context.client.lessons(schoolID: schoolID, trainingID: training.id, cursor: nil)
+            #expect(!lessons.items.isEmpty)
+            states.formUnion(lessons.items.map { $0.drivyState.title })
+            let progress = try await context.client.reports.progress(schoolID: schoolID, trainingID: training.id)
+            #expect(progress.trainingId == training.id)
+        }
+        #expect(states == ["Planifiée", "À terminer", "Terminée", "Annulée", "Absence"])
+    }
+
+    @MainActor @Test func twoPermitFixtureServesTheFirstTwoTrainings() async throws {
+        let context = try await SchoolVisualData.prepare(permitCount: 2)
+        let trainings = try await context.client.reader.trainings(schoolID: SchoolVisualData.schoolID,
+            learnerID: SchoolVisualData.learnerID, cursor: nil)
+        #expect(trainings.items.map(\.categoryCode) == ["B", "A"])
+    }
+
+    @MainActor @Test func cancelledLessonOpensWithItsPlannedGoals() async throws {
+        let context = try await SchoolVisualData.prepare()
+        let schoolID = SchoolVisualData.schoolID
+        let lesson = try await context.agenda.lesson(schoolID: schoolID, id: SchoolVisualData.cancelledLessonID)
+        #expect(lesson.status == "CANCELLED")
+        let preparation = try await context.agenda.reportClient.preparation(schoolID: schoolID, lessonID: lesson.id)
+        #expect(preparation.goals.count == 2)
+        let reports = try await context.agenda.reportClient.revisions(schoolID: schoolID, lessonID: lesson.id)
+        #expect(reports.isEmpty)
+    }
+
     private static let path = "/v1/schools/fixture-school/lessons"
+
+    private func trainingFixture() throws -> SchoolVisualTransport {
+        func lesson(_ id: String, training: String) -> [String: Any] {
+            ["id": id, "trainingId": training, "plannedStart": "2026-09-21T08:00:00Z", "plannedEnd": "2026-09-21T09:00:00Z"]
+        }
+        let items: [[String: Any]] = [
+            lesson("first", training: "10000000-0000-4000-8000-0000000000AA"),
+            lesson("second", training: "10000000-0000-4000-8000-0000000000bb"),
+            lesson("third", training: "10000000-0000-4000-8000-0000000000AA")
+        ]
+        let page: [String: Any] = ["items": items, "nextCursor": NSNull()]
+        let body: [String: Any] = ["data": page, "requestId": "visual-test-request", "serverTime": "2026-10-04T10:00:00Z"]
+        return SchoolVisualTransport(responses: [Self.path: try JSONSerialization.data(withJSONObject: body)])
+    }
 
     private func request(_ query: [URLQueryItem]) throws -> URLRequest {
         var components = try #require(URLComponents(string: "https://visual.drivy.invalid" + Self.path))

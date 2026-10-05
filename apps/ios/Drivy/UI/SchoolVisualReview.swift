@@ -5,7 +5,7 @@ import SwiftUI
 /// No production credentials, persistent school store or network transport is created.
 struct SchoolVisualReview: View {
     /// Shell screens routed here directly by DrivyApp, with the real tab bar.
-    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "live", "live-waiting"]
+    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "live", "live-waiting", "dossier-multi"]
 
     let screen: String
     @State private var context: SchoolVisualContext?
@@ -23,10 +23,10 @@ struct SchoolVisualReview: View {
                     SchoolFieldVisualReview(screen: screen, context: context)
                 case "planning", "start-now", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit":
                     SchoolOfficeVisualReview(screen: screen, context: context)
-                case "lesson", "lesson-planned", "lesson-observations":
+                case "lesson", "lesson-planned", "lesson-observations", "lesson-cancelled":
                     NavigationStack {
                         SchoolLessonReportView(client: context.agenda.reportClient, schoolWorkspace: context.workspace,
-                            lessonID: screen == "lesson-planned" ? SchoolVisualData.plannedLessonID : SchoolVisualData.lessonID,
+                            lessonID: SchoolVisualData.reportLessonID(for: screen),
                             learnerName: context.learner.displayName, outbox: SchoolVisualOutbox())
                     }
                 case "invitation-code":
@@ -35,6 +35,13 @@ struct SchoolVisualReview: View {
                             code: "K7QM-4TXR", expiresAt: "2026-10-06T10:00:00Z"), schoolName: "Auto-école du Val-de-Ruz",
                             now: SchoolLesson.date("2026-09-29T10:00:00Z")!)
                             .navigationTitle("Inviter un élève")
+                    }
+                case "lessons-multi", "lessons-two", "progression-multi":
+                    NavigationStack {
+                        SchoolVisualTrainingPage(context: context, permitCount: SchoolVisualData.permitCount(for: screen),
+                            section: screen == "progression-multi" ? .progress : .lessons)
+                            .navigationTitle(screen == "progression-multi" ? "Progression" : "Leçons")
+                            .navigationBarTitleDisplayMode(.inline)
                     }
                 case "progression":
                     NavigationStack {
@@ -68,7 +75,7 @@ struct SchoolVisualReview: View {
                     SchoolVisualShell(context: context, tab: .agenda)
                 case "learners":
                     SchoolVisualShell(context: context, tab: .learners)
-                case "learner", "dossier":
+                case "learner", "dossier", "dossier-multi":
                     SchoolVisualShell(context: context, tab: .learners, learnerID: SchoolVisualData.learnerID)
                 default:
                     SchoolTrainingView(client: context.client, workspace: context.workspace,
@@ -93,7 +100,8 @@ struct SchoolVisualReview: View {
             guard context == nil else { return }
             do {
                 context = try await SchoolVisualData.prepare(learnerRole: screen == "learner-home" || screen == "learner-progress",
-                    populatedObservations: screen == "lesson-observations")
+                    populatedObservations: screen == "lesson-observations",
+                    permitCount: SchoolVisualData.permitCount(for: screen))
             }
             catch { self.error = error.localizedDescription }
         }
@@ -166,9 +174,11 @@ struct SchoolVisualShell: View {
     nonisolated static let captureID = identifier(70)
     nonisolated static let time = "2026-09-24T10:00:00Z"
 
-    static func prepare(learnerRole: Bool = false, populatedObservations: Bool = false) async throws -> SchoolVisualContext {
+    static func prepare(learnerRole: Bool = false, populatedObservations: Bool = false,
+        permitCount: Int = 1) async throws -> SchoolVisualContext {
         let baseURL = URL(string: "https://visual.drivy.invalid")!
-        let fixtures = try responses(learnerRole: learnerRole, populatedObservations: populatedObservations)
+        let fixtures = try responses(learnerRole: learnerRole, populatedObservations: populatedObservations,
+            permitCount: permitCount)
         let transport = SchoolVisualTransport(responses: fixtures)
         let token = SchoolVisualToken()
         let client = SchoolTrainingClient(baseURL: baseURL, tokenSource: token, transport: transport)
@@ -184,7 +194,7 @@ struct SchoolVisualShell: View {
             learner: learner, replay: replay)
     }
 
-    nonisolated private static func identifier(_ value: Int) -> UUID {
+    nonisolated static func identifier(_ value: Int) -> UUID {
         UUID(uuidString: "10000000-0000-4000-8000-" + String(format: "%012d", value))!
     }
 
@@ -336,7 +346,8 @@ struct SchoolVisualShell: View {
             "generatedAt": time, "reportRevisionId": NSNull(), "geometrySnapshotId": NSNull()]
     }
 
-    static func responses(learnerRole: Bool = false, populatedObservations: Bool = false) throws -> [String: Data] {
+    static func responses(learnerRole: Bool = false, populatedObservations: Bool = false,
+        permitCount: Int = 1) throws -> [String: Data] {
         let null = NSNull()
         let root = "/v1/schools/\(schoolID.uuidString)"
         let roles = ["ADMIN", "INSTRUCTOR"]
@@ -490,6 +501,13 @@ struct SchoolVisualShell: View {
         }
         objects["\(root)/lessons/\(lessonID.uuidString)/captures"] = ["items": [syntheticCapture(captureID)]]
         objects["\(root)/lessons/\(plannedLessonID.uuidString)/reports"] = page([])
+        // Fiche d’une leçon annulée (clés nouvelles : aucun écran existant n’en dépend).
+        objects.merge(cancelledLessonObjects()) { _, new in new }
+        // Élève à deux ou trois permis : remplace la formation, l’offre, le référentiel et les leçons du dossier.
+        if permitCount > 1 {
+            objects.merge(permitObjects(count: permitCount, training: training, offerings: [offering, otherOffering],
+                curricula: [curriculum], lessons: [nextLesson, lesson])) { _, new in new }
+        }
         return try objects.mapValues { object in
             try JSONSerialization.data(withJSONObject: ["data": object, "requestId": identifier(99).uuidString, "serverTime": time])
         }
@@ -513,7 +531,27 @@ struct SchoolVisualTransport: SchoolHTTPTransport {
         guard var bytes = (window ? responses[url.path + Self.agendaSuffix] : nil) ?? responses[url.path]
         else { throw SchoolAPIError.invalidResponse }
         if window { bytes = try filteredAgenda(bytes, query: query) }
+        else if url.lastPathComponent == "lessons", let trainingID = query.first(where: { $0.name == "trainingId" })?.value {
+            bytes = try filteredLessons(bytes, trainingID: trainingID)
+        }
         return SchoolHTTPResponse(data: bytes, status: 200, url: url, contentType: "application/json")
+    }
+
+    /// Comme l’école, la lecture par formation ne renvoie que les leçons de cette formation. Une leçon qui ne
+    /// nomme aucune formation reste, et la réponse d’origine est rendue telle quelle quand rien n’est écarté.
+    private func filteredLessons(_ bytes: Data, trainingID: String) throws -> Data {
+        guard var envelope = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+              var page = envelope["data"] as? [String: Any], let lessons = page["items"] as? [[String: Any]]
+        else { throw SchoolAPIError.invalidResponse }
+        let wanted = trainingID.lowercased()
+        let kept = lessons.filter { lesson in
+            guard let value = lesson["trainingId"] as? String else { return true }
+            return value.lowercased() == wanted
+        }
+        guard kept.count != lessons.count else { return bytes }
+        page["items"] = kept
+        envelope["data"] = page
+        return try JSONSerialization.data(withJSONObject: envelope)
     }
 
     private func filteredAgenda(_ bytes: Data, query: [URLQueryItem]) throws -> Data {

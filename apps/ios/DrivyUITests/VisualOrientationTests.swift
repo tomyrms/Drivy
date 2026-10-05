@@ -17,7 +17,7 @@ import XCTest
         "join-code", "join-code-preview", "join-code-error", "join-code-pending", "join-code-confirmed",
         "join-link", "join-link-preview", "profile", "profile-error", "onboarding-welcome",
         "onboarding-information", "onboarding-formation", "onboarding-gps", "onboarding-review", "onboarding-ready",
-        "onboarding-staff",
+        "onboarding-staff", "dossier-multi", "lessons-multi", "lessons-two", "progression-multi", "lesson-cancelled",
     ]
 
     func testRequestedScreensAtRealOrientations() throws {
@@ -73,7 +73,9 @@ import XCTest
                     // Même délai de stabilisation des fixtures/MapKit que la voie simctl.
                     RunLoop.current.run(until: Date().addingTimeInterval(10))
                     let readyIdentifier: String? = switch screen {
-                    case "learner", "dossier": "learner-dossier"
+                    case "learner", "dossier", "dossier-multi": "learner-dossier"
+                    case "lessons-multi", "lessons-two", "progression-multi": "training-permit-filter"
+                    case "lesson-cancelled": "lesson-state"
                     case "account": "account-heading"
                     case "profile-tab": "profile-open-trips"
                     case "onboarding-staff": "onboarding-start"
@@ -88,7 +90,7 @@ import XCTest
                         guard requireVisual(app.descendants(matching: .any)[readyIdentifier].waitForExistence(timeout: 30),
                             "Élément de l’écran absent : \(readyIdentifier).", app: app, name: captureName) else { return }
                     }
-                    if screen == "learner" || screen == "dossier" {
+                    if screen == "learner" || screen == "dossier" || screen == "dossier-multi" {
                         let firstName = app.descendants(matching: .any)["learner-profile-first-name"]
                         guard requireVisual(firstName.waitForExistence(timeout: 30) && firstName.label.contains("Camille"),
                             "Le profil administratif de l’élève n’est pas chargé.", app: app, name: captureName) else { return }
@@ -104,6 +106,26 @@ import XCTest
                         guard requireVisual(app.descendants(matching: .any).matching(NSPredicate(
                             format: "label CONTAINS %@", "Avec accompagnement")).firstMatch.waitForExistence(timeout: 30),
                             "La progression n’est pas chargée.", app: app, name: captureName) else { return }
+                    }
+                    if screen == "lessons-multi" || screen == "lessons-two" {
+                        // La ligne d’absence du permis A prouve que les leçons de la seconde formation sont lues.
+                        let noShow = app.descendants(matching: .any)["training-lesson-10000000-0000-4000-8000-000000000341"]
+                        guard requireVisual(noShow.waitForExistence(timeout: 30),
+                            "Les leçons du second permis ne sont pas chargées.", app: app, name: captureName) else { return }
+                    }
+                    if screen == "progression-multi" {
+                        // « En autonomie » n’existe que dans la progression du permis BE, lue en dernier.
+                        guard requireVisual(app.descendants(matching: .any).matching(NSPredicate(
+                            format: "label CONTAINS %@", "En autonomie")).firstMatch.waitForExistence(timeout: 30),
+                            "La progression du dernier permis n’est pas chargée.", app: app, name: captureName) else { return }
+                    }
+                    if screen == "lesson-cancelled" {
+                        let state = app.descendants(matching: .any)["lesson-state"]
+                        guard requireVisual(state.label == "Annulée",
+                            "La fiche n’annonce pas une leçon annulée.", app: app, name: captureName) else { return }
+                        guard requireVisual(app.descendants(matching: .any).matching(NSPredicate(
+                            format: "label CONTAINS %@", "Revoir les priorités à droite")).firstMatch.waitForExistence(timeout: 30),
+                            "Les objectifs prévus de la leçon annulée sont absents.", app: app, name: captureName) else { return }
                     }
                     if screen == "lesson-tariff" {
                         // « Prix de la leçon » : une seule ligne (lesson-tariff). La ligne lesson-balance n’existe que si
