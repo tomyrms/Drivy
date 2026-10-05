@@ -106,20 +106,24 @@ import XCTest
                             "La progression n’est pas chargée.", app: app, name: captureName) else { return }
                     }
                     if screen == "lesson-tariff" {
+                        // « Prix de la leçon » : une seule ligne (lesson-tariff). La ligne lesson-balance n’existe que si
+                        // l’école a corrigé le montant retenu ; ici le compte de la fixture égale le prix convenu.
                         let tariff = app.descendants(matching: .any)["lesson-tariff"]
                         let balance = app.descendants(matching: .any)["lesson-balance"]
                         let form = app.collectionViews.firstMatch
                         guard requireVisual(form.waitForExistence(timeout: 30),
                             "La fiche leçon n’est pas chargée.", app: app, name: captureName) else { return }
                         for _ in 0..<10 {
-                            if tariff.exists && balance.exists && balance.isHittable { break }
+                            if tariff.exists && tariff.isHittable { break }
                             form.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.8))
                                 .press(forDuration: 0.05, thenDragTo: form.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.3)))
                         }
                         guard requireVisual(!app.buttons["lesson-tariff"].exists && !app.navigationBars["Tarif"].exists,
                             "Le tarif ouvre encore un écran secondaire.", app: app, name: captureName) else { return }
-                        guard requireVisual(tariff.exists && balance.exists && balance.isHittable,
-                            "Le tarif ou le solde disponible n’est pas affiché dans la fiche.", app: app, name: captureName) else { return }
+                        guard requireVisual(tariff.exists && tariff.isHittable,
+                            "Le prix de la leçon n’est pas affiché dans la fiche.", app: app, name: captureName) else { return }
+                        guard requireVisual(!balance.exists,
+                            "Une seconde ligne de prix apparaît alors que le compte égale le prix convenu.", app: app, name: captureName) else { return }
                     }
                     if interactiveSignal {
                         let signal = app.buttons["capture-signal-observation"]

@@ -308,7 +308,7 @@ struct SchoolLearnerDossierView: View {
                         .buttonStyle(DrivyPrimaryButtonStyle())
                         .accessibilityLabel("Démarrer une leçon").accessibilityIdentifier("learner-start-now")
                     }
-                    let plan = Button { openPlanning(learner) } label: { Label("Planifier", systemImage: "calendar.badge.plus") }
+                    let plan = Button { openPlanning(learner) } label: { Text("Planifier") }
                         .accessibilityLabel("Planifier une leçon").accessibilityIdentifier("learner-plan-lesson")
                     if agendaClient != nil { plan.buttonStyle(DrivySecondaryButtonStyle()) }
                     else { plan.buttonStyle(DrivyPrimaryButtonStyle()) }

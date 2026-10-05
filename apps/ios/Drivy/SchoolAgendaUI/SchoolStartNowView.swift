@@ -256,8 +256,10 @@ struct SchoolStartNowView: View {
                     if model.learners.isEmpty && (model.isLoading || (model.defaults == nil && model.errorMessage == nil)) {
                         DrivySkeletonRows(count: 3).drivySkeleton("Chargement des élèves…")
                     } else {
+                        // Le choix de l’élève reste actif pendant la lecture de ses formations : seules les lignes qui
+                        // en dépendent (formation, lieu) se verrouillent, dans `fields`.
                         fields
-                            .disabled(model.isBusy || model.isLoading || model.pending != nil)
+                            .disabled(model.isBusy || model.pending != nil)
                     }
                     primaryAction
                 }.drivyPageContent(maxWidth: DrivyLayout.compactColumn)
@@ -306,14 +308,18 @@ struct SchoolStartNowView: View {
                     .pickerStyle(.menu).labelsHidden()
                     .frame(minHeight: 44).contentShape(Rectangle())
                 }
+                // Les formations de l’élève se relisent : le choix attend leur réponse.
+                .disabled(model.isLoading)
             } else if let training = model.trainings.first, training.id == model.trainingID {
                 Divider()
                 fieldRow("Formation") { Text("Permis \(training.categoryCode)") }
             }
             Divider()
+            // Le lieu se remplit avec celui de la dernière leçon de l’élève : on n’écrit pas dessus pendant la lecture.
             SchoolMeetingPointField(text: $model.meetingPoint)
                 .padding(.vertical, DrivySpacing.s)
                 .frame(minHeight: 44)
+                .disabled(model.isLoading)
             if model.meetingPointTooLong {
                 DrivyFormMessage(text: "Raccourcis le lieu à 500 caractères.", tone: .danger)
                     .padding(.bottom, DrivySpacing.s)

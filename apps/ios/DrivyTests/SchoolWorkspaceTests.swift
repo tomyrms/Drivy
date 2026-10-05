@@ -313,6 +313,37 @@ struct SchoolWorkspaceTests {
         #expect(workspace.trainings.count == 1)
     }
 
+    @Test func rereadingTheDossierUpdatesItsRowInTheLearnerListWithoutReorderingIt() async throws {
+        let api = WorkspaceAPIStub()
+        let before = WorkspaceFixture.learner(id: UUID(), name: "Élève précédent")
+        let stale = WorkspaceFixture.learner(name: "Ancien nom")
+        let after = WorkspaceFixture.learner(id: UUID(), name: "Élève suivant")
+        api.learnersHandler = { _, _, _ in .init(items: [before, stale, after], nextCursor: "page-2") }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        #expect(workspace.learners == [before, stale, after])
+        let corrected = WorkspaceFixture.learner(name: "Nom corrigé", version: 2)
+        api.learnerHandler = { _, _ in corrected }
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learner == corrected)
+        // La liste Élèves montre déjà le nom relu, à la même place, et sa pagination n'a pas bougé.
+        #expect(workspace.learners == [before, corrected, after])
+        #expect(workspace.nextLearnersCursor == "page-2")
+    }
+
+    @Test func rereadingADossierAbsentFromTheListNeverAddsARow() async throws {
+        let api = WorkspaceAPIStub()
+        let listed = WorkspaceFixture.learner(id: UUID(), name: "Élève listé")
+        api.learnersHandler = { _, _, _ in .init(items: [listed], nextCursor: nil) }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learner?.id == WorkspaceFixture.learnerID)
+        #expect(workspace.learners == [listed])
+    }
+
     @Test func rereadingTheAccountNeverEmptiesTheScreenWhileTheSameAccountIsSignedIn() async throws {
         let api = WorkspaceAPIStub()
         let workspace = SchoolWorkspace(api: api)
@@ -405,6 +436,7 @@ private final class WorkspaceAPIStub: SchoolAPI {
     var schoolHandler: ((UUID) async throws -> SchoolDetails)?
     var learnersHandler: ((UUID, String, String?) async throws -> SchoolPage<SchoolLearner>)?
     var trainingsHandler: ((UUID, UUID, String?) async throws -> SchoolPage<SchoolTraining>)?
+    var learnerHandler: ((UUID, UUID) async throws -> SchoolLearner)?
     var learnerQueries: [String] = []
 
     init(memberships: [SchoolMembership] = [WorkspaceFixture.firstMembership]) {
@@ -424,7 +456,8 @@ private final class WorkspaceAPIStub: SchoolAPI {
         return .init(items: [WorkspaceFixture.learner(school: schoolID)], nextCursor: nil)
     }
     func learner(schoolID: UUID, id: UUID) async throws -> SchoolLearner {
-        WorkspaceFixture.learner(id: id, school: schoolID)
+        if let learnerHandler { return try await learnerHandler(schoolID, id) }
+        return WorkspaceFixture.learner(id: id, school: schoolID)
     }
     func trainings(schoolID: UUID, learnerID: UUID, cursor: String?) async throws -> SchoolPage<SchoolTraining> {
         if let trainingsHandler { return try await trainingsHandler(schoolID, learnerID, cursor) }

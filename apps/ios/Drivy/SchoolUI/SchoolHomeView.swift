@@ -57,8 +57,10 @@ struct SchoolHomeView: View {
         }
         .onChange(of: workspace.membership?.membershipId) { _, _ in resetScope() }
         .onChange(of: workspace.membership?.accessEpoch) { _, _ in resetScope() }
-        .onChange(of: captureController?.isCollecting) { wasCollecting, isCollecting in
-            if wasCollecting != true && isCollecting == true { selectedTab = .session }
+        // Seul le départ d’un trajet ramène sur « Aujourd’hui ». L’identifiant du trajet reste le même pendant
+        // la pause et la reprise ; l’état « en collecte », lui, repasse à vrai à chaque reprise.
+        .onChange(of: captureController?.captureID) { previous, current in
+            if current != nil && current != previous { selectedTab = .session }
         }
         .onChange(of: selectedTab) { previous, _ in
             // A trip the school has confirmed (complete or partial) is over: leaving the live

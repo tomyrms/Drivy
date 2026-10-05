@@ -193,7 +193,7 @@ struct SchoolTodayView: View {
                 lessonSummary(lesson, badge: lesson.drivyState(now: now).badge, moment: nil)
                 if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId {
                     Button { opened = OpenedLesson(lesson: lesson, completing: true) } label: {
-                        Label("Terminer la leçon", systemImage: "checkmark.circle")
+                        Text("Terminer la leçon")
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                     .accessibilityIdentifier("today-finish-lesson")

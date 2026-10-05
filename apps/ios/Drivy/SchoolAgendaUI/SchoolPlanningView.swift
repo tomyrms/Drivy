@@ -44,6 +44,13 @@ struct SchoolPlanningView: View {
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy || isPreparingCancellation) }
+                // Relecture du planning, nouvel élève ou nouvelle formation : l’attente se lit dans la barre,
+                // le formulaire ne reçoit pas de ligne et ne se décale pas. Le premier chargement garde son squelette.
+                if model.school != nil && model.isLoading {
+                    ToolbarItem(placement: .primaryAction) {
+                        ProgressView().accessibilityLabel("Actualisation du planning")
+                    }
+                }
             }
             .task { if model.school == nil { await model.load() } }
             .task(id: model.slotValidationRequest) {
@@ -175,11 +182,9 @@ struct SchoolPlanningView: View {
                 }
             }
             if model.instructorID != nil {
-                DisclosureGroup("Disponibilités du moniteur") {
+                DisclosureGroup {
                     if !model.availabilityLoaded && model.availabilityError == nil {
                         DrivySkeletonRows(count: 2).drivySkeleton("Chargement des disponibilités…")
-                    } else if model.isLoadingAvailability {
-                        ProgressView().accessibilityLabel("Actualisation des disponibilités")
                     }
                     if let error = model.availabilityError {
                         SchoolErrorNotice(message: error, retry: { Task { await model.loadAvailability() } })
@@ -198,6 +203,14 @@ struct SchoolPlanningView: View {
                         Text("Indisponible : \(SchoolPlanningFormat.interval(closure.startsAt, closure.endsAt, zone: model.timeZone))")
                             .font(.caption).foregroundStyle(DrivyTheme.warning)
                             .fixedSize(horizontal: false, vertical: true)
+                    }
+                } label: {
+                    // La relecture se lit sur la ligne du titre : aucune ligne n’est insérée dans la liste ouverte.
+                    HStack(spacing: DrivySpacing.xs) {
+                        Text("Disponibilités du moniteur")
+                        if model.availabilityLoaded && model.isLoadingAvailability {
+                            ProgressView().accessibilityLabel("Actualisation des disponibilités")
+                        }
                     }
                 }
                 .task(id: model.instructorID) { await model.loadAvailability() }
@@ -416,7 +429,6 @@ struct SchoolPlanningFeedback: View {
     var body: some View {
         if model.school == nil && (model.isLoading || model.errorMessage == nil) { Section { DrivySkeletonRows(count: 4).drivySkeleton("Ouverture du planning…") }
             .drivyFormRows() }
-        if model.school != nil && model.isLoading { Section { ProgressView("Actualisation du planning…") }.drivyFormRows() }
         if let error = model.errorMessage {
             // Même présentation d’erreur que les pages : notice, puis « Réessayer ».
             Section {

@@ -249,6 +249,9 @@ final class SchoolWorkspace {
             guard scope == schoolScope, request == learnerRequest, selectedLearnerID == id else { return }
             guard result.id == id, result.schoolId == schoolID else { throw SchoolAPIError.invalidResponse }
             learner = result
+            // La liste Élèves porte le même élève : sa ligne suit le dossier relu (nom, coordonnées) sans attendre sa
+            // propre relecture. Ni l’ordre ni la pagination ne changent, et un élève absent de la liste n’y est pas ajouté.
+            if let row = learners.firstIndex(where: { $0.id == result.id }) { learners[row] = result }
             isLoadingLearner = false
             await loadTrainings()
         } catch {

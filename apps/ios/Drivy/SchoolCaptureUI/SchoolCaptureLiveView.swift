@@ -458,7 +458,7 @@ struct SchoolCaptureLiveView: View {
         Button {
             confirmsFinish = true
         } label: {
-            Label("Terminer la leçon", systemImage: "checkmark.circle")
+            Text("Terminer la leçon")
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
         }
         .buttonStyle(DrivySecondaryButtonStyle())
@@ -527,7 +527,7 @@ struct SchoolCaptureLiveView: View {
                 }.buttonStyle(DrivySecondaryButtonStyle())
             }
             if let state = controller.finalizedSyncState { finalizationResult(state) }
-            Button("Terminer la leçon", systemImage: "checkmark.circle") { confirmsFinish = true }
+            Button("Terminer la leçon") { confirmsFinish = true }
                 .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(isFinishing)
         }
     }

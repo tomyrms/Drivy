@@ -44,7 +44,7 @@ struct SchoolCapturePreparationView: View {
                             tone: .warning)
                     }
                     if model.contextIsCurrent && model.isInstructor && model.quickStep == nil && model.quickBlock != nil {
-                        DisclosureGroup("Détails") {
+                        DisclosureGroup {
                             VStack(alignment: .leading, spacing: DrivySpacing.l) {
                                 feedback
                                 choicePanel
@@ -52,6 +52,15 @@ struct SchoolCapturePreparationView: View {
                                 if model.collectionIsIntegrated { startPanel }
                             }
                             .padding(.top, DrivySpacing.s)
+                        } label: {
+                            // L’attente se lit sur la ligne du titre : aucune ligne n’est insérée dans les panneaux.
+                            HStack(spacing: DrivySpacing.xs) {
+                                Text("Détails")
+                                if isWaiting {
+                                    ProgressView()
+                                        .accessibilityLabel(model.isBusy ? "Vérification auprès de l’école…" : "Ouverture de la préparation…")
+                                }
+                            }
                         }
                         .font(.subheadline.weight(.semibold))
                     }
@@ -126,6 +135,9 @@ struct SchoolCapturePreparationView: View {
         _ = await model.begin(reload: reload)
     }
 
+    /// Une lecture de la leçon ou une vérification auprès de l’école est en cours.
+    private var isWaiting: Bool { model.isLoading || model.isBusy }
+
     /// Un seul état visible : le départ en cours, ou ce qui l’empêche et comment le lever.
     @ViewBuilder private var quickStart: some View {
         if let step = model.quickStep {
@@ -178,9 +190,19 @@ struct SchoolCapturePreparationView: View {
             }
             .accessibilityIdentifier("capture-quick-start-block")
         } else if model.captureStarted == false && !model.accessRevoked && model.pendingAssessments.isEmpty && model.pendingStarts.isEmpty {
-            Button { Task { await start() } } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
-                .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(model.isLoading || model.isBusy)
-                .accessibilityIdentifier("capture-quick-start")
+            // L’attente se lit dans le bouton, qui ne se grise pas : un appui pendant la lecture reste sans effet.
+            Button {
+                guard !isWaiting else { return }
+                Task { await start() }
+            } label: {
+                if isWaiting {
+                    DrivyBusyLabel(title: "Démarrer le trajet", busyTitle: "Vérification de la leçon…", isBusy: true)
+                } else {
+                    Label("Démarrer le trajet", systemImage: "location.fill")
+                }
+            }
+            .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+            .accessibilityIdentifier("capture-quick-start")
         }
     }
 
@@ -200,9 +222,6 @@ struct SchoolCapturePreparationView: View {
     }
 
     @ViewBuilder private var feedback: some View {
-        if model.isLoading || model.isBusy {
-            DrivyLoadingState(title: model.isBusy ? "Vérification auprès de l’école…" : "Ouverture de la préparation…")
-        }
         if let message = model.errorMessage {
             SchoolErrorNotice(message: message,
                 retry: model.accessRevoked || model.isLoading || model.isBusy ? nil : { Task { await model.load() } })
