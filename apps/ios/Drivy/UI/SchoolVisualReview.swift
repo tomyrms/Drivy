@@ -231,12 +231,12 @@ struct SchoolVisualShell: View {
         let today = calendar.startOfDay(for: Date())
         let iso = ISO8601DateFormatter()
         let plan: [(day: Int, hour: Int, minute: Int, minutes: Int, learner: UUID, status: String, place: String)] = [
-            (0, 8, 0, 50, learnerID, "COMPLETED", "Gare · lieu fictif"),
-            (0, 10, 30, 50, otherLearners[0].id, "PLANNED", "Place du Marché · lieu fictif"),
-            (0, 14, 0, 75, otherLearners[1].id, "PLANNED", "Collège · lieu fictif"),
-            (0, 16, 30, 50, otherLearners[2].id, "CANCELLED", "Piscine · lieu fictif"),
-            (1, 9, 0, 50, learnerID, "PLANNED", "Gare · lieu fictif"),
-            (2, 13, 30, 50, otherLearners[0].id, "PLANNED", "Place du Marché · lieu fictif")
+            (0, 8, 0, 50, learnerID, "COMPLETED", "Gare de Cernier"),
+            (0, 10, 30, 50, otherLearners[0].id, "PLANNED", "Place du Marché, Fontainemelon"),
+            (0, 14, 0, 75, otherLearners[1].id, "PLANNED", "Collège de la Fontenelle"),
+            (0, 16, 30, 50, otherLearners[2].id, "CANCELLED", "Piscine d’Engollon"),
+            (1, 9, 0, 50, learnerID, "PLANNED", "Gare de Cernier"),
+            (2, 13, 30, 50, otherLearners[0].id, "PLANNED", "Place du Marché, Fontainemelon")
         ]
         var result: [[String: Any]] = []
         for (index, item) in plan.enumerated() {
@@ -376,7 +376,7 @@ struct SchoolVisualShell: View {
         let curriculum: [String: Any] = ["id": curriculumID.uuidString, "schoolId": schoolID.uuidString,
             "version": 1, "categoryCode": "B", "revision": 2, "approved": true, "competencies": competencyObjects]
         let policy: [String: Any] = ["id": policyID.uuidString, "schoolId": schoolID.uuidString, "version": 1,
-            "categoryCode": "B", "procedureText": "Texte fictif : préparation, conduite et bilan de la leçon.",
+            "categoryCode": "B", "procedureText": "Préparation, conduite et bilan de la leçon.",
             "cancellationPolicyText": "Conditions fictives destinées au contrôle de la mise en page.",
             "sourceUrls": [], "approved": true, "approvedAt": time]
         let member: [String: Any] = ["id": membershipID.uuidString, "schoolId": schoolID.uuidString, "version": 1,

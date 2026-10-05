@@ -95,7 +95,7 @@ struct SchoolOfficeVisualReview: View {
             await planning.selectTraining(SchoolVisualData.trainingID)
             planning.instructorID = SchoolVisualData.membershipID
             planning.productID = SchoolOfficeVisualData.productID
-            planning.meetingPoint = "Gare · lieu fictif"
+            planning.meetingPoint = "Gare de Cernier"
             await planning.loadAvailability()
         case "invitations", "invitation-create", "invitation-detail":
             await invitations.load()

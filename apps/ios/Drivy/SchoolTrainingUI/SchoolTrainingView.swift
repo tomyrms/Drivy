@@ -357,10 +357,11 @@ private struct SchoolTrainingContent: View {
         }
     }
 
-    /// Un badge seulement pour l’inhabituel : en pause, terminée, annulée.
+    /// Un mot de texte seulement pour l’inhabituel : en pause, terminée, annulée.
     @ViewBuilder private var statusBadge: some View {
         if let training = shownTraining, training.status != "ACTIVE" {
-            DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status))
+            Text(SchoolPresentation.trainingStatus(training.status))
+                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
         }
     }
 
@@ -372,9 +373,24 @@ private struct SchoolTrainingContent: View {
                 .frame(maxWidth: TrainingLayout.pickerMaxWidth)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-            permitPicker(allTitle: "Tous les permis").pickerStyle(.menu)
+            // Même libellé-menu que le tri des leçons, aligné sur la marge du contenu.
+            let current = selected.map { permitName($0, in: permitNames) } ?? "Tous les permis"
+            Menu {
+                permitPicker(allTitle: "Tous les permis").pickerStyle(.inline)
+            } label: {
+                HStack(spacing: DrivySpacing.xs) {
+                    Text(current).fixedSize(horizontal: false, vertical: true)
+                    Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold))
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(DrivyTheme.accent)
                 .frame(minHeight: 44)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel("Permis")
+            .accessibilityValue(current)
+            .accessibilityIdentifier("training-permit-filter")
         }
     }
     private func permitPicker(allTitle: String) -> some View {
@@ -593,7 +609,9 @@ private struct SchoolTrainingContent: View {
             DrivyRowGroup {
                 ForEach(month.lessons) { lesson in
                     Button { opened = OpenedLesson(id: lesson.id) } label: {
-                        SchoolTrainingLessonRow(lesson: lesson, permit: permitNames[lesson.trainingId])
+                        // Sous le titre « À terminer », la ligne ne redit pas son état.
+                        SchoolTrainingLessonRow(lesson: lesson, permit: permitNames[lesson.trainingId],
+                            showsState: month.id != "to-finish")
                     }
                         .buttonStyle(DrivyRowButtonStyle())
                         .disabled(feed.model(for: lesson)?.canOpenPedagogicalContent != true)
@@ -624,7 +642,8 @@ private struct SchoolTrainingContent: View {
         return layout {
             DrivySectionHeader(title: name)
             if let training = training(of: model), training.status != "ACTIVE" {
-                DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status))
+                Text(SchoolPresentation.trainingStatus(training.status))
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
             }
         }
     }
@@ -702,12 +721,13 @@ private struct SchoolTrainingLessonRow: View {
     let lesson: SchoolLesson
     /// Nommé seulement quand la liste mêle plusieurs permis : du texte parmi les détails, pas un badge.
     var permit: String? = nil
+    var showsState = true
     var body: some View {
         DrivyLessonRow(start: SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone),
             end: SchoolTrainingFormatting.time(lesson.plannedEnd, zone: lesson.timeZone),
             title: SchoolTrainingFormatting.rowDay(lesson.plannedStart, zone: lesson.timeZone),
-            details: [permit, lesson.meetingPoint].compactMap { $0 },
-            state: lesson.drivyState)
+            details: [[permit, lesson.meetingPoint].compactMap { $0 }.joined(separator: " · ")],
+            state: showsState ? lesson.drivyState : nil)
     }
 }
 

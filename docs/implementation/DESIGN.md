@@ -194,7 +194,7 @@ Ordre de préséance, du plus fort au plus faible :
 
 | Étape | Écran | Composants |
 |---|---|---|
-| 1. Onglet Leçons | `SchoolHomeView.learnerTab(.lessons)` → `SchoolTrainingScreen` | `DrivyLessonRow` ; menu « Permis B » dans la barre si plusieurs formations. |
+| 1. Onglet Leçons | `SchoolHomeView.learnerTab(.lessons)` → `SchoolTrainingScreen` | `DrivyLessonRow` ; filtre par permis en tête de page si plusieurs formations (aucun avec une, segmenté avec deux, menu au-delà), « Tous » par défaut. |
 | 2. Ouvrir une leçon réalisée | Leçon en lecture | Trajet, observations visibles par l’élève, `DrivyReportBody` (« Prochaine étape » en tête). |
 | 3. Onglet Progression | `SchoolTrainingScreen` section `.progress` | Liste de `DrivyCompetencyNote` : compétence, niveau en badge, contexte, date ; « Pas encore vu » en neutre ; jamais de score global. |
 
@@ -217,7 +217,7 @@ Toujours consommer une couleur par son rôle `DrivyTheme.*`. Interdit dans une v
 
 Règles de ton :
 
-- Refus ou interruption GPS, leçon « À terminer », annulée ou absence : `warning`, jamais `danger`.
+- Refus ou interruption GPS, leçon « À terminer » : `warning`, jamais `danger`. Une leçon annulée ou manquée est un fait clos : encre `muted`, sans couleur d’alerte.
 - Observation : « Attention » en `warning`, « À retravailler » en `danger`, « Point positif » en `success` (`ObservationStatus.tone`), avec les symboles `exclamationmark`, `xmark`, `checkmark`.
 - Leçon et bilan : `DrivyLessonState` et `DrivyReportState` fixent titre, symbole et ton ; une vue ne les redéfinit pas. Une leçon planifiée n’a pas de badge en ligne (`rowBadge`).
 - `.tint(DrivyTheme.accent)` sur chaque racine de navigation et de feuille, pour que les contrôles système prennent l’accent.
@@ -373,7 +373,7 @@ Les styles système `.borderedProminent`, `.bordered` et `.controlSize` ne rempl
 | Action désactivée ou échec près du bouton bas | `DrivyStickyActionBar` / `DrivyFormActionBar` + `DrivyActionNote` | Une ligne qui dit pourquoi, au-dessus de l’action. Sur une page courte centrée (connexion `SchoolSignInLanding`, verrou `AppLock`), la barre suit la colonne du contenu : `maxWidth: DrivyLayout.narrowColumn`. |
 | Résultat inconnu | `DrivyPendingRequest` | « Demande à vérifier » → « Vérifier auprès de l’école » → « Renvoyer la même demande » → référence repliée. |
 | Carte sans position | `DrivyMapPlaceholder` | Jamais une carte vide, jamais une vue de pays. Aujourd’hui : sans autorisation de localisation, le placeholder remplace la carte ; la caméra se replie sur `.automatic`, plus sur une région de pays. Le point de rendez-vous d’une leçon est un texte, pas une coordonnée : aucune région n’en est déduite. |
-| Statut | `DrivyStatusBadge(title:symbol:tone:)` | Seulement pour l’inhabituel ; symbole + texte + couleur. |
+| Statut | `DrivyStatusBadge(title:symbol:tone:)` | Seulement pour l’inhabituel ; symbole + texte + couleur. Jamais pour l’état d’une leçon ou d’un trajet dans une ligne : voir `DrivyRowNote`. |
 
 ### Composants partagés de la passe du 29–30/09/2026
 
@@ -385,7 +385,7 @@ Les styles système `.borderedProminent`, `.bordered` et `.controlSize` ne rempl
 | `drivyFormRows(isSelected:)` | Fond des lignes de Form et de List (surface) ; remplace les `listRowBackground(DrivyTheme.surface)` locaux. Les fonds spéciaux (danger, clair) restent. |
 | `DrivyPrivacyMark(isPrivate:)` | Cadenas privé/partagé, teinte `muted` : le privé n’est jamais alarmant. |
 | `drivyFormSectionHeader()` | En-tête de `Section` de Form et de List : subheadline semi-gras, `muted`, casse d’écriture (`textCase(nil)`). Appliqué à tous les en-têtes natifs ; les `Section("Titre")` deviennent `Section { } header: { Text(...).drivyFormSectionHeader() }`. |
-| `DrivyLessonRow` | En largeur compacte, le badge passe sous le résumé (plus de coupure avant « · ») ; en largeur régulière il reste à droite. Le séparateur de List démarre sur la colonne du texte (`listRowSeparatorLeading`). |
+| `DrivyLessonRow` | L’état inhabituel est un mot de texte semi-gras en tête de la ligne de détail (`state:` pour une leçon, `note:` sinon, `DrivyRowNote`), sans pastille : « À terminer » en encre `warning`, « Annulée » et « Absence » en `muted` avec heure et titre en retrait, heures barrées pour l’annulation. Planifiée, en cours, terminée : aucun libellé. Le séparateur de List démarre sur la colonne du texte (`listRowSeparatorLeading`). |
 | `DrivyReplayTransport` | Une seule rangée dans une colonne de 380 pt : boutons de 48 pt (lecture 60 pt), espacement 4 pt, 276 pt au total ; repli sur deux rangées seulement en dessous. |
 | `DrivyMapPlaceholder(isSearching:)` | Emplacement GPS sans position inventée ; pulsation pendant la recherche, fixe sous Réduire les animations. |
 | `DrivyElevation` et `drivyShadow` | Ombre douce à deux couches issue de `DrivyTheme.shadow`. |
@@ -419,7 +419,7 @@ Un contrôle réagit sans changer d’identité : même taille de libellé, mêm
 - **VoiceOver** : icône seule = `accessibilityLabel` ; icône décorative = `accessibilityHidden(true)` ; rangée = un élément (`.combine`) ; libellé/valeur = `accessibilityLabel` + `accessibilityValue` ; titres de section avec `.isHeader` ; sélection avec `.isSelected` ; chronologie du replay = un élément ajustable. Les erreurs d’un champ sont un élément lisible, pas seulement un indice.
 - Ne jamais renommer un `accessibilityIdentifier` existant (tests UI).
 - **Contraste** : paires de tokens calculées au 29 septembre (`proofs/ui-shared-contrast-20260929.json`) : texte 4,5:1, contrôle graphique 3:1. Pas d’opacité appliquée à un texte ou à un bouton entier (elle a déjà fait passer `danger` sous 4,5:1). Contraste réel sur Liquid Glass : non vérifié.
-- Couleur jamais seule : un état = symbole + texte + couleur.
+- Couleur jamais seule : un état porte toujours son mot ; un badge ajoute symbole et couleur, une ligne de leçon se contente du mot et de son encre.
 - Aucun résultat VoiceOver, GPS ou haptique ne se déduit du simulateur ; il se qualifie sur appareil et se consigne dans `STATUS.md`.
 
 ## Mouvement
@@ -505,7 +505,7 @@ Registre (décidé le 29/09/2026) : tutoiement partout où l’app s’adresse �
 - Ne pas utiliser de dégradé, de thème vitre global ni de vitre sur un formulaire.
 - Ne pas cacher une commande dans un seul geste de balayage.
 - Ne pas colorer en rouge un état normal (Complet, Sans GPS, refus GPS).
-- Faire : tokens partout, une action primaire à la fois, statut en symbole + texte + couleur, composants `Drivy*` partagés.
+- Faire : tokens partout, une action primaire à la fois, statut toujours écrit en mots (badge avec symbole seulement hors des lignes de leçon), composants `Drivy*` partagés.
 
 ## Écarts constatés
 
@@ -552,3 +552,12 @@ Relevé factuel du 29 septembre 2026 sur la branche `codex/revue-integration-202
 24. **Moyenne — deux mots pour l’absence de niveau.** « Non observé » dans le bilan (`SchoolLessonReportUI/SchoolLessonReportView.swift:607`) contre « Pas encore vu » dans la progression (`SchoolTrainingUI/SchoolTrainingView.swift:221`).
 25. **Basse — formats de date dispersés.** `SchoolDateFormat` n’est employé que par l’agenda ; les autres écrans créent leur propre `DateFormatter` (`SchoolCaptureUI/SchoolCapturePreparationView.swift:385`, `:391`, `:457`, `SchoolAgendaUI/SchoolPlanningView.swift:330`, `SchoolTrainingUI/SchoolTrainingView.swift:280`, `SchoolObservationUI/SchoolObservationWorkspace.swift:102`) ; ce dernier affiche des secondes (`timeStyle = .medium`, ligne 104).
 26. **Moyenne — registre de l’élève (résolu le 29/09/2026).** Tutoiement partout ; les composants partagés, `Info.plist` et le message d’invitation web sont tutoyés, les écrans School* suivent leur passe dédiée.
+
+
+## Passe du 5 octobre 2026 (soir) — dossier, fiche de leçon, bilan
+
+- **Dossier** : un seul groupe « Leçons » / « Progression » quel que soit le nombre de formations ; les permis se lisent en une ligne sous le nom (« Permis A, B (terminée) »). Le filtre par permis vit dans chaque page ; en Progression, « Tous » aligne une section par permis, sans score global.
+- **Fiche de leçon** : le contenu suit le statut. L’état inhabituel est un mot de texte en tête (`lesson-state`), jamais une pastille ni une confirmation verte. Les objectifs prévus restent lisibles après la leçon. Pour le moniteur, une leçon terminée s’ouvre en lecture.
+- **Trajet** : la carte porte sa seule commande, un bouton lecture (`play.fill`, 48 pt, vitre des commandes de carte) en bas à droite ; avec plusieurs trajets il ouvre leur liste.
+- **Rédaction du bilan** : parcours poussé dans la pile de la fiche, étapes Trajet (ou Observations), Compétences, Bilan ; une étape sans contenu est omise. Titre de l’étape et « 2 sur 3 » dans la barre, retour système, « Continuer » en secondaire, action finale en primaire à la dernière étape seulement. À partir de 900 pt hors grand texte : un écran en deux colonnes, mêmes sections, même bouton.
+- **Lignes de compte et de profil** : pas de symbole de tête.
