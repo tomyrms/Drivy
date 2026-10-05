@@ -26,8 +26,11 @@ struct SchoolLessonCompletionSheet: View {
                                 isSubmitting = false
                             }
                         } label: {
-                            Text("J’ai vu le permis d’élève")
+                            // Le geste fait les deux : le contrôle du permis est enregistré pour la formation,
+                            // puis la leçon est terminée. Le libellé nomme l’un et l’autre.
+                            Text("Enregistrer le permis vu et terminer la leçon")
                                 .font(.body.weight(.semibold))
+                                .multilineTextAlignment(.leading)
                                 .frame(minHeight: 44)
                         }
                         .disabled(!model.canMutate || isSubmitting)

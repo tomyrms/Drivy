@@ -42,6 +42,11 @@ import Observation
     private(set) var reportSaveConfirmed = false
     private(set) var pendingReviewed = false
     private(set) var needsReload = true
+    /// Premier envoi d’une demande, juste après le geste : bref, il ne se présente pas comme une demande à vérifier.
+    private(set) var isFirstSend = false
+    /// L’école vient de confirmer un contenu qu’aucune relecture n’a encore appliqué. La saisie attend cette
+    /// relecture : faite avant, elle se comparerait à la version d’avant l’envoi et passerait pour un conflit.
+    private(set) var awaitsRereadAfterWrite = false
     var goals: [SchoolLessonGoal] = []
     var administrativeNote = ""
     var wishText = ""
@@ -55,6 +60,7 @@ import Observation
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
     @ObservationIgnored private var storageAccessible = false
+    @ObservationIgnored private var waiters: [CheckedContinuation<Void, Never>] = []
 
     init(scope: SchoolCommandScope, membership: SchoolMembership, lessonID: UUID, client: SchoolLessonReportClient,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(), notifications: NotificationCenter = .default) {
@@ -66,6 +72,19 @@ import Observation
     var canReadSharedReport: Bool { isAuthor || isOwnLearner || membership.roles.contains("INSTRUCTOR") }
     var replayableCaptures: [SchoolCaptureSession] { captures.filter(SchoolTripsWorkspace.isReplayable) }
     var canMutate: Bool { !invalidated && !isLoading && !isBusy && !needsReload && storageAccessible && pending == nil }
+    /// Réglage de partage tout juste demandé, en cours d’envoi : la saisie n’en dépend pas.
+    private var isSendingSharing: Bool { isBusy && isFirstSend && pending?.kind == .updateLessonSharing }
+    /// Saisie possible. Une relecture silencieuse ou l’envoi d’un réglage de partage ne ferment rien à l’écran ;
+    /// seul un état qui dure le fait : accès retiré, conflit à relire, stockage fermé, demande à vérifier,
+    /// contenu en cours d’enregistrement. L’envoi d’une commande reste gardé par `canMutate`.
+    var acceptsInput: Bool {
+        guard !invalidated, !needsReload, storageAccessible, !awaitsRereadAfterWrite else { return false }
+        return pending == nil ? !isBusy : isSendingSharing
+    }
+    /// Demande restée en attente après un envoi sans réponse sûre. Le premier envoi, en cours, n’en est pas une.
+    var pendingAwaitsReview: Bool { pending != nil && !(isBusy && isFirstSend) }
+    /// Envoi qui retient la fiche jusqu’à son résultat ; un réglage de partage, bref, ne la retient pas.
+    var holdsScreen: Bool { isBusy && !isSendingSharing }
     var validTexts: Bool { [workedOn, observationText, nextStep].allSatisfy { $0.unicodeScalars.count <= 4_000 } }
     var preparationValid: Bool {
         goals.count <= 3 && administrativeNote.unicodeScalars.count <= 4_000 && goals.allSatisfy {
@@ -116,7 +135,7 @@ import Observation
         guard let lesson else { return (now.addingTimeInterval(-3_000), now) }
         return SchoolLessonHubRules.completionTimes(lesson: lesson, captures: captures, now: now)
     }
-    /// « J’ai vu le permis d’élève » : grant `permit_review` du moniteur de la leçon ; l’affectation est relue par le serveur.
+    /// Permis d’élève vu : grant `permit_review` du moniteur de la leçon ; l’affectation est relue par le serveur.
     var mayRecordPermit: Bool {
         isAuthor && membership.grants.contains("permit_review") && !permitReviewDenied && !permitRecorded
             && lesson?.status == "PLANNED" && training != nil && training?.id == lesson?.trainingId
@@ -176,6 +195,19 @@ import Observation
         sharing = nil; lessonObservations = []; track = []; trackAnchors = [:]
         training = nil; account = nil; currentLevels = [:]; captures = []; permitRecorded = false; permitReviewDenied = false
         isLoading = false; isBusy = false; storageAccessible = false; revisionsError = nil; reportSaveConfirmed = false
+        isFirstSend = false; awaitsRereadAfterWrite = false
+        wake()
+    }
+    /// Attend la fin de la relecture ou de l’envoi en cours. Un appui fait pendant ce bref passage n’est ni grisé
+    /// ni perdu : la commande part ensuite, sur les versions relues, une à la fois.
+    func settled() async {
+        while !invalidated, isLoading || isBusy { await withCheckedContinuation { waiters.append($0) } }
+    }
+    private func wake() {
+        guard !isLoading, !isBusy else { return }
+        let waiting = waiters
+        waiters.removeAll()
+        for waiter in waiting { waiter.resume() }
     }
     private struct DraftContent: Equatable {
         let id: UUID
@@ -201,7 +233,9 @@ import Observation
     func load(discardingEdits: Bool = false) async {
         guard !invalidated, !isBusy else { return }
         generation = UUID(); let request = generation
-        isLoading = true; needsReload = true; errorMessage = nil; revisionsError = nil; information = nil; pendingReviewed = false
+        // Une relecture garde l’état affiché : `needsReload`, les notes et la saisie ne changent qu’à son résultat.
+        isLoading = true; errorMessage = nil; pendingReviewed = false
+        defer { wake() }
         do { pending = try outbox.pending(for: scope); storageAccessible = true }
         catch { storageAccessible = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         do {
@@ -321,19 +355,25 @@ import Observation
             competencies = curriculumRead.value ?? []
             currentLevels = Dictionary((progressRead.value?.items ?? []).map { ($0.competencyId, $0) }, uniquingKeysWith: { first, _ in first })
             lessonObservations = (observationsRead.value ?? []).sorted { ($0.observedAt ?? "") < ($1.observedAt ?? "") }
-            sharing = sharingRead.value; optimisticSharing = nil
+            // Le réglage voulu reste affiché jusqu’à la fin de son propre envoi (`updateSharing`).
+            sharing = sharingRead.value
             track = trackRead.value?.segments ?? []; trackAnchors = trackRead.value?.pointsByAnchor ?? [:]
             if lesson.status == "COMPLETED" { captures = capturesRead.value ?? [] }
             else if !author { captures = [] }
             let notes = [wishRead.message, preparationRead.message, draftsRead.message, accountRead.message,
                          observationsRead.message, capturesRead.message, trackRead.message, sharingRead.message, curriculumRead.message, progressRead.message].compactMap { $0 }
             information = notes.isEmpty ? nil : notes.joined(separator: "\n\n")
-            isLoading = false; needsReload = conflict
+            isLoading = false; needsReload = conflict; awaitsRereadAfterWrite = false
             if conflict {
                 errorMessage = "Ta saisie est conservée. Le contenu enregistré a changé ou n’a pas pu être relu. Copie ton texte si nécessaire, puis actualise avant d’enregistrer."
             }
+            wake()
             if author && lesson.status == "PLANNED" { await refreshCaptures() }
-        } catch { guard request == generation, !invalidated else { return }; isLoading = false; fail(error) }
+        } catch {
+            guard request == generation, !invalidated else { return }
+            // Relecture échouée : l’état de l’école n’est plus connu, toute écriture attend une relecture réussie.
+            isLoading = false; needsReload = true; information = nil; revisionsError = nil; fail(error)
+        }
     }
     /// Lecture discrète des trajets de la leçon : une panne laisse simplement l’horaire prévu au constat.
     func refreshCaptures() async {
@@ -359,12 +399,15 @@ import Observation
         }
     }
     @discardableResult func savePreparation() async -> Bool {
-        guard let preparation, canMutate, isAuthor, preparationValid else { return false }
+        await settled()
+        // Relu après l’attente : un second appui n’envoie pas deux fois les mêmes objectifs.
+        guard let preparation, canMutate, isAuthor, preparationValid, preparationChanged else { return false }
         let operation = UUID()
         return await prepare(SchoolSavePreparation(operationId: operation, goals: goals, administrativeCheckNote: administrativeNote), id: operation, kind: .savePreparation, version: preparation.version, resourceID: preparation.id, routeID: lessonID)
     }
     func saveWish() async {
-        guard let wish, canMutate, isOwnLearner, wishText.unicodeScalars.count <= 500 else { return }
+        await settled()
+        guard let wish, canMutate, isOwnLearner, wishChanged, wishText.unicodeScalars.count <= 500 else { return }
         let operation = UUID()
         _ = await prepare(SchoolSaveWish(operationId: operation, text: wishText), id: operation, kind: .saveWish, version: wish.version, resourceID: wish.id, routeID: wish.trainingId)
     }
@@ -401,7 +444,7 @@ import Observation
               request == generation, !invalidated else { return }
         lessonObservations = values.sorted { ($0.observedAt ?? "") < ($1.observedAt ?? "") }
     }
-    /// « J’ai vu le permis d’élève » (AP30) : décision APPROVED sur examen physique, sans date de validité inventée.
+    /// Permis d’élève vu (AP30) : décision APPROVED sur examen physique, sans date de validité inventée.
     /// La demande est chiffrée dans la file avant l’envoi ; la leçon est relue après la preuve de l’école.
     func recordPermitSeen() async -> Bool {
         guard let lesson, let training, mayRecordPermit, canMutate, completionNeedsReason else { return false }
@@ -412,34 +455,53 @@ import Observation
         return recorded
     }
     @discardableResult func saveDraft() async -> Bool {
+        await settled()
         guard let draft, canMutate, isAuthor, validTexts, observationsValid else { return false }
         let operation = UUID()
         return await prepare(SchoolSaveReport(operationId: operation, workedOn: workedOn, observationText: observationText, nextStep: nextStep, observations: observations), id: operation, kind: .saveReportDraft, version: draft.version, resourceID: draft.id)
     }
     /// Garder pour soi le bilan, le trajet ou certaines observations ; tout le reste est vu par l’élève.
+    /// Le réglage se lit aussitôt. Demandé pendant une relecture ou un autre envoi, il attend son tour puis part
+    /// de l’état confirmé par l’école : aucun interrupteur ne se grise, aucun geste n’est perdu ni envoyé deux fois.
     func updateSharing(reportPrivate: Bool? = nil, captureHidden: Bool? = nil, observation: UUID? = nil, observationPrivate: Bool = false) async {
-        guard let sharing, canMutate, isAuthor else { return }
-        var hidden = sharing.privateObservationIds
+        guard let shown = sharing, acceptsInput, isAuthor else { return }
+        let operation = UUID()
+        optimisticSharing = sharingRequest(operation,
+            reportPrivate: reportPrivate ?? optimisticSharing?.reportPrivate ?? shown.reportPrivate,
+            captureHidden: captureHidden ?? optimisticSharing?.captureHidden ?? shown.captureHidden,
+            privateIDs: optimisticSharing?.privateObservationIds ?? shown.privateObservationIds,
+            observation: observation, observationPrivate: observationPrivate)
+        await settled()
+        if let confirmed = sharing, canMutate, isAuthor {
+            let requested = sharingRequest(operation, reportPrivate: reportPrivate ?? confirmed.reportPrivate,
+                captureHidden: captureHidden ?? confirmed.captureHidden, privateIDs: confirmed.privateObservationIds,
+                observation: observation, observationPrivate: observationPrivate)
+            _ = await prepare(requested, id: operation, kind: .updateLessonSharing, version: confirmed.version, resourceID: lessonID)
+        }
+        // Un réglage demandé entre-temps garde son affichage : seul le dernier geste efface l’état voulu.
+        if optimisticSharing?.operationId == operation { optimisticSharing = nil }
+    }
+    private func sharingRequest(_ operation: UUID, reportPrivate: Bool, captureHidden: Bool, privateIDs: [UUID],
+                                observation: UUID?, observationPrivate: Bool) -> SchoolUpdateSharing {
+        var hidden = privateIDs
         if let observation {
             hidden.removeAll { $0 == observation }
             if observationPrivate { hidden.append(observation) }
         }
-        let operation = UUID()
-        let requested = SchoolUpdateSharing(operationId: operation, reportPrivate: reportPrivate ?? sharing.reportPrivate,
-            captureHidden: captureHidden ?? sharing.captureHidden, privateObservationIds: hidden)
-        optimisticSharing = requested
-        _ = await prepare(requested, id: operation, kind: .updateLessonSharing, version: sharing.version, resourceID: lessonID)
-        optimisticSharing = nil
+        return SchoolUpdateSharing(operationId: operation, reportPrivate: reportPrivate, captureHidden: captureHidden,
+            privateObservationIds: hidden)
     }
     func retryPending() async { _ = await transmit(firstAttempt: false) }
     func verifyPending() async {
         guard let pending, !invalidated, !isLoading, !isBusy else { return }
-        let request = generation; isBusy = true; errorMessage = nil
+        let request = generation; isBusy = true; isFirstSend = false; errorMessage = nil
+        defer { wake() }
         do {
             _ = try await client.receipt(for: pending)
             try outbox.remove(pending)
             guard request == generation, !invalidated else { return }
             self.pending = nil; isBusy = false; confirmation = "L’école confirme l’enregistrement de la demande."
+            if pending.kind != .updateLessonSharing { awaitsRereadAfterWrite = true }
             announceConfirmedChange(pending)
             if confirmsThisReport(pending) { reportSaveConfirmed = true; return }
             await load()
@@ -458,13 +520,15 @@ import Observation
     }
     private func transmit(firstAttempt: Bool) async -> Bool {
         guard canRetry, let command = pending else { return false }
-        let request = generation; isBusy = true; errorMessage = nil; confirmation = nil
+        let request = generation; isBusy = true; isFirstSend = firstAttempt; errorMessage = nil; confirmation = nil
+        defer { wake() }
         do {
             try outbox.save(command)
             let confirmedSharing = try await client.send(command)
             try outbox.remove(command)
             guard request == generation, !invalidated else { return false }
             pending = nil; isBusy = false
+            if command.kind != .updateLessonSharing { awaitsRereadAfterWrite = true }
             announceConfirmedChange(command)
             if confirmsThisReport(command) { reportSaveConfirmed = true; return true }
             confirmation = Self.confirmationText(for: command.kind)

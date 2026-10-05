@@ -24,6 +24,8 @@ struct SchoolObservationEditor: Identifiable {
     private(set) var isLoading = false
     private(set) var isBusy = false
     private(set) var loaded = false
+    /// Premier envoi d’une demande, juste après le geste : bref, il ne se présente pas comme une demande à vérifier.
+    private(set) var isFirstSend = false
     private(set) var accessRevoked = false
     private(set) var errorMessage: String?
     private(set) var competenciesMessage: String?
@@ -33,6 +35,8 @@ struct SchoolObservationEditor: Identifiable {
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var storageAccessible = false
+    /// Enregistreur du dernier « Signaler » ouvert depuis cet écran.
+    @ObservationIgnored private var live: SchoolLiveObservationRecorder?
 
     init(scope: SchoolCommandScope, lessonID: UUID, client: SchoolObservationClient,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
@@ -45,6 +49,20 @@ struct SchoolObservationEditor: Identifiable {
     }
     var canAdd: Bool {
         guard canMutate, let lesson, observations.count < 100 else { return false }
+        return lesson.status == "PLANNED" || (lesson.status == "COMPLETED" && draft?.basePublicationVersion == lesson.publicationVersion)
+    }
+    /// Signalement tout juste posé depuis cet écran, encore en cours d’envoi.
+    private var liveSendInFlight: Bool { live?.isSettlingGesture == true }
+    /// Demande restée en attente, sans envoi en cours : elle seule se montre et ferme les modifications.
+    var pendingAwaitsReview: Bool { pending != nil && !(isBusy && isFirstSend) && !liveSendInFlight }
+    /// Ce que l’écran présente. Une relecture ou un envoi bref laissent en place la liste, ses menus et la barre
+    /// d’action ; l’écriture elle-même reste gardée par `canMutate`.
+    var acceptsChanges: Bool {
+        loaded && !accessRevoked && storageAccessible && !pendingAwaitsReview
+            && ["PLANNED", "COMPLETED"].contains(lesson?.status ?? "")
+    }
+    var acceptsAdd: Bool {
+        guard acceptsChanges, let lesson, observations.count < 100 else { return false }
         return lesson.status == "PLANNED" || (lesson.status == "COMPLETED" && draft?.basePublicationVersion == lesson.publicationVersion)
     }
     var canRetry: Bool {
@@ -72,7 +90,8 @@ struct SchoolObservationEditor: Identifiable {
     func begin(marker: Bool) -> SchoolObservationEditor? {
         // Date() est prise avant tout réseau ou présentation de feuille.
         let instant = Date()
-        guard canAdd, let lesson, !marker || lesson.status == "PLANNED" else { return nil }
+        // Une relecture n’empêche pas d’ouvrir la saisie : l’enregistrement reste gardé par `canMutate`.
+        guard acceptsAdd, !isBusy, let lesson, !marker || lesson.status == "PLANNED" else { return nil }
         if lesson.status == "PLANNED" {
             let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             return .init(original: nil, observedAt: formatter.string(from: instant), origin: "LIVE", draftID: nil, marker: marker)
@@ -80,7 +99,8 @@ struct SchoolObservationEditor: Identifiable {
         return .init(original: nil, observedAt: nil, origin: "REVIEW", draftID: draft?.id, marker: false)
     }
     func edit(_ observation: SchoolObservation) -> SchoolObservationEditor? {
-        guard canMutate, observations.contains(where: { $0.id == observation.id && $0.version == observation.version }) else { return nil }
+        guard acceptsChanges, !isBusy,
+              observations.contains(where: { $0.id == observation.id && $0.version == observation.version }) else { return nil }
         return .init(original: observation, observedAt: observation.observedAt, origin: observation.origin ?? "REVIEW",
                      draftID: observation.draftId, marker: observation.isMarker)
     }
@@ -89,14 +109,19 @@ struct SchoolObservationEditor: Identifiable {
         return competencies.first(where: { $0.id == id })?.displayLabel ?? "Compétence du référentiel"
     }
     func liveRecorder() -> SchoolLiveObservationRecorder? {
-        guard canAdd, lesson?.status == "PLANNED" else { return nil }
-        return SchoolLiveObservationRecorder(scope: scope, lessonID: lessonID, client: client, outbox: outbox,
+        guard acceptsAdd, !isBusy, lesson?.status == "PLANNED" else { return nil }
+        // Le signalement précédent part encore : le même enregistreur ouvre la palette et fait attendre la seule
+        // écriture suivante, comme pendant le trajet. Un nouvel enregistreur lirait cette demande comme un blocage.
+        if let live, live.isSettlingGesture, live.acceptsSignal { return live }
+        let recorder = SchoolLiveObservationRecorder(scope: scope, lessonID: lessonID, client: client, outbox: outbox,
             onSettlement: { [weak self] in
                 guard let self, !self.accessRevoked else { return }
                 // onDismiss peut avoir fini sa lecture avant la réponse d’envoi. Cette lecture
                 // crée une nouvelle génération ; aucune réponse antérieure ne peut la remplacer.
                 await self.load()
             })
+        live = recorder
+        return recorder
     }
     func timeLabel(_ value: String?) -> String? {
         guard let value, let date = SchoolLesson.date(value) else { return nil }
@@ -109,12 +134,14 @@ struct SchoolObservationEditor: Identifiable {
         generation = UUID(); accessRevoked = true; loaded = false; isLoading = false; isBusy = false
         lesson = nil; learnerName = ""; observations = []; competencies = []; draft = nil; pending = nil
         storageAccessible = false; confirmation = nil; competenciesMessage = nil; draftMessage = nil
+        isFirstSend = false; live = nil
     }
 
     func load() async {
         guard !accessRevoked, !isBusy else { return }
         generation = UUID(); let request = generation
-        isLoading = true; loaded = false; errorMessage = nil; competenciesMessage = nil; draftMessage = nil
+        // Une relecture garde la liste, ses messages et sa barre d’action : `loaded` ne retombe qu’après un échec.
+        isLoading = true; errorMessage = nil
         do { pending = try outbox.pending(for: scope); storageAccessible = true }
         catch { storageAccessible = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         do {
@@ -126,7 +153,8 @@ struct SchoolObservationEditor: Identifiable {
             // Le référentiel et le brouillon ne conditionnent pas la lecture de la liste privée.
             do {
                 let values = try await client.competencies(scope: scope, trainingID: current.trainingId)
-                guard valid(request) else { return }; competencies = values
+                guard valid(request) else { return }
+                competencies = values; competenciesMessage = nil
             }
             catch {
                 guard valid(request) else { return }
@@ -134,22 +162,29 @@ struct SchoolObservationEditor: Identifiable {
                 competencies = []; competenciesMessage = "Le référentiel est indisponible. Les repères simples restent possibles sans choisir de compétence."
             }
             guard valid(request) else { return }
-            draft = nil
+            // Le brouillon connu reste en place pendant sa relecture : la barre d’action ne disparaît pas entre-temps.
             if current.status == "COMPLETED" {
                 do {
                     let values = try await client.agenda.reportClient.drafts(schoolID: scope.schoolID, lessonID: lessonID)
                     guard valid(request) else { return }
                     guard values.count <= 1, values.allSatisfy({ $0.authorMembershipId == scope.membershipID }) else { throw SchoolObservationFailure.invalidResponse }
-                    draft = values.first
+                    draft = values.first; draftMessage = nil
                 } catch {
                     guard valid(request) else { return }
                     if isRevoked(error) { throw error }
+                    draft = nil
                     draftMessage = "Le brouillon privé n’a pas pu être relu. Les observations enregistrées restent consultables."
                 }
+            } else {
+                draft = nil; draftMessage = nil
             }
             guard valid(request) else { return }
             isLoading = false; loaded = true
-        } catch { guard valid(request) else { return }; isLoading = false; fail(error) }
+        } catch {
+            guard valid(request) else { return }
+            // Relecture échouée : l’état de l’école n’est plus connu, les modifications attendent une relecture réussie.
+            isLoading = false; loaded = false; competenciesMessage = nil; draftMessage = nil; fail(error)
+        }
     }
 
     func save(_ editor: SchoolObservationEditor, text: String, marker: Bool, competencyID: UUID?, status: SchoolObservationStatus?) async -> Bool {
@@ -184,7 +219,7 @@ struct SchoolObservationEditor: Identifiable {
     }
     func verifyPending() async {
         guard canRetry, let command = rereadPending() else { return }
-        let request = generation; isBusy = true; errorMessage = nil
+        let request = generation; isBusy = true; isFirstSend = false; errorMessage = nil
         do {
             try await client.verifyScope(scope)
             guard valid(request) else { return }
@@ -213,7 +248,7 @@ struct SchoolObservationEditor: Identifiable {
 
     private func submit<Value: Encodable>(_ value: Value, operation: UUID, kind: SchoolCommandKind, resourceID: UUID?, version: Int) async -> Bool {
         guard canMutate else { return false }
-        let request = generation; isBusy = true; errorMessage = nil; confirmation = nil
+        let request = generation; isBusy = true; isFirstSend = true; errorMessage = nil; confirmation = nil
         do {
             let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
             let command = PendingSchoolCommand(id: operation, scope: scope, kind: kind, resourceVersion: version,
@@ -229,7 +264,7 @@ struct SchoolObservationEditor: Identifiable {
     }
     private func transmit(_ command: PendingSchoolCommand, fresh: Bool) async -> Bool {
         guard !accessRevoked, command.scope == scope, command.routeResourceID == lessonID else { return false }
-        let request = generation; isBusy = true; errorMessage = nil; confirmation = nil
+        let request = generation; isBusy = true; isFirstSend = fresh; errorMessage = nil; confirmation = nil
         var sent = false
         do {
             _ = try await authorizedLesson()

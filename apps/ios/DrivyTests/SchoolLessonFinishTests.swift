@@ -11,7 +11,7 @@ import Testing
         #expect(await model.saveDraft())
         #expect(model.reportSaveConfirmed && model.pending == nil && outbox.value == nil)
         let saved = try #require(outbox.saves.first)
-        let body = try #require(JSONSerialization.jsonObject(with: saved.body) as? [String: Any])
+        let body = try #require(try JSONSerialization.jsonObject(with: saved.body) as? [String: Any])
         #expect(body["workedOn"] as? String == "" && body["observationText"] as? String == "" && body["nextStep"] as? String == "")
         #expect(outbox.removals == [saved])
     }
@@ -83,7 +83,7 @@ import Testing
         model.setObservationLevel("INDEPENDENT", for: competency)
         #expect(await model.saveDraft())
         let saved = try #require(outbox.saves.first)
-        let body = try #require(JSONSerialization.jsonObject(with: saved.body) as? [String: Any])
+        let body = try #require(try JSONSerialization.jsonObject(with: saved.body) as? [String: Any])
         let sent = try #require(body["observations"] as? [[String: Any]])
         #expect(sent.count == 1 && sent.first?["competencyId"] as? String == competency.uuidString && sent.first?["level"] as? String == "INDEPENDENT")
         // Après l’enregistrement, la progression est relue pour que le niveau suivant parte du plus récent.
@@ -135,6 +135,74 @@ import Testing
         #expect(model.trainings.count == 1 && model.trainingID == HubFixture.trainingID && model.canStart)
     }
 
+    // MARK: Relectures et réglages de partage
+
+    @Test func aSilentRereadKeepsTheReportOpenAndTheSaveWaitsForItsResult() async throws {
+        let server = LessonFinishServer(), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox: outbox)
+        await model.load()
+        #expect(model.canMutate && model.acceptsInput && !model.needsReload)
+        await server.holdProgress()
+        let reread = Task { await model.load() }
+        try await HubFixture.wait { await server.isHoldingProgress() }
+        // Relecture en cours : l’envoi est fermé, la saisie reste ouverte et aucun état de conflit ne s’affiche.
+        #expect(model.isLoading && !model.canMutate && model.acceptsInput && !model.needsReload && !model.pendingAwaitsReview)
+        model.nextStep = "Saisi pendant la relecture"
+        // L’appui n’est ni perdu ni envoyé sur une version en cours de relecture : il attend.
+        let saving = Task { await model.saveDraft() }
+        await Task.yield()
+        #expect(outbox.saves.isEmpty)
+        await server.releaseProgress()
+        await reread.value
+        let saved = await saving.value
+        #expect(saved && model.reportSaveConfirmed && model.nextStep == "Saisi pendant la relecture")
+        let command = try #require(outbox.saves.first)
+        let body = try #require(try JSONSerialization.jsonObject(with: command.body) as? [String: Any])
+        #expect(body["nextStep"] as? String == "Saisi pendant la relecture")
+        #expect(await server.requests().filter { $0.httpMethod == "PUT" }.count == 1)
+    }
+
+    @Test func sharingChangesKeepTheReportOpenAndAreSentOneAtATime() async throws {
+        let server = LessonFinishServer(sharing: true), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox: outbox)
+        await model.load()
+        #expect(model.sharing?.version == 1 && model.reportShared && model.captureShared)
+        await server.holdSharing()
+        let first = Task { await model.updateSharing(reportPrivate: true) }
+        try await HubFixture.wait { await server.isHoldingSharing() }
+        // Envoi du réglage en cours : il se lit aussitôt, sans griser la saisie ni montrer une demande à vérifier.
+        #expect(model.isBusy && !model.canMutate && model.acceptsInput && !model.pendingAwaitsReview && !model.holdsScreen)
+        #expect(!model.reportShared && model.captureShared)
+        model.nextStep = "Saisi pendant le réglage"
+        // Second réglage pendant cet envoi : il se lit aussitôt et attend son tour.
+        let second = Task { await model.updateSharing(captureHidden: true) }
+        try await HubFixture.wait { !model.captureShared }
+        #expect(!model.reportShared && !model.captureShared)
+        #expect(await server.sharingWrites().count == 1)
+        await server.releaseSharing()
+        await first.value
+        await second.value
+        #expect(model.sharing?.reportPrivate == true && model.sharing?.captureHidden == true && model.sharing?.version == 3)
+        #expect(model.optimisticSharing == nil && !model.reportShared && !model.captureShared)
+        #expect(model.nextStep == "Saisi pendant le réglage" && model.canMutate && model.acceptsInput && outbox.value == nil)
+        let writes = await server.sharingWrites()
+        // Le second réglage part de l’état confirmé par le premier.
+        #expect(writes.count == 2 && writes.last?.value(forHTTPHeaderField: "If-Match") == "\"2\"")
+    }
+
+    @Test func aReportLeftWithoutAnswerIsShownAsARequestToVerifyAndLocksTheForm() async {
+        let server = LessonFinishServer()
+        let model = workspace(server, outbox: ConfigurationOutboxStub())
+        await model.load()
+        await server.setReceiptAvailable(false)
+        model.nextStep = "À conserver"
+        #expect(!(await model.saveDraft()))
+        #expect(model.pending != nil && model.pendingAwaitsReview && !model.acceptsInput && !model.canMutate && !model.holdsScreen)
+        await server.setReceiptAvailable(true)
+        await model.verifyPending()
+        #expect(model.reportSaveConfirmed && !model.pendingAwaitsReview)
+    }
+
     private func workspace(_ server: LessonFinishServer, outbox: ConfigurationOutboxStub, roles: [String] = ["INSTRUCTOR"]) -> SchoolLessonReportWorkspace {
         let membership = SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: HubFixture.schoolID,
             schoolName: "École de test", roles: roles, grants: ["permit_review"], accessEpoch: 1)
@@ -151,6 +219,7 @@ actor LessonFinishServer: SchoolHTTPTransport {
     private let emptyContext: Bool
     private let progressLevel: String?
     private let progressStatus: Int
+    private let sharingEnabled: Bool
     static let progressCompetency = UUID(uuidString: "70000000-0000-4000-8000-0000000000c1")!
     private var receiptAvailable = true
     private var rejectSave = false
@@ -158,9 +227,27 @@ actor LessonFinishServer: SchoolHTTPTransport {
     private var receiptResourceID: UUID?
     private var recorded: [URLRequest] = []
     private let draftID = UUID(uuidString: "70000000-0000-4000-8000-000000000050")!
-    init(roles: [String] = ["INSTRUCTOR"], emptyContext: Bool = false, progressLevel: String? = nil, progressStatus: Int = 200) {
+    private var heldProgress = false, holdingProgress = false
+    private var progressWaiters: [CheckedContinuation<Void, Never>] = []
+    private var heldSharing = false, holdingSharing = false
+    private var sharingWaiters: [CheckedContinuation<Void, Never>] = []
+    private var sharingVersion = 1, reportPrivate = false, captureHidden = false
+    private var sharingOperation: UUID?
+    /// `sharing` : l’école expose le réglage de partage de la leçon (absent par défaut, comme un serveur plus ancien).
+    init(roles: [String] = ["INSTRUCTOR"], emptyContext: Bool = false, progressLevel: String? = nil, progressStatus: Int = 200,
+         sharing: Bool = false) {
         self.roles = roles; self.emptyContext = emptyContext; self.progressLevel = progressLevel; self.progressStatus = progressStatus
+        sharingEnabled = sharing
     }
+    /// Retient la dernière lecture d’une relecture (les niveaux actuels), juste avant son application.
+    func holdProgress() { heldProgress = true }
+    func releaseProgress() { heldProgress = false; let values = progressWaiters; progressWaiters = []; for item in values { item.resume() } }
+    func isHoldingProgress() -> Bool { holdingProgress }
+    /// Retient l’écriture d’un réglage de partage.
+    func holdSharing() { heldSharing = true }
+    func releaseSharing() { heldSharing = false; let values = sharingWaiters; sharingWaiters = []; for item in values { item.resume() } }
+    func isHoldingSharing() -> Bool { holdingSharing }
+    func sharingWrites() -> [URLRequest] { recorded.filter { $0.httpMethod == "PUT" && $0.url?.path.hasSuffix("/sharing") == true } }
     func setReceiptAvailable(_ value: Bool) { receiptAvailable = value }
     func setRejectSave(_ value: Bool) { rejectSave = value }
     func setConfirmedOperation(_ id: UUID, resourceID: UUID) { operation = id; receiptResourceID = resourceID }
@@ -191,6 +278,11 @@ actor LessonFinishServer: SchoolHTTPTransport {
             return try ok(data as! [String: Any])
         }
         if parts.last == "progress" {
+            if heldProgress {
+                holdingProgress = true
+                await withCheckedContinuation { progressWaiters.append($0) }
+                holdingProgress = false
+            }
             if progressStatus != 200 { return problem(progressStatus, "UNAVAILABLE") }
             let items: [[String: Any]] = progressLevel.map { level in
                 [["competencyId": Self.progressCompetency.uuidString, "label": "Observation", "level": level, "context": "Leçon précédente",
@@ -198,6 +290,26 @@ actor LessonFinishServer: SchoolHTTPTransport {
             } ?? []
             return try ok(["trainingId": HubFixture.trainingID.uuidString, "items": items, "unobservedCompetencyIds": [] as [String],
                 "computedAt": "2026-09-28T13:30:00Z"])
+        }
+        if sharingEnabled, parts.suffix(3) == ["lessons", HubFixture.lessonID.uuidString.lowercased(), "sharing"] {
+            if request.httpMethod == "PUT" {
+                if heldSharing {
+                    holdingSharing = true
+                    await withCheckedContinuation { sharingWaiters.append($0) }
+                    holdingSharing = false
+                }
+                let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+                sharingOperation = UUID(uuidString: body?["operationId"] as? String ?? "")
+                reportPrivate = body?["reportPrivate"] as? Bool ?? reportPrivate
+                captureHidden = body?["captureHidden"] as? Bool ?? captureHidden
+                sharingVersion += 1
+            }
+            return try ok(["lessonId": HubFixture.lessonID.uuidString, "schoolId": HubFixture.schoolID.uuidString, "version": sharingVersion,
+                "reportPrivate": reportPrivate, "captureHidden": captureHidden, "privateObservationIds": [] as [String]])
+        }
+        if parts.dropLast().last == "operations", let sharingOperation, parts.last == sharingOperation.uuidString.lowercased() {
+            return try ok(["operationId": sharingOperation.uuidString, "commandType": "UPDATE_LESSON_SHARING", "resourceType": "LessonSharing",
+                "resourceId": HubFixture.lessonID.uuidString, "committedAt": "2026-09-28T13:30:00Z", "resourceVersion": sharingVersion])
         }
         if parts.last == "report-drafts" {
             let draft = SchoolReportDraft(id: draftID, schoolId: HubFixture.schoolID, lessonId: HubFixture.lessonID,

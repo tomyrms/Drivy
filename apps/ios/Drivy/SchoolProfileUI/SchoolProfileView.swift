@@ -65,7 +65,8 @@ struct SchoolProfileView: View {
                         attemptedSave = true
                         Task { _ = await model.saveProfileAfterConfirmation() }
                     } label: {
-                        DrivyBusyLabel(title: "Enregistrer les modifications", isBusy: model.isBusy)
+                        // Même indicateur de l’envoi jusqu’à la relecture qui en applique la réponse.
+                        DrivyBusyLabel(title: "Enregistrer les modifications", isBusy: model.isSavingProfile)
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle()).disabled(!model.canSaveProfile)
                     .accessibilityIdentifier("profile-save")
@@ -121,7 +122,7 @@ struct SchoolProfileView: View {
             } else { LabeledContent("Nom", value: profile.lastName ?? "À compléter") }
         } header: { Text("Identité scolaire").drivyFormSectionHeader() }
             .drivyFormRows()
-        .disabled(!model.canMutate)
+        .disabled(!model.acceptsInput)
     }
 
     @ViewBuilder private var contactSection: some View {
@@ -140,7 +141,7 @@ struct SchoolProfileView: View {
                 }
             } header: { Text("Contacts").drivyFormSectionHeader() }
                 .drivyFormRows()
-            .disabled(!model.canMutate)
+            .disabled(!model.acceptsInput)
         }
     }
     private var birthSection: some View {
@@ -154,7 +155,7 @@ struct SchoolProfileView: View {
             fieldExplanation(.birthDate)
         } header: { Text("Date de naissance").drivyFormSectionHeader() }
             .drivyFormRows()
-        .disabled(!model.canMutate)
+        .disabled(!model.acceptsInput)
     }
     private var addressSection: some View {
         Section {
@@ -170,7 +171,7 @@ struct SchoolProfileView: View {
             fieldExplanation(.postalAddress)
         } header: { Text("Adresse postale").drivyFormSectionHeader() }
             .drivyFormRows()
-        .disabled(!model.canMutate)
+        .disabled(!model.acceptsInput)
     }
     /// Le serveur attend un code à deux lettres : la personne choisit un pays, elle ne tape pas un code.
     /// Le pays de la région de l’appareil vient en tête ; rien n’est présélectionné. Un code déjà enregistré
@@ -310,7 +311,8 @@ struct SchoolProfileStatusSections: View {
                 Section { DrivyFormMessage(text: success) }
                     .drivyFormRows()
             }
-            if let pending = model.pending {
+            // Réservée à une demande restée en attente : un enregistrement normal, en cours, ne la montre pas.
+            if let pending = model.pending, model.pendingAwaitsReview {
                 Section {
                     DrivyPendingRequest(
                         message: "Une nouvelle modification sera possible après vérification du résultat.",

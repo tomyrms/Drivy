@@ -33,9 +33,26 @@ struct SchoolLessonPriceLine: Equatable, Identifiable, Sendable {
     var id: String { kind.rawValue }
 }
 
+/// Personne présentée en tête de la fiche d’une leçon, avec son rôle quand le nom seul ne le dit pas.
+struct SchoolLessonHeaderIdentity: Equatable, Sendable {
+    let name: String
+    let role: String?
+}
+
 /// Règles de l’écran unique d’une leçon. Toutes sont relues par le serveur ;
 /// elles évitent seulement de proposer une action qu’il refuserait à coup sûr.
 enum SchoolLessonHubRules {
+    /// L’équipe lit en tête le nom de l’élève. L’élève qui ouvre sa propre leçon connaît le sien : c’est son
+    /// moniteur qui l’informe. Un compte seulement élève n’affiche donc jamais son nom, même avant la lecture
+    /// (aucun titre ne change sous les yeux) ; sans nom de moniteur fourni par l’école, rien n’est affiché ni deviné.
+    static func headerIdentity(learnerName: String, instructorName: String?, isOwnLearner: Bool,
+                               roles: [String]) -> SchoolLessonHeaderIdentity? {
+        guard isOwnLearner || (roles.contains("LEARNER") && !mayManage(roles)) else {
+            return SchoolLessonHeaderIdentity(name: learnerName, role: nil)
+        }
+        return instructorName.map { SchoolLessonHeaderIdentity(name: $0, role: "Moniteur") }
+    }
+
     /// Le prix d’une leçon planifiée ou réalisée : une ligne. L’école n’enregistre aucun paiement, donc rien ne
     /// s’intitule « à payer » ; le compte d’une leçon réalisée porte le prix convenu et ne se relit à part que
     /// si l’école l’a corrigé. Une leçon annulée ou manquée n’affiche aucun prix : rien n’y est retenu.

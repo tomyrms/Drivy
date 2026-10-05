@@ -61,7 +61,9 @@ struct SchoolLessonReportView: View {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Fermer") {
                     if hasUnsavedChanges { confirmsDiscard = true } else { model?.invalidate(); dismiss() }
-                }.disabled(model?.isBusy == true || isCompletingLesson)
+                }
+                // Un réglage de partage, bref, ne grise pas « Fermer » : sa demande reste dans la file chiffrée.
+                .disabled(model?.holdsScreen == true || isCompletingLesson)
             }
         }
         .interactiveDismissDisabled(hasUnsavedChanges || model?.isBusy == true || isCompletingLesson)
@@ -273,10 +275,13 @@ private struct SchoolLessonReportContent: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { if model.hasLocalEdits { showReloadConfirmation = true } else { Task { await model.load() } } } label: {
+                Button {
+                    // Relecture ou envoi déjà en cours : l’appui est ignoré, le bouton ne se grise pas.
+                    guard !model.isBusy, !model.isLoading else { return }
+                    if model.hasLocalEdits { showReloadConfirmation = true } else { Task { await model.load() } }
+                } label: {
                     Label("Actualiser", systemImage: "arrow.clockwise")
                 }
-                .disabled(model.isBusy || model.isLoading)
             }
             ToolbarItem(placement: .topBarTrailing) { lessonMenu(now: now) }
         }
@@ -299,7 +304,7 @@ private struct SchoolLessonReportContent: View {
                 Section { Text(model.retainedEditsText).textSelection(.enabled) } header: { Text("Saisie conservée").drivyFormSectionHeader() }
                     .drivyFormRows()
             }
-            if model.pending != nil { pendingSection }
+            if model.pendingAwaitsReview { pendingSection }
         }
         .drivyFormRows()
     }
@@ -349,9 +354,11 @@ private struct SchoolLessonReportContent: View {
     }
 
     private func beginCompletion() {
-        guard !completionQueued, !isFinishing, model.canMutate, isPlanned, model.isAuthor else { return }
+        guard !completionQueued, !isFinishing, model.acceptsInput, isPlanned, model.isAuthor else { return }
         completionQueued = true
         Task {
+            // Relecture en cours : le constat confirmé attend sa fin au lieu d’être ignoré.
+            await model.settled()
             _ = await finishLesson("")
             completionQueued = false
         }
@@ -387,13 +394,17 @@ private struct SchoolLessonReportContent: View {
 
     // MARK: En-tête
 
-    /// L’élève, puis les faits de la leçon. Un enregistrement en cours se lit dans le bouton qui l’a lancé,
+    /// L’élève (pour l’élève qui lit sa leçon : son moniteur), puis les faits de la leçon. Un enregistrement en cours se lit dans le bouton qui l’a lancé,
     /// pas dans une ligne d’en-tête qui décale toute la fiche puis disparaît.
     private var headerSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                DrivyLearnerIdentity(name: learnerName, variant: .compact)
-                if let lesson = model.lesson { lessonFacts(lesson) }
+        let identity = SchoolLessonHubRules.headerIdentity(learnerName: learnerName,
+            instructorName: model.lesson?.providedInstructorName, isOwnLearner: model.isOwnLearner, roles: model.membership.roles)
+        return Section {
+            if identity != nil || model.lesson != nil {
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                    if let identity { DrivyLearnerIdentity(name: identity.name, detail: identity.role, variant: .compact) }
+                    if let lesson = model.lesson { lessonFacts(lesson) }
+                }
             }
             if model.isLoading && model.lesson == nil {
                 DrivySkeletonRows(count: 4)
@@ -556,7 +567,7 @@ private struct SchoolLessonReportContent: View {
                     DrivyBusyLabel(title: "Enregistrer les objectifs", isBusy: isSending(.savePreparation))
                 }
                 .buttonStyle(DrivyPrimaryButtonStyle())
-                .disabled(!model.canMutate || !model.preparationValid || !model.preparationChanged)
+                .disabled(!model.acceptsInput || !model.preparationValid || !model.preparationChanged)
                 .accessibilityIdentifier("lesson-save-goals")
             }
         }
@@ -576,7 +587,7 @@ private struct SchoolLessonReportContent: View {
                 }
             }
                 .buttonStyle(DrivyPrimaryButtonStyle())
-                .disabled(!model.canMutate || isFinishing)
+                .disabled(!model.acceptsInput || isFinishing)
                 .accessibilityIdentifier("lesson-complete")
         } else {
             // Action alternative sous « Démarrer le trajet » ou « Trajet en cours » : même composant que partout.
@@ -587,7 +598,7 @@ private struct SchoolLessonReportContent: View {
                 }
             }
             .buttonStyle(DrivySecondaryButtonStyle())
-            .disabled(!model.canMutate || isFinishing)
+            .disabled(!model.acceptsInput || isFinishing)
             .accessibilityIdentifier("lesson-complete")
         }
     }
@@ -679,14 +690,17 @@ private struct SchoolLessonReportContent: View {
                             .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
                         }
                         .buttonStyle(.borderless)
-                        .disabled(!model.canMutate)
+                        .disabled(!model.acceptsInput)
                         .accessibilityLabel("Partage de l’observation : \(kept ? "pour moi" : "visible par l’élève")")
                     }
                 }
             }
             if model.isAuthor {
-                Button(observationsActionTitle) { openObservations() }
-                    .disabled(model.isBusy || model.isLoading)
+                Button(observationsActionTitle) {
+                    // Envoi bref en cours : l’appui est ignoré plutôt que le bouton grisé. Une relecture n’empêche rien.
+                    guard !model.isBusy else { return }
+                    openObservations()
+                }
                     .accessibilityIdentifier("lesson-private-observations")
             }
         } header: { Text("Pendant la leçon").drivyFormSectionHeader() }
@@ -761,7 +775,7 @@ private struct SchoolLessonReportContent: View {
                             .frame(minHeight: 44).contentShape(Rectangle())
                         }
                         .buttonStyle(.borderless)
-                        .disabled(!model.canMutate)
+                        .disabled(!model.acceptsInput)
                         .accessibilityIdentifier("lesson-competency-level-\(competency.id.uuidString)")
                         // Bilan « Pour moi » : le niveau choisi ne compte dans la progression qu’une fois le bilan partagé.
                         if model.levelIsHeldBack(for: competency.id) {
@@ -774,7 +788,7 @@ private struct SchoolLessonReportContent: View {
                         TextField("Situation", text: contextBinding(competency.id), axis: .vertical)
                             .font(.subheadline)
                             .foregroundStyle(DrivyTheme.muted)
-                            .disabled(!model.canMutate)
+                            .disabled(!model.acceptsInput)
                             .accessibilityLabel("Situation, \(competency.displayLabel)")
                     }
                 }
@@ -813,7 +827,7 @@ private struct SchoolLessonReportContent: View {
                 }
             } header: { Text("Bilan").drivyFormSectionHeader() }
                 .drivyFormRows()
-        } else if model.revisionsError == nil, !model.isLoading {
+        } else if model.revisionsError == nil {
             Section {
                 Text("Ton moniteur n’a pas encore écrit le bilan.").foregroundStyle(DrivyTheme.muted)
             } header: { Text("Bilan").drivyFormSectionHeader() }
@@ -836,27 +850,27 @@ private struct SchoolLessonReportContent: View {
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Retirer l’objectif \(number)")
                 }
-                .disabled(!model.canMutate)
+                .disabled(!model.acceptsInput)
             }
             if model.goals.count < 3 {
                 Button("Ajouter un objectif") {
                     model.goals.append(SchoolLessonGoal(label: ""))
                 }
-                .disabled(!model.canMutate)
+                .disabled(!model.acceptsInput)
             }
             // Jamais montrée à l’élève. Le cadenas reste : une fois la note écrite, l’invite « Note pour moi »
             // disparaît et lui seul distingue cette ligne des objectifs, que l’élève lit.
             HStack(alignment: .center, spacing: DrivySpacing.s) {
                 DrivyPrivacyMark(isPrivate: true).accessibilityHidden(true)
                     .frame(width: DrivySpacing.l)
-                TextField("Note pour moi", text: $model.administrativeNote, axis: .vertical).lineLimit(1...4).disabled(!model.canMutate)
+                TextField("Note pour moi", text: $model.administrativeNote, axis: .vertical).lineLimit(1...4).disabled(!model.acceptsInput)
             }
             // Le bouton n’apparaît qu’avec une modification : désactivé, il n’était qu’un texte fantôme.
             if savesInline && model.preparationChanged {
                 Button { Task { await model.savePreparation() } } label: {
                     DrivyBusyLabel(title: "Enregistrer les objectifs", isBusy: isSending(.savePreparation))
                 }
-                .disabled(!model.canMutate || !model.preparationValid || !model.preparationChanged)
+                .disabled(!model.acceptsInput || !model.preparationValid || !model.preparationChanged)
             }
         } header: { Text("Objectifs").drivyFormSectionHeader() }
             .drivyFormRows()
@@ -872,11 +886,11 @@ private struct SchoolLessonReportContent: View {
     private func wishSection(_ wish: SchoolLearnerWish) -> some View {
         Section {
             if model.isOwnLearner {
-                TextField("Ce que j’aimerais travailler", text: $model.wishText, axis: .vertical).lineLimit(2...6).disabled(!model.canMutate)
+                TextField("Ce que j’aimerais travailler", text: $model.wishText, axis: .vertical).lineLimit(2...6).disabled(!model.acceptsInput)
                 Button { Task { await model.saveWish() } } label: {
                     DrivyBusyLabel(title: "Enregistrer le souhait", isBusy: isSending(.saveWish))
                 }
-                .disabled(!model.canMutate || model.wishText.unicodeScalars.count > 500 || model.wishText == wish.text)
+                .disabled(!model.acceptsInput || model.wishText.unicodeScalars.count > 500 || model.wishText == wish.text)
             } else {
                 Text(wish.text)
             }
@@ -896,7 +910,7 @@ private struct SchoolLessonReportContent: View {
                 DrivyBusyLabel(title: saveReportTitle, isBusy: isSending(.saveReportDraft))
             }
                 .buttonStyle(DrivyPrimaryButtonStyle())
-                .disabled(!model.canMutate || !model.validTexts || !model.observationsValid)
+                .disabled(!model.acceptsInput || !model.validTexts || !model.observationsValid)
                 .accessibilityIdentifier("lesson-save-report")
         }
     }
@@ -910,13 +924,13 @@ private struct SchoolLessonReportContent: View {
     /// Partage d’un bloc avec l’élève. L’interrupteur porte l’état : aucun symbole ne le répète.
     private func sharingToggle(_ isOn: Binding<Bool>) -> some View {
         Toggle("Visible par l’élève", isOn: isOn)
-            .disabled(!model.canMutate)
+            .disabled(!model.acceptsInput)
     }
 
     private func reportField(_ label: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
-            TextField("Facultatif", text: text, axis: .vertical).lineLimit(1...10).disabled(!model.canMutate)
+            TextField("Facultatif", text: text, axis: .vertical).lineLimit(1...10).disabled(!model.acceptsInput)
                 .accessibilityLabel(label)
                 .accessibilityHint("Facultatif")
         }

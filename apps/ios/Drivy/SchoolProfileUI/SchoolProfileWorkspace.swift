@@ -24,6 +24,10 @@ final class SchoolProfileWorkspace: Identifiable {
     private(set) var isBusy = false
     private(set) var needsReload = true
     private(set) var pendingRequiresReview = false
+    /// Premier envoi d’une demande, juste après le geste : bref, il ne se présente pas comme une demande à vérifier.
+    private(set) var isFirstSend = false
+    /// Relecture qui remplace le brouillon par la réponse de l’école (après notre propre enregistrement).
+    private(set) var isReplacingDraft = false
     private(set) var errorMessage: String?
     private(set) var successMessage: String?
     private(set) var accessFailure: SchoolProfileFailure?
@@ -53,6 +57,17 @@ final class SchoolProfileWorkspace: Identifiable {
     var canMutate: Bool {
         !invalidated && !isLoading && !isBusy && !needsReload && storageAccessible && pending == nil && school?.status != "ARCHIVED" && school != nil
     }
+    /// Saisie possible. Une relecture silencieuse garde le formulaire ouvert : ce qui est saisi entre-temps est
+    /// conservé à son résultat. Seul un état qui dure le ferme (demande à vérifier, conflit à relire, école
+    /// archivée), ou la relecture qui remplace le brouillon après notre enregistrement. L’envoi reste gardé par `canMutate`.
+    var acceptsInput: Bool {
+        !invalidated && !isBusy && !needsReload && storageAccessible && pending == nil && school?.status != "ARCHIVED"
+            && school != nil && !(isLoading && isReplacingDraft)
+    }
+    /// Demande restée en attente après un envoi sans réponse sûre. Le premier envoi, en cours, n’en est pas une.
+    var pendingAwaitsReview: Bool { pending != nil && !(isBusy && isFirstSend) }
+    /// Enregistrement du dossier en cours, de l’envoi jusqu’à la relecture qui en applique la réponse.
+    var isSavingProfile: Bool { isBusy || (isLoading && isReplacingDraft) }
     /// Champs écrits en accès complet (`drivy.profile_access` = FULL).
     static let fullAccessFields: Set<SchoolProfileField> = [.firstName, .lastName, .birthDate, .postalAddress, .contactEmail, .contactPhone]
     /// Champs écrits par le moniteur affecté (CONTACT) : le serveur refuse tout autre champ par un 403.
@@ -101,14 +116,16 @@ final class SchoolProfileWorkspace: Identifiable {
         onboarding = nil; readiness = nil; pending = nil; nextCursor = nil; draft = SchoolProfileDraft()
         errorMessage = nil; successMessage = nil; isLoading = false; isBusy = false; storageAccessible = false
         reviewGeneration = UUID(); publicationNotice = nil; reviewingPolicyID = nil; isLoadingPublication = false
+        isFirstSend = false; isReplacingDraft = false
     }
     func load(preserveDraft: Bool = true, receiptRefused: Bool = false) async {
         guard !invalidated, !isBusy else { return }
         generation = UUID(); let request = generation
         reviewGeneration = UUID(); publicationNotice = nil; reviewingPolicyID = nil; isLoadingPublication = false
-        let changedKeys: Set<String> = preserveDraft ? Set(profile.map { draft.changes(from: $0, allowed: editableFields).keys.map { $0 } } ?? []) : []
-        let previousDraft = draft
-        isLoading = true; needsReload = true; errorMessage = nil; storageAccessible = false
+        // Droits lus avant la relecture : pendant elle, la politique applicable peut manquer un instant.
+        let allowed = editableFields
+        // Une relecture garde l’état affiché : `needsReload` ne se lève qu’après un échec.
+        isLoading = true; isReplacingDraft = !preserveDraft; errorMessage = nil; storageAccessible = false
         var storageError: String?
         do { pending = try outbox.pending(for: scope); storageAccessible = true }
         catch { storageError = SchoolConfigurationFailure.storage.localizedDescription }
@@ -129,8 +146,11 @@ final class SchoolProfileWorkspace: Identifiable {
                     let profile = try await api.profile(schoolID: scope.schoolID, learnerID: learnerID)
                     guard request == generation else { return }
                     guard SchoolProfileClient.valid(profile, schoolID: scope.schoolID, learnerID: learnerID) else { throw SchoolProfileFailure.invalidResponse }
+                    // Comparé à la réception, pas au départ : ce qui a été saisi pendant la relecture est conservé.
+                    let changedKeys: Set<String> = preserveDraft
+                        ? Set(self.profile.map { draft.changes(from: $0, allowed: allowed).keys.map { $0 } } ?? []) : []
+                    draft = draft.rebased(on: profile, changedKeys: changedKeys)
                     self.profile = profile
-                    draft = previousDraft.rebased(on: profile, changedKeys: changedKeys)
                     let readiness = try await api.readiness(schoolID: scope.schoolID, learnerID: learnerID, action: "ENTER")
                     guard request == generation else { return }
                     guard readiness.learnerId == learnerID, readiness.action == "ENTER" else { throw SchoolProfileFailure.invalidResponse }
@@ -158,10 +178,12 @@ final class SchoolProfileWorkspace: Identifiable {
                     guard request == generation else { return }; self.notice = notice
                 }
             }
-            isLoading = false; needsReload = false
+            isLoading = false; isReplacingDraft = false; needsReload = false
             errorMessage = storageError ?? (receiptRefused ? "Le résultat ne peut pas être consulté avec tes droits actuels. Sa référence reste conservée." : nil)
         } catch {
-            guard request == generation else { return }; isLoading = false; fail(error)
+            guard request == generation else { return }
+            // Relecture échouée : l’état de l’école n’est plus connu, toute écriture attend une relecture réussie.
+            isLoading = false; isReplacingDraft = false; needsReload = true; fail(error)
         }
     }
     func loadMorePolicies() async {
@@ -254,7 +276,7 @@ final class SchoolProfileWorkspace: Identifiable {
     func retryPending() async { _ = await transmit(firstAttempt: false) }
     func verifyPending() async {
         guard canVerifyPending, let command = pending else { return }
-        let request = generation; isBusy = true; errorMessage = nil
+        let request = generation; isBusy = true; isFirstSend = false; errorMessage = nil
         do {
             let receipt = try await api.operation(schoolID: scope.schoolID, id: command.id)
             guard command.matches(receipt) else { throw SchoolProfileFailure.invalidResponse }
@@ -284,7 +306,7 @@ final class SchoolProfileWorkspace: Identifiable {
         guard canRetryPending, let command = pending else { return false }
         let request = generation
         do { try outbox.save(command) } catch { storageAccessible = false; fail(error); return false }
-        isBusy = true; errorMessage = nil; successMessage = nil
+        isBusy = true; isFirstSend = firstAttempt; errorMessage = nil; successMessage = nil
         do {
             let result = try await api.send(command)
             guard result.schoolID == scope.schoolID, result.version > command.resourceVersion,
@@ -329,6 +351,7 @@ final class SchoolProfileWorkspace: Identifiable {
         if failure == .unauthorized || failure == .forbidden || failure == .notFound {
             generation = UUID(); school = nil; policies = []; profile = nil; notice = nil; readiness = nil; onboarding = nil
             draft = SchoolProfileDraft(); storageAccessible = false; isLoading = false; isBusy = false; nextCursor = nil
+            isReplacingDraft = false
             accessFailure = failure
             reviewGeneration = UUID(); publicationNotice = nil; reviewingPolicyID = nil; isLoadingPublication = false
         }

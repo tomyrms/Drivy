@@ -70,33 +70,6 @@ extension SchoolLesson {
     var drivyState: DrivyLessonState { DrivyLessonState(status: status, start: startsAt, end: endsAt) }
 }
 
-/// Report state in the words of the driving school: kept for the instructor,
-/// visible to the learner, or an earlier report. Same lock shapes as
-/// DrivyPrivacyMark; neutral tone, because keeping a note is not an anomaly.
-enum DrivyReportState {
-    case privateDraft, shared, historical
-
-    var title: String {
-        switch self {
-        case .privateDraft: "Pour moi"
-        case .shared: "Visible par l’élève"
-        case .historical: "Bilan précédent"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .privateDraft: "lock.fill"
-        case .shared: "lock.open"
-        case .historical: "clock.arrow.circlepath"
-        }
-    }
-
-    var tone: DrivyTone { .neutral }
-
-    var badge: DrivyStatusBadge { DrivyStatusBadge(title: title, symbol: symbol, tone: tone) }
-}
-
 /// Lesson row used by the agenda, the dossier lessons and the report lists:
 /// time column, name, meta lines, state badge, chevron. Switches to a single
 /// column at accessibility text sizes so nothing is truncated.
@@ -169,18 +142,6 @@ struct DrivyLessonRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
-/// Label / value line of a lesson screen (date, time, meeting point, price).
-struct DrivyLessonFactRow: View {
-    let title: String
-    let value: String
-    var monospaced = false
-
-    // One label/value anatomy for the whole app.
-    var body: some View {
-        DrivyKeyValueRow(title: title, value: value, numeric: monospaced)
     }
 }
 

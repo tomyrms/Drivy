@@ -233,6 +233,42 @@ struct SchoolProfileWorkspaceTests {
         #expect(model.profile == nil && model.draft.firstName.isEmpty && model.accessFailure == .forbidden)
         #expect(box.value == command)
     }
+    @Test func silentRereadKeepsTheFormOpenAndWhatWasTypedMeanwhile() async {
+        let api = ProfileAPIStub(); let model = ProfileFixture.workspace(api: api)
+        await model.load()
+        #expect(model.canMutate && model.acceptsInput && !model.needsReload)
+        let latch = ProfileReadLatch()
+        api.schoolHandler = { await latch.wait() }
+        let reread = Task { await model.load() }
+        await latch.started()
+        // Relecture en cours : l’envoi est fermé, le formulaire reste ouvert et rien ne se présente comme un enregistrement.
+        #expect(model.isLoading && !model.canMutate && model.acceptsInput && !model.needsReload && !model.isSavingProfile)
+        model.draft.contactPhone = "0123456"
+        latch.resolve(); await reread.value
+        api.schoolHandler = nil
+        #expect(model.draft.contactPhone == "0123456" && model.hasEdits && model.canSaveProfile)
+        // Relecture échouée : l’état de l’école n’est plus connu, la saisie est conservée mais le formulaire attend.
+        api.readFailure = .unavailable
+        await model.load()
+        #expect(model.needsReload && !model.acceptsInput && !model.canMutate && model.draft.contactPhone == "0123456")
+        api.readFailure = nil
+        await model.load()
+        #expect(model.acceptsInput && model.canSaveProfile && model.draft.contactPhone == "0123456")
+    }
+    @Test func aNormalSaveIsNeverShownAsARequestToVerify() async {
+        let api = ProfileAPIStub(); let box = ConfigurationOutboxStub(); let model = ProfileFixture.workspace(api: api, box: box)
+        await model.load(); model.draft.contactPhone = "0123456"
+        var duringSend: [Bool] = []
+        api.onSend = { duringSend = [model.pending != nil, model.pendingAwaitsReview, model.acceptsInput, model.isSavingProfile] }
+        #expect(await model.saveProfileAfterConfirmation())
+        // Pendant l’envoi : la demande est dans la file sans être « à vérifier » ; la saisie attend la réponse.
+        #expect(duringSend == [true, false, false, true])
+        #expect(model.pending == nil && !model.pendingAwaitsReview && model.acceptsInput && !model.isSavingProfile)
+        // Sans réponse sûre, la demande reste en attente : elle se montre et ferme la saisie.
+        api.onSend = nil; api.sendFailure = .unavailable; model.draft.contactPhone = "0765432"
+        #expect(await model.saveProfileAfterConfirmation() == false)
+        #expect(box.value != nil && model.pendingAwaitsReview && !model.acceptsInput && !model.canMutate)
+    }
     @Test func delayedReadCannotRestoreAClosedProfile() async {
         let api = ProfileAPIStub(); let latch = ProfileReadLatch()
         api.schoolHandler = { await latch.wait() }
@@ -304,6 +340,8 @@ final class ProfileAPIStub: SchoolProfileAPI {
     var sendFailure: SchoolProfileFailure?
     var receipt: SchoolOperationReceipt?
     var schoolHandler: (() async -> SchoolDetails)?
+    /// Appelé au début d’un envoi, pour lire l’état du modèle pendant qu’il est en cours.
+    var onSend: (() -> Void)?
     var commands: [PendingSchoolCommand] = []
     var cursors: [String?] = []
     var noticeRequests: [UUID?] = []
@@ -333,6 +371,7 @@ final class ProfileAPIStub: SchoolProfileAPI {
     }
     func send(_ command: PendingSchoolCommand) async throws -> SchoolProfileResult {
         commands.append(command)
+        onSend?()
         if let sendFailure { throw sendFailure }
         switch command.kind {
         case .updateProfile:

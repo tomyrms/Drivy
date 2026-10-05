@@ -85,7 +85,8 @@ struct SchoolObservationView: View {
                     if model.loaded || model.lesson != nil {
                         observationList
                     }
-                    if let pending = model.pending { pendingCard(pending) }
+                    // Réservée à une demande restée en attente : un envoi normal, en cours, ne la montre pas.
+                    if let pending = model.pending, model.pendingAwaitsReview { pendingCard(pending) }
                 }
                 .drivyPageContent()
             }
@@ -100,7 +101,7 @@ struct SchoolObservationView: View {
                         .padding(.horizontal, DrivySpacing.m)
                         .padding(.vertical, DrivySpacing.xs)
                     }
-                    if model.loaded && model.canAdd { DrivyStickyActionBar { actions } }
+                    if model.acceptsAdd { DrivyStickyActionBar { actions } }
                 }
                 .background(DrivyTheme.surface)
             }
@@ -108,8 +109,12 @@ struct SchoolObservationView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { await model.load() } } label: { Label("Actualiser", systemImage: "arrow.clockwise") }
-                        .disabled(model.isBusy || model.isLoading || model.accessRevoked)
+                    Button {
+                        // Relecture ou envoi déjà en cours : l’appui est ignoré, le bouton ne se grise pas.
+                        guard !model.isBusy, !model.isLoading else { return }
+                        Task { await model.load() }
+                    } label: { Label("Actualiser", systemImage: "arrow.clockwise") }
+                        .disabled(model.accessRevoked)
                 }
             }
             .task { await model.load() }
@@ -209,7 +214,7 @@ struct SchoolObservationView: View {
                 Image(systemName: "ellipsis").foregroundStyle(DrivyTheme.muted)
                     .frame(width: 44, height: 44).contentShape(Rectangle())
             }
-            .disabled(!model.canMutate)
+            .disabled(!model.acceptsChanges)
             .accessibilityLabel("Actions pour l’observation : \(observation.text)")
         }
         .padding(.vertical, DrivySpacing.s)
@@ -291,7 +296,7 @@ private struct SchoolObservationComposer: View {
                     }
                   }
                     .drivyFormRows()
-                if model.pending != nil {
+                if model.pendingAwaitsReview {
                     Section {
                         Label("La demande est conservée. Ferme cette saisie pour vérifier son résultat dans les observations.", systemImage: "clock.arrow.circlepath")
                             .font(.subheadline).foregroundStyle(DrivyTheme.warning)
@@ -300,7 +305,7 @@ private struct SchoolObservationComposer: View {
                         .drivyFormRows()
                 }
             }
-            .disabled(model.isBusy || model.pending != nil)
+            .disabled(model.isBusy || model.pendingAwaitsReview)
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -321,7 +326,7 @@ private struct SchoolObservationComposer: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuler") { if changed && model.pending == nil { confirmsDiscard = true } else { dismiss() } }.disabled(model.isBusy)
+                    Button("Annuler") { if changed && !model.pendingAwaitsReview { confirmsDiscard = true } else { dismiss() } }.disabled(model.isBusy)
                 }
             }
             .alert("Quitter sans enregistrer ?", isPresented: $confirmsDiscard) {
@@ -343,7 +348,7 @@ private struct SchoolObservationComposer: View {
     }
     /// Explains a disabled save. Mirrors `valid`; never a second rule.
     private var saveHint: String? {
-        if model.isBusy || valid && model.canMutate { return nil }
+        if model.isBusy || model.isLoading || valid && model.canMutate { return nil }
         if text.unicodeScalars.count > 4_000 { return "Le texte est limité à 4 000 caractères." }
         if editor.origin == "LIVE" && !marker && competencyID == nil { return "Choisis une compétence, ou garde un repère simple." }
         if editor.origin == "LIVE" && !marker && status == nil { return "Choisis une appréciation pour cette compétence." }
@@ -401,7 +406,7 @@ private struct SchoolObservationRemoval: View {
                 } header: { Text("Motif du retrait").drivyFormSectionHeader() }
                 footer: { Text("Ce retrait ne modifie pas un bilan déjà partagé.") }
                     .drivyFormRows()
-                if model.pending != nil {
+                if model.pendingAwaitsReview {
                     Section {
                         Label("La demande est conservée. Retrouve-la dans les observations pour vérifier le résultat.", systemImage: "clock.arrow.circlepath")
                             .font(.subheadline).foregroundStyle(DrivyTheme.warning)
@@ -410,7 +415,7 @@ private struct SchoolObservationRemoval: View {
                         .drivyFormRows()
                 }
             }
-            .disabled(model.isBusy || model.pending != nil)
+            .disabled(model.isBusy || model.pendingAwaitsReview)
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -430,7 +435,7 @@ private struct SchoolObservationRemoval: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuler") {
-                        if hasChanges && model.pending == nil { confirmsDiscard = true } else { dismiss() }
+                        if hasChanges && !model.pendingAwaitsReview { confirmsDiscard = true } else { dismiss() }
                     }.disabled(model.isBusy)
                 }
             }

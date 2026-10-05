@@ -184,7 +184,7 @@ struct SchoolLessonHubTests {
     @Test func permitCheckCommandMatchesTheStrictServerSchemaAndReceipt() throws {
         let id = UUID(), training = UUID()
         let body = try JSONEncoder().encode(SchoolRecordPermitCheck.seen(operationId: id, categoryCode: "B"))
-        let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
         #expect(Set(object.keys) == ["operationId", "physicalSeen", "categoryCode", "decision"])
         #expect(object["physicalSeen"] as? Bool == true && object["decision"] as? String == "APPROVED" && object["categoryCode"] as? String == "B")
         let command = PendingSchoolCommand(id: id, scope: ConfigurationFixture.scope(), kind: .recordPermitCheck, resourceVersion: 0,
@@ -305,6 +305,64 @@ struct SchoolLessonHubTests {
         #expect(outbox.value?.scope.personID == ConfigurationFixture.personID)
         #expect(await server.requests().allSatisfy { $0.httpMethod == "GET" })
     }
+
+    // MARK: En-tête et relectures
+
+    @Test func theLearnerReadsTheInstructorInTheHeaderAndTheTeamReadsTheLearner() {
+        func identity(_ roles: [String], own: Bool, instructor: String? = "Luc Moniteur") -> SchoolLessonHeaderIdentity? {
+            SchoolLessonHubRules.headerIdentity(learnerName: "Alice Élève", instructorName: instructor, isOwnLearner: own, roles: roles)
+        }
+        let learner = SchoolLessonHeaderIdentity(name: "Alice Élève", role: nil)
+        #expect(identity(["INSTRUCTOR"], own: false) == learner)
+        #expect(identity(["ADMIN"], own: false) == learner)
+        // L’élève connaît son nom : c’est son moniteur qui l’informe, y compris avant la lecture de la leçon.
+        let instructor = SchoolLessonHeaderIdentity(name: "Luc Moniteur", role: "Moniteur")
+        #expect(identity(["LEARNER"], own: true) == instructor)
+        #expect(identity(["LEARNER"], own: false) == instructor)
+        // Sans nom fourni par l’école, rien n’est affiché ni deviné.
+        #expect(identity(["LEARNER"], own: false, instructor: nil) == nil)
+        // Compte de l’équipe aussi élève : son nom d’élève s’efface dès que la leçon lue est la sienne.
+        #expect(identity(["INSTRUCTOR", "LEARNER"], own: false) == learner)
+        #expect(identity(["INSTRUCTOR", "LEARNER"], own: true) == instructor)
+    }
+
+    @Test func goalsWithoutChangeAreNeverSentAgain() async {
+        let outbox = ConfigurationOutboxStub()
+        let model = HubFixture.workspace(server: HubServer(), outbox: outbox)
+        await model.load()
+        #expect(model.canMutate && model.acceptsInput && !model.pendingAwaitsReview && !model.preparationChanged)
+        #expect(!(await model.savePreparation()) && outbox.saves.isEmpty)
+    }
+
+    @Test func aRereadKeepsTheObservationListAndItsActionsInPlace() async throws {
+        let server = ObservationReadServer()
+        let client = SchoolObservationClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+            tokenSource: HubToken(), transport: server)
+        let workspace = SchoolObservationWorkspace(scope: ConfigurationFixture.scope(), lessonID: HubFixture.lessonID,
+            client: client, outbox: ConfigurationOutboxStub())
+        await workspace.load()
+        #expect(workspace.loaded && workspace.canAdd && workspace.acceptsAdd && !workspace.pendingAwaitsReview)
+        await server.hold()
+        let reread = Task { await workspace.load() }
+        try await HubFixture.wait { await server.isHolding() }
+        // Relecture en cours : la liste, ses menus et la barre d’action restent ; l’écriture reste gardée.
+        #expect(workspace.isLoading && workspace.loaded && workspace.acceptsChanges && workspace.acceptsAdd && !workspace.canAdd)
+        await server.release()
+        await reread.value
+        #expect(workspace.loaded && workspace.canAdd && workspace.acceptsAdd)
+    }
+
+    @Test func onlyARequestLeftWaitingIsShownAndLocksTheObservations() async {
+        let other = PendingSchoolCommand(id: UUID(), scope: ConfigurationFixture.scope(), kind: .completeLesson,
+            resourceVersion: 1, createdAt: Date(), body: Data("{}".utf8), routeResourceID: HubFixture.lessonID)
+        let client = SchoolObservationClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+            tokenSource: HubToken(), transport: ObservationReadServer())
+        let workspace = SchoolObservationWorkspace(scope: ConfigurationFixture.scope(), lessonID: HubFixture.lessonID,
+            client: client, outbox: ConfigurationOutboxStub(value: other))
+        await workspace.load()
+        #expect(workspace.loaded && workspace.pending == other && workspace.pendingAwaitsReview)
+        #expect(!workspace.acceptsChanges && !workspace.acceptsAdd && !workspace.canAdd && workspace.liveRecorder() == nil)
+    }
 }
 
 // MARK: Données de test
@@ -316,6 +374,12 @@ enum HubFixture {
     static let learnerID = UUID(uuidString: "40000000-0000-4000-8000-000000000001")!
 
     static func date(_ value: String) -> Date { SchoolLesson.date(value)! }
+
+    /// Attend qu’une condition devienne vraie, trois secondes au plus : un test ne reste jamais bloqué.
+    @MainActor static func wait(until condition: () async -> Bool) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while !(await condition()), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+    }
 
     static func lesson(status: String = "PLANNED", meetingPoint: String = "Gare de Lausanne", permitWarning: Bool = true) -> SchoolLesson {
         SchoolLesson(id: lessonID, schoolId: schoolID, version: 2, trainingId: trainingID, learnerId: learnerID,
@@ -430,5 +494,30 @@ actor HubServer: SchoolHTTPTransport {
         if parts.suffix(3) == ["lessons", lesson, "reports"] { return ok(["items": [] as [Any], "nextCursor": NSNull()]) }
         if parts.suffix(3) == ["lessons", lesson, "captures"] { return ok(["items": [] as [Any]]) }
         return problem(404, "NOT_FOUND")
+    }
+}
+
+/// Lectures d’une feuille d’observations sans trajet : liste vide, aucun référentiel, lecture retenue à la demande.
+actor ObservationReadServer: SchoolHTTPTransport {
+    private let fallback = HubServer()
+    private var held = false
+    private var holding = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func hold() { held = true }
+    func release() { held = false; let values = waiters; waiters = []; for item in values { item.resume() } }
+    func isHolding() -> Bool { holding }
+
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        guard let url = request.url, request.httpMethod == "GET",
+              ["geo-observations", "offerings", "curricula"].contains(url.lastPathComponent) else { return try await fallback.send(request) }
+        if held, url.lastPathComponent == "geo-observations" {
+            holding = true
+            await withCheckedContinuation { waiters.append($0) }
+            holding = false
+        }
+        let page: [String: Any] = ["items": [] as [Any], "nextCursor": NSNull()]
+        let envelope: [String: Any] = ["data": page, "requestId": UUID().uuidString.lowercased(), "serverTime": "2026-09-28T13:30:00Z"]
+        return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: envelope), status: 200, url: url, contentType: "application/json")
     }
 }
