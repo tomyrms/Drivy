@@ -4,7 +4,7 @@ import SwiftUI
 // one lesson row, one wording per lesson or report state, one report body.
 // Presentation only: states are derived from values the server already returned.
 
-/// Lesson state as shown to people. Same title, symbol and tone everywhere.
+/// Lesson state as shown to people. Same wording everywhere.
 enum DrivyLessonState {
     case planned, inProgress, toFinish, completed, cancelled, noShow, unknown
 
@@ -33,37 +33,9 @@ enum DrivyLessonState {
         }
     }
 
-    var symbol: String {
-        switch self {
-        case .planned: "calendar"
-        case .inProgress: "clock"
-        case .toFinish: "clock.badge.exclamationmark"
-        case .completed: "checkmark"
-        case .cancelled: "xmark"
-        case .noShow: "person.crop.circle.badge.xmark"
-        case .unknown: "questionmark.circle"
-        }
-    }
-
-    var tone: DrivyTone {
-        switch self {
-        case .planned, .unknown: .neutral
-        case .inProgress: .accent
-        case .completed: .success
-        case .toFinish, .cancelled, .noShow: .warning
-        }
-    }
-
-    /// Full badge, for the head of a lesson screen.
-    /// Transitional: lesson rows no longer draw a capsule, they take `DrivyLessonRow(state:)`.
-    var badge: DrivyStatusBadge { DrivyStatusBadge(title: title, symbol: symbol, tone: tone) }
-
     /// What a lesson screen flags: a lesson left without outcome, cancelled, missed,
     /// or whose state the app cannot read.
     var isUnusual: Bool { self == .toFinish || self == .cancelled || self == .noShow || self == .unknown }
-
-    /// Transitional, see `badge`. Prefer `rowNote` through `DrivyLessonRow(state:)`.
-    var rowBadge: DrivyStatusBadge? { isUnusual ? badge : nil }
 
     /// A lesson that will not be driven (cancelled, missed): its row steps back
     /// instead of competing with the lessons still to come.
@@ -121,14 +93,11 @@ struct DrivyLessonRow: View {
     var end: String? = nil
     let title: String
     var details: [String] = []
-    /// Transitional capsule, kept while screens migrate to `state:` / `note:`.
-    var badge: DrivyStatusBadge? = nil
     var state: DrivyLessonState? = nil
     var note: DrivyRowNote? = nil
     var showsChevron = true
     var isSecondary = false
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var rowNote: DrivyRowNote? { note ?? state?.rowNote }
     private var isClosed: Bool { state?.isClosed ?? false }
@@ -144,26 +113,14 @@ struct DrivyLessonRow: View {
                         .strikethrough(strikesTimes)
                         .foregroundStyle(timeInk)
                     summary
-                    if let badge { badge }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 HStack(alignment: .top, spacing: DrivySpacing.m) {
                     timeColumn
                         .fixedSize(horizontal: true, vertical: false)
-                    // Compact width: the badge sits under the summary so the lines
-                    // are not cut before « · »; the separator starts on the text column.
-                    if sizeClass == .compact {
-                        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                            summary
-                            if let badge { badge }
-                        }
+                    summary
                         .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
-                    } else {
-                        summary
-                            .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
-                        if let badge { badge }
-                    }
                     if showsChevron {
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))

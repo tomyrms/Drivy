@@ -178,28 +178,107 @@ import Observation
     }
 }
 
-/// Les onglets « Leçons » et « Progression » de l’élève montrent la même formation :
-/// ils partagent un seul modèle au lieu de tout relire chacun.
+/// Les leçons d’un élève pour les formations montrées. Le serveur ne lit les leçons que par formation, de la plus
+/// ancienne à la plus récente : ces lectures sont fusionnées ici, sans route ni droit supplémentaire.
+@MainActor struct SchoolLessonFeed {
+    let models: [SchoolTrainingWorkspace]
+
+    var lessons: [SchoolLesson] { Self.merged(models.map { (lessons: $0.lessons, hasMore: $0.nextCursor != nil) }) }
+
+    /// Tant qu’une formation a d’autres pages, rien n’est montré au-delà de sa dernière leçon lue : la liste est celle
+    /// qu’une lecture unique aurait donnée, sans leçon manquante au milieu d’un mois déjà affiché.
+    static func merged(_ sources: [(lessons: [SchoolLesson], hasMore: Bool)]) -> [SchoolLesson] {
+        let all = sources.flatMap { $0.lessons }
+        guard let limit = sources.filter({ $0.hasMore }).map({ lastStart($0.lessons) }).min() else { return all }
+        return all.filter { ($0.startsAt ?? .distantPast) <= limit }
+    }
+    private static func lastStart(_ lessons: [SchoolLesson]) -> Date { lessons.compactMap(\.startsAt).max() ?? .distantPast }
+
+    var hasLessons: Bool { models.contains { !$0.lessons.isEmpty } }
+    var hasMore: Bool { models.contains { $0.nextCursor != nil } }
+    /// Une liste vide ne se dit que lorsque chaque formation a répondu.
+    var allRead: Bool { models.allSatisfy { $0.lessonsLoaded } }
+    var isLoading: Bool { models.contains { $0.isLoading } }
+    /// Première lecture : aucune liste partielle tant qu’une formation n’a pas répondu.
+    var isLoadingFirstPage: Bool { models.contains { $0.isLoading && !$0.lessonsLoaded } }
+    var isLoadingMore: Bool { models.contains { $0.isLoadingMore } }
+    var isLoadingHistory: Bool { models.contains { $0.isLoadingHistory } }
+
+    func model(for lesson: SchoolLesson) -> SchoolTrainingWorkspace? { models.first { $0.trainingID == lesson.trainingId } }
+
+    /// Seules les formations qui retiennent la suite avancent d’une page.
+    func loadMore() async {
+        let pending = models.filter { $0.nextCursor != nil }
+        guard let limit = pending.map({ Self.lastStart($0.lessons) }).min() else { return }
+        await Self.together(pending.filter { Self.lastStart($0.lessons) == limit }) { await $0.loadMore() }
+    }
+    func loadHistory() async { await Self.together(models) { await $0.loadHistory() } }
+    /// Relecture silencieuse : ce qui est affiché reste visible jusqu’à chaque réponse.
+    func reload() async { await Self.together(models) { await $0.load(keepingCurrent: true) } }
+
+    static func together(_ models: [SchoolTrainingWorkspace],
+                         _ work: @escaping @MainActor @Sendable (SchoolTrainingWorkspace) async -> Void) async {
+        await withTaskGroup(of: Void.self) { group in
+            for model in models { group.addTask { await work(model) } }
+        }
+    }
+}
+
+/// Le nom d’un permis dans un filtre, un titre ou une ligne de leçon.
+enum SchoolPermitName {
+    /// La formation en cours d’abord ; l’ordre du dossier départage.
+    static func ordered(_ trainings: [SchoolTraining]) -> [SchoolTraining] {
+        trainings.filter { $0.status == "ACTIVE" } + trainings.filter { $0.status != "ACTIVE" }
+    }
+
+    /// Deux formations de même catégorie se distinguent par leur année de début.
+    static func names(_ trainings: [SchoolTraining]) -> [UUID: String] {
+        let counts = Dictionary(trainings.map { ($0.categoryCode, 1) }, uniquingKeysWith: +)
+        var result: [UUID: String] = [:]
+        for training in trainings {
+            var name = "Permis \(training.categoryCode)"
+            if (counts[training.categoryCode] ?? 0) > 1, let year = training.startedOn?.prefix(4), year.count == 4 {
+                name += " · \(year)"
+            }
+            result[training.id] = name
+        }
+        return result
+    }
+
+    /// Sous le nom de l’élève : ses permis en une ligne. Seul un état inhabituel est précisé.
+    static func summary(_ trainings: [SchoolTraining]) -> String? {
+        guard trainings.count > 1 else { return trainings.first.map { "Permis \($0.categoryCode)" } }
+        let parts = trainings.map { training in
+            training.status == "ACTIVE" ? training.categoryCode
+                : "\(training.categoryCode) (\(SchoolPresentation.trainingStatus(training.status).lowercased()))"
+        }
+        return "Permis " + parts.joined(separator: ", ")
+    }
+}
+
+/// Les pages « Leçons » et « Progression » montrent les mêmes formations d’un élève :
+/// elles partagent un modèle par formation au lieu de tout relire chacune.
 @MainActor enum SchoolTrainingModelCache {
-    private static var current: SchoolTrainingWorkspace?
+    private static var models: [UUID: SchoolTrainingWorkspace] = [:]
 
     /// Fermeture du compte ou relecture complète : aucune leçon ni progression ne reste en mémoire
     /// pour le compte suivant, même si aucun écran ne les affiche plus.
     static func reset() {
-        current?.invalidate()
-        current = nil
+        for model in models.values { model.invalidate() }
+        models = [:]
     }
 
     static func model(scope: SchoolCommandScope, membership: SchoolMembership, learnerID: UUID, trainingID: UUID,
                       client: SchoolTrainingClient) -> (model: SchoolTrainingWorkspace, isNew: Bool) {
-        if let current, current.scope == scope, current.membership == membership, current.learnerID == learnerID,
-           current.trainingID == trainingID, current.client.baseURL == client.baseURL, !current.accessRevoked,
-           !current.invalidated {
+        if let current = models[trainingID], current.scope == scope, current.membership == membership, current.learnerID == learnerID,
+           current.client.baseURL == client.baseURL, !current.accessRevoked, !current.invalidated {
             return (current, false)
         }
+        // Un autre compte, d’autres droits ou un autre élève : les modèles gardés ne servent plus.
         // Un écran encore ouvert garde son propre modèle : il n’est pas invalidé ici.
+        models = models.filter { $0.value.scope == scope && $0.value.membership == membership && $0.value.learnerID == learnerID }
         let value = SchoolTrainingWorkspace(scope: scope, membership: membership, learnerID: learnerID, trainingID: trainingID, client: client)
-        current = value
+        models[trainingID] = value
         return (value, true)
     }
 }

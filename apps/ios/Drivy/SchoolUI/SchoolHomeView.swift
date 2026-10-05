@@ -21,7 +21,8 @@ struct SchoolHomeView: View {
     @Binding var selectedTab: SchoolHomeTab
     @State private var choosesSchool = false
     @State private var dossierPlanningModel: SchoolPlanningWorkspace?
-    @State private var chosenTrainingID: UUID?
+    /// Le permis que l’élève filtre dans ses onglets Leçons et Progression ; `nil` les montre tous.
+    @State private var chosenPermit: UUID?
     @State private var captureLesson: CaptureLessonRoute?
 
     var body: some View {
@@ -73,7 +74,7 @@ struct SchoolHomeView: View {
     }
 
     private func resetScope() {
-        dossierPlanningModel?.invalidate(); dossierPlanningModel = nil; chosenTrainingID = nil; captureLesson = nil
+        dossierPlanningModel?.invalidate(); dossierPlanningModel = nil; chosenPermit = nil; captureLesson = nil
     }
 
     // MARK: Moniteur
@@ -157,11 +158,10 @@ struct SchoolHomeView: View {
         workspace.learners.first { $0.personId == workspace.person?.personId }
     }
 
-    /// La formation en cours d’abord ; un menu permet d’en choisir une autre.
-    private var learnerTraining: SchoolTraining? {
-        guard workspace.learner?.id == ownLearner?.id else { return nil }
-        return workspace.trainings.first { $0.id == chosenTrainingID }
-            ?? workspace.trainings.first { $0.status == "ACTIVE" } ?? workspace.trainings.first
+    /// Toutes les formations de l’élève, celle en cours d’abord ; la page les filtre par permis.
+    private var learnerTrainings: [SchoolTraining] {
+        guard workspace.learner?.id == ownLearner?.id else { return [] }
+        return SchoolPermitName.ordered(workspace.trainings)
     }
 
     private var learnerTabs: some View {
@@ -177,33 +177,24 @@ struct SchoolHomeView: View {
             guard let id = ownLearner?.id else { return }
             if workspace.selectedLearnerID != id { workspace.selectLearner(id) }
             if workspace.learner?.id != id { await workspace.loadSelectedLearner() }
+            await workspace.loadRemainingTrainings()
         }
     }
 
     private func learnerTab(_ section: SchoolTrainingSection, title: String) -> some View {
         NavigationStack {
             Group {
-                if let learner = ownLearner, let training = learnerTraining, let trainingClient {
+                let trainings = learnerTrainings
+                if let learner = ownLearner, !trainings.isEmpty, let trainingClient {
                     SchoolTrainingScreen(client: trainingClient, workspace: workspace, learner: learner,
-                        trainingID: training.id, section: section)
+                        trainingIDs: trainings.map(\.id), permit: $chosenPermit, section: section)
                 } else {
                     learnerStatus
                 }
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                if workspace.trainings.count > 1, let current = learnerTraining {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Menu {
-                            Picker("Formation", selection: Binding(get: { current.id }, set: { chosenTrainingID = $0 })) {
-                                ForEach(workspace.trainings) { training in Text("Permis \(training.categoryCode)").tag(training.id) }
-                            }
-                        } label: { Label("Permis \(current.categoryCode)", systemImage: "steeringwheel") }
-                    }
-                }
-                contextToolbar
-            }
+            .toolbar { contextToolbar }
         }
     }
 

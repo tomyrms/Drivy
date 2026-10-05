@@ -321,6 +321,15 @@ final class SchoolWorkspace {
         }
     }
 
+    /// Les filtres par permis portent sur toutes les formations de l’élève, pas sur la première page.
+    /// Une panne laisse le curseur en place : le dossier propose alors de continuer.
+    func loadRemainingTrainings() async {
+        while let cursor = nextTrainingsCursor, !isLoadingTrainings, !isLoadingMoreTrainings {
+            await loadMoreTrainings()
+            if nextTrainingsCursor == cursor || trainingsError != nil { return }
+        }
+    }
+
     func selectTraining(_ id: UUID?) {
         trainingRequest = UUID()
         training = nil

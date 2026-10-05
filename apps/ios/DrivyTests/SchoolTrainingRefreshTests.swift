@@ -125,6 +125,73 @@ import Testing
         #expect(!model.reportSaveConfirmed && model.pending == nil)
     }
 
+    // MARK: Dossier à plusieurs permis
+
+    @Test func mergedLessonsStopAtTheLastLessonReadOfAFormationThatHasMorePages() throws {
+        let early = try HistoryServer.lesson(id: UUID(), start: "2026-01-10T08:00:00Z", end: "2026-01-10T08:50:00Z")
+        let limit = try HistoryServer.lesson(id: UUID(), start: "2026-03-10T08:00:00Z", end: "2026-03-10T08:50:00Z")
+        let between = try HistoryServer.lesson(id: UUID(), start: "2026-02-10T08:00:00Z", end: "2026-02-10T08:50:00Z")
+        let later = try HistoryServer.lesson(id: UUID(), start: "2026-06-10T08:00:00Z", end: "2026-06-10T08:50:00Z")
+        // La première formation a d’autres pages après mars : la leçon de juin de la seconde attend.
+        let partial = SchoolLessonFeed.merged([(lessons: [early, limit], hasMore: true), (lessons: [between, later], hasMore: false)])
+        #expect(Set(partial.map(\.id)) == Set([early.id, limit.id, between.id]))
+        let complete = SchoolLessonFeed.merged([(lessons: [early, limit], hasMore: false), (lessons: [between, later], hasMore: false)])
+        #expect(complete.count == 4)
+        // Une seule formation : ses pages lues sont toutes montrées.
+        #expect(SchoolLessonFeed.merged([(lessons: [early, limit], hasMore: true)]).count == 2)
+        // Une formation paginée dont rien n’est lu retient tout.
+        #expect(SchoolLessonFeed.merged([(lessons: [], hasMore: true), (lessons: [between], hasMore: false)]).isEmpty)
+    }
+
+    @Test func aFeedReadsEveryFormationAndPagesOnlyTheOneHoldingTheListBack() async {
+        let other = UUID(uuidString: "60000000-0000-4000-8000-000000000002")!
+        let first = workspace(HistoryServer()), second = workspace(HistoryServer(), trainingID: other)
+        let feed = SchoolLessonFeed(models: [first, second])
+        await feed.reload()
+        #expect(first.lessons.count == 1 && first.nextCursor != nil && first.errorMessage == nil)
+        // Le serveur de test ne connaît qu’une formation : la seconde lecture échoue sans effacer la première.
+        #expect(second.training == nil && second.errorMessage != nil)
+        #expect(!feed.allRead && feed.hasLessons && feed.hasMore && !feed.isLoadingFirstPage)
+        #expect(feed.lessons.map(\.id) == [HubFixture.lessonID])
+        await feed.loadMore()
+        #expect(first.lessons.count == 2 && !feed.hasMore && feed.lessons.count == 2)
+        #expect(feed.model(for: first.lessons[0]) === first)
+    }
+
+    @Test func permitsAreNamedOrderedAndSummarisedFromTheLearnerFormations() {
+        let b = training("B", status: "COMPLETED", startedOn: "2024-03-01"), a = training("A"), be = training("BE", status: "PAUSED")
+        #expect(SchoolPermitName.ordered([b, a, be]).map(\.id) == [a.id, b.id, be.id])
+        #expect(SchoolPermitName.names([b, a])[a.id] == "Permis A")
+        #expect(SchoolPermitName.summary([]) == nil)
+        #expect(SchoolPermitName.summary([b]) == "Permis B")
+        #expect(SchoolPermitName.summary([a, b, be]) == "Permis A, B (terminée), BE (en pause)")
+        // Deux formations de même catégorie : l’année de début les distingue.
+        let again = training("B", startedOn: "2026-09-01")
+        let names = SchoolPermitName.names([again, b])
+        #expect(names[again.id] == "Permis B · 2026" && names[b.id] == "Permis B · 2024")
+    }
+
+    @Test func theSharedCacheKeepsOneModelPerFormationOfTheSameLearner() {
+        SchoolTrainingModelCache.reset()
+        let client = client(HistoryServer()), scope = ConfigurationFixture.scope(), other = UUID()
+        func model(_ training: UUID, learner: UUID = HubFixture.learnerID) -> (model: SchoolTrainingWorkspace, isNew: Bool) {
+            SchoolTrainingModelCache.model(scope: scope, membership: membership, learnerID: learner, trainingID: training, client: client)
+        }
+        let first = model(HubFixture.trainingID), second = model(other)
+        #expect(first.isNew && second.isNew)
+        #expect(!model(HubFixture.trainingID).isNew && model(HubFixture.trainingID).model === first.model)
+        #expect(!model(other).isNew)
+        // Un autre élève : les modèles du précédent ne sont plus servis.
+        #expect(model(UUID(), learner: UUID()).isNew)
+        #expect(model(HubFixture.trainingID).isNew)
+        SchoolTrainingModelCache.reset()
+    }
+
+    private func training(_ category: String, status: String = "ACTIVE", startedOn: String? = nil) -> SchoolTraining {
+        SchoolTraining(id: UUID(), schoolId: HubFixture.schoolID, learnerId: HubFixture.learnerID, offeringId: UUID(),
+            version: 1, categoryCode: category, status: status, startedOn: startedOn, closedOn: nil)
+    }
+
     private var membership: SchoolMembership {
         SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: HubFixture.schoolID,
             schoolName: "École de test", roles: ["INSTRUCTOR"], grants: ["permit_review"], accessEpoch: 1)
@@ -132,9 +199,9 @@ import Testing
     private func client(_ server: HistoryServer) -> SchoolTrainingClient {
         SchoolTrainingClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!, tokenSource: HubToken(), transport: server)
     }
-    private func workspace(_ server: HistoryServer) -> SchoolTrainingWorkspace {
+    private func workspace(_ server: HistoryServer, trainingID: UUID = HubFixture.trainingID) -> SchoolTrainingWorkspace {
         SchoolTrainingWorkspace(scope: ConfigurationFixture.scope(), membership: membership, learnerID: HubFixture.learnerID,
-            trainingID: HubFixture.trainingID, client: client(server))
+            trainingID: trainingID, client: client(server))
     }
 }
 

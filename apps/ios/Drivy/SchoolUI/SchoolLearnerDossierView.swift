@@ -1,12 +1,12 @@
 import SwiftUI
 
 private struct SchoolLearnerPage: Hashable {
-    let trainingID: UUID
     let section: SchoolTrainingSection
 }
 
 /// The dossier's home says who the learner is and how to reach them, then opens lessons and
-/// progression as distinct pushed pages, so the native back action always returns here.
+/// progression as two pushed pages, so the native back action always returns here.
+/// However many formations the learner follows, there are two entries: each page filters by permit.
 /// Personal details stay folded until someone asks for them.
 struct SchoolLearnerDossierView: View {
     @Bindable var workspace: SchoolWorkspace
@@ -22,6 +22,9 @@ struct SchoolLearnerDossierView: View {
     @State private var profileScopeKey = ""
     @State private var profileCreationFailed = false
     @State private var showsInformation = false
+    /// The permit filtered in Lessons and Progression; `nil` shows them all. Held here so the choice
+    /// survives going back and forth between the two pages of the same learner.
+    @State private var permit: UUID?
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.scenePhase) private var scenePhase
 
@@ -34,14 +37,14 @@ struct SchoolLearnerDossierView: View {
         profileScopeKey == scopeKey ? profileModel : nil
     }
 
-    /// With a single formation, its name and unusual status sit under the learner's name.
-    /// With several, each group of rows carries its own.
-    private var soleTraining: SchoolTraining? {
-        workspace.trainings.count == 1 && workspace.nextTrainingsCursor == nil ? workspace.trainings.first : nil
-    }
+    /// The learner's formations, the current one first: the order of the permit filter.
+    private var trainings: [SchoolTraining] { SchoolPermitName.ordered(workspace.trainings) }
 
+    /// With a single formation, its unusual status is a badge under the learner's name.
+    /// With several, the line of permits says it in words, next to the permit concerned.
     private var unusualSoleTraining: SchoolTraining? {
-        guard let training = soleTraining, training.status != "ACTIVE" else { return nil }
+        guard workspace.trainings.count == 1, workspace.nextTrainingsCursor == nil,
+              let training = workspace.trainings.first, training.status != "ACTIVE" else { return nil }
         return training
     }
 
@@ -51,9 +54,10 @@ struct SchoolLearnerDossierView: View {
                 .navigationTitle("Dossier")
                 .navigationBarTitleDisplayMode(.inline)
                 .navigationDestination(for: SchoolLearnerPage.self) { page in
-                    if let learner = workspace.learner, learner.id == workspace.selectedLearnerID, let trainingClient {
+                    if let learner = workspace.learner, learner.id == workspace.selectedLearnerID, let trainingClient,
+                       !workspace.trainings.isEmpty {
                         SchoolTrainingScreen(client: trainingClient, workspace: workspace, learner: learner,
-                            trainingID: page.trainingID, section: page.section, showsHeading: true)
+                            trainingIDs: trainings.map(\.id), permit: $permit, section: page.section, showsHeading: true)
                             .navigationTitle(page.section.rawValue)
                             .navigationBarTitleDisplayMode(.inline)
                     } else {
@@ -110,13 +114,13 @@ struct SchoolLearnerDossierView: View {
 
     // MARK: - Identity
 
-    /// Visible at once: who, which formation, what is unusual, and the frequent gestures.
+    /// Visible at once: who, which permits, what is unusual, and the frequent gestures.
     /// Everything shown here comes with the dossier itself, so nothing moves when the profile arrives.
     private func header(_ learner: SchoolLearner) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
             // Historic UI-test identifier: it now designates the full name that heads the dossier.
             DrivyLearnerIdentity(name: learner.displayName,
-                                 detail: soleTraining.map { "Permis \($0.categoryCode)" }, variant: .page)
+                                 detail: SchoolPermitName.summary(trainings), variant: .page)
                 .accessibilityIdentifier("learner-profile-first-name")
             statusBadges(learner)
             SchoolLearnerActions(learner: learner, contact: contact(of: learner), identifierPrefix: "learner-profile")
@@ -249,7 +253,7 @@ struct SchoolLearnerDossierView: View {
             if !workspace.isLoadingTrainings && workspace.trainings.isEmpty && workspace.trainingsError == nil {
                 DrivyEmptyState(title: "Aucune formation", message: "Ouvre-la sur le web.", symbol: "steeringwheel")
             }
-            ForEach(workspace.trainings) { training in trainingPages(training) }
+            if let first = workspace.trainings.first { sections(identifiedBy: first.id) }
             if workspace.nextTrainingsCursor != nil {
                 Button { Task { await workspace.loadMoreTrainings() } } label: {
                     DrivyBusyLabel(title: "Afficher les autres formations", busyTitle: "Chargement…", isBusy: workspace.isLoadingMoreTrainings)
@@ -261,34 +265,16 @@ struct SchoolLearnerDossierView: View {
         }
     }
 
-    private func trainingPages(_ training: SchoolTraining) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-            if soleTraining == nil { trainingTitle(training) }
-            DrivyRowGroup {
-                DrivyNavigationRow(title: "Leçons") {
-                    path.append(SchoolLearnerPage(trainingID: training.id, section: .lessons))
-                }
-                .accessibilityIdentifier("learner-lessons-\(training.id.uuidString)")
-                DrivyNavigationRow(title: "Progression") {
-                    path.append(SchoolLearnerPage(trainingID: training.id, section: .progress))
-                }
-                .accessibilityIdentifier("learner-progress-\(training.id.uuidString)")
-            }
-            .disabled(trainingClient == nil)
+    /// One group, two rows, whatever the number of formations.
+    /// Historic UI-test identifiers: they carry the first formation the dossier lists.
+    private func sections(identifiedBy id: UUID) -> some View {
+        DrivyRowGroup {
+            DrivyNavigationRow(title: "Leçons") { path.append(SchoolLearnerPage(section: .lessons)) }
+                .accessibilityIdentifier("learner-lessons-\(id.uuidString)")
+            DrivyNavigationRow(title: "Progression") { path.append(SchoolLearnerPage(section: .progress)) }
+                .accessibilityIdentifier("learner-progress-\(id.uuidString)")
         }
-    }
-
-    /// Several formations: each group is named, and an unusual status follows its own name.
-    private func trainingTitle(_ training: SchoolTraining) -> some View {
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.s))
-        return layout {
-            DrivySectionHeader(title: "Permis \(training.categoryCode)")
-            if training.status != "ACTIVE" {
-                DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status))
-            }
-        }
+        .disabled(trainingClient == nil)
     }
 
     // MARK: - Actions
@@ -320,6 +306,8 @@ struct SchoolLearnerDossierView: View {
     private func reload() async {
         let requestedScope = scopeKey
         await workspace.loadSelectedLearner()
+        guard !Task.isCancelled, requestedScope == scopeKey else { return }
+        await workspace.loadRemainingTrainings()
         guard !Task.isCancelled, requestedScope == scopeKey else { return }
         await loadProfile()
     }

@@ -48,32 +48,60 @@ struct SchoolTrainingView: View {
     }
 }
 
-/// Leçons et progression d’une formation. Les onglets de l’élève fixent la section ;
-/// sans section fixée, un sélecteur passe de l’une à l’autre.
+/// Leçons et progression d’un élève, pour une ou plusieurs de ses formations. Les pages du dossier et les
+/// onglets de l’élève fixent la section ; sans section fixée, un sélecteur passe de l’une à l’autre.
+/// Avec plusieurs formations, un filtre par permis apparaît ; avec une seule, rien ne s’ajoute.
 /// `showsHeading` ajoute à une section fixée un rappel d’une ligne (élève, formation) : la page
-/// poussée depuis le dossier en a besoin, les onglets de l’élève qui lit sa propre formation non.
+/// poussée depuis le dossier en a besoin, les onglets de l’élève qui lit son propre dossier non.
 struct SchoolTrainingScreen: View {
     let client: SchoolTrainingClient
     @Bindable var workspace: SchoolWorkspace
     let learner: SchoolLearner
-    let trainingID: UUID
-    var section: SchoolTrainingSection? = nil
-    var showsHeading = false
-    var openProfile: (() -> Void)? = nil
-    @State private var model: SchoolTrainingWorkspace?
+    /// Les formations montrées, dans l’ordre du filtre.
+    let trainingIDs: [UUID]
+    let section: SchoolTrainingSection?
+    let showsHeading: Bool
+    let openProfile: (() -> Void)?
+    /// Le permis choisi ; `nil` les montre tous. Tenu par l’appelant : le choix survit au retour sur la page.
+    @Binding private var permit: UUID?
+    @State private var models: [SchoolTrainingWorkspace] = []
     /// La leçon ouverte vit ici, hors du contenu conditionnel et de `.id` : une relecture ou un changement
     /// de portée recrée le contenu, jamais la feuille qui le surplombe.
     @State private var opened: OpenedLesson?
     @Environment(\.scenePhase) private var scenePhase
 
+    init(client: SchoolTrainingClient, workspace: SchoolWorkspace, learner: SchoolLearner, trainingIDs: [UUID],
+         permit: Binding<UUID?>, section: SchoolTrainingSection? = nil, showsHeading: Bool = false,
+         openProfile: (() -> Void)? = nil) {
+        self.client = client
+        _workspace = Bindable(wrappedValue: workspace)
+        self.learner = learner
+        self.trainingIDs = trainingIDs
+        self.section = section
+        self.showsHeading = showsHeading
+        self.openProfile = openProfile
+        _permit = permit
+    }
+
+    /// Une seule formation : aucun filtre.
+    init(client: SchoolTrainingClient, workspace: SchoolWorkspace, learner: SchoolLearner, trainingID: UUID,
+         section: SchoolTrainingSection? = nil, showsHeading: Bool = false, openProfile: (() -> Void)? = nil) {
+        self.init(client: client, workspace: workspace, learner: learner, trainingIDs: [trainingID], permit: .constant(nil),
+            section: section, showsHeading: showsHeading, openProfile: openProfile)
+    }
+
     private var scopeKey: String {
-        "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.joined(separator: ",") ?? ""):\(workspace.membership?.grants.joined(separator: ",") ?? ""):\(trainingID)"
+        "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.joined(separator: ",") ?? ""):\(workspace.membership?.grants.joined(separator: ",") ?? ""):\(trainingIDs.map(\.uuidString).joined(separator: ","))"
+    }
+    /// Les modèles affichés sont ceux des formations demandées, pour l’élève et les droits en cours.
+    private var isCurrent: Bool {
+        !models.isEmpty && models.map(\.trainingID) == trainingIDs && models.allSatisfy { matches($0) }
     }
     var body: some View {
         Group {
-            if let model, matches(model) {
-                SchoolTrainingContent(model: model, workspace: workspace, learner: learner, fixedSection: section, showsHeading: showsHeading,
-                    openProfile: openProfile, opened: $opened)
+            if isCurrent {
+                SchoolTrainingContent(models: models, workspace: workspace, learner: learner, fixedSection: section, showsHeading: showsHeading,
+                    openProfile: openProfile, permit: $permit, opened: $opened)
             } else {
                 DrivySkeletonRows(count: 4, leading: .time)
                     .drivySkeleton("Chargement de la formation…")
@@ -83,45 +111,49 @@ struct SchoolTrainingScreen: View {
             }
         }
         .id(scopeKey)
-        .task(id: scopeKey) {
-            if let model, matches(model), model.trainingID == trainingID {
-                // Retour sur l’écran ou changement d’onglet : toujours relire, sans effacer ce qui est affiché.
-                await model.refreshOnAppear()
-                return
-            }
-            model = nil
-            guard let person = workspace.person, let membership = workspace.membership else { return }
-            let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
-                membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: client.baseURL.absoluteString)
-            let shared = SchoolTrainingModelCache.model(scope: scope, membership: membership, learnerID: learner.id,
-                trainingID: trainingID, client: client)
-            model = shared.model
-            // Le modèle partagé peut dater d’avant un bilan enregistré ailleurs : relecture à chaque affichage.
-            await shared.model.load(keepingCurrent: !shared.isNew)
-        }
-        .onChange(of: model?.accessRevoked) { _, revoked in
+        .task(id: scopeKey) { await open() }
+        .onChange(of: models.contains { $0.accessRevoked }) { _, revoked in
             // Relecture silencieuse : `loadAccount` vide le compte et fait disparaître tout l’écran (feuille ouverte comprise).
-            if revoked == true { Task { await workspace.refreshAccount(minimumInterval: 0) } }
+            if revoked { Task { await workspace.refreshAccount(minimumInterval: 0) } }
         }
         // Une leçon planifiée ailleurs (feuille de planification du dossier) : la liste se relit sans être recréée.
         .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { notification in
-            if let change = notification.object as? SchoolLessonChange,
-               change.schoolID != workspace.membership?.schoolId || change.trainingID != trainingID { return }
-            if let model, matches(model) { Task { await model.refreshOnAppear() } }
+            guard isCurrent else { return }
+            guard let change = notification.object as? SchoolLessonChange else { Task { await refresh() }; return }
+            guard change.schoolID == workspace.membership?.schoolId,
+                  let model = models.first(where: { $0.trainingID == change.trainingID }) else { return }
+            Task { await model.refreshOnAppear() }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, let model, matches(model) { Task { await model.refreshOnAppear() } }
+            if phase == .active, isCurrent { Task { await refresh() } }
         }
-        .sheet(item: $opened, onDismiss: { if let model { Task { await model.load(keepingCurrent: true) } } }) { lesson in
+        .sheet(item: $opened, onDismiss: { Task { await refresh() } }) { lesson in
             NavigationStack {
+                // Le souhait de l’élève suit la prochaine leçon de sa formation, pas celle du dossier entier.
                 SchoolLessonReportView(client: client.reports, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: learner.displayName,
-                    isNextPlanned: lesson.id == model?.upcomingLessons.first?.id)
+                    isNextPlanned: models.contains { $0.upcomingLessons.first?.id == lesson.id })
             }
             .tint(DrivyTheme.accent)
         }
     }
+    private func open() async {
+        // Retour sur l’écran ou changement d’onglet : toujours relire, sans effacer ce qui est affiché.
+        if isCurrent { await refresh(); return }
+        models = []
+        guard let person = workspace.person, let membership = workspace.membership else { return }
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: client.baseURL.absoluteString)
+        let shared = trainingIDs.map {
+            SchoolTrainingModelCache.model(scope: scope, membership: membership, learnerID: learner.id, trainingID: $0, client: client)
+        }
+        models = shared.map { $0.model }
+        // Un modèle partagé peut dater d’avant un bilan enregistré ailleurs : relecture à chaque affichage.
+        let kept = Set(shared.filter { !$0.isNew }.map { $0.model.trainingID })
+        await SchoolLessonFeed.together(models) { await $0.load(keepingCurrent: kept.contains($0.trainingID)) }
+    }
+    private func refresh() async { await SchoolLessonFeed(models: models).reload() }
     private func matches(_ model: SchoolTrainingWorkspace) -> Bool {
-        model.learnerID == learner.id && model.trainingID == trainingID
+        model.learnerID == learner.id
             && model.scope.personID == workspace.person?.personId && model.scope.membershipID == workspace.membership?.membershipId
             && model.scope.accessEpoch == workspace.membership?.accessEpoch && model.membership.roles == workspace.membership?.roles
             && model.membership.grants == workspace.membership?.grants
@@ -190,12 +222,14 @@ private struct TrainingLessonMonth: Identifiable {
 }
 
 private struct SchoolTrainingContent: View {
-    @Bindable var model: SchoolTrainingWorkspace
+    /// Un modèle par formation de l’élève, dans l’ordre du filtre.
+    let models: [SchoolTrainingWorkspace]
     @Bindable var workspace: SchoolWorkspace
     let learner: SchoolLearner
     let fixedSection: SchoolTrainingSection?
     let showsHeading: Bool
     let openProfile: (() -> Void)?
+    @Binding var permit: UUID?
     @Binding var opened: OpenedLesson?
     @State private var chosenSection: SchoolTrainingSection = .lessons
     /// Le tri et le filtre survivent aux changements d’onglet et de dossier pendant la session de la scène.
@@ -209,15 +243,31 @@ private struct SchoolTrainingContent: View {
     private var section: SchoolTrainingSection { fixedSection ?? chosenSection }
     private var period: SchoolLessonPeriod { SchoolLessonPeriod(month: selectedMonth, year: selectedYear) }
 
+    /// Le permis montré seul : l’unique formation de l’élève, ou celle que le filtre désigne.
+    /// Un choix qui ne correspond plus à aucune formation revient à « Tous ».
+    private var selected: SchoolTrainingWorkspace? {
+        models.count == 1 ? models.first : models.first { $0.trainingID == permit }
+    }
+    private var shown: [SchoolTrainingWorkspace] { selected.map { [$0] } ?? models }
+    private var feed: SchoolLessonFeed { SchoolLessonFeed(models: shown) }
+    private var hasSeveralPermits: Bool { models.count > 1 }
+    /// « Tous » avec plusieurs permis : chaque leçon et chaque section de progression nomme le sien.
+    private var mixesPermits: Bool { shown.count > 1 }
+    private var hasPedagogicalRole: Bool { models.first?.hasPedagogicalRole ?? false }
+    private var hasTraining: Bool { shown.contains { $0.training != nil } }
+    /// Les filtres de statut et de période portent sur l’historique complet, jamais sur les seules pages lues.
+    private var needsHistory: Bool { period.isActive || filter != .all }
+
     var body: some View {
         GeometryReader { geometry in
             // Dans un grand détail, les leçons et leur progression restent visibles ensemble.
             // Le sélecteur est conservé quand chaque colonne n’aurait plus 460 pt de lecture.
-            if geometry.size.width >= TrainingLayout.twoColumnBreakpoint && fixedSection == nil && model.hasPedagogicalRole
-                && model.training != nil && !dynamicTypeSize.isAccessibilitySize {
+            if geometry.size.width >= TrainingLayout.twoColumnBreakpoint && fixedSection == nil && hasPedagogicalRole
+                && hasTraining && !dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     heading
-                    if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
+                    if hasSeveralPermits { permitFilter }
+                    failures
                     HStack(alignment: .top, spacing: DrivySpacing.xl) {
                         ScrollView {
                             VStack(alignment: .leading, spacing: DrivySpacing.m) {
@@ -226,7 +276,7 @@ private struct SchoolTrainingContent: View {
                             }
                         }
                         .frame(maxWidth: .infinity)
-                        .refreshable { await model.load(keepingCurrent: true) }
+                        .refreshable { await feed.reload() }
                         ScrollView {
                             VStack(alignment: .leading, spacing: DrivySpacing.m) {
                                 DrivySectionHeader(title: "Progression")
@@ -234,7 +284,7 @@ private struct SchoolTrainingContent: View {
                             }
                         }
                         .frame(maxWidth: .infinity)
-                        .refreshable { await model.loadProgress() }
+                        .refreshable { await SchoolLessonFeed.together(shown) { await $0.loadProgress() } }
                     }
                 }
                 .drivyPageContent(maxWidth: TrainingLayout.twoColumnMaxWidth)
@@ -242,13 +292,14 @@ private struct SchoolTrainingContent: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: DrivySpacing.m) {
                         if fixedSection == nil || showsHeading { heading }
-                        if model.isLoading && model.training == nil {
+                        if hasSeveralPermits { permitFilter }
+                        if !hasTraining && feed.isLoading {
                             DrivySkeletonRows(count: 4, leading: .time)
                                 .drivySkeleton("Chargement de la formation…")
                         }
-                        if let error = model.errorMessage { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
-                        if model.training != nil {
-                            if fixedSection == nil && model.hasPedagogicalRole { sectionPicker }
+                        failures
+                        if hasTraining {
+                            if fixedSection == nil && hasPedagogicalRole { sectionPicker }
                             switch section {
                             case .lessons: lessons
                             case .progress: progress
@@ -257,14 +308,14 @@ private struct SchoolTrainingContent: View {
                     }
                     .drivyPageContent()
                 }
-                .refreshable { await model.load(keepingCurrent: true) }
+                .refreshable { await feed.reload() }
             }
         }
         .background(DrivyTheme.surface)
         .accessibilityIdentifier("training-dossier")
         .sheet(isPresented: $showsPeriod) { periodPicker }
-        .task(id: "\(selectedMonth):\(selectedYear)") {
-            if period.isActive { await model.loadHistory() }
+        .task(id: "\(selectedMonth):\(selectedYear):\(filter.rawValue):\(selected?.trainingID.uuidString ?? "")") {
+            if needsHistory { await feed.loadHistory() }
         }
     }
     private var heading: some View {
@@ -275,12 +326,22 @@ private struct SchoolTrainingContent: View {
         }
     }
 
-    /// La formation à nommer : celle que cet écran a relue, sinon celle que le dossier connaît déjà,
-    /// pour que le rappel ne change pas pendant le chargement.
-    private var shownTraining: SchoolTraining? {
+    /// La formation d’un modèle : celle que cet écran a relue, sinon celle que le dossier connaît déjà,
+    /// pour que son nom ne change pas pendant le chargement.
+    private func training(of model: SchoolTrainingWorkspace) -> SchoolTraining? {
         model.training ?? workspace.trainings.first { $0.id == model.trainingID }
     }
-    private var formationName: String? { shownTraining.map { "Permis \($0.categoryCode)" } }
+    private var permitNames: [UUID: String] { SchoolPermitName.names(models.compactMap { training(of: $0) }) }
+    private func permitName(_ model: SchoolTrainingWorkspace, in names: [UUID: String]) -> String {
+        names[model.trainingID] ?? "Permis"
+    }
+
+    /// Le permis montré seul. Avec « Tous », aucun n’est à nommer en tête.
+    private var shownTraining: SchoolTraining? { selected.flatMap { training(of: $0) } }
+    /// Avec plusieurs permis, le filtre dit déjà lequel est affiché : le rappel ne le répète pas.
+    private var formationName: String? {
+        hasSeveralPermits ? nil : shownTraining.map { "Permis \($0.categoryCode)" }
+    }
 
     /// Poussée depuis le dossier, la page rappelle l’élève en une ligne : on vient de le quitter.
     /// Ouverte seule, la formation nomme l’élève en tête, sans le poids d’un titre d’écran.
@@ -302,6 +363,50 @@ private struct SchoolTrainingContent: View {
             DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status))
         }
     }
+
+    /// Deux permis : trois choix courts tiennent dans un contrôle segmenté. Au-delà, ou en très grand texte,
+    /// un menu qui affiche le choix en cours ; jamais une rangée de boutons à faire défiler.
+    @ViewBuilder private var permitFilter: some View {
+        if models.count == 2 && !dynamicTypeSize.isAccessibilitySize {
+            permitPicker(allTitle: "Tous").pickerStyle(.segmented)
+                .frame(maxWidth: TrainingLayout.pickerMaxWidth)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            permitPicker(allTitle: "Tous les permis").pickerStyle(.menu)
+                .frame(minHeight: 44)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+    private func permitPicker(allTitle: String) -> some View {
+        let names = permitNames
+        return Picker("Permis", selection: Binding(get: { selected?.trainingID }, set: { permit = $0 })) {
+            Text(allTitle).tag(UUID?.none)
+            ForEach(models, id: \.trainingID) { model in
+                Text(permitName(model, in: names)).tag(UUID?.some(model.trainingID))
+            }
+        }
+        .labelsHidden()
+        .accessibilityLabel("Permis")
+        .accessibilityIdentifier("training-permit-filter")
+    }
+
+    /// Une panne commune à tout ce qui est montré se dit une fois ; sinon chaque permis porte la sienne,
+    /// et les autres restent lisibles.
+    @ViewBuilder private var failures: some View {
+        let failed = shown.filter { $0.errorMessage != nil }
+        if let message = failed.first?.errorMessage, failed.count == shown.count,
+           failed.allSatisfy({ $0.errorMessage == message }) {
+            SchoolErrorNotice(message: message, retry: { retry(failed) })
+        } else {
+            let names = permitNames
+            ForEach(failed, id: \.trainingID) { model in
+                SchoolErrorNotice(message: "\(permitName(model, in: names)) : \(model.errorMessage ?? "")", retry: { retry([model]) })
+            }
+        }
+    }
+    private func retry(_ models: [SchoolTrainingWorkspace]) {
+        Task { await SchoolLessonFeed.together(models) { await $0.load() } }
+    }
     @ViewBuilder private var sectionPicker: some View {
         if dynamicTypeSize.isAccessibilitySize {
             sections.pickerStyle(.menu).frame(minHeight: 48)
@@ -319,23 +424,28 @@ private struct SchoolTrainingContent: View {
         }
     }
     private var lessons: some View {
-        let visible = model.lessons.filter { filter.includes($0) && period.includes($0) }
+        let feed = self.feed
+        let visible = feed.lessons.filter { filter.includes($0) && period.includes($0) }
+        // Le permis d’une leçon n’est nommé que lorsque la liste en mêle plusieurs.
+        let names = mixesPermits ? permitNames : [:]
         return VStack(alignment: .leading, spacing: DrivySpacing.m) {
-            if model.isLoading && !model.lessonsLoaded {
+            if feed.isLoadingFirstPage {
                 DrivySkeletonRows(count: 4, leading: .time)
                     .drivySkeleton("Chargement des leçons…")
+            } else {
+                if feed.allRead && !feed.hasLessons && !feed.isLoading {
+                    DrivyEmptyState(title: "Aucune leçon", symbol: "calendar")
+                }
+                if feed.hasLessons { lessonsMenu }
+                if feed.isLoadingHistory { DrivyLoadingState(title: "Chargement de l’historique…") }
+                // Tant qu’il reste des pages à lire, « aucune leçon » ne peut pas être affirmé.
+                if visible.isEmpty && feed.hasLessons && !feed.isLoadingHistory && !feed.hasMore {
+                    DrivyEmptyState(title: period.isActive ? "Aucune leçon sur cette période" : filter.emptyTitle, symbol: "calendar",
+                        actionTitle: "Tout afficher", action: { filter = .all; selectedMonth = 0; selectedYear = 0 })
+                }
+                ForEach(months(of: visible)) { month in monthGroup(month, feed: feed, permitNames: names) }
+                moreLessons
             }
-            if model.lessonsLoaded && model.lessons.isEmpty && !model.isLoading {
-                DrivyEmptyState(title: "Aucune leçon", symbol: "calendar")
-            }
-            if !model.lessons.isEmpty { lessonsMenu }
-            if model.isLoadingHistory { DrivyLoadingState(title: "Chargement de l’historique…") }
-            if visible.isEmpty && !model.lessons.isEmpty && !model.isLoadingHistory && (!period.isActive || model.nextCursor == nil) {
-                DrivyEmptyState(title: period.isActive ? "Aucune leçon sur cette période" : filter.emptyTitle, symbol: "calendar",
-                    actionTitle: "Tout afficher", action: { filter = .all; selectedMonth = 0; selectedYear = 0 })
-            }
-            ForEach(months(of: visible)) { month in monthGroup(month) }
-            moreLessons
         }
     }
     /// Un seul contrôle natif : le libellé dit le filtre, la flèche dit le sens ; le menu range les deux choix.
@@ -390,12 +500,12 @@ private struct SchoolTrainingContent: View {
                                 Text("Toutes les années").tag(0)
                                 ForEach(periodYears, id: \.self) { year in Text(String(year)).tag(year) }
                             }
-                            .disabled(model.isLoadingHistory)
+                            .disabled(feed.isLoadingHistory)
                         }
                     }
-                    if model.isLoadingHistory { ProgressView("Chargement de l’historique…") }
-                    if let error = model.errorMessage {
-                        SchoolErrorNotice(message: error, retry: { Task { await model.loadHistory() } })
+                    if feed.isLoadingHistory { ProgressView("Chargement de l’historique…") }
+                    if let error = shown.compactMap(\.errorMessage).first {
+                        SchoolErrorNotice(message: error, retry: { Task { await feed.loadHistory() } })
                     }
                     if period.isActive {
                         Button("Toutes les périodes") { selectedMonth = 0; selectedYear = 0 }
@@ -409,7 +519,7 @@ private struct SchoolTrainingContent: View {
             .background(DrivyTheme.surface)
             .navigationTitle("Période").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Afficher") { showsPeriod = false } } }
-            .task { await model.loadHistory() }
+            .task { await feed.loadHistory() }
         }
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .presentationDragIndicator(.visible)
@@ -427,7 +537,7 @@ private struct SchoolTrainingContent: View {
         .padding(.vertical, DrivySpacing.xs)
     }
     private var periodYears: [Int] {
-        var years = Set(model.lessons.compactMap { SchoolLessonPeriod.parts($0)?.year })
+        var years = Set(shown.flatMap(\.lessons).compactMap { SchoolLessonPeriod.parts($0)?.year })
         if selectedYear != 0 { years.insert(selectedYear) }
         return years.sorted(by: >)
     }
@@ -466,7 +576,7 @@ private struct SchoolTrainingContent: View {
         }
         return result
     }
-    private func monthGroup(_ month: TrainingLessonMonth) -> some View {
+    private func monthGroup(_ month: TrainingLessonMonth, feed: SchoolLessonFeed, permitNames: [UUID: String]) -> some View {
         let count = month.lessons.count
         return VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
@@ -482,21 +592,49 @@ private struct SchoolTrainingContent: View {
             .accessibilityIdentifier("training-month-\(month.id)")
             DrivyRowGroup {
                 ForEach(month.lessons) { lesson in
-                    Button { opened = OpenedLesson(id: lesson.id) } label: { SchoolTrainingLessonRow(lesson: lesson) }
+                    Button { opened = OpenedLesson(id: lesson.id) } label: {
+                        SchoolTrainingLessonRow(lesson: lesson, permit: permitNames[lesson.trainingId])
+                    }
                         .buttonStyle(DrivyRowButtonStyle())
-                        .disabled(!model.canOpenPedagogicalContent)
+                        .disabled(feed.model(for: lesson)?.canOpenPedagogicalContent != true)
                         .accessibilityIdentifier("training-lesson-\(lesson.id.uuidString)")
                 }
             }
         }
     }
+    /// Une compétence relève du référentiel de sa catégorie : « Tous » montre la progression de chaque permis
+    /// sous son nom, l’une après l’autre, sans rien additionner d’un permis à l’autre.
     private var progress: some View {
+        let names = permitNames
+        return VStack(alignment: .leading, spacing: DrivySpacing.l) {
+            // Une formation illisible est dite par son erreur, pas par une section vide.
+            ForEach(shown.filter { $0.training != nil || $0.isLoading }, id: \.trainingID) { model in
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                    if mixesPermits { permitTitle(model, name: permitName(model, in: names)) }
+                    competencies(of: model)
+                }
+            }
+        }
+    }
+    /// Le titre d’un permis dans « Tous » ; un état inhabituel suit son nom.
+    private func permitTitle(_ model: SchoolTrainingWorkspace, name: String) -> some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.s))
+        return layout {
+            DrivySectionHeader(title: name)
+            if let training = training(of: model), training.status != "ACTIVE" {
+                DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status))
+            }
+        }
+    }
+    private func competencies(of model: SchoolTrainingWorkspace) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.m) {
             if let value = model.progress {
                 if let error = model.progressError { SchoolErrorNotice(message: error, retry: { Task { await model.loadProgress() } }) }
                 DrivyRowGroup {
-                    ForEach(orderedProgress(value.items)) { item in
-                        Button { opened = OpenedLesson(id: item.sourceLessonId) } label: { progressRow(item) }
+                    ForEach(orderedProgress(value.items, of: model)) { item in
+                        Button { opened = OpenedLesson(id: item.sourceLessonId) } label: { progressRow(item, of: model) }
                             .buttonStyle(DrivyRowButtonStyle())
                             .accessibilityHint("Ouvre la leçon")
                     }
@@ -519,7 +657,7 @@ private struct SchoolTrainingContent: View {
             }
         }
     }
-    private func progressRow(_ item: SchoolReportProgressItem) -> some View {
+    private func progressRow(_ item: SchoolReportProgressItem, of model: SchoolTrainingWorkspace) -> some View {
         progressLayout {
             DrivyCompetencyNote(label: model.competencies.first(where: { $0.id == item.id })?.displayLabel ?? item.displayLabel,
                 level: SchoolTrainingFormatting.level(item.level), context: item.context,
@@ -541,7 +679,7 @@ private struct SchoolTrainingContent: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
             : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.m))
     }
-    private func orderedProgress(_ items: [SchoolReportProgressItem]) -> [SchoolReportProgressItem] {
+    private func orderedProgress(_ items: [SchoolReportProgressItem], of model: SchoolTrainingWorkspace) -> [SchoolReportProgressItem] {
         let ranks = Dictionary(model.competencies.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })
         return items.sorted {
             let a = ranks[$0.id] ?? Int.max, b = ranks[$1.id] ?? Int.max
@@ -549,24 +687,27 @@ private struct SchoolTrainingContent: View {
         }
     }
     @ViewBuilder private var moreLessons: some View {
-        if model.nextCursor != nil {
-            Button { Task { await model.loadMore() } } label: {
-                DrivyBusyLabel(title: "Afficher d’autres leçons", busyTitle: "Chargement…", isBusy: model.isLoadingMore)
+        let feed = self.feed
+        if feed.hasMore {
+            Button { Task { await feed.loadMore() } } label: {
+                DrivyBusyLabel(title: "Afficher d’autres leçons", busyTitle: "Chargement…", isBusy: feed.isLoadingMore)
             }
-            .buttonStyle(DrivySecondaryButtonStyle()).disabled(model.isLoadingMore)
+            .buttonStyle(DrivySecondaryButtonStyle()).disabled(feed.isLoadingMore)
         }
     }
 }
 
-/// Même anatomie que la ligne d’agenda : heure, jour, lieu ; un badge seulement pour l’inhabituel.
+/// Même anatomie que la ligne d’agenda : heure, jour, lieu ; un mot de texte seulement pour l’inhabituel.
 private struct SchoolTrainingLessonRow: View {
     let lesson: SchoolLesson
+    /// Nommé seulement quand la liste mêle plusieurs permis : du texte parmi les détails, pas un badge.
+    var permit: String? = nil
     var body: some View {
         DrivyLessonRow(start: SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone),
             end: SchoolTrainingFormatting.time(lesson.plannedEnd, zone: lesson.timeZone),
             title: SchoolTrainingFormatting.rowDay(lesson.plannedStart, zone: lesson.timeZone),
-            details: [lesson.meetingPoint],
-            badge: lesson.drivyState.isUnusual ? lesson.drivyState.badge : nil)
+            details: [permit, lesson.meetingPoint].compactMap { $0 },
+            state: lesson.drivyState)
     }
 }
 
