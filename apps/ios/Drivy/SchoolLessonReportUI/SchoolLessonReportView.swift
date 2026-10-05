@@ -2,7 +2,7 @@ import MapKit
 import SwiftUI
 
 /// L’écran unique d’une leçon : avant (objectifs, départ du trajet), pendant (trajet en cours, observations),
-/// après (trajet, observations, bilan). Tout est partagé avec l’élève automatiquement ; le moniteur garde
+/// après (objectifs prévus, bilan, trajet, observations). Une leçon annulée ou manquée garde ses objectifs prévus. Tout est partagé avec l’élève automatiquement ; le moniteur garde
 /// pour lui ce qu’il choisit.
 struct SchoolLessonReportView: View {
     let client: SchoolLessonReportClient
@@ -252,6 +252,7 @@ private struct SchoolLessonReportContent: View {
                 Form {
                     headerSection
                     lessonNotices
+                    plannedGoals
                     completedReport
                     lessonEvidence
                     // Avant la leçon : le souhait de l’élève éclaire les objectifs, puis viennent les observations.
@@ -295,7 +296,17 @@ private struct SchoolLessonReportContent: View {
     @ViewBuilder private var lessonContext: some View {
         headerSection
         lessonNotices
+        plannedGoals
         lessonEvidence
+    }
+
+    /// Après la leçon (terminée, annulée, manquée), les objectifs prévus se relisent sans se modifier : l’école
+    /// ferme la préparation dès que la leçon a un résultat. Le moniteur de la leçon et l’élève les reçoivent ;
+    /// la note que le moniteur garde pour lui reste hors de cette lecture.
+    @ViewBuilder private var plannedGoals: some View {
+        if let lesson = model.lesson, lesson.status != "PLANNED", let goals = model.preparation?.goals, !goals.isEmpty {
+            goalsReader(goals)
+        }
     }
 
     @ViewBuilder private var lessonNotices: some View {
@@ -422,17 +433,27 @@ private struct SchoolLessonReportContent: View {
         .listRowSeparator(.hidden)
     }
 
-    /// Faits de la leçon sous l’élève : quand, où, à quel prix. Du texte seul, sans symbole ni colonne de montants ;
-    /// le badge ne signale que l’inhabituel.
+    /// Faits de la leçon sous l’élève : son état s’il est inhabituel, quand, où, avec qui, à quel prix.
+    /// Du texte seul, sans symbole, pastille ni colonne de montants.
     private func lessonFacts(_ lesson: SchoolLesson) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            // L’inhabituel (à terminer, annulée, absence) se lit en premier, du même mot que dans les listes :
+            // du texte dans la hiérarchie, sans pastille. Planifiée, en cours ou terminée : rien, l’écran le dit déjà.
+            if let note = lesson.drivyState.rowNote {
+                DrivyRowNoteText(note: note)
+                    .accessibilityIdentifier("lesson-state")
+            }
             scheduleLines(lesson)
                 .accessibilityElement(children: .combine)
+            if let actual = SchoolLessonHubRules.actualSchedule(lesson) {
+                factLine(actual, color: DrivyTheme.muted)
+            }
+            if let instructor = SchoolLessonHubRules.instructorLine(instructorName: lesson.providedInstructorName,
+                isAuthor: model.isAuthor, isOwnLearner: model.isOwnLearner, roles: model.membership.roles) {
+                factLine(instructor, color: DrivyTheme.muted)
+            }
             ForEach(SchoolLessonHubRules.priceLines(lesson: lesson, account: model.account)) { line in
                 priceLine(line)
-            }
-            if lesson.drivyState.isUnusual {
-                lesson.drivyState.badge.padding(.top, DrivySpacing.xxs)
             }
         }
     }
@@ -640,20 +661,22 @@ private struct SchoolLessonReportContent: View {
     }
 
     private var trackSection: some View {
-        Section {
+        let replayable = model.replayableCaptures
+        return Section {
             if !model.track.isEmpty {
+                // La carte porte sa seule commande : lecture, en bas à droite.
                 LessonTrackMap(segments: model.track, pins: pins)
+                    .overlay(alignment: .bottomTrailing) { replayControl(replayable) }
                     .listRowInsets(EdgeInsets())
-            }
-            ForEach(Array(model.replayableCaptures.enumerated()), id: \.element.id) { index, capture in
-                Button {
-                    replay = SchoolTripReplayRoute(model: SchoolCaptureReplayWorkspace(scope: model.scope, client: agenda.captureClient,
-                        captureID: capture.id), learnerName: learnerName, lessonTimeZone: model.lesson?.timeZone)
-                } label: {
-                    Text(model.replayableCaptures.count == 1 ? "Revoir le trajet" : "Revoir le trajet \(index + 1)")
-                        .frame(minHeight: 44)
+            } else {
+                // Sans aperçu (tracé illisible ou vide), le replay s’ouvre par une ligne de texte.
+                ForEach(Array(replayable.enumerated()), id: \.element.id) { index, capture in
+                    Button { openReplay(capture) } label: {
+                        Text(replayable.count == 1 ? "Revoir le trajet" : "Revoir le trajet \(index + 1)")
+                            .frame(minHeight: 44)
+                    }
+                    .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
                 }
-                .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
             }
             if model.captures.contains(where: { $0.syncState != .synced && $0.syncState != .partial && $0.publicationState == .privateCapture }) {
                 // État inhabituel du trajet : symbole et texte, comme tout statut.
@@ -665,6 +688,35 @@ private struct SchoolLessonReportContent: View {
             }
         } header: { Text("Trajet").drivyFormSectionHeader() }
             .drivyFormRows()
+    }
+
+    /// Lecture du trajet, posée sur la carte. Un trajet : l’appui ouvre le replay. Plusieurs : la même commande
+    /// ouvre leur liste, pour ne jamais poser deux boutons sur la carte.
+    @ViewBuilder private func replayControl(_ captures: [SchoolCaptureSession]) -> some View {
+        if captures.count == 1, let capture = captures.first {
+            Button { openReplay(capture) } label: { LessonReplayGlyph() }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Revoir le trajet")
+                .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
+                .padding(DrivySpacing.s)
+        } else if captures.count > 1 {
+            Menu {
+                ForEach(Array(captures.enumerated()), id: \.element.id) { index, capture in
+                    Button("Trajet \(index + 1)") { openReplay(capture) }
+                        .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
+                }
+            } label: { LessonReplayGlyph() }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Revoir le trajet")
+                .accessibilityHint("Ouvre la liste des trajets de la leçon")
+                .accessibilityIdentifier("lesson-replay-menu")
+                .padding(DrivySpacing.s)
+        }
+    }
+
+    private func openReplay(_ capture: SchoolCaptureSession) {
+        replay = SchoolTripReplayRoute(model: SchoolCaptureReplayWorkspace(scope: model.scope, client: agenda.captureClient,
+            captureID: capture.id), learnerName: learnerName, lessonTimeZone: model.lesson?.timeZone)
     }
 
     private var observationsSection: some View {
@@ -827,9 +879,9 @@ private struct SchoolLessonReportContent: View {
                 }
             } header: { Text("Bilan").drivyFormSectionHeader() }
                 .drivyFormRows()
-        } else if model.revisionsError == nil {
+        } else if model.sharedReportWasRead {
             Section {
-                Text("Ton moniteur n’a pas encore écrit le bilan.").foregroundStyle(DrivyTheme.muted)
+                Text(SchoolLessonHubRules.missingReportText(isOwnLearner: model.isOwnLearner)).foregroundStyle(DrivyTheme.muted)
             } header: { Text("Bilan").drivyFormSectionHeader() }
                 .drivyFormRows()
         }
@@ -935,6 +987,21 @@ private struct SchoolLessonReportContent: View {
                 .accessibilityHint("Facultatif")
         }
         .padding(.vertical, DrivySpacing.xs)
+    }
+}
+
+/// Commande de lecture posée sur l’aperçu du trajet : même vitre teintée et même cible de 48 pt que les
+/// commandes des écrans carte, lisible sur la carte en clair comme en sombre.
+private struct LessonReplayGlyph: View {
+    var body: some View {
+        Image(systemName: "play.fill")
+            .font(DrivyMapGlyph.control)
+            .foregroundStyle(DrivyTheme.text)
+            // Le triangle de lecture paraît décalé à gauche dans un cercle : un point le recentre à l’œil.
+            .offset(x: 1)
+            .frame(width: 48, height: 48)
+            .drivyLegibleMapControl(in: Circle())
+            .contentShape(Circle())
     }
 }
 

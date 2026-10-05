@@ -10,6 +10,8 @@ import Observation
     private(set) var wish: SchoolLearnerWish?
     private(set) var draft: SchoolReportDraft?
     private(set) var revisions: [SchoolReportRevision] = []
+    /// L’école a répondu à la lecture des bilans partagés : une liste vide est alors un bilan absent, pas un bilan refusé.
+    private(set) var sharedReportWasRead = false
     private(set) var competencies: [SchoolCatalogCompetency] = []
     /// Partage automatique : ce que le moniteur garde pour lui (auteur seulement).
     private(set) var sharing: SchoolLessonSharing?
@@ -191,6 +193,7 @@ import Observation
     func invalidate() {
         invalidated = true; generation = UUID(); lesson = nil; preparation = nil; wish = nil; draft = nil; revisions = []
         competencies = []; pending = nil; goals = []; administrativeNote = ""; wishText = ""; optimisticSharing = nil
+        sharedReportWasRead = false
         workedOn = ""; observationText = ""; nextStep = ""; observations = []
         sharing = nil; lessonObservations = []; track = []; trackAnchors = [:]
         training = nil; account = nil; currentLevels = [:]; captures = []; permitRecorded = false; permitReviewDenied = false
@@ -248,15 +251,18 @@ import Observation
             let isOwn = current.roles.contains("LEARNER") && learner.personId == scope.personID
             let author = current.roles.contains("INSTRUCTOR") && lesson.instructorMembershipId == current.membershipId
             let readsContent = author || isOwn || current.roles.contains("ADMIN") || current.roles.contains("INSTRUCTOR")
+            // Hors de sa propre leçon, un moniteur ne lit le souhait et le bilan partagé que s’il est affecté à la
+            // formation : un refus de l’école laisse alors la section absente, sans message de panne.
+            let asColleague = !author && !isOwn
             var wishRead: (value: SchoolLearnerWish?, message: String?) = (nil, nil)
-            if author || isOwn {
-                wishRead = try await readSupplement(request: request, unavailable: "Le souhait de l’élève n’a pas pu être chargé.") {
+            if author || isOwn || (lesson.status == "PLANNED" && current.roles.contains("INSTRUCTOR")) {
+                wishRead = try await readSupplement(request: request, unavailable: "Le souhait de l’élève n’a pas pu être chargé.", absentWhenRefused: asColleague) {
                     try await self.client.wish(schoolID: self.scope.schoolID, trainingID: lesson.trainingId)
                 }
             }
             var revisionsRead: (value: [SchoolReportRevision]?, message: String?) = (nil, nil)
             if author || isOwn || current.roles.contains("INSTRUCTOR") {
-                revisionsRead = try await readSupplement(request: request, unavailable: "Les bilans partagés n’ont pas pu être chargés. Actualise pour les retrouver.") {
+                revisionsRead = try await readSupplement(request: request, unavailable: "Les bilans partagés n’ont pas pu être chargés. Actualise pour les retrouver.", absentWhenRefused: asColleague) {
                     try await self.client.revisions(schoolID: self.scope.schoolID, lessonID: self.lessonID)
                 }
             }
@@ -342,6 +348,7 @@ import Observation
             if preparationPolicy != .conflict { preparation = preparationRead.value }
             if wishPolicy != .conflict { wish = wishRead.value }
             revisions = revisionsRead.value ?? []; revisionsError = revisionsRead.message
+            sharedReportWasRead = revisionsRead.value != nil
             if draftPolicy != .conflict { draft = draftsRead.value?.first }
             isOwnLearner = isOwn
             training = trainingRead.value
@@ -386,7 +393,10 @@ import Observation
     // A failed secondary read must not hide independently authorized content. Only
     // authentication/access changes invalidate the whole projection; missing resources
     // and transient failures leave that section unavailable, never editable as empty data.
-    private func readSupplement<Value>(request: UUID, unavailable: String, fetch: () async throws -> Value) async throws -> (value: Value?, message: String?) {
+    // `absentWhenRefused` : the school answers 404 to a colleague who is not assigned to the training. That is a
+    // right the reader does not hold, not an outage: the section stays absent and no message is shown.
+    private func readSupplement<Value>(request: UUID, unavailable: String, absentWhenRefused: Bool = false,
+                                       fetch: () async throws -> Value) async throws -> (value: Value?, message: String?) {
         guard request == generation, !invalidated else { throw CancellationError() }
         do {
             let value = try await fetch()
@@ -395,6 +405,7 @@ import Observation
         } catch {
             guard request == generation, !invalidated else { throw CancellationError() }
             if error is CancellationError || isAccessRevoked(error) { throw error }
+            if absentWhenRefused, error as? SchoolReportFailure == .notFound { return (nil, nil) }
             return (nil, unavailable)
         }
     }
@@ -550,15 +561,15 @@ import Observation
             isBusy = false; pendingReviewed = false; fail(error); return false
         }
     }
-    /// La confirmation nomme ce que l’école vient d’enregistrer ; un réglage de partage ou un permis vu
-    /// se lisent déjà dans la fiche et n’en reçoivent pas.
+    /// La confirmation nomme ce que l’école vient d’enregistrer ; un réglage de partage, un permis vu, une leçon
+    /// terminée ou une absence se lisent déjà dans la fiche et n’en reçoivent pas.
     static func confirmationText(for kind: SchoolCommandKind) -> String? {
         switch kind {
         case .updateLessonSharing, .recordPermitCheck: return nil
+        // La fiche change d’état sous les yeux (bilan à rédiger, « Absence » en tête) : rien à redire.
+        case .completeLesson, .markNoShow: return nil
         case .savePreparation: return "Objectifs enregistrés."
         case .saveWish: return "Souhait enregistré."
-        case .completeLesson: return "Leçon terminée."
-        case .markNoShow: return "Absence enregistrée."
         default: return "Enregistré."
         }
     }

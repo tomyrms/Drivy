@@ -53,6 +53,32 @@ enum SchoolLessonHubRules {
         return instructorName.map { SchoolLessonHeaderIdentity(name: $0, role: "Moniteur") }
     }
 
+    /// Écart, en secondes, à partir duquel l’horaire réel d’une leçon terminée se lit à part de l’horaire prévu.
+    static let actualScheduleThreshold: TimeInterval = 300
+
+    /// « Horaire réel : 14:10 – 15:05 » pour une leçon terminée dont le début ou la fin s’écarte d’au moins
+    /// cinq minutes de l’horaire prévu. En dessous, l’horaire prévu suffit et rien n’est ajouté.
+    static func actualSchedule(_ lesson: SchoolLesson) -> String? {
+        guard lesson.status == "COMPLETED", let plannedStart = lesson.startsAt, let plannedEnd = lesson.endsAt,
+              let start = lesson.actualStart.flatMap(SchoolLesson.date), let end = lesson.actualEnd.flatMap(SchoolLesson.date), end > start,
+              abs(start.timeIntervalSince(plannedStart)) >= actualScheduleThreshold
+                || abs(end.timeIntervalSince(plannedEnd)) >= actualScheduleThreshold else { return nil }
+        return "Horaire réel\u{00A0}: \(time(start, zone: lesson.timeZone))\u{00A0}–\u{00A0}\(time(end, zone: lesson.timeZone))"
+    }
+
+    /// L’équipe qui ouvre la leçon d’un collègue lit qui la donne : la fiche d’une leçon dont on n’est pas le
+    /// moniteur ne montre ni ses objectifs ni ses observations, que l’école réserve à ce moniteur.
+    static func instructorLine(instructorName: String?, isAuthor: Bool, isOwnLearner: Bool, roles: [String]) -> String? {
+        guard !isAuthor, !isOwnLearner, mayManage(roles), let instructorName else { return nil }
+        return "Moniteur\u{00A0}: \(instructorName)"
+    }
+
+    /// Bilan absent d’une leçon terminée, pour qui ne l’écrit pas. L’élève attend celui de son moniteur ;
+    /// l’équipe ne lit que le bilan partagé.
+    static func missingReportText(isOwnLearner: Bool) -> String {
+        isOwnLearner ? "Ton moniteur n’a pas encore écrit le bilan." : "Aucun bilan partagé."
+    }
+
     /// Le prix d’une leçon planifiée ou réalisée : une ligne. L’école n’enregistre aucun paiement, donc rien ne
     /// s’intitule « à payer » ; le compte d’une leçon réalisée porte le prix convenu et ne se relit à part que
     /// si l’école l’a corrigé. Une leçon annulée ou manquée n’affiche aucun prix : rien n’y est retenu.

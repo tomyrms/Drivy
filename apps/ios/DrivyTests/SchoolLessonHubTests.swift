@@ -172,11 +172,56 @@ struct SchoolLessonHubTests {
     @Test func confirmationsNameWhatWasSaved() {
         #expect(SchoolLessonReportWorkspace.confirmationText(for: .savePreparation) == "Objectifs enregistrés.")
         #expect(SchoolLessonReportWorkspace.confirmationText(for: .saveWish) == "Souhait enregistré.")
-        #expect(SchoolLessonReportWorkspace.confirmationText(for: .completeLesson) == "Leçon terminée.")
-        #expect(SchoolLessonReportWorkspace.confirmationText(for: .markNoShow) == "Absence enregistrée.")
         // Un réglage de partage ou un permis vu se lisent déjà dans la fiche.
         #expect(SchoolLessonReportWorkspace.confirmationText(for: .updateLessonSharing) == nil)
         #expect(SchoolLessonReportWorkspace.confirmationText(for: .recordPermitCheck) == nil)
+        // Une leçon terminée ou une absence changent la fiche elle-même : aucun bandeau ne le répète.
+        #expect(SchoolLessonReportWorkspace.confirmationText(for: .completeLesson) == nil)
+        #expect(SchoolLessonReportWorkspace.confirmationText(for: .markNoShow) == nil)
+    }
+
+    // MARK: Contenu de la fiche selon le statut
+
+    @Test func theActualScheduleIsReadOnlyWhenItDepartsFromThePlan() {
+        func completed(start: String?, end: String?, status: String = "COMPLETED") -> SchoolLesson {
+            SchoolLesson(id: HubFixture.lessonID, schoolId: HubFixture.schoolID, version: 3, trainingId: HubFixture.trainingID,
+                learnerId: HubFixture.learnerID, instructorMembershipId: ConfigurationFixture.membershipID,
+                plannedStart: "2026-09-28T12:00:00Z", plannedEnd: "2026-09-28T12:50:00Z", timeZone: "Europe/Zurich",
+                meetingPoint: "Gare de Lausanne", status: status, priceCentsSnapshot: 9_000, bufferMinutesSnapshot: 10,
+                actualStart: start, actualEnd: end, permitWarning: false, publicationVersion: 0, currentPublishedRevisionId: nil,
+                commercialRevisionVersion: 1)
+        }
+        // Dix minutes de retard au départ, quinze à l’arrivée : l’horaire réel se lit, dans le fuseau de la leçon.
+        #expect(SchoolLessonHubRules.actualSchedule(completed(start: "2026-09-28T12:10:00Z", end: "2026-09-28T13:05:00Z"))
+            == "Horaire réel\u{00A0}: 14:10\u{00A0}–\u{00A0}15:05")
+        // Un seul bord écarté suffit.
+        #expect(SchoolLessonHubRules.actualSchedule(completed(start: "2026-09-28T12:01:00Z", end: "2026-09-28T12:55:00Z")) != nil)
+        // À quelques minutes près, l’horaire prévu suffit.
+        #expect(SchoolLessonHubRules.actualSchedule(completed(start: "2026-09-28T12:02:00Z", end: "2026-09-28T12:47:00Z")) == nil)
+        // Rien sans horaire réel, avec un intervalle incohérent ou hors d’une leçon terminée.
+        #expect(SchoolLessonHubRules.actualSchedule(completed(start: nil, end: nil)) == nil)
+        #expect(SchoolLessonHubRules.actualSchedule(completed(start: "2026-09-28T13:05:00Z", end: "2026-09-28T12:10:00Z")) == nil)
+        #expect(SchoolLessonHubRules.actualSchedule(completed(start: "2026-09-28T12:10:00Z", end: "2026-09-28T13:05:00Z", status: "PLANNED")) == nil)
+    }
+
+    @Test func theTeamReadsWhoGivesAColleaguesLesson() {
+        func line(_ roles: [String], author: Bool = false, own: Bool = false, name: String? = "Alex Martin") -> String? {
+            SchoolLessonHubRules.instructorLine(instructorName: name, isAuthor: author, isOwnLearner: own, roles: roles)
+        }
+        #expect(line(["ADMIN"]) == "Moniteur\u{00A0}: Alex Martin")
+        #expect(line(["ADMIN", "INSTRUCTOR"]) == "Moniteur\u{00A0}: Alex Martin")
+        // Sa propre leçon : le moniteur ne se lit pas lui-même.
+        #expect(line(["INSTRUCTOR"], author: true) == nil)
+        // L’élève lit déjà son moniteur en tête de fiche.
+        #expect(line(["LEARNER"], own: true) == nil)
+        #expect(line(["LEARNER"]) == nil)
+        // Aucun nom n’est deviné.
+        #expect(line(["ADMIN"], name: nil) == nil)
+    }
+
+    @Test func aMissingReportIsWordedForItsReader() {
+        #expect(SchoolLessonHubRules.missingReportText(isOwnLearner: true) == "Ton moniteur n’a pas encore écrit le bilan.")
+        #expect(SchoolLessonHubRules.missingReportText(isOwnLearner: false) == "Aucun bilan partagé.")
     }
 
     // MARK: Permis
