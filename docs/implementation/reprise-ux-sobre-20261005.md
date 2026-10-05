@@ -54,7 +54,7 @@ Celles de `reprise-revue-ui-20261004.md` valent ici : aucune compilation Swift l
 
 Tous les lots sont intégrés et poussés. Il reste :
 
-1. Confirmer la campagne native après correction des deux fixtures de test : `gh workflow run "Refonte · iOS" --ref codex/revue-integration-20260929`.
+1. Campagne native confirmée sur `e1097eb` : 324 tests sur 324, parcours iPhone et iPad réussis (run 37340252666). IPA finale : run 37340253321, à télécharger avec l’accord du porteur.
 2. Décision du porteur sur l'API (`4daae5f`, nom affiché recomposé, écart avec R77) : déployer après sauvegarde, ou revenir à un champ « Nom affiché » distinct.
 3. Essai sur appareil par le porteur : transitions, GPS réel, VoiceOver, grandes tailles de texte.
 4. Points laissés en l'état, listés dans `ux-sobre-20261005.md`.
