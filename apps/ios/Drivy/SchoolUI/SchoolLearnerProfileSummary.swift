@@ -1,34 +1,52 @@
 import SwiftUI
 
-/// Read-only contents of the learner's profile panel. Its owner loads the workspace
-/// and presents loading, errors and editing; this view never reads the editable draft.
+/// Prénom et nom enregistrés au profil, comparés au nom déjà affiché en tête d’écran.
+/// Hors de la vue : la règle se teste telle quelle.
+enum SchoolLearnerRecordedName {
+    /// Dans l’ordre de lecture ; vide si ni le prénom ni le nom ne sont renseignés.
+    static func text(firstName: String?, lastName: String?) -> String {
+        [firstName, lastName]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    /// Vrai quand le nom du profil redit celui déjà affiché, à la casse et aux espaces près.
+    static func repeats(_ recordedName: String, displayedName: String?) -> Bool {
+        guard let displayedName else { return false }
+        return folded(recordedName).compare(folded(displayedName), options: .caseInsensitive) == .orderedSame
+    }
+
+    private static func folded(_ value: String) -> String {
+        value.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+}
+
+/// Read-only personal details of the learner's profile, in clear: contacts, then birth date and
+/// address when the rights give them. Its owner loads the workspace and presents loading, errors
+/// and editing; this view never reads the editable draft.
 struct SchoolLearnerProfileSummary: View {
     let model: SchoolProfileWorkspace
+    /// Name already shown at the top of the screen: the profile's first and last name are then
+    /// repeated only when they differ from it.
+    var displayedName: String? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         if let profile = model.profile {
-            VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                    valueRow("Prénom", value: profile.firstName, identifier: "learner-profile-first-name")
-                    valueRow("Nom", value: profile.lastName, identifier: "learner-profile-last-name")
+            let recordedName = SchoolLearnerRecordedName.text(firstName: profile.firstName, lastName: profile.lastName)
+            VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                if !SchoolLearnerRecordedName.repeats(recordedName, displayedName: displayedName) {
+                    valueRow("Prénom et nom", value: recordedName, identifier: "learner-profile-name")
                 }
-                Divider()
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    contactRow("E-mail", value: profile.contactEmail, scheme: "mailto",
-                               action: "Envoyer un e-mail", identifier: "learner-profile-email")
-                    contactRow("Téléphone", value: profile.contactPhone, scheme: "tel",
-                               action: "Appeler", identifier: "learner-profile-phone")
-                }
+                valueRow("E-mail", value: profile.contactEmail, identifier: "learner-profile-email-value")
+                valueRow("Téléphone", value: profile.contactPhone, identifier: "learner-profile-phone-value")
                 // CONTACT projections omit these fields; omission must never read as missing data.
                 if model.isOwnProfile || model.roles.contains("ADMIN") {
-                    Divider()
-                    VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                        valueRow("Date de naissance", value: SchoolProfileDraft.displayDate(profile.birthDate),
-                                 missing: "Non renseignée", identifier: "learner-profile-birth-date")
-                        valueRow("Adresse", value: profile.postalAddress.map(addressText),
-                                 missing: "Non renseignée", identifier: "learner-profile-address")
-                    }
+                    valueRow("Date de naissance", value: SchoolProfileDraft.displayDate(profile.birthDate),
+                             missing: "Non renseignée", identifier: "learner-profile-birth-date")
+                    valueRow("Adresse", value: profile.postalAddress.map(addressText),
+                             missing: "Non renseignée", identifier: "learner-profile-address")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -41,24 +59,6 @@ struct SchoolLearnerProfileSummary: View {
         return row(title, value: content ?? missing, tone: content == nil ? DrivyTheme.muted : DrivyTheme.text)
             .textSelection(.enabled)
             .accessibilityIdentifier(identifier)
-    }
-
-    @ViewBuilder private func contactRow(_ title: String, value: String?, scheme: String,
-                                        action: String, identifier: String) -> some View {
-        if let value = nonempty(value), let destination = contactURL(scheme: scheme, value: value) {
-            Link(destination: destination) {
-                row(title, value: value, tone: DrivyTheme.accent)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(action)
-            .accessibilityValue(value)
-            .accessibilityIdentifier(identifier)
-        } else {
-            valueRow(title, value: value, identifier: identifier)
-                .frame(minHeight: 44, alignment: .leading)
-        }
     }
 
     @ViewBuilder private func row(_ title: String, value: String, tone: Color) -> some View {
@@ -88,10 +88,6 @@ struct SchoolLearnerProfileSummary: View {
     private func nonempty(_ value: String?) -> String? {
         guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return value
-    }
-
-    private func contactURL(scheme: String, value: String) -> URL? {
-        scheme == "tel" ? SchoolContactLinks.call(value) : SchoolContactLinks.mail(value)
     }
 
     private func addressText(_ address: SchoolPostalAddress) -> String {

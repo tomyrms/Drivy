@@ -50,6 +50,8 @@ struct SchoolTrainingView: View {
 
 /// Leçons et progression d’une formation. Les onglets de l’élève fixent la section ;
 /// sans section fixée, un sélecteur passe de l’une à l’autre.
+/// `showsHeading` ajoute à une section fixée un rappel d’une ligne (élève, formation) : la page
+/// poussée depuis le dossier en a besoin, les onglets de l’élève qui lit sa propre formation non.
 struct SchoolTrainingScreen: View {
     let client: SchoolTrainingClient
     @Bindable var workspace: SchoolWorkspace
@@ -268,31 +270,37 @@ private struct SchoolTrainingContent: View {
     private var heading: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             identity
-            if fixedSection == nil && (openProfile != nil || learner.contactPhone != nil || learner.contactEmail != nil) {
-                SchoolLearnerActions(learner: learner, openProfile: openProfile)
+            // Sans coordonnée exploitable ni profil à ouvrir, la rangée ne prend aucune place.
+            if fixedSection == nil { SchoolLearnerActions(learner: learner, openProfile: openProfile) }
+        }
+    }
+
+    /// La formation à nommer : celle que cet écran a relue, sinon celle que le dossier connaît déjà,
+    /// pour que le rappel ne change pas pendant le chargement.
+    private var shownTraining: SchoolTraining? {
+        model.training ?? workspace.trainings.first { $0.id == model.trainingID }
+    }
+    private var formationName: String? { shownTraining.map { "Permis \($0.categoryCode)" } }
+
+    /// Poussée depuis le dossier, la page rappelle l’élève en une ligne : on vient de le quitter.
+    /// Ouverte seule, la formation nomme l’élève en tête, sans le poids d’un titre d’écran.
+    @ViewBuilder private var identity: some View {
+        if fixedSection == nil {
+            DrivyLearnerIdentity(name: learner.displayName, detail: formationName ?? "Formation", variant: .compact) {
+                statusBadge
+            }
+        } else {
+            DrivyLearnerIdentity(name: learner.displayName, detail: formationName, variant: .inline) {
+                statusBadge
             }
         }
     }
 
-    private var identity: some View {
-        // Le dossier est celui d’une personne : son nom est le titre, la formation la précise.
-        HStack(spacing: DrivySpacing.m) {
-            if !dynamicTypeSize.isAccessibilitySize {
-                DrivyAvatar(name: learner.displayName, size: 48)
-            }
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text(learner.displayName)
-                    .font(.drivyTitle).foregroundStyle(DrivyTheme.text).fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
-                Label(model.training.map { "Permis \($0.categoryCode)" } ?? "Formation", systemImage: "steeringwheel")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-            }
-            Spacer(minLength: 0)
-            if let training = model.training, training.status != "ACTIVE" {
-                DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status))
-            }
+    /// Un badge seulement pour l’inhabituel : en pause, terminée, annulée.
+    @ViewBuilder private var statusBadge: some View {
+        if let training = shownTraining, training.status != "ACTIVE" {
+            DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status))
         }
-        .accessibilityElement(children: .combine)
     }
     @ViewBuilder private var sectionPicker: some View {
         if dynamicTypeSize.isAccessibilitySize {
