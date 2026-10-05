@@ -34,12 +34,13 @@ Chemins relatifs à `apps/ios/Drivy/`. Chaque lot possède ses fichiers ; person
 
 | Lot | Sujet | Modèle | Fichiers possédés | État |
 |---|---|---|---|---|
-| A | Dossier de l'élève, pages Leçons et Progression | opus | `SchoolUI/SchoolLearnerDossierView.swift`, `SchoolUI/SchoolLearnerProfileSummary.swift`, `SchoolUI/SchoolLearnerActions.swift`, `SchoolTrainingUI/*`, tests `SchoolDossierTests`, `SchoolTrainingRefreshTests` | lancé |
-| B | Fiche de leçon, bilan, saisie d'observations | opus | `SchoolLessonReportUI/*`, `SchoolObservationUI/*`, `UI/DrivyComponents+Agenda.swift`, tests `SchoolLessonFinishTests`, `SchoolLessonHubTests` | lancé |
-| C | Tarif dans la planification, libellés de l'agenda | sonnet | `SchoolAgendaUI/*`, tests `SchoolPlanningDefaultsTests`, `SchoolStartNowClientTests` | lancé |
-| D | GPS actif : Signaler, pause et reprise | opus | `SchoolCaptureUI/SchoolCaptureLive*.swift`, `SchoolLiveObservationSheet.swift`, `SchoolObservationUndoBanner.swift`, `SchoolObservationEmblem.swift`, `SchoolLiveHeadingSource.swift`, `SchoolMapCourse.swift`, `SchoolCaptureCore/SchoolCaptureSessionController.swift`, `UI/DrivyComponents+Seance.swift`, tests `FieldFlowTests`, `SchoolLiveObservationRecorderTests`, `SchoolCaptureLifecycleTests` | lancé |
-| E | Modification des informations de l'élève | opus | `SchoolProfileUI/*`, `SchoolProfileAPI/*`, tests `SchoolProfile*Tests` ; au besoin `apps/api/src/profiles.ts` et son test | lancé |
-| F | Seconde vague : mêmes défauts ailleurs, relecture de compilation | opus | à définir après intégration de A à E | à faire |
+| A | Dossier de l'élève, pages Leçons et Progression | opus | `SchoolUI/SchoolLearnerDossierView.swift`, `SchoolUI/SchoolLearnerProfileSummary.swift`, `SchoolUI/SchoolLearnerActions.swift`, `SchoolTrainingUI/*`, test `SchoolDossierTests` | **committé `392c360`** |
+| B | Fiche de leçon, bilan, saisie d'observations | opus | `SchoolLessonReportUI/*`, `SchoolObservationUI/*`, `UI/DrivyComponents+Agenda.swift`, test `SchoolLessonHubTests` | **committé `7209608`** |
+| C | Tarif dans la planification, libellés de l'agenda | sonnet | `SchoolAgendaUI/*`, tests `SchoolPlanningBookingTests` | **committé `7fc911a`**, non compilé |
+| D | GPS actif : Signaler, pause et reprise | opus | `SchoolCaptureCore/SchoolCaptureSessionController.swift`, `SchoolCaptureUI/SchoolCaptureLiveView.swift`, `SchoolCaptureLiveObservations.swift`, `SchoolLiveObservationSheet.swift`, tests de cycle de vie et d'enregistreur | **committé `fa72b75`** |
+| E | Modification des informations de l'élève | opus | `SchoolProfileUI/*`, `SchoolProfileAPI/*`, tests `SchoolProfile*Tests` ; `apps/api/src/profiles.ts` et `apps/api/test/g1d.integration.test.ts` | **committé `876bef9` (app) et `4daae5f` (API, non déployée)** |
+| F1 | Seconde vague : relectures et états occupés sans clignotement (fiche de leçon, observations, profil), nom du moniteur pour l'élève, libellé du permis vu | opus | `SchoolLessonReportUI/*`, `SchoolObservationUI/*`, `SchoolProfileUI/SchoolProfileWorkspace.swift`, `SchoolProfileView.swift`, `UI/DrivyComponents+Agenda.swift` | **committé** |
+| F2 | Seconde vague : huit corrections ciblées (onglet après reprise, planification, démarrage, préparation du trajet, symboles restants, liste Élèves, test UI du prix) | sonnet | `SchoolUI/SchoolHomeView.swift`, `SchoolTodayView.swift`, `SchoolWorkspace.swift`, `SchoolLearnerDossierView.swift`, `SchoolAgendaUI/SchoolPlanning*.swift`, `SchoolStartNowView.swift`, `SchoolCaptureUI/SchoolCapturePreparation*.swift`, `DrivyUITests/VisualOrientationTests.swift`, `DrivyTests/SchoolWorkspaceTests.swift` | **committé** |
 
 ## Skills
 
@@ -51,11 +52,17 @@ Celles de `reprise-revue-ui-20261004.md` valent ici : aucune compilation Swift l
 
 ## Ce qu'il reste à faire
 
-1. Recevoir les comptes rendus des lots A à E, relire chaque diff, committer lot par lot.
-2. Lancer le lot F, intégrer.
-3. Pousser la branche, attendre la compilation de l'IPA, corriger les erreurs éventuelles.
-4. Écrire la décision (`docs/implementation/ux-sobre-20261005.md`), mettre à jour `STATUS.md`.
+Tous les lots sont intégrés et poussés. Il reste :
+
+1. Confirmer la campagne native après correction des deux fixtures de test : `gh workflow run "Refonte · iOS" --ref codex/revue-integration-20260929`.
+2. Décision du porteur sur l'API (`4daae5f`, nom affiché recomposé, écart avec R77) : déployer après sauvegarde, ou revenir à un champ « Nom affiché » distinct.
+3. Essai sur appareil par le porteur : transitions, GPS réel, VoiceOver, grandes tailles de texte.
+4. Points laissés en l'état, listés dans `ux-sobre-20261005.md`.
 
 ## Journal
 
 - 5 octobre 2026 : constats par lecture, composant `DrivyLearnerIdentity` écrit, lots A à E lancés en parallèle. Rien n'est compilé.
+- 5 octobre, nuit : lot C terminé, relu et committé (`7fc911a`). Les lots A, B, D et E ont été coupés par la limite d'usage. Au moment de la coupure : A avait modifié le dossier et la page de formation, B la fiche de leçon et ses règles, E `profiles.ts`, son test et `SchoolProfileWorkspace.swift`, D aucun fichier. Chaque fichier modifié est à relire en entier avant de continuer.
+- 5 octobre, 12 h 20 : les quatre agents sont repris avec leur contexte.
+- 5 octobre, 12 h 36 : lots A, B, D, E relus et committés ; branche poussée (`fa72b75`), compilation de l'IPA et vérifications lancées. Seconde vague F1 (opus) et F2 (sonnet) lancée sur les défauts similaires relevés par D, B et A.
+- 5 octobre, après-midi : F2 committé (`30f4ff4`). F1, coupé une fois par la limite d'usage, repris et committé (`4cb4cee`). Cible de tests réparée (`37dc641`, `57ffbcf`). IPA compilée sur `4cb4cee`. Captures de 15 écrans regardées. Campagne native : 322 tests sur 324 et 12 parcours d'interface réussis ; deux fixtures de test corrigées. Préparation du trajet : en-tête compact à la place du nom en grand titre. Décision et STATUS écrits.

@@ -116,11 +116,17 @@ struct SchoolCapturePreparationView: View {
         .interactiveDismissDisabled(model.isBusy)
     }
 
-    private var heading: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            Text(model.learner?.displayName ?? "Ta leçon").font(.drivyScreenTitle)
-                .fixedSize(horizontal: false, vertical: true)
-            if let lesson = model.lesson { Text(lessonDate(lesson)).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
+    /// Même rappel compact que la fiche de leçon : la feuille s’ouvre depuis une leçon dont l’élève est déjà connu,
+    /// son nom n’a pas à redevenir un titre d’écran.
+    @ViewBuilder private var heading: some View {
+        let date = model.lesson.map { lessonDate($0) }
+        if let name = model.learner?.displayName {
+            DrivyLearnerIdentity(name: name, detail: date, variant: .compact)
+        } else {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text("Ta leçon").font(.headline).fixedSize(horizontal: false, vertical: true)
+                if let date { Text(date).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
+            }
         }
     }
 

@@ -229,7 +229,8 @@ private actor PlanningBookingServer: SchoolHTTPTransport {
         if url.deletingLastPathComponent().lastPathComponent == "operations", let operationID {
             guard receiptAvailable else { throw URLError(.notConnectedToInternet) }
             return try reply(["operationId": operationID, "commandType": operationType, "resourceType": "Lesson",
-                "resourceId": HubFixture.lessonID.uuidString, "resourceVersion": 2,
+                // Un déplacement fait passer la leçon de la version 2 de la fixture à la version 3 : le reçu la porte.
+                "resourceId": HubFixture.lessonID.uuidString, "resourceVersion": operationType == "MOVE_LESSON" ? 3 : 2,
                 "committedAt": ISO8601DateFormatter().string(from: Date())])
         }
         let response = try await fallback.send(request)

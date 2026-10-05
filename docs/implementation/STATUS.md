@@ -1,5 +1,25 @@
 # État de la réalisation
 
+## 5 octobre 2026 — passe UX sobre : dossier, leçon, bilan, GPS, modification du dossier
+
+À la demande du porteur. Décisions : [ux-sobre-20261005.md](ux-sobre-20261005.md). Reprise : [reprise-ux-sobre-20261005.md](reprise-ux-sobre-20261005.md).
+
+- **Identité de l’élève** : composant partagé `DrivyLearnerIdentity` (dossier, fiche de leçon, bilan, Leçons, Progression, observations, préparation du trajet).
+- **Dossier** : en-tête compact avec pastilles de contact ; coordonnées, date de naissance, adresse et « Modifier les informations » dans une zone dépliable.
+- **Fiche de leçon et bilan** : une vingtaine de symboles décoratifs retirés ; une ligne « Prix de la leçon » ; « À payer » retiré (aucun paiement n’est enregistré) ; bouton « Enregistrer et partager le bilan » ou « pour moi » selon le partage.
+- **Planification** : un seul tarif possible s’affiche en une ligne, le sélecteur n’apparaît qu’avec plusieurs tarifs.
+- **Modification du dossier** : les six champs en accès complet, e-mail et téléphone pour le moniteur affecté, alignés sur les droits du serveur. Le formulaire ne suivait que la politique de champs de l’école.
+- **GPS actif** : « Signaler » ne se grise plus pendant l’envoi ; pause, reprise et perte de signal récupérée ne reconstruisent plus le panneau ni la carte.
+- **Relectures** : fiche de leçon, observations, profil, planification, démarrage et préparation du trajet ne se grisent plus et ne se décalent plus pendant une relecture silencieuse.
+
+**Exécuté sur la CI.** IPA compilée à chaque étape, la dernière sur `4cb4cee` ([run37334495412](https://github.com/tomyrms/Drivy/actions/runs/37334495412)). Vérifications API et web réussies sur `fa72b75`, dont le nouveau test PostgreSQL du dossier ([run37297614674](https://github.com/tomyrms/Drivy/actions/runs/37297614674)). Campagne native sur `4cb4cee` ([run37335264393](https://github.com/tomyrms/Drivy/actions/runs/37335264393)) : 322 tests unitaires sur 324 et les 12 parcours d’interface, iPhone et iPad. Les deux échecs venaient de fixtures de test écrites la veille sans être exécutées (reçu de déplacement à version inchangée, attente oubliant la création confirmée) ; elles sont corrigées, la campagne de confirmation est indiquée ci-dessous quand elle a tourné. Captures de 15 écrans sur simulateur iPhone, en clair ([run37332255921](https://github.com/tomyrms/Drivy/actions/runs/37332255921)) : [dossier](assets/ux-sobre-20261005/dossier.png), [leçon](assets/ux-sobre-20261005/lecon.png), [saisie](assets/ux-sobre-20261005/saisie.png), [GPS](assets/ux-sobre-20261005/gps.png).
+
+La cible de tests ne compilait plus depuis `9dcad86` (macros `#require` imbriquées ou sans `try` interne) : corrigé.
+
+**Non déployé.** `apps/api/src/profiles.ts` recompose le nom affiché quand le prénom ou le nom changent. C’est un écart avec R77 (nom public distinct de l’identité administrative) : le porteur tranche avant tout déploiement. Sans lui, les six champs fonctionnent déjà ; seul le nom affiché dans les listes ne suit pas.
+
+**Non qualifié.** Aucune transition n’a été vue : clignotement de « Signaler », pause et reprise, relectures. Ni GPS réel, ni VoiceOver, ni grandes tailles de texte, ni mode sombre, ni rendu iPad de ces écrans. Le dossier déplié, le formulaire du moniteur affecté et la liste des pays n’ont pas été capturés.
+
 ## 4 octobre 2026 — jeu de volume fictif en production
 
 À la demande du porteur, la base du homelab contient maintenant un jeu d’essai volumineux : **86 élèves (+80), 7 moniteurs (+5 sans compte), 108 formations (+102) et 1 298 leçons (+1 236)** sur 180 jours passés et 45 jours à venir, avec 751 révisions de bilan, 1 912 observations sans position, des objectifs, 82 contrôles de permis, des disponibilités et deux fermetures. La catégorie B reprend l’offre existante ; les offres A et BE sont nouvelles. Script `infra/deploy/provision-volume-data.sql`, une transaction, refuse une seconde exécution ; il vérifie avant validation qu’aucune ligne existante n’a changé, hors champs vides du dossier de l’élève d’essai. **Sauvegarde vérifiée avant application**, répétition jouée deux fois sur une copie restaurée puis supprimée, résultat identique en production. Sous les droits par ligne : `luc` lit tout, `moniteur` 66 élèves sur 86, `eleve` ses 174 leçons, 93 bilans partagés, aucun brouillon ni repère privé. API prête après application. [Preuve](proofs/volume-seed-20261004.json), [reprise](reprise-jeu-volume-20261004.md).

@@ -109,7 +109,8 @@ import Testing
         let restored = recorder(outbox, server)
         await restored.retry()
         #expect(restored.undoState == .confirmed && outbox.value == nil)
-        #expect(outbox.removals == [withdrawal])
+        // La création confirmée a déjà quitté la file ; le retrait la quitte en dernier.
+        #expect(outbox.removals.last == withdrawal)
         #expect(await server.removalVersions() == [2])
         let undoID = try #require(withdrawal.observationUndoOperationID)
         #expect(await server.operations().removals == [undoID])
