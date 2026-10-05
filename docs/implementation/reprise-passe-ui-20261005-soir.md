@@ -57,6 +57,13 @@ Aucune compilation Swift locale : l'IPA se compile par le workflow « IPA d'essa
 3. Pousser, compiler l'IPA, lancer la campagne native et les captures (dossier, leçon, agenda, aujourd'hui).
 4. Écrire la décision (`passe-ui-20261005-soir.md`) et l'entrée de `STATUS.md`.
 
+## Suite de la demande (soir et nuit)
+
+- Points 9 à 12 (bilan et fin de leçon) : **faits**, commit `b960478`. Fiche de lecture pour une leçon terminée ; rédaction en étapes Trajet → Compétences → Bilan sur iPhone, deux colonnes sur iPad large ; brouillon local chiffré ; constat sans texte. Décision : `passe-ui-20261005-soir.md`.
+- Lots L, D, G : **committés** (`afee877`, `f296e27`, `117950c`). Fixtures multi-permis : `8e9b685`. Retouches issues des captures : `d038571`.
+- Points 13 à 17 (dossier Leçons / Progression à retravailler, vue récapitulative de leçon distincte du parcours de rédaction, « Leçons » à la place de « Trajets » dans le profil du moniteur, un seul détail de leçon quel que soit le point d'entrée) : **audit d'ensemble en cours**, lecture seule ; trois lots d'implémentation suivront (dossier + progression + ligne de leçon ; vue récapitulative ; profil → Leçons + API éventuelle).
+- En attente sur `d038571` : IPA iLoader, campagne native complète, captures iPhone + iPad.
+
 ## Journal
 
 - 5 octobre, 22 h 45 : lots L, D, G lancés. Lot Données appliqué en production.
