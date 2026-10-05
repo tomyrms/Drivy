@@ -345,15 +345,22 @@ struct DrivyPrivacyMark: View {
 }
 
 /// Short line above a bottom action: why it is disabled, or what failed.
+/// Only a failure carries a symbol (symbol, text and color); a plain note is text alone.
 struct DrivyActionNote: View {
     let text: String
     var isError = false
 
     var body: some View {
-        Label {
-            Text(text)
-        } icon: {
-            Image(systemName: isError ? "exclamationmark.triangle.fill" : "info.circle")
+        Group {
+            if isError {
+                Label {
+                    Text(text)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                }
+            } else {
+                Text(text)
+            }
         }
         .font(.footnote)
         .foregroundStyle(isError ? DrivyTheme.danger : DrivyTheme.muted)

@@ -387,34 +387,17 @@ private struct SchoolLessonReportContent: View {
 
     // MARK: En-tête
 
+    /// L’élève, puis les faits de la leçon. Un enregistrement en cours se lit dans le bouton qui l’a lancé,
+    /// pas dans une ligne d’en-tête qui décale toute la fiche puis disparaît.
     private var headerSection: some View {
         Section {
-            HStack(alignment: .top, spacing: DrivySpacing.m) {
-                if !typeSize.isAccessibilitySize { DrivyAvatar(name: learnerName, size: 44) }
-                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                    Text(learnerName).font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
-                    if let lesson = model.lesson {
-                        scheduleLines(lesson)
-                        // Le badge de l’inhabituel vit dans l’en-tête, sous le lieu, dans la même colonne de texte.
-                        if lesson.drivyState.isUnusual { lesson.drivyState.badge }
-                    }
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-            if let lesson = model.lesson {
-                amountRow("Tarif", cents: lesson.priceCentsSnapshot)
-                    .accessibilityIdentifier("lesson-tariff")
-                if let account = model.account {
-                    amountRow("À payer", cents: account.balanceCents)
-                        .accessibilityIdentifier("lesson-balance")
-                }
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                DrivyLearnerIdentity(name: learnerName, variant: .compact)
+                if let lesson = model.lesson { lessonFacts(lesson) }
             }
             if model.isLoading && model.lesson == nil {
                 DrivySkeletonRows(count: 4)
                     .drivySkeleton("Chargement de la leçon…")
-            } else if model.isBusy {
-                DrivyLoadingState(title: "Enregistrement…")
             }
             if let error = model.errorMessage {
                 SchoolErrorNotice(message: error, retry: model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
@@ -424,57 +407,60 @@ private struct SchoolLessonReportContent: View {
             if let message = model.information { DrivyInlineMessage(text: message, tone: .neutral) }
         }
         .listRowBackground(Color.clear)
-        // En-tête posé sur le canevas : aucun filet entre le nom, l’état et les messages.
+        // En-tête posé sur le canevas : aucun filet entre l’élève, les faits de la leçon et les messages.
         .listRowSeparator(.hidden)
     }
 
-    /// Montants lus directement dans la fiche, sans action ni écran financier secondaire.
-    private func amountRow(_ title: String, cents: Int64) -> some View {
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xxs))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.s))
-        return layout {
-            Text(title).foregroundStyle(DrivyTheme.muted)
-            if !typeSize.isAccessibilitySize { Spacer(minLength: DrivySpacing.s) }
-            Text(SchoolCatalogFormatting.price(cents))
-                .fontWeight(.medium).monospacedDigit().foregroundStyle(DrivyTheme.text)
-                .fixedSize(horizontal: false, vertical: true)
+    /// Faits de la leçon sous l’élève : quand, où, à quel prix. Du texte seul, sans symbole ni colonne de montants ;
+    /// le badge ne signale que l’inhabituel.
+    private func lessonFacts(_ lesson: SchoolLesson) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            scheduleLines(lesson)
+                .accessibilityElement(children: .combine)
+            ForEach(SchoolLessonHubRules.priceLines(lesson: lesson, account: model.account)) { line in
+                priceLine(line)
+            }
+            if lesson.drivyState.isUnusual {
+                lesson.drivyState.badge.padding(.top, DrivySpacing.xxs)
+            }
         }
-        .font(.subheadline)
-        .accessibilityElement(children: .combine)
     }
 
-    /// Date, horaire et lieu : sur une ligne quand la colonne le permet, sinon la date, l’horaire puis le lieu.
-    /// L’intervalle horaire ne se coupe jamais entre ses deux heures.
-    @ViewBuilder private func scheduleLines(_ lesson: SchoolLesson) -> some View {
+    /// Date, horaire et lieu. La date et l’horaire tiennent sur une ligne quand la colonne le permet, sinon l’un
+    /// sous l’autre : l’intervalle horaire ne se coupe jamais entre ses deux heures. Le lieu passe à la ligne seul.
+    private func scheduleLines(_ lesson: SchoolLesson) -> some View {
         let schedule = SchoolLessonHubRules.schedule(lesson)?.replacingOccurrences(of: " – ", with: "\u{00A0}–\u{00A0}")
         let parts = schedule?.components(separatedBy: " · ") ?? []
-        ViewThatFits(in: .horizontal) {
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                if let schedule { headerLine("clock", schedule).fixedSize(horizontal: true, vertical: false) }
-                if !lesson.meetingPoint.isEmpty {
-                    headerLine("mappin", lesson.meetingPoint).fixedSize(horizontal: true, vertical: false)
+        return VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            if let schedule {
+                ViewThatFits(in: .horizontal) {
+                    factLine(schedule, color: DrivyTheme.text).fixedSize(horizontal: true, vertical: false)
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        ForEach(parts, id: \.self) { part in factLine(part, color: DrivyTheme.text) }
+                    }
                 }
             }
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                if parts.count == 2 {
-                    headerLine("calendar", parts[0])
-                    headerLine("clock", parts[1])
-                } else if let schedule {
-                    headerLine("clock", schedule)
-                }
-                if !lesson.meetingPoint.isEmpty { headerLine("mappin", lesson.meetingPoint) }
-            }
+            if !lesson.meetingPoint.isEmpty { factLine(lesson.meetingPoint, color: DrivyTheme.muted) }
         }
     }
 
-    /// Ligne de contexte de l’en-tête : symbole collé au texte, aligné sur la ligne de base, graisse constante.
-    private func headerLine(_ symbol: String, _ text: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
-            Image(systemName: symbol).font(.footnote.weight(.semibold)).accessibilityHidden(true)
-            Text(text).monospacedDigit().fixedSize(horizontal: false, vertical: true)
-        }
-        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+    /// Une ligne de l’en-tête : l’horaire en encre pleine, le lieu et le prix en retrait.
+    private func factLine(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.subheadline)
+            .monospacedDigit()
+            .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Le prix se lit à la suite de la date et du lieu, sous son intitulé ; il n’ouvre rien et ne promet aucun suivi.
+    private func priceLine(_ line: SchoolLessonPriceLine) -> some View {
+        let amount = SchoolCatalogFormatting.price(line.cents)
+        return factLine("\(line.title)\u{00A0}: \(amount)", color: DrivyTheme.muted)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(line.title)
+            .accessibilityValue(amount)
+            .accessibilityIdentifier(line.kind == .agreed ? "lesson-tariff" : "lesson-balance")
     }
 
     /// Même présentation que partout ailleurs pour une demande au résultat inconnu.
@@ -512,21 +498,23 @@ private struct SchoolLessonReportContent: View {
             let cancels = SchoolLessonHubRules.mayCancel(lesson, roles: model.membership.roles)
             let absent = model.mayMarkNoShow(now: now)
             if moves || cancels || absent {
+                // Menus en texte seul : ces actions sont propres à Drivy, un symbole n’y serait qu’un ornement.
                 Menu {
                     if absent {
-                        Button("Élève absent", systemImage: "person.crop.circle.badge.xmark") { confirmsNoShow = true }
+                        Button("Élève absent") { confirmsNoShow = true }
                             .disabled(!model.canMutate || isFinishing)
                     }
                     if moves {
-                        Button("Déplacer", systemImage: "calendar.badge.clock") { openPlanning(lesson, cancelling: false) }
+                        Button("Déplacer") { openPlanning(lesson, cancelling: false) }
                             .disabled(!model.canMutate || isFinishing)
                     }
                     if cancels {
-                        Button("Annuler la leçon", systemImage: "calendar.badge.minus", role: .destructive) { openPlanning(lesson, cancelling: true) }
+                        Button("Annuler la leçon", role: .destructive) { openPlanning(lesson, cancelling: true) }
                             .disabled(!model.canMutate || isFinishing)
                     }
                 } label: {
-                    Label("Plus d’actions", systemImage: "ellipsis.circle")
+                    // Même symbole « plus » que sur les rangées d’observation et le trajet en cours.
+                    Label("Plus d’actions", systemImage: "ellipsis")
                 }
                 .accessibilityIdentifier("lesson-more-actions")
             }
@@ -544,6 +532,8 @@ private struct SchoolLessonReportContent: View {
         return .goals(startsAt: captureOpensLater(now: now))
     }
 
+    /// Boutons en texte seul. Seule la flèche de localisation reste, celle du système : elle signale que le geste
+    /// utilise le GPS, comme sur Aujourd’hui et la préparation du trajet.
     @ViewBuilder private func plannedBarView(_ bar: PlannedBar) -> some View {
         DrivyStickyActionBar {
             switch bar {
@@ -563,7 +553,7 @@ private struct SchoolLessonReportContent: View {
             case .goals(let startsAt):
                 if let startsAt { DrivyActionNote(text: "Trajet dès \(startsAt)") }
                 Button { Task { await model.savePreparation() } } label: {
-                    Label("Enregistrer les objectifs", systemImage: "square.and.arrow.down")
+                    DrivyBusyLabel(title: "Enregistrer les objectifs", isBusy: isSending(.savePreparation))
                 }
                 .buttonStyle(DrivyPrimaryButtonStyle())
                 .disabled(!model.canMutate || !model.preparationValid || !model.preparationChanged)
@@ -572,12 +562,17 @@ private struct SchoolLessonReportContent: View {
         }
     }
 
+    /// L’envoi en cours est celui de ce bouton : l’attente se lit là où le geste a été fait.
+    private func isSending(_ kind: SchoolCommandKind) -> Bool {
+        model.isBusy && model.pending?.kind == kind
+    }
+
     @ViewBuilder private func completeButton(primary: Bool) -> some View {
         if primary {
             Button { confirmsCompletion = true } label: {
                 HStack(spacing: DrivySpacing.xs) {
                     if isFinishing { ProgressView().accessibilityHidden(true) }
-                    Label("Terminer la leçon", systemImage: "checkmark.circle")
+                    Text("Terminer la leçon")
                 }
             }
                 .buttonStyle(DrivyPrimaryButtonStyle())
@@ -588,7 +583,7 @@ private struct SchoolLessonReportContent: View {
             Button { confirmsCompletion = true } label: {
                 HStack(spacing: DrivySpacing.xs) {
                     if isFinishing { ProgressView().accessibilityHidden(true) }
-                    Label("Terminer la leçon", systemImage: "checkmark.circle")
+                    Text("Terminer la leçon")
                 }
             }
             .buttonStyle(DrivySecondaryButtonStyle())
@@ -644,12 +639,13 @@ private struct SchoolLessonReportContent: View {
                     replay = SchoolTripReplayRoute(model: SchoolCaptureReplayWorkspace(scope: model.scope, client: agenda.captureClient,
                         captureID: capture.id), learnerName: learnerName, lessonTimeZone: model.lesson?.timeZone)
                 } label: {
-                    Label(model.replayableCaptures.count == 1 ? "Revoir le trajet" : "Revoir le trajet \(index + 1)", systemImage: "play.circle")
+                    Text(model.replayableCaptures.count == 1 ? "Revoir le trajet" : "Revoir le trajet \(index + 1)")
                         .frame(minHeight: 44)
                 }
                 .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
             }
             if model.captures.contains(where: { $0.syncState != .synced && $0.syncState != .partial && $0.publicationState == .privateCapture }) {
+                // État inhabituel du trajet : symbole et texte, comme tout statut.
                 Label("Trajet en cours d’envoi", systemImage: "arrow.triangle.2.circlepath").foregroundStyle(DrivyTheme.muted)
             }
             if model.isAuthor, model.sharing != nil {
@@ -672,8 +668,7 @@ private struct SchoolLessonReportContent: View {
                     if model.isAuthor, model.sharing != nil {
                         let kept = model.isPrivate(observation)
                         Menu {
-                            Button(kept ? "Montrer à l’élève" : "Garder pour moi",
-                                   systemImage: kept ? "person.2" : "person") {
+                            Button(kept ? "Montrer à l’élève" : "Garder pour moi") {
                                 Task { await model.updateSharing(observation: observation.id, observationPrivate: !kept) }
                             }
                         } label: {
@@ -690,12 +685,18 @@ private struct SchoolLessonReportContent: View {
                 }
             }
             if model.isAuthor {
-                Button(isPlanned ? "Noter une observation" : "Modifier les observations", systemImage: "square.and.pencil") { openObservations() }
+                Button(observationsActionTitle) { openObservations() }
                     .disabled(model.isBusy || model.isLoading)
                     .accessibilityIdentifier("lesson-private-observations")
             }
         } header: { Text("Pendant la leçon").drivyFormSectionHeader() }
             .drivyFormRows()
+    }
+
+    /// Le verbe suit ce que la feuille des observations permettra : rien à « modifier » tant que la liste est vide.
+    private var observationsActionTitle: String {
+        if isPlanned { return "Noter une observation" }
+        return model.lessonObservations.isEmpty ? "Ajouter une observation" : "Modifier les observations"
     }
 
     /// Constat par symbole, libellé et couleur : jamais par la couleur seule.
@@ -742,11 +743,11 @@ private struct SchoolLessonReportContent: View {
                             Text("En autonomie").tag("INDEPENDENT")
                             }
                             if model.observations.contains(where: { $0.id == competency.id }) {
-                                Button("Retirer l’évaluation de cette leçon", systemImage: "arrow.uturn.backward") {
+                                Button("Retirer l’évaluation de cette leçon") {
                                     model.setObservationLevel("", for: competency.id)
                                     expandedCompetencies.remove(competency.id)
                                 }
-                                Button("Préciser la situation", systemImage: "text.alignleft") { expandedCompetencies.insert(competency.id) }
+                                Button("Préciser la situation") { expandedCompetencies.insert(competency.id) }
                             }
                         } label: {
                             HStack(spacing: DrivySpacing.s) {
@@ -838,12 +839,13 @@ private struct SchoolLessonReportContent: View {
                 .disabled(!model.canMutate)
             }
             if model.goals.count < 3 {
-                Button("Ajouter un objectif", systemImage: "plus") {
+                Button("Ajouter un objectif") {
                     model.goals.append(SchoolLessonGoal(label: ""))
                 }
                 .disabled(!model.canMutate)
             }
-            // Jamais montrée à l’élève : le cadenas le dit sans texte.
+            // Jamais montrée à l’élève. Le cadenas reste : une fois la note écrite, l’invite « Note pour moi »
+            // disparaît et lui seul distingue cette ligne des objectifs, que l’élève lit.
             HStack(alignment: .center, spacing: DrivySpacing.s) {
                 DrivyPrivacyMark(isPrivate: true).accessibilityHidden(true)
                     .frame(width: DrivySpacing.l)
@@ -851,8 +853,10 @@ private struct SchoolLessonReportContent: View {
             }
             // Le bouton n’apparaît qu’avec une modification : désactivé, il n’était qu’un texte fantôme.
             if savesInline && model.preparationChanged {
-                Button("Enregistrer les objectifs") { Task { await model.savePreparation() } }
-                    .disabled(!model.canMutate || !model.preparationValid || !model.preparationChanged)
+                Button { Task { await model.savePreparation() } } label: {
+                    DrivyBusyLabel(title: "Enregistrer les objectifs", isBusy: isSending(.savePreparation))
+                }
+                .disabled(!model.canMutate || !model.preparationValid || !model.preparationChanged)
             }
         } header: { Text("Objectifs").drivyFormSectionHeader() }
             .drivyFormRows()
@@ -869,8 +873,10 @@ private struct SchoolLessonReportContent: View {
         Section {
             if model.isOwnLearner {
                 TextField("Ce que j’aimerais travailler", text: $model.wishText, axis: .vertical).lineLimit(2...6).disabled(!model.canMutate)
-                Button("Enregistrer le souhait") { Task { await model.saveWish() } }
-                    .disabled(!model.canMutate || model.wishText.unicodeScalars.count > 500 || model.wishText == wish.text)
+                Button { Task { await model.saveWish() } } label: {
+                    DrivyBusyLabel(title: "Enregistrer le souhait", isBusy: isSending(.saveWish))
+                }
+                .disabled(!model.canMutate || model.wishText.unicodeScalars.count > 500 || model.wishText == wish.text)
             } else {
                 Text(wish.text)
             }
@@ -880,27 +886,31 @@ private struct SchoolLessonReportContent: View {
 
     // MARK: Bilan : enregistrement
 
+    /// La leçon est déjà terminée : ce bouton enregistre le bilan, puis ferme la fiche. L’école en fait aussitôt
+    /// la version lue par l’élève, sauf bilan gardé pour soi ; le libellé le dit avant le geste.
     private var saveBar: some View {
         DrivyStickyActionBar {
             if !model.validTexts { DrivyActionNote(text: "Un texte dépasse 4 000 caractères.", isError: true) }
             else if !model.observationsValid { DrivyActionNote(text: "Vérifie les niveaux et limite chaque situation à 500 caractères.", isError: true) }
-            Button { Task { await model.saveDraft() } } label: { Label("Enregistrer le bilan", systemImage: "square.and.arrow.down") }
+            Button { Task { await model.saveDraft() } } label: {
+                DrivyBusyLabel(title: saveReportTitle, isBusy: isSending(.saveReportDraft))
+            }
                 .buttonStyle(DrivyPrimaryButtonStyle())
                 .disabled(!model.canMutate || !model.validTexts || !model.observationsValid)
                 .accessibilityIdentifier("lesson-save-report")
         }
     }
 
-    /// Partage d’un bloc avec l’élève : le cadenas fermé signale ce que le moniteur garde pour lui.
+    private var saveReportTitle: String {
+        let empty = SchoolLessonHubRules.reportIsEmpty(workedOn: model.workedOn, observationText: model.observationText,
+            nextStep: model.nextStep, observations: model.observations)
+        return SchoolLessonHubRules.saveReportTitle(isEmpty: empty, shared: model.sharing == nil ? nil : model.reportShared)
+    }
+
+    /// Partage d’un bloc avec l’élève. L’interrupteur porte l’état : aucun symbole ne le répète.
     private func sharingToggle(_ isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
-            Label {
-                Text("Visible par l’élève")
-            } icon: {
-                DrivyPrivacyMark(isPrivate: !isOn.wrappedValue)
-            }
-        }
-        .disabled(!model.canMutate)
+        Toggle("Visible par l’élève", isOn: isOn)
+            .disabled(!model.canMutate)
     }
 
     private func reportField(_ label: String, text: Binding<String>) -> some View {

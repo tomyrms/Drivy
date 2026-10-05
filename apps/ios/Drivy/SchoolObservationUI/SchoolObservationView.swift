@@ -147,13 +147,13 @@ struct SchoolObservationView: View {
         observationNotice?.recorder.stop()
         observationNotice = nil
     }
-    private var heading: some View {
-        // Partage automatique (28 septembre 2026) : l’élève voit les observations d’une leçon terminée,
-        // sauf celles que le moniteur garde pour lui depuis l’écran de la leçon.
-        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            Text(model.learnerName.isEmpty ? "Pendant la leçon" : model.learnerName)
-                .font(.drivyTitle).fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
+    /// Rappel de l’élève sur une ligne, comme sur les pages secondaires du dossier : la fiche de leçon l’a déjà
+    /// présenté et le titre dit où l’on est. Rien avant la lecture, donc aucun titre qui change sous les yeux.
+    /// Partage automatique (28 septembre 2026) : l’élève voit les observations d’une leçon terminée,
+    /// sauf celles que le moniteur garde pour lui depuis l’écran de la leçon.
+    @ViewBuilder private var heading: some View {
+        if !model.learnerName.isEmpty {
+            DrivyLearnerIdentity(name: model.learnerName, variant: .inline)
         }
     }
     @ViewBuilder private var feedback: some View {
@@ -171,14 +171,15 @@ struct SchoolObservationView: View {
     private var actions: some View {
         VStack(spacing: DrivySpacing.s) {
             if model.lesson?.status == "PLANNED" {
+                // Même bouton, même symbole que « Signaler » sur le trajet en cours : une action, une apparence.
                 Button {
                     if let recorder = model.liveRecorder() { route = .signal(.init(recorder: recorder)) }
                 } label: { Label("Signaler", systemImage: "text.bubble.fill") }
                     .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).accessibilityIdentifier("school-observation-signal")
             } else {
-                Button {
+                Button("Ajouter une observation") {
                     if let editor = model.begin(marker: false) { route = .edit(editor) }
-                } label: { Label("Ajouter une note de relecture", systemImage: "square.and.pencil") }
+                }
                     .buttonStyle(DrivyPrimaryButtonStyle())
             }
         }
@@ -200,10 +201,10 @@ struct SchoolObservationView: View {
         return HStack(alignment: .center, spacing: DrivySpacing.s) {
             DrivyObservationSummary(observation: observation, detail: meta)
             Menu {
-                Button(observation.isMarker ? "Préciser" : "Modifier", systemImage: "pencil") {
+                Button(observation.isMarker ? "Préciser" : "Modifier") {
                     if let editor = model.edit(observation) { route = .edit(editor) }
                 }
-                Button("Retirer", systemImage: "trash", role: .destructive) { route = .remove(observation) }
+                Button("Retirer", role: .destructive) { route = .remove(observation) }
             } label: {
                 Image(systemName: "ellipsis").foregroundStyle(DrivyTheme.muted)
                     .frame(width: 44, height: 44).contentShape(Rectangle())
@@ -229,10 +230,6 @@ struct SchoolObservationView: View {
                 }
             }
         }
-    }
-    /// Same tones as the signalement tiles and the replay (ObservationStatus.tone).
-    private func tone(_ status: SchoolObservationStatus) -> DrivyTone {
-        switch status { case .positive: .success; case .attention: .warning; case .toWorkOn: .danger }
     }
 }
 
@@ -270,10 +267,8 @@ private struct SchoolObservationComposer: View {
         NavigationStack {
             Form {
                 Section {
-                    if let label = model.timeLabel(editor.observedAt) { Label(label, systemImage: "clock").font(.subheadline.monospacedDigit()) }
-                    Label(editor.original?.hasPosition == true ? "Sur le trajet" : "Sans position",
-                          systemImage: editor.original?.hasPosition == true ? "mappin" : "location.slash")
-                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    Text(contextLine)
+                        .font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                     .drivyFormRows()
@@ -315,14 +310,14 @@ private struct SchoolObservationComposer: View {
                     Button {
                         Task { if await model.save(editor, text: text, marker: marker, competencyID: competencyID, status: status) { dismiss() } }
                     } label: {
-                        DrivyBusyLabel(title: "Enregistrer", isBusy: model.isBusy)
+                        DrivyBusyLabel(title: "Enregistrer l’observation", isBusy: model.isBusy)
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle())
                     .disabled(!valid || !model.canMutate)
                     .accessibilityIdentifier("school-observation-save")
                 }
             }
-            .navigationTitle(editor.original == nil ? "Garder une observation" : "Préciser l’observation")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -334,6 +329,17 @@ private struct SchoolObservationComposer: View {
                 Button("Continuer", role: .cancel) { }
             }
         }.tint(DrivyTheme.accent).interactiveDismissDisabled(changed || model.isBusy)
+    }
+    /// Le titre reprend le verbe du geste qui a ouvert la feuille : ajouter, préciser un repère, modifier.
+    private var title: String {
+        guard editor.original != nil else { return "Nouvelle observation" }
+        return editor.marker ? "Préciser l’observation" : "Modifier l’observation"
+    }
+    /// Moment et position de l’observation, sur une seule ligne de contexte.
+    private var contextLine: String {
+        let parts: [String?] = [model.timeLabel(editor.observedAt),
+                                editor.original?.hasPosition == true ? "Sur le trajet" : "Sans position"]
+        return parts.compactMap { $0 }.joined(separator: " · ")
     }
     /// Explains a disabled save. Mirrors `valid`; never a second rule.
     private var saveHint: String? {

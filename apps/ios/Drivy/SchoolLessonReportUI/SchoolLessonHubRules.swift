@@ -23,9 +23,49 @@ enum SchoolLessonCaptureStatus: Equatable {
     var permitsCompletion: Bool { self != .collecting }
 }
 
+/// Montant lu dans la fiche d’une leçon, sous le nom de ce qu’il est.
+struct SchoolLessonPriceLine: Equatable, Identifiable, Sendable {
+    /// `agreed` : prix convenu à la réservation. `charged` : montant retenu par l’école après la leçon.
+    enum Kind: String, Sendable { case agreed, charged }
+    let kind: Kind
+    let title: String
+    let cents: Int64
+    var id: String { kind.rawValue }
+}
+
 /// Règles de l’écran unique d’une leçon. Toutes sont relues par le serveur ;
 /// elles évitent seulement de proposer une action qu’il refuserait à coup sûr.
 enum SchoolLessonHubRules {
+    /// Le prix d’une leçon planifiée ou réalisée : une ligne. L’école n’enregistre aucun paiement, donc rien ne
+    /// s’intitule « à payer » ; le compte d’une leçon réalisée porte le prix convenu et ne se relit à part que
+    /// si l’école l’a corrigé. Une leçon annulée ou manquée n’affiche aucun prix : rien n’y est retenu.
+    static func priceLines(lesson: SchoolLesson, account: SchoolLessonAccount?) -> [SchoolLessonPriceLine] {
+        guard lesson.status == "PLANNED" || lesson.status == "COMPLETED" else { return [] }
+        let agreed = lesson.priceCentsSnapshot
+        guard lesson.status == "COMPLETED", let charged = account?.chargeCents, charged != agreed else {
+            return [SchoolLessonPriceLine(kind: .agreed, title: "Prix de la leçon", cents: agreed)]
+        }
+        return [SchoolLessonPriceLine(kind: .agreed, title: "Prix à la réservation", cents: agreed),
+                SchoolLessonPriceLine(kind: .charged, title: "Prix de la leçon", cents: charged)]
+    }
+
+    /// Même critère que le serveur (`syncSharedReport`) : sans texte ni niveau, rien n’est montré à l’élève
+    /// et un bilan déjà partagé est retiré.
+    static func reportIsEmpty(workedOn: String, observationText: String, nextStep: String,
+                              observations: [SchoolReportObservation]) -> Bool {
+        observations.isEmpty
+            && (workedOn + observationText + nextStep).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Libellé du bouton du bilan : ce qui est enregistré, et qui le lira. L’enregistrement devient aussitôt
+    /// la version lue par l’élève, sauf bilan gardé pour soi. `shared` vaut `nil` quand le réglage de partage
+    /// n’a pas pu être lu : le libellé ne promet alors rien.
+    static func saveReportTitle(isEmpty: Bool, shared: Bool?) -> String {
+        if isEmpty { return "Enregistrer sans bilan" }
+        guard let shared else { return "Enregistrer le bilan" }
+        return shared ? "Enregistrer et partager le bilan" : "Enregistrer le bilan pour moi"
+    }
+
     /// CAPTURE_START_WINDOW : le serveur n’autorise un départ qu’à 30 minutes près de l’horaire prévu.
     static func withinCaptureWindow(_ lesson: SchoolLesson, now: Date) -> Bool {
         guard let start = lesson.startsAt, let end = lesson.endsAt else { return false }

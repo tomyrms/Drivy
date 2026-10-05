@@ -467,7 +467,7 @@ import Observation
             pending = nil; isBusy = false
             announceConfirmedChange(command)
             if confirmsThisReport(command) { reportSaveConfirmed = true; return true }
-            confirmation = command.kind == .updateLessonSharing || command.kind == .recordPermitCheck ? nil : "Enregistré."
+            confirmation = Self.confirmationText(for: command.kind)
             // Partage : l’état confirmé suffit. Seul un bilan passé privé ou rendu visible change le brouillon côté école.
             if command.kind == .updateLessonSharing, let confirmedSharing {
                 let reportChanged = confirmedSharing.reportPrivate != sharing?.reportPrivate
@@ -484,6 +484,18 @@ import Observation
             }
             guard request == generation, !invalidated else { return false }
             isBusy = false; pendingReviewed = false; fail(error); return false
+        }
+    }
+    /// La confirmation nomme ce que l’école vient d’enregistrer ; un réglage de partage ou un permis vu
+    /// se lisent déjà dans la fiche et n’en reçoivent pas.
+    static func confirmationText(for kind: SchoolCommandKind) -> String? {
+        switch kind {
+        case .updateLessonSharing, .recordPermitCheck: return nil
+        case .savePreparation: return "Objectifs enregistrés."
+        case .saveWish: return "Souhait enregistré."
+        case .completeLesson: return "Leçon terminée."
+        case .markNoShow: return "Absence enregistrée."
+        default: return "Enregistré."
         }
     }
     private func confirmsThisReport(_ command: PendingSchoolCommand) -> Bool {

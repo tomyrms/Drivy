@@ -133,6 +133,52 @@ struct SchoolLessonHubTests {
         #expect(schedule.first?.isUppercase == true)
     }
 
+    // MARK: Prix et enregistrement du bilan
+
+    @Test func priceIsOneLineAndTheAccountIsOnlyReadWhenItDiffers() {
+        func account(_ charge: Int64) -> SchoolLessonAccount {
+            SchoolLessonAccount(id: UUID(), ownerId: HubFixture.lessonID, ownerType: "LESSON", lessonId: HubFixture.lessonID, version: 1,
+                currency: "CHF", plannedPriceCents: 9_000, chargeCents: charge, netReceivedCents: 0, balanceCents: charge, charges: [])
+        }
+        let agreed = [SchoolLessonPriceLine(kind: .agreed, title: "Prix de la leçon", cents: 9_000)]
+        #expect(SchoolLessonHubRules.priceLines(lesson: HubFixture.lesson(), account: nil) == agreed)
+        // Leçon réalisée au prix convenu : le compte ne répète pas le même montant, et rien ne s’appelle « à payer ».
+        let completed = HubFixture.lesson(status: "COMPLETED")
+        #expect(SchoolLessonHubRules.priceLines(lesson: completed, account: account(9_000)) == agreed)
+        #expect(SchoolLessonHubRules.priceLines(lesson: completed, account: nil) == agreed)
+        // Montant corrigé par l’école : les deux se lisent, chacun sous son nom.
+        let corrected = SchoolLessonHubRules.priceLines(lesson: completed, account: account(7_500))
+        #expect(corrected == [SchoolLessonPriceLine(kind: .agreed, title: "Prix à la réservation", cents: 9_000),
+                              SchoolLessonPriceLine(kind: .charged, title: "Prix de la leçon", cents: 7_500)])
+        // Rien n’est retenu pour une leçon annulée ou manquée.
+        #expect(SchoolLessonHubRules.priceLines(lesson: HubFixture.lesson(status: "CANCELLED"), account: nil).isEmpty)
+        #expect(SchoolLessonHubRules.priceLines(lesson: HubFixture.lesson(status: "NO_SHOW"), account: account(0)).isEmpty)
+    }
+
+    @Test func reportSaveLabelSaysWhatIsSavedAndWhoWillReadIt() {
+        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: false, shared: true) == "Enregistrer et partager le bilan")
+        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: false, shared: false) == "Enregistrer le bilan pour moi")
+        // Réglage de partage illisible : aucune promesse sur ce que lira l’élève.
+        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: false, shared: nil) == "Enregistrer le bilan")
+        // Sans texte ni niveau, l’école ne montre rien à l’élève, quel que soit le réglage.
+        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: true, shared: true) == "Enregistrer sans bilan")
+        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: true, shared: false) == "Enregistrer sans bilan")
+        #expect(SchoolLessonHubRules.reportIsEmpty(workedOn: " ", observationText: "\n", nextStep: "", observations: []))
+        #expect(!SchoolLessonHubRules.reportIsEmpty(workedOn: "", observationText: "", nextStep: "Créneaux", observations: []))
+        #expect(!SchoolLessonHubRules.reportIsEmpty(workedOn: "", observationText: "", nextStep: "",
+            observations: [SchoolReportObservation(competencyId: UUID(), level: "GUIDED", context: "")]))
+    }
+
+    @Test func confirmationsNameWhatWasSaved() {
+        #expect(SchoolLessonReportWorkspace.confirmationText(for: .savePreparation) == "Objectifs enregistrés.")
+        #expect(SchoolLessonReportWorkspace.confirmationText(for: .saveWish) == "Souhait enregistré.")
+        #expect(SchoolLessonReportWorkspace.confirmationText(for: .completeLesson) == "Leçon terminée.")
+        #expect(SchoolLessonReportWorkspace.confirmationText(for: .markNoShow) == "Absence enregistrée.")
+        // Un réglage de partage ou un permis vu se lisent déjà dans la fiche.
+        #expect(SchoolLessonReportWorkspace.confirmationText(for: .updateLessonSharing) == nil)
+        #expect(SchoolLessonReportWorkspace.confirmationText(for: .recordPermitCheck) == nil)
+    }
+
     // MARK: Permis
 
     @Test func permitCheckCommandMatchesTheStrictServerSchemaAndReceipt() throws {

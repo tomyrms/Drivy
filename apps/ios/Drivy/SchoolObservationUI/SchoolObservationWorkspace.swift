@@ -243,7 +243,7 @@ struct SchoolObservationEditor: Identifiable {
             guard valid(request) else { return true }
             pending = nil; isBusy = false
             confirmation = command.kind == .removeObservation || command.observationUndoOperationID != nil
-                ? "Observation retirée." : "Observation privée enregistrée."
+                ? "Observation retirée." : "Observation enregistrée."
             await load(); return true
         } catch {
             if fresh && sent, let refusal = error as? SchoolObservationFailure, refusal.permitsFreshCorrection {

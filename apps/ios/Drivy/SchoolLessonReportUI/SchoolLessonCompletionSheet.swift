@@ -26,7 +26,7 @@ struct SchoolLessonCompletionSheet: View {
                                 isSubmitting = false
                             }
                         } label: {
-                            Label("J’ai vu le permis d’élève", systemImage: "checkmark.seal")
+                            Text("J’ai vu le permis d’élève")
                                 .font(.body.weight(.semibold))
                                 .frame(minHeight: 44)
                         }
@@ -68,7 +68,7 @@ struct SchoolLessonCompletionSheet: View {
                     } label: {
                         HStack(spacing: DrivySpacing.xs) {
                             if isSubmitting { ProgressView().accessibilityHidden(true) }
-                            Label("Terminer la leçon", systemImage: "checkmark.circle")
+                            Text("Terminer la leçon")
                         }
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle())
