@@ -190,7 +190,7 @@ struct SchoolTodayView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             if let lesson = toFinish.first {
-                lessonSummary(lesson, badge: lesson.drivyState(now: now).badge, moment: nil)
+                lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote, moment: nil)
                 if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId {
                     Button { opened = OpenedLesson(lesson: lesson, completing: true) } label: {
                         Text("Terminer la leçon")
@@ -203,14 +203,14 @@ struct SchoolTodayView: View {
                     upcomingLesson(next, now: now)
                 }
             } else if let next {
-                lessonSummary(next, badge: nil, moment: SchoolTodayPresentation.moment(for: next, now: now))
+                lessonSummary(next, note: nil, moment: SchoolTodayPresentation.moment(for: next, now: now))
                 if mayStart(next, now: now) {
                     Button { start(next) } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
                         .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                         .accessibilityIdentifier("today-start")
                 } else {
                     if let opening = startOpening(next, now: now) {
-                        Label("Démarrer dès \(opening)", systemImage: "clock")
+                        Text("Démarrer dès \(opening)")
                             .font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(DrivyTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, minHeight: 44)
@@ -237,13 +237,15 @@ struct SchoolTodayView: View {
     }
 
     /// Point focal du panneau : l’heure de départ en grand chiffre tabulaire, puis l’élève (avatar, nom, lieu).
-    private func lessonSummary(_ lesson: SchoolLesson, badge: DrivyStatusBadge?, moment: String?) -> some View {
+    /// Un état inhabituel (« À terminer ») est un mot de texte au-dessus de l’heure, sans pastille.
+    private func lessonSummary(_ lesson: SchoolLesson, note: DrivyRowNote?, moment: String?) -> some View {
         let stacked = typeSize.isAccessibilitySize
         let layout = stacked
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.xs))
         return Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                if let note { DrivyRowNoteText(note: note) }
                 if let moment {
                     Text(moment).font(.headline).foregroundStyle(DrivyTheme.text)
                         .fixedSize(horizontal: false, vertical: true)
@@ -251,8 +253,6 @@ struct SchoolTodayView: View {
                 layout {
                     Text(startTime(lesson)).font(.drivyScreenTitle.monospacedDigit()).foregroundStyle(DrivyTheme.text)
                     Text("– \(endTime(lesson))").font(.title3.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-                    if !stacked { Spacer(minLength: DrivySpacing.xs) }
-                    if let badge { badge }
                 }
                 HStack(spacing: DrivySpacing.s) {
                     if !stacked { DrivyAvatar(name: name(lesson), size: 44) }
@@ -303,7 +303,7 @@ struct SchoolTodayView: View {
                     ForEach(others) { lesson in
                         Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
                             DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                                details: [lesson.meetingPoint], badge: lesson.drivyState(now: now).rowBadge, showsChevron: false)
+                                details: [lesson.meetingPoint], state: lesson.drivyState(now: now), showsChevron: false)
                         }
                         .buttonStyle(DrivyRowButtonStyle())
                         .accessibilityHint("Ouvre la leçon")

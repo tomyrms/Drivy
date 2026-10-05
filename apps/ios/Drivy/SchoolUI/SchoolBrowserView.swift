@@ -185,12 +185,8 @@ struct SchoolChooserView: View {
                     onSelect?()
                     Task { await workspace.selectSchool(membership) }
                 } label: {
+                    // Pas de symbole d’école sur chaque choix : la coche porte l’école ouverte.
                     HStack(spacing: DrivySpacing.m) {
-                        Image(systemName: "building.2")
-                            .font(.title3)
-                            .foregroundStyle(isCurrent ? DrivyTheme.accent : DrivyTheme.muted)
-                            .frame(width: 28)
-                            .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                             Text(membership.schoolName).font(.headline).foregroundStyle(DrivyTheme.text)
                             Text(SchoolPresentation.roles(membership.roles))
@@ -220,7 +216,7 @@ private struct SchoolLearnerRow: View {
 
     /// Seul ce qui demande une action reste en badge.
     private var badge: DrivyStatusBadge? {
-        if learner.archivedAt != nil { return DrivyStatusBadge(title: "Archivé", symbol: "archivebox") }
+        if learner.archivedAt != nil { return DrivyStatusBadge(title: "Archivé") }
         if learner.profileReadiness == "ACTION_REQUIRED" { return DrivyStatusBadge(title: "À vérifier", symbol: "exclamationmark.triangle", tone: .warning) }
         return nil
     }

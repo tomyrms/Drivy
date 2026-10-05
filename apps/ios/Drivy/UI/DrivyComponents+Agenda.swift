@@ -55,15 +55,55 @@ enum DrivyLessonState {
     }
 
     /// Full badge, for the head of a lesson screen.
+    /// Transitional: lesson rows no longer draw a capsule, they take `DrivyLessonRow(state:)`.
     var badge: DrivyStatusBadge { DrivyStatusBadge(title: title, symbol: symbol, tone: tone) }
 
     /// What a lesson screen flags: a lesson left without outcome, cancelled, missed,
     /// or whose state the app cannot read.
     var isUnusual: Bool { self == .toFinish || self == .cancelled || self == .noShow || self == .unknown }
 
-    /// One rule for every lesson row (agenda, Aujourd’hui, dossier): a badge only
-    /// for the unusual. A planned, running or finished lesson stays quiet.
+    /// Transitional, see `badge`. Prefer `rowNote` through `DrivyLessonRow(state:)`.
     var rowBadge: DrivyStatusBadge? { isUnusual ? badge : nil }
+
+    /// A lesson that will not be driven (cancelled, missed): its row steps back
+    /// instead of competing with the lessons still to come.
+    var isClosed: Bool { self == .cancelled || self == .noShow }
+
+    /// One rule for every lesson row (agenda, Aujourd’hui, dossier): one word of
+    /// plain text, only for the unusual, never a capsule. A planned, running or
+    /// finished lesson stays silent. Weight and ink carry the emphasis: a lesson
+    /// to finish calls for an action (warning ink); a cancelled or missed one is
+    /// a closed fact (muted ink, struck times for a cancellation).
+    var rowNote: DrivyRowNote? {
+        switch self {
+        case .toFinish: return DrivyRowNote(text: title, tone: .warning)
+        case .cancelled, .noShow, .unknown: return DrivyRowNote(text: title, tone: .neutral)
+        case .planned, .inProgress, .completed: return nil
+        }
+    }
+}
+
+/// The one word a row says about its subject (« Annulée », « À terminer », « Partiel »):
+/// semibold text in the tone's ink, placed at the head of the detail line. No capsule,
+/// no symbol; the word itself is what VoiceOver reads inside the combined row.
+struct DrivyRowNote: Equatable {
+    let text: String
+    var tone: DrivyTone = .neutral
+
+    /// The accent stays reserved for actions: an accent note reads in the main ink.
+    var color: Color { tone == .accent ? DrivyTheme.text : tone.foreground }
+}
+
+/// A row note on a line of its own, for screens that stack it instead of using a row.
+struct DrivyRowNoteText: View {
+    let note: DrivyRowNote
+
+    var body: some View {
+        Text(note.text)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(note.color)
+            .fixedSize(horizontal: false, vertical: true)
+    }
 }
 
 extension SchoolLesson {
@@ -71,18 +111,29 @@ extension SchoolLesson {
 }
 
 /// Lesson row used by the agenda, the dossier lessons and the report lists:
-/// time column, name, meta lines, state badge, chevron. Switches to a single
-/// column at accessibility text sizes so nothing is truncated.
+/// time column, name, meta lines, chevron. An unusual state is one word of plain
+/// text at the head of the detail line (`state:` for a lesson, `note:` for any
+/// other subject), never a capsule. A cancelled or missed lesson steps back: its
+/// times and name take the muted ink, and a cancellation strikes its times.
+/// Switches to a single column at accessibility text sizes so nothing is truncated.
 struct DrivyLessonRow: View {
     let start: String
     var end: String? = nil
     let title: String
     var details: [String] = []
+    /// Transitional capsule, kept while screens migrate to `state:` / `note:`.
     var badge: DrivyStatusBadge? = nil
+    var state: DrivyLessonState? = nil
+    var note: DrivyRowNote? = nil
     var showsChevron = true
     var isSecondary = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var rowNote: DrivyRowNote? { note ?? state?.rowNote }
+    private var isClosed: Bool { state?.isClosed ?? false }
+    private var strikesTimes: Bool { state == .cancelled }
+    private var timeInk: Color { isSecondary || isClosed ? DrivyTheme.muted : DrivyTheme.text }
 
     var body: some View {
         Group {
@@ -90,14 +141,15 @@ struct DrivyLessonRow: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     Text(end.map { "\(start) – \($0)" } ?? start)
                         .font(.headline.monospacedDigit())
-                        .foregroundStyle(isSecondary ? DrivyTheme.muted : DrivyTheme.text)
+                        .strikethrough(strikesTimes)
+                        .foregroundStyle(timeInk)
                     summary
                     if let badge { badge }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 HStack(alignment: .top, spacing: DrivySpacing.m) {
-                    DrivyTimeColumn(start: start, end: end)
+                    timeColumn
                         .fixedSize(horizontal: true, vertical: false)
                     // Compact width: the badge sits under the summary so the lines
                     // are not cut before « · »; the separator starts on the text column.
@@ -128,12 +180,29 @@ struct DrivyLessonRow: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// Same metrics as `DrivyTimeColumn`, with the closed-lesson ink and the struck times.
+    private var timeColumn: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            Text(start)
+                .font(.headline.monospacedDigit())
+                .strikethrough(strikesTimes)
+                .foregroundStyle(isClosed ? DrivyTheme.muted : DrivyTheme.text)
+            if let end {
+                Text(end)
+                    .font(.caption.monospacedDigit())
+                    .strikethrough(strikesTimes)
+                    .foregroundStyle(DrivyTheme.muted)
+            }
+        }
+        .frame(minWidth: 52, alignment: .leading)
+    }
+
     private var summary: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             Text(title)
                 .font(isSecondary ? .body : .headline)
-                .foregroundStyle(isSecondary ? DrivyTheme.muted : DrivyTheme.text)
-            ForEach(Array(details.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.enumerated()), id: \.offset) { _, line in
+                .foregroundStyle(isSecondary || isClosed ? DrivyTheme.muted : DrivyTheme.text)
+            ForEach(Array(detailLines.enumerated()), id: \.offset) { _, line in
                 Text(line)
                     .font(.subheadline)
                     .foregroundStyle(DrivyTheme.muted)
@@ -142,6 +211,22 @@ struct DrivyLessonRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// The detail lines, the state word leading the first one (« Annulée · Lausanne »).
+    /// The word carries its own weight and ink; the rest of the line stays muted.
+    private var detailLines: [AttributedString] {
+        var lines = details
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .map { AttributedString($0) }
+        guard let rowNote else { return lines }
+        var word = AttributedString(rowNote.text)
+        word.font = Font.subheadline.weight(.semibold)
+        word.foregroundColor = rowNote.color
+        if lines.isEmpty { return [word] }
+        let separator = AttributedString(" · ")
+        lines[0] = word + separator + lines[0]
+        return lines
     }
 }
 

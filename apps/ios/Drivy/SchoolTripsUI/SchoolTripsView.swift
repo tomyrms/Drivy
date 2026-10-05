@@ -306,8 +306,9 @@ private struct SchoolTripRow: View {
     }
 
     private var content: some View {
+        // L’état inhabituel d’un trajet est un mot de texte en tête de la ligne de détail, sans pastille.
         DrivyLessonRow(start: SchoolTripsWorkspace.time(trip), title: title, details: detail.map { [$0] } ?? [],
-            badge: badge.map { DrivyStatusBadge(title: $0.title, symbol: $0.symbol, tone: $0.tone) },
+            note: badge.map { DrivyRowNote(text: $0.title, tone: $0.tone) },
             showsChevron: replayable)
     }
 

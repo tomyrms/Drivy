@@ -13,38 +13,54 @@ struct SchoolAccountActions {
     /// Les lignes du compte, dans l’ordre de la feuille. `afterChangingSchool` ferme la feuille qui les porte, s’il y en a une.
     @MainActor @ViewBuilder
     func rows(workspace: SchoolWorkspace?, openURL: OpenURLAction, afterChangingSchool: @escaping () -> Void = {}) -> some View {
+        // Aucun symbole de tête : chaque ligne se lit par son titre, une icône par ligne ne dit rien de plus.
         if let openProfile {
-            DrivyNavigationRow(title: "Mon profil", symbol: "person.text.rectangle", action: openProfile)
+            DrivyNavigationRow(title: "Mon profil", action: openProfile)
                 .accessibilityIdentifier("open-my-profile")
         }
         if let resumeOnboarding {
-            DrivyNavigationRow(title: "Reprendre l’accueil", symbol: "figure.wave", action: resumeOnboarding)
+            DrivyNavigationRow(title: "Reprendre l’accueil", action: resumeOnboarding)
                 .accessibilityIdentifier("resume-school-onboarding")
         }
         if let openInvitations {
-            DrivyNavigationRow(title: "Invitations", symbol: "envelope", action: openInvitations)
+            DrivyNavigationRow(title: "Invitations", action: openInvitations)
                 .accessibilityIdentifier("open-school-invitations")
         }
         if let manageURL {
-            DrivyNavigationRow(title: "Gérer l’école", detail: "Sur le web", symbol: "globe",
-                action: { openURL(manageURL) })
+            DrivyNavigationRow(title: "Gérer l’école", detail: "Sur le web", action: { openURL(manageURL) })
                 .accessibilityIdentifier("open-school-management")
         }
         if let workspace, (workspace.person?.memberships.count ?? 0) > 1 {
-            DrivyNavigationRow(title: "Changer d’école", detail: workspace.membership?.schoolName,
-                symbol: "arrow.left.arrow.right", action: {
-                    workspace.leaveSchool()
-                    afterChangingSchool()
-                })
-                .accessibilityIdentifier("school-change-school")
+            DrivyNavigationRow(title: "Changer d’école", detail: workspace.membership?.schoolName, action: {
+                workspace.leaveSchool()
+                afterChangingSchool()
+            })
+            .accessibilityIdentifier("school-change-school")
         }
         if let openJoinSchool {
-            DrivyNavigationRow(title: "Rejoindre une école", symbol: "number", action: openJoinSchool)
+            DrivyNavigationRow(title: "Rejoindre une école", action: openJoinSchool)
                 .accessibilityIdentifier("open-join-school")
         }
         SchoolAppLockRow()
-        DrivyDestructiveRow(title: "Se déconnecter", symbol: "rectangle.portrait.and.arrow.right", action: signOut)
+        SchoolSignOutRow(action: signOut)
             .accessibilityIdentifier("school-sign-out")
+    }
+}
+
+/// « Se déconnecter » : même ligne que `DrivyDestructiveRow` (danger, 52 pt, retour d’appui de ligne),
+/// sans symbole puisque les lignes voisines n’en portent plus.
+private struct SchoolSignOutRow: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(role: .destructive, action: action) {
+            Text("Se déconnecter")
+                .font(.headline)
+                .foregroundStyle(DrivyTheme.danger)
+                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(DrivyRowButtonStyle())
     }
 }
 
@@ -80,26 +96,18 @@ struct SchoolAccountHeading: View {
     }
 }
 
-/// « Ouvrir avec Face ID » : même colonne de symbole et même hauteur que les lignes de navigation voisines.
-/// Sans verrou biométrique sur l’appareil, la ligne n’existe pas.
+/// « Ouvrir avec Face ID » : même hauteur que les lignes de navigation voisines. Le titre nomme déjà
+/// la biométrie, le symbole le redisait. Sans verrou biométrique sur l’appareil, la ligne n’existe pas.
 private struct SchoolAppLockRow: View {
     @Environment(AppLock.self) private var appLock: AppLock?
-    @ScaledMetric(relativeTo: .title3) private var symbolWidth: CGFloat = 28
 
     var body: some View {
         if let appLock, let biometry = appLock.biometryName {
             Toggle(isOn: Binding(get: { appLock.isEnabled }, set: { appLock.setEnabled($0) })) {
-                HStack(spacing: DrivySpacing.m) {
-                    Image(systemName: biometry == "Touch ID" ? "touchid" : "faceid")
-                        .font(.title3)
-                        .foregroundStyle(DrivyTheme.muted)
-                        .frame(width: symbolWidth)
-                        .accessibilityHidden(true)
-                    Text("Ouvrir avec \(biometry)")
-                        .font(.headline)
-                        .foregroundStyle(DrivyTheme.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("Ouvrir avec \(biometry)")
+                    .font(.headline)
+                    .foregroundStyle(DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.vertical, DrivySpacing.s)
             .frame(minHeight: 52)

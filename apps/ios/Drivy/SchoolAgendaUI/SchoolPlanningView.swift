@@ -361,11 +361,11 @@ struct SchoolPlanningView: View {
                     Text(SchoolPlanningFormat.interval(lesson.plannedStart, lesson.plannedEnd, zone: lesson.timeZone))
                         .font(.headline.monospacedDigit())
                     if !lesson.meetingPoint.isEmpty { Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted) }
+                    // Un mot de texte seulement pour l’inhabituel : une leçon planifiée à venir n’en porte pas.
+                    if let note = lesson.drivyState.rowNote { DrivyRowNoteText(note: note) }
                 }
                 .padding(.vertical, DrivySpacing.xxs)
                 .accessibilityElement(children: .combine)
-                // Un badge seulement pour l’inhabituel : une leçon planifiée à venir n’en porte pas.
-                if let badge = lesson.drivyState.rowBadge { badge }
             } header: { Text("Leçon concernée").drivyFormSectionHeader() }
                 .drivyFormRows()
         }

@@ -282,12 +282,13 @@ struct SchoolAgendaView: View {
     }
 
     /// Same row anatomy as the training dossier and the report lists: the time column already
-    /// gives start and end, so the meta lines keep only who and where.
+    /// gives start and end, so the meta lines keep only who and where. An unusual state
+    /// (à terminer, annulée, absence) is one word at the head of the detail line, no capsule.
     private func lessonRow(_ lesson: SchoolLesson) -> some View {
         var details = [lesson.meetingPoint]
         if showsInstructor, let instructor = lesson.providedInstructorName { details.insert(instructor, at: 0) }
         return DrivyLessonRow(start: time(lesson.startsAt), end: time(lesson.endsAt), title: learnerName(lesson),
-            details: details, badge: lesson.drivyState.rowBadge)
+            details: details, state: lesson.drivyState)
     }
 
     /// Nom fourni avec la leçon, sinon celui d’un dossier déjà chargé ; jamais deviné.

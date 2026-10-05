@@ -65,7 +65,7 @@ struct SchoolProfileTabView: View {
                         .navigationTitle("Trajets")
                         .navigationBarTitleDisplayMode(.inline)
                 } label: {
-                    Label("Trajets", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                    Text("Trajets")
                         .frame(minHeight: 44)
                 }
                 .accessibilityIdentifier("profile-open-trips")
@@ -75,8 +75,10 @@ struct SchoolProfileTabView: View {
                         planningSettings = PlanningSettingsPresentation(scope: agendaClient.scope(person: person, membership: membership),
                             client: agendaClient.planningClient)
                     } label: {
-                        Label("Préférences de leçon", systemImage: "slider.horizontal.3")
-                            .frame(minHeight: 44)
+                        Text("Préférences de leçon")
+                            .foregroundStyle(DrivyTheme.text)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("profile-planning-settings")
                 }
