@@ -56,18 +56,26 @@ import Observation
     var observationText = ""
     var nextStep = ""
     var observations: [SchoolReportObservation] = []
+    /// « Travail réalisé » proposé à partir des objectifs, juste après la fin de la leçon. Tant que le moniteur n’y
+    /// touche pas, ce n’est pas une saisie à protéger : rien n’en est envoyé avant l’enregistrement du bilan.
+    private(set) var workedOnProposal: String?
     @ObservationIgnored private let client: SchoolLessonReportClient
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
     @ObservationIgnored private let notifications: NotificationCenter
+    /// Brouillon chiffré sur l’appareil ; absent, la saisie ne vit qu’en mémoire.
+    @ObservationIgnored private let localDrafts: (any SchoolReportLocalDraftStore)?
+    /// Cette fiche vient de terminer la leçon : la prochaine lecture propose les objectifs comme travail réalisé.
+    @ObservationIgnored private var proposesWorkedOn = false
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
     @ObservationIgnored private var storageAccessible = false
     @ObservationIgnored private var waiters: [CheckedContinuation<Void, Never>] = []
 
     init(scope: SchoolCommandScope, membership: SchoolMembership, lessonID: UUID, client: SchoolLessonReportClient,
-         outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(), notifications: NotificationCenter = .default) {
+         outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(), notifications: NotificationCenter = .default,
+         localDrafts: (any SchoolReportLocalDraftStore)? = nil) {
         self.scope = scope; self.membership = membership; self.lessonID = lessonID; self.client = client; self.outbox = outbox
-        self.notifications = notifications
+        self.notifications = notifications; self.localDrafts = localDrafts
     }
     var isAuthor: Bool { membership.roles.contains("INSTRUCTOR") && lesson?.instructorMembershipId == membership.membershipId }
     var canReadLessonContent: Bool { isAuthor || isOwnLearner || membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") }
@@ -109,8 +117,66 @@ import Observation
         guard isOwnLearner, let wish else { return false }
         return wishText != wish.text
     }
+    /// Bilan modifié par le moniteur. Une proposition laissée telle quelle n’en est pas une.
+    var reportEdited: Bool {
+        guard let draft, draftChanged else { return false }
+        if let workedOnProposal, workedOn == workedOnProposal, draft.workedOn.isEmpty, observationText == draft.observationText,
+           nextStep == draft.nextStep, observations == draft.observations { return false }
+        return true
+    }
     /// Saisie non enregistrée : bilan, objectifs ou souhait.
-    var hasLocalEdits: Bool { draftChanged || preparationChanged || wishChanged }
+    var hasLocalEdits: Bool { reportEdited || preparationChanged || wishChanged }
+    /// Le bilan tel qu’il est saisi : ce que le brouillon local conserve, et ce qu’une pause de frappe surveille.
+    var editedReport: SchoolReportLocalDraft.Content {
+        .init(workedOn: workedOn, observationText: observationText, nextStep: nextStep, observations: observations)
+    }
+    var reportIsEmpty: Bool { editedReport.isEmpty }
+    /// Étapes de la rédaction en largeur compacte, selon ce que la leçon contient.
+    var reportSteps: [SchoolReportStep] {
+        SchoolReportFlowRules.steps(hasTrip: !track.isEmpty || !replayableCaptures.isEmpty,
+            observationCount: lessonObservations.count, competencyCount: competencies.count)
+    }
+    /// Écrit la saisie du bilan dans le brouillon chiffré de l’appareil, ou le retire quand il n’y a plus rien à garder.
+    /// Un coffre illisible n’écrit rien : la saisie reste en mémoire, jamais en clair sur le disque.
+    func persistLocalDraft() {
+        guard let localDrafts, !invalidated, isAuthor, let draft, lesson?.status == "COMPLETED" else { return }
+        if reportEdited {
+            try? localDrafts.save(SchoolReportLocalDraft(draftID: draft.id, lessonID: lessonID, base: Self.content(of: draft),
+                edited: editedReport, savedAt: Date()), scope: scope)
+        } else {
+            try? localDrafts.remove(scope: scope, draftID: draft.id)
+        }
+    }
+    /// Le moniteur renonce à sa saisie, ou l’école vient de l’enregistrer.
+    func discardLocalDraft() {
+        guard let localDrafts, let draft else { return }
+        try? localDrafts.remove(scope: scope, draftID: draft.id)
+    }
+    private static func content(of draft: SchoolReportDraft) -> SchoolReportLocalDraft.Content {
+        .init(workedOn: draft.workedOn, observationText: draft.observationText, nextStep: draft.nextStep, observations: draft.observations)
+    }
+    /// Après une lecture qui a remis le bilan sur la version de l’école : reprend la saisie gardée sur l’appareil,
+    /// sinon propose les objectifs comme travail réalisé juste après la fin de la leçon.
+    /// Rend `true` quand la saisie reprise ne part plus de ce que l’école a enregistré.
+    private func restoreUnsentReport() -> Bool {
+        guard isAuthor, let draft, lesson?.status == "COMPLETED" else { return false }
+        let server = Self.content(of: draft)
+        if let localDrafts, let stored = try? localDrafts.read(scope: scope, draftID: draft.id) {
+            if stored.edited == server {
+                try? localDrafts.remove(scope: scope, draftID: draft.id)
+            } else {
+                workedOn = stored.edited.workedOn; observationText = stored.edited.observationText
+                nextStep = stored.edited.nextStep; observations = stored.edited.observations
+                return stored.base != server
+            }
+        }
+        guard proposesWorkedOn, server.isEmpty else { return false }
+        proposesWorkedOn = false
+        let proposal = SchoolLessonHubRules.completionReport(goals: preparation?.goals ?? [], observations: [], competencies: []).workedOn
+        guard !proposal.isEmpty else { return false }
+        workedOn = proposal; workedOnProposal = proposal
+        return false
+    }
     var retainedEditsText: String {
         ([workedOn, observationText, nextStep] + goals.map(\.label) + [administrativeNote, wishText]
             + observations.map { "\($0.levelLabel) : \($0.context)" })
@@ -195,6 +261,7 @@ import Observation
         competencies = []; pending = nil; goals = []; administrativeNote = ""; wishText = ""; optimisticSharing = nil
         sharedReportWasRead = false
         workedOn = ""; observationText = ""; nextStep = ""; observations = []
+        workedOnProposal = nil; proposesWorkedOn = false
         sharing = nil; lessonObservations = []; track = []; trackAnchors = [:]
         training = nil; account = nil; currentLevels = [:]; captures = []; permitRecorded = false; permitReviewDenied = false
         isLoading = false; isBusy = false; storageAccessible = false; revisionsError = nil; reportSaveConfirmed = false
@@ -235,6 +302,7 @@ import Observation
     /// cas, la version ancienne reste attachée au texte et toute écriture attend une relecture explicite.
     func load(discardingEdits: Bool = false) async {
         guard !invalidated, !isBusy else { return }
+        if discardingEdits { discardLocalDraft(); proposesWorkedOn = false }
         generation = UUID(); let request = generation
         // Une relecture garde l’état affiché : `needsReload`, les notes et la saisie ne changent qu’à son résultat.
         isLoading = true; errorMessage = nil; pendingReviewed = false
@@ -343,7 +411,7 @@ import Observation
                 discardingEdits: discardingEdits || !author)
             let wishPolicy = SchoolLessonRefreshPolicy.decide(previous: wish?.text, edited: wishText,
                 received: wishRead.value?.text, discardingEdits: discardingEdits || !isOwn)
-            let conflict = draftPolicy == .conflict || preparationPolicy == .conflict || wishPolicy == .conflict
+            var conflict = draftPolicy == .conflict || preparationPolicy == .conflict || wishPolicy == .conflict
             self.lesson = lesson
             if preparationPolicy != .conflict { preparation = preparationRead.value }
             if wishPolicy != .conflict { wish = wishRead.value }
@@ -358,6 +426,8 @@ import Observation
             if draftPolicy == .replace {
                 workedOn = draft?.workedOn ?? ""; observationText = draft?.observationText ?? ""; nextStep = draft?.nextStep ?? ""
                 observations = draft?.observations ?? []
+                workedOnProposal = nil
+                if !discardingEdits, restoreUnsentReport() { conflict = true }
             }
             competencies = curriculumRead.value ?? []
             currentLevels = Dictionary((progressRead.value?.items ?? []).map { ($0.competencyId, $0) }, uniquingKeysWith: { first, _ in first })
@@ -433,11 +503,11 @@ import Observation
         guard let lesson, canMutate, isAuthor, lesson.status == "PLANNED", localCaptureStopped, end > start,
               end <= Date().addingTimeInterval(300), !completionNeedsReason || !trimmed.isEmpty, reason.unicodeScalars.count <= 1_000 else { return false }
         let operation = UUID(), iso = ISO8601DateFormatter()
-        // Le bilan part des objectifs enregistrés et de ce qui a été noté pendant la leçon ; il reste modifiable.
-        let prefill = SchoolLessonHubRules.completionReport(goals: preparation?.goals ?? [], observations: lessonObservations,
-            competencies: competencies)
+        // Le constat part sans texte : l’école partage tout bilan non vide, et rien n’a encore été rédigé.
+        // Les objectifs sont proposés ensuite comme travail réalisé, sur l’appareil seulement.
+        proposesWorkedOn = true
         return await prepare(SchoolCompleteLesson(operationId: operation, actualStart: iso.string(from: start), actualEnd: iso.string(from: end),
-            workedOn: prefill.workedOn, observationText: prefill.observationText, nextStep: "", anomalyReason: trimmed.isEmpty ? nil : reason),
+            workedOn: "", observationText: "", nextStep: "", anomalyReason: trimmed.isEmpty ? nil : reason),
             id: operation, kind: .completeLesson, version: lesson.version, resourceID: lessonID)
     }
     func markNoShow(reason: String) async -> Bool {
@@ -514,7 +584,7 @@ import Observation
             self.pending = nil; isBusy = false; confirmation = "L’école confirme l’enregistrement de la demande."
             if pending.kind != .updateLessonSharing { awaitsRereadAfterWrite = true }
             announceConfirmedChange(pending)
-            if confirmsThisReport(pending) { reportSaveConfirmed = true; return }
+            if confirmsThisReport(pending) { discardLocalDraft(); reportSaveConfirmed = true; return }
             await load()
         } catch { guard request == generation, !invalidated else { return }; isBusy = false; fail(error) }
     }
@@ -541,7 +611,7 @@ import Observation
             pending = nil; isBusy = false
             if command.kind != .updateLessonSharing { awaitsRereadAfterWrite = true }
             announceConfirmedChange(command)
-            if confirmsThisReport(command) { reportSaveConfirmed = true; return true }
+            if confirmsThisReport(command) { discardLocalDraft(); reportSaveConfirmed = true; return true }
             confirmation = Self.confirmationText(for: command.kind)
             // Partage : l’état confirmé suffit. Seul un bilan passé privé ou rendu visible change le brouillon côté école.
             if command.kind == .updateLessonSharing, let confirmedSharing {

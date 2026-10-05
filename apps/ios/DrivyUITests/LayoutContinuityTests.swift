@@ -12,8 +12,14 @@ import UIKit
         app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = "lesson"
         app.launchArguments = ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH"]
         app.launch()
+        // La fiche s’ouvre en lecture ; la rédaction se pousse, et l’enregistrement est à sa dernière étape.
+        let edit = app.buttons["lesson-report-edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 20), app.debugDescription)
+        edit.tap()
         let save = app.buttons["lesson-save-report"]
-        XCTAssertTrue(save.waitForExistence(timeout: 20), app.debugDescription)
+        let next = app.buttons["lesson-report-next"]
+        for _ in 0..<3 where !save.waitForExistence(timeout: 5) { if next.exists { next.tap() } }
+        XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
 
         let field = reportField(in: app)
         // Sur une petite fenêtre, la carte précède le formulaire dans le même défilement.

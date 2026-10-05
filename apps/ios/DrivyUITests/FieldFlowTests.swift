@@ -73,6 +73,9 @@ import XCTest
         finish.tap()
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), app.debugDescription)
         confirm.tap()
+        // La rédaction s’ouvre sur sa première étape ; l’enregistrement est à la dernière.
+        let next = app.buttons["lesson-report-next"]
+        for _ in 0..<3 where !save.waitForExistence(timeout: 5) { if next.exists { next.tap() } }
         XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(app.datePickers.count, 0)
         XCTAssertTrue(save.isEnabled)

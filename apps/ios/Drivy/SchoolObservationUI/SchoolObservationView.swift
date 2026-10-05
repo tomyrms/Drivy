@@ -238,7 +238,7 @@ struct SchoolObservationView: View {
     }
 }
 
-private struct SchoolObservationComposer: View {
+struct SchoolObservationComposer: View {
     @Bindable var model: SchoolObservationWorkspace
     let editor: SchoolObservationEditor
     @Environment(\.dismiss) private var dismiss
@@ -387,7 +387,7 @@ private struct SchoolObservationComposer: View {
     }
 }
 
-private struct SchoolObservationRemoval: View {
+struct SchoolObservationRemoval: View {
     @Bindable var model: SchoolObservationWorkspace
     let observation: SchoolObservation
     @Environment(\.dismiss) private var dismiss

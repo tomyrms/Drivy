@@ -1,9 +1,10 @@
-import MapKit
 import SwiftUI
 
 /// L’écran unique d’une leçon : avant (objectifs, départ du trajet), pendant (trajet en cours, observations),
 /// après (objectifs prévus, bilan, trajet, observations). Une leçon annulée ou manquée garde ses objectifs prévus. Tout est partagé avec l’élève automatiquement ; le moniteur garde
 /// pour lui ce qu’il choisit.
+/// Une leçon terminée se relit ici. Le moniteur rédige son bilan dans des étapes poussées depuis cette fiche
+/// (`SchoolReportStepView`) ; dès que la fenêtre est assez large, il le rédige sur place, en deux colonnes.
 struct SchoolLessonReportView: View {
     let client: SchoolLessonReportClient
     @Bindable var schoolWorkspace: SchoolWorkspace
@@ -54,13 +55,19 @@ struct SchoolLessonReportView: View {
                 ContentUnavailableView("Choisis ton école", systemImage: "building.2")
             }
         }
-        .navigationTitle(opensCompletion && completionConfirmed ? "Bilan" : "Leçon")
+        // La fiche reste « Leçon » : le bilan se rédige dans des étapes qui portent leur propre titre.
+        .navigationTitle("Leçon")
         .navigationBarTitleDisplayMode(.inline)
         .presentationSizing(.page)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Fermer") {
-                    if hasUnsavedChanges { confirmsDiscard = true } else { model?.invalidate(); dismiss() }
+                    if hasUnsavedChanges {
+                        confirmsDiscard = true
+                    } else {
+                        // Sans saisie à garder, le brouillon local éventuel est retiré avec la fiche.
+                        model?.persistLocalDraft(); model?.invalidate(); dismiss()
+                    }
                 }
                 // Un réglage de partage, bref, ne grise pas « Fermer » : sa demande reste dans la file chiffrée.
                 .disabled(model?.holdsScreen == true || isCompletingLesson)
@@ -68,7 +75,10 @@ struct SchoolLessonReportView: View {
         }
         .interactiveDismissDisabled(hasUnsavedChanges || model?.isBusy == true || isCompletingLesson)
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active, let model, matches(model), !model.isLoading, !model.isBusy, !isCompletingLesson else { return }
+            guard let model, matches(model) else { return }
+            // L’app quitte le premier plan : la saisie du bilan est écrite sur l’appareil avant tout verrouillage.
+            guard phase == .active else { model.persistLocalDraft(); return }
+            guard !model.isLoading, !model.isBusy, !isCompletingLesson else { return }
             Task { await model.load() }
         }
         .onChange(of: model?.reportSaveConfirmed) { _, confirmed in
@@ -78,7 +88,7 @@ struct SchoolLessonReportView: View {
             dismiss()
         }
         .alert("Quitter sans enregistrer ?", isPresented: $confirmsDiscard) {
-            Button("Quitter sans enregistrer", role: .destructive) { model?.invalidate(); dismiss() }
+            Button("Quitter sans enregistrer", role: .destructive) { model?.discardLocalDraft(); model?.invalidate(); dismiss() }
             Button("Continuer", role: .cancel) { }
         }
         .task(id: scopeKey) {
@@ -88,7 +98,11 @@ struct SchoolLessonReportView: View {
             model?.invalidate(); model = nil
             guard let person = schoolWorkspace.person, let membership = schoolWorkspace.membership else { return }
             let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId, membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: client.baseURL.absoluteString)
-            let value = SchoolLessonReportWorkspace(scope: scope, membership: membership, lessonID: lessonID, client: client, outbox: outbox)
+            // Le brouillon local suit la file chiffrée de l’app. Une file de substitution (revue visuelle, tests)
+            // n’écrit rien sur l’appareil : la saisie y reste en mémoire.
+            let drafts: (any SchoolReportLocalDraftStore)? = outbox is EncryptedSchoolCommandOutbox ? EncryptedSchoolReportDraftStore() : nil
+            let value = SchoolLessonReportWorkspace(scope: scope, membership: membership, lessonID: lessonID, client: client, outbox: outbox,
+                localDrafts: drafts)
             model = value; await value.load()
         }
     }
@@ -127,7 +141,12 @@ private struct SchoolLessonReportContent: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var lessonSheet: LessonSheet?
-    @State private var replay: SchoolTripReplayRoute?
+    @State private var router = SchoolReportRouter()
+    /// Rédaction du bilan en étapes : ouverte seule après « Terminer », sinon depuis la barre basse.
+    @State private var showsReport = false
+    @State private var reportSteps: [SchoolReportStep] = []
+    /// La leçon vient d’être terminée ici : la rédaction s’ouvre dès que la fiche est de nouveau à l’écran.
+    @State private var opensReportWhenReady = false
     @Binding var isFinishing: Bool
     @State private var finishError: String?
     @State private var completionOpened = false
@@ -136,21 +155,14 @@ private struct SchoolLessonReportContent: View {
     @State private var showReloadConfirmation = false
     @State private var confirmsNoShow = false
     @State private var showsLive = false
-    @State private var observationRoute: ObservationRoute?
     @State private var capturePreparation: SchoolCapturePreparationWorkspace?
     @State private var planningRoute: PlanningRoute?
-    @State private var expandedCompetencies = Set<UUID>()
 
     private enum LessonSheet: String, Identifiable {
         case permit
         var id: String { rawValue }
     }
 
-    private struct ObservationRoute: Identifiable {
-        let id = UUID()
-        let client: SchoolObservationClient
-        let lessonID: UUID
-    }
     private struct PlanningRoute: Identifiable {
         let id = UUID()
         let model: SchoolPlanningWorkspace
@@ -169,6 +181,11 @@ private struct SchoolLessonReportContent: View {
     /// L’élève ne reçoit que ce qui lui est partagé ; le moniteur voit tout, y compris ce qu’il garde pour lui.
     private var readsLesson: Bool { model.canReadLessonContent }
     private var captureStatus: SchoolLessonCaptureStatus { SchoolLessonCaptureStatus(controller: capture, lessonID: model.lessonID) }
+    private var reportContext: SchoolReportContext {
+        SchoolReportContext(agenda: agenda, learnerName: learnerName, schoolWorkspace: schoolWorkspace)
+    }
+    /// Le moniteur de la leçon rédige ou reprend son bilan.
+    private var editsReport: Bool { model.isAuthor && isCompleted && model.draft != nil }
 
     var body: some View {
         TimelineView(.everyMinute) { context in
@@ -197,12 +214,8 @@ private struct SchoolLessonReportContent: View {
             case .permit: SchoolLessonCompletionSheet(model: model, finish: finishLesson)
             }
         }
-        .fullScreenCover(item: $replay) { route in
-            SchoolCaptureReplayView(model: route.model, learnerName: route.learnerName, lessonTimeZone: route.lessonTimeZone)
-        }
-        .sheet(item: $observationRoute, onDismiss: { Task { await model.load() } }) { route in
-            SchoolObservationEntryView(client: route.client, schoolWorkspace: schoolWorkspace, lessonID: route.lessonID)
-        }
+        .modifier(SchoolReportPresentations(router: router, model: model, context: reportContext))
+        .modifier(SchoolReportLocalDraftKeeper(model: model))
         .sheet(item: $capturePreparation, onDismiss: { captureSheetClosed() }) { preparation in
             SchoolCapturePreparationView(model: preparation, schoolWorkspace: schoolWorkspace)
         }
@@ -217,6 +230,13 @@ private struct SchoolLessonReportContent: View {
                 }, observationClient: agenda.observationClient)
             }
         }
+        .navigationDestination(isPresented: $showsReport) {
+            if !reportSteps.isEmpty {
+                SchoolReportStepView(model: model, context: reportContext, steps: reportSteps, index: 0)
+            }
+        }
+        // Retour sur la fiche : la saisie reste dans le modèle et se garde aussi sur l’appareil.
+        .onChange(of: showsReport) { _, shown in if !shown { model.persistLocalDraft() } }
         .onChange(of: captureStatus) { _, status in if status != .collecting && status != .stopped { showsLive = false } }
         .onChange(of: showsLive) { _, visible in
             if !visible { Task { await model.refreshObservations() } }
@@ -233,47 +253,19 @@ private struct SchoolLessonReportContent: View {
     private func form(now: Date) -> some View {
         let bar = plannedBar(now: now)
         return GeometryReader { geometry in
-            // Le contexte reste à portée pendant la rédaction. La saisie vit dans le modèle,
-            // au-dessus de ce changement de composition et des rotations de la fenêtre.
-            if geometry.size.width >= LessonLayout.splitBreakpoint && hasCompletedReport && !typeSize.isAccessibilitySize {
-                HStack(spacing: 0) {
-                    Form { lessonContext }
-                        .scrollContentBackground(.hidden)
-                        .frame(width: LessonLayout.contextColumnWidth)
-                    Form { completedReport }
-                        .scrollContentBackground(.hidden)
-                        // Le bilan démarre à la hauteur du nom de l’élève, pas au bord de la barre.
-                        .contentMargins(.top, DrivySpacing.m, for: .scrollContent)
-                        .frame(maxWidth: .infinity)
+            // Fenêtre large : le contexte reste à portée pendant la rédaction, sur un seul écran. Plus étroite
+            // (iPhone, Slide Over, grand texte) : la fiche se relit et le bilan se rédige en étapes. La saisie vit
+            // dans le modèle, au-dessus de ce changement de composition et des rotations de la fenêtre.
+            let split = geometry.size.width >= LessonLayout.splitBreakpoint && hasCompletedReport && !typeSize.isAccessibilitySize
+            layout(split: split, bar: bar)
+                .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar(bar, split: split) }
+                .onChange(of: opensReportWhenReady, initial: true) { _, wanted in
+                    guard wanted else { return }
+                    opensReportWhenReady = false
+                    if !split { openReport() }
                 }
-                .frame(maxWidth: LessonLayout.splitMaxWidth)
-                .frame(maxWidth: .infinity)
-            } else {
-                Form {
-                    headerSection
-                    lessonNotices
-                    plannedGoals
-                    completedReport
-                    lessonEvidence
-                    // Avant la leçon : le souhait de l’élève éclaire les objectifs, puis viennent les observations.
-                    Group {
-                        if let wish = model.wish, showsWish(wish) { wishSection(wish) }
-                        if isPlanned, model.isAuthor { goalsEditor(savesInline: !isGoalsBar(bar)) }
-                        if isPlanned, model.isOwnLearner, let goals = model.preparation?.goals, !goals.isEmpty { goalsReader(goals) }
-                        if isPlanned, model.isAuthor { observationsSection }
-                    }
-                    .drivyFormRows()
-                }
-                .scrollContentBackground(.hidden)
-                .frame(maxWidth: LessonLayout.formMaxWidth)
-                .frame(maxWidth: .infinity)
-            }
         }
         .background(DrivyTheme.canvas)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let bar { plannedBarView(bar) }
-            else if model.isAuthor && isCompleted && model.draft != nil { saveBar }
-        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -292,48 +284,124 @@ private struct SchoolLessonReportContent: View {
         isCompleted && ((model.isAuthor && model.draft != nil) || (!model.isAuthor && model.canReadSharedReport))
     }
 
-    /// Les lignes des sections prennent la surface du thème (le gris système du sombre ne s’accorde pas au canevas).
+    @ViewBuilder private func layout(split: Bool, bar: PlannedBar?) -> some View {
+        if split {
+            HStack(spacing: 0) {
+                Form { lessonContext }
+                    .scrollContentBackground(.hidden)
+                    .frame(width: LessonLayout.contextColumnWidth)
+                Form { completedReport(editing: true) }
+                    .scrollContentBackground(.hidden)
+                    .scrollDismissesKeyboard(.interactively)
+                    // Le bilan démarre à la hauteur du nom de l’élève, pas au bord de la barre.
+                    .contentMargins(.top, DrivySpacing.m, for: .scrollContent)
+                    .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: LessonLayout.splitMaxWidth)
+            .frame(maxWidth: .infinity)
+        } else {
+            Form {
+                headerSection
+                lessonNotices
+                plannedGoals
+                completedReport(editing: false)
+                lessonEvidence(mapHeight: DrivyMapLayout.previewHeight)
+                // Avant la leçon : le souhait de l’élève éclaire les objectifs, puis viennent les observations.
+                plannedSections(bar: bar)
+            }
+            .scrollContentBackground(.hidden)
+            .frame(maxWidth: LessonLayout.formMaxWidth)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    @ViewBuilder private func plannedSections(bar: PlannedBar?) -> some View {
+        Group {
+            if let wish = model.wish, showsWish(wish) { wishSection(wish) }
+            if isPlanned, model.isAuthor { goalsEditor(savesInline: !isGoalsBar(bar)) }
+            if isPlanned, model.isOwnLearner, let goals = model.preparation?.goals, !goals.isEmpty { goalsReader(goals) }
+        }
+        .drivyFormRows()
+        if isPlanned, model.isAuthor { SchoolReportObservationsSection(model: model, router: router, context: reportContext) }
+    }
+
+    /// Barre basse : les gestes d’une leçon planifiée ; pour une leçon terminée, l’enregistrement du bilan quand
+    /// il se rédige sur place, sinon l’entrée dans sa rédaction.
+    @ViewBuilder private func bottomBar(_ bar: PlannedBar?, split: Bool) -> some View {
+        if let bar {
+            plannedBarView(bar)
+        } else if editsReport {
+            if split { SchoolReportSaveBar(model: model) } else { editReportBar }
+        }
+    }
+
+    /// « Rédiger », « Modifier » ou « Reprendre le bilan » : l’action domine tant que rien n’est enregistré.
+    private var editReportBar: some View {
+        let empty = model.reportIsEmpty, unsaved = model.draftChanged
+        let title = SchoolReportFlowRules.editTitle(isEmpty: empty, unsaved: unsaved)
+        return DrivyStickyActionBar {
+            if empty || unsaved {
+                Button(title) { openReport() }
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .accessibilityIdentifier("lesson-report-edit")
+            } else {
+                Button(title) { openReport() }
+                    .buttonStyle(DrivySecondaryButtonStyle())
+                    .accessibilityIdentifier("lesson-report-edit")
+            }
+        }
+    }
+
+    /// Les étapes sont figées à l’entrée, d’après ce que la leçon contient à cet instant.
+    private func openReport() {
+        guard editsReport, !showsReport else { return }
+        reportSteps = model.reportSteps
+        showsReport = true
+    }
+
+    /// Colonne de contexte en fenêtre large : la leçon, ses objectifs, son trajet et ses observations.
     @ViewBuilder private var lessonContext: some View {
         headerSection
         lessonNotices
         plannedGoals
-        lessonEvidence
+        lessonEvidence(mapHeight: SchoolReportLayout.evidenceMapHeight)
     }
 
     /// Après la leçon (terminée, annulée, manquée), les objectifs prévus se relisent sans se modifier : l’école
     /// ferme la préparation dès que la leçon a un résultat. Le moniteur de la leçon et l’élève les reçoivent ;
-    /// la note que le moniteur garde pour lui reste hors de cette lecture.
+    /// la note que le moniteur garde pour lui n’est rendue qu’à lui par l’école, et relue ici par lui seul.
     @ViewBuilder private var plannedGoals: some View {
-        if let lesson = model.lesson, lesson.status != "PLANNED", let goals = model.preparation?.goals, !goals.isEmpty {
-            goalsReader(goals)
+        if let lesson = model.lesson, lesson.status != "PLANNED" {
+            let goals = model.preparation?.goals ?? []
+            let note = model.isAuthor
+                ? (model.preparation?.administrativeCheckNote ?? "").trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            if !goals.isEmpty || !note.isEmpty { goalsReader(goals, note: note) }
         }
     }
 
-    @ViewBuilder private var lessonNotices: some View {
-        Group {
-            if model.needsReload && model.hasLocalEdits {
-                Section { Text(model.retainedEditsText).textSelection(.enabled) } header: { Text("Saisie conservée").drivyFormSectionHeader() }
-                    .drivyFormRows()
+    private var lessonNotices: some View { SchoolReportNotices(model: model) }
+
+    @ViewBuilder private func lessonEvidence(mapHeight: CGFloat) -> some View {
+        if isCompleted, readsLesson, !model.captures.isEmpty || !model.track.isEmpty {
+            SchoolReportTripSection(model: model, router: router, context: reportContext, mapHeight: mapHeight)
+        }
+        if isCompleted, model.isAuthor || model.isOwnLearner {
+            SchoolReportObservationsSection(model: model, router: router, context: reportContext)
+        }
+    }
+
+    /// Le moniteur relit son bilan sur la fiche et le rédige en étapes ; en fenêtre large, il le rédige ici.
+    /// Les autres lecteurs reçoivent le bilan partagé.
+    @ViewBuilder private func completedReport(editing: Bool) -> some View {
+        if editsReport {
+            if editing {
+                SchoolReportTextSection(model: model)
+                SchoolReportCompetenciesSection(model: model)
+            } else {
+                SchoolReportReadSection(model: model)
             }
-            if model.pendingAwaitsReview { pendingSection }
         }
-        .drivyFormRows()
-    }
-
-    @ViewBuilder private var lessonEvidence: some View {
-        Group {
-            if isCompleted, readsLesson, !model.captures.isEmpty || !model.track.isEmpty { trackSection }
-            if isCompleted, model.isAuthor || model.isOwnLearner { observationsSection }
-        }
-        .drivyFormRows()
-    }
-
-    @ViewBuilder private var completedReport: some View {
-        Group {
-            if model.isAuthor, isCompleted, model.draft != nil { reportEditor }
-            if !model.isAuthor, model.canReadSharedReport, isCompleted { sharedReportSection }
-        }
-        .drivyFormRows()
+        if !model.isAuthor, model.canReadSharedReport, isCompleted { sharedReportSection }
     }
 
     private func isGoalsBar(_ bar: PlannedBar?) -> Bool {
@@ -394,7 +462,10 @@ private struct SchoolLessonReportContent: View {
            let start = SchoolLesson.date(local.startedAt), let end = SchoolLesson.date(local.stoppedAt), end > start {
             times = (start, end)
         }
-        return await model.complete(start: times.start, end: times.end, reason: reason, localCaptureStopped: true)
+        let completed = await model.complete(start: times.start, end: times.end, reason: reason, localCaptureStopped: true)
+        // La leçon est terminée : la rédaction du bilan s’ouvre d’elle-même dès que la fiche revient à l’écran.
+        if completed { opensReportWhenReady = true }
+        return completed
     }
 
     /// Départ réussi depuis cette feuille : elle se ferme pour laisser le trajet en cours à l’écran.
@@ -493,33 +564,6 @@ private struct SchoolLessonReportContent: View {
             .accessibilityLabel(line.title)
             .accessibilityValue(amount)
             .accessibilityIdentifier(line.kind == .agreed ? "lesson-tariff" : "lesson-balance")
-    }
-
-    /// Même présentation que partout ailleurs pour une demande au résultat inconnu.
-    private var pendingSection: some View {
-        let idle = !(model.isBusy || model.isLoading)
-        let retry: (() -> Void)? = model.pending?.kind.isReport == true
-            ? { model.reviewPending(); Task { await model.retryPending() } }
-            : nil
-        return Section {
-            DrivyPendingRequest(
-                message: "La demande est conservée sur cet appareil. Vérifie son résultat avant une nouvelle action.",
-                verify: { Task { await model.verifyPending() } }, canVerify: idle,
-                retry: retry, canRetry: idle
-            ) {
-                DisclosureGroup {
-                    Text(model.pendingDescription)
-                        .font(.footnote)
-                        .foregroundStyle(DrivyTheme.muted)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } label: {
-                    Text("Voir la demande").font(.footnote).foregroundStyle(DrivyTheme.muted)
-                }
-            }
-        }
-            .drivyFormRows()
     }
 
     // MARK: Actions de la leçon
@@ -647,227 +691,7 @@ private struct SchoolLessonReportContent: View {
         planningRoute = PlanningRoute(model: planning, cancelling: cancelling)
     }
 
-    private func openObservations() {
-        observationRoute = ObservationRoute(client: agenda.observationClient, lessonID: model.lessonID)
-    }
-
-    // MARK: Trajet et observations
-
-    private var pins: [LessonTrackMap.Pin] {
-        model.lessonObservations.compactMap { observation in
-            guard let point = model.anchor(of: observation) else { return nil }
-            return LessonTrackMap.Pin(id: observation.id, latitude: point.latitude, longitude: point.longitude, color: color(observation))
-        }
-    }
-
-    private var trackSection: some View {
-        let replayable = model.replayableCaptures
-        return Section {
-            if !model.track.isEmpty {
-                // La carte porte sa seule commande : lecture, en bas à droite.
-                LessonTrackMap(segments: model.track, pins: pins)
-                    .overlay(alignment: .bottomTrailing) { replayControl(replayable) }
-                    .listRowInsets(EdgeInsets())
-            } else {
-                // Sans aperçu (tracé illisible ou vide), le replay s’ouvre par une ligne de texte.
-                ForEach(Array(replayable.enumerated()), id: \.element.id) { index, capture in
-                    Button { openReplay(capture) } label: {
-                        Text(replayable.count == 1 ? "Revoir le trajet" : "Revoir le trajet \(index + 1)")
-                            .frame(minHeight: 44)
-                    }
-                    .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
-                }
-            }
-            if model.captures.contains(where: { $0.syncState != .synced && $0.syncState != .partial && $0.publicationState == .privateCapture }) {
-                // État inhabituel du trajet : symbole et texte, comme tout statut.
-                Label("Trajet en cours d’envoi", systemImage: "arrow.triangle.2.circlepath").foregroundStyle(DrivyTheme.muted)
-            }
-            if model.isAuthor, model.sharing != nil {
-                sharingToggle(Binding(get: { model.captureShared },
-                    set: { shared in Task { await model.updateSharing(captureHidden: !shared) } }))
-            }
-        } header: { Text("Trajet").drivyFormSectionHeader() }
-            .drivyFormRows()
-    }
-
-    /// Lecture du trajet, posée sur la carte. Un trajet : l’appui ouvre le replay. Plusieurs : la même commande
-    /// ouvre leur liste, pour ne jamais poser deux boutons sur la carte.
-    @ViewBuilder private func replayControl(_ captures: [SchoolCaptureSession]) -> some View {
-        if captures.count == 1, let capture = captures.first {
-            Button { openReplay(capture) } label: { LessonReplayGlyph() }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Revoir le trajet")
-                .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
-                .padding(DrivySpacing.s)
-        } else if captures.count > 1 {
-            Menu {
-                ForEach(Array(captures.enumerated()), id: \.element.id) { index, capture in
-                    Button("Trajet \(index + 1)") { openReplay(capture) }
-                        .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
-                }
-            } label: { LessonReplayGlyph() }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Revoir le trajet")
-                .accessibilityHint("Ouvre la liste des trajets de la leçon")
-                .accessibilityIdentifier("lesson-replay-menu")
-                .padding(DrivySpacing.s)
-        }
-    }
-
-    private func openReplay(_ capture: SchoolCaptureSession) {
-        replay = SchoolTripReplayRoute(model: SchoolCaptureReplayWorkspace(scope: model.scope, client: agenda.captureClient,
-            captureID: capture.id), learnerName: learnerName, lessonTimeZone: model.lesson?.timeZone)
-    }
-
-    private var observationsSection: some View {
-        Section {
-            if model.lessonObservations.isEmpty && isCompleted {
-                Text("Aucune observation.").foregroundStyle(DrivyTheme.muted)
-            }
-            ForEach(model.lessonObservations) { observation in
-                HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
-                    observationContent(observation)
-                    Spacer(minLength: 0)
-                    if model.isAuthor, model.sharing != nil {
-                        let kept = model.isPrivate(observation)
-                        Menu {
-                            Button(kept ? "Montrer à l’élève" : "Garder pour moi") {
-                                Task { await model.updateSharing(observation: observation.id, observationPrivate: !kept) }
-                            }
-                        } label: {
-                            HStack(spacing: DrivySpacing.xxs) {
-                                if kept { Text("Pour moi").font(.caption).foregroundStyle(DrivyTheme.muted) }
-                                Image(systemName: "ellipsis").font(.body).foregroundStyle(DrivyTheme.muted)
-                            }
-                            .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                        }
-                        .buttonStyle(.borderless)
-                        .disabled(!model.acceptsInput)
-                        .accessibilityLabel("Partage de l’observation : \(kept ? "pour moi" : "visible par l’élève")")
-                    }
-                }
-            }
-            if model.isAuthor {
-                Button(observationsActionTitle) {
-                    // Envoi bref en cours : l’appui est ignoré plutôt que le bouton grisé. Une relecture n’empêche rien.
-                    guard !model.isBusy else { return }
-                    openObservations()
-                }
-                    .accessibilityIdentifier("lesson-private-observations")
-            }
-        } header: { Text("Pendant la leçon").drivyFormSectionHeader() }
-            .drivyFormRows()
-    }
-
-    /// Le verbe suit ce que la feuille des observations permettra : rien à « modifier » tant que la liste est vide.
-    private var observationsActionTitle: String {
-        if isPlanned { return "Noter une observation" }
-        return model.lessonObservations.isEmpty ? "Ajouter une observation" : "Modifier les observations"
-    }
-
-    /// Constat par symbole, libellé et couleur : jamais par la couleur seule.
-    private func observationContent(_ observation: SchoolObservation) -> some View {
-        DrivyObservationSummary(observation: observation, competency: competencyLabel(observation))
-    }
-
-    private func color(_ observation: SchoolObservation) -> Color {
-        switch SchoolLessonHubRules.status(of: observation) {
-        case .positive: DrivyTheme.success
-        case .attention: DrivyTheme.warning
-        case .toWorkOn: DrivyTheme.danger
-        case nil: DrivyTheme.muted
-        }
-    }
-    private func competencyLabel(_ observation: SchoolObservation) -> String? {
-        guard let id = observation.competencyId else { return nil }
-        return model.competencies.first(where: { $0.id == id })?.displayLabel
-    }
-
-    // MARK: Bilan
-
-    @ViewBuilder private var reportEditor: some View {
-        Section {
-            if model.sharing != nil {
-                sharingToggle(Binding(get: { model.reportShared },
-                    set: { shared in Task { await model.updateSharing(reportPrivate: !shared) } }))
-            }
-            reportField("Travail réalisé", text: $model.workedOn)
-            reportField("À retenir", text: $model.observationText)
-            reportField("Prochaine étape", text: $model.nextStep)
-        } header: { Text("Bilan").drivyFormSectionHeader() }
-            .drivyFormRows()
-        if !model.competencies.isEmpty {
-            Section {
-                // Un niveau choisi suffit : le jour et le lieu sont proposés comme situation, modifiable.
-                ForEach(model.competencies) { competency in
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Menu {
-                            Picker(competency.displayLabel, selection: levelBinding(competency.id)) {
-                            Text(model.unchangedChoiceLabel(for: competency.id)).tag("")
-                            Text("En découverte").tag("DISCOVERING")
-                            Text("Avec accompagnement").tag("GUIDED")
-                            Text("En autonomie").tag("INDEPENDENT")
-                            }
-                            if model.observations.contains(where: { $0.id == competency.id }) {
-                                Button("Retirer l’évaluation de cette leçon") {
-                                    model.setObservationLevel("", for: competency.id)
-                                    expandedCompetencies.remove(competency.id)
-                                }
-                                Button("Préciser la situation") { expandedCompetencies.insert(competency.id) }
-                            }
-                        } label: {
-                            HStack(spacing: DrivySpacing.s) {
-                                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                                    Text(competency.displayLabel).font(.subheadline.weight(.medium)).foregroundStyle(DrivyTheme.text)
-                                    Text(competencyLevelLabel(competency.id)).font(.caption).foregroundStyle(DrivyTheme.muted)
-                                }.frame(maxWidth: .infinity, alignment: .leading)
-                                DrivyCompetencyMeter(level: displayedCompetencyLevel(competency.id))
-                                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(DrivyTheme.muted)
-                            }
-                            .frame(minHeight: 44).contentShape(Rectangle())
-                        }
-                        .buttonStyle(.borderless)
-                        .disabled(!model.acceptsInput)
-                        .accessibilityIdentifier("lesson-competency-level-\(competency.id.uuidString)")
-                        // Bilan « Pour moi » : le niveau choisi ne compte dans la progression qu’une fois le bilan partagé.
-                        if model.levelIsHeldBack(for: competency.id) {
-                            Text("Pour moi").font(.caption).foregroundStyle(DrivyTheme.muted)
-                                .accessibilityLabel("Cette évaluation reste pour toi")
-                                .accessibilityIdentifier("lesson-competency-private-\(competency.id.uuidString)")
-                        }
-                    }
-                    if expandedCompetencies.contains(competency.id), model.observations.contains(where: { $0.id == competency.id }) {
-                        TextField("Situation", text: contextBinding(competency.id), axis: .vertical)
-                            .font(.subheadline)
-                            .foregroundStyle(DrivyTheme.muted)
-                            .disabled(!model.acceptsInput)
-                            .accessibilityLabel("Situation, \(competency.displayLabel)")
-                    }
-                }
-            } header: { Text("Compétences").drivyFormSectionHeader() }
-                .drivyFormRows()
-        }
-    }
-
-    private func displayedCompetencyLevel(_ id: UUID) -> String {
-        model.observations.first(where: { $0.id == id })?.level
-            ?? (model.currentLevels[id]?.sourceLessonId == model.lessonID ? "" : model.currentLevels[id]?.level ?? "")
-    }
-    private func competencyLevelLabel(_ id: UUID) -> String {
-        if let chosen = model.observations.first(where: { $0.id == id }) { return chosen.levelLabel }
-        return model.unchangedChoiceLabel(for: id)
-    }
-
-    private func levelBinding(_ competencyID: UUID) -> Binding<String> {
-        Binding(get: { model.observations.first(where: { $0.id == competencyID })?.level ?? "" },
-                set: { model.setObservationLevel($0, for: competencyID) })
-    }
-    private func contextBinding(_ competencyID: UUID) -> Binding<String> {
-        Binding(get: { model.observations.first(where: { $0.id == competencyID })?.context ?? "" },
-                set: { value in
-                    if let index = model.observations.firstIndex(where: { $0.id == competencyID }) { model.observations[index].context = value }
-                })
-    }
+    // MARK: Bilan partagé
 
     @ViewBuilder private var sharedReportSection: some View {
         if let revision = model.revisions.first {
@@ -928,9 +752,19 @@ private struct SchoolLessonReportContent: View {
             .drivyFormRows()
     }
 
-    private func goalsReader(_ goals: [SchoolLessonGoal]) -> some View {
+    private func goalsReader(_ goals: [SchoolLessonGoal], note: String = "") -> some View {
         Section {
             ForEach(goals) { goal in Text(goal.label) }
+            if !note.isEmpty {
+                // Même cadenas que dans la préparation : cette ligne reste au moniteur, l’élève ne la reçoit pas.
+                HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+                    DrivyPrivacyMark(isPrivate: true)
+                    Text(note).foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("lesson-private-note")
+            }
         } header: { Text("Objectifs").drivyFormSectionHeader() }
             .drivyFormRows()
     }
@@ -948,109 +782,5 @@ private struct SchoolLessonReportContent: View {
             }
         } header: { Text(model.isOwnLearner ? "Mon souhait" : "Souhait de l’élève").drivyFormSectionHeader() }
             .drivyFormRows()
-    }
-
-    // MARK: Bilan : enregistrement
-
-    /// La leçon est déjà terminée : ce bouton enregistre le bilan, puis ferme la fiche. L’école en fait aussitôt
-    /// la version lue par l’élève, sauf bilan gardé pour soi ; le libellé le dit avant le geste.
-    private var saveBar: some View {
-        DrivyStickyActionBar {
-            if !model.validTexts { DrivyActionNote(text: "Un texte dépasse 4 000 caractères.", isError: true) }
-            else if !model.observationsValid { DrivyActionNote(text: "Vérifie les niveaux et limite chaque situation à 500 caractères.", isError: true) }
-            Button { Task { await model.saveDraft() } } label: {
-                DrivyBusyLabel(title: saveReportTitle, isBusy: isSending(.saveReportDraft))
-            }
-                .buttonStyle(DrivyPrimaryButtonStyle())
-                .disabled(!model.acceptsInput || !model.validTexts || !model.observationsValid)
-                .accessibilityIdentifier("lesson-save-report")
-        }
-    }
-
-    private var saveReportTitle: String {
-        let empty = SchoolLessonHubRules.reportIsEmpty(workedOn: model.workedOn, observationText: model.observationText,
-            nextStep: model.nextStep, observations: model.observations)
-        return SchoolLessonHubRules.saveReportTitle(isEmpty: empty, shared: model.sharing == nil ? nil : model.reportShared)
-    }
-
-    /// Partage d’un bloc avec l’élève. L’interrupteur porte l’état : aucun symbole ne le répète.
-    private func sharingToggle(_ isOn: Binding<Bool>) -> some View {
-        Toggle("Visible par l’élève", isOn: isOn)
-            .disabled(!model.acceptsInput)
-    }
-
-    private func reportField(_ label: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-            Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
-            TextField("Facultatif", text: text, axis: .vertical).lineLimit(1...10).disabled(!model.acceptsInput)
-                .accessibilityLabel(label)
-                .accessibilityHint("Facultatif")
-        }
-        .padding(.vertical, DrivySpacing.xs)
-    }
-}
-
-/// Commande de lecture posée sur l’aperçu du trajet : même vitre teintée et même cible de 48 pt que les
-/// commandes des écrans carte, lisible sur la carte en clair comme en sombre.
-private struct LessonReplayGlyph: View {
-    var body: some View {
-        Image(systemName: "play.fill")
-            .font(DrivyMapGlyph.control)
-            .foregroundStyle(DrivyTheme.text)
-            // Le triangle de lecture paraît décalé à gauche dans un cercle : un point le recentre à l’œil.
-            .offset(x: 1)
-            .frame(width: 48, height: 48)
-            .drivyLegibleMapControl(in: Circle())
-            .contentShape(Circle())
-    }
-}
-
-/// Carte d’un trajet enregistré, avec les observations ancrées. Aucune position n’est inventée :
-/// sans mesure, la section n’est pas affichée.
-struct LessonTrackMap: View {
-    struct Pin: Identifiable {
-        let id: UUID
-        let latitude: Double
-        let longitude: Double
-        let color: Color
-        var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
-    }
-    private struct Line: Identifiable {
-        let id: Int
-        let coordinates: [CLLocationCoordinate2D]
-    }
-    let segments: [[SchoolCapturePoint]]
-    let pins: [Pin]
-
-    private var lines: [Line] {
-        segments.enumerated().map { index, points in
-            Line(id: index, coordinates: points.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) })
-        }
-    }
-
-    var body: some View {
-        Map(initialPosition: .automatic) {
-            ForEach(lines) { line in
-                if line.coordinates.count > 1 {
-                    MapPolyline(coordinates: line.coordinates).stroke(DrivyTheme.routeHalo, lineWidth: 8)
-                    MapPolyline(coordinates: line.coordinates).stroke(DrivyTheme.route, lineWidth: 4)
-                } else if let coordinate = line.coordinates.first {
-                    Annotation("Position enregistrée", coordinate: coordinate) {
-                        Circle().fill(DrivyTheme.route).frame(width: 8, height: 8)
-                    }.annotationTitles(.hidden)
-                }
-            }
-            ForEach(pins) { pin in
-                Annotation("", coordinate: pin.coordinate) {
-                    Circle().fill(pin.color).frame(width: 16, height: 16)
-                        .overlay(Circle().stroke(DrivyTheme.routeHalo, lineWidth: 2))
-                        .accessibilityHidden(true)
-                }
-                .annotationTitles(.hidden)
-            }
-        }
-        .mapStyle(.standard(pointsOfInterest: .excludingAll))
-        .frame(height: DrivyMapLayout.previewHeight)
-        .accessibilityLabel("Trajet de la leçon")
     }
 }
