@@ -9,7 +9,7 @@ import XCTest
         trips.tap()
         let list = app.descendants(matching: .any)["trips-list"]
         XCTAssertTrue(list.waitForExistence(timeout: 10), app.debugDescription)
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Camille Exemple"))
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Camille Perret"))
             .firstMatch.waitForExistence(timeout: 10))
         let back = app.navigationBars["Trajets"].buttons.firstMatch
         XCTAssertTrue(back.exists)

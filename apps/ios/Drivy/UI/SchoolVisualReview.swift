@@ -32,7 +32,7 @@ struct SchoolVisualReview: View {
                 case "invitation-code":
                     NavigationStack {
                         InvitationCodeResultView(issued: SchoolIssuedInvitationCode(invitationID: SchoolVisualData.lessonID,
-                            code: "EXEM-PLE1", expiresAt: "2026-10-06T10:00:00Z"), schoolName: "École Exemple",
+                            code: "K7QM-4TXR", expiresAt: "2026-10-06T10:00:00Z"), schoolName: "Auto-école du Val-de-Ruz",
                             now: SchoolLesson.date("2026-09-29T10:00:00Z")!)
                             .navigationTitle("Inviter un élève")
                     }
@@ -190,15 +190,15 @@ struct SchoolVisualShell: View {
 
     private static var learnerObject: [String: Any] {
         ["id": learnerID.uuidString, "schoolId": schoolID.uuidString, "personId": identifier(11).uuidString,
-         "version": 1, "displayName": "Camille Exemple", "contactEmail": "camille@example.invalid",
+         "version": 1, "displayName": "Camille Perret", "contactEmail": "camille@example.invalid",
          "contactPhone": NSNull(), "archivedAt": NSNull(), "profileReadiness": "READY"]
     }
 
     /// Fictional learners shown in lists and in the agenda; only `learnerID` has a dossier.
     private static let otherLearners: [(id: UUID, person: UUID, name: String, readiness: String)] = [
-        (identifier(14), identifier(17), "Léa Exemple", "MINIMAL"),
-        (identifier(15), identifier(18), "Noah Exemple", "READY"),
-        (identifier(16), identifier(19), "Inès Exemple", "READY")
+        (identifier(14), identifier(17), "Léa Morel", "MINIMAL"),
+        (identifier(15), identifier(18), "Noah Jacot", "READY"),
+        (identifier(16), identifier(19), "Inès Dubois", "READY")
     ]
 
     private static var learnerObjects: [[String: Any]] {
@@ -289,8 +289,8 @@ struct SchoolVisualShell: View {
     private static func syntheticTrips() -> [[String: Any]] {
         [captureID, identifier(71), identifier(72)].enumerated().map { index, id in
             var capture = syntheticCapture(id)
-            capture["learnerName"] = ["Camille Exemple", "Léa Exemple", "Noah Exemple"][index]
-            capture["instructorName"] = "Moniteur Exemple"
+            capture["learnerName"] = ["Camille Perret", "Léa Morel", "Noah Jacot"][index]
+            capture["instructorName"] = "Julien Rey"
             capture["lessonPlannedStart"] = "2026-09-21T07:00:00Z"
             capture["lessonTimeZone"] = "Europe/Zurich"
             if index == 1 { capture["syncState"] = "PARTIAL" }
@@ -323,7 +323,7 @@ struct SchoolVisualShell: View {
                 "version": 1, "lessonId": lessonID.uuidString, "trainingId": trainingID.uuidString,
                 "captureId": captureID.uuidString, "segmentId": identifier(76 + segment).uuidString,
                 "pointSequence": sequence, "competencyId": identifier(30).uuidString,
-                "text": ["Contrôle latéral · exemple", "Moment à revoir · exemple", "Bonne anticipation · exemple"][index],
+                "text": ["Contrôle latéral", "Moment à revoir", "Bonne anticipation"][index],
                 "origin": "LIVE", "observedAt": iso.string(from: origin.addingTimeInterval(Double(seconds))),
                 "eventKind": index == 1 ? "MARKER" : "QUALIFIED",
                 "eventStatus": index == 0 ? "ATTENTION" : "POSITIVE",
@@ -341,11 +341,11 @@ struct SchoolVisualShell: View {
         let root = "/v1/schools/\(schoolID.uuidString)"
         let roles = ["ADMIN", "INSTRUCTOR"]
         let membership: [String: Any] = ["membershipId": membershipID.uuidString, "schoolId": schoolID.uuidString,
-            "schoolName": "École Exemple", "roles": learnerRole ? ["LEARNER"] : roles, "grants": [], "accessEpoch": 1]
+            "schoolName": "Auto-école du Val-de-Ruz", "roles": learnerRole ? ["LEARNER"] : roles, "grants": [], "accessEpoch": 1]
         let person: [String: Any] = ["personId": (learnerRole ? identifier(11) : personID).uuidString, "version": 1,
-            "displayName": learnerRole ? "Camille Exemple" : "Moniteur Exemple", "locale": "fr-CH", "memberships": [membership]]
+            "displayName": learnerRole ? "Camille Perret" : "Julien Rey", "locale": "fr-CH", "memberships": [membership]]
         let school: [String: Any] = ["id": schoolID.uuidString, "schoolId": schoolID.uuidString,
-            "version": 1, "name": "École Exemple", "timeZone": "Europe/Zurich", "status": "ACTIVE",
+            "version": 1, "name": "Auto-école du Val-de-Ruz", "timeZone": "Europe/Zurich", "status": "ACTIVE",
             "contactEmail": "contact@example.invalid", "contactPhone": null, "logoAssetId": null,
             "modules": ["gpsEnabled": true, "packsEnabled": false, "collectiveCoursesEnabled": false,
                 "courseOffersVisibleByDefault": false], "configurationVersion": 1]
@@ -369,12 +369,12 @@ struct SchoolVisualShell: View {
             "cancellationPolicyText": "Conditions fictives destinées au contrôle de la mise en page.",
             "sourceUrls": [], "approved": true, "approvedAt": time]
         let member: [String: Any] = ["id": membershipID.uuidString, "schoolId": schoolID.uuidString, "version": 1,
-            "personId": personID.uuidString, "displayName": "Moniteur Exemple", "status": "ACTIVE",
+            "personId": personID.uuidString, "displayName": "Julien Rey", "status": "ACTIVE",
             "roles": roles, "grants": [], "accessEpoch": 1]
         let lesson: [String: Any] = ["id": lessonID.uuidString, "schoolId": schoolID.uuidString, "version": 1,
             "trainingId": trainingID.uuidString, "learnerId": learnerID.uuidString,
             "instructorMembershipId": membershipID.uuidString, "plannedStart": "2026-09-21T07:00:00Z",
-            "plannedEnd": "2026-09-21T07:50:00Z", "timeZone": "Europe/Zurich", "meetingPoint": "Gare de Cernier · exemple",
+            "plannedEnd": "2026-09-21T07:50:00Z", "timeZone": "Europe/Zurich", "meetingPoint": "Gare de Cernier",
             "status": "COMPLETED", "priceCentsSnapshot": 9500, "bufferMinutesSnapshot": 10,
             "actualStart": "2026-09-21T07:00:00Z", "actualEnd": "2026-09-21T07:50:00Z",
             "permitWarning": false, "publicationVersion": 1, "currentPublishedRevisionId": revisionID.uuidString,
@@ -430,8 +430,8 @@ struct SchoolVisualShell: View {
             "approvedByMembershipId": membershipID.uuidString]])
         objects["\(root)/learners/\(learnerID.uuidString)/administrative-profile"] = [
             "id": identifier(202).uuidString, "schoolId": schoolID.uuidString, "version": 1, "learnerId": learnerID.uuidString,
-            "firstName": "Camille", "lastName": "Exemple", "birthDate": "2005-07-12",
-            "postalAddress": ["line1": "Rue des Exemples 12", "line2": null, "postalCode": "2053",
+            "firstName": "Camille", "lastName": "Perret", "birthDate": "2005-07-12",
+            "postalAddress": ["line1": "Rue des Parcs 12", "line2": null, "postalCode": "2053",
                 "locality": "Cernier", "countryCode": "CH"] as [String: Any],
             "contactEmail": "camille@example.invalid", "contactPhone": "+41 00 000 00 00", "profilePhotoDocumentId": null,
             "updatedAt": time, "enteredByMembershipId": membershipID.uuidString, "entrySource": "STAFF_ASSISTED",

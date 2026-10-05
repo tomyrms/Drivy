@@ -111,13 +111,13 @@ private struct SchoolAccountVisualJoinTransport: SchoolHTTPTransport {
         let result: Data
         if url.lastPathComponent == "accept" {
             result = try JSONEncoder().encode(SchoolMembership(membershipId: membershipID,
-                schoolId: schoolID, schoolName: "École Exemple", roles: ["LEARNER"], grants: [], accessEpoch: 1))
+                schoolId: schoolID, schoolName: "Auto-école du Val-de-Ruz", roles: ["LEARNER"], grants: [], accessEpoch: 1))
         } else if url.path.contains("/code/") {
-            result = try JSONEncoder().encode(SchoolCodePreview(schoolName: "École Exemple", roles: ["LEARNER"],
+            result = try JSONEncoder().encode(SchoolCodePreview(schoolName: "Auto-école du Val-de-Ruz", roles: ["LEARNER"],
                 trainingCategoryCode: "B", expiresAt: "2026-10-06T10:00:00Z", trainingCategoryCodes: ["B", "A1"]))
         } else {
             result = try JSONEncoder().encode(SchoolJoinPreview(invitationId: UUID(uuidString: "10000000-0000-4000-8000-000000000009")!, schoolId: schoolID,
-                schoolName: "École Exemple", roles: ["LEARNER"], maskedEmail: "c***@example.invalid", expiresAt: "2026-10-06T10:00:00Z",
+                schoolName: "Auto-école du Val-de-Ruz", roles: ["LEARNER"], maskedEmail: "c***@example.invalid", expiresAt: "2026-10-06T10:00:00Z",
                 notice: SchoolJoinNotice(version: 1, noticeText: "Notice fictive : les leçons, trajets et bilans sont visibles dans votre dossier.",
                     retentionText: "La durée de conservation est fixée par l’école.", contactEmail: "contact@example.invalid")))
         }
@@ -170,7 +170,7 @@ private struct SchoolAccountVisualJoinTransport: SchoolHTTPTransport {
     }
     func profile(schoolID: UUID, learnerID: UUID) async throws -> SchoolAdministrativeProfile {
         SchoolAdministrativeProfile(id: SchoolVisualData.learnerID, schoolId: schoolID, version: 1, learnerId: learnerID,
-            firstName: "Camille", lastName: "Exemple", birthDate: nil, postalAddress: nil, contactEmail: "camille@example.invalid",
+            firstName: "Camille", lastName: "Perret", birthDate: nil, postalAddress: nil, contactEmail: "camille@example.invalid",
             contactPhone: nil, profilePhotoDocumentId: nil, updatedAt: "2026-09-24T10:00:00Z", enteredByMembershipId: scope.membershipID,
             entrySource: "SELF", policyVersionId: SchoolVisualData.policyID)
     }
