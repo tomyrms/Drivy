@@ -1,12 +1,8 @@
 import SwiftUI
 
-private struct SchoolLearnerPage: Hashable {
-    let section: SchoolTrainingSection
-}
-
-/// The dossier's home says who the learner is and how to reach them, then opens lessons and
-/// progression as two pushed pages, so the native back action always returns here.
-/// However many formations the learner follows, there are two entries: each page filters by permit.
+/// The dossier says who the learner is and how to reach them, then shows lessons or progression
+/// in place, in the same scroll, behind one segmented control: nothing is pushed.
+/// However many formations the learner follows, one permit filter serves both sections.
 /// Personal details stay folded until someone asks for them.
 struct SchoolLearnerDossierView: View {
     @Bindable var workspace: SchoolWorkspace
@@ -16,14 +12,15 @@ struct SchoolLearnerDossierView: View {
     let trainingClient: SchoolTrainingClient?
     let agendaClient: SchoolAgendaClient?
     let captureController: SchoolCaptureSessionController?
-    @State private var path: [SchoolLearnerPage] = []
+    /// Lessons or progression: the choice survives a reread and a change of permit.
+    @State private var section: SchoolTrainingSection = .lessons
     @State private var profileModel: SchoolProfileWorkspace?
     @State private var editingProfile: SchoolProfileWorkspace?
     @State private var profileScopeKey = ""
     @State private var profileCreationFailed = false
     @State private var showsInformation = false
     /// The permit filtered in Lessons and Progression; `nil` shows them all. Held here so the choice
-    /// survives going back and forth between the two pages of the same learner.
+    /// is shared by the two sections of the same learner.
     @State private var permit: UUID?
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.scenePhase) private var scenePhase
@@ -49,21 +46,10 @@ struct SchoolLearnerDossierView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack {
             dossier
                 .navigationTitle("Dossier")
                 .navigationBarTitleDisplayMode(.inline)
-                .navigationDestination(for: SchoolLearnerPage.self) { page in
-                    if let learner = workspace.learner, learner.id == workspace.selectedLearnerID, let trainingClient,
-                       !workspace.trainings.isEmpty {
-                        SchoolTrainingScreen(client: trainingClient, workspace: workspace, learner: learner,
-                            trainingIDs: trainings.map(\.id), permit: $permit, section: page.section, showsHeading: true)
-                            .navigationTitle(page.section.rawValue)
-                            .navigationBarTitleDisplayMode(.inline)
-                    } else {
-                        ContentUnavailableView("Dossier indisponible", systemImage: "person.crop.circle.badge.exclamationmark")
-                    }
-                }
         }
         .task(id: scopeKey) { await reload() }
         .sheet(item: $editingProfile, onDismiss: { Task { await reload() } }) { model in
@@ -82,7 +68,7 @@ struct SchoolLearnerDossierView: View {
             if phase == .active && editingProfile == nil { Task { await reload() } }
         }
         .onDisappear {
-            // Pushing a page or changing tabs keeps the profile. Changing account,
+            // Changing tabs keeps the profile. Changing account,
             // rights or selected learner invalidates its in-flight reads and draft.
             if profileScopeKey != scopeKey { profileModel?.invalidate(); editingProfile = nil }
         }
@@ -101,13 +87,13 @@ struct SchoolLearnerDossierView: View {
                 }
                 if let learner = workspace.learner, learner.id == workspace.selectedLearnerID {
                     header(learner)
-                    pages
+                    pages(learner)
                 }
             }
             .drivyPageContent()
         }
         .background(DrivyTheme.surface)
-        .refreshable { await reload() }
+        .refreshable { await reload(); await reloadLessons() }
         .accessibilityIdentifier("learner-dossier")
         .safeAreaInset(edge: .bottom, spacing: 0) { actions }
     }
@@ -242,7 +228,7 @@ struct SchoolLearnerDossierView: View {
 
     // MARK: - Lessons and progression
 
-    private var pages: some View {
+    private func pages(_ learner: SchoolLearner) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if workspace.isLoadingTrainings && workspace.trainings.isEmpty {
                 DrivySkeletonRows(count: 2).drivySkeleton("Chargement des formations…")
@@ -253,7 +239,11 @@ struct SchoolLearnerDossierView: View {
             if !workspace.isLoadingTrainings && workspace.trainings.isEmpty && workspace.trainingsError == nil {
                 DrivyEmptyState(title: "Aucune formation", message: "Ouvre-la sur le web.", symbol: "steeringwheel")
             }
-            if let first = workspace.trainings.first { sections(identifiedBy: first.id) }
+            if let trainingClient, !workspace.trainings.isEmpty {
+                // The section control, the permit filter and the content live in this page's own scroll.
+                SchoolTrainingScreen(embeddedIn: workspace, client: trainingClient, learner: learner,
+                    trainingIDs: trainings.map(\.id), permit: $permit, section: $section)
+            }
             if workspace.nextTrainingsCursor != nil {
                 Button { Task { await workspace.loadMoreTrainings() } } label: {
                     DrivyBusyLabel(title: "Afficher les autres formations", busyTitle: "Chargement…", isBusy: workspace.isLoadingMoreTrainings)
@@ -263,18 +253,6 @@ struct SchoolLearnerDossierView: View {
                 .disabled(workspace.isLoadingMoreTrainings || workspace.isLoadingTrainings)
             }
         }
-    }
-
-    /// One group, two rows, whatever the number of formations.
-    /// Historic UI-test identifiers: they carry the first formation the dossier lists.
-    private func sections(identifiedBy id: UUID) -> some View {
-        DrivyRowGroup {
-            DrivyNavigationRow(title: "Leçons") { path.append(SchoolLearnerPage(section: .lessons)) }
-                .accessibilityIdentifier("learner-lessons-\(id.uuidString)")
-            DrivyNavigationRow(title: "Progression") { path.append(SchoolLearnerPage(section: .progress)) }
-                .accessibilityIdentifier("learner-progress-\(id.uuidString)")
-        }
-        .disabled(trainingClient == nil)
     }
 
     // MARK: - Actions
@@ -310,6 +288,13 @@ struct SchoolLearnerDossierView: View {
         await workspace.loadRemainingTrainings()
         guard !Task.isCancelled, requestedScope == scopeKey else { return }
         await loadProfile()
+    }
+
+    /// Pull to refresh also rereads what the embedded section shows. The models are the shared ones,
+    /// so the lists stay on screen until each answer arrives.
+    private func reloadLessons() async {
+        guard !Task.isCancelled else { return }
+        await SchoolLessonFeed(models: SchoolTrainingModelCache.current(trainings.map(\.id))).reload()
     }
 
     private func loadProfile() async {

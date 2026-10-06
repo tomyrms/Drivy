@@ -82,6 +82,38 @@ extension SchoolLesson {
     var drivyState: DrivyLessonState { DrivyLessonState(status: status, start: startsAt, end: endsAt) }
 }
 
+/// What a past lesson holds for its reader: a shared report, a trip that can be replayed.
+/// Said in words on the last detail line of a lesson row (« Bilan · Trajet »), never as glyphs.
+struct DrivyLessonContents: OptionSet, Sendable, Equatable {
+    let rawValue: Int
+    static let report = DrivyLessonContents(rawValue: 1 << 0)
+    static let trip = DrivyLessonContents(rawValue: 1 << 1)
+
+    /// The line a row shows, in a fixed order; `nil` when the lesson holds neither.
+    var label: String? {
+        var words: [String] = []
+        if contains(.report) { words.append("Bilan") }
+        if contains(.trip) { words.append("Trajet") }
+        return words.isEmpty ? nil : words.joined(separator: " · ")
+    }
+}
+
+extension SchoolLesson {
+    /// Shared report; reconstructed trip (same criteria as `SchoolTripsWorkspace.isReplayable`).
+    /// A report kept « Pour moi » is not marked, even for its author.
+    var drivyContents: DrivyLessonContents {
+        var contents: DrivyLessonContents = []
+        if status == "COMPLETED", currentPublishedRevisionId != nil { contents.insert(.report) }
+        if let capture = captureSummary, capture.hasCapture,
+           capture.publicationState == SchoolCaptureSession.PublicationState.privateCapture.rawValue,
+           let sync = capture.syncState,
+           sync == SchoolCaptureSession.SyncState.synced.rawValue || sync == SchoolCaptureSession.SyncState.partial.rawValue {
+            contents.insert(.trip)
+        }
+        return contents
+    }
+}
+
 /// Lesson row used by the agenda, the dossier lessons and the report lists:
 /// time column, name, meta lines, chevron. An unusual state is one word of plain
 /// text at the head of the detail line (`state:` for a lesson, `note:` for any
@@ -95,6 +127,8 @@ struct DrivyLessonRow: View {
     var details: [String] = []
     var state: DrivyLessonState? = nil
     var note: DrivyRowNote? = nil
+    /// Last detail line (« Bilan · Trajet »); no line when empty.
+    var contents: DrivyLessonContents = []
     var showsChevron = true
     var isSecondary = false
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -172,17 +206,20 @@ struct DrivyLessonRow: View {
 
     /// The detail lines, the state word leading the first one (« Annulée · Lausanne »).
     /// The word carries its own weight and ink; the rest of the line stays muted.
+    /// What the lesson holds closes the list; VoiceOver reads it with the combined row.
     private var detailLines: [AttributedString] {
         var lines = details
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .map { AttributedString($0) }
-        guard let rowNote else { return lines }
-        var word = AttributedString(rowNote.text)
-        word.font = Font.subheadline.weight(.semibold)
-        word.foregroundColor = rowNote.color
-        if lines.isEmpty { return [word] }
-        let separator = AttributedString(" · ")
-        lines[0] = word + separator + lines[0]
+        if let rowNote {
+            var word = AttributedString(rowNote.text)
+            word.font = Font.subheadline.weight(.semibold)
+            word.foregroundColor = rowNote.color
+            if lines.isEmpty { lines = [word] }
+            else { lines[0] = word + AttributedString(" · ") + lines[0] }
+        }
+        // Always a line of its own, after the state word and the details.
+        if let label = contents.label { lines.append(AttributedString(label)) }
         return lines
     }
 }

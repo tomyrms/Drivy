@@ -71,6 +71,33 @@ import Testing
         #expect(revision.observations.count == 1 && revision.observations.first?.context == "")
     }
 
+    @Test func progressionReadsTheNextStepOfTheLastEvaluatedLessonAndDropsItWhenRefused() async throws {
+        let server = HistoryServer(), model = workspace(server)
+        await server.setEvaluated(true)
+        await model.load()
+        let last = try #require(model.lastEvaluated)
+        #expect(last.lessonID == HubFixture.lessonID && last.revisionID == HistoryServer.revisionID)
+        #expect(last.nextStep == "Reprendre les giratoires" && last.date == "2026-09-28T12:00:00Z")
+        #expect(SchoolProgressRules.worked(in: last.lessonID, items: model.progress?.items ?? [], order: []).map(\.label) == ["Giratoire"])
+        // Une révision publiée ne change pas : une relecture de la progression ne la redemande pas.
+        let reads = await server.revisionReads
+        await model.loadProgress()
+        let readsAfter = await server.revisionReads
+        #expect(readsAfter == reads && model.lastEvaluated == last)
+        // Lecture du bilan refusée : le bloc disparaît, la progression reste, le dossier ne se ferme pas.
+        await server.setRevisionStatus(403)
+        await model.loadProgress(keepingCurrent: false)
+        #expect(model.lastEvaluated == nil && model.progress != nil)
+        #expect(model.training != nil && !model.accessRevoked)
+    }
+
+    @Test func aFormationWithoutEvaluationHasNoLastEvaluatedLesson() async {
+        let server = HistoryServer(), model = workspace(server)
+        await model.load()
+        // L’évaluation du serveur de test désigne une autre leçon que celle de la révision servie : rien n’est affiché.
+        #expect(model.progress != nil && model.lastEvaluated == nil)
+    }
+
     @Test func refreshDuringAnOlderPageRestartsTheCompleteHistory() async {
         let server = HistoryServer(), model = workspace(server)
         await model.load()
@@ -222,11 +249,17 @@ private actor HistoryServer: SchoolHTTPTransport {
     private let fallback = LessonFinishServer()
     private var pageUnavailable = false
     private var progressStatus: Int?
+    private var evaluated = false
+    private var revisionStatus: Int?
+    private(set) var revisionReads = 0
     private var shouldPause = false
     private var suspended: CheckedContinuation<Void, Never>?
     private var pauseWaiter: CheckedContinuation<Void, Never>?
     func setPageUnavailable(_ value: Bool) { pageUnavailable = value }
     func setProgressStatus(_ value: Int?) { progressStatus = value }
+    /// La leçon de la première page devient une leçon terminée, évaluée, dont le bilan publié est la révision servie.
+    func setEvaluated(_ value: Bool) { evaluated = value }
+    func setRevisionStatus(_ value: Int?) { revisionStatus = value }
     func pauseNextPage() { shouldPause = true }
     func waitUntilPaused() async {
         if suspended != nil { return }
@@ -248,10 +281,21 @@ private actor HistoryServer: SchoolHTTPTransport {
             let value: [String: Any] = ["data": data, "requestId": UUID().uuidString, "serverTime": "2026-09-30T10:00:00Z"]
             return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: value), status: 200, url: url, contentType: "application/json")
         }
+        if url.lastPathComponent == "progress", evaluated {
+            return try ok(["trainingId": HubFixture.trainingID.uuidString, "items": [["competencyId": LessonFinishServer.progressCompetency.uuidString,
+                "label": "Giratoire", "level": "GUIDED", "context": "", "observedAt": "2026-09-28T13:00:00Z",
+                "sourceLessonId": HubFixture.lessonID.uuidString, "sourceRevisionId": Self.revisionID.uuidString]],
+                "unobservedCompetencyIds": [String](), "computedAt": "2026-09-28T13:30:00Z"])
+        }
         if url.pathComponents.dropLast().last?.lowercased() == "report-revisions" {
+            revisionReads += 1
+            if let revisionStatus {
+                return SchoolHTTPResponse(data: Data("{}".utf8), status: revisionStatus, url: url, contentType: "application/problem+json")
+            }
             return try ok(["id": Self.revisionID.uuidString, "schoolId": HubFixture.schoolID.uuidString,
                 "lessonId": HubFixture.lessonID.uuidString, "authorMembershipId": ConfigurationFixture.membershipID.uuidString,
-                "version": 1, "sequence": 1, "publishedAt": "2026-09-28T13:00:00Z", "workedOn": "", "observationText": "", "nextStep": "",
+                "version": 1, "sequence": 1, "publishedAt": "2026-09-28T13:00:00Z", "workedOn": "", "observationText": "",
+                "nextStep": evaluated ? "Reprendre les giratoires" : "",
                 "observations": [["competencyId": LessonFinishServer.progressCompetency.uuidString, "level": "GUIDED", "context": ""]],
                 "attachmentIds": [], "correctionReason": NSNull(), "capturePublication": NSNull(), "textObservations": []])
         }
@@ -265,8 +309,9 @@ private actor HistoryServer: SchoolHTTPTransport {
                 return SchoolHTTPResponse(data: Data("{}".utf8), status: 503, url: url, contentType: "application/problem+json")
             }
             let lesson = older ? try Self.lesson(id: UUID(uuidString: "50000000-0000-4000-8000-000000000002")!,
-                start: "2025-12-31T23:30:00Z", end: "2026-01-01T00:20:00Z") : HubFixture.lesson()
-            let value = try JSONSerialization.jsonObject(with: JSONEncoder().encode(lesson))
+                start: "2025-12-31T23:30:00Z", end: "2026-01-01T00:20:00Z") : HubFixture.lesson(status: evaluated ? "COMPLETED" : "PLANNED")
+            var value = try JSONSerialization.jsonObject(with: JSONEncoder().encode(lesson)) as! [String: Any]
+            if evaluated && !older { value["currentPublishedRevisionId"] = Self.revisionID.uuidString }
             return try ok(["items": [value], "nextCursor": older ? NSNull() : "older" as Any])
         }
         return try await fallback.send(request)

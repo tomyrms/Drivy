@@ -35,4 +35,27 @@ struct SchoolDossierTests {
         // Un profil sans nom n’est pas une répétition : la ligne reste, avec « Non renseigné ».
         #expect(!SchoolLearnerRecordedName.repeats("", displayedName: "Camille Exemple"))
     }
+
+    // MARK: Ligne de leçon
+
+    @MainActor @Test func aDossierLessonRowIsTitledByItsDayAndNeverShowsTheMeetingPoint() {
+        let lesson = HubFixture.lesson(status: "COMPLETED", meetingPoint: "Gare de Lausanne")
+        let day = SchoolTrainingFormatting.rowDay(lesson.plannedStart, zone: lesson.timeZone)
+        #expect(SchoolLessonHistoryRow.titleText(lesson, title: .day) == day)
+        // Un seul permis, le lecteur est le moniteur : la ligne de détail n’existe pas.
+        #expect(SchoolLessonHistoryRow.detail(lesson, title: .day, permit: nil, instructor: nil).isEmpty)
+        #expect(SchoolLessonHistoryRow.detail(lesson, title: .day, permit: "Permis B", instructor: " ") == "Permis B")
+        #expect(SchoolLessonHistoryRow.detail(lesson, title: .day, permit: "Permis B", instructor: "Luc Morel") == "Permis B · Luc Morel")
+    }
+
+    @MainActor @Test func anInstructorHistoryRowIsTitledByTheLearnerAndDatedInItsDetail() {
+        var lesson = HubFixture.lesson(status: "COMPLETED")
+        let day = SchoolTrainingFormatting.rowDay(lesson.plannedStart, zone: lesson.timeZone)
+        // Sans nom fourni avec la leçon, aucun nom n’est déduit.
+        #expect(SchoolLessonHistoryRow.titleText(lesson, title: .learner) == "Élève")
+        lesson.learnerDisplayName = "Camille Perret"
+        #expect(SchoolLessonHistoryRow.titleText(lesson, title: .learner) == "Camille Perret")
+        #expect(SchoolLessonHistoryRow.detail(lesson, title: .learner, permit: nil, instructor: nil) == day)
+        #expect(SchoolLessonHistoryRow.detail(lesson, title: .learner, permit: nil, instructor: "Luc Morel") == "\(day) · Luc Morel")
+    }
 }

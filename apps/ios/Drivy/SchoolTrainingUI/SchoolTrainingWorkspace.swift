@@ -12,6 +12,8 @@ import Observation
     private(set) var nextCursor: String?
     private(set) var progress: SchoolReportProgress?
     private(set) var competencies: [SchoolCatalogCompetency] = []
+    /// La dernière leçon évaluée et la prochaine étape de son bilan ; absente tant qu’elle n’est pas lue, ou si sa lecture est refusée.
+    private(set) var lastEvaluated: SchoolLastEvaluatedLesson?
     private(set) var isLoading = false
     private(set) var isLoadingMore = false
     private(set) var isLoadingHistory = false
@@ -54,7 +56,10 @@ import Observation
         clear(); isLoading = false; isLoadingMore = false
     }
     private func cancelHistory() { historyTask?.cancel(); historyTask = nil; isLoadingHistory = false }
-    private func clear() { training = nil; lessons = []; nextCursor = nil; progress = nil; competencies = []; seenCursors = []; lessonsLoaded = false }
+    private func clear() {
+        training = nil; lessons = []; nextCursor = nil; progress = nil; competencies = []; lastEvaluated = nil
+        seenCursors = []; lessonsLoaded = false
+    }
 
     /// `keepingCurrent` : relecture au retour d’une leçon ; ce qui est affiché reste visible jusqu’à la réponse.
     func load(keepingCurrent: Bool = false) async {
@@ -138,7 +143,7 @@ import Observation
         guard !invalidated, !accessRevoked, hasPedagogicalRole, let training else { return }
         let request = generation; progressRequest = UUID(); let detailRequest = progressRequest
         progressError = nil
-        if !keepingCurrent { progress = nil; competencies = [] }
+        if !keepingCurrent { progress = nil; competencies = []; lastEvaluated = nil }
         do {
             let value = try await client.reports.progress(schoolID: scope.schoolID, trainingID: trainingID)
             guard Set(value.unobservedCompetencyIds).count == value.unobservedCompetencyIds.count,
@@ -168,6 +173,26 @@ import Observation
                 }
                 progressError = SchoolTrainingAccess.message(error)
             }
+        }
+        guard request == generation, detailRequest == progressRequest, !invalidated, !accessRevoked else { return }
+        await loadLastEvaluated(request: request, detailRequest: detailRequest)
+    }
+    /// Une lecture de plus par formation, seulement quand la leçon évaluée change : une révision publiée ne change pas.
+    /// Un refus ou une panne retire le bloc sans fermer la progression ni afficher d’erreur.
+    private func loadLastEvaluated(request: UUID, detailRequest: UUID) async {
+        guard let progress, let source = SchoolProgressRules.lastEvaluated(lessons: lessons, hasMore: nextCursor != nil,
+            items: progress.items) else { lastEvaluated = nil; return }
+        if let current = lastEvaluated, current.lessonID == source.lessonID, current.revisionID == source.revisionID { return }
+        do {
+            let revision = try await client.revision(schoolID: scope.schoolID, id: source.revisionID)
+            guard request == generation, detailRequest == progressRequest, !invalidated else { return }
+            guard revision.lessonId == source.lessonID else { lastEvaluated = nil; return }
+            lastEvaluated = SchoolLastEvaluatedLesson(lessonID: source.lessonID, revisionID: source.revisionID,
+                date: source.date, timeZone: source.timeZone, nextStep: revision.nextStep)
+        } catch {
+            guard request == generation, detailRequest == progressRequest, !invalidated else { return }
+            if error is CancellationError { return }
+            lastEvaluated = nil
         }
     }
     private func fail(_ error: Error) {
@@ -266,6 +291,12 @@ enum SchoolPermitName {
     static func reset() {
         for model in models.values { model.invalidate() }
         models = [:]
+    }
+
+    /// Les modèles déjà partagés de ces formations : l’écran qui embarque les leçons (le dossier) relit
+    /// ainsi ce qu’elles montrent quand on tire pour actualiser, sans en créer d’autres.
+    static func current(_ trainingIDs: [UUID]) -> [SchoolTrainingWorkspace] {
+        trainingIDs.compactMap { models[$0] }.filter { !$0.invalidated && !$0.accessRevoked }
     }
 
     static func model(scope: SchoolCommandScope, membership: SchoolMembership, learnerID: UUID, trainingID: UUID,

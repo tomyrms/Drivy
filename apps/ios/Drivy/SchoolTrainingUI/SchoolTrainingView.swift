@@ -48,11 +48,12 @@ struct SchoolTrainingView: View {
     }
 }
 
-/// Leçons et progression d’un élève, pour une ou plusieurs de ses formations. Les pages du dossier et les
-/// onglets de l’élève fixent la section ; sans section fixée, un sélecteur passe de l’une à l’autre.
+/// Leçons et progression d’un élève, pour une ou plusieurs de ses formations. Les onglets de l’élève
+/// fixent la section ; sans section fixée, un sélecteur passe de l’une à l’autre, en place.
 /// Avec plusieurs formations, un filtre par permis apparaît ; avec une seule, rien ne s’ajoute.
-/// `showsHeading` ajoute à une section fixée un rappel d’une ligne (élève, formation) : la page
-/// poussée depuis le dossier en a besoin, les onglets de l’élève qui lit son propre dossier non.
+/// `showsHeading` ajoute à une section fixée un rappel d’une ligne (élève, formation).
+/// Le dossier embarque cet écran dans son propre défilement (`init(embeddedIn:)`) : ni défilement
+/// ni fond ici, et c’est le dossier qui tient la section choisie.
 struct SchoolTrainingScreen: View {
     let client: SchoolTrainingClient
     @Bindable var workspace: SchoolWorkspace
@@ -62,8 +63,12 @@ struct SchoolTrainingScreen: View {
     let section: SchoolTrainingSection?
     let showsHeading: Bool
     let openProfile: (() -> Void)?
+    private let isEmbedded: Bool
+    /// La section tenue par l’écran hôte ; sinon celle de cet écran.
+    private let hostSection: Binding<SchoolTrainingSection>?
     /// Le permis choisi ; `nil` les montre tous. Tenu par l’appelant : le choix survit au retour sur la page.
     @Binding private var permit: UUID?
+    @State private var ownSection: SchoolTrainingSection = .lessons
     @State private var models: [SchoolTrainingWorkspace] = []
     /// La leçon ouverte vit ici, hors du contenu conditionnel et de `.id` : une relecture ou un changement
     /// de portée recrée le contenu, jamais la feuille qui le surplombe.
@@ -80,6 +85,23 @@ struct SchoolTrainingScreen: View {
         self.section = section
         self.showsHeading = showsHeading
         self.openProfile = openProfile
+        isEmbedded = false
+        hostSection = nil
+        _permit = permit
+    }
+
+    /// Dans le dossier : sélecteur Leçons / Progression, filtre et contenu, posés dans le défilement de l’hôte.
+    init(embeddedIn workspace: SchoolWorkspace, client: SchoolTrainingClient, learner: SchoolLearner, trainingIDs: [UUID],
+         permit: Binding<UUID?>, section: Binding<SchoolTrainingSection>) {
+        self.client = client
+        _workspace = Bindable(wrappedValue: workspace)
+        self.learner = learner
+        self.trainingIDs = trainingIDs
+        self.section = nil
+        showsHeading = false
+        openProfile = nil
+        isEmbedded = true
+        hostSection = section
         _permit = permit
     }
 
@@ -101,7 +123,11 @@ struct SchoolTrainingScreen: View {
         Group {
             if isCurrent {
                 SchoolTrainingContent(models: models, workspace: workspace, learner: learner, fixedSection: section, showsHeading: showsHeading,
-                    openProfile: openProfile, permit: $permit, opened: $opened)
+                    openProfile: openProfile, isEmbedded: isEmbedded, permit: $permit, chosenSection: hostSection ?? $ownSection,
+                    opened: $opened)
+            } else if isEmbedded {
+                DrivySkeletonRows(count: 4, leading: .time)
+                    .drivySkeleton("Chargement de la formation…")
             } else {
                 DrivySkeletonRows(count: 4, leading: .time)
                     .drivySkeleton("Chargement de la formation…")
@@ -229,9 +255,11 @@ private struct SchoolTrainingContent: View {
     let fixedSection: SchoolTrainingSection?
     let showsHeading: Bool
     let openProfile: (() -> Void)?
+    /// Posé dans le défilement d’un autre écran (le dossier) : ni défilement, ni fond, ni rappel de l’élève.
+    let isEmbedded: Bool
     @Binding var permit: UUID?
+    @Binding var chosenSection: SchoolTrainingSection
     @Binding var opened: OpenedLesson?
-    @State private var chosenSection: SchoolTrainingSection = .lessons
     /// Le tri et le filtre survivent aux changements d’onglet et de dossier pendant la session de la scène.
     @SceneStorage("training.lessons.filter") private var filter: TrainingLessonFilter = .all
     @SceneStorage("training.lessons.order") private var order: TrainingLessonOrder = .chronological
@@ -240,7 +268,8 @@ private struct SchoolTrainingContent: View {
     @State private var showsPeriod = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private var section: SchoolTrainingSection { fixedSection ?? chosenSection }
+    /// Sans lecture pédagogique, il n’y a pas de sélecteur : seules les leçons sont montrées.
+    private var section: SchoolTrainingSection { fixedSection ?? (hasPedagogicalRole ? chosenSection : .lessons) }
     private var period: SchoolLessonPeriod { SchoolLessonPeriod(month: selectedMonth, year: selectedYear) }
 
     /// Le permis montré seul : l’unique formation de l’élève, ou celle que le filtre désigne.
@@ -259,65 +288,84 @@ private struct SchoolTrainingContent: View {
     private var needsHistory: Bool { period.isActive || filter != .all }
 
     var body: some View {
-        GeometryReader { geometry in
-            // Dans un grand détail, les leçons et leur progression restent visibles ensemble.
-            // Le sélecteur est conservé quand chaque colonne n’aurait plus 460 pt de lecture.
-            if geometry.size.width >= TrainingLayout.twoColumnBreakpoint && fixedSection == nil && hasPedagogicalRole
-                && hasTraining && !dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                    heading
-                    if hasSeveralPermits { permitFilter }
-                    failures
-                    HStack(alignment: .top, spacing: DrivySpacing.xl) {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                                DrivySectionHeader(title: "Leçons")
-                                lessons
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .refreshable { await feed.reload() }
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                                DrivySectionHeader(title: "Progression")
-                                progress
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .refreshable { await SchoolLessonFeed.together(shown) { await $0.loadProgress() } }
-                    }
-                }
-                .drivyPageContent(maxWidth: TrainingLayout.twoColumnMaxWidth)
+        Group {
+            if isEmbedded {
+                // Un conteneur d’accessibilité : l’identifiant ne remplace pas ceux des lignes.
+                page.accessibilityElement(children: .contain)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                        if fixedSection == nil || showsHeading { heading }
-                        if hasSeveralPermits { permitFilter }
-                        if !hasTraining && feed.isLoading {
-                            DrivySkeletonRows(count: 4, leading: .time)
-                                .drivySkeleton("Chargement de la formation…")
-                        }
-                        failures
-                        if hasTraining {
-                            if fixedSection == nil && hasPedagogicalRole { sectionPicker }
-                            switch section {
-                            case .lessons: lessons
-                            case .progress: progress
-                            }
-                        }
-                    }
-                    .drivyPageContent()
-                }
-                .refreshable { await feed.reload() }
+                standalone
             }
         }
-        .background(DrivyTheme.surface)
         .accessibilityIdentifier("training-dossier")
         .sheet(isPresented: $showsPeriod) { periodPicker }
         .task(id: "\(selectedMonth):\(selectedYear):\(filter.rawValue):\(selected?.trainingID.uuidString ?? "")") {
             if needsHistory { await feed.loadHistory() }
         }
     }
+
+    private var standalone: some View {
+        GeometryReader { geometry in
+            // Dans un grand détail, les leçons et leur progression restent visibles ensemble.
+            // Le sélecteur est conservé quand chaque colonne n’aurait plus 460 pt de lecture.
+            if geometry.size.width >= TrainingLayout.twoColumnBreakpoint && fixedSection == nil && hasPedagogicalRole
+                && hasTraining && !dynamicTypeSize.isAccessibilitySize {
+                columns
+            } else {
+                ScrollView { page.drivyPageContent() }
+                    .refreshable { await feed.reload() }
+            }
+        }
+        .background(DrivyTheme.surface)
+    }
+
+    /// Le flux unique : sélecteur, rangée de filtres, puis la section choisie. Le dossier le pose tel quel sous l’identité.
+    private var page: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.m) {
+            if !isEmbedded && (fixedSection == nil || showsHeading) { heading }
+            if fixedSection == nil && hasPedagogicalRole { sectionPicker }
+            filterRow(withLessonsMenu: section == .lessons)
+            if !hasTraining && feed.isLoading {
+                DrivySkeletonRows(count: 4, leading: .time)
+                    .drivySkeleton("Chargement de la formation…")
+            }
+            failures
+            if hasTraining {
+                switch section {
+                case .lessons: lessons
+                case .progress: progress
+                }
+            }
+        }
+    }
+
+    private var columns: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.l) {
+            heading
+            filterRow(withLessonsMenu: false)
+            failures
+            HStack(alignment: .top, spacing: DrivySpacing.xl) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                        DrivySectionHeader(title: "Leçons")
+                        if showsLessonsMenu { lessonsMenu.frame(maxWidth: .infinity, alignment: .trailing) }
+                        lessons
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .refreshable { await feed.reload() }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                        DrivySectionHeader(title: "Progression")
+                        progress
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .refreshable { await SchoolLessonFeed.together(shown) { await $0.loadProgress() } }
+            }
+        }
+        .drivyPageContent(maxWidth: TrainingLayout.twoColumnMaxWidth)
+    }
+
     private var heading: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             identity
@@ -343,8 +391,8 @@ private struct SchoolTrainingContent: View {
         hasSeveralPermits ? nil : shownTraining.map { "Permis \($0.categoryCode)" }
     }
 
-    /// Poussée depuis le dossier, la page rappelle l’élève en une ligne : on vient de le quitter.
-    /// Ouverte seule, la formation nomme l’élève en tête, sans le poids d’un titre d’écran.
+    /// Une section fixée rappelle l’élève en une ligne. Ouverte seule, la formation nomme l’élève
+    /// en tête, sans le poids d’un titre d’écran. Dans le dossier, l’identité est déjà au-dessus.
     @ViewBuilder private var identity: some View {
         if fixedSection == nil {
             DrivyLearnerIdentity(name: learner.displayName, detail: formationName ?? "Formation", variant: .compact) {
@@ -365,44 +413,52 @@ private struct SchoolTrainingContent: View {
         }
     }
 
-    /// Deux permis : trois choix courts tiennent dans un contrôle segmenté. Au-delà, ou en très grand texte,
-    /// un menu qui affiche le choix en cours ; jamais une rangée de boutons à faire défiler.
-    @ViewBuilder private var permitFilter: some View {
-        if models.count == 2 && !dynamicTypeSize.isAccessibilitySize {
-            permitPicker(allTitle: "Tous").pickerStyle(.segmented)
-                .frame(maxWidth: TrainingLayout.pickerMaxWidth)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            // Même libellé-menu que le tri des leçons, aligné sur la marge du contenu.
-            let current = selected.map { permitName($0, in: permitNames) } ?? "Tous les permis"
-            Menu {
-                permitPicker(allTitle: "Tous les permis").pickerStyle(.inline)
-            } label: {
-                HStack(spacing: DrivySpacing.xs) {
-                    Text(current).fixedSize(horizontal: false, vertical: true)
-                    Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold))
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(DrivyTheme.accent)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
+    /// Le tri des leçons n’a de sens qu’une fois des leçons lues.
+    private var showsLessonsMenu: Bool { hasTraining && feed.hasLessons && !feed.isLoadingFirstPage }
+
+    /// Une seule rangée : le permis à gauche, « Filtrer et trier » à droite (Leçons seulement).
+    /// Avec un seul permis et rien à trier, la rangée n’existe pas. En très grand texte, les deux menus s’empilent.
+    @ViewBuilder private func filterRow(withLessonsMenu: Bool) -> some View {
+        let showsMenu = withLessonsMenu && showsLessonsMenu
+        if hasSeveralPermits || showsMenu {
+            let stacked = dynamicTypeSize.isAccessibilitySize
+            let layout = stacked
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+                : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.m))
+            layout {
+                if hasSeveralPermits { permitFilter }
+                if !stacked { Spacer(minLength: 0) }
+                if showsMenu { lessonsMenu }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityLabel("Permis")
-            .accessibilityValue(current)
-            .accessibilityIdentifier("training-permit-filter")
         }
     }
-    private func permitPicker(allTitle: String) -> some View {
+
+    /// Toujours un menu qui affiche le choix en cours, quel que soit le nombre de permis :
+    /// jamais un second contrôle segmenté sous celui des sections.
+    private var permitFilter: some View {
         let names = permitNames
-        return Picker("Permis", selection: Binding(get: { selected?.trainingID }, set: { permit = $0 })) {
-            Text(allTitle).tag(UUID?.none)
-            ForEach(models, id: \.trainingID) { model in
-                Text(permitName(model, in: names)).tag(UUID?.some(model.trainingID))
+        let current = selected.map { permitName($0, in: names) } ?? "Tous les permis"
+        return Menu {
+            Picker("Permis", selection: Binding(get: { selected?.trainingID }, set: { permit = $0 })) {
+                Text("Tous les permis").tag(UUID?.none)
+                ForEach(models, id: \.trainingID) { model in
+                    Text(permitName(model, in: names)).tag(UUID?.some(model.trainingID))
+                }
             }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            HStack(spacing: DrivySpacing.xs) {
+                Text(current).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold))
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(DrivyTheme.accent)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
-        .labelsHidden()
         .accessibilityLabel("Permis")
+        .accessibilityValue(current)
         .accessibilityIdentifier("training-permit-filter")
     }
 
@@ -423,9 +479,11 @@ private struct SchoolTrainingContent: View {
     private func retry(_ models: [SchoolTrainingWorkspace]) {
         Task { await SchoolLessonFeed.together(models) { await $0.load() } }
     }
+    /// Segmenté ; en très grand texte, un menu qui affiche la section en cours.
     @ViewBuilder private var sectionPicker: some View {
         if dynamicTypeSize.isAccessibilitySize {
-            sections.pickerStyle(.menu).frame(minHeight: 48)
+            sections.pickerStyle(.menu)
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         } else {
             sections.pickerStyle(.segmented)
                 .frame(maxWidth: TrainingLayout.pickerMaxWidth)
@@ -435,9 +493,10 @@ private struct SchoolTrainingContent: View {
     private var sections: some View {
         Picker("Afficher", selection: $chosenSection) {
             ForEach(SchoolTrainingSection.allCases, id: \.self) { item in
-                Text(item.rawValue).tag(item).accessibilityIdentifier("training-tab-\(item.rawValue)")
+                Text(item.rawValue).tag(item)
             }
         }
+        .accessibilityIdentifier("dossier-section")
     }
     private var lessons: some View {
         let feed = self.feed
@@ -452,7 +511,6 @@ private struct SchoolTrainingContent: View {
                 if feed.allRead && !feed.hasLessons && !feed.isLoading {
                     DrivyEmptyState(title: "Aucune leçon", symbol: "calendar")
                 }
-                if feed.hasLessons { lessonsMenu }
                 if feed.isLoadingHistory { DrivyLoadingState(title: "Chargement de l’historique…") }
                 // Tant qu’il reste des pages à lire, « aucune leçon » ne peut pas être affirmé.
                 if visible.isEmpty && feed.hasLessons && !feed.isLoadingHistory && !feed.hasMore {
@@ -487,6 +545,7 @@ private struct SchoolTrainingContent: View {
             HStack(spacing: DrivySpacing.xs) {
                 Image(systemName: order.symbol).font(.caption.weight(.bold))
                 Text(period.isActive ? "\(filter.title) · \(period.title)" : filter.title)
+                    .multilineTextAlignment(.trailing)
                     .fixedSize(horizontal: false, vertical: true)
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold))
             }
@@ -495,7 +554,6 @@ private struct SchoolTrainingContent: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
         .accessibilityLabel("Filtrer et trier les leçons")
         .accessibilityValue([filter.title, period.isActive ? period.title : "Toutes les périodes", order.title].joined(separator: ", "))
         .accessibilityIdentifier("training-lessons-menu")
@@ -610,8 +668,8 @@ private struct SchoolTrainingContent: View {
                 ForEach(month.lessons) { lesson in
                     Button { opened = OpenedLesson(id: lesson.id) } label: {
                         // Sous le titre « À terminer », la ligne ne redit pas son état.
-                        SchoolTrainingLessonRow(lesson: lesson, permit: permitNames[lesson.trainingId],
-                            showsState: month.id != "to-finish")
+                        SchoolLessonHistoryRow(lesson: lesson, permit: permitNames[lesson.trainingId],
+                            instructor: instructorName(of: lesson), showsState: month.id != "to-finish")
                     }
                         .buttonStyle(DrivyRowButtonStyle())
                         .disabled(feed.model(for: lesson)?.canOpenPedagogicalContent != true)
@@ -620,16 +678,21 @@ private struct SchoolTrainingContent: View {
             }
         }
     }
+    /// Le moniteur n’est nommé que s’il n’est pas le lecteur : un collègue pour l’équipe, toujours pour l’élève.
+    private func instructorName(of lesson: SchoolLesson) -> String? {
+        lesson.instructorMembershipId == workspace.membership?.membershipId ? nil : lesson.providedInstructorName
+    }
     /// Une compétence relève du référentiel de sa catégorie : « Tous » montre la progression de chaque permis
     /// sous son nom, l’une après l’autre, sans rien additionner d’un permis à l’autre.
     private var progress: some View {
         let names = permitNames
-        return VStack(alignment: .leading, spacing: DrivySpacing.l) {
+        let zone = workspace.school?.timeZone ?? "Europe/Zurich"
+        return VStack(alignment: .leading, spacing: DrivySpacing.xl) {
             // Une formation illisible est dite par son erreur, pas par une section vide.
             ForEach(shown.filter { $0.training != nil || $0.isLoading }, id: \.trainingID) { model in
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     if mixesPermits { permitTitle(model, name: permitName(model, in: names)) }
-                    competencies(of: model)
+                    SchoolTrainingProgressSection(model: model, schoolTimeZone: zone) { opened = OpenedLesson(id: $0) }
                 }
             }
         }
@@ -647,64 +710,6 @@ private struct SchoolTrainingContent: View {
             }
         }
     }
-    private func competencies(of model: SchoolTrainingWorkspace) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.m) {
-            if let value = model.progress {
-                if let error = model.progressError { SchoolErrorNotice(message: error, retry: { Task { await model.loadProgress() } }) }
-                DrivyRowGroup {
-                    ForEach(orderedProgress(value.items, of: model)) { item in
-                        Button { opened = OpenedLesson(id: item.sourceLessonId) } label: { progressRow(item, of: model) }
-                            .buttonStyle(DrivyRowButtonStyle())
-                            .accessibilityHint("Ouvre la leçon")
-                    }
-                    ForEach(model.unobservedCompetencies) { competency in
-                        progressLayout {
-                            DrivyCompetencyNote(label: competency.displayLabel, level: "Pas encore vu", tone: .neutral)
-                            DrivyCompetencyMeter(level: "")
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, DrivySpacing.s)
-                    }
-                }
-                if value.items.isEmpty && value.unobservedCompetencyIds.isEmpty {
-                    DrivyEmptyState(title: "Aucune compétence", symbol: "list.bullet")
-                }
-            } else if let error = model.progressError {
-                SchoolErrorNotice(message: error, retry: { Task { await model.loadProgress() } })
-            } else {
-                DrivySkeletonRows(count: 5)
-                    .drivySkeleton("Chargement de la progression…")
-            }
-        }
-    }
-    private func progressRow(_ item: SchoolReportProgressItem, of model: SchoolTrainingWorkspace) -> some View {
-        progressLayout {
-            DrivyCompetencyNote(label: model.competencies.first(where: { $0.id == item.id })?.displayLabel ?? item.displayLabel,
-                level: SchoolTrainingFormatting.level(item.level), context: item.context,
-                date: SchoolTrainingFormatting.day(item.observedAt, zone: workspace.school?.timeZone ?? "Europe/Zurich"))
-            HStack(spacing: DrivySpacing.s) {
-                DrivyCompetencyMeter(level: item.level)
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                    .accessibilityHidden(true)
-            }
-            .padding(.top, DrivySpacing.xs)
-        }
-        .padding(.vertical, DrivySpacing.s)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
-    private var progressLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.m))
-    }
-    private func orderedProgress(_ items: [SchoolReportProgressItem], of model: SchoolTrainingWorkspace) -> [SchoolReportProgressItem] {
-        let ranks = Dictionary(model.competencies.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })
-        return items.sorted {
-            let a = ranks[$0.id] ?? Int.max, b = ranks[$1.id] ?? Int.max
-            return a == b ? $0.displayLabel.localizedStandardCompare($1.displayLabel) == .orderedAscending : a < b
-        }
-    }
     @ViewBuilder private var moreLessons: some View {
         let feed = self.feed
         if feed.hasMore {
@@ -713,21 +718,6 @@ private struct SchoolTrainingContent: View {
             }
             .buttonStyle(DrivySecondaryButtonStyle()).disabled(feed.isLoadingMore)
         }
-    }
-}
-
-/// Même anatomie que la ligne d’agenda : heure, jour, lieu ; un mot de texte seulement pour l’inhabituel.
-private struct SchoolTrainingLessonRow: View {
-    let lesson: SchoolLesson
-    /// Nommé seulement quand la liste mêle plusieurs permis : du texte parmi les détails, pas un badge.
-    var permit: String? = nil
-    var showsState = true
-    var body: some View {
-        DrivyLessonRow(start: SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone),
-            end: SchoolTrainingFormatting.time(lesson.plannedEnd, zone: lesson.timeZone),
-            title: SchoolTrainingFormatting.rowDay(lesson.plannedStart, zone: lesson.timeZone),
-            details: [[permit, lesson.meetingPoint].compactMap { $0 }.joined(separator: " · ")],
-            state: showsState ? lesson.drivyState : nil)
     }
 }
 
