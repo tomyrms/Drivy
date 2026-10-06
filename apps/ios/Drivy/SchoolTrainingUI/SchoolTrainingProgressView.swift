@@ -85,7 +85,7 @@ struct SchoolTrainingProgressSection: View {
                 DrivyRowGroup {
                     ForEach(items) { item in
                         Button { open(item.sourceLessonId) } label: {
-                            SchoolProgressRow(label: label(item), level: item.level,
+                            SchoolProgressRow(label: label(item), level: item.level, context: item.context,
                                 date: SchoolTrainingFormatting.day(item.observedAt, zone: schoolTimeZone))
                         }
                         .buttonStyle(DrivyRowButtonStyle())
@@ -134,10 +134,12 @@ private struct SchoolProgressGroupTitle: View {
     }
 }
 
-/// Une compétence évaluée : libellé, niveau en mots, date, et la jauge à trois points du bilan.
+/// Une compétence évaluée : libellé, niveau en mots, situation, date, et la jauge à trois points du bilan.
 private struct SchoolProgressRow: View {
     let label: String
     let level: String
+    /// La situation notée par le moniteur (« Slalom sur le plateau »), si elle existe.
+    var context: String? = nil
     let date: String
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -146,7 +148,7 @@ private struct SchoolProgressRow: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
             : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.m))
         layout {
-            DrivyCompetencyNote(label: label, level: SchoolTrainingFormatting.level(level), date: date)
+            DrivyCompetencyNote(label: label, level: SchoolTrainingFormatting.level(level), context: context, date: date)
             HStack(spacing: DrivySpacing.s) {
                 DrivyCompetencyMeter(level: level)
                 Image(systemName: "chevron.right")
