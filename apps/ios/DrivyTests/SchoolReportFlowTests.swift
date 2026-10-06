@@ -46,6 +46,57 @@ import Testing
         #expect(SchoolReportFlowRules.editTitle(isEmpty: false, unsaved: true) == "Reprendre le bilan")
     }
 
+    // MARK: Lecture ou rédaction
+
+    @Test func openingALessonNeverOpensTheEditorWhateverTheWidth() {
+        for wide in [false, true] {
+            #expect(SchoolReportFlowRules.presentation(entry: nil, canEdit: true, isWide: wide) == .reading)
+            #expect(SchoolReportFlowRules.presentation(entry: nil, canEdit: false, isWide: wide) == .reading)
+        }
+    }
+
+    @Test func everyOriginOfTheEditorIsNamedAndTheWidthOnlyChoosesItsShape() {
+        #expect(Set(SchoolReportEntry.allCases) == [.lessonCompleted, .write, .edit, .resume])
+        for entry in SchoolReportEntry.allCases {
+            #expect(SchoolReportFlowRules.presentation(entry: entry, canEdit: true, isWide: false) == .steps)
+            #expect(SchoolReportFlowRules.presentation(entry: entry, canEdit: true, isWide: true) == .sideBySide)
+            // Qui ne rédige pas ce bilan ne reçoit jamais l’éditeur, même avec une origine.
+            #expect(SchoolReportFlowRules.presentation(entry: entry, canEdit: false, isWide: true) == .reading)
+        }
+    }
+
+    @Test func theWideCompositionStartsAt900PointsAndNeverInVeryLargeText() {
+        #expect(!SchoolReportFlowRules.isWide(width: 899, accessibilitySize: false))
+        #expect(SchoolReportFlowRules.isWide(width: 900, accessibilitySize: false))
+        #expect(!SchoolReportFlowRules.isWide(width: 1_200, accessibilitySize: true))
+    }
+
+    @Test func theEntryFollowsTheStateOfTheReport() {
+        #expect(SchoolReportFlowRules.entry(isEmpty: true, unsaved: false) == .write)
+        #expect(SchoolReportFlowRules.entry(isEmpty: false, unsaved: false) == .edit)
+        #expect(SchoolReportFlowRules.entry(isEmpty: false, unsaved: true) == .resume)
+        #expect(SchoolReportFlowRules.entry(isEmpty: true, unsaved: true) == .resume)
+    }
+
+    @Test func aSavedReportIsEditedFromTheMenuSoThatReadingStaysReading() {
+        #expect(SchoolReportFlowRules.placement(of: .edit) == .menu)
+        #expect(SchoolReportFlowRules.placement(of: .resume) == .bottomBar(primary: true))
+        #expect(SchoolReportFlowRules.placement(of: .write) == .bottomBar(primary: false))
+    }
+
+    // MARK: Récapitulatif
+
+    @Test func aLongListFoldsAndASingleExtraItemStaysVisible() {
+        let short = SchoolReportFlowRules.fold(Array(1...5), limit: 5)
+        #expect(short.shown == Array(1...5) && short.hidden.isEmpty)
+        let oneMore = SchoolReportFlowRules.fold(Array(1...6), limit: 5)
+        #expect(oneMore.shown.count == 6 && oneMore.hidden.isEmpty)
+        let long = SchoolReportFlowRules.fold(Array(1...9), limit: 5)
+        #expect(long.shown == Array(1...5) && long.hidden == Array(6...9))
+        #expect(SchoolReportFlowRules.foldTitle(hidden: long.hidden.count, noun: "compétences") == "Afficher les 4 autres compétences")
+        #expect(SchoolReportFlowRules.fold([Int](), limit: 4).shown.isEmpty)
+    }
+
     // MARK: Compétences
 
     @Test func competenciesOfTheLessonComeFirstAndTheOthersStayReachable() {

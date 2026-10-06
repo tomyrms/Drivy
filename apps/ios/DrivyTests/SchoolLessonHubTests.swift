@@ -224,6 +224,42 @@ struct SchoolLessonHubTests {
         #expect(SchoolLessonHubRules.missingReportText(isOwnLearner: false) == "Aucun bilan partagé.")
     }
 
+    @Test func theMissingReportLineIsSaidOnlyToWhoCouldReadIt() {
+        #expect(SchoolReportFlowRules.missingReportLine(isAuthor: true, isOwnLearner: false, canReadSharedReport: true)
+            == "Aucun bilan pour cette leçon.")
+        #expect(SchoolReportFlowRules.missingReportLine(isAuthor: false, isOwnLearner: true, canReadSharedReport: true)
+            == "Ton moniteur n’a pas encore écrit le bilan.")
+        #expect(SchoolReportFlowRules.missingReportLine(isAuthor: false, isOwnLearner: false, canReadSharedReport: true)
+            == "Aucun bilan partagé.")
+        // L’administration seule ne reçoit aucun bilan : rien ne lui est dit.
+        #expect(SchoolReportFlowRules.missingReportLine(isAuthor: false, isOwnLearner: false, canReadSharedReport: false) == nil)
+    }
+
+    // MARK: Récapitulatif : trajet
+
+    @Test func aReplayableTripIsShownWhateverTheLessonStatus() {
+        for planned in [false, true] {
+            #expect(SchoolReportFlowRules.showsTrip(readsLesson: true, hasTrack: false, replayableCount: 1, noteCount: 0, isPlanned: planned))
+            #expect(SchoolReportFlowRules.showsTrip(readsLesson: true, hasTrack: true, replayableCount: 0, noteCount: 0, isPlanned: planned))
+            // Sans droit de lecture, rien ; sans trajet, pas de section vide.
+            #expect(!SchoolReportFlowRules.showsTrip(readsLesson: false, hasTrack: true, replayableCount: 1, noteCount: 1, isPlanned: planned))
+            #expect(!SchoolReportFlowRules.showsTrip(readsLesson: true, hasTrack: false, replayableCount: 0, noteCount: 0, isPlanned: planned))
+        }
+    }
+
+    @Test func aTripThatCannotBeReplayedIsStillSaidOnceTheLessonIsOver() {
+        #expect(SchoolReportFlowRules.showsTrip(readsLesson: true, hasTrack: false, replayableCount: 0, noteCount: 1, isPlanned: false))
+        // Leçon planifiée : la barre du bas parle déjà du trajet en cours.
+        #expect(!SchoolReportFlowRules.showsTrip(readsLesson: true, hasTrack: false, replayableCount: 0, noteCount: 1, isPlanned: true))
+    }
+
+    @Test func tripNotesSayEachUnusualStateOnce() {
+        let live = HubFixture.capture(authorizedAt: "2026-09-28T12:00:00Z", stoppedAt: nil, state: .authorized)
+        let other = HubFixture.capture(authorizedAt: "2026-09-28T12:20:00Z", stoppedAt: nil, state: .authorized)
+        #expect(SchoolReportFlowRules.tripNotes([live, other]) == ["En cours"])
+        #expect(SchoolReportFlowRules.tripNotes([]).isEmpty)
+    }
+
     // MARK: Permis
 
     @Test func permitCheckCommandMatchesTheStrictServerSchemaAndReceipt() throws {

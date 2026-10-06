@@ -106,12 +106,76 @@ struct SchoolReportPresentations: ViewModifier {
 
 // MARK: Trajet
 
-/// Carte du trajet avec ses observations ancrées et la lecture posée dessus. Le moniteur y règle le partage du trajet.
+/// Le trajet d’une leçon dans un formulaire : carte, lecture, état inhabituel et, quand `editable`, le réglage
+/// de son partage. Le récapitulatif lu compose les mêmes pièces sans formulaire.
 struct SchoolReportTripSection: View {
     @Bindable var model: SchoolLessonReportWorkspace
     let router: SchoolReportRouter
     let context: SchoolReportContext
     var mapHeight: CGFloat = DrivyMapLayout.previewHeight
+    /// Lecture seule : aucune commande de partage.
+    var editable = true
+
+    var body: some View {
+        Section {
+            if !model.track.isEmpty {
+                SchoolLessonTripMap(model: model, router: router, context: context, height: mapHeight)
+                    .listRowInsets(EdgeInsets())
+            } else {
+                SchoolLessonReplayLinks(model: model, router: router, context: context)
+            }
+            SchoolLessonTripNotes(captures: model.captures)
+            if editable, model.isAuthor, model.sharing != nil {
+                Toggle("Visible par l’élève", isOn: Binding(get: { model.captureShared },
+                    set: { shared in Task { await model.updateSharing(captureHidden: !shared) } }))
+                    .disabled(!model.acceptsInput)
+            }
+        } header: { Text("Trajet").drivyFormSectionHeader() }
+            .drivyFormRows()
+    }
+}
+
+/// Sans aperçu (tracé illisible ou vide), le replay s’ouvre par une ligne de texte par trajet.
+struct SchoolLessonReplayLinks: View {
+    let model: SchoolLessonReportWorkspace
+    let router: SchoolReportRouter
+    let context: SchoolReportContext
+
+    var body: some View {
+        let replayable = model.replayableCaptures
+        ForEach(Array(replayable.enumerated()), id: \.element.id) { index, capture in
+            Button { router.openReplay(capture, model: model, context: context) } label: {
+                Text(replayable.count == 1 ? "Revoir le trajet" : "Revoir le trajet \(index + 1)")
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
+        }
+    }
+}
+
+/// L’état inhabituel d’un trajet (partiel, pas encore envoyé, retiré) : un mot de texte, comme dans les listes.
+struct SchoolLessonTripNotes: View {
+    let captures: [SchoolCaptureSession]
+
+    var body: some View {
+        let notes = SchoolReportFlowRules.tripNotes(captures)
+        if !notes.isEmpty {
+            Text(notes.joined(separator: " · "))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("lesson-trip-state")
+        }
+    }
+}
+
+/// Carte du trajet avec ses observations ancrées. Elle porte sa seule commande : lecture, en bas à droite.
+struct SchoolLessonTripMap: View {
+    let model: SchoolLessonReportWorkspace
+    let router: SchoolReportRouter
+    let context: SchoolReportContext
+    var height: CGFloat = DrivyMapLayout.previewHeight
 
     private var pins: [LessonTrackMap.Pin] {
         model.lessonObservations.compactMap { observation in
@@ -120,39 +184,9 @@ struct SchoolReportTripSection: View {
                 color: SchoolReportObservationsSection.color(observation), isSelected: router.selectedObservation == observation.id)
         }
     }
-    private var isUploading: Bool {
-        model.captures.contains { $0.syncState != .synced && $0.syncState != .partial && $0.publicationState == .privateCapture }
-    }
-
     var body: some View {
-        let replayable = model.replayableCaptures
-        Section {
-            if !model.track.isEmpty {
-                // La carte porte sa seule commande : lecture, en bas à droite.
-                LessonTrackMap(segments: model.track, pins: pins, height: mapHeight)
-                    .overlay(alignment: .bottomTrailing) { replayControl(replayable) }
-                    .listRowInsets(EdgeInsets())
-            } else {
-                // Sans aperçu (tracé illisible ou vide), le replay s’ouvre par une ligne de texte.
-                ForEach(Array(replayable.enumerated()), id: \.element.id) { index, capture in
-                    Button { router.openReplay(capture, model: model, context: context) } label: {
-                        Text(replayable.count == 1 ? "Revoir le trajet" : "Revoir le trajet \(index + 1)")
-                            .frame(minHeight: 44)
-                    }
-                    .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
-                }
-            }
-            if isUploading {
-                // État inhabituel du trajet : symbole et texte, comme tout statut.
-                Label("Trajet en cours d’envoi", systemImage: "arrow.triangle.2.circlepath").foregroundStyle(DrivyTheme.muted)
-            }
-            if model.isAuthor, model.sharing != nil {
-                Toggle("Visible par l’élève", isOn: Binding(get: { model.captureShared },
-                    set: { shared in Task { await model.updateSharing(captureHidden: !shared) } }))
-                    .disabled(!model.acceptsInput)
-            }
-        } header: { Text("Trajet").drivyFormSectionHeader() }
-            .drivyFormRows()
+        LessonTrackMap(segments: model.track, pins: pins, height: height)
+            .overlay(alignment: .bottomTrailing) { replayControl(model.replayableCaptures) }
     }
 
     /// Lecture du trajet, posée sur la carte. Un trajet : l’appui ouvre le replay. Plusieurs : la même commande
@@ -188,6 +222,8 @@ struct SchoolReportObservationsSection: View {
     @Bindable var model: SchoolLessonReportWorkspace
     let router: SchoolReportRouter
     let context: SchoolReportContext
+    /// Lecture seule : ni ajout, ni menu de ligne, ni section vide.
+    var editable = true
 
     private var isCompleted: Bool { model.lesson?.status == "COMPLETED" }
 
@@ -201,15 +237,19 @@ struct SchoolReportObservationsSection: View {
     }
 
     var body: some View {
+        if editable || !model.lessonObservations.isEmpty { section }
+    }
+
+    private var section: some View {
         Section {
-            if model.lessonObservations.isEmpty && isCompleted {
+            if editable && model.lessonObservations.isEmpty && isCompleted {
                 Text("Aucune observation.").foregroundStyle(DrivyTheme.muted)
             }
             ForEach(model.lessonObservations) { observation in
                 SchoolReportObservationRow(model: model, router: router, context: context, observation: observation,
-                    editable: model.isAuthor && isCompleted)
+                    editable: editable && model.isAuthor && isCompleted)
             }
-            if model.isAuthor {
+            if editable && model.isAuthor {
                 Button(isCompleted ? "Ajouter une observation" : "Noter une observation") {
                     // Envoi bref en cours : l’appui est ignoré plutôt que le bouton grisé. Une relecture n’empêche rien.
                     guard !model.isBusy else { return }
@@ -449,33 +489,6 @@ struct SchoolReportSaveBar: View {
             .buttonStyle(DrivyPrimaryButtonStyle())
             .disabled(!model.acceptsInput || !model.validTexts || !model.observationsValid)
             .accessibilityIdentifier("lesson-save-report")
-        }
-    }
-}
-
-// MARK: Bilan : lecture
-
-/// Le bilan du moniteur, relu sur la fiche de sa leçon : même corps que celui que lit l’élève.
-struct SchoolReportReadSection: View {
-    let model: SchoolLessonReportWorkspace
-
-    var body: some View {
-        if !model.reportIsEmpty {
-            Section {
-                DrivyReportBody(nextStep: model.nextStep, workedOn: model.workedOn, observationText: model.observationText, compact: true)
-                ForEach(model.observations) { observation in
-                    DrivyCompetencyNote(label: model.competencies.first(where: { $0.id == observation.id })?.displayLabel ?? "Compétence",
-                        level: observation.levelLabel, context: observation.context)
-                }
-                // L’inhabituel seulement : une saisie pas encore envoyée, un bilan gardé pour soi.
-                if model.draftChanged {
-                    Text("Non enregistré").font(.caption).foregroundStyle(DrivyTheme.muted)
-                        .accessibilityIdentifier("lesson-report-unsaved")
-                } else if model.sharing != nil, !model.reportShared {
-                    Text("Pour moi").font(.caption).foregroundStyle(DrivyTheme.muted)
-                }
-            } header: { Text("Bilan").drivyFormSectionHeader() }
-                .drivyFormRows()
         }
     }
 }

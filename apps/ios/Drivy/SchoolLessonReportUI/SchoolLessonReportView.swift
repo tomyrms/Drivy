@@ -3,8 +3,9 @@ import SwiftUI
 /// L’écran unique d’une leçon : avant (objectifs, départ du trajet), pendant (trajet en cours, observations),
 /// après (objectifs prévus, bilan, trajet, observations). Une leçon annulée ou manquée garde ses objectifs prévus. Tout est partagé avec l’élève automatiquement ; le moniteur garde
 /// pour lui ce qu’il choisit.
-/// Une leçon terminée se relit ici. Le moniteur rédige son bilan dans des étapes poussées depuis cette fiche
-/// (`SchoolReportStepView`) ; dès que la fenêtre est assez large, il le rédige sur place, en deux colonnes.
+/// Une leçon qui n’est plus à venir s’ouvre toujours sur son récapitulatif (`SchoolLessonSummaryView`), à toute largeur.
+/// La rédaction du bilan ne s’ouvre que sur un geste (« Rédiger », « Modifier », « Reprendre le bilan ») ou juste après
+/// « Terminer la leçon » : en étapes poussées (`SchoolReportStepView`), ou sur place en deux colonnes en fenêtre large.
 struct SchoolLessonReportView: View {
     let client: SchoolLessonReportClient
     @Bindable var schoolWorkspace: SchoolWorkspace
@@ -120,9 +121,8 @@ private struct SchoolLessonFinishingView: View {
     }
 }
 
-/// Seuils et colonnes de la leçon : contexte à gauche, bilan à droite dès que la fenêtre le permet.
+/// Colonnes de la rédaction en fenêtre large : contexte à gauche, bilan à droite.
 private enum LessonLayout {
-    static let splitBreakpoint: CGFloat = 900
     static let contextColumnWidth = DrivyMapLayout.sidebarWidth
     static let splitMaxWidth: CGFloat = 1248
     static let formMaxWidth = DrivyLayout.formColumn
@@ -142,9 +142,13 @@ private struct SchoolLessonReportContent: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var lessonSheet: LessonSheet?
     @State private var router = SchoolReportRouter()
-    /// Rédaction du bilan en étapes : ouverte seule après « Terminer », sinon depuis la barre basse.
+    /// Origine de la rédaction en cours ; `nil` : la fiche se lit. Seul `openReport` lui donne une valeur.
+    @State private var reportEntry: SchoolReportEntry?
+    /// Étapes de la rédaction poussées dans la pile (largeur compacte).
     @State private var showsReport = false
     @State private var reportSteps: [SchoolReportStep] = []
+    /// Largeur de la fiche, relevée à l’affichage : elle choisit la forme de la rédaction, jamais son ouverture.
+    @State private var isWide = false
     /// La leçon vient d’être terminée ici : la rédaction s’ouvre dès que la fiche est de nouveau à l’écran.
     @State private var opensReportWhenReady = false
     @Binding var isFinishing: Bool
@@ -235,8 +239,18 @@ private struct SchoolLessonReportContent: View {
                 SchoolReportStepView(model: model, context: reportContext, steps: reportSteps, index: 0)
             }
         }
-        // Retour sur la fiche : la saisie reste dans le modèle et se garde aussi sur l’appareil.
-        .onChange(of: showsReport) { _, shown in if !shown { model.persistLocalDraft() } }
+        // Retour sur la fiche : la saisie reste dans le modèle et se garde aussi sur l’appareil. En largeur compacte,
+        // quitter les étapes quitte la rédaction ; en fenêtre large, elle continue sur place.
+        .onChange(of: showsReport) { _, shown in
+            guard !shown else { return }
+            model.persistLocalDraft()
+            if !isWide { reportEntry = nil }
+        }
+        // La fenêtre change de largeur pendant la rédaction : la saisie vit dans le modèle, seule sa forme change.
+        .onChange(of: isWide) { _, wide in
+            guard reportEntry != nil else { return }
+            showsReport = !wide && !reportSteps.isEmpty
+        }
         .onChange(of: captureStatus) { _, status in if status != .collecting && status != .stopped { showsLive = false } }
         .onChange(of: showsLive) { _, visible in
             if !visible { Task { await model.refreshObservations() } }
@@ -253,16 +267,18 @@ private struct SchoolLessonReportContent: View {
     private func form(now: Date) -> some View {
         let bar = plannedBar(now: now)
         return GeometryReader { geometry in
-            // Fenêtre large : le contexte reste à portée pendant la rédaction, sur un seul écran. Plus étroite
-            // (iPhone, Slide Over, grand texte) : la fiche se relit et le bilan se rédige en étapes. La saisie vit
-            // dans le modèle, au-dessus de ce changement de composition et des rotations de la fenêtre.
-            let split = geometry.size.width >= LessonLayout.splitBreakpoint && hasCompletedReport && !typeSize.isAccessibilitySize
-            layout(split: split, bar: bar)
-                .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar(bar, split: split) }
+            // La fiche se lit, quelle que soit sa largeur. Une fois la rédaction demandée, la largeur en choisit la
+            // forme : étapes poussées (iPhone, Slide Over, grand texte) ou deux colonnes sur place. La saisie vit dans
+            // le modèle, au-dessus de ce changement de composition et des rotations de la fenêtre.
+            let wide = SchoolReportFlowRules.isWide(width: geometry.size.width, accessibilitySize: typeSize.isAccessibilitySize)
+            let presentation = SchoolReportFlowRules.presentation(entry: reportEntry, canEdit: editsReport, isWide: wide)
+            layout(presentation: presentation, wide: wide, bar: bar)
+                .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar(bar, presentation: presentation) }
+                .onChange(of: wide, initial: true) { _, value in isWide = value }
                 .onChange(of: opensReportWhenReady, initial: true) { _, wanted in
                     guard wanted else { return }
                     opensReportWhenReady = false
-                    if !split { openReport() }
+                    openReport(.lessonCompleted, wide: wide)
                 }
         }
         .background(DrivyTheme.canvas)
@@ -280,17 +296,19 @@ private struct SchoolLessonReportContent: View {
         }
     }
 
-    private var hasCompletedReport: Bool {
-        isCompleted && ((model.isAuthor && model.draft != nil) || (!model.isAuthor && model.canReadSharedReport))
-    }
-
-    @ViewBuilder private func layout(split: Bool, bar: PlannedBar?) -> some View {
-        if split {
+    /// Trois compositions : la rédaction sur place (fenêtre large, sur demande), le formulaire d’une leçon à venir,
+    /// et le récapitulatif de toute leçon qui a eu lieu ou n’aura pas lieu. Pendant la rédaction en étapes, le
+    /// récapitulatif reste sous la pile.
+    @ViewBuilder private func layout(presentation: SchoolReportPresentation, wide: Bool, bar: PlannedBar?) -> some View {
+        if presentation == .sideBySide {
             HStack(spacing: 0) {
                 Form { lessonContext }
                     .scrollContentBackground(.hidden)
                     .frame(width: LessonLayout.contextColumnWidth)
-                Form { completedReport(editing: true) }
+                Form {
+                    SchoolReportTextSection(model: model)
+                    SchoolReportCompetenciesSection(model: model)
+                }
                     .scrollContentBackground(.hidden)
                     .scrollDismissesKeyboard(.interactively)
                     // Le bilan démarre à la hauteur du nom de l’élève, pas au bord de la barre.
@@ -299,20 +317,29 @@ private struct SchoolLessonReportContent: View {
             }
             .frame(maxWidth: LessonLayout.splitMaxWidth)
             .frame(maxWidth: .infinity)
-        } else {
+        } else if isPlanned || model.lesson == nil {
             Form {
                 headerSection
                 lessonNotices
-                plannedGoals
-                completedReport(editing: false)
-                lessonEvidence(mapHeight: DrivyMapLayout.previewHeight)
+                // Leçon restée à terminer : son trajet déjà reçu par l’école se revoit d’ici, sans réglage.
+                if showsPlannedTrip {
+                    SchoolReportTripSection(model: model, router: router, context: reportContext, editable: false)
+                }
                 // Avant la leçon : le souhait de l’élève éclaire les objectifs, puis viennent les observations.
                 plannedSections(bar: bar)
             }
             .scrollContentBackground(.hidden)
             .frame(maxWidth: LessonLayout.formMaxWidth)
             .frame(maxWidth: .infinity)
+        } else {
+            SchoolLessonSummaryView(model: model, router: router, context: reportContext, learnerName: learnerName,
+                finishError: finishError, isWide: wide)
         }
+    }
+
+    private var showsPlannedTrip: Bool {
+        isPlanned && SchoolReportFlowRules.showsTrip(readsLesson: readsLesson, hasTrack: !model.track.isEmpty,
+            replayableCount: model.replayableCaptures.count, noteCount: 0, isPlanned: true)
     }
 
     @ViewBuilder private func plannedSections(bar: PlannedBar?) -> some View {
@@ -326,40 +353,60 @@ private struct SchoolLessonReportContent: View {
     }
 
     /// Barre basse : les gestes d’une leçon planifiée ; pour une leçon terminée, l’enregistrement du bilan quand
-    /// il se rédige sur place, sinon l’entrée dans sa rédaction.
-    @ViewBuilder private func bottomBar(_ bar: PlannedBar?, split: Bool) -> some View {
+    /// il se rédige sur place, sinon l’entrée dans sa rédaction quand elle a sa place en bas.
+    @ViewBuilder private func bottomBar(_ bar: PlannedBar?, presentation: SchoolReportPresentation) -> some View {
         if let bar {
             plannedBarView(bar)
         } else if editsReport {
-            if split { SchoolReportSaveBar(model: model) } else { editReportBar }
+            if presentation == .sideBySide { SchoolReportSaveBar(model: model) } else { reportEntryBar }
         }
     }
 
-    /// « Rédiger », « Modifier » ou « Reprendre le bilan » : l’action domine tant que rien n’est enregistré.
-    private var editReportBar: some View {
-        let empty = model.reportIsEmpty, unsaved = model.draftChanged
-        let title = SchoolReportFlowRules.editTitle(isEmpty: empty, unsaved: unsaved)
-        return DrivyStickyActionBar {
-            if empty || unsaved {
-                Button(title) { openReport() }
-                    .buttonStyle(DrivyPrimaryButtonStyle())
-                    .accessibilityIdentifier("lesson-report-edit")
-            } else {
-                Button(title) { openReport() }
-                    .buttonStyle(DrivySecondaryButtonStyle())
-                    .accessibilityIdentifier("lesson-report-edit")
+    /// Le geste proposé sur la fiche lue, d’après l’état du bilan.
+    private var offeredEntry: SchoolReportEntry {
+        SchoolReportFlowRules.entry(isEmpty: model.reportIsEmpty, unsaved: model.draftChanged)
+    }
+    private var entryTitle: String {
+        SchoolReportFlowRules.editTitle(isEmpty: model.reportIsEmpty, unsaved: model.draftChanged)
+    }
+
+    /// « Reprendre le bilan » domine (une saisie attend) ; « Rédiger le bilan » se propose sans dominer.
+    /// « Modifier le bilan » n’est pas ici : il vit dans le menu de la barre d’outils.
+    @ViewBuilder private var reportEntryBar: some View {
+        let entry = offeredEntry
+        if case .bottomBar(let primary) = SchoolReportFlowRules.placement(of: entry) {
+            DrivyStickyActionBar {
+                if primary {
+                    Button(entryTitle) { openReport(entry) }
+                        .buttonStyle(DrivyPrimaryButtonStyle())
+                        .accessibilityIdentifier("lesson-report-edit")
+                } else {
+                    Button(entryTitle) { openReport(entry) }
+                        .buttonStyle(DrivySecondaryButtonStyle())
+                        .accessibilityIdentifier("lesson-report-edit")
+                }
             }
         }
     }
 
-    /// Les étapes sont figées à l’entrée, d’après ce que la leçon contient à cet instant.
-    private func openReport() {
-        guard editsReport, !showsReport else { return }
+    /// Seule entrée dans la rédaction. Ses origines sont celles de `SchoolReportEntry` : la fin de la leçon depuis
+    /// cette fiche, ou l’un des trois gestes. Les étapes sont figées à l’entrée, d’après ce que la leçon contient.
+    private func openReport(_ origin: SchoolReportEntry, wide: Bool? = nil) {
+        guard editsReport, reportEntry == nil else { return }
         reportSteps = model.reportSteps
-        showsReport = true
+        reportEntry = origin
+        if !(wide ?? isWide) { showsReport = true }
     }
 
-    /// Colonne de contexte en fenêtre large : la leçon, ses objectifs, son trajet et ses observations.
+    /// Fenêtre large : quitter la rédaction sur place sans rien perdre. La saisie reste dans le modèle et sur
+    /// l’appareil ; la fiche relue propose alors « Reprendre le bilan ».
+    private func leaveReport() {
+        model.persistLocalDraft()
+        showsReport = false
+        reportEntry = nil
+    }
+
+    /// Colonne de contexte de la rédaction en fenêtre large : la leçon, ses objectifs, son trajet et ses observations.
     @ViewBuilder private var lessonContext: some View {
         headerSection
         lessonNotices
@@ -388,20 +435,6 @@ private struct SchoolLessonReportContent: View {
         if isCompleted, model.isAuthor || model.isOwnLearner {
             SchoolReportObservationsSection(model: model, router: router, context: reportContext)
         }
-    }
-
-    /// Le moniteur relit son bilan sur la fiche et le rédige en étapes ; en fenêtre large, il le rédige ici.
-    /// Les autres lecteurs reçoivent le bilan partagé.
-    @ViewBuilder private func completedReport(editing: Bool) -> some View {
-        if editsReport {
-            if editing {
-                SchoolReportTextSection(model: model)
-                SchoolReportCompetenciesSection(model: model)
-            } else {
-                SchoolReportReadSection(model: model)
-            }
-        }
-        if !model.isAuthor, model.canReadSharedReport, isCompleted { sharedReportSection }
     }
 
     private func isGoalsBar(_ bar: PlannedBar?) -> Bool {
@@ -476,106 +509,43 @@ private struct SchoolLessonReportContent: View {
 
     // MARK: En-tête
 
-    /// L’élève (pour l’élève qui lit sa leçon : son moniteur), puis les faits de la leçon. Un enregistrement en cours se lit dans le bouton qui l’a lancé,
-    /// pas dans une ligne d’en-tête qui décale toute la fiche puis disparaît.
+    /// L’en-tête commun (`SchoolLessonHeaderView`), posé sur le canevas du formulaire : aucun filet entre l’élève,
+    /// les faits de la leçon et les messages.
     private var headerSection: some View {
-        let identity = SchoolLessonHubRules.headerIdentity(learnerName: learnerName,
-            instructorName: model.lesson?.providedInstructorName, isOwnLearner: model.isOwnLearner, roles: model.membership.roles)
-        return Section {
-            if identity != nil || model.lesson != nil {
-                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                    if let identity { DrivyLearnerIdentity(name: identity.name, detail: identity.role, variant: .compact) }
-                    if let lesson = model.lesson { lessonFacts(lesson) }
-                }
-            }
-            if model.isLoading && model.lesson == nil {
-                DrivySkeletonRows(count: 4)
-                    .drivySkeleton("Chargement de la leçon…")
-            }
-            if let error = model.errorMessage {
-                SchoolErrorNotice(message: error, retry: model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
-            }
-            if let finishError { DrivyInlineMessage(text: finishError, tone: .danger) }
-            if let message = model.confirmation { DrivyInlineMessage(text: message) }
-            if let message = model.information { DrivyInlineMessage(text: message, tone: .neutral) }
+        Section {
+            SchoolLessonHeaderView(model: model, learnerName: learnerName, finishError: finishError)
         }
         .listRowBackground(Color.clear)
-        // En-tête posé sur le canevas : aucun filet entre l’élève, les faits de la leçon et les messages.
         .listRowSeparator(.hidden)
     }
 
-    /// Faits de la leçon sous l’élève : son état s’il est inhabituel, quand, où, avec qui, à quel prix.
-    /// Du texte seul, sans symbole, pastille ni colonne de montants.
-    private func lessonFacts(_ lesson: SchoolLesson) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-            // L’inhabituel (à terminer, annulée, absence) se lit en premier, du même mot que dans les listes :
-            // du texte dans la hiérarchie, sans pastille. Planifiée, en cours ou terminée : rien, l’écran le dit déjà.
-            if let note = lesson.drivyState.rowNote {
-                DrivyRowNoteText(note: note)
-                    .accessibilityIdentifier("lesson-state")
-            }
-            scheduleLines(lesson)
-                .accessibilityElement(children: .combine)
-            if let actual = SchoolLessonHubRules.actualSchedule(lesson) {
-                factLine(actual, color: DrivyTheme.muted)
-            }
-            if let instructor = SchoolLessonHubRules.instructorLine(instructorName: lesson.providedInstructorName,
-                isAuthor: model.isAuthor, isOwnLearner: model.isOwnLearner, roles: model.membership.roles) {
-                factLine(instructor, color: DrivyTheme.muted)
-            }
-            ForEach(SchoolLessonHubRules.priceLines(lesson: lesson, account: model.account)) { line in
-                priceLine(line)
-            }
-        }
-    }
-
-    /// Date, horaire et lieu. La date et l’horaire tiennent sur une ligne quand la colonne le permet, sinon l’un
-    /// sous l’autre : l’intervalle horaire ne se coupe jamais entre ses deux heures. Le lieu passe à la ligne seul.
-    private func scheduleLines(_ lesson: SchoolLesson) -> some View {
-        let schedule = SchoolLessonHubRules.schedule(lesson)?.replacingOccurrences(of: " – ", with: "\u{00A0}–\u{00A0}")
-        let parts = schedule?.components(separatedBy: " · ") ?? []
-        return VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-            if let schedule {
-                ViewThatFits(in: .horizontal) {
-                    factLine(schedule, color: DrivyTheme.text).fixedSize(horizontal: true, vertical: false)
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        ForEach(parts, id: \.self) { part in factLine(part, color: DrivyTheme.text) }
-                    }
-                }
-            }
-            if !lesson.meetingPoint.isEmpty { factLine(lesson.meetingPoint, color: DrivyTheme.muted) }
-        }
-    }
-
-    /// Une ligne de l’en-tête : l’horaire en encre pleine, le lieu et le prix en retrait.
-    private func factLine(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.subheadline)
-            .monospacedDigit()
-            .foregroundStyle(color)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    /// Le prix se lit à la suite de la date et du lieu, sous son intitulé ; il n’ouvre rien et ne promet aucun suivi.
-    private func priceLine(_ line: SchoolLessonPriceLine) -> some View {
-        let amount = SchoolCatalogFormatting.price(line.cents)
-        return factLine("\(line.title)\u{00A0}: \(amount)", color: DrivyTheme.muted)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(line.title)
-            .accessibilityValue(amount)
-            .accessibilityIdentifier(line.kind == .agreed ? "lesson-tariff" : "lesson-balance")
-    }
-
     // MARK: Actions de la leçon
+
+    /// « Modifier le bilan » vit ici quand le bilan est enregistré : la fiche lue ne porte alors aucune barre.
+    private var offersEditInMenu: Bool {
+        editsReport && reportEntry == nil && SchoolReportFlowRules.placement(of: offeredEntry) == .menu
+    }
+    /// Rédaction sur place, en fenêtre large : le menu permet de revenir à la lecture.
+    private var offersLeaveInMenu: Bool { editsReport && reportEntry != nil && isWide }
 
     @ViewBuilder private func lessonMenu(now: Date) -> some View {
         if let lesson = model.lesson {
             let moves = SchoolLessonHubRules.mayMove(lesson, roles: model.membership.roles, now: now)
             let cancels = SchoolLessonHubRules.mayCancel(lesson, roles: model.membership.roles)
             let absent = model.mayMarkNoShow(now: now)
-            if moves || cancels || absent {
+            let edits = offersEditInMenu, leaves = offersLeaveInMenu
+            if moves || cancels || absent || edits || leaves {
                 // Menus en texte seul : ces actions sont propres à Drivy, un symbole n’y serait qu’un ornement.
                 Menu {
+                    if edits {
+                        Button(entryTitle) { openReport(offeredEntry) }
+                            .accessibilityIdentifier("lesson-report-edit")
+                    }
+                    if leaves {
+                        Button("Quitter la rédaction") { leaveReport() }
+                            .disabled(model.holdsScreen)
+                            .accessibilityIdentifier("lesson-report-leave")
+                    }
                     if absent {
                         Button("Élève absent") { confirmsNoShow = true }
                             .disabled(!model.canMutate || isFinishing)
@@ -689,26 +659,6 @@ private struct SchoolLessonReportContent: View {
     private func openPlanning(_ lesson: SchoolLesson, cancelling: Bool) {
         let planning = SchoolPlanningWorkspace(scope: model.scope, client: agenda.planningClient, lesson: lesson)
         planningRoute = PlanningRoute(model: planning, cancelling: cancelling)
-    }
-
-    // MARK: Bilan partagé
-
-    @ViewBuilder private var sharedReportSection: some View {
-        if let revision = model.revisions.first {
-            Section {
-                DrivyReportBody(nextStep: revision.nextStep, workedOn: revision.workedOn, observationText: revision.observationText, compact: true)
-                ForEach(revision.observations) { observation in
-                    DrivyCompetencyNote(label: model.competencies.first(where: { $0.id == observation.id })?.displayLabel ?? "Compétence",
-                        level: observation.levelLabel, context: observation.context)
-                }
-            } header: { Text("Bilan").drivyFormSectionHeader() }
-                .drivyFormRows()
-        } else if model.sharedReportWasRead {
-            Section {
-                Text(SchoolLessonHubRules.missingReportText(isOwnLearner: model.isOwnLearner)).foregroundStyle(DrivyTheme.muted)
-            } header: { Text("Bilan").drivyFormSectionHeader() }
-                .drivyFormRows()
-        }
     }
 
     // MARK: Avant la leçon

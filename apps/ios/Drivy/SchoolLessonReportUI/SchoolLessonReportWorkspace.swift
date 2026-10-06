@@ -379,6 +379,18 @@ import Observation
                         try await self.client.sharing(schoolID: self.scope.schoolID, lessonID: self.lessonID)
                     }
                 }
+            } else if readsContent, lesson.captureSummary?.hasCapture == true {
+                // Leçon à terminer, annulée ou manquée : son trajet reste à revoir depuis la fiche. L’école dit
+                // elle-même qu’un trajet existe ; sans cela, rien n’est demandé. Lecture discrète : un refus ou une
+                // panne laisse la section absente, sans message.
+                capturesRead.value = try await readSupplement(request: request, unavailable: "", absentWhenRefused: true) {
+                    try await self.client.agenda.captureClient.lessonCaptures(schoolID: self.scope.schoolID, lessonID: self.lessonID)
+                }.value
+                if let capture = capturesRead.value?.last(where: { SchoolTripsWorkspace.isReplayable($0) }) {
+                    trackRead.value = try await readSupplement(request: request, unavailable: "", absentWhenRefused: true) {
+                        try await self.client.agenda.captureClient.replayTrack(schoolID: self.scope.schoolID, captureID: capture.id)
+                    }.value
+                }
             }
             let trainingRead = try await readSupplement(request: request, unavailable: "Le référentiel est momentanément indisponible. Le bilan textuel peut être enregistré sans ajouter de compétence.") {
                 let training = try await self.client.reader.training(schoolID: self.scope.schoolID, id: lesson.trainingId)
@@ -436,6 +448,7 @@ import Observation
             sharing = sharingRead.value
             track = trackRead.value?.segments ?? []; trackAnchors = trackRead.value?.pointsByAnchor ?? [:]
             if lesson.status == "COMPLETED" { captures = capturesRead.value ?? [] }
+            else if let values = capturesRead.value { captures = values }
             else if !author { captures = [] }
             let notes = [wishRead.message, preparationRead.message, draftsRead.message, accountRead.message,
                          observationsRead.message, capturesRead.message, trackRead.message, sharingRead.message, curriculumRead.message, progressRead.message].compactMap { $0 }
