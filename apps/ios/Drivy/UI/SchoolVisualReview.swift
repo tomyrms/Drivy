@@ -49,10 +49,9 @@ struct SchoolVisualReview: View {
                             learner: context.learner, trainingID: SchoolVisualData.trainingID, section: .progress)
                             .navigationTitle("Progression")
                     }
-                case "trips":
+                case "lessons-history":
                     NavigationStack {
-                        SchoolTripsView(workspace: context.workspace, agendaClient: context.agenda, showsHeading: false) { EmptyView() }
-                            .navigationTitle("Trajets")
+                        SchoolLessonHistoryView(workspace: context.workspace, agendaClient: context.agenda)
                     }
                 case "profile-tab":
                     SchoolVisualShell(context: context, tab: .profile)

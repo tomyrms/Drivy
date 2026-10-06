@@ -219,7 +219,7 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
    });return envelope(data,r);
   });
   app.get(`${base}/lessons`,async r=>{
-  const query=z.object({from:date.optional(),to:date.optional(),trainingId:id.optional(),instructorMembershipId:id.optional(),limit:z.coerce.number().int().min(1).max(100).default(50),cursor:z.string().max(6000).optional()}).strict().parse(r.query);
+  const query=z.object({from:date.optional(),to:date.optional(),trainingId:id.optional(),instructorMembershipId:id.optional(),limit:z.coerce.number().int().min(1).max(100).default(50),order:z.enum(['asc','desc']).default('asc'),cursor:z.string().max(6000).optional()}).strict().parse(r.query);
   if(query.from&&query.to&&Date.parse(query.to)<=Date.parse(query.from))throw new ApiError(422,'INVALID_INTERVAL','La fenêtre de planning est invalide.');
   const schoolId=schoolID(r),identity=await options.verifyToken(r.headers.authorization);
   const data=await withActor(options.pool,identity,schoolId,async(db,actor,member)=>{
@@ -227,8 +227,10 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
    const values:unknown[]=[schoolId],where=['school_id=$1'],bind=(v:unknown)=>{values.push(v);return `$${values.length}`;};
    if(query.from)where.push(`planned_end>${bind(query.from)}::timestamptz`);if(query.to)where.push(`planned_start<${bind(query.to)}::timestamptz`);
    if(query.trainingId)where.push(`training_id=${bind(query.trainingId)}`);if(query.instructorMembershipId)where.push(`instructor_membership_id=${bind(query.instructorMembershipId)}`);
-   if(position)where.push(`(planned_start,id)>(${bind(position.createdAt)}::timestamptz,${bind(position.id)}::uuid)`);
-   const rows=(await db.query<LessonRow>(`SELECT ${lessonColumns},to_char(planned_start AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "_createdAt" FROM drivy.lesson WHERE ${where.join(' AND ')} ORDER BY planned_start,id LIMIT ${bind(query.limit+1)}`,values)).rows;
+   // `order` fait partie de la portée du curseur : un curseur émis dans un sens est refusé dans l'autre.
+   const desc=query.order==='desc';
+   if(position)where.push(`(planned_start,id)${desc?'<':'>'}(${bind(position.createdAt)}::timestamptz,${bind(position.id)}::uuid)`);
+   const rows=(await db.query<LessonRow>(`SELECT ${lessonColumns},to_char(planned_start AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "_createdAt" FROM drivy.lesson WHERE ${where.join(' AND ')} ORDER BY planned_start ${desc?'DESC':'ASC'},id ${desc?'DESC':'ASC'} LIMIT ${bind(query.limit+1)}`,values)).rows;
    const last=rows.length>query.limit?rows[query.limit-1]:undefined;return {items:rows.slice(0,query.limit).map(lessonProjection),nextCursor:last?cursors.encode(scope,{id:last.id,createdAt:last._createdAt}):null};
   });return envelope(data,r);
  });

@@ -232,6 +232,14 @@ import Observation
     private func current(_ request: UUID) -> Bool { !invalidated && generation == request }
 }
 
+/// Replay of one reconstructed trip, presented full screen from the lesson it belongs to.
+struct SchoolTripReplayRoute: Identifiable {
+    let model: SchoolCaptureReplayWorkspace
+    let learnerName: String
+    let lessonTimeZone: String?
+    var id: UUID { model.id }
+}
+
 struct SchoolTripDay: Identifiable, Equatable {
     let id: String
     let title: String

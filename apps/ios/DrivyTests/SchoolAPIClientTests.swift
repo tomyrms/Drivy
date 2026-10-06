@@ -138,4 +138,89 @@ struct SchoolAPIClientTests {
         let client = DrivyAPIClient(baseURL: base, tokenSource: TestAccessToken(), transport: transport)
         #expect(try await client.me().displayName == "Alex Moniteur")
     }
+
+    // MARK: Historique des leçons
+
+    private func historyLesson(_ index: Int, start: String, end: String, instructor: UUID, capture: [String: Any]? = nil) -> [String: Any] {
+        var lesson: [String: Any] = [
+            "id": String(format: "81000000-0000-4000-8000-%012d", index), "schoolId": school.uuidString, "version": 2,
+            "trainingId": training.uuidString, "learnerId": learner.uuidString, "instructorMembershipId": instructor.uuidString,
+            "plannedStart": start, "plannedEnd": end, "timeZone": "Europe/Zurich", "meetingPoint": "Gare", "status": "COMPLETED",
+            "priceCentsSnapshot": 9_000, "bufferMinutesSnapshot": 10, "actualStart": NSNull(), "actualEnd": NSNull(),
+            "permitWarning": false, "publicationVersion": 0, "currentPublishedRevisionId": NSNull(), "commercialRevisionVersion": 1,
+            "learnerDisplayName": "Alice Exemple", "instructorDisplayName": "Alex Moniteur"
+        ]
+        if let capture { lesson["captureSummary"] = capture }
+        return lesson
+    }
+
+    private func historyPage(_ items: [[String: Any]], nextCursor: String?) throws -> Data {
+        let page: [String: Any] = ["items": items, "nextCursor": nextCursor.map { $0 as Any } ?? NSNull()]
+        let envelope: [String: Any] = ["data": page, "requestId": "90000000-0000-4000-8000-000000000001",
+                                       "serverTime": "2026-10-06T10:00:00Z"]
+        return try JSONSerialization.data(withJSONObject: envelope)
+    }
+
+    @Test func lessonHistoryAsksForTheOrderAndReadsTheCaptureSummaryWhenPresent() async throws {
+        let instructor = UUID(uuidString: "30000000-0000-4000-8000-000000000002")!
+        let before = try #require(SchoolLesson.date("2026-10-06T10:00:00Z"))
+        let items = [
+            historyLesson(1, start: "2026-10-05T08:00:00Z", end: "2026-10-05T08:50:00Z", instructor: instructor,
+                capture: ["hasCapture": true, "syncState": "SYNCED", "publicationState": "PRIVATE"]),
+            historyLesson(2, start: "2026-10-04T08:00:00Z", end: "2026-10-04T08:50:00Z", instructor: instructor,
+                capture: ["hasCapture": false, "syncState": NSNull(), "publicationState": "NONE"]),
+            // Serveur plus ancien : pas de résumé de trajet, la leçon se lit quand même.
+            historyLesson(3, start: "2026-10-03T08:00:00Z", end: "2026-10-03T08:50:00Z", instructor: instructor)
+        ]
+        let transport = ResponseTransport(data: try historyPage(items, nextCursor: "next-page"))
+        let client = SchoolAgendaClient(baseURL: base, tokenSource: TestAccessToken(), transport: transport)
+        let page = try await client.lessonHistory(schoolID: school, before: before, instructorMembershipID: instructor, cursor: "previous-page")
+        #expect(page.items.count == 3 && page.nextCursor == "next-page")
+        #expect(page.items[0].captureSummary == SchoolLessonCaptureSummary(hasCapture: true, syncState: "SYNCED", publicationState: "PRIVATE"))
+        #expect(page.items[1].captureSummary == SchoolLessonCaptureSummary(hasCapture: false, syncState: nil, publicationState: "NONE"))
+        #expect(page.items[2].captureSummary == nil)
+        #expect(page.items[0].drivyContents == [.trip] && page.items[1].drivyContents.isEmpty && page.items[2].drivyContents.isEmpty)
+        let request = try #require(await transport.recordedRequests().first)
+        #expect(request.httpMethod == "GET" && request.url?.path == "/v1/schools/\(school.uuidString)/lessons")
+        let query = try #require(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems)
+        #expect(query == [URLQueryItem(name: "to", value: "2026-10-06T10:00:00Z"), URLQueryItem(name: "limit", value: "100"),
+                          URLQueryItem(name: "order", value: "desc"),
+                          URLQueryItem(name: "instructorMembershipId", value: instructor.uuidString.lowercased()),
+                          URLQueryItem(name: "cursor", value: "previous-page")])
+
+        // Toute l’école, anciennes d’abord, première page : ni filtre de moniteur ni curseur.
+        let oldest = ResponseTransport(data: try historyPage(Array(items.reversed()), nextCursor: nil))
+        _ = try await SchoolAgendaClient(baseURL: base, tokenSource: TestAccessToken(), transport: oldest)
+            .lessonHistory(schoolID: school, before: before, instructorMembershipID: nil, newestFirst: false, cursor: nil)
+        let ascending = try #require(await oldest.recordedRequests().first?.url)
+        #expect(URLComponents(url: ascending, resolvingAgainstBaseURL: false)?.queryItems == [
+            URLQueryItem(name: "to", value: "2026-10-06T10:00:00Z"), URLQueryItem(name: "limit", value: "100"),
+            URLQueryItem(name: "order", value: "asc")])
+    }
+
+    @Test func lessonHistoryRefusesWhatTheRequestDidNotAskFor() async throws {
+        let instructor = UUID(uuidString: "30000000-0000-4000-8000-000000000002")!
+        let before = try #require(SchoolLesson.date("2026-10-06T10:00:00Z"))
+        let past = historyLesson(1, start: "2026-10-05T08:00:00Z", end: "2026-10-05T08:50:00Z", instructor: instructor)
+        // Une leçon à venir, celle d’un autre moniteur, un doublon, le curseur rendu tel quel : jamais dans la liste.
+        let future = historyLesson(2, start: "2026-10-06T10:00:00Z", end: "2026-10-06T10:50:00Z", instructor: instructor)
+        let colleague = historyLesson(3, start: "2026-10-04T08:00:00Z", end: "2026-10-04T08:50:00Z", instructor: UUID())
+        let refused: [(items: [[String: Any]], cursor: String?)] = [([past, future], nil), ([past, colleague], nil),
+                                                                   ([past, past], nil), ([past], "previous-page")]
+        for answer in refused {
+            let client = SchoolAgendaClient(baseURL: base, tokenSource: TestAccessToken(),
+                transport: ResponseTransport(data: try historyPage(answer.items, nextCursor: answer.cursor)))
+            await #expect(throws: SchoolAgendaFailure.invalidResponse) {
+                try await client.lessonHistory(schoolID: school, before: before, instructorMembershipID: instructor, cursor: "previous-page")
+            }
+        }
+        // Un résumé de trajet d’une autre forme est une réponse invalide, pas une leçon sans trajet.
+        let malformed = historyLesson(4, start: "2026-10-05T08:00:00Z", end: "2026-10-05T08:50:00Z", instructor: instructor,
+            capture: ["hasCapture": "yes"])
+        let client = SchoolAgendaClient(baseURL: base, tokenSource: TestAccessToken(),
+            transport: ResponseTransport(data: try historyPage([malformed], nextCursor: nil)))
+        await #expect(throws: SchoolAgendaFailure.invalidResponse) {
+            try await client.lessonHistory(schoolID: school, before: before, instructorMembershipID: instructor, cursor: nil)
+        }
+    }
 }

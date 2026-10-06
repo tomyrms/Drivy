@@ -25,6 +25,8 @@ struct SchoolLesson: Codable, Sendable, Equatable, Identifiable {
     var instructorDisplayName: String? = nil
     /// Sélection commerciale acceptée à la réservation ; lue seulement pour ne pas redemander des conditions déjà acceptées.
     var commercialSelection: SchoolLessonCommercialSelection? = nil
+    /// Trajet de la leçon tel que le serveur le montre à ce lecteur ; absent d’un serveur plus ancien.
+    var captureSummary: SchoolLessonCaptureSummary? = nil
 
     var startsAt: Date? { Self.date(plannedStart) }
     var endsAt: Date? { Self.date(plannedEnd) }
@@ -52,6 +54,15 @@ struct SchoolLesson: Codable, Sendable, Equatable, Identifiable {
         guard let text = value?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty, text.count <= 200 else { return nil }
         return text
     }
+}
+
+/// Résumé du trajet joint à la leçon. `syncState` et `publicationState` gardent les valeurs brutes du serveur
+/// (`SchoolCaptureSession.SyncState`, `.PublicationState`, plus « NONE » sans trajet) : une valeur inconnue
+/// ne doit pas empêcher de lire la leçon.
+struct SchoolLessonCaptureSummary: Codable, Sendable, Equatable {
+    let hasCapture: Bool
+    let syncState: String?
+    let publicationState: String
 }
 
 /// Lecture tolérante : un champ absent ou d’une autre forme n’empêche jamais de lire la leçon.
@@ -111,6 +122,25 @@ final class SchoolAgendaClient {
         if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
         let result: SchoolPage<SchoolLesson> = try await read(["v1", "schools", schoolID.uuidString, "lessons"], query: query)
         guard result.items.allSatisfy({ valid($0, schoolID: schoolID) && (instructorMembershipID == nil || $0.instructorMembershipId == instructorMembershipID) }),
+              Set(result.items.map(\.id)).count == result.items.count else { throw SchoolAgendaFailure.invalidResponse }
+        return result
+    }
+
+    /// Historique : les leçons commencées avant `before`, 100 par page, triées par le serveur
+    /// (`newestFirst` : les plus récentes d’abord). Le curseur d’un sens est refusé dans l’autre.
+    func lessonHistory(schoolID: UUID, before: Date, instructorMembershipID: UUID?,
+                       newestFirst: Bool = true, cursor: String?) async throws -> SchoolPage<SchoolLesson> {
+        var query = [URLQueryItem(name: "to", value: ISO8601DateFormatter().string(from: before)),
+                     URLQueryItem(name: "limit", value: "100"),
+                     URLQueryItem(name: "order", value: newestFirst ? "desc" : "asc")]
+        if let instructorMembershipID { query.append(URLQueryItem(name: "instructorMembershipId", value: instructorMembershipID.uuidString.lowercased())) }
+        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        let result: SchoolPage<SchoolLesson> = try await read(["v1", "schools", schoolID.uuidString, "lessons"], query: query)
+        guard result.nextCursor != cursor,
+              result.items.allSatisfy({ lesson in
+                  valid(lesson, schoolID: schoolID) && (instructorMembershipID == nil || lesson.instructorMembershipId == instructorMembershipID)
+                      && (lesson.startsAt.map { $0 < before } ?? false)
+              }),
               Set(result.items.map(\.id)).count == result.items.count else { throw SchoolAgendaFailure.invalidResponse }
         return result
     }

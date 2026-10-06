@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Le compte et ses réglages. L’historique des trajets a sa propre destination,
-/// sans déplacer les filtres ni élargir les données autorisées par le serveur.
+/// Le compte et ses réglages. L’historique des leçons a sa propre destination ;
+/// le serveur décide de ce que ce compte y lit.
 struct SchoolProfileTabView: View {
     @Bindable var workspace: SchoolWorkspace
     let account: SchoolAccountActions?
@@ -61,14 +61,12 @@ struct SchoolProfileTabView: View {
         if let agendaClient {
             Section {
                 NavigationLink {
-                    SchoolTripsView(workspace: workspace, agendaClient: agendaClient, captureController: captureController, showsHeading: false) { EmptyView() }
-                        .navigationTitle("Trajets")
-                        .navigationBarTitleDisplayMode(.inline)
+                    SchoolLessonHistoryView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
                 } label: {
-                    Text("Trajets")
+                    Text("Leçons")
                         .frame(minHeight: 44)
                 }
-                .accessibilityIdentifier("profile-open-trips")
+                .accessibilityIdentifier("profile-open-lessons")
                 if let person = workspace.person, let membership = workspace.membership,
                    membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") {
                     Button {
@@ -82,7 +80,7 @@ struct SchoolProfileTabView: View {
                     }
                     .accessibilityIdentifier("profile-planning-settings")
                 }
-            } header: { Text("Leçons").drivyFormSectionHeader() }
+            }
             .drivyFormRows()
         }
         if let account {

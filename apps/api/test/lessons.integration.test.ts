@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {afterAll,beforeAll,describe,expect,it} from 'vitest';
 import type {Pool} from 'pg';
 import {expectContract,freshDatabase,harness,prepareCommercial,prepareSchool,lessonBody,slot,id,type Call} from './support/harness.js';
+import {captureHarness,type CaptureHarness} from './support/capture-harness.js';
 
 let pool:Pool,call:Call,app:Awaited<ReturnType<typeof harness>>['app'],school:Awaited<ReturnType<typeof prepareSchool>>;
 beforeAll(async()=>{pool=await freshDatabase();({call,app}=await harness(pool));school=await prepareSchool(pool);});
@@ -141,6 +142,46 @@ describe('leçons (AP39–AP43)',()=>{
  });
 });
 
+describe('historique des leçons (extension order)',()=>{
+ type Item={id:string;plannedStart:string};
+ const ids=(response:{json:()=>any})=>(response.json().data.items as Item[]).map(item=>item.id);
+ it('deux pages en ordre décroissant, exactement l’inverse de l’ordre croissant, sans doublon ni trou',async()=>{
+  const asc=await call('GET','/lessons?limit=100');expect(asc.statusCode,asc.body).toBe(200);
+  const expected=ids(asc);expect(expected.length).toBeGreaterThanOrEqual(3);
+  // Sans paramètre, l'ordre reste croissant : les clients existants ne changent pas.
+  expect(ids(await call('GET','/lessons?limit=100&order=asc'))).toEqual(expected);
+  const first=await call('GET','/lessons?limit=2&order=desc');expect(first.statusCode,first.body).toBe(200);
+  await expectContract('LessonPageEnvelope',first.json());
+  expect(ids(first)).toEqual([...expected].reverse().slice(0,2));expect(first.json().data.nextCursor).toBeTypeOf('string');
+  const second=await call('GET',`/lessons?limit=2&order=desc&cursor=${encodeURIComponent(first.json().data.nextCursor)}`);expect(second.statusCode,second.body).toBe(200);
+  expect(ids(second)).toEqual([...expected].reverse().slice(2,4));
+  // Jusqu'au bout : deux leçons au même début (l'annulée et sa remplaçante) sont départagées par l'identifiant.
+  const seen=[...ids(first),...ids(second)];let cursor:string|null=second.json().data.nextCursor;
+  for(let guard=0;cursor&&guard<50;guard++){
+   const page=await call('GET',`/lessons?limit=2&order=desc&cursor=${encodeURIComponent(cursor)}`);expect(page.statusCode,page.body).toBe(200);
+   seen.push(...ids(page));cursor=page.json().data.nextCursor;
+  }
+  expect(cursor).toBeNull();expect(seen).toEqual([...expected].reverse());
+  const starts=(await call('GET','/lessons?limit=100&order=desc')).json().data.items.map((item:Item)=>Date.parse(item.plannedStart));
+  expect(starts).toEqual([...starts].sort((a,b)=>b-a));
+  // `to` borne l'historique : rien ne commence à cette date ou après.
+  const before=slot(3).plannedStart,bounded=await call('GET',`/lessons?order=desc&to=${encodeURIComponent(before)}`);expect(bounded.statusCode,bounded.body).toBe(200);
+  expect(bounded.json().data.items.length).toBeGreaterThanOrEqual(1);
+  for(const item of bounded.json().data.items as Item[])expect(Date.parse(item.plannedStart)).toBeLessThan(Date.parse(before));
+ });
+ it('un curseur est lié à son sens : croissant refusé en décroissant, et inversement',async()=>{
+  const asc=await call('GET','/lessons?limit=1'),desc=await call('GET','/lessons?limit=1&order=desc');
+  const ascCursor=encodeURIComponent(asc.json().data.nextCursor),descCursor=encodeURIComponent(desc.json().data.nextCursor);
+  const crossed=await call('GET',`/lessons?limit=1&order=desc&cursor=${ascCursor}`);expect(crossed.statusCode).toBe(400);expect(crossed.json().code).toBe('INVALID_CURSOR');
+  expect((await call('GET',`/lessons?limit=1&cursor=${descCursor}`)).json().code).toBe('INVALID_CURSOR');
+  expect((await call('GET',`/lessons?limit=1&order=asc&cursor=${descCursor}`)).json().code).toBe('INVALID_CURSOR');
+  // Dans son sens, chaque curseur reste valable, y compris quand `order=asc` est écrit en toutes lettres.
+  expect((await call('GET',`/lessons?limit=1&order=asc&cursor=${ascCursor}`)).statusCode).toBe(200);
+  expect((await call('GET',`/lessons?limit=1&order=desc&cursor=${descCursor}`)).statusCode).toBe(200);
+  for(const query of ['?order=DESC','?order=newest','?order=','?sort=desc'])expect((await call('GET',`/lessons${query}`)).statusCode,query).toBe(400);
+ });
+});
+
 describe('identifiants en majuscules (client iOS)',()=>{
  it('une leçon planifiée avec des UUID en majuscules est acceptée comme en minuscules',async()=>{
   const commercial=await prepareCommercial(call);
@@ -151,5 +192,35 @@ describe('identifiants en majuscules (client iOS)',()=>{
   // Le rejeu en minuscules est la même opération.
   expect((await call('POST','/lessons',body)).json().data).toEqual(created.json().data);
   expect((await call('GET',`/lessons/${created.json().data.id.toUpperCase()}`)).statusCode).toBe(200);
+ });
+});
+
+describe('captureSummary dans la liste des leçons, selon le lecteur',()=>{
+ // Base et recette de capture propres à ce bloc, placé en dernier : les blocs précédents ont terminé avec la leur.
+ let capturePool:Pool,h:CaptureHarness,trip:Awaited<ReturnType<CaptureHarness['startTrip']>>;
+ beforeAll(async()=>{
+  capturePool=await freshDatabase();h=await captureHarness(capturePool);
+  trip=await h.startTrip({instructorSubject:'demo-instructor',instructorMember:id.instructorMember,learnerSubject:'demo-alice',learnerId:id.aliceLearner,learnerPerson:id.alice,trainingId:id.aliceTraining});
+  await h.uploadStopFinalize(trip);
+ });
+ afterAll(async()=>{await h?.app.close();await capturePool?.end();});
+ const summary=async(subject:string)=>{
+  const page=await h.call('GET','/lessons?order=desc',undefined,undefined,subject);expect(page.statusCode,page.body).toBe(200);
+  return (page.json().data.items as {id:string;captureSummary:unknown}[]).find(item=>item.id===trip.lesson)?.captureSummary;
+ };
+ const none={hasCapture:false,syncState:null,publicationState:'NONE'},shared={hasCapture:true,syncState:'SYNCED',publicationState:'PRIVATE'};
+ it('l’élève ne reçoit le trajet qu’une fois la leçon réalisée, et plus du tout quand le moniteur le masque',async()=>{
+  // Leçon encore planifiée : le moniteur a son trajet, l'élève n'en reçoit aucune trace.
+  expect(await summary('demo-instructor')).toEqual(shared);expect(await summary('demo-alice')).toEqual(none);
+  await capturePool.query("UPDATE drivy.lesson SET status='COMPLETED',actual_start=now()-interval '2 minutes',actual_end=now()-interval '1 minute' WHERE id=$1",[trip.lesson]);
+  expect(await summary('demo-alice')).toEqual(shared);
+  // Trajet masqué : la politique de lecture retire la ligne à l'élève, la projection retombe sur l'absence de trajet.
+  await capturePool.query('UPDATE drivy.lesson SET capture_hidden=true WHERE id=$1',[trip.lesson]);
+  expect(await summary('demo-alice')).toEqual(none);
+  expect((await h.call('GET',`/lessons/${trip.lesson}`,undefined,undefined,'demo-alice')).json().data.captureSummary).toEqual(none);
+  // Le moniteur et l'administration ne perdent rien.
+  expect(await summary('demo-instructor')).toEqual(shared);expect(await summary('demo-admin')).toMatchObject({hasCapture:true});
+  await capturePool.query('UPDATE drivy.lesson SET capture_hidden=false WHERE id=$1',[trip.lesson]);
+  expect(await summary('demo-alice')).toEqual(shared);
  });
 });
