@@ -165,7 +165,7 @@ enum SchoolReportFlowRules {
     }
 
     /// État inhabituel des trajets de la leçon, un mot par état, sans répétition : « Partiel », « Envoi refusé ».
-    static func tripNotes(_ captures: [SchoolCaptureSession]) -> [String] {
+    @MainActor static func tripNotes(_ captures: [SchoolCaptureSession]) -> [String] {
         var notes: [String] = []
         for capture in captures {
             guard let title = SchoolTripsWorkspace.badge(capture)?.title, !notes.contains(title) else { continue }
