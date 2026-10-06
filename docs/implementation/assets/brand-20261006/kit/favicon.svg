@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-labelledby="t">
+  <title id="t">Drivy</title>
+  <rect id="tuile" width="32" height="32" rx="7" fill="#245BD6"/>
+  <path id="trace" fill="#FFFFFF" d="M20 7 A2 2 0 0 1 24 7 V25 A2 2 0 0 1 20 25 Z"/>
+  <path id="repere" fill="#FFFFFF" fill-rule="evenodd" d="M8 20 A7 7 0 1 0 22 20 A7 7 0 1 0 8 20 Z M11 20 A4 4 0 1 1 19 20 A4 4 0 1 1 11 20 Z"/>
+</svg>

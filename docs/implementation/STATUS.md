@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 6 octobre 2026 — passe de marque « La trace » (proposition, non codée)
+
+Trois territoires explorés, « La trace » retenu : [compte rendu](brand-pass-20261006.md), [Drivy Brand System](brand-system.md), [fichiers](assets/brand-20261006).
+
+- **Exécuté** : audit du code et des captures ; rendus et audits SVG du logo, de l'icône et des pictogrammes ; contrastes calculés ; onze maquettes avant/après capturées sous Windows (police de repli, carte schématique).
+- **Reste à qualifier** : validation du porteur ; toute l'implémentation Swift et web ; rendu MapKit atténué ; icône sur appareil (Liquid Glass, mode teinté) ; Dynamic Type et VoiceOver sur le rail et le parcours ; mouvement ; impression ; recherche d'antériorité de la marque.
+
 ## 5 et 6 octobre 2026 — dossier par permis, fiche et récapitulatif de leçon, bilan en étapes, Leçons du moniteur
 
 À la demande du porteur. Décisions : [passe-ui-20261005-soir.md](passe-ui-20261005-soir.md), conception : [conception-dossier-lecon-20261006.md](conception-dossier-lecon-20261006.md), reprise : [reprise-passe-ui-20261005-soir.md](reprise-passe-ui-20261005-soir.md).
