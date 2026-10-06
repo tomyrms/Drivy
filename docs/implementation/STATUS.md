@@ -1,5 +1,22 @@
 # État de la réalisation
 
+## 5 et 6 octobre 2026 — dossier par permis, fiche et récapitulatif de leçon, bilan en étapes, Leçons du moniteur
+
+À la demande du porteur. Décisions : [passe-ui-20261005-soir.md](passe-ui-20261005-soir.md), conception : [conception-dossier-lecon-20261006.md](conception-dossier-lecon-20261006.md), reprise : [reprise-passe-ui-20261005-soir.md](reprise-passe-ui-20261005-soir.md).
+
+- **Données fictives** : plus aucune mention « exemple » dans les noms, fermetures, conditions générales et adresses de l’école du homelab (`infra/deploy/provision-realistic-labels.sql`, sauvegarde vérifiée, répétition sur copie). E-mails et téléphones laissés non attribués. Photos de profil non faites : la base les interdit et aucun dépôt de documents n’existe.
+- **États de leçon** : un mot de texte dans la ligne, plus de pastille ; lignes de compte et de profil sans symbole de tête.
+- **Dossier** : sous l’identité, « Leçons | Progression » en place, un seul filtre par permis. Ligne de leçon avec « Bilan · Trajet » en mots. Progression : dernière leçon évaluée, décompte en mots, à travailler, en autonomie, pas encore vues.
+- **Leçon** : récapitulatif en lecture par défaut à toute largeur (bilan, compétences, trajet avec bouton lecture sur la carte, observations, objectifs prévus), deux colonnes sur iPad large. La rédaction du bilan ne s’ouvre qu’après « Terminer la leçon » ou sur demande : étapes Trajet → Compétences → Bilan sur iPhone, un envoi final, brouillon local chiffré. Le constat de fin de leçon ne publie plus les objectifs comme bilan.
+- **Profil** : « Leçons » remplace « Trajets » ; historique récent d’abord, par mois, recherche par élève, même fiche que partout ailleurs.
+- **API** : paramètre `order` sur la liste des leçons (extension hors contrat canonique, le contrat du dossier de conception n’est pas modifié).
+
+**Exécuté sur la CI.** Sur `0d42721` : **388 tests unitaires sur 388 et les parcours d’interface iPhone et iPad** ([run37422613310](https://github.com/tomyrms/Drivy/actions/runs/37422613310)) ; captures de dix écrans sur simulateur iPhone et iPad, en clair ([run37422615940](https://github.com/tomyrms/Drivy/actions/runs/37422615940)) : [dossier](assets/passe-ui-20261006/iPhone-dossier-multi.png), [leçon](assets/passe-ui-20261006/iPhone-lesson.png), [leçon iPad](assets/passe-ui-20261006/iPad-lesson.png), [leçon annulée](assets/passe-ui-20261006/iPhone-lesson-cancelled.png), [progression](assets/passe-ui-20261006/iPhone-progression-multi.png), [leçons du moniteur](assets/passe-ui-20261006/iPhone-lessons-history.png). Vérifications API et web réussies, dont les tests PostgreSQL du tri et du trajet masqué à l’élève. IPA compilée sur `5054914` ([run37422673391](https://github.com/tomyrms/Drivy/actions/runs/37422673391)), non téléchargée ; ce dernier commit (situation notée en Progression) n’a que la compilation.
+
+**Déployé.** Release `ef0ea21` sur le homelab le 6 octobre, après sauvegarde vérifiée (`/root/drivy_refonte-before-ef0ea216…-20261006T055442Z-4c5d61b6eca2.dump`), 22 migrations inchangées, services actifs. Elle inclut le nom affiché recomposé (`4daae5f`), accepté par le porteur le 6 octobre : écart assumé avec R77.
+
+**Non qualifié.** Les étapes de rédaction du bilan et l’écran deux colonnes de rédaction sur iPad n’ont jamais été capturés (les tests d’interface les traversent, sans image regardée). Aucun essai sur appareil : clavier, longs textes, rotation, reprise du brouillon après arrêt de l’app, VoiceOver, grand texte, mode sombre. Profil → Leçons n’a pas été vu avec un compte réel ni avec du volume ; sa recherche lit tout l’historique. Aucun trajet GPS dans le jeu fictif : carte et bouton lecture ne se voient que sur des leçons réellement enregistrées.
+
 ## 5 octobre 2026 — passe UX sobre : dossier, leçon, bilan, GPS, modification du dossier
 
 À la demande du porteur. Décisions : [ux-sobre-20261005.md](ux-sobre-20261005.md). Reprise : [reprise-ux-sobre-20261005.md](reprise-ux-sobre-20261005.md).

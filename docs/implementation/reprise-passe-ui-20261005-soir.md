@@ -61,8 +61,8 @@ Aucune compilation Swift locale : l'IPA se compile par le workflow « IPA d'essa
 
 - Points 9 à 12 (bilan et fin de leçon) : **faits**, commit `b960478`. Fiche de lecture pour une leçon terminée ; rédaction en étapes Trajet → Compétences → Bilan sur iPhone, deux colonnes sur iPad large ; brouillon local chiffré ; constat sans texte. Décision : `passe-ui-20261005-soir.md`.
 - Lots L, D, G : **committés** (`afee877`, `f296e27`, `117950c`). Fixtures multi-permis : `8e9b685`. Retouches issues des captures : `d038571`.
-- Points 13 à 17 (dossier Leçons / Progression à retravailler, vue récapitulative de leçon distincte du parcours de rédaction, « Leçons » à la place de « Trajets » dans le profil du moniteur, un seul détail de leçon quel que soit le point d'entrée) : **audit d'ensemble en cours**, lecture seule ; trois lots d'implémentation suivront (dossier + progression + ligne de leçon ; vue récapitulative ; profil → Leçons + API éventuelle).
-- En attente sur `d038571` : IPA iLoader, campagne native complète, captures iPhone + iPad.
+- Points 13 à 17 : **faits et committés** (`1203579`, `86a43fc`, `454bb7f`, `2345bb9`, correctifs `ef0ea21`, `0d42721`, `5054914`). Campagne native verte sur `0d42721`, API déployée (`ef0ea21`). Conception : `conception-dossier-lecon-20261006.md`.
+- **Il reste** : capturer les étapes de rédaction du bilan (écran de revue à ajouter), enrichir les fixtures de capture (« Bilan · Trajet », nom d’élève dans l’historique), essai sur appareil par le porteur, puis les restes listés dans `passe-ui-20261005-soir.md`.
 
 ## Journal
 

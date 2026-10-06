@@ -33,3 +33,19 @@ La leçon est déjà terminée quand le bilan s’ouvre et rien n’y est obliga
 - Symboles décoratifs restants hors périmètre : accueil guidé, invitations, rejoindre une école, profil.
 - 16 révisions de bilan du jeu de volume répètent deux fois la même phrase.
 - `DrivyDestructiveRow` exige un symbole ; `SchoolTripBadge.symbol` n’a plus d’usage ; `DrivyGuidedStepHeader` et `DrivyGuidedFact` sont sans appelant.
+
+## Suite du 6 octobre : dossier, récapitulatif, Leçons du moniteur
+
+Conception détaillée : [conception-dossier-lecon-20261006.md](conception-dossier-lecon-20261006.md).
+
+- **Dossier** : contrôle segmenté « Leçons | Progression » sous l’identité, contenu en place, un seul filtre par permis (toujours un menu). Le segmenté de permis à deux permis est abandonné pour ne pas empiler deux contrôles segmentés.
+- **Ligne de leçon partagée** : « Bilan · Trajet » en mots ; un bilan gardé « pour moi » n’est pas marqué ; le lieu quitte la ligne.
+- **Progression** : pas d’évolution ni de tendance, le serveur ne garde que le dernier niveau par compétence.
+- **Leçon** : lecture par défaut à toute largeur ; quatre portes vers la rédaction (fin de leçon, Reprendre, Rédiger, Modifier dans le menu), règle pure testée. Le trajet s’affiche dès qu’il existe, quel que soit le statut.
+- **Profil → Leçons** remplace Trajets ; les trajets à envoyer restent en tête de cette page. `SchoolTripsWorkspace` conservé pour ses règles.
+- **API** : `order=asc|desc` sur `GET /v1/schools/:id/lessons`, curseur lié au sens. Extension hors contrat canonique.
+- **Nom affiché recomposé** (`4daae5f`) : accepté par le porteur le 6 octobre, déployé avec la release `ef0ea21`.
+
+Bugs trouvés par les tests à leur première exécution : `lessonHistory` refusait une première page sans suite (l’historique d’un moniteur de moins de cent leçons ne se serait jamais affiché) ; isolation d’acteur de `tripNotes`.
+
+Restes ajoutés : étapes de rédaction jamais capturées ; fixtures de capture sans « Bilan · Trajet » ni nom d’élève dans l’historique ; administrateur non moniteur toujours sans bilan ni observations ; recherche de l’historique côté client.
