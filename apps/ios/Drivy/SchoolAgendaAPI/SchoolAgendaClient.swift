@@ -136,7 +136,8 @@ final class SchoolAgendaClient {
         if let instructorMembershipID { query.append(URLQueryItem(name: "instructorMembershipId", value: instructorMembershipID.uuidString.lowercased())) }
         if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
         let result: SchoolPage<SchoolLesson> = try await read(["v1", "schools", schoolID.uuidString, "lessons"], query: query)
-        guard result.nextCursor != cursor,
+        // Une suite qui renvoie son propre curseur tournerait en rond ; une dernière page n’en a pas.
+        guard result.nextCursor == nil || result.nextCursor != cursor,
               result.items.allSatisfy({ lesson in
                   valid(lesson, schoolID: schoolID) && (instructorMembershipID == nil || lesson.instructorMembershipId == instructorMembershipID)
                       && (lesson.startsAt.map { $0 < before } ?? false)

@@ -164,7 +164,8 @@ import XCTest
                     if lessonEvidence {
                         let observation = app.descendants(matching: .any).matching(NSPredicate(
                             format: "label CONTAINS %@", "Priorité à droite · regard tardif")).firstMatch
-                        let contextForm = app.collectionViews.firstMatch
+                        // Le récapitulatif d’une leçon terminée défile dans sa propre vue, plus dans un formulaire.
+                        let contextForm = app.descendants(matching: .any)["lesson-summary"]
                         guard requireVisual(contextForm.waitForExistence(timeout: 5),
                             "Formulaire des observations absent.", app: app, name: captureName) else { return }
                         for _ in 0..<10 {
