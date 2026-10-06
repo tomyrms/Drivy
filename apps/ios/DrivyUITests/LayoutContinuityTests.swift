@@ -13,8 +13,15 @@ import UIKit
         app.launchArguments = ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH"]
         app.launch()
         // La fiche s’ouvre en lecture ; la rédaction se pousse, et l’enregistrement est à sa dernière étape.
+        // « Modifier le bilan » vit dans le menu de la barre quand un bilan est déjà enregistré.
         let edit = app.buttons["lesson-report-edit"]
-        XCTAssertTrue(edit.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertTrue(app.descendants(matching: .any)["lesson-summary"].waitForExistence(timeout: 20), app.debugDescription)
+        if !edit.exists {
+            let more = app.descendants(matching: .any)["lesson-more-actions"]
+            XCTAssertTrue(more.waitForExistence(timeout: 10), app.debugDescription)
+            more.tap()
+        }
+        XCTAssertTrue(edit.waitForExistence(timeout: 10), app.debugDescription)
         edit.tap()
         let save = app.buttons["lesson-save-report"]
         let next = app.buttons["lesson-report-next"]

@@ -8,7 +8,7 @@ import XCTest
         "dossier", "progression", "home-tabs", "school-choice", "no-school",
         "profile-tab", "learner-home", "learner-progress", "start-now", "planning-settings",
         "agenda", "learners", "learner", "lesson", "lesson-planned",
-        "lesson-observations", "lesson-evidence", "lesson-permit", "invitation-code", "trips",
+        "lesson-observations", "lesson-evidence", "lesson-permit", "invitation-code", "lessons-history",
         "replay", "design-system", "skeletons", "gps-choice", "signal", "live-signal",
         "signal-status", "observations", "capture-preparation", "live", "live-waiting",
         "planning", "planning-details", "planning-confirmation", "invitations", "invitation-create",
@@ -77,7 +77,8 @@ import XCTest
                     case "lessons-multi", "lessons-two", "progression-multi": "training-permit-filter"
                     case "lesson-cancelled": "lesson-state"
                     case "account": "account-heading"
-                    case "profile-tab": "profile-open-trips"
+                    case "profile-tab": "profile-open-lessons"
+                    case "lessons-history": "lessons-history"
                     case "onboarding-staff": "onboarding-start"
                     case "home-tabs": "today-day-list"
                     case "live", "live-waiting": "capture-signal-observation"
@@ -94,13 +95,8 @@ import XCTest
                         let firstName = app.descendants(matching: .any)["learner-profile-first-name"]
                         guard requireVisual(firstName.waitForExistence(timeout: 30) && firstName.label.contains("Camille"),
                             "Le profil administratif de l’élève n’est pas chargé.", app: app, name: captureName) else { return }
-                        for identifier in ["learner-lessons-10000000-0000-4000-8000-000000000005",
-                                           "learner-progress-10000000-0000-4000-8000-000000000005"] {
-                            guard requireVisual(app.descendants(matching: .any)[identifier].exists,
-                                "Entrée du dossier absente : \(identifier).", app: app, name: captureName) else { return }
-                        }
-                        guard requireVisual(!app.segmentedControls.buttons["Leçons"].exists,
-                            "Les leçons remplacent encore le profil à la racine du dossier.", app: app, name: captureName) else { return }
+                        guard requireVisual(app.descendants(matching: .any)["dossier-section"].waitForExistence(timeout: 30),
+                            "Le choix Leçons / Progression du dossier est absent.", app: app, name: captureName) else { return }
                     }
                     if screen == "progression" {
                         guard requireVisual(app.descendants(matching: .any).matching(NSPredicate(
