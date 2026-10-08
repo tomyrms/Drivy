@@ -81,7 +81,7 @@ struct DrivyThreadItem<Content: View>: View {
                 if let anchor {
                     let marker = geometry[anchor]
                     let top = position == .first || position == .only ? marker.midY : 0
-                    let bottom = position == .last ? marker.midY : geometry.size.height
+                    let bottom = position == .last || position == .only ? marker.midY : geometry.size.height
                     Path { path in
                         path.move(to: CGPoint(x: marker.midX, y: top))
                         path.addLine(to: CGPoint(x: marker.midX, y: marker.midY))
@@ -91,7 +91,7 @@ struct DrivyThreadItem<Content: View>: View {
                         path.move(to: CGPoint(x: marker.midX, y: marker.midY))
                         path.addLine(to: CGPoint(x: marker.midX, y: bottom))
                     }
-                    .stroke(isPast && !isCurrent ? DrivyTheme.text : DrivyTheme.rail, lineWidth: 2)
+                    .stroke(isPast ? DrivyTheme.text : DrivyTheme.rail, lineWidth: 2)
                 }
             }
             .accessibilityHidden(true)
