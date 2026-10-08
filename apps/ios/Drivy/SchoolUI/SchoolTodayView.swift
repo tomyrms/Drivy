@@ -135,7 +135,7 @@ struct SchoolTodayView: View {
     @ViewBuilder private var map: some View {
         if location.permitted {
             Map(position: $camera, scope: mapScope) { UserAnnotation() }
-                .mapStyle(.standard(pointsOfInterest: .excludingAll))
+                .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
                 .mapControls { }
                 // Avant les insets du panneau : le contrôle suit la carte visible sans déplacer ses mentions.
                 .overlay(alignment: .bottomTrailing) {
@@ -300,14 +300,14 @@ struct SchoolTodayView: View {
             Divider().overlay(DrivyTheme.border)
             DisclosureGroup(isExpanded: $showsDay) {
                 VStack(spacing: 0) {
-                    ForEach(others) { lesson in
+                    ForEach(Array(others.enumerated()), id: \.element.id) { index, lesson in
                         Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
                             DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                                details: [lesson.meetingPoint], state: lesson.drivyState(now: now), showsChevron: false)
+                                details: [lesson.meetingPoint], state: lesson.drivyState(now: now), showsChevron: false,
+                                railPosition: .at(index, count: others.count))
                         }
                         .buttonStyle(DrivyRowButtonStyle())
                         .accessibilityHint("Ouvre la leçon")
-                        Divider().overlay(DrivyTheme.border)
                     }
                 }
             } label: {

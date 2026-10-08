@@ -1,11 +1,11 @@
 {
   "images": [
     {
-      "filename": "DrivyBrand.svg",
+      "filename": "DrivyBrandMarker.svg",
       "idiom": "universal"
     },
     {
-      "filename": "DrivyBrand-dark.svg",
+      "filename": "DrivyBrandMarker-dark.svg",
       "idiom": "universal",
       "appearances": [{ "appearance": "luminosity", "value": "dark" }]
     }

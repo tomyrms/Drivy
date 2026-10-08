@@ -131,6 +131,8 @@ struct DrivyLessonRow: View {
     var contents: DrivyLessonContents = []
     var showsChevron = true
     var isSecondary = false
+    /// Set only for a chronological day list; other lists keep the plain row.
+    var railPosition: DrivyThreadPosition? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var rowNote: DrivyRowNote? { note ?? state?.rowNote }
@@ -139,6 +141,20 @@ struct DrivyLessonRow: View {
     private var timeInk: Color { isSecondary || isClosed ? DrivyTheme.muted : DrivyTheme.text }
 
     var body: some View {
+        Group {
+            if let railPosition {
+                DrivyThreadItem(position: railPosition, isCurrent: state == .inProgress,
+                    isPast: state == .completed || state == .toFinish) { rowContent }
+            } else {
+                rowContent.padding(.vertical, DrivySpacing.m)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    private var rowContent: some View {
         Group {
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
@@ -165,10 +181,6 @@ struct DrivyLessonRow: View {
                 }
             }
         }
-        .padding(.vertical, DrivySpacing.m)
-        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
     }
 
     /// Same metrics as `DrivyTimeColumn`, with the closed-lesson ink and the struck times.
@@ -239,7 +251,7 @@ struct DrivyReportBody: View {
             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                 Text("Prochaine étape")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.accent)
+                    .foregroundStyle(DrivyTheme.text)
                 Text(nextStep)
                     .font(.body)
                     .foregroundStyle(DrivyTheme.text)
@@ -310,6 +322,7 @@ struct DrivyObservationSummary: View {
     let observation: SchoolObservation
     var competency: String? = nil
     var detail: String? = nil
+    var showsStatusSymbol = true
     private var status: SchoolObservationStatus? { SchoolLessonHubRules.status(of: observation) }
     private var color: Color {
         switch status { case .positive: DrivyTheme.success; case .attention: DrivyTheme.warning;
@@ -317,8 +330,10 @@ struct DrivyObservationSummary: View {
     }
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
-            Image(systemName: status?.symbol ?? (observation.isMarker ? "bookmark" : "text.bubble"))
-                .font(.caption.weight(.semibold)).foregroundStyle(color).frame(width: 16).accessibilityHidden(true)
+            if showsStatusSymbol {
+                Image(systemName: status?.symbol ?? (observation.isMarker ? "bookmark" : "text.bubble"))
+                    .font(.caption.weight(.semibold)).foregroundStyle(color).frame(width: 16).accessibilityHidden(true)
+            }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(observation.text).font(.subheadline.weight(.medium)).foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
@@ -335,20 +350,14 @@ struct DrivyObservationSummary: View {
     }
 }
 
-/// Trois points communs au bilan et à la progression ; zéro point rempli signifie aucune évaluation.
+/// Shared presentation in reports and progression. Adjacent text carries the accessible reading.
 struct DrivyCompetencyMeter: View {
     let level: String
     static func rank(_ level: String) -> Int {
-        switch level { case "DISCOVERING": 1; case "GUIDED": 2; case "INDEPENDENT": 3; default: 0 }
+        DrivyCompetencyTrack.rank(level)
     }
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(1...3, id: \.self) { step in
-                Circle().fill(step <= Self.rank(level) ? DrivyTheme.accent : DrivyTheme.border)
-                    .frame(width: 7, height: 7)
-            }
-        }
-        .accessibilityHidden(true)
+        DrivyCompetencyTrack(level: level).accessibilityHidden(true)
     }
 }
 

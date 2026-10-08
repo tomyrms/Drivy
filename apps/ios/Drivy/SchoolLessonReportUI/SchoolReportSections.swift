@@ -181,7 +181,9 @@ struct SchoolLessonTripMap: View {
         model.lessonObservations.compactMap { observation in
             guard let point = model.anchor(of: observation) else { return nil }
             return LessonTrackMap.Pin(id: observation.id, latitude: point.latitude, longitude: point.longitude,
-                color: SchoolReportObservationsSection.color(observation), isSelected: router.selectedObservation == observation.id)
+                color: SchoolReportObservationsSection.color(observation), isSelected: router.selectedObservation == observation.id,
+                symbol: SchoolLessonHubRules.status(of: observation)?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble"),
+                label: observation.text)
         }
     }
     var body: some View {
@@ -245,9 +247,16 @@ struct SchoolReportObservationsSection: View {
             if editable && model.lessonObservations.isEmpty && isCompleted {
                 Text("Aucune observation.").foregroundStyle(DrivyTheme.muted)
             }
-            ForEach(model.lessonObservations) { observation in
-                SchoolReportObservationRow(model: model, router: router, context: context, observation: observation,
-                    editable: editable && model.isAuthor && isCompleted)
+            ForEach(Array(model.lessonObservations.enumerated()), id: \.element.id) { index, observation in
+                DrivyThreadItem(position: .at(index, count: model.lessonObservations.count),
+                    isCurrent: router.selectedObservation == observation.id,
+                    markerColor: Self.color(observation),
+                    markerSymbol: SchoolLessonHubRules.status(of: observation)?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble")) {
+                    SchoolReportObservationRow(model: model, router: router, context: context, observation: observation,
+                        editable: editable && model.isAuthor && isCompleted)
+                }
+                .listRowInsets(EdgeInsets(top: 0, leading: DrivySpacing.l, bottom: 0, trailing: DrivySpacing.l))
+                .listRowSeparator(.hidden)
             }
             if editable && model.isAuthor {
                 Button(isCompleted ? "Ajouter une observation" : "Noter une observation") {
@@ -269,6 +278,7 @@ private struct SchoolReportObservationRow: View {
     let context: SchoolReportContext
     let observation: SchoolObservation
     let editable: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var competency: String? {
         guard let id = observation.competencyId else { return nil }
@@ -278,16 +288,18 @@ private struct SchoolReportObservationRow: View {
     private var isAnchored: Bool { model.anchor(of: observation) != nil }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.s))
+        layout {
             summary
-            Spacer(minLength: 0)
             if editable { actions }
         }
     }
 
     @ViewBuilder private var summary: some View {
         let content = DrivyObservationSummary(observation: observation, competency: competency,
-            detail: SchoolReportFlowRules.observationDetail(observation, zone: model.lesson?.timeZone))
+            detail: SchoolReportFlowRules.observationDetail(observation, zone: model.lesson?.timeZone), showsStatusSymbol: false)
         if isAnchored {
             // Une observation placée sur le trajet se retrouve sur la carte : son épingle grossit.
             content
@@ -397,6 +409,7 @@ private struct SchoolReportCompetencyRow: View {
     @Bindable var model: SchoolLessonReportWorkspace
     let competency: SchoolCatalogCompetency
     @Binding var expanded: Set<UUID>
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var chosen: SchoolReportObservation? { model.observations.first(where: { $0.id == competency.id }) }
     private var displayedLevel: String {
@@ -449,7 +462,10 @@ private struct SchoolReportCompetencyRow: View {
                 Button("Préciser la situation") { expanded.insert(competency.id) }
             }
         } label: {
-            HStack(spacing: DrivySpacing.s) {
+            let layout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
+                : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
+            layout {
                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                     Text(competency.displayLabel).font(.subheadline.weight(.medium)).foregroundStyle(DrivyTheme.text)
                     Text(levelLabel).font(.caption).foregroundStyle(DrivyTheme.muted)
@@ -458,8 +474,11 @@ private struct SchoolReportCompetencyRow: View {
                         Text(signalled).font(.caption).foregroundStyle(DrivyTheme.muted)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                DrivyCompetencyMeter(level: displayedLevel)
-                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(DrivyTheme.muted)
+                HStack(spacing: DrivySpacing.s) {
+                    DrivyCompetencyMeter(level: displayedLevel)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
+                }
             }
             .frame(minHeight: 44).contentShape(Rectangle())
         }
@@ -549,58 +568,5 @@ private struct LessonReplayGlyph: View {
             .frame(width: 48, height: 48)
             .drivyLegibleMapControl(in: Circle())
             .contentShape(Circle())
-    }
-}
-
-/// Carte d’un trajet enregistré, avec les observations ancrées. Aucune position n’est inventée :
-/// sans mesure, la section n’est pas affichée.
-struct LessonTrackMap: View {
-    struct Pin: Identifiable {
-        let id: UUID
-        let latitude: Double
-        let longitude: Double
-        let color: Color
-        /// Observation touchée dans la liste : son épingle grossit, sa couleur ne change pas.
-        var isSelected = false
-        var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
-    }
-    private struct Line: Identifiable {
-        let id: Int
-        let coordinates: [CLLocationCoordinate2D]
-    }
-    let segments: [[SchoolCapturePoint]]
-    let pins: [Pin]
-    var height: CGFloat = DrivyMapLayout.previewHeight
-
-    private var lines: [Line] {
-        segments.enumerated().map { index, points in
-            Line(id: index, coordinates: points.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) })
-        }
-    }
-
-    var body: some View {
-        Map(initialPosition: .automatic) {
-            ForEach(lines) { line in
-                if line.coordinates.count > 1 {
-                    MapPolyline(coordinates: line.coordinates).stroke(DrivyTheme.routeHalo, lineWidth: 8)
-                    MapPolyline(coordinates: line.coordinates).stroke(DrivyTheme.route, lineWidth: 4)
-                } else if let coordinate = line.coordinates.first {
-                    Annotation("Position enregistrée", coordinate: coordinate) {
-                        Circle().fill(DrivyTheme.route).frame(width: 8, height: 8)
-                    }.annotationTitles(.hidden)
-                }
-            }
-            ForEach(pins) { pin in
-                Annotation("", coordinate: pin.coordinate) {
-                    Circle().fill(pin.color).frame(width: pin.isSelected ? 24 : 16, height: pin.isSelected ? 24 : 16)
-                        .overlay(Circle().stroke(DrivyTheme.routeHalo, lineWidth: pin.isSelected ? 3 : 2))
-                        .accessibilityHidden(true)
-                }
-                .annotationTitles(.hidden)
-            }
-        }
-        .mapStyle(.standard(pointsOfInterest: .excludingAll))
-        .frame(height: height)
-        .accessibilityLabel("Trajet de la leçon")
     }
 }

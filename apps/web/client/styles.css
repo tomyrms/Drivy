@@ -27,9 +27,9 @@
   --surface-detail: #fafbfe;
   --text: #202936;
   --muted: #596579;
-  --accent: #285cc4;
-  --accent-pressed: #1c479d;
-  --accent-soft: #eef3fd;
+  --accent: #245bd6;
+  --accent-pressed: #1947ad;
+  --accent-soft: #eaf0fe;
   --on-accent: #fff;
   --success: #17633d;
   --success-surface: #e9f5ee;
@@ -80,9 +80,9 @@
     --surface-detail: #202934;
     --text: #eef2f8;
     --muted: #afbbcd;
-    --accent: #9abeff;
-    --accent-pressed: #b6cfff;
-    --accent-soft: #283a55;
+    --accent: #91b5ff;
+    --accent-pressed: #b4ccff;
+    --accent-soft: #233859;
     --on-accent: #132a50;
     --success: #98dbb4;
     --success-surface: #18372a;
@@ -144,9 +144,14 @@ p, h1, h2, h3, dd, dt, a, span, strong { overflow-wrap: anywhere; }
 }
 .brand-symbol {
   inline-size: 2.25rem; block-size: 2.25rem; display: grid; place-items: center; flex: none;
-  border-radius: .625rem; background: var(--text); color: var(--surface);
+  color: var(--accent);
 }
-.brand-symbol svg { inline-size: 1.875rem; block-size: 1.875rem; fill: currentColor; }
+.brand-symbol svg { inline-size: 100%; block-size: 100%; fill: currentColor; }
+.brand-symbol-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  .brand-symbol-light { display: none; }
+  .brand-symbol-dark { display: initial; }
+}
 .site-footer {
   display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-xxs) var(--space-m);
   padding-top: var(--space-l); padding-bottom: max(var(--space-xl), env(safe-area-inset-bottom));
@@ -335,7 +340,7 @@ h3 { font: var(--type-headline); }
   a { text-decoration-thickness: 2px; }
 }
 @media (forced-colors: active) {
-  .symbol.tile, .brand-symbol, .panel, .notice, .button, .badge, .confirm-card { border: 1px solid CanvasText; }
+  .symbol.tile, .panel, .notice, .button, .badge, .confirm-card { border: 1px solid CanvasText; }
   .brand-symbol { color: CanvasText; }
   .button:disabled { color: GrayText; border-color: GrayText; }
   :focus-visible { outline-color: Highlight; }
@@ -360,7 +365,6 @@ select, textarea { font: inherit; color: inherit; }
 }
 .console-bar .brand { font: 700 1.25rem / 1.2 var(--font); letter-spacing: -.035em; }
 .console-bar .brand-symbol { inline-size: 2rem; block-size: 2rem; }
-.console-bar .brand-symbol svg { inline-size: 1.625rem; block-size: 1.625rem; }
 .brand-context { color: var(--muted); font-weight: 600; padding-left: var(--space-xs); border-left: 1px solid var(--border); }
 .school-name { font: var(--type-headline); min-width: 0; }
 .school-switch select, .console-shell select, .console-shell input:not([type="checkbox"]), .console-shell textarea {

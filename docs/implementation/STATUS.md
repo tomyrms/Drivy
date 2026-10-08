@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 9 octobre 2026 — intégration de La trace
+
+Le chantier de marque reprend à la demande du porteur. [Décisions et périmètre](brand-integration-20261009.md).
+
+- **Implémenté** : primitives ligne/repère, parcours des compétences, fils de l’agenda, de la progression et des observations ; cartes atténuées, bornes et lacunes mesurées ; symbole de connexion animé, icônes d’application, marque/cobalt/favicons web.
+- **Vérification en cours** : compilation Release et simulateur, tests natifs et serveur/web, captures des vrais écrans iPhone/iPad. Ne pas confondre le code écrit avec la qualification Apple avant le retour des workflows.
+- **Différé** : vignettes de trajet dans les listes (aucune géométrie dans leur contrat), déploiement homelab, validation physique et recherche de marque. Aucune donnée ni règle d’accès modifiée.
+
 ## 6 octobre 2026 — passe de marque « La trace » (proposition, non codée)
 
 Trois territoires explorés, « La trace » retenu : [compte rendu](brand-pass-20261006.md), [Drivy Brand System](brand-system.md), [fichiers](assets/brand-20261006).

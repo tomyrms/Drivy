@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: Drivy · Web et Apple
-description: Deux directions par surface. Web bureau sobre depuis le 30 septembre 2026 ; Apple Cartographie native conservée. Les tokens structurés de cet en-tête concernent Apple uniquement ; les tokens web figurent dans la section Web.
+description: La trace prolonge Cartographie native côté Apple et unifie la marque du web Bureau. Les tokens structurés de cet en-tête concernent Apple uniquement ; les tokens web figurent dans la section Web.
 colors:
   canvas: "#F7F8FA"
   surface: "#FFFFFF"
@@ -20,6 +20,7 @@ colors:
   danger-surface: "#FDECEF"
   border: "#D9E0E9"
   control-border: "#78869A"
+  rail: "#C3CDD9"
   disabled-text: "#5D6A7C"
   disabled-surface: "#E8EDF3"
   route: "#245BD6"
@@ -95,7 +96,7 @@ components:
 
 # Drivy · Web et Apple
 
-La refonte de direction artistique du 30 septembre 2026 concerne **uniquement le web**, y compris son rendu sur téléphone et tablette. L’identité native iPhone/iPad est conservée. Les ajustements fonctionnels ciblés de l’app (carte, bilan, compétences) ne donnent pas mandat pour changer son thème.
+La direction web Bureau du 30 septembre est conservée. À la demande du porteur le 9 octobre, la proposition **La trace** du 6 octobre est intégrée : ligne et repère dans les parcours Apple, même symbole et même cobalt côté web. Les structures de navigation, surfaces Bureau et règles métier restent celles de chaque surface. Référence : [Brand System](docs/implementation/brand-system.md) et [intégration](docs/implementation/brand-integration-20261009.md).
 
 Le dossier `Drivy_Conception_v3_17_2026-09-20` reste une livraison conservée. La première passe est consignée dans [web-direction-20260930.md](docs/implementation/web-direction-20260930.md), puis remplacée par [l’architecture des parcours web](docs/implementation/web-architecture-20260930.md) et [la passe esthétique encre et papier](docs/implementation/web-craft-20260930.md). La référence native détaillée reste ci-dessous et dans [la grille iOS](docs/implementation/DESIGN.md).
 
@@ -129,10 +130,10 @@ Source d’exécution : `apps/web/client/styles.css`. Les hexadécimaux sont nom
 | surface-detail | `#FAFBFE` | `#202934` |
 | text | `#202936` | `#EEF2F8` |
 | muted | `#596579` | `#AFBBCD` |
-| accent | `#285CC4` | `#9ABEFF` |
-| accent-pressed | `#1C479D` | `#B6CFFF` |
+| accent | `#245BD6` | `#91B5FF` |
+| accent-pressed | `#1947AD` | `#B4CCFF` |
 | on-accent | `#FFFFFF` | `#132A50` |
-| accent-soft | `#EEF3FD` | `#283A55` |
+| accent-soft | `#EAF0FE` | `#233859` |
 | border | `#DFE4EC` | `#344050` |
 | control-border | `#7E899B` | `#8491A5` |
 
@@ -154,7 +155,7 @@ Contrastes calculés depuis les tokens : texte sur surface 14,67:1 clair / 14,08
 
 **Portée du reste de ce document : client natif Apple.** Les valeurs structurées de l’en-tête et les anciennes correspondances iOS/web ci-dessous décrivent le système natif conservé et l’harmonisation historique du 25 septembre ; elles ne prescrivent plus le thème web. Source native : dossier de conception et `apps/ios/Drivy/UI/DrivyTheme.swift`. Ne pas modifier les tokens du dossier livré pour implémenter une décision récente.
 
-**Statut natif.** Direction A validée, tokens 3.8 conservés. Durées, dimensions de panneaux et comportement physique restent soumis à qualification. Le petit signe de trajet n’est pas un logo approuvé.
+**Statut natif.** Cartographie native est prolongée par La trace : un rail, des repères annelés et le symbole du kit du 6 octobre. Un token `rail` est ajouté aux tokens 3.8 ; il est décoratif et ne porte jamais seul une information. Durées, dimensions de panneaux et comportement physique restent soumis à qualification sur appareil.
 
 ## Overview
 
