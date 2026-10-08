@@ -63,6 +63,7 @@ struct DrivyThreadItem<Content: View>: View {
     var isPast = true
     var markerColor: Color? = nil
     var markerSymbol: String? = nil
+    var minimumHeight: CGFloat = 0
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -74,6 +75,7 @@ struct DrivyThreadItem<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, DrivySpacing.s)
+        .frame(minHeight: minimumHeight, alignment: .leading)
         .backgroundPreferenceValue(DrivyMarkerAnchorKey.self) { anchor in
             GeometryReader { geometry in
                 if let anchor {

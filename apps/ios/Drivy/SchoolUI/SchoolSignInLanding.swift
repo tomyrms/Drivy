@@ -59,7 +59,7 @@ struct SchoolSignInLanding: View {
         }
     }
 
-    /// The same mark on the Home Screen and at sign-in.
+    /// Transparent symbol at sign-in; the Home Screen has its own full-bleed composition.
     private func hero(height: CGFloat) -> some View {
         DrivyBrandMark()
             .frame(width: height, height: height)

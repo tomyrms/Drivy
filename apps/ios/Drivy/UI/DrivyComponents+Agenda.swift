@@ -144,7 +144,7 @@ struct DrivyLessonRow: View {
         Group {
             if let railPosition {
                 DrivyThreadItem(position: railPosition, isCurrent: state == .inProgress,
-                    isPast: state == .completed || state == .toFinish) { rowContent }
+                    isPast: state == .completed || state == .toFinish, minimumHeight: 64) { rowContent }
             } else {
                 rowContent.padding(.vertical, DrivySpacing.m)
             }
@@ -152,6 +152,7 @@ struct DrivyLessonRow: View {
         .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+        .accessibilityValue(railPosition == nil || rowNote != nil ? "" : state?.title ?? "")
     }
 
     private var rowContent: some View {
