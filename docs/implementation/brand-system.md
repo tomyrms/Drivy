@@ -1,6 +1,6 @@
 # Drivy Brand System — « La trace »
 
-Version 1 · 6 octobre 2026 · statut : **proposition à valider par le porteur**. Rien de ce document n'est encore codé dans l'app ; les écrans « après » sont des maquettes. Démarche, audit et directions écartées : [passe de marque du 6 octobre](brand-pass-20261006.md). Fichiers : [assets/brand-20261006](assets/brand-20261006).
+Version 1.1 · 9 octobre 2026 · **intégration engagée à la demande du porteur**. La proposition du 6 octobre est maintenant implémentée sur les parcours décrits dans [le suivi d’intégration](brand-integration-20261009.md) ; les images de ce document restent les maquettes de conception. Les résultats de qualification figurent dans [STATUS](STATUS.md). Démarche, audit et directions écartées : [passe de marque du 6 octobre](brand-pass-20261006.md). Fichiers : [assets/brand-20261006](assets/brand-20261006).
 
 Ce document complète [DESIGN.md](../../DESIGN.md) : il ne remplace ni les tokens natifs 3.8 ni la direction web « Bureau », il dit ce qui rend Drivy reconnaissable et comment le rester.
 
@@ -60,7 +60,7 @@ La trace traverse la tuile de haut en bas à fond perdu, décalée à droite : e
 - **Calques** pour Icon Composer (fond, trace, repère) : [app-icon-layers.md](assets/brand-20261006/kit/app-icon-layers.md).
 - **Favicon web** : coupe petite taille sur tuile cobalt, SVG et PNG 32, 180, 192, 512.
 - **Limites** : masque iOS approché (rayon 22,37 %) ; à 29 px l'icône se lit anneau et bande plus que « d » ; Liquid Glass et le mode teinté ne sont pas vus sur appareil.
-- **Avant d'intégrer** : retirer `scripts/generate-app-icon.ps1`, qui écraserait l'icône.
+- **Reproduction** : `scripts/generate-app-icon.ps1` synchronise désormais les trois PNG du kit versionné et leur catalogue. L’ancien dessin procédural ne peut plus écraser l’icône.
 
 ## 6. Couleur
 
@@ -137,6 +137,8 @@ SF Pro système sur iPhone et iPad, Source Sans 3 sur le web : inchangés. La pe
 | pictogramme « poser un repère » | bouton Signaler | `text.bubble.fill` |
 
 Chaque composant porte un libellé accessible complet (« Priorités, avec accompagnement, niveau 2 sur 3 ») : la position seule n'est jamais l'information.
+
+Dans le code, `DrivyThreadItem` porte les fils de l’agenda, de la progression et des observations ; `DrivyLessonRow` le compose pour les horaires. `DrivyCompetencyMeter` reste un adaptateur vers `DrivyCompetencyTrack` lorsque le texte adjacent fournit déjà la lecture accessible. Les marqueurs cartographiques utilisent `SchoolMapObservationMarker` et `SchoolMapEndpointMarker`. `DrivyTraceThumbnail` attend le contrat de géométrie autorisée des listes ; aucune silhouette n’est inventée.
 
 ## 12. Illustration
 

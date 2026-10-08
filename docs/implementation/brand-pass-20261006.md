@@ -1,5 +1,7 @@
 # Passe de marque et direction artistique — 6 octobre 2026
 
+Compte rendu historique de la proposition. La [passe d’intégration du 9 octobre](brand-integration-20261009.md) décrit sa mise en œuvre et les corrections ; voir [STATUS](STATUS.md) pour les vérifications actuelles.
+
 Demande du porteur : donner à Drivy une identité reconnaissable dans le produit, pas seulement un logo. Méthode : skills `brand-identity` et `logo-design` lus avec leurs références et employés comme méthode (un mécanisme par direction, un seul élément fort, logo dessiné en noir d'abord, rendus regardés à 16 et 32 px, audit SVG). Travail réparti entre agents : trois pour l'audit, trois pour les territoires, trois pour la production. Résultat formalisé dans le [Drivy Brand System](brand-system.md).
 
 **Statut : proposition.** Aucun fichier de l'app n'est modifié. Les écrans « après » sont des maquettes HTML capturées sous Windows, donc en Segoe UI et non en SF Pro, sur une carte schématique. Rien n'a été vu tourner sur appareil.

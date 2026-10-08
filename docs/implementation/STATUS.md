@@ -5,7 +5,9 @@
 Le chantier de marque reprend à la demande du porteur. [Décisions et périmètre](brand-integration-20261009.md).
 
 - **Implémenté** : primitives ligne/repère, parcours des compétences, fils de l’agenda, de la progression et des observations ; cartes atténuées, bornes et lacunes mesurées ; symbole de connexion animé, icônes d’application, marque/cobalt/favicons web.
-- **Vérification en cours** : compilation Release et simulateur, tests natifs et serveur/web, captures des vrais écrans iPhone/iPad. Ne pas confondre le code écrit avec la qualification Apple avant le retour des workflows.
+- **Vérifié** : 238 tests API/PostgreSQL et 104 tests web, types/builds et intégrité documentaire réussis sur `bb75ae5` ([CI](https://github.com/tomyrms/Drivy/actions/runs/37858824079)) ; 52 couples de contraste web conformes aux seuils mesurés. Tests natifs et parcours iPhone/iPad réussis sur `aecdac1` ([campagne](https://github.com/tomyrms/Drivy/actions/runs/37857755974)). Les deux corrections graphiques ultérieures de `bb75ae5` ont été compilées et capturées, sans nouvelle campagne complète.
+- **Vu** : 56 captures des écrans natifs sur iPhone 17 Pro et iPad Pro 13 pouces M5, clair/sombre, 28 en grands caractères sur `aecdac1` et 28 à taille normale sur `bb75ae5`. Toutes ouvertes pour inspection, [preuve et limites](proofs/brand-native-visual-20261009.json), [six aperçus](assets/brand-integration-20261009). Quatre vues web inspectées. Contenu hors viewport, interactions et détails du replay synthétique non qualifiés : voir le [suivi](brand-integration-20261009.md#limites-des-captures).
+- **Livré** : IPA 0.7.0 **build 120**, source `bb75ae5`, [compilation Release réussie](https://github.com/tomyrms/Drivy/actions/runs/37858824190), téléchargée et SHA-256 vérifié ; paquet non signé pour iLoader.
 - **Différé** : vignettes de trajet dans les listes (aucune géométrie dans leur contrat), déploiement homelab, validation physique et recherche de marque. Aucune donnée ni règle d’accès modifiée.
 
 ## 6 octobre 2026 — passe de marque « La trace » (proposition, non codée)
