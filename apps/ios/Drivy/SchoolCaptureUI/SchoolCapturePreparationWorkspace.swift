@@ -54,6 +54,7 @@ struct SchoolCaptureStartReview: Identifiable {
     @ObservationIgnored private let onCaptureAuthorized: SchoolCaptureStartHandler?
     @ObservationIgnored private let onRefusalConfirmed: (@MainActor (UUID, UUID?) -> Void)?
     @ObservationIgnored private let canUseDiagnostic: @MainActor () -> Bool
+    @ObservationIgnored private let makeLocationSource: @MainActor () -> any SchoolCaptureLocationProviding
     @ObservationIgnored private var startTransfer: SchoolCaptureTransferCoordinator?
     @ObservationIgnored private var source: (any SchoolCaptureLocationProviding)?
     @ObservationIgnored private var sourceTransferred = false
@@ -69,7 +70,8 @@ struct SchoolCaptureStartReview: Identifiable {
          journalProvider: @escaping @MainActor () async throws -> SQLCipherSchoolCaptureStore = { try await SQLCipherSchoolCaptureStore.openDefault() },
          onCaptureAuthorized: SchoolCaptureStartHandler? = nil,
          onRefusalConfirmed: (@MainActor (UUID, UUID?) -> Void)? = nil,
-         canUseDiagnostic: @escaping @MainActor () -> Bool = { true }) {
+         canUseDiagnostic: @escaping @MainActor () -> Bool = { true },
+         makeLocationSource: @escaping @MainActor () -> any SchoolCaptureLocationProviding = { SchoolCaptureLocationSource() }) {
         self.scope = scope
         self.lessonID = lessonID
         self.client = client
@@ -80,6 +82,7 @@ struct SchoolCaptureStartReview: Identifiable {
         self.onCaptureAuthorized = onCaptureAuthorized
         self.onRefusalConfirmed = onRefusalConfirmed
         self.canUseDiagnostic = canUseDiagnostic
+        self.makeLocationSource = makeLocationSource
     }
 
     var pendingAssessments: [SchoolCaptureQueuedMutation] { pending.filter { $0.mutation.kind == .assessDevice } }
@@ -123,6 +126,10 @@ struct SchoolCaptureStartReview: Identifiable {
     /// Invalidate that continuation before closing the source; admitted receipts may
     /// still be saved under their original scope, but cannot restart a diagnostic.
     func suspend() {
+        // L’adoption met le trajet à l’écran et retire cette feuille avant sa dernière lecture des droits.
+        // La source appartient déjà au contrôleur : fermer la feuille ne doit plus annuler son démarrage.
+        // Un vrai changement de portée passe toujours par invalidate() et le contrôleur de séance.
+        guard !sourceTransferred else { return }
         generation = UUID()
         lifecycle = UUID()
         beginRun?.task.cancel()
@@ -628,7 +635,7 @@ struct SchoolCaptureStartReview: Identifiable {
 
     private func diagnosticSource() -> any SchoolCaptureLocationProviding {
         if let source { return source }
-        let value = SchoolCaptureLocationSource()
+        let value = makeLocationSource()
         value.updateScope(scope)
         value.onEvent = { [weak self] event in
             guard let self, !self.invalidated else { return }

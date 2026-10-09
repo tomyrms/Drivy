@@ -4,6 +4,60 @@ import Testing
 @testable import Drivy
 
 @MainActor struct SchoolCaptureLifecycleTests {
+    @Test func closingPreparationDuringTransferredAdoptionKeepsTheFinalRightsCheck() async throws {
+        let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
+        let model = fixture.preparation(holdAdoption: true)
+        let starting = Task { await model.begin() }
+        await fixture.waitForScopeRead()
+        #expect(fixture.controller.captureID == fixture.capture.id && fixture.controller.state == .preparing)
+        #expect(!fixture.source.isRunning)
+        // Aujourd’hui remplace la préparation par le trajet pendant le dernier GET /me du contrôleur.
+        model.suspend()
+        await fixture.server.releaseScopeReads()
+        #expect(await starting.value)
+        #expect(model.captureStarted && fixture.controller.isCollecting && fixture.source.isRunning && fixture.source.startCount == 1)
+        #expect(await fixture.controller.stopAndSynchronize())
+        await fixture.waitUntilSettled()
+    }
+
+    @Test func closingPreparationBeforeOwnershipTransferStillCancelsTheStart() async throws {
+        let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
+        let model = fixture.preparation()
+        await fixture.server.holdScopeReads()
+        let starting = Task { await model.begin() }
+        await fixture.waitForScopeRead()
+        model.suspend()
+        await fixture.server.releaseScopeReads()
+        #expect(!(await starting.value))
+        #expect(!fixture.source.isRunning && fixture.source.startCount == 0 && fixture.controller.captureID == nil && !model.captureStarted)
+        #expect(!(await fixture.server.requests()).contains { $0.httpMethod == "POST" && $0.url?.lastPathComponent == "captures" })
+    }
+
+    @Test func changingScopeDuringTransferredAdoptionStillStopsTheSource() async throws {
+        let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
+        let model = fixture.preparation(holdAdoption: true)
+        let starting = Task { await model.begin() }
+        await fixture.waitForScopeRead()
+        model.invalidate()
+        fixture.controller.setScope(nil)
+        await fixture.server.releaseScopeReads()
+        #expect(!(await starting.value))
+        #expect(!fixture.source.isRunning && fixture.source.startCount == 0 && fixture.controller.captureID == nil && !model.captureStarted)
+    }
+
+    @Test func aRemoteRightsRefusalAfterPreparationClosesCannotStartGPS() async throws {
+        let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
+        let model = fixture.preparation(holdAdoption: true)
+        let starting = Task { await model.begin() }
+        await fixture.waitForScopeRead()
+        model.suspend()
+        await fixture.server.releaseScopeReads(refused: true)
+        #expect(!(await starting.value))
+        #expect(!fixture.source.isRunning && fixture.source.startCount == 0 && fixture.controller.captureID == nil && !model.captureStarted)
+        let stored = try await fixture.store.storedSession(captureID: fixture.capture.id, scope: fixture.scope)
+        #expect(stored.state == .stopped && stored.manifest?.isEmpty == true)
+    }
+
     @Test func slowFirstFixDoesNotBecomeASignalBreak() throws {
         let policy = try SchoolCaptureLocationPolicy()
         #expect(!policy.requiresNewSegment(previousElapsedMs: nil, nextElapsedMs: 90_000))
@@ -305,7 +359,7 @@ import Testing
     let source: CaptureLifecycleSource
     let controller: SchoolCaptureSessionController
 
-    static func make() async throws -> Self {
+    static func make(startImmediately: Bool = true) async throws -> Self {
         let scope = ConfigurationFixture.scope(), device = UUID(), operation = UUID()
         let time = Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970) - 1)
         let stamp = SchoolCaptureLocationTime.timestamp
@@ -338,20 +392,40 @@ import Testing
             scope: scope, lessonID: capture.lessonId, deviceID: device, assessmentID: capture.deviceAssessmentId, requestStartedAt: received)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("capture-lifecycle-\(UUID()).sqlite")
         let store = try SQLCipherSchoolCaptureStore(url: url, key: Data(repeating: 0x3D, count: 32), protectFiles: false, installationID: device)
-        let command = try SchoolCapturePendingMutation.make(id: operation, scope: scope, kind: .startCapture,
-            targetID: capture.lessonId, expectedVersion: 1, body: SchoolStartCaptureBody(operationId: operation, deviceId: device,
-                choiceId: capture.choiceId, choiceVersion: 1, noticeVersionId: UUID(), explicitStartConfirmed: true, deviceAssessmentId: capture.deviceAssessmentId))
-        try await store.stage(command)
-        _ = try await store.markAttempted(id: operation, scope: scope)
-        let session = try await store.acceptAuthorization(operationID: operation, authorization: authorization, lease: lease, scope: scope, deviceID: device)
-        let server = CaptureLifecycleServer(scope: scope, capture: capture)
+        let server = CaptureLifecycleServer(scope: scope, capture: capture, authorization: authorization, keys: keys)
         let client = SchoolCaptureClient(baseURL: URL(string: scope.apiBaseURL)!, tokenSource: HubToken(), transport: server)
         let transfer = SchoolCaptureTransferCoordinator(scope: scope, client: client, store: store, stopCollection: { _ in })
         let controller = SchoolCaptureSessionController(store: store), source = CaptureLifecycleSource()
         controller.setScope(scope)
-        try await controller.adoptAndStart(transfer: transfer, source: source, session: session, lease: lease,
-            authorization: authorization, receivedAt: received)
+        if startImmediately {
+            let command = try SchoolCapturePendingMutation.make(id: operation, scope: scope, kind: .startCapture,
+                targetID: capture.lessonId, expectedVersion: 1, body: SchoolStartCaptureBody(operationId: operation, deviceId: device,
+                    choiceId: capture.choiceId, choiceVersion: 1, noticeVersionId: UUID(), explicitStartConfirmed: true, deviceAssessmentId: capture.deviceAssessmentId))
+            try await store.stage(command)
+            _ = try await store.markAttempted(id: operation, scope: scope)
+            let session = try await store.acceptAuthorization(operationID: operation, authorization: authorization, lease: lease, scope: scope, deviceID: device)
+            try await controller.adoptAndStart(transfer: transfer, source: source, session: session, lease: lease,
+                authorization: authorization, receivedAt: received)
+        }
         return Self(scope: scope, capture: capture, store: store, server: server, source: source, controller: controller)
+    }
+
+    func preparation(holdAdoption: Bool = false) -> SchoolCapturePreparationWorkspace {
+        let agenda = SchoolAgendaClient(baseURL: URL(string: scope.apiBaseURL)!, tokenSource: HubToken(), transport: server)
+        return SchoolCapturePreparationWorkspace(scope: scope, lessonID: capture.lessonId, client: agenda.captureClient,
+            reader: agenda.reader, agenda: agenda, store: store, onCaptureAuthorized: { transfer, source, session, lease, authorization, received in
+                if holdAdoption { await server.holdScopeReads() }
+                try await controller.adoptAndStart(transfer: transfer, source: source, session: session, lease: lease,
+                    authorization: authorization, receivedAt: received)
+            }, onRefusalConfirmed: { _, _ in }, canUseDiagnostic: { controller.canPrepareCapture }, makeLocationSource: { source })
+    }
+
+    func waitForScopeRead() async {
+        for _ in 0..<600 {
+            if await server.isWaitingForScope() { return }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(await server.isWaitingForScope())
     }
 
     func waitUntilSettled() async {
@@ -367,13 +441,21 @@ import Testing
     var onEvent: (@MainActor (SchoolCaptureLocationEvent) -> Void)?
     var permission: SchoolCaptureLocationPermission { .foreground }
     private(set) var isRunning = false
+    private(set) var startCount = 0
     private var segment: SchoolCaptureLocationSegment?
     private var handle: SchoolCaptureSegmentHandle?
     private var boundary: SchoolCaptureLocationStop?
     func requestPermission() {}
-    func requestDiagnosticSample() throws {}
-    func diagnosticSnapshot() throws -> SchoolCaptureDeviceSnapshot { throw SchoolCaptureLocationFailure.diagnosticUnavailable }
-    func diagnosticBody(operationID: UUID, networkAvailable: Bool) throws -> SchoolDeviceAssessmentBody { throw SchoolCaptureLocationFailure.diagnosticUnavailable }
+    func requestDiagnosticSample() throws { Task { onEvent?(.diagnosticChanged) } }
+    func diagnosticSnapshot() throws -> SchoolCaptureDeviceSnapshot {
+        .init(permission: .foreground, preciseLocation: true, deviceClass: "PHONE", modelCode: "test-phone",
+            osVersion: "26.0", appBuild: "1", sampleAgeSeconds: 0, horizontalAccuracyMeters: 5, availableBytesLocally: nil)
+    }
+    func diagnosticBody(operationID: UUID, networkAvailable: Bool) throws -> SchoolDeviceAssessmentBody {
+        .init(operationId: operationID, platform: "IOS", deviceClass: "PHONE", modelCode: "test-phone",
+            osVersion: "26.0", appBuild: "1", permission: permission.assessmentValue, preciseLocation: true,
+            sampleAgeSeconds: 0, horizontalAccuracyMeters: 5, freeBytes: nil, networkAvailable: networkAvailable)
+    }
     func updateScope(_ scope: SchoolCommandScope?) {}
     func prepareSegment(authorization: SchoolCaptureAuthorization, lease: SchoolCaptureLease, scope: SchoolCommandScope,
                         clockReference: SchoolCaptureClockReference, policy: SchoolCaptureLocationPolicy) throws -> SchoolCaptureLocationSegment {
@@ -383,7 +465,7 @@ import Testing
             lease: lease, policy: policy, wallStartedAt: Date(), monotonicStartedAt: now, mappedStartedAt: mapped)
     }
     func start(segment: SchoolCaptureLocationSegment, handle: SchoolCaptureSegmentHandle) throws {
-        self.segment = segment; self.handle = handle; isRunning = true; boundary = nil
+        self.segment = segment; self.handle = handle; isRunning = true; startCount += 1; boundary = nil
     }
     func emitPoint(accuracyMeters: Double = 5) -> Date? {
         guard isRunning, let segment, let handle else { return nil }
@@ -404,14 +486,27 @@ import Testing
 private actor CaptureLifecycleServer: SchoolHTTPTransport {
     private let scope: SchoolCommandScope
     private var capture: SchoolCaptureSession
+    private let authorization: SchoolCaptureAuthorization
+    private let keys: SchoolCapturePublicKeys
+    private let noticeID = UUID()
+    private var scopeHeld = false, scopeRefused = false
+    private var scopeWaiters: [CheckedContinuation<Void, Never>] = []
     private var recorded: [URLRequest] = []
     private var held = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var loseFinalization = false
     private var conflictFinalization = false
     private var finalized: [UUID: SchoolCaptureSession] = [:]
-    init(scope: SchoolCommandScope, capture: SchoolCaptureSession) { self.scope = scope; self.capture = capture }
+    init(scope: SchoolCommandScope, capture: SchoolCaptureSession, authorization: SchoolCaptureAuthorization, keys: SchoolCapturePublicKeys) {
+        self.scope = scope; self.capture = capture; self.authorization = authorization; self.keys = keys
+    }
     func requests() -> [URLRequest] { recorded }
+    func holdScopeReads() { scopeHeld = true }
+    func isWaitingForScope() -> Bool { !scopeWaiters.isEmpty }
+    func releaseScopeReads(refused: Bool = false) {
+        scopeHeld = false; scopeRefused = refused
+        let values = scopeWaiters; scopeWaiters = []; for item in values { item.resume() }
+    }
     func holdTransfers() { held = true }
     func releaseTransfers() { held = false; let values = waiters; waiters = []; for item in values { item.resume() } }
     func loseNextFinalizationResponse() { loseFinalization = true }
@@ -419,17 +514,57 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         recorded.append(request)
         let url = request.url!
-        func ok<T: Encodable>(_ value: T) throws -> SchoolHTTPResponse {
-            let data = try JSONSerialization.jsonObject(with: JSONEncoder().encode(value))
-            return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["data": data, "requestId": UUID().uuidString,
+        func json(_ value: Any) throws -> SchoolHTTPResponse {
+            SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["data": value, "requestId": UUID().uuidString,
                 "serverTime": capture.authorizedAt]), status: 200, url: url, contentType: "application/json")
         }
+        func ok<T: Encodable>(_ value: T) throws -> SchoolHTTPResponse {
+            try json(JSONSerialization.jsonObject(with: JSONEncoder().encode(value)))
+        }
         if url.lastPathComponent == "me" {
+            if scopeHeld { await withCheckedContinuation { scopeWaiters.append($0) } }
+            if scopeRefused {
+                return SchoolHTTPResponse(data: Data("{\"code\":\"FORBIDDEN\"}".utf8), status: 403,
+                    url: url, contentType: "application/problem+json")
+            }
             return try ok(SchoolPerson(personId: scope.personID, version: 1, displayName: "Moniteur synthétique", locale: "fr",
                 memberships: [.init(membershipId: scope.membershipID, schoolId: scope.schoolID, schoolName: "École synthétique",
                     roles: ["INSTRUCTOR"], grants: [], accessEpoch: scope.accessEpoch)]))
         }
         if held { await withCheckedContinuation { waiters.append($0) } }
+        let leaf = url.lastPathComponent.lowercased()
+        if leaf == "capture-keys" {
+            return try json(["keys": keys.keys.map { ["kty": $0.kty, "crv": $0.crv, "x": $0.x,
+                "kid": $0.kid, "alg": $0.alg, "use": $0.use] }])
+        }
+        if leaf == scope.schoolID.uuidString.lowercased() { return try ok(HubFixture.school(gps: true)) }
+        if leaf == capture.lessonId.uuidString.lowercased() {
+            return try ok(SchoolLesson(id: capture.lessonId, schoolId: scope.schoolID, version: 1, trainingId: HubFixture.trainingID,
+                learnerId: capture.learnerId, instructorMembershipId: scope.membershipID, plannedStart: capture.authorizedAt,
+                plannedEnd: capture.expiresAt, timeZone: "Europe/Zurich", meetingPoint: "", status: "PLANNED", priceCentsSnapshot: 9000,
+                bufferMinutesSnapshot: 10, actualStart: capture.authorizedAt, actualEnd: nil, permitWarning: false,
+                publicationVersion: 0, currentPublishedRevisionId: nil, commercialRevisionVersion: 1))
+        }
+        if leaf == capture.learnerId.uuidString.lowercased() {
+            return try ok(SchoolLearner(id: capture.learnerId, schoolId: scope.schoolID, personId: UUID(), version: 1,
+                displayName: "Élève synthétique", contactEmail: nil, contactPhone: nil, archivedAt: nil))
+        }
+        if leaf == "recording-notice" {
+            return try json(["noticeVersionId": noticeID.uuidString, "noticeText": "Information GPS synthétique",
+                "retentionText": "Conservation de test", "contactEmail": "ecole@example.invalid", "approvedAt": capture.authorizedAt])
+        }
+        if leaf == "recording-choice" {
+            return try ok(SchoolRecordingChoice(id: capture.choiceId, schoolId: scope.schoolID, version: 1,
+                learnerId: capture.learnerId, lessonId: capture.lessonId, status: .allowed, noticeVersionId: noticeID,
+                recordedBy: scope.membershipID, recordedAt: capture.authorizedAt, source: .verbal))
+        }
+        if leaf == "assessments" || leaf == capture.deviceAssessmentId.uuidString.lowercased() {
+            return try ok(SchoolDeviceAssessment(id: capture.deviceAssessmentId, schoolId: scope.schoolID, version: 1,
+                deviceId: capture.deviceId, membershipId: scope.membershipID, platform: "IOS", deviceClass: "PHONE",
+                modelCode: "test-phone", osVersion: "26.0", appBuild: "1", qualificationProfileVersion: "test",
+                status: .qualified, assessedAt: capture.authorizedAt, expiresAt: capture.expiresAt, blockers: []))
+        }
+        if leaf == "captures", request.httpMethod == "POST" { return try ok(authorization) }
         if url.lastPathComponent == "stop" {
             let body = try JSONDecoder().decode(SchoolStopCaptureBody.self, from: request.httpBody!)
             capture = changed(stoppedAt: body.stoppedAt, sync: .uploading)
