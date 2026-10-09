@@ -675,9 +675,10 @@ import Observation
             await load(); return true
         } catch {
             // Une demande que l’école ne connaît pas se renvoie comme neuve : son refus motivé est définitif.
-            // Un 404 ou un 403 à l’envoi est aussi une réponse de l’école : rien n’a été enregistré.
+            // Un 404 à l’envoi est aussi une réponse de l’école : rien n’a été enregistré. Un accès qui a changé
+            // (autre compte, droits retirés) garde en revanche la demande : elle n’est jamais renvoyée sous ces accès.
             let fresh = firstAttempt || command.id == absentPendingID
-            let refused = error as? SchoolReportFailure == .notFound || error as? SchoolReportFailure == .forbidden
+            let refused = error as? SchoolReportFailure == .notFound
             if fresh, let failure = error as? SchoolReportFailure, failure.permitsFreshCorrection || refused {
                 do { try outbox.remove(command) }
                 catch { guard request == generation else { return false }; isBusy = false; storageAccessible = false; fail(error); return false }
