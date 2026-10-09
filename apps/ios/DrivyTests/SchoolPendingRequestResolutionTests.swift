@@ -56,7 +56,7 @@ import Testing
     @Test func theNoticeNamesTheRequestAndWhatTheSchoolKnows() throws {
         let stale = try staleStart()
         #expect(stale.waitingMessage(absent: false).contains("« Début de la leçon »"))
-        #expect(stale.waitingMessage(absent: true).contains("rien n’a été enregistré"))
+        #expect(stale.waitingMessage(absent: true).contains("n’a pas enregistré « Début de la leçon »"))
         #expect(SchoolCommandKind.startLessonNow.requestTitle == "Leçon sans rendez-vous")
     }
 

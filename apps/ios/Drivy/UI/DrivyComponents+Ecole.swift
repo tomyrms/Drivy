@@ -387,7 +387,8 @@ struct DrivyPendingRequest<Details: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            Label("Demande à vérifier", systemImage: "clock.arrow.circlepath")
+            // L’abandon n’est offert qu’après la réponse de l’école : le titre dit alors l’état connu.
+            Label(abandon == nil ? "Demande à vérifier" : "Demande non enregistrée", systemImage: "clock.arrow.circlepath")
                 .font(.headline)
                 .foregroundStyle(DrivyTheme.warning)
                 .accessibilityAddTraits(.isHeader)
@@ -433,8 +434,8 @@ struct DrivyPendingRequest<Details: View>: View {
                 .accessibilityIdentifier("pending-request-abandon")
                 .confirmationDialog("Abandonner cette demande ?", isPresented: $confirmsAbandon, titleVisibility: .visible) {
                     Button("Abandonner la demande", role: .destructive) { abandon() }
-                    Button("Annuler", role: .cancel) { }
-                } message: { Text("Elle ne sera pas renvoyée.") }
+                    Button("Conserver", role: .cancel) { }
+                } message: { Text("Elle est retirée de cet appareil et ne sera pas envoyée à l’école.") }
             }
             if let reference {
                 DisclosureGroup {

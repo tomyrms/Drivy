@@ -49,7 +49,7 @@ extension PendingSchoolCommand {
     func waitingMessage(absent: Bool) -> String {
         let moment = createdAt.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(Locale(identifier: "fr_CH")))
         return absent
-            ? "L’école n’a aucune trace de « \(kind.requestTitle) » (\(moment)) : rien n’a été enregistré."
-            : "« \(kind.requestTitle) » (\(moment)) n’a pas reçu de réponse sûre de l’école. Vérifie son résultat pour continuer."
+            ? "L’école n’a pas enregistré « \(kind.requestTitle) » (\(moment))."
+            : "« \(kind.requestTitle) » (\(moment)) : la réponse de l’école n’est pas arrivée. Vérifie si elle a été enregistrée."
     }
 }

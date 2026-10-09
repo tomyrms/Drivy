@@ -227,13 +227,7 @@ private struct SchoolLessonReportContent: View {
         .sheet(item: $capturePreparation, onDismiss: { captureSheetClosed() }) { preparation in
             SchoolCapturePreparationView(model: preparation, schoolWorkspace: schoolWorkspace)
         }
-        .sheet(item: $planningRoute, onDismiss: { Task { await model.load() } }) { route in
-            SchoolPlanningView(model: route.model, cancelling: route.cancelling,
-                beforeCancellation: route.cancelling && captureStatus == .collecting ? { await capture?.stopAndSynchronize() ?? true } : nil)
-            .onChange(of: route.model.confirmedCancellationLessonID) { _, id in
-                if let id, id == model.lessonID, capture?.lessonID == id { capture?.closeSaved() }
-            }
-        }
+        .sheet(item: $planningRoute, onDismiss: { Task { await model.load() } }) { route in planningSheet(route) }
         .navigationDestination(isPresented: $showsLive) {
             if let capture {
                 SchoolCaptureLiveView(controller: capture, learnerName: learnerName, openLesson: { _, completing in
@@ -657,6 +651,16 @@ private struct SchoolLessonReportContent: View {
               await model.savePreparationBeforeDeparture(), capturePreparation == nil,
               mayStartCapture(now: Date()) else { return }
         capturePreparation = agenda.capturePreparation(scope: model.scope, lessonID: model.lessonID, controller: capture)
+    }
+
+    /// Annuler pendant un trajet l’arrête d’abord, comme depuis l’écran du trajet : aucune position après l’annulation.
+    private func planningSheet(_ route: PlanningRoute) -> some View {
+        let stopsCapture = route.cancelling && captureStatus == .collecting
+        let beforeCancellation: (@MainActor () async -> Bool)? = stopsCapture ? { await capture?.stopAndSynchronize() ?? true } : nil
+        return SchoolPlanningView(model: route.model, cancelling: route.cancelling, beforeCancellation: beforeCancellation)
+            .onChange(of: route.model.confirmedCancellationLessonID) { _, id in
+                if let id, id == model.lessonID, capture?.lessonID == id { capture?.closeSaved() }
+            }
     }
 
     private func openPlanning(_ lesson: SchoolLesson, cancelling: Bool) {
