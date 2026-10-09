@@ -24,7 +24,7 @@ struct SchoolInvitationWorkspaceTests {
         api.offeringValues = [offering]
         let model = InvitationFixture.workspace(api: api, roles: ["INSTRUCTOR"])
         await model.load()
-        #expect(model.carriesTraining && model.selectedOfferingID == offering.id)
+        #expect(model.carriesTraining && model.selectedOfferingIDs == [offering.id])
         #expect(await model.inviteAfterConfirmation(email: "eleve@example.invalid", roles: [.learner], offeringID: offering.id))
         let body = try JSONDecoder().decode(SchoolInviteCommand.self, from: try #require(api.commands.last).body)
         #expect(body.training == SchoolInvitationTraining(offeringId: offering.id, instructorMembershipId: ConfigurationFixture.membershipID))
@@ -289,7 +289,7 @@ struct SchoolInvitationWorkspaceTests {
         await model.retryPending()
         #expect(model.invitations.isEmpty && model.school == nil && model.email.isEmpty)
         #expect(model.offerings.isEmpty && model.instructors.isEmpty && model.selectedOfferingIDs.isEmpty)
-        #expect(model.selectedOfferingID == nil && model.selectedInstructorID == nil && !model.hasLoaded)
+        #expect(model.selectedInstructorID == nil && !model.hasLoaded)
         #expect(model.accessFailure == .forbidden)
         #expect(outbox.value == command)
     }

@@ -4,7 +4,7 @@ import SwiftUI
 import UIKit
 
 /// Aujourd’hui : la carte et la leçon qui compte maintenant. Une leçon passée sans résultat passe en premier
-/// (« À terminer ») ; sinon la prochaine, avec son départ. Un trajet se lance toujours depuis une leçon et son élève ;
+/// si elle a été démarrée ; sinon la prochaine, avec son départ. Un trajet se lance toujours depuis une leçon et son élève ;
 /// tant qu’aucune leçon n’est en cours ou imminente, « Démarrer une leçon » en crée une qui commence maintenant
 /// (le serveur contrôle le planning) puis enchaîne sur le départ du trajet.
 struct SchoolTodayView: View {
@@ -18,7 +18,6 @@ struct SchoolTodayView: View {
     @State private var isLoading = false
     @State private var requestID = UUID()
     @State private var error: String?
-    @State private var preparation: SchoolCapturePreparationWorkspace?
     @State private var opened: OpenedLesson?
     @State private var showsDay = false
     @State private var cardHeight: CGFloat = 0
@@ -29,6 +28,7 @@ struct SchoolTodayView: View {
     private struct OpenedLesson: Identifiable {
         let lesson: SchoolLesson
         let completing: Bool
+        var starting = false
         var id: UUID { lesson.id }
     }
 
@@ -85,19 +85,16 @@ struct SchoolTodayView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { notification in
             if let change = notification.object as? SchoolLessonChange, change.schoolID != workspace.membership?.schoolId { return }
-            if preparation == nil && opened == nil { Task { await load() } }
+            if opened == nil { Task { await load() } }
         }
         .onChange(of: scopeKey) { _, _ in
-            preparation?.invalidate(); preparation = nil; opened = nil
-        }
-        .sheet(item: $preparation, onDismiss: { Task { await load() } }) { model in
-            SchoolCapturePreparationView(model: model, schoolWorkspace: workspace)
+            opened = nil
         }
         .sheet(item: $opened, onDismiss: { Task { await load() } }) { item in
             if let agendaClient {
                 NavigationStack {
                     SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace, lessonID: item.lesson.id,
-                        learnerName: name(item.lesson), opensCompletion: item.completing)
+                        learnerName: name(item.lesson), opensCompletion: item.completing, opensStart: item.starting)
                 }
                 .tint(DrivyTheme.accent)
                 .environment(captureController)
@@ -182,42 +179,28 @@ struct SchoolTodayView: View {
 
     /// Panneau de la journée : la leçon qui compte maintenant et son action dominante, puis le reste du jour.
     @ViewBuilder private func card(now: Date, floating: Bool) -> some View {
-        let toFinish = planned.filter { ($0.endsAt ?? .distantFuture) <= now }
-        let next = planned.first { ($0.endsAt ?? .distantPast) > now }
+        let active = planned.first { $0.hasStarted }
+        let next = planned.first { !$0.hasStarted }
+        let featured = active ?? next
         DrivyMapDock(floating: floating) {
             Text(SchoolDateFormat.template("EEEEdMMMM", now, zone: workspace.school?.timeZone ?? "Europe/Zurich").capitalizedFirst)
                 .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
-            if let lesson = toFinish.first {
-                lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote, moment: nil)
+            if let lesson = featured {
+                lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote,
+                    moment: lesson.drivyState(now: now).rowNote == nil ? SchoolTodayPresentation.moment(for: lesson, now: now) : nil)
                 if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId {
-                    Button { opened = OpenedLesson(lesson: lesson, completing: true) } label: {
-                        Text("Terminer la leçon")
+                    Button { opened = OpenedLesson(lesson: lesson, completing: false, starting: !lesson.hasStarted) } label: {
+                        Text(lesson.hasStarted ? "Continuer la leçon" : "Commencer la leçon")
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
-                    .accessibilityIdentifier("today-finish-lesson")
+                    .accessibilityIdentifier(lesson.hasStarted ? "today-continue-lesson" : "today-start")
+                    if !lesson.hasStarted { startNowButton(prominent: false) }
                 }
-                if let next {
+                if active != nil, let next {
                     Divider().overlay(DrivyTheme.border)
                     upcomingLesson(next, now: now)
-                }
-            } else if let next {
-                lessonSummary(next, note: nil, moment: SchoolTodayPresentation.moment(for: next, now: now))
-                if mayStart(next, now: now) {
-                    Button { start(next) } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
-                        .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
-                        .accessibilityIdentifier("today-start")
-                } else {
-                    if let opening = startOpening(next, now: now) {
-                        Text("Démarrer dès \(opening)")
-                            .font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(DrivyTheme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .accessibilityIdentifier("today-start-later")
-                    }
-                    // Ni en cours ni imminente : le moniteur peut lancer une autre leçon sans la planifier.
-                    if instructs, (next.startsAt ?? .distantPast) > now { startNowButton(prominent: false) }
                 }
             } else if loadedKey != dayKey(now) && error == nil {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
@@ -232,7 +215,7 @@ struct SchoolTodayView: View {
                 if instructs { startNowButton(prominent: true) }
             }
             if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
-            dayList(now: now, excluding: Set([toFinish.first?.id, next?.id].compactMap { $0 }))
+            dayList(now: now, excluding: Set([featured?.id, active == nil ? nil : next?.id].compactMap { $0 }))
         }
     }
 
@@ -311,7 +294,7 @@ struct SchoolTodayView: View {
                     }
                 }
             } label: {
-                Text(others.count == 1 ? "Prochaine leçon" : "\(others.count) prochaines leçons")
+                Text(others.count == 1 ? "Autre leçon" : "\(others.count) autres leçons")
                     .font(.subheadline.weight(.semibold)).monospacedDigit()
                     .frame(minHeight: 44, alignment: .leading)
             }
@@ -333,29 +316,6 @@ struct SchoolTodayView: View {
         lesson.endsAt.map { SchoolDateFormat.time($0, zone: lesson.timeZone) } ?? "—"
     }
 
-    /// Même règle que l’écran de la leçon : moniteur de la leçon, GPS de l’école actif, aucun autre trajet,
-    /// dans la fenêtre acceptée par le serveur.
-    private func mayStart(_ lesson: SchoolLesson, now: Date = Date()) -> Bool {
-        guard instructs, let captureController else { return false }
-        let isAuthor = lesson.instructorMembershipId == workspace.membership?.membershipId
-        return SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: isAuthor, school: workspace.school,
-            capture: SchoolLessonCaptureStatus(controller: captureController, lessonID: lesson.id),
-            controllerCanPrepare: captureController.canPrepareCapture, now: now)
-    }
-    private func startOpening(_ lesson: SchoolLesson, now: Date) -> String? {
-        guard instructs, let captureController else { return nil }
-        let isAuthor = lesson.instructorMembershipId == workspace.membership?.membershipId
-        guard let opening = SchoolLessonHubRules.captureOpening(lesson: lesson, isAuthor: isAuthor, school: workspace.school,
-            capture: SchoolLessonCaptureStatus(controller: captureController, lessonID: lesson.id),
-            controllerCanPrepare: captureController.canPrepareCapture, now: now) else { return nil }
-        return SchoolLessonHubRules.openingLabel(opening, zone: lesson.timeZone, now: now)
-    }
-    private func start(_ lesson: SchoolLesson) {
-        guard let agendaClient, let person = workspace.person, let membership = workspace.membership,
-              lesson.instructorMembershipId == membership.membershipId, mayStart(lesson) else { return }
-        preparation = agendaClient.capturePreparation(scope: agendaClient.scope(person: person, membership: membership),
-            lessonID: lesson.id, controller: captureController)
-    }
     /// « Démarrer une leçon » : élève, leçon créée maintenant par le serveur, puis départ du trajet (voir SchoolStartNowButton).
     @ViewBuilder private func startNowButton(prominent: Bool) -> some View {
         let button = SchoolStartNowButton(workspace: workspace, agendaClient: agendaClient, captureController: captureController,
@@ -403,7 +363,6 @@ struct SchoolTodayView: View {
             switch error as? SchoolAgendaFailure {
             case .authentication, .forbidden:
                 lessons = []; loadedKey = nil; opened = nil
-                preparation?.invalidate(); preparation = nil
             default: break
             }
             self.error = (error as? LocalizedError)?.errorDescription ?? "Les leçons du jour n’ont pas pu être chargées."
@@ -412,19 +371,19 @@ struct SchoolTodayView: View {
 }
 
 enum SchoolTodayPresentation {
-    /// Une leçon planifiée reste présente pendant son créneau, jusqu’à sa fin exclue.
-    /// Les leçons passées sans constat gardent leur mise en avant « À terminer » dans la carte.
+    /// Tous les rendez-vous encore ouverts restent accessibles, y compris ceux en attente après leur horaire.
     static func upcomingLessons(_ lessons: [SchoolLesson], now: Date, excluding: Set<UUID> = []) -> [SchoolLesson] {
         lessons.filter { lesson in
-            lesson.status == "PLANNED" && (lesson.endsAt ?? .distantPast) > now && !excluding.contains(lesson.id)
+            lesson.status == "PLANNED" && !excluding.contains(lesson.id)
         }.sorted { $0.plannedStart < $1.plannedStart }
     }
 
     /// Un horaire écoulé ne prouve pas que la conduite a démarré.
     static func moment(for lesson: SchoolLesson, now: Date) -> String {
+        if lesson.hasStarted { return "En cours" }
         guard let start = lesson.startsAt else { return "Prochaine leçon" }
         let minutes = Int(ceil(start.timeIntervalSince(now) / 60))
-        if minutes <= 0 { return "Horaire commencé" }
+        if minutes <= 0 { return "En attente" }
         if minutes < 60 { return "Dans \(minutes) min" }
         let hours = minutes / 60, remainder = minutes % 60
         return remainder == 0 ? "Dans \(hours) h" : "Dans \(hours) h \(remainder) min"
@@ -456,5 +415,5 @@ private enum TodayLayout {
 
 extension SchoolLesson {
     /// État affiché à un instant donné (l’état par défaut suit l’horloge au moment du rendu).
-    func drivyState(now: Date) -> DrivyLessonState { DrivyLessonState(status: status, start: startsAt, end: endsAt, now: now) }
+    func drivyState(now: Date) -> DrivyLessonState { DrivyLessonState(status: status, start: startsAt, end: endsAt, actualStart: startedAt, now: now) }
 }

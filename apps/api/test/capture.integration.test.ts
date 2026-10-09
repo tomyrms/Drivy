@@ -45,10 +45,14 @@ try{
  a=await call('POST',`/devices/${device}/assessments`,{...aBody,operationId:randomUUID()});assert.equal(a.json().data.status,'QUALIFIED');
  const choice=await call('POST',`/learners/${id.aliceLearner}/recording-choice`,{operationId:randomUUID(),lessonId:lesson,status:'ALLOWED',noticeVersionId:notice,source:'SELF'},undefined,'demo-alice');assert.equal(choice.statusCode,200,JSON.stringify(choice.json()));
  const startBody={operationId:randomUUID(),deviceId:device,choiceId:choice.json().data.id,choiceVersion:choice.json().data.version,noticeVersionId:notice,explicitStartConfirmed:true,deviceAssessmentId:a.json().data.id};
+ const rejected=await call('POST',`/lessons/${lesson}/captures`,{...startBody,operationId:randomUUID(),choiceVersion:choice.json().data.version+1},1);
+ assert.equal(rejected.json().code,'RECORDING_CHOICE_CHANGED');assert.equal((await call('GET',`/lessons/${lesson}`)).json().data.actualStart,null);
  const start=await call('POST',`/lessons/${lesson}/captures`,startBody,1);assert.equal(start.statusCode,201,JSON.stringify(start.json()));const authorization=start.json().data,capture=authorization.capture;
  assert.equal((await call('POST',`/lessons/${lesson}/captures`,startBody,1)).json().data.capture.id,capture.id);
+ const startedLesson=(await call('GET',`/lessons/${lesson}`)).json().data;
+ assert.equal(startedLesson.actualStart,capture.authorizedAt);assert.equal(startedLesson.version,2);assert.equal(startedLesson.status,'PLANNED');
  const claims=await jwtVerify(authorization.signedCaptureAuthorization,await importJWK(pub,'EdDSA'),{issuer:config.issuer,audience:'drivy-native-capture'});assert.equal(claims.payload.scope,'capture:collect');
- assert.equal((await call('POST',`/lessons/${lesson}/captures`,{...startBody,operationId:randomUUID()},1)).json().code,'CAPTURE_ALREADY_ACTIVE');
+ assert.equal((await call('POST',`/lessons/${lesson}/captures`,{...startBody,operationId:randomUUID()},2)).json().code,'CAPTURE_ALREADY_ACTIVE');
  await new Promise(r=>setTimeout(r,40));const segment=randomUUID(),started=Date.parse(capture.authorizedAt)+1;
  const points=[0,1,2].map(sequence=>({sequence,elapsedMs:sequence+1,capturedAt:new Date(started+sequence+1).toISOString(),latitude:46.99+sequence/100000,longitude:6.9,accuracyMeters:5}));
  const content={segmentIndex:0,segmentStartedAt:new Date(started).toISOString(),segmentStartReason:'START' as const,points:points.slice(0,2)};const chunk={operationId:randomUUID(),...content,contentHash:trackContentHash(content),signedUploadAuthorization:authorization.signedUploadAuthorization};
@@ -83,15 +87,28 @@ try{
   assert.equal((await call('GET',`/captures/${capture.id}/replay`,undefined,undefined,'demo-alice')).statusCode,404);
   assert.equal((await call('GET',`/captures/${capture.id}/replay`)).statusCode,200);
   const show=await call('PUT',`/lessons/${lesson}/sharing`,{operationId:randomUUID(),reportPrivate:false,captureHidden:false,privateObservationIds:[]},hide.json().data.version);assert.equal(show.statusCode,200);
- }finally{await pool.query("UPDATE drivy.lesson SET status='PLANNED',actual_start=NULL,actual_end=NULL WHERE id=$1",[lesson]);}
+ }finally{await pool.query("UPDATE drivy.lesson SET status='PLANNED',actual_start=$2,actual_end=NULL WHERE id=$1",[lesson,startedLesson.actualStart]);}
  const proof=await call('GET',`/operations/${startBody.operationId}`);assert.equal(proof.statusCode,200,JSON.stringify(proof.json()));assert.equal(proof.json().data.resourceType,'CaptureSession');
  const stored=(await pool.query('SELECT response_data FROM drivy.operation WHERE operation_id=$1',[startBody.operationId])).rows[0];assert(!JSON.stringify(stored).includes('signedCaptureAuthorization'));
  // Une borne resserrée purge le lot entier touché, sans réactiver ni dupliquer son identité.
  const earlier=await call('POST',`/captures/${capture.id}/stop`,{operationId:randomUUID(),stoppedAt:points[2]!.capturedAt,reason:'USER_STOP',segments:manifest,localCollectorStopped:true});assert.equal(earlier.statusCode,200);assert.equal(earlier.json().data.syncState,'PARTIAL');assert.equal((await pool.query('SELECT encrypted_points FROM drivy.capture_chunk WHERE capture_id=$1 AND chunk_index=1',[capture.id])).rows[0].encrypted_points,null);
- const nextCapture=await call('POST',`/lessons/${lesson}/captures`,{...startBody,operationId:randomUUID()},1);assert.equal(nextCapture.statusCode,201,JSON.stringify(nextCapture.json()));
+ // Un départ explicite demeure valide même si l'ancien créneau est dépassé (reprise GPS).
+ await pool.query("UPDATE drivy.lesson SET planned_start=now()-interval '3 hours',planned_end=now()-interval '2 hours' WHERE id=$1",[lesson]);
+ const nextCapture=await call('POST',`/lessons/${lesson}/captures`,{...startBody,operationId:randomUUID()},2);assert.equal(nextCapture.statusCode,201,JSON.stringify(nextCapture.json()));
+ assert.equal((await call('GET',`/lessons/${lesson}`)).json().data.actualStart,startedLesson.actualStart);
  const refuse=await call('POST',`/learners/${id.aliceLearner}/recording-choice`,{operationId:randomUUID(),lessonId:lesson,status:'REFUSED',noticeVersionId:notice,source:'SELF'},undefined,'demo-alice');assert.equal(refuse.statusCode,200);
  assert.equal((await call('GET',`/captures/${nextCapture.json().data.capture.id}`)).json().data.captureState,'REVOKED');
  assert.equal((await call('POST',`/learners/${id.aliceLearner}/recording-choice`,{operationId:randomUUID(),lessonId:lesson,status:'ALLOWED',noticeVersionId:notice,source:'RECORDED_VERBAL'})).json().code,'RECORDING_CHOICE_PROTECTED');
+ // Réparation historique GPS sous le propriétaire non privilégié, même avec FORCE RLS sur capture_session.
+ await pool.query('UPDATE drivy.lesson SET actual_start=NULL WHERE id=$1',[lesson]);
+ const migrationText=await readFile(new URL('../migrations/023_explicit_lesson_start.sql',import.meta.url),'utf8');
+ const repair=migrationText.slice(migrationText.indexOf('ALTER TABLE drivy.lesson NO FORCE'),migrationText.indexOf('-- Un rendez-vous dépassé'));
+ const repairDB=await migration.connect();
+ try{await repairDB.query('BEGIN');await repairDB.query(repair);await repairDB.query('COMMIT');}
+ catch(error){await repairDB.query('ROLLBACK');throw error;}finally{repairDB.release();}
+ const repaired=(await call('GET',`/lessons/${lesson}`)).json().data;
+ assert.equal(repaired.actualStart,capture.authorizedAt);assert.equal(repaired.version,3);
+ assert.equal((await pool.query("SELECT bool_and(relforcerowsecurity) AS forced FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r'")).rows[0].forced,true);
  assert.equal(rls.rows[0].forced,45);assert(rls.rows[0].tables.includes('planning_defaults'));
 }finally{await app.close();await migration.end();await pool.end();}
 

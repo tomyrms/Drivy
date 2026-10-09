@@ -54,6 +54,12 @@ import Testing
         await server.setProgressStatus(401)
         await model.loadProgress()
         #expect(model.training == nil && model.lessons.isEmpty && model.accessRevoked)
+        // La session et les accès sont à nouveau autorisés : la même formation
+        // partagée peut se rouvrir, sans exiger un changement d’école.
+        await server.setProgressStatus(nil)
+        await model.refreshOnAppear()
+        #expect(!model.accessRevoked && model.canOpenPedagogicalContent)
+        #expect(model.training != nil && !model.lessons.isEmpty && model.progress != nil)
     }
 
     @Test func anUnfinishedPastLessonDoesNotTakeTheNextLearnerWish() async {
@@ -63,6 +69,14 @@ import Testing
         #expect(model.upcomingLessons(at: HubFixture.date("2026-09-28T11:00:00Z")).map(\.id) == [HubFixture.lessonID])
         #expect(model.upcomingLessons(at: HubFixture.date("2026-09-28T12:49:59Z")).map(\.id) == [HubFixture.lessonID])
         #expect(model.upcomingLessons(at: HubFixture.date("2026-09-28T12:50:00Z")).isEmpty)
+    }
+
+    @Test func aStartedLessonNoLongerReceivesTheNextLearnerWish() async {
+        let server = HistoryServer(), model = workspace(server)
+        await server.setStarted(true)
+        await model.load()
+        #expect(model.lessons.first?.hasStarted == true)
+        #expect(model.upcomingLessons(at: HubFixture.date("2026-09-28T12:20:00Z")).isEmpty)
     }
 
     @Test func publishedCompetencyWithNoContextRemainsReadable() async throws {
@@ -250,6 +264,7 @@ private actor HistoryServer: SchoolHTTPTransport {
     private var pageUnavailable = false
     private var progressStatus: Int?
     private var evaluated = false
+    private var started = false
     private var revisionStatus: Int?
     private(set) var revisionReads = 0
     private var shouldPause = false
@@ -259,6 +274,7 @@ private actor HistoryServer: SchoolHTTPTransport {
     func setProgressStatus(_ value: Int?) { progressStatus = value }
     /// La leçon de la première page devient une leçon terminée, évaluée, dont le bilan publié est la révision servie.
     func setEvaluated(_ value: Bool) { evaluated = value }
+    func setStarted(_ value: Bool) { started = value }
     func setRevisionStatus(_ value: Int?) { revisionStatus = value }
     func pauseNextPage() { shouldPause = true }
     func waitUntilPaused() async {
@@ -311,6 +327,7 @@ private actor HistoryServer: SchoolHTTPTransport {
             let lesson = older ? try Self.lesson(id: UUID(uuidString: "50000000-0000-4000-8000-000000000002")!,
                 start: "2025-12-31T23:30:00Z", end: "2026-01-01T00:20:00Z") : HubFixture.lesson(status: evaluated ? "COMPLETED" : "PLANNED")
             var value = try JSONSerialization.jsonObject(with: JSONEncoder().encode(lesson)) as! [String: Any]
+            if started && !older { value["actualStart"] = "2026-09-28T12:10:00Z" }
             if evaluated && !older { value["currentPublishedRevisionId"] = Self.revisionID.uuidString }
             return try ok(["items": [value], "nextCursor": older ? NSNull() : "older" as Any])
         }

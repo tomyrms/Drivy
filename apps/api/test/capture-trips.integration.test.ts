@@ -127,9 +127,9 @@ describe('fin de leçon indépendante du transfert GPS',()=>{
   // Les trois instants synthétiques doivent précéder la fin réelle, même si leur dépôt arrive après.
   const lastPoint=h.pointTimes(trip).at[2]!;while(Date.now()<=lastPoint)await new Promise(resolve=>setTimeout(resolve,10));
   const body={operationId:randomUUID(),actualStart:trip.capture.authorizedAt,actualEnd:new Date().toISOString(),anomalyReason:'Recette synthétique'};
-  const completed=await h.call('POST',`/lessons/${trip.lesson}/complete`,body,1);expect(completed.statusCode,completed.body).toBe(200);
+  const completed=await h.call('POST',`/lessons/${trip.lesson}/complete`,body,2);expect(completed.statusCode,completed.body).toBe(200);
   expect(completed.json().data.lesson.status).toBe('COMPLETED');expect(completed.json().data.draft).toMatchObject({workedOn:'',observationText:'',nextStep:''});
-  expect((await h.call('POST',`/lessons/${trip.lesson}/complete`,body,1)).json().data).toEqual(completed.json().data);
+  expect((await h.call('POST',`/lessons/${trip.lesson}/complete`,body,2)).json().data).toEqual(completed.json().data);
   expect((await h.call('GET',`/captures/${trip.capture.id}`,undefined,undefined,'demo-alice')).statusCode).toBe(404);
   const finalized=await h.uploadStopFinalize(trip);expect(finalized.finalized.syncState).toBe('SYNCED');
   const visible=await h.call('GET',`/lessons/${trip.lesson}/captures`,undefined,undefined,'demo-alice');expect(visible.statusCode,visible.body).toBe(200);

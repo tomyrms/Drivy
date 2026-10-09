@@ -97,6 +97,7 @@ export const permitSchema = z.object({
 export const lessonSchema = z.object({
   id, schoolId: id, version, trainingId: id, learnerId: id, instructorMembershipId: id, plannedStart: timestamp, plannedEnd: timestamp,
   timeZone: z.string(), meetingPoint: z.string(), status: z.enum(['PLANNED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']),
+  actualStart: timestamp.nullable().optional(), actualEnd: timestamp.nullable().optional(),
   permitWarning: z.boolean().optional(), currentPublishedRevisionId: id.nullable().optional(),
 });
 export const observationLevels = ['DISCOVERING', 'GUIDED', 'INDEPENDENT'] as const;

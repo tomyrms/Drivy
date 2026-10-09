@@ -13,6 +13,8 @@ struct SchoolLessonReportView: View {
     let learnerName: String
     /// Propose la fin dès que la leçon est lue (« À terminer » d’Aujourd’hui, fin du trajet).
     var opensCompletion = false
+    /// Geste explicite « Commencer la leçon » depuis Aujourd’hui.
+    var opensStart = false
     /// Seule la carte transmet ce consentement après sa confirmation explicite.
     var completionConfirmed = false
     /// Élève : le souhait se modifie sur la prochaine leçon seulement ; `nil` quand l’appelant ne le sait pas.
@@ -40,7 +42,7 @@ struct SchoolLessonReportView: View {
         Group {
             if let model, matches(model) {
                 SchoolLessonReportContent(model: model, learnerName: learnerName, schoolWorkspace: schoolWorkspace, agenda: client.agenda,
-                    opensCompletion: opensCompletion, completionConfirmed: completionConfirmed, isNextPlanned: isNextPlanned,
+                    opensCompletion: opensCompletion, opensStart: opensStart, completionConfirmed: completionConfirmed, isNextPlanned: isNextPlanned,
                     isFinishing: $isCompletingLesson)
             } else if schoolWorkspace.membership != nil {
                 if opensCompletion && completionConfirmed {
@@ -134,6 +136,7 @@ private struct SchoolLessonReportContent: View {
     @Bindable var schoolWorkspace: SchoolWorkspace
     let agenda: SchoolAgendaClient
     let opensCompletion: Bool
+    let opensStart: Bool
     let completionConfirmed: Bool
     let isNextPlanned: Bool?
     /// Contrôleur de séance de l’app ; absent, rien de ce qui dépend du GPS de l’appareil n’est proposé.
@@ -154,6 +157,7 @@ private struct SchoolLessonReportContent: View {
     @Binding var isFinishing: Bool
     @State private var finishError: String?
     @State private var completionOpened = false
+    @State private var startOpened = false
     @State private var confirmsCompletion = false
     @State private var completionQueued = false
     @State private var showReloadConfirmation = false
@@ -174,10 +178,10 @@ private struct SchoolLessonReportContent: View {
     }
     /// Barre du bas d’une leçon planifiée du moniteur, selon l’heure et le trajet.
     private enum PlannedBar: Equatable {
-        case live(finishable: Bool)
-        case start(finishable: Bool)
+        case begin
+        case live
+        case start
         case finish
-        case goals(startsAt: String?)
     }
 
     private var isCompleted: Bool { model.lesson?.status == "COMPLETED" }
@@ -256,11 +260,11 @@ private struct SchoolLessonReportContent: View {
             if !visible { Task { await model.refreshObservations() } }
         }
         .onChange(of: model.lesson?.status) { _, _ in openCompletionIfAsked() }
-        .onChange(of: model.isLoading) { _, loading in if !loading { openCompletionIfAsked() } }
+        .onChange(of: model.isLoading) { _, loading in if !loading { openCompletionIfAsked(); openStartIfAsked() } }
         .onChange(of: capture?.finalizedSyncState) { _, state in
             if isCompleted && !isFinishing && (state == .synced || state == .partial) { Task { await model.load() } }
         }
-        .onAppear { openCompletionIfAsked() }
+        .onAppear { openCompletionIfAsked(); openStartIfAsked() }
         .interactiveDismissDisabled(isFinishing || completionQueued || awaitsConfirmedCompletion)
     }
 
@@ -345,7 +349,7 @@ private struct SchoolLessonReportContent: View {
     @ViewBuilder private func plannedSections(bar: PlannedBar?) -> some View {
         Group {
             if let wish = model.wish, showsWish(wish) { wishSection(wish) }
-            if isPlanned, model.isAuthor { goalsEditor(savesInline: !isGoalsBar(bar)) }
+            if isPlanned, model.isAuthor { goalsEditor() }
             if isPlanned, model.isOwnLearner, let goals = model.preparation?.goals, !goals.isEmpty { goalsReader(goals) }
         }
         .drivyFormRows()
@@ -437,11 +441,6 @@ private struct SchoolLessonReportContent: View {
         }
     }
 
-    private func isGoalsBar(_ bar: PlannedBar?) -> Bool {
-        if case .goals = bar { return true }
-        return false
-    }
-
     /// Le souhait de l’élève vaut pour la formation : il se lit (moniteur) ou se modifie (élève) avant une leçon,
     /// pas sur chaque leçon passée.
     private func showsWish(_ wish: SchoolLearnerWish) -> Bool {
@@ -453,7 +452,7 @@ private struct SchoolLessonReportContent: View {
     private func openCompletionIfAsked() {
         guard opensCompletion, !completionOpened, !model.isLoading, model.lesson != nil else { return }
         completionOpened = true
-        guard isPlanned, model.isAuthor, model.canMutate else { return }
+        guard isPlanned, model.lesson?.hasStarted == true, model.isAuthor, model.canMutate else { return }
         if completionConfirmed { beginCompletion() }
         else { confirmsCompletion = true }
     }
@@ -466,7 +465,7 @@ private struct SchoolLessonReportContent: View {
     }
 
     private func beginCompletion() {
-        guard !completionQueued, !isFinishing, model.acceptsInput, isPlanned, model.isAuthor else { return }
+        guard !completionQueued, !isFinishing, model.acceptsInput, isPlanned, model.lesson?.hasStarted == true, model.isAuthor else { return }
         completionQueued = true
         Task {
             // Relecture en cours : le constat confirmé attend sa fin au lieu d’être ignoré.
@@ -478,7 +477,7 @@ private struct SchoolLessonReportContent: View {
 
     /// L’arrêt est écrit sur l’appareil avant le constat. Le transfert du trajet continue sans retenir le bilan.
     private func finishLesson(_ reason: String) async -> Bool {
-        guard !isFinishing, model.canMutate, isPlanned, model.isAuthor else { return false }
+        guard !isFinishing, model.canMutate, isPlanned, model.lesson?.hasStarted == true, model.isAuthor else { return false }
         isFinishing = true; finishError = nil
         defer { isFinishing = false }
         if let capture, !(await capture.finishForLesson(lessonID: model.lessonID)) {
@@ -490,11 +489,7 @@ private struct SchoolLessonReportContent: View {
             return false
         }
         await model.refreshCaptures()
-        var times = model.completionTimes()
-        if let local = capture?.lessonTimes(lessonID: model.lessonID),
-           let start = SchoolLesson.date(local.startedAt), let end = SchoolLesson.date(local.stoppedAt), end > start {
-            times = (start, end)
-        }
+        let times = model.completionTimes()
         let completed = await model.complete(start: times.start, end: times.end, reason: reason, localCaptureStopped: true)
         // La leçon est terminée : la rédaction du bilan s’ouvre d’elle-même dès que la fiche revient à l’écran.
         if completed { opensReportWhenReady = true }
@@ -503,7 +498,7 @@ private struct SchoolLessonReportContent: View {
 
     /// Départ réussi depuis cette feuille : elle se ferme pour laisser le trajet en cours à l’écran.
     private func captureSheetClosed() {
-        guard captureStatus == .collecting else { return }
+        guard captureStatus == .collecting else { Task { await model.load() }; return }
         if model.hasLocalEdits { showsLive = true } else { model.invalidate(); dismiss() }
     }
 
@@ -567,15 +562,13 @@ private struct SchoolLessonReportContent: View {
         }
     }
 
-    /// Leçon planifiée du moniteur : démarrer le trajet (ou y revenir), terminer dès 15 minutes avant le début
-    /// (LESSON_NOT_STARTED côté serveur) ; plus tôt, enregistrer les objectifs.
+    /// Leçon du moniteur : commencer explicitement, puis gérer le trajet facultatif ou terminer.
     private func plannedBar(now: Date) -> PlannedBar? {
         guard model.isAuthor, isPlanned, let lesson = model.lesson else { return nil }
-        let finishable = SchoolLessonHubRules.mayFinish(lesson, now: now)
-        if captureStatus == .collecting { return .live(finishable: finishable) }
-        if mayStartCapture(now: now) { return .start(finishable: finishable) }
-        if finishable { return .finish }
-        return .goals(startsAt: captureOpensLater(now: now))
+        if !lesson.hasStarted { return .begin }
+        if captureStatus == .collecting { return .live }
+        if mayStartCapture(now: now) { return .start }
+        return .finish
     }
 
     /// Boutons en texte seul. Seule la flèche de localisation reste, celle du système : elle signale que le geste
@@ -583,27 +576,26 @@ private struct SchoolLessonReportContent: View {
     @ViewBuilder private func plannedBarView(_ bar: PlannedBar) -> some View {
         DrivyStickyActionBar {
             switch bar {
-            case .live(let finishable):
+            case .begin:
+                Button { Task { await startLesson() } } label: {
+                    DrivyBusyLabel(title: "Commencer la leçon", isBusy: isSending(.startLesson))
+                }
+                .buttonStyle(DrivyPrimaryButtonStyle())
+                .disabled(!model.acceptsInput)
+                .accessibilityIdentifier("lesson-start")
+            case .live:
                 Button { showsLive = true } label: { Label("Trajet en cours", systemImage: "location.fill") }
                     .buttonStyle(DrivyPrimaryButtonStyle())
                     .accessibilityHint("Ouvre le trajet")
                     .accessibilityIdentifier("lesson-live-capture")
-                if finishable { completeButton(primary: false) }
-            case .start(let finishable):
+                completeButton(primary: false)
+            case .start:
                 Button { openCapturePreparation() } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
                     .buttonStyle(DrivyPrimaryButtonStyle())
                     .accessibilityIdentifier("lesson-prepare-gps")
-                if finishable { completeButton(primary: false) }
+                completeButton(primary: false)
             case .finish:
                 completeButton(primary: true)
-            case .goals(let startsAt):
-                if let startsAt { DrivyActionNote(text: "Trajet dès \(startsAt)") }
-                Button { Task { await model.savePreparation() } } label: {
-                    DrivyBusyLabel(title: "Enregistrer les objectifs", isBusy: isSending(.savePreparation))
-                }
-                .buttonStyle(DrivyPrimaryButtonStyle())
-                .disabled(!model.acceptsInput || !model.preparationValid || !model.preparationChanged)
-                .accessibilityIdentifier("lesson-save-goals")
             }
         }
     }
@@ -611,6 +603,17 @@ private struct SchoolLessonReportContent: View {
     /// L’envoi en cours est celui de ce bouton : l’attente se lit là où le geste a été fait.
     private func isSending(_ kind: SchoolCommandKind) -> Bool {
         model.isBusy && model.pending?.kind == kind
+    }
+
+    private func openStartIfAsked() {
+        guard opensStart, !startOpened, !model.isLoading, model.lesson != nil else { return }
+        startOpened = true
+        Task { await startLesson() }
+    }
+
+    private func startLesson() async {
+        guard await model.start() else { return }
+        if mayStartCapture(now: Date()) { openCapturePreparation() }
     }
 
     @ViewBuilder private func completeButton(primary: Bool) -> some View {
@@ -643,14 +646,6 @@ private struct SchoolLessonReportContent: View {
         return SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: model.isAuthor, school: schoolWorkspace.school,
             capture: captureStatus, controllerCanPrepare: capture.canPrepareCapture, now: now)
     }
-    /// « Trajet dès 13:30 » : le départ sera possible plus tard aujourd’hui.
-    private func captureOpensLater(now: Date) -> String? {
-        guard let lesson = model.lesson, let capture,
-              let opening = SchoolLessonHubRules.captureOpening(lesson: lesson, isAuthor: model.isAuthor, school: schoolWorkspace.school,
-                capture: captureStatus, controllerCanPrepare: capture.canPrepareCapture, now: now) else { return nil }
-        return SchoolLessonHubRules.openingLabel(opening, zone: lesson.timeZone, now: now)
-    }
-
     private func openCapturePreparation() {
         guard let capture, mayStartCapture(now: Date()) else { return }
         capturePreparation = agenda.capturePreparation(scope: model.scope, lessonID: model.lessonID, controller: capture)
@@ -663,7 +658,7 @@ private struct SchoolLessonReportContent: View {
 
     // MARK: Avant la leçon
 
-    private func goalsEditor(savesInline: Bool) -> some View {
+    private func goalsEditor() -> some View {
         Section {
             // Identifiants stables : retirer un objectif ne relit jamais un index disparu.
             ForEach($model.goals) { $goal in
@@ -692,7 +687,7 @@ private struct SchoolLessonReportContent: View {
                 TextField("Note pour moi", text: $model.administrativeNote, axis: .vertical).lineLimit(1...4).disabled(!model.acceptsInput)
             }
             // Le bouton n’apparaît qu’avec une modification : désactivé, il n’était qu’un texte fantôme.
-            if savesInline && model.preparationChanged {
+            if model.preparationChanged {
                 Button { Task { await model.savePreparation() } } label: {
                     DrivyBusyLabel(title: "Enregistrer les objectifs", isBusy: isSending(.savePreparation))
                 }

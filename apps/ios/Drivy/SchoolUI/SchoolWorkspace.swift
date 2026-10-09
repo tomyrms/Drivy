@@ -43,6 +43,7 @@ final class SchoolWorkspace {
 
     @ObservationIgnored private let api: any SchoolAPI
     @ObservationIgnored private var accountRequest = UUID()
+    @ObservationIgnored private var accountRefresh = UUID()
     @ObservationIgnored private var schoolScope = UUID()
     @ObservationIgnored private var searchRequest = UUID()
     @ObservationIgnored private var learnerRequest = UUID()
@@ -63,6 +64,7 @@ final class SchoolWorkspace {
     func reset() {
         SchoolTrainingModelCache.reset()
         accountRequest = UUID()
+        accountRefresh = UUID()
         person = nil
         accountError = nil
         requiresAuthentication = false
@@ -115,10 +117,14 @@ final class SchoolWorkspace {
         if let accountReadAt, now.timeIntervalSince(accountReadAt) < minimumInterval { return }
         let request = accountRequest
         let previousReadAt = accountReadAt
+        accountRefresh = UUID()
+        let refresh = accountRefresh
         accountReadAt = now
         do {
             let result = try await api.me()
-            guard request == accountRequest else { return }
+            // Several screens can request a silent refresh at once. Only the latest
+            // reading may replace the account and its rights, even within one session.
+            guard request == accountRequest, refresh == accountRefresh else { return }
             guard result.personId == current.personId else { await loadAccountFromScratch(); return }
             person = result
             guard let selected = membership else {
@@ -139,7 +145,7 @@ final class SchoolWorkspace {
                 membership = updated
             }
         } catch {
-            guard request == accountRequest else { return }
+            guard request == accountRequest, refresh == accountRefresh else { return }
             // Une panne passagère ne compte pas comme une lecture : la prochaine occasion réessaie.
             if !invalidateAccess(for: error) { accountReadAt = previousReadAt }
         }

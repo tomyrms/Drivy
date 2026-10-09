@@ -13,14 +13,14 @@ struct SchoolLessonHistoryTests {
 
     private static func lesson(_ index: Int, start: String, name: String? = "Camille Perret", status: String = "COMPLETED",
                                zone: String = "Europe/Zurich", instructor: UUID? = nil, version: Int = 1,
-                               revision: UUID? = nil) -> SchoolLesson {
+                               revision: UUID? = nil, actualStart: String? = nil) -> SchoolLesson {
         let end = ISO8601DateFormatter().string(from: (SchoolLesson.date(start) ?? Date(timeIntervalSince1970: 0)).addingTimeInterval(3_000))
         return SchoolLesson(id: UUID(uuidString: String(format: "71000000-0000-4000-8000-%012d", index))!, schoolId: scope.schoolID,
             version: version, trainingId: UUID(uuidString: "70000000-0000-4000-8000-000000000005")!,
             learnerId: UUID(uuidString: String(format: "72000000-0000-4000-8000-%012d", index))!,
             instructorMembershipId: instructor ?? scope.membershipID, plannedStart: start, plannedEnd: end, timeZone: zone,
             meetingPoint: "Gare", status: status, priceCentsSnapshot: 9_000, bufferMinutesSnapshot: 10,
-            actualStart: nil, actualEnd: nil, permitWarning: false, publicationVersion: 0, currentPublishedRevisionId: revision,
+            actualStart: actualStart, actualEnd: nil, permitWarning: false, publicationVersion: 0, currentPublishedRevisionId: revision,
             commercialRevisionVersion: 1, learnerDisplayName: name, instructorDisplayName: "Luc Exemple")
     }
 
@@ -178,11 +178,12 @@ struct SchoolLessonHistoryTests {
         let now = try #require(SchoolLesson.date("2026-10-06T10:00:00Z"))
         let report = Self.lesson(1, start: "2026-10-05T08:00:00Z", revision: UUID())
         let bare = Self.lesson(2, start: "2026-10-04T08:00:00Z")
-        let toFinish = Self.lesson(3, start: "2026-10-03T08:00:00Z", status: "PLANNED")
-        let running = Self.lesson(4, start: "2026-10-06T09:45:00Z", status: "PLANNED")
+        let toFinish = Self.lesson(3, start: "2026-10-03T08:00:00Z", status: "PLANNED", actualStart: "2026-10-03T08:00:00Z")
+        let running = Self.lesson(4, start: "2026-10-06T09:45:00Z", status: "PLANNED", actualStart: "2026-10-06T09:45:00Z")
         let cancelled = Self.lesson(5, start: "2026-10-02T08:00:00Z", status: "CANCELLED")
         let missed = Self.lesson(6, start: "2026-10-01T08:00:00Z", status: "NO_SHOW")
-        let all = [running, report, bare, toFinish, cancelled, missed]
+        let waiting = Self.lesson(7, start: "2026-10-03T08:00:00Z", status: "PLANNED")
+        let all = [running, report, bare, toFinish, cancelled, missed, waiting]
         func shown(_ filter: SchoolLessonHistoryFilter) -> [SchoolLesson] {
             SchoolLessonHistoryWorkspace.visible(all, filter: filter, search: "", now: now)
         }
@@ -196,6 +197,20 @@ struct SchoolLessonHistoryTests {
         let updated = Self.lesson(2, start: "2026-10-04T08:00:00Z", version: 3)
         let stale = Self.lesson(1, start: "2026-10-05T08:00:00Z", version: 0)
         #expect(SchoolLessonHistoryWorkspace.merging([report, bare], [updated, stale, toFinish]) == [report, updated, toFinish])
+    }
+
+    @Test func dossierFiltersKeepAnOverdueUnstartedLessonWaitingUntilItReallyStarts() throws {
+        let now = try #require(SchoolLesson.date("2026-10-06T10:30:00Z"))
+        let planned = Self.lesson(1, start: "2026-10-06T12:00:00Z", status: "PLANNED")
+        let waiting = Self.lesson(2, start: "2026-10-06T10:00:00Z", status: "PLANNED")
+        let oldWaiting = Self.lesson(3, start: "2026-10-05T10:00:00Z", status: "PLANNED")
+        let running = Self.lesson(4, start: "2026-10-06T10:00:00Z", status: "PLANNED", actualStart: "2026-10-06T10:10:00Z")
+        let toFinish = Self.lesson(5, start: "2026-10-05T10:00:00Z", status: "PLANNED", actualStart: "2026-10-05T10:10:00Z")
+        let lessons = [planned, waiting, oldWaiting, running, toFinish]
+        #expect(lessons.filter { TrainingLessonFilter.upcoming.includes($0, now: now) } == [planned, running])
+        #expect(lessons.filter { TrainingLessonFilter.past.includes($0, now: now) } == [waiting, oldWaiting, toFinish])
+        #expect(lessons.filter { TrainingLessonFilter.toFinish.includes($0, now: now) } == [toFinish])
+        #expect(waiting.drivyState(now: now) == .waiting && oldWaiting.drivyState(now: now) == .waiting)
     }
 }
 

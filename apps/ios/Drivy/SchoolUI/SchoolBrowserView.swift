@@ -250,8 +250,11 @@ private struct SchoolOverviewView: View {
 /// `tel:`, `sms:` and `mailto:` links built from what the school recorded, never guessed.
 enum SchoolContactLinks {
     private static func dialable(_ phone: String) -> String? {
-        let characters = phone.filter { ($0.isASCII && $0.isNumber) || $0 == "+" }
-        let value = String(characters.prefix(1)) + characters.dropFirst().filter { $0 != "+" }
+        // Remove formatting only. A note, extension or misplaced + is not a new
+        // number: keep the recorded contact readable without offering a wrong call.
+        guard phone.allSatisfy({ ($0.isASCII && $0.isNumber) || $0 == "+" || $0.isWhitespace || "().-".contains($0) }) else { return nil }
+        let value = phone.filter { !$0.isWhitespace && !"().-".contains($0) }
+        guard !value.dropFirst().contains("+") else { return nil }
         return value.filter(\.isNumber).count >= 3 ? value : nil
     }
     static func call(_ phone: String) -> URL? { dialable(phone).flatMap { URL(string: "tel:\($0)") } }

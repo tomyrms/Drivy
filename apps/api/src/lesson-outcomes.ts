@@ -74,6 +74,7 @@ export function registerLessonOutcomes(app:FastifyInstance,options:{pool:Pool;ve
   const data=await run<Lesson>(r,'MARK_NO_SHOW',body,['ADMIN','INSTRUCTOR'],(schoolId,lessonId)=>lessonCommandGuards(schoolId,{lessonId}),async(db,_actor,school,lessonId,expected)=>{
    const old=await getLesson(db,school.id,lessonId,true);checkVersion(old.version,expected);
    if(old.status!=='PLANNED')throw conflict('LESSON_CLOSED','Cette leçon possède déjà un résultat.');
+   if(old.actual_start)throw conflict('LESSON_STARTED','Une leçon commencée ne peut pas être marquée comme absence.');
    if(old.planned_end.getTime()>Date.now())throw conflict('LESSON_NOT_ENDED','Une absence se constate après la fin prévue du rendez-vous.');
    const row=(await db.query<LessonRow>(`UPDATE drivy.lesson SET status='NO_SHOW',version=version+1,no_show_reason=$3 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lessonId,body.reason])).rows[0]!;
    await releaseFutureOccupations(db,school.id,lessonId);await openClosedAccount(db,row);await event(db,row,body.operationId,'LessonNoShow');

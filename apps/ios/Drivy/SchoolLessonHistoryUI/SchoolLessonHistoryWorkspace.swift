@@ -36,7 +36,7 @@ enum SchoolLessonHistoryFilter: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .all: true
         case .withReport: lesson.drivyContents.contains(.report)
-        case .toFinish: DrivyLessonState(status: lesson.status, start: lesson.startsAt, end: lesson.endsAt, now: now) == .toFinish
+        case .toFinish: lesson.drivyState(now: now) == .toFinish
         case .closed: lesson.status == "CANCELLED" || lesson.status == "NO_SHOW"
         }
     }

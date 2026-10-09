@@ -146,13 +146,15 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
   const value=await command(r,'COMPLETE_LESSON',bound,expected,{lessonId},async(db,actor,school)=>{
    const old=await getLesson(db,school.id,lessonId,true);checkVersion(old.version,expected);
    if(old.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Cette leçon possède déjà un résultat.');
-   if(Date.parse(body.actualEnd)<=Date.parse(body.actualStart)||Date.parse(body.actualEnd)>Date.now()+300_000)throw new ApiError(422,'INVALID_ACTUAL_INTERVAL','La fin réelle doit suivre le début et ne pas être future.');
+   const actualStart=old.actual_start?.toISOString()??body.actualStart;
+   if(Date.parse(body.actualEnd)<=Date.parse(actualStart)||Date.parse(body.actualEnd)>Date.now()+300_000)throw new ApiError(422,'INVALID_ACTUAL_INTERVAL','La fin réelle doit suivre le début et ne pas être future.');
    // R07 : sans contrôle de permis approuvé et valide à la date de la leçon, la réalisation reste déclarable avec anomalie motivée.
    if(old.permit_warning!==false&&!body.anomalyReason?.trim())throw new ApiError(422,'ANOMALY_REASON_REQUIRED','Indiquez le motif du constat avec contrôle de permis non confirmé et, le cas échéant, des écarts horaires.');
    if(old.commercial_selection.mode!=='UNIT_PRICE')throw new ApiError(409,'ENTITLEMENT_NOT_READY','Le constat couvert par un pack exige le registre de consommation des droits.');
-   // Une leçon à venir ne devient pas « réalisée » par erreur : le constat n'est possible qu'à partir de 15 minutes avant son début prévu.
-   if(Date.now()<old.planned_start.getTime()-15*60_000)throw new ApiError(422,'LESSON_NOT_STARTED','Cette leçon n’a pas encore commencé : le constat est possible 15 minutes avant son début prévu.');
-   const lesson=(await db.query<LessonRow>(`UPDATE drivy.lesson SET status='COMPLETED',version=version+1,actual_start=$3,actual_end=$4,completion_anomaly_reason=$5 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lessonId,body.actualStart,body.actualEnd,body.anomalyReason?.trim()?body.anomalyReason:null])).rows[0]!;
+   // Compatibilité du constat rétrospectif AP49 : les heures déclarées restent nécessaires lorsqu'aucun départ n'a été enregistré.
+   // Un départ durable prime toujours sur le créneau prévu, y compris lorsque la leçon a commencé en avance.
+   if(!old.actual_start&&Date.now()<old.planned_start.getTime()-15*60_000)throw new ApiError(422,'LESSON_NOT_STARTED','Commencez la leçon avant de la terminer.');
+   const lesson=(await db.query<LessonRow>(`UPDATE drivy.lesson SET status='COMPLETED',version=version+1,actual_start=$3,actual_end=$4,completion_anomaly_reason=$5 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lessonId,actualStart,body.actualEnd,body.anomalyReason?.trim()?body.anomalyReason:null])).rows[0]!;
    const created=(await db.query<DraftRow>(`INSERT INTO drivy.report_draft(school_id,lesson_id,author_membership_id,worked_on,observation_text,next_step) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[school.id,lessonId,actor.membershipId,body.workedOn??'',body.observationText??'',body.nextStep??''])).rows[0]!;
    await attachLiveObservations(db,lesson,created.id,actor.membershipId);
    const accountId=randomUUID();await db.query('INSERT INTO drivy.lesson_account(id,school_id,lesson_id,planned_price_cents) VALUES($1,$2,$3,$4)',[accountId,school.id,lessonId,old.price_cents_snapshot]);

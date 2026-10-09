@@ -269,6 +269,40 @@ struct SchoolProfileWorkspaceTests {
         #expect(await model.saveProfileAfterConfirmation() == false)
         #expect(box.value != nil && model.pendingAwaitsReview && !model.acceptsInput && !model.canMutate)
     }
+
+    @Test func rereadingAConcurrentProfileEditKeepsTheDraftButNeverRebasesItsVersion() async {
+        let api = ProfileAPIStub()
+        let editing = ProfileFixture.workspace(api: api)
+        await editing.load()
+        editing.draft.contactPhone = "0791112233"
+        api.profileValue = ProfileFixture.profile(version: 2, phone: "0794445566")
+        await editing.load()
+        #expect(editing.hasProfileConflict && editing.needsReload && !editing.canSaveProfile)
+        #expect(editing.profile?.version == 1 && editing.draft.contactPhone == "0791112233")
+        #expect(await editing.saveProfileAfterConfirmation() == false)
+        #expect(api.commands.isEmpty)
+        // Repeated retries cannot erase the conflict or authorize an overwrite.
+        await editing.load()
+        #expect(editing.hasProfileConflict && editing.profile?.version == 1)
+        // Only the explicit reload discards the local draft and accepts version 2.
+        await editing.load(preserveDraft: false)
+        #expect(!editing.hasProfileConflict && editing.canMutate && !editing.hasEdits)
+        #expect(editing.profile?.version == 2 && editing.draft.contactPhone == "0794445566")
+    }
+
+    @Test func rereadingAnUnrelatedProfileEditPreservesBothChanges() async {
+        let api = ProfileAPIStub(), box = ConfigurationOutboxStub()
+        let model = ProfileFixture.workspace(api: api, box: box)
+        await model.load()
+        model.draft.contactPhone = "0791112233"
+        api.profileValue = ProfileFixture.profile(version: 2, email: "corrige@example.invalid")
+        await model.load()
+        #expect(!model.hasProfileConflict && model.canSaveProfile)
+        #expect(model.draft.contactPhone == "0791112233" && model.draft.contactEmail == "corrige@example.invalid")
+        #expect(await model.saveProfileAfterConfirmation())
+        #expect(api.commands.last?.resourceVersion == 2)
+        #expect(api.profileValue.contactPhone == "0791112233" && api.profileValue.contactEmail == "corrige@example.invalid")
+    }
     @Test func delayedReadCannotRestoreAClosedProfile() async {
         let api = ProfileAPIStub(); let latch = ProfileReadLatch()
         api.schoolHandler = { await latch.wait() }
@@ -283,7 +317,7 @@ struct SchoolProfileWorkspaceTests {
         let model = SchoolProfileWorkspace(scope: ConfigurationFixture.scope(), roles: ["LEARNER"], learnerID: ProfileFixture.learnerID,
             isOwnProfile: true, onboardingKind: .student, api: api, outbox: ConfigurationOutboxStub())
         await model.load(); #expect(api.commands.isEmpty)
-        #expect(await model.saveOnboarding(step: .review, skipOptional: true))
+        #expect(await model.saveOnboarding(step: .review, skipping: ["PHOTO", "NOTIFICATIONS", "DEVICE"]))
         let body = try JSONSerialization.jsonObject(with: api.commands[0].body) as? [String: Any]
         #expect(Set(body?["skippedOptionalSteps"] as? [String] ?? []) == ["PHOTO", "NOTIFICATIONS", "DEVICE"])
         #expect(api.commands.count == 1)

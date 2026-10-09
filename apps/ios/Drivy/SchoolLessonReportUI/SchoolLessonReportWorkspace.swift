@@ -215,7 +215,7 @@ import Observation
     }
     /// Absence de l’élève : après la fin prévue, par le moniteur de la leçon ou l’administration (AP44).
     func mayMarkNoShow(now: Date = Date()) -> Bool {
-        guard let lesson, lesson.status == "PLANNED", let end = lesson.endsAt, end <= now else { return false }
+        guard let lesson, lesson.status == "PLANNED", !lesson.hasStarted, let end = lesson.endsAt, end <= now else { return false }
         return isAuthor || membership.roles.contains("ADMIN")
     }
     /// Position enregistrée d’une observation ancrée, si le trajet visible la contient.
@@ -226,7 +226,7 @@ import Observation
     var canRetry: Bool {
         guard let pending, pending.kind.isReport, pending.scope == scope, pendingReviewed, !invalidated, !isBusy, !isLoading else { return false }
         switch pending.kind {
-        case .completeLesson: return isAuthor && pending.resourceID == lessonID
+        case .startLesson, .completeLesson: return isAuthor && pending.resourceID == lessonID
         case .savePreparation: return isAuthor && pending.routeResourceID == lessonID
         case .saveWish: return isOwnLearner && pending.routeResourceID == lesson?.trainingId
         case .saveReportDraft: return isAuthor && pending.resourceID == draft?.id
@@ -241,6 +241,7 @@ import Observation
         guard let pending else { return "" }
         let title: String
         switch pending.kind {
+        case .startLesson: title = "Début de la leçon"
         case .savePreparation: title = "Enregistrement de la préparation"
         case .saveWish: title = "Enregistrement du souhait"
         case .completeLesson: title = "Fin de la leçon"
@@ -507,15 +508,26 @@ import Observation
     }
     /// Motif exigé seulement tant que le permis n’est pas confirmé (R07).
     var completionNeedsReason: Bool { lesson?.permitWarning ?? true }
+    /// Même file durable et même preuve d’opération que la fin de leçon.
+    func start() async -> Bool {
+        await settled()
+        guard let lesson, canMutate, isAuthor, lesson.status == "PLANNED", !lesson.hasStarted else { return false }
+        struct Start: Encodable { let operationId: UUID }
+        let operation = UUID()
+        let confirmed = await prepare(Start(operationId: operation), id: operation, kind: .startLesson,
+            version: lesson.version, resourceID: lessonID)
+        return confirmed && self.lesson?.hasStarted == true
+    }
     func complete(start: Date, end: Date, reason: String, localCaptureStopped: Bool) async -> Bool {
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         // Terminer depuis des objectifs en cours de saisie ne doit ni les perdre ni clôturer sur leur ancienne version.
         if preparationChanged {
             guard preparationValid, await savePreparation(), !preparationChanged else { return false }
         }
-        guard let lesson, canMutate, isAuthor, lesson.status == "PLANNED", localCaptureStopped, end > start,
+        guard let lesson, canMutate, isAuthor, lesson.status == "PLANNED", lesson.hasStarted, localCaptureStopped, end > start,
               end <= Date().addingTimeInterval(300), !completionNeedsReason || !trimmed.isEmpty, reason.unicodeScalars.count <= 1_000 else { return false }
         let operation = UUID(), iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         // Le constat part sans texte : l’école partage tout bilan non vide, et rien n’a encore été rédigé.
         // Les objectifs sont proposés ensuite comme travail réalisé, sur l’appareil seulement.
         proposesWorkedOn = true
@@ -650,7 +662,7 @@ import Observation
         switch kind {
         case .updateLessonSharing, .recordPermitCheck: return nil
         // La fiche change d’état sous les yeux (bilan à rédiger, « Absence » en tête) : rien à redire.
-        case .completeLesson, .markNoShow: return nil
+        case .startLesson, .completeLesson, .markNoShow: return nil
         case .savePreparation: return "Objectifs enregistrés."
         case .saveWish: return "Souhait enregistré."
         default: return "Enregistré."

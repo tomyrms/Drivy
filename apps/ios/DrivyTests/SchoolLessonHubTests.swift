@@ -77,7 +77,7 @@ struct SchoolLessonHubTests {
     @Test func movingAndCancellingStayWithStaffOnPlannedLessons() {
         let lesson = HubFixture.lesson(), before = HubFixture.date("2026-09-28T11:00:00Z"), after = HubFixture.date("2026-09-28T12:30:00Z")
         #expect(SchoolLessonHubRules.mayMove(lesson, roles: ["INSTRUCTOR"], now: before))
-        #expect(!SchoolLessonHubRules.mayMove(lesson, roles: ["INSTRUCTOR"], now: after))
+        #expect(SchoolLessonHubRules.mayMove(lesson, roles: ["INSTRUCTOR"], now: after))
         #expect(SchoolLessonHubRules.mayCancel(lesson, roles: ["ADMIN"]))
         #expect(!SchoolLessonHubRules.mayCancel(lesson, roles: ["LEARNER"]))
         #expect(!SchoolLessonHubRules.mayCancel(HubFixture.lesson(status: "CANCELLED"), roles: ["ADMIN"]))
@@ -462,11 +462,11 @@ enum HubFixture {
         while !(await condition()), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
     }
 
-    static func lesson(status: String = "PLANNED", meetingPoint: String = "Gare de Lausanne", permitWarning: Bool = true) -> SchoolLesson {
+    static func lesson(status: String = "PLANNED", meetingPoint: String = "Gare de Lausanne", permitWarning: Bool = true, actualStart: String? = nil) -> SchoolLesson {
         SchoolLesson(id: lessonID, schoolId: schoolID, version: 2, trainingId: trainingID, learnerId: learnerID,
             instructorMembershipId: ConfigurationFixture.membershipID, plannedStart: "2026-09-28T12:00:00Z", plannedEnd: "2026-09-28T12:50:00Z",
             timeZone: "Europe/Zurich", meetingPoint: meetingPoint, status: status, priceCentsSnapshot: 9_000, bufferMinutesSnapshot: 10,
-            actualStart: nil, actualEnd: nil, permitWarning: permitWarning, publicationVersion: 0, currentPublishedRevisionId: nil,
+            actualStart: actualStart, actualEnd: nil, permitWarning: permitWarning, publicationVersion: 0, currentPublishedRevisionId: nil,
             commercialRevisionVersion: 1)
     }
 

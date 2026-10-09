@@ -53,11 +53,17 @@ import XCTest
         XCTAssertFalse(attention.exists)
     }
 
-    func testFinishingALessonRequiresConfirmationButNoDatesOrReportText() {
+    func testAnUnstartedLessonMustStartBeforeFinishingAndSavingItsReport() {
         continueAfterFailure = false
         let app = launch("lesson-finish")
         let finish = app.buttons["lesson-complete"]
+        let start = app.buttons["lesson-start"]
+        XCTAssertTrue(start.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertFalse(finish.exists)
+        capture(app, name: "lesson-waiting-before-start")
+        start.tap()
         XCTAssertTrue(finish.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertFalse(start.exists)
         finish.tap()
         let confirm = completionConfirmation(in: app)
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), app.debugDescription)

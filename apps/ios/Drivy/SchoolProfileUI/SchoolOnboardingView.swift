@@ -112,7 +112,9 @@ struct SchoolOnboardingView: View {
     }
 
     @ViewBuilder private var statusBlock: some View {
-        if let error = model.errorMessage, !isWorking {
+        if model.hasProfileConflict, !isWorking {
+            SchoolProfileConflictNotice(model: model)
+        } else if let error = model.errorMessage, !isWorking {
             SchoolErrorNotice(message: error, retry: { Task { await model.load() } })
         }
         if let pending = model.pending {

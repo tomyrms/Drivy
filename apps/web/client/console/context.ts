@@ -8,6 +8,7 @@ import type { School } from '../school-api';
 import type { NavigationQuery } from './route';
 import type { SectionKey } from './sections';
 import { resumableDraft } from './draft-model';
+import { readStateFor, type ScopedReadState } from './load-model';
 export { sectionKeys, type SectionKey } from './sections';
 
 export interface ConsoleContextValue {
@@ -78,21 +79,21 @@ export function readError(error: unknown): string {
 
 export type Loaded<T> = { status: 'loading' | 'ready' | 'error'; data: T | undefined; error: string | null; reload: () => void };
 
-/** Load with a generation guard: a late answer never replaces a newer one. Keeps the last data while reloading. */
-export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[]): Loaded<T> {
-  const [state, setState] = useState<{ status: 'loading' | 'ready' | 'error'; data: T | undefined; error: string | null }>({ status: 'loading', data: undefined, error: null });
+/** Keep the same resource during refresh; hide the previous resource immediately when scope changes. */
+export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[], scope = String(deps[0] ?? '')): Loaded<T> {
+  const [state, setState] = useState<ScopedReadState<T>>({ scope, status: 'loading', data: undefined, error: null });
   const generation = useRef(0);
   const run = useCallback(loader, deps);
   const reload = useCallback(() => {
     const current = ++generation.current;
-    setState(previous => ({ status: 'loading', data: previous.data, error: null }));
-    run().then(data => { if (current === generation.current) setState({ status: 'ready', data, error: null }); },
+    setState(previous => ({ scope, status: 'loading', data: readStateFor(previous, scope).data, error: null }));
+    run().then(data => { if (current === generation.current) setState({ scope, status: 'ready', data, error: null }); },
       error => { if (current === generation.current) setState(previous => ({ status: 'error',
-        data: error instanceof RequestFailure && [401, 403, 404].includes(error.status ?? 0) ? undefined : previous.data,
+        scope, data: error instanceof RequestFailure && [401, 403, 404].includes(error.status ?? 0) ? undefined : readStateFor(previous, scope).data,
         error: readError(error) })); });
-  }, [run]);
+  }, [run, scope]);
   useEffect(() => { reload(); return () => { generation.current++; }; }, [reload]);
-  return { ...state, reload };
+  return { ...readStateFor(state, scope), reload };
 }
 
 /** Draft that follows the school's value until the person edits it. */

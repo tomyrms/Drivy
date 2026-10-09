@@ -1,5 +1,23 @@
 import { describe, expect, test } from 'vitest';
-import { addDays, civilDateIn, dayOf, formatTimeRange, formatWeek, groupByDay, weekStart, weekWindow } from '../client/agenda-model.js';
+import { addDays, civilDateIn, dayOf, formatTimeRange, formatWeek, groupByDay, lessonPhase, weekStart, weekWindow } from '../client/agenda-model.js';
+
+describe('Agenda : heure prévue distincte du démarrage enregistré', () => {
+  const lesson = { status: 'PLANNED', plannedStart: '2026-10-09T12:00:00Z', plannedEnd: '2026-10-09T13:00:00Z', actualStart: null };
+  test('à 14 h 30, la leçon de 14 h reste en attente tant que personne ne la démarre', () => {
+    expect(lessonPhase(lesson, Date.parse('2026-10-09T11:59:00Z'))).toBe('planned');
+    expect(lessonPhase(lesson, Date.parse('2026-10-09T12:30:00Z'))).toBe('waiting');
+    expect(lessonPhase(lesson, Date.parse('2026-10-10T12:30:00Z'))).toBe('waiting');
+  });
+  test('seul un démarrage enregistré autorise En cours puis À terminer', () => {
+    const started = { ...lesson, actualStart: '2026-10-09T12:05:00Z' };
+    expect(lessonPhase(started, Date.parse('2026-10-09T12:30:00Z'))).toBe('started');
+    expect(lessonPhase(started, Date.parse('2026-10-09T13:00:00Z'))).toBe('to-finish');
+    expect(lessonPhase({ ...lesson, actualStart: 'invalid' }, Date.parse('2026-10-09T12:30:00Z'))).toBe('waiting');
+  });
+  test.each([['COMPLETED', 'completed'], ['CANCELLED', 'cancelled'], ['NO_SHOW', 'absent']] as const)('préserve le constat %s', (status, expected) => {
+    expect(lessonPhase({ ...lesson, status, actualStart: '2026-10-09T12:05:00Z' }, Date.parse('2026-10-10T12:30:00Z'))).toBe(expected);
+  });
+});
 
 describe('Agenda : semaine dans le fuseau de l’école', () => {
   test('le calcul de dates civiles traverse mois et années', () => {

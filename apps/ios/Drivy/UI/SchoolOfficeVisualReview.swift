@@ -145,6 +145,8 @@ struct SchoolOfficeVisualReview: View {
                   let value = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
                   var lesson = value["data"] as? [String: Any] else { throw SchoolAPIError.invalidResponse }
             lesson["permitWarning"] = true
+            // Ce scénario ouvre la fin d’une leçon déjà commencée explicitement.
+            lesson["actualStart"] = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-3000))
             responses[planned] = try envelope(lesson)
         }
         if let bytes = responses["\(root)/lessons/\(SchoolVisualData.lessonID.uuidString)/report-drafts"],
@@ -173,15 +175,22 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
         func envelope(_ value: Any) throws -> Data {
             try JSONSerialization.data(withJSONObject: ["data": value, "requestId": UUID().uuidString, "serverTime": "2026-09-29T10:00:00Z"])
         }
-        if request.httpMethod == "POST", url.lastPathComponent == "complete" {
+        if request.httpMethod == "POST", ["start", "complete"].contains(url.lastPathComponent) {
             let lessonPath = url.deletingLastPathComponent().path
             guard let bytes = responses[lessonPath], let envelopeObject = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
                   var lesson = envelopeObject["data"] as? [String: Any],
                   let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any] else { throw SchoolAPIError.invalidResponse }
-            lesson["status"] = "COMPLETED"; lesson["version"] = 2
-            lesson["actualStart"] = body["actualStart"]; lesson["actualEnd"] = body["actualEnd"]
+            let version = (lesson["version"] as? Int ?? 1) + 1
+            lesson["version"] = version
+            if url.lastPathComponent == "start" {
+                lesson["actualStart"] = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60))
+            } else {
+                lesson["status"] = "COMPLETED"
+                lesson["actualEnd"] = body["actualEnd"]
+            }
             responses[lessonPath] = try envelope(lesson)
-            try receipt(body: body, url: url, command: "COMPLETE_LESSON", resource: "Lesson", id: lesson["id"] as! String)
+            try receipt(body: body, url: url, command: url.lastPathComponent == "start" ? "START_LESSON" : "COMPLETE_LESSON",
+                resource: "Lesson", id: lesson["id"] as! String, version: version)
             return SchoolHTTPResponse(data: try envelope([:]), status: 200, url: url, contentType: "application/json")
         }
         if request.httpMethod == "PUT", url.path.contains("/report-drafts/"),
@@ -196,11 +205,11 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
         return SchoolHTTPResponse(data: bytes, status: 200, url: url, contentType: "application/json")
     }
 
-    private func receipt(body: [String: Any], url: URL, command: String, resource: String, id: String) throws {
+    private func receipt(body: [String: Any], url: URL, command: String, resource: String, id: String, version: Int = 2) throws {
         guard let operation = body["operationId"] as? String else { throw SchoolAPIError.invalidResponse }
         let schoolRoot = url.pathComponents.prefix(4).joined(separator: "/").replacingOccurrences(of: "//", with: "/")
         let data: [String: Any] = ["operationId": operation, "commandType": command, "resourceType": resource,
-            "resourceId": id, "resourceVersion": 2, "committedAt": "2026-09-29T10:00:00Z"]
+            "resourceId": id, "resourceVersion": version, "committedAt": "2026-09-29T10:00:00Z"]
         responses["\(schoolRoot)/operations/\(operation)"] = try JSONSerialization.data(withJSONObject: ["data": data,
             "requestId": UUID().uuidString, "serverTime": "2026-09-29T10:00:00Z"])
     }

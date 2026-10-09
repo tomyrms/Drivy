@@ -10,8 +10,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
 }
 
 /// Une leçon qui commence maintenant, avec un élève : choisir l’élève suffit quand il n’a qu’une formation.
-/// La demande est chiffrée dans la file avant l’envoi ; sans la route côté serveur (404), la planification
-/// classique prend le relais.
+/// La demande est chiffrée dans la file avant l’envoi ; un refus reste visible dans ce parcours.
 @MainActor @Observable final class SchoolStartNowWorkspace: Identifiable {
     let id = UUID()
     let scope: SchoolCommandScope
@@ -27,8 +26,6 @@ struct SchoolStartNowBody: Encodable, Sendable {
     private(set) var contextValid = false
     private(set) var errorMessage: String?
     private(set) var pending: PendingSchoolCommand?
-    /// Le serveur ne connaît pas encore « Démarrer une leçon ».
-    private(set) var unsupported = false
     private(set) var started: SchoolLesson?
     /// Le serveur a refusé : un rendez-vous du moniteur ou de l’élève tombe pendant la leçon. Rien n’est forcé.
     private(set) var conflicted = false
@@ -152,7 +149,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
     /// Un refus explicite retire les données affichées sans effacer une demande durable en attente.
     private func clearContext() {
         learners = []; trainings = []; defaults = nil; learnerID = nil; trainingID = nil; meetingPoint = ""
-        contextValid = false; started = nil; conflicted = false; planInstead = false; unsupported = false
+        contextValid = false; started = nil; conflicted = false; planInstead = false
     }
 
     /// A successful context read cannot repair the encrypted outbox. Its failure
@@ -224,7 +221,6 @@ struct SchoolStartNowBody: Encodable, Sendable {
             if fresh, let failure = error as? SchoolPlanningFailure, failure == .notFound || failure.definitiveRejection {
                 do { try outbox.remove(command); pending = nil }
                 catch { storageAvailable = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription; return nil }
-                if failure == .notFound { unsupported = true; return nil }
             }
             errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription
             if let failure = error as? SchoolPlanningFailure {
@@ -355,7 +351,7 @@ struct SchoolStartNowView: View {
             Button {
                 Task {
                     _ = await model.start()
-                    if model.started != nil || model.unsupported { dismiss() }
+                    if model.started != nil { dismiss() }
                 }
             } label: {
                 DrivyBusyLabel(title: "Démarrer maintenant", busyTitle: "Démarrage…", isBusy: model.isBusy)
@@ -387,6 +383,7 @@ struct SchoolStartNowButton<Content: View>: View {
     @State private var startNow: SchoolStartNowWorkspace?
     @State private var lastStartNow: SchoolStartNowWorkspace?
     @State private var preparation: SchoolCapturePreparationWorkspace?
+    @State private var preparingLesson: SchoolLesson?
     @State private var planning: SchoolPlanningWorkspace?
     @State private var opened: SchoolLesson?
 
@@ -403,13 +400,18 @@ struct SchoolStartNowButton<Content: View>: View {
             .disabled(agendaClient == nil || !instructs)
             .onChange(of: scopeKey) { _, _ in
                 lastStartNow?.invalidate(); lastStartNow = nil; startNow = nil
-                preparation?.invalidate(); preparation = nil
+                preparation?.invalidate(); preparation = nil; preparingLesson = nil
                 planning?.invalidate(); planning = nil; opened = nil
             }
             .sheet(item: $startNow, onDismiss: { closed() }) { model in
                 SchoolStartNowView(model: model)
             }
-            .sheet(item: $preparation, onDismiss: { onFinished() }) { model in
+            .sheet(item: $preparation, onDismiss: {
+                if let lesson = preparingLesson, SchoolLessonCaptureStatus(controller: captureController, lessonID: lesson.id) != .collecting {
+                    opened = lesson
+                } else { onFinished() }
+                preparingLesson = nil
+            }) { model in
                 SchoolCapturePreparationView(model: model, schoolWorkspace: workspace)
             }
             .sheet(item: $planning, onDismiss: { onFinished() }) { model in
@@ -434,17 +436,18 @@ struct SchoolStartNowButton<Content: View>: View {
         lastStartNow = model; startNow = model
     }
 
-    /// Leçon créée : le trajet part aussitôt si possible, sinon la leçon s’ouvre. Conflit de planning ou serveur sans
-    /// la route : la planification classique s’ouvre avec l’élève déjà choisi.
+    /// Leçon créée : le trajet part aussitôt si possible, sinon la leçon s’ouvre. En cas de conflit,
+    /// la planification est choisie explicitement, avec l’élève déjà connu.
     private func closed() {
         guard let model = lastStartNow else { return }
         lastStartNow = nil
         if let lesson = model.started {
             if mayStart(lesson), let agendaClient, let person = workspace.person, let membership = workspace.membership {
+                preparingLesson = lesson
                 preparation = agendaClient.capturePreparation(scope: agendaClient.scope(person: person, membership: membership),
                     lessonID: lesson.id, controller: captureController)
             } else { opened = lesson }
-        } else if model.planInstead || model.unsupported {
+        } else if model.planInstead {
             guard let agendaClient, let person = workspace.person, let membership = workspace.membership else { return onFinished() }
             let planned = SchoolPlanningWorkspace(scope: agendaClient.scope(person: person, membership: membership),
                 client: agendaClient.planningClient, date: Date().addingTimeInterval(120))

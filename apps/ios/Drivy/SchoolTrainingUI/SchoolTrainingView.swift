@@ -28,7 +28,8 @@ struct SchoolLessonPeriod: Equatable {
     }
 }
 
-/// La formation ouverte depuis le dossier d’un élève (moniteur).
+/// La formation ouverte depuis les écrans de revue visuelle. Le dossier produit
+/// utilise SchoolTrainingScreen directement, dans son propre défilement.
 struct SchoolTrainingView: View {
     let client: SchoolTrainingClient
     @Bindable var workspace: SchoolWorkspace
@@ -200,9 +201,9 @@ struct SchoolLessonChange: Sendable {
     let lessonID: UUID
 }
 
-/// Filtre de statut des leçons du dossier. Deux ensembles disjoints (à venir, passées) ; « À terminer »
-/// est le sous-ensemble des passées restées sans issue.
-private enum TrainingLessonFilter: String, CaseIterable, Identifiable {
+/// Filtre de statut des leçons du dossier. Une leçon dont l’horaire est passé
+/// reste en attente sans démarrage ; « À terminer » exige un démarrage enregistré.
+enum TrainingLessonFilter: String, CaseIterable, Identifiable {
     case all, upcoming, past, toFinish
     var id: String { rawValue }
     var title: String {
@@ -216,9 +217,9 @@ private enum TrainingLessonFilter: String, CaseIterable, Identifiable {
         case .toFinish: "Aucune leçon à terminer"
         }
     }
-    func includes(_ lesson: SchoolLesson) -> Bool {
-        let state = lesson.drivyState
-        let isUpcoming = lesson.status == "PLANNED" && state != .toFinish
+    func includes(_ lesson: SchoolLesson, now: Date = Date()) -> Bool {
+        let state = lesson.drivyState(now: now)
+        let isUpcoming = state == .planned || state == .inProgress
         switch self {
         case .all: return true
         case .upcoming: return isUpcoming
@@ -228,8 +229,8 @@ private enum TrainingLessonFilter: String, CaseIterable, Identifiable {
     }
 }
 
-/// Ordre des leçons. « Chronologique » garde la prochaine leçon en tête : à venir (croissant), à terminer,
-/// puis passées (la plus récente d’abord). Les deux autres sont strictement croissant ou décroissant.
+/// Ordre des leçons. « Chronologique » garde la prochaine leçon en tête : à venir (croissant),
+/// en attente, à terminer, puis passées (la plus récente d’abord).
 private enum TrainingLessonOrder: String, CaseIterable, Identifiable {
     case chronological, newestFirst, oldestFirst
     var id: String { rawValue }
@@ -621,9 +622,13 @@ private struct SchoolTrainingContent: View {
         case .oldestFirst: return monthGroups(values, newestFirst: false)
         case .chronological:
             let toFinish = values.filter { $0.drivyState == .toFinish }
-            let upcoming = values.filter { $0.status == "PLANNED" && $0.drivyState != .toFinish }
+            let waiting = values.filter { $0.drivyState == .waiting }
+            let upcoming = values.filter { $0.drivyState == .planned || $0.drivyState == .inProgress }
             let past = values.filter { $0.status != "PLANNED" }
             var result = monthGroups(upcoming, newestFirst: false, prefix: "upcoming")
+            if !waiting.isEmpty {
+                result.append(TrainingLessonMonth(id: "waiting", title: "En attente", lessons: sortedByDate(waiting, newestFirst: false)))
+            }
             if !toFinish.isEmpty {
                 result.append(TrainingLessonMonth(id: "to-finish", title: "À terminer", lessons: sortedByDate(toFinish, newestFirst: false)))
             }
@@ -667,9 +672,9 @@ private struct SchoolTrainingContent: View {
             DrivyRowGroup {
                 ForEach(month.lessons) { lesson in
                     Button { opened = OpenedLesson(id: lesson.id) } label: {
-                        // Sous le titre « À terminer », la ligne ne redit pas son état.
+                        // Sous un titre d’état, la ligne ne redit pas la même information.
                         SchoolLessonHistoryRow(lesson: lesson, permit: permitNames[lesson.trainingId],
-                            instructor: instructorName(of: lesson), showsState: month.id != "to-finish")
+                            instructor: instructorName(of: lesson), showsState: month.id != "to-finish" && month.id != "waiting")
                     }
                         .buttonStyle(DrivyRowButtonStyle())
                         .disabled(feed.model(for: lesson)?.canOpenPedagogicalContent != true)

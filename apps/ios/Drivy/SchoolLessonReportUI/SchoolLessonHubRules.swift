@@ -111,6 +111,7 @@ enum SchoolLessonHubRules {
 
     /// CAPTURE_START_WINDOW : le serveur n’autorise un départ qu’à 30 minutes près de l’horaire prévu.
     static func withinCaptureWindow(_ lesson: SchoolLesson, now: Date) -> Bool {
+        if lesson.hasStarted { return true }
         guard let start = lesson.startsAt, let end = lesson.endsAt else { return false }
         return now >= start.addingTimeInterval(-1_800) && now < end.addingTimeInterval(1_800)
     }
@@ -122,26 +123,9 @@ enum SchoolLessonHubRules {
         return capture == .none && controllerCanPrepare && withinCaptureWindow(lesson, now: now)
     }
 
-    /// Départ possible plus tard (ouverture de la fenêtre), toutes les autres conditions réunies.
-    static func captureOpening(lesson: SchoolLesson, isAuthor: Bool, school: SchoolDetails?,
-                               capture: SchoolLessonCaptureStatus, controllerCanPrepare: Bool, now: Date) -> Date? {
-        guard let start = lesson.startsAt else { return nil }
-        let opening = start.addingTimeInterval(-1_800)
-        guard now < opening, mayStartCapture(lesson: lesson, isAuthor: isAuthor, school: school, capture: capture,
-            controllerCanPrepare: controllerCanPrepare, now: opening) else { return nil }
-        return opening
-    }
-    /// « 13:30 » si l’ouverture tombe aujourd’hui (fuseau de la leçon) ; sinon rien, la date de la leçon suffit.
-    static func openingLabel(_ opening: Date, zone: String, now: Date) -> String? {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: zone) ?? .current
-        guard calendar.isDate(opening, inSameDayAs: now) else { return nil }
-        return time(opening, zone: zone)
-    }
-    /// LESSON_NOT_STARTED : le serveur refuse le constat plus de 15 minutes avant le début prévu.
+    /// Le démarrage confirmé ouvre la fin, indépendamment de l’horaire prévu.
     static func mayFinish(_ lesson: SchoolLesson, now: Date) -> Bool {
-        guard lesson.status == "PLANNED", let start = lesson.startsAt else { return false }
-        return now >= start.addingTimeInterval(-900)
+        lesson.status == "PLANNED" && lesson.hasStarted
     }
     /// Constat d’une observation : son statut, ou celui du repère posé d’une tuile pendant le trajet.
     static func status(of observation: SchoolObservation) -> SchoolObservationStatus? {
@@ -151,15 +135,16 @@ enum SchoolLessonHubRules {
 
     static func mayManage(_ roles: [String]) -> Bool { roles.contains("ADMIN") || roles.contains("INSTRUCTOR") }
     static func mayMove(_ lesson: SchoolLesson, roles: [String], now: Date) -> Bool {
-        mayManage(roles) && lesson.status == "PLANNED" && (lesson.startsAt.map { $0 > now } ?? false)
+        mayManage(roles) && lesson.status == "PLANNED" && !lesson.hasStarted
     }
     static func mayCancel(_ lesson: SchoolLesson, roles: [String]) -> Bool {
         mayManage(roles) && lesson.status == "PLANNED"
     }
 
-    /// Début et fin proposés au constat : ceux du trajet de la leçon s’il existe, sinon l’horaire prévu ;
-    /// jamais une fin à venir. Un arrêt local pas encore transmis vaut l’instant présent.
+    /// Départ durable de la leçon et instant du geste de fin. Le GPS facultatif ne réduit pas la séance.
+    /// Compatibilité de lecture des anciennes leçons : trajet puis horaire prévu.
     static func completionTimes(lesson: SchoolLesson, captures: [SchoolCaptureSession], now: Date) -> (start: Date, end: Date) {
+        if let start = lesson.startedAt { return (start, now) }
         let own = captures.filter { $0.lessonId == lesson.id }
         let capturedStart = own.compactMap { SchoolLesson.date($0.authorizedAt) }.min()
         let capturedEnd = own.compactMap { capture -> Date? in

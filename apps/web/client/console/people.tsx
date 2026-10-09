@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { commandMessage, createCommand, filled, isEmail, matchesSearch } from '../command-core';
-import { useCommandSnapshot } from '../command-store';
+import { useCommandSnapshot, type SubmitResult } from '../command-store';
 import { roleLabel, type Role } from '../protocol';
 import {
   activeInstructors, defaultInstructorId, invitationCodeMessage, invitationLabel, invitationSchema, issuedCodeOf, offeringLabel, openOfferings, parseInvitationResponse,
@@ -64,23 +64,24 @@ export function TeamSection() {
 
   async function confirm() {
     if (!current || !canWrite) return;
+    let result: SubmitResult | undefined;
     if (dialog === 'access' && !problem && changed) {
       const command = createCommand({ schoolId, kind: 'updateMember', path: `members/${current.id}`, ifMatch: current.version, resourceId: current.id,
         resourceVersion: current.version, body: { roles: roles.map(item => item.value).filter(value => draftRoles.includes(value)), grants: grants.map(item => item.value).filter(value => draftGrants.includes(value)), reason: reason.trim() } });
-      await runner.run(command, `Les accès de ${current.displayName} sont modifiés.`);
+      result = await runner.run(command, `Les accès de ${current.displayName} sont modifiés.`);
     } else if (dialog === 'deactivate' && !deactivateProblem && !self) {
       const command = createCommand({ schoolId, kind: 'deactivateMember', path: `members/${current.id}/deactivate`, ifMatch: current.version, resourceId: current.id,
         resourceVersion: current.version, body: { reason: deactivateReason.trim() } });
-      await runner.run(command, `${current.displayName} n’a plus accès à l’école.`);
+      result = await runner.run(command, `${current.displayName} n’a plus accès à l’école.`);
     }
-    setDialog(null);
+    if (result && result.status !== 'rejected') setDialog(null);
   }
   const toggle = <T extends string,>(list: T[], value: T, on: boolean) => on ? [...list, value] : list.filter(item => item !== value);
 
   return (
     <div className="section-stack">
       <SectionHeading title="Équipe et accès" />
-      <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
+      {!dialog && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.outcome?.code === 'REAUTH_REQUIRED' && <p className="caption">Après la reconnexion, rouvrez ce membre et saisissez à nouveau le changement : la saisie n’est pas conservée.</p>}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture de l’équipe…">{data => <SplitView mobileDetail={!!selected} onBack={() => setSelected(null)} backLabel="Tous les membres"
@@ -134,6 +135,7 @@ export function TeamSection() {
         disabledReason={!canWrite ? 'Actualisez les accès avant de confirmer.' : dialog === 'deactivate' ? deactivateProblem : problem}
         {...(dialog === 'deactivate' ? { acknowledgement: 'Je comprends que cette personne ne pourra plus accéder à l’école.', acknowledged, onAcknowledge: setAcknowledged }
           : loseAdmin ? { acknowledgement: 'Je comprends que je ne pourrai plus administrer cette école.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
+        <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
         <p className="dialog-lead">{current.displayName}</p>
         {dialog === 'deactivate' ? <TextArea label="Motif du retrait" required rows={3} maxLength={1000} value={deactivateReason} onChange={setDeactivateReason} disabled={runner.busy} />
           : <Facts items={[

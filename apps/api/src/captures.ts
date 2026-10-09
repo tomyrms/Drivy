@@ -6,7 +6,7 @@ import { withActor } from './database.js';
 import { ApiError,forbidden,notFound } from './errors.js';
 import { Cursors } from './cursor.js';
 import { checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandActor,type CommandEffect,type CommandGuards,type SchoolRow } from './commands.js';
-import { getLesson } from './lessons.js';
+import { getLesson,startLesson } from './lessons.js';
 import { assessmentCommand,assessmentProjection,choiceCommand,choiceProjection,chunkCommand,captureProjection,finalizeCommand,startCommand,stopCommand,uuid,type AssessmentInput,type AssessmentRow,type CaptureRow,type ChoiceRow,type ChunkInput,type ChunkRow,type Manifest,type TrackPoint } from './capture-contracts.js';
 import { CaptureAuthority,canonicalCaptureJSON,chunkAAD,decryptPoints,encryptPoints,trackContentHash,type CaptureConfig,type QualificationProfile } from './capture-crypto.js';
 import {geoObservationProjection,type GeoObservationRow} from './capture-contracts.js';
@@ -139,7 +139,7 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
    if(school.status!=='ACTIVE'||!school.modules.gpsEnabled)throw error('CAPTURE_DISABLED','Le GPS scolaire n’est pas activé. La leçon reste disponible sans GPS.');
    const lesson=await getLesson(db,school.id,lessonId,true);checkVersion(lesson.version,expected);if(lesson.status!=='PLANNED')throw error('LESSON_CLOSED','Cette leçon ne permet plus de démarrer une capture.');
    const training=(await db.query<{status:string}>('SELECT status FROM drivy.training WHERE school_id=$1 AND id=$2',[school.id,lesson.training_id])).rows[0];if(training?.status!=='ACTIVE')throw error('TRAINING_NOT_ACTIVE','La formation doit être active.');
-   const now=Date.now();if(now<lesson.planned_start.getTime()-1_800_000||now>=lesson.planned_end.getTime()+1_800_000)throw error('CAPTURE_START_WINDOW','La capture démarre à proximité de la leçon planifiée.');
+   const now=Date.now();if(!lesson.actual_start&&(now<lesson.planned_start.getTime()-1_800_000||now>=lesson.planned_end.getTime()+1_800_000))throw error('CAPTURE_START_WINDOW','Commencez la leçon avant de démarrer le trajet en dehors du créneau prévu.');
    const choice=await getChoice(db,school.id,lesson.learner_id,lessonId),n=await notice(db,school.id);
    if(choice.status!=='ALLOWED')throw error('RECORDING_NOT_ALLOWED','Le choix actuel de l’élève ne permet pas de capturer le GPS.',403);
    if(choice.id!==body.choiceId||choice.version!==body.choiceVersion||choice.notice_version_id!==body.noticeVersionId||n.notice_version_id!==body.noticeVersionId)throw error('RECORDING_CHOICE_CHANGED','Relisez le choix et la notice avant de commencer.');
@@ -154,6 +154,7 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
    if(!assignment)throw notFound();const expiry=new Date(Math.min(now+10_800_000,Date.parse(profile.expiresAt),assignment.valid_until?.getTime()??Infinity));
    const row=(await db.query<CaptureRow>(`INSERT INTO drivy.capture_session(school_id,lesson_id,learner_id,instructor_membership_id,person_id,device_id,choice_id,notice_version_id,device_assessment_id,authorized_at,expires_at,upload_deadline)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,[school.id,lessonId,lesson.learner_id,actor.membershipId,actor.personId,body.deviceId,choice.id,body.noticeVersionId,assessment.id,new Date(now),expiry,new Date(expiry.getTime()+config.uploadHours*3_600_000)])).rows[0]!;
+   if(!lesson.actual_start)await startLesson(db,lesson,body.operationId,row.authorized_at);
    return {data:captureProjection(row),action:'CaptureAuthorized',resourceType:'CaptureSession',resourceId:row.id,changedFields:['authorizedAt','expiresAt','choiceId','deviceAssessmentId']};
   },false,{replay:async(db,_actor,data)=>captureProjection(await getCapture(db,schoolID(r),data.id))});
   // Les preuves sont dérivées après commit ; elles ne figurent jamais dans Operation/audit.

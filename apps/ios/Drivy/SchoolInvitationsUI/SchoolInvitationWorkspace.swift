@@ -43,7 +43,6 @@ final class SchoolInvitationWorkspace: Identifiable {
     private(set) var codeRecovery: SchoolCodeRecovery?
     var email = ""
     var selectedRoles: Set<SchoolInvitationRole> = [.learner]
-    var selectedOfferingID: UUID?
     var selectedOfferingIDs: Set<UUID> = []
     var selectedInstructorID: UUID?
     var selectedID: UUID?
@@ -74,10 +73,8 @@ final class SchoolInvitationWorkspace: Identifiable {
             && !pendingRequiresReview && !isBusy && !isLoading && !isInvalidated
     }
     var canVerifyPending: Bool { pending != nil && !isBusy && !isLoading && !isInvalidated }
-    var draftIsValid: Bool { valid(email: email, roles: selectedRoles) }
     /// Un moniteur invite l'élève dans sa formation et s'y affecte lui-même.
     var carriesTraining: Bool { canCreateCode && selectedRoles == [.learner] }
-    var selectedOffering: SchoolOffering? { offerings.first { $0.id == selectedOfferingID } }
     var selectedInvitation: SchoolInvitation? { invitations.first { $0.id == selectedID } }
     var canCreateCode: Bool { allowedRoles.contains(.learner) }
     var selectedOfferings: [SchoolOffering] { offerings.filter { selectedOfferingIDs.contains($0.id) } }
@@ -105,7 +102,7 @@ final class SchoolInvitationWorkspace: Identifiable {
         issuedCode = nil; codeRecovery = nil
         school = nil; invitations = []; nextCursor = nil; selectedID = nil; pending = nil; offerings = []; instructors = []
         selectedOfferingIDs = []; selectedInstructorID = nil; creationOptionsError = nil
-        email = ""; selectedRoles = [.learner]; selectedOfferingID = nil; errorMessage = nil; successMessage = nil
+        email = ""; selectedRoles = [.learner]; errorMessage = nil; successMessage = nil
         isLoading = false; isLoadingMore = false; isBusy = false; storageAccessible = false
     }
 
@@ -152,7 +149,6 @@ final class SchoolInvitationWorkspace: Identifiable {
                     // Publish a complete context: a failed instructor read must not erase a selected permit.
                     self.offerings = offerings
                     self.instructors = instructors
-                    if !offerings.contains(where: { $0.id == selectedOfferingID }) { selectedOfferingID = offerings.count == 1 ? offerings[0].id : nil }
                     selectedOfferingIDs.formIntersection(Set(offerings.map(\.id)))
                     if selectedOfferingIDs.isEmpty, offerings.count == 1 { selectedOfferingIDs = [offerings[0].id] }
                     if roles.contains("ADMIN") {
@@ -418,7 +414,7 @@ final class SchoolInvitationWorkspace: Identifiable {
             errorMessage = failure.localizedDescription
             if failure == .unauthorized || failure == .forbidden {
                 school = nil; invitations = []; nextCursor = nil; selectedID = nil
-                offerings = []; instructors = []; selectedOfferingIDs = []; selectedOfferingID = nil; selectedInstructorID = nil
+                offerings = []; instructors = []; selectedOfferingIDs = []; selectedInstructorID = nil
                 creationOptionsError = nil
                 email = ""; selectedRoles = [.learner]; successMessage = nil; issuedCode = nil; codeRecovery = nil
                 storageAccessible = false; hasLoaded = false

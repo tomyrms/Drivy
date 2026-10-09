@@ -410,6 +410,30 @@ struct SchoolWorkspaceTests {
         SchoolTrainingModelCache.reset()
     }
 
+    @Test(arguments: [false, true])
+    func anOlderAccountRefreshCannotReplaceNewerRightsOrCloseTheCurrentAccount(fails: Bool) async {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let held = WorkspaceResponse<SchoolPerson>()
+        api.meHandler = { try await held.value() }
+        let old = Task { await workspace.refreshAccount(minimumInterval: 0) }
+        await held.waitUntilRequested()
+        let membership = SchoolMembership(membershipId: WorkspaceFixture.firstMembership.membershipId,
+            schoolId: WorkspaceFixture.firstSchool, schoolName: "École actualisée", roles: ["INSTRUCTOR", "ADMIN"],
+            grants: [], accessEpoch: 2)
+        let updated = SchoolPerson(personId: api.person.personId, version: 2, displayName: "Nom actualisé",
+            locale: "fr", memberships: [membership])
+        api.meHandler = { updated }
+        await workspace.refreshAccount(minimumInterval: 0)
+        if fails { held.fail(SchoolAPIError.forbidden) }
+        else { held.succeed(api.person) }
+        await old.value
+        #expect(workspace.person == updated)
+        #expect(workspace.membership == membership && workspace.school != nil)
+        #expect(!workspace.accessRevoked && workspace.accountError == nil)
+    }
+
     @Test func theGuidedWelcomeIsOfferedAtMostOnceAWeekPerMembership() throws {
         let defaults = try #require(UserDefaults(suiteName: "drivy-tests-onboarding-\(UUID().uuidString)"))
         let membership = UUID(), now = Date()

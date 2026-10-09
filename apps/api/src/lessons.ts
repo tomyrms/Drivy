@@ -15,6 +15,7 @@ const interval={plannedStart:date,plannedEnd:date,timeZone:z.string().min(1).max
 const createCommand=z.object({operationId:id,trainingId:id,...interval,agreedPriceCents:amount,bufferMinutes:z.number().int().min(0).max(240),policyVersionId:id,commercialSelection:selection}).strict();
 const commercialChange=z.object({commercialSelection:selection,agreedPriceCents:amount,expectedAccountVersion:z.number().int().positive().nullable(),reason:z.string().trim().min(1).max(1000)}).strict();
 const startNowCommand=z.object({operationId:id,trainingId:id,meetingPoint:z.string().trim().max(500).nullable().optional()}).strict();
+const startLessonCommand=z.object({operationId:id}).strict();
 const moveCommand=z.object({operationId:id,...interval,agreementConfirmed:z.literal(true),reason:z.string().max(1000).nullable().optional(),commercialChange:commercialChange.optional()}).strict();
 const cancelCommand=z.object({operationId:id,reasonCode:z.enum(['LEARNER_REQUEST','INSTRUCTOR_UNAVAILABLE','SCHOOL_CLOSURE','OTHER']),comment:z.string().max(1000).nullable().optional()}).strict();
 const availabilityQuery=z.object({trainingId:id,instructorMembershipId:id,plannedStart:date,plannedEnd:date,
@@ -97,10 +98,15 @@ async function validateCommercial(db:PoolClient,schoolId:string,commercial:Selec
  if(catalog>BigInt(Number.MAX_SAFE_INTEGER))throw new ApiError(422,'INVALID_AMOUNT','Le montant dépasse la limite acceptée.');
  if(BigInt(price)!==catalog&&!allowOverride)throw new ApiError(422,'PRICE_OVERRIDE_REQUIRED','Le prix doit correspondre à la prestation. Une exception nécessite un motif et un accord explicites.');
 }
-interface NewLesson {trainingId:string;instructorId:string;start:string;end:string;meetingPoint:string;priceCents:number;bufferMinutes:number;policyVersionId:string;selection:Selection}
+interface NewLesson {trainingId:string;instructorId:string;start:string;end:string;meetingPoint:string;priceCents:number;bufferMinutes:number;policyVersionId:string;selection:Selection;actualStart?:string}
 async function insertLesson(db:PoolClient,school:SchoolRow,context:TrainingContext,value:NewLesson){
- return (await db.query<LessonRow>(`INSERT INTO drivy.lesson(id,school_id,training_id,learner_id,learner_person_id,instructor_membership_id,planned_start,planned_end,time_zone,meeting_point,price_cents_snapshot,buffer_minutes_snapshot,policy_version_id,commercial_selection)
-  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING ${lessonColumns}`,[randomUUID(),school.id,value.trainingId,context.learner_id,context.person_id,value.instructorId,value.start,value.end,school.timeZone,value.meetingPoint,value.priceCents,value.bufferMinutes,value.policyVersionId,JSON.stringify(value.selection)])).rows[0]!;
+ return (await db.query<LessonRow>(`INSERT INTO drivy.lesson(id,school_id,training_id,learner_id,learner_person_id,instructor_membership_id,planned_start,planned_end,time_zone,meeting_point,price_cents_snapshot,buffer_minutes_snapshot,policy_version_id,commercial_selection,actual_start)
+  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING ${lessonColumns}`,[randomUUID(),school.id,value.trainingId,context.learner_id,context.person_id,value.instructorId,value.start,value.end,school.timeZone,value.meetingPoint,value.priceCents,value.bufferMinutes,value.policyVersionId,JSON.stringify(value.selection),value.actualStart??null])).rows[0]!;
+}
+/** Seule une action explicite établit le départ, jamais le passage de l'heure prévue. */
+export async function startLesson(db:PoolClient,lesson:LessonRow,operationId:string,startedAt:Date){
+ const row=(await db.query<LessonRow>(`UPDATE drivy.lesson SET actual_start=$3,version=version+1 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[lesson.school_id,lesson.id,startedAt])).rows[0]!;
+ await event(db,row,operationId,'LessonStarted');return row;
 }
 /** Prestation de leçon en vigueur (dernière version, conditions approuvées) dont la durée divise celle de la séance ; la durée exacte est préférée. */
 async function currentLessonProduct(db:PoolClient,schoolId:string,category:string,minutes:number,start:string,timeZone:string,membershipId:string){
@@ -207,7 +213,7 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
      await access(db,original.training_id,original.instructor_membership_id);
      if(original.training_id!==query.trainingId)throw notFound();
      if(original.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Seule une leçon planifiée peut être déplacée.');
-     if(original.planned_start.getTime()<=Date.now()||original.actual_start)throw new ApiError(409,'LESSON_STARTED','La leçon a déjà commencé.');
+     if(original.actual_start)throw new ApiError(409,'LESSON_STARTED','La leçon a déjà commencé.');
      if(original.buffer_minutes_snapshot!==query.bufferMinutes)throw new ApiError(422,'INVALID_INTERVAL','Le déplacement conserve l’intervalle de la leçon.');
     }
     try{await ensureOpen(db,schoolId,query.instructorMembershipId,query.plannedStart,query.plannedEnd,query.timeZone);}
@@ -282,24 +288,40 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
     if(catalog>BigInt(Number.MAX_SAFE_INTEGER))throw new ApiError(422,'INVALID_AMOUNT','Le montant dépasse la limite acceptée.');
     const selection:Selection={mode:'UNIT_PRICE',serviceProductVersionId:product.id,quantity,entitlementLotId:null,acceptedTermsVersionId:product.terms_version_id};
     await validateCommercial(db,school.id,selection,Number(catalog),context.category_code,minutes,startIso,school.timeZone,false);
-    const row=await insertLesson(db,school,context,{trainingId:body.trainingId,instructorId:actor.membershipId,start:startIso,end:endIso,meetingPoint:body.meetingPoint??'',priceCents:Number(catalog),bufferMinutes:0,policyVersionId:context.policy_version_id,selection});
+    const row=await insertLesson(db,school,context,{trainingId:body.trainingId,instructorId:actor.membershipId,start:startIso,end:endIso,meetingPoint:body.meetingPoint??'',priceCents:Number(catalog),bufferMinutes:0,policyVersionId:context.policy_version_id,selection,actualStart:startIso});
     await occupations(db,row,context.instructor_person_id);await revision(db,row,actor,body.operationId,'Initial booking');await event(db,row,body.operationId,'LessonCreated');
-    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonStartedNow',changedFields:['plannedStart','plannedEnd','instructorMembershipId','meetingPoint','commercialSelection']};
+    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonStartedNow',changedFields:['plannedStart','plannedEnd','actualStart','instructorMembershipId','meetingPoint','commercialSelection']};
    },['INSTRUCTOR'],guards);
   }catch(error){return slotConflict(error,startNowConflictMessage);}
   reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,r);
+ });
+ app.post(`${base}/lessons/:lessonId/start`,async(r,reply)=>{
+  empty.parse(r.query);const body=startLessonCommand.parse(r.body),lessonId=z.object({lessonId:id}).parse(r.params).lessonId,schoolId=schoolID(r),expected=requireVersion(r.headers['if-match']);
+  checkIdempotency(r.headers['idempotency-key'],body.operationId);const identity=await options.verifyToken(r.headers.authorization);
+  const authorize=async(db:PoolClient)=>{if(!(await db.query<{ok:boolean}>('SELECT drivy.report_lesson_author($1) AS ok',[lessonId])).rows[0]?.ok)throw notFound();};
+  const bound={...body,lessonId};
+  const data=await schoolCommand<Lesson>(options.pool,identity,schoolId,'START_LESSON',bound,expected,async(db,_actor,school)=>{
+   const old=await getLesson(db,school.id,lessonId,true);checkVersion(old.version,expected);
+   if(old.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Cette leçon possède déjà un résultat.');
+   if(old.actual_start)throw new ApiError(409,'LESSON_STARTED','Cette leçon a déjà commencé. Continuez la leçon.');
+   if(school.status!=='ACTIVE')throw new ApiError(409,'SCHOOL_NOT_ACTIVE','L’école doit être active pour commencer une leçon.');
+   const training=(await db.query<{status:string}>('SELECT status FROM drivy.training WHERE school_id=$1 AND id=$2',[school.id,old.training_id])).rows[0];
+   if(training?.status!=='ACTIVE')throw new ApiError(409,'TRAINING_NOT_ACTIVE','La formation doit être active pour commencer la leçon.');
+   const row=await startLesson(db,old,body.operationId,new Date());
+   return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonStarted',changedFields:['actualStart']};
+  },['INSTRUCTOR'],{...lessonCommandGuards(schoolId,{lessonId}),authorize,replay:async(db,_actor,previous)=>{await authorize(db);return previous;}});
+  reply.header('ETag',`"${data.version}"`);return envelope(data,r);
  });
  app.post(`${base}/lessons/:lessonId/move`,async(r,reply)=>{
   const body=moveCommand.parse(r.body),lessonId=z.object({lessonId:id}).parse(r.params).lessonId,expected=requireVersion(r.headers['if-match']);
   const boundCommand={...body,lessonId};
   const data=await command(r,'MOVE_LESSON',boundCommand,expected,{lessonId},async(db,actor,school)=>{
    const old=await getLesson(db,school.id,lessonId,true);checkVersion(old.version,expected);if(old.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Seule une leçon planifiée peut être déplacée.');
-   if(old.planned_start.getTime()<=Date.now()||old.actual_start)throw new ApiError(409,'LESSON_STARTED','Une leçon dont le début prévu est passé doit recevoir son constat ; son ancien créneau reste conservé.');
+   if(old.actual_start)throw new ApiError(409,'LESSON_STARTED','Une leçon commencée ne peut plus être déplacée.');
    const minutes=validateInterval(body,school),context=await trainingContext(db,school,old.training_id,body.instructorMembershipId,body.plannedStart,body.plannedEnd);
    const changed=minutes!==(old.planned_end.getTime()-old.planned_start.getTime())/60000;
    if(changed&&!body.commercialChange)throw new ApiError(422,'LESSON_COMMERCIAL_CHANGE_REQUIRED','Une nouvelle durée exige un accord commercial explicite.');
    if(body.commercialChange){
-    if(old.planned_start.getTime()<=Date.now()||old.actual_start)throw new ApiError(409,'LESSON_COMMERCIAL_REVISION_CLOSED','Les conditions ne peuvent plus être révisées après le début prévu.');
     if(body.commercialChange.expectedAccountVersion!==null)throw new ApiError(409,'FINANCIAL_RECONCILIATION_REQUIRED','Le compte financier doit être rapproché avant cette révision.');
     await validateCommercial(db,school.id,body.commercialChange.commercialSelection,body.commercialChange.agreedPriceCents,context.category_code,minutes,body.plannedStart,body.timeZone,actor.roles.includes('ADMIN'));
    }
@@ -330,7 +352,7 @@ export async function authorizePlanningOperation(db:PoolClient,schoolId:string,t
   if(!(await db.query('SELECT 1 FROM drivy.planning_defaults WHERE school_id=$1 AND membership_id=$2',[schoolId,resourceId])).rowCount)throw notFound();
   return true;
  }
- if(['CREATE_LESSON','START_LESSON_NOW','MOVE_LESSON','CANCEL_LESSON'].includes(type)){
+ if(['CREATE_LESSON','START_LESSON_NOW','START_LESSON','MOVE_LESSON','CANCEL_LESSON'].includes(type)){
   const row=await getLesson(db,schoolId,resourceId);await access(db,row.training_id,row.instructor_membership_id);return true;
  }
  if(['CREATE_COMMERCIAL_TERMS','CREATE_SERVICE_PRODUCT'].includes(type)){

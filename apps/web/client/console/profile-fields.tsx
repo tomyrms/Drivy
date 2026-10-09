@@ -59,7 +59,7 @@ export function ProfileFieldsSection() {
     const target = loaded.data?.policies.find(item => item.id === selected);
     if (dialog !== 'publish' || !target) return null;
     return readSchool(schoolId, 'data-policy', dataPolicySchema, { noticeVersionId: target.noticeVersionId });
-  }, [dialog, selected, schoolId]);
+  }, [dialog, selected, schoolId], `${schoolId}/${selected ?? ''}/${dialog ?? ''}`);
   const data = loaded.data;
   const notice = data?.notice;
   const noticeAdopted = notice?.status === 'APPROVED' && !!notice.noticeVersionId;

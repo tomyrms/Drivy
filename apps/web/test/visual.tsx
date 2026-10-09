@@ -83,7 +83,7 @@ function reply(status: number, body: unknown, url: string) {
 window.fetch = (async (input: URL | string, init?: RequestInit) => {
   const url = new URL(String(input)); const path = url.pathname.split(`/${schoolId}`)[1]?.replace(/^\//, '') ?? '';
   const method = init?.method ?? 'GET'; const body = init?.body ? JSON.parse(String(init.body)) : null;
-  await new Promise(resolve => setTimeout(resolve, 120));
+  await new Promise(resolve => setTimeout(resolve, reviewState === 'slow' && path === 'lessons' ? 1500 : 120));
   if (method === 'GET') {
     if (url.pathname.endsWith('/bff/session')) return reply(200, { authenticated: page !== 'signin', csrfToken: 'synthetic-review', invitationPending: page === 'invitation', user: { displayName: 'Luc Martin', email: 'luc@example.test', emailVerified: true } }, url.href);
     if (url.pathname.endsWith('/bff/me')) return reply(200, { data: { ...value.me, memberships: [value.membership] } }, url.href);
@@ -102,6 +102,7 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
   }
   if (url.pathname.endsWith('/bff/invitation/preview')) return reply(200, { confirmation: 'synthetic-confirmation', data: { invitationId: uuid(), schoolId, schoolName: value.school.name, roles: ['LEARNER'], maskedEmail: 'l***@example.test', expiresAt: '2026-10-06T08:00:00.000Z', notice: { version: 1, noticeText: 'Les informations de votre profil servent au suivi de votre formation.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique.', contactEmail: 'ecole@example.test' } } }, url.href);
   log.push(`${method} ${path} ${JSON.stringify(body)} if-match=${(init?.headers as Record<string, string>)?.['If-Match'] ?? ''}`);
+  if (reviewState === 'mutation-error') return reply(409, { code: 'PLANNING_CONFLICT' }, url.href);
   if ((method === 'PATCH' && path.startsWith('members/')) || path.endsWith('/deactivate')) {
     if (!(window as any).__reauthed) return reply(401, { code: 'REAUTH_REQUIRED' }, url.href);
     const target = db.members.find((item: any) => path.includes(item.id)); if (path.endsWith('/deactivate')) target.status = 'INACTIVE'; else { target.roles = body.roles; target.grants = body.grants; } target.version++;

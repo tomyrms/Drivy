@@ -1,5 +1,14 @@
 import { isCivilDate, schoolTimeToInstant } from './command-core.js';
 
+/** A planned time is never evidence that teaching started or finished. */
+export function lessonPhase(lesson: { status: string; plannedStart: string; plannedEnd: string; actualStart?: string | null | undefined }, now = Date.now()): 'planned' | 'waiting' | 'started' | 'to-finish' | 'completed' | 'cancelled' | 'absent' {
+  if (lesson.status === 'COMPLETED') return 'completed';
+  if (lesson.status === 'CANCELLED') return 'cancelled';
+  if (lesson.status === 'NO_SHOW') return 'absent';
+  if (lesson.actualStart && Number.isFinite(Date.parse(lesson.actualStart))) return Date.parse(lesson.plannedEnd) <= now ? 'to-finish' : 'started';
+  return Date.parse(lesson.plannedStart) <= now ? 'waiting' : 'planned';
+}
+
 /**
  * Week view of the school agenda: pure calendar rules, in the time zone of the school.
  * Civil dates are 'YYYY-MM-DD'; they are shifted by calendar arithmetic, never by a fixed number of hours.

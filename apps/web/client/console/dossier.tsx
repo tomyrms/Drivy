@@ -44,7 +44,7 @@ function ReportBody({ report, competencies }: { report: Report; competencies: Re
 /** Bilan publié d'une leçon, lu à la demande (dernière révision). */
 function LessonReport({ schoolId, lesson, competencies }: { schoolId: string; lesson: Lesson; competencies: ReadonlyMap<string, string> }) {
   const [open, setOpen] = useState(false);
-  const loaded = useLoad(async () => open ? (await readAll(schoolId, `lessons/${lesson.id}/reports`, reportSchema)).items : null, [schoolId, lesson.id, open]);
+  const loaded = useLoad(async () => open ? (await readAll(schoolId, `lessons/${lesson.id}/reports`, reportSchema)).items : null, [schoolId, lesson.id, open], `${schoolId}/${lesson.id}`);
   const latest = loaded.data?.at(-1);
   return (
     <li className="report-row">
@@ -70,7 +70,7 @@ export function TrainingFollowUp({ schoolId, training, competencies, timeZone }:
     const [progress, lessons] = await Promise.all([readSchool(schoolId, `trainings/${training.id}/progress`, progressSchema),
       readAll(schoolId, 'lessons', lessonSchema, { trainingId: training.id })]);
     return { progress, lessons: lessons.items, truncated: lessons.truncated };
-  }, [schoolId, training.id, open]);
+  }, [schoolId, training.id, open], `${schoolId}/${training.id}`);
   const data = loaded.data;
   const { reported, years, filtered, canFilter } = reportHistory(data?.lessons ?? [], { year, month }, data?.truncated ?? false);
   const observedIds = new Set(data?.progress.items.map(item => item.competencyId));

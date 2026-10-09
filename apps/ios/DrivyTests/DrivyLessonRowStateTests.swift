@@ -7,19 +7,19 @@ import Testing
     private let start = Date(timeIntervalSince1970: 1_800_000_000)
     private var end: Date { start.addingTimeInterval(3_600) }
 
-    private func state(_ status: String, now: Date) -> DrivyLessonState {
-        DrivyLessonState(status: status, start: start, end: end, now: now)
+    private func state(_ status: String, now: Date, actualStart: Date? = nil) -> DrivyLessonState {
+        DrivyLessonState(status: status, start: start, end: end, actualStart: actualStart, now: now)
     }
 
     @Test func plannedRunningAndCompletedLessonsSayNothing() {
         #expect(state("PLANNED", now: start.addingTimeInterval(-60)).rowNote == nil)
-        #expect(state("PLANNED", now: start.addingTimeInterval(60)).rowNote == nil)
+        #expect(state("PLANNED", now: start.addingTimeInterval(60), actualStart: start).rowNote == nil)
         #expect(state("COMPLETED", now: end.addingTimeInterval(60)).rowNote == nil)
     }
 
     @Test func unusualLessonsSayOneWord() {
         let after = end.addingTimeInterval(60)
-        #expect(state("PLANNED", now: after).rowNote == DrivyRowNote(text: "À terminer", tone: .warning))
+        #expect(state("PLANNED", now: after, actualStart: start).rowNote == DrivyRowNote(text: "À terminer", tone: .warning))
         #expect(state("CANCELLED", now: after).rowNote == DrivyRowNote(text: "Annulée", tone: .neutral))
         #expect(state("NO_SHOW", now: after).rowNote == DrivyRowNote(text: "Absence", tone: .neutral))
         #expect(state("UNKNOWN", now: after).rowNote == DrivyRowNote(text: "À vérifier", tone: .neutral))

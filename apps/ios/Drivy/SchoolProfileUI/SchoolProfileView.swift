@@ -298,7 +298,10 @@ struct SchoolProfileStatusSections: View {
                 Section { DrivySkeletonRows(count: 4).drivySkeleton("Chargement du dossier…") }
                     .drivyFormRows()
             }
-            if let error = model.errorMessage {
+            if model.hasProfileConflict {
+                Section { SchoolProfileConflictNotice(model: model) }
+                    .drivyFormRows()
+            } else if let error = model.errorMessage {
                 // The notice is the whole row: no white card around the red one.
                 Section {
                     SchoolErrorNotice(message: error,
@@ -326,6 +329,30 @@ struct SchoolProfileStatusSections: View {
         }
     }
 }
+
+/// Shared by the profile form and its guided welcome: a re-read must not silently
+/// put local edits on top of someone else's newer version.
+struct SchoolProfileConflictNotice: View {
+    @Bindable var model: SchoolProfileWorkspace
+    @State private var confirmsReload = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            SchoolErrorNotice(message: model.errorMessage ?? "Ces informations ont changé dans l’école.")
+            Button("Recharger les informations") { confirmsReload = true }
+                .frame(minHeight: 44)
+                .disabled(model.isLoading || model.isBusy)
+                .accessibilityIdentifier("profile-reload-conflict")
+        }
+        .alert("Recharger les informations de l’école ?", isPresented: $confirmsReload) {
+            Button("Recharger", role: .destructive) { Task { await model.load(preserveDraft: false) } }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Ton brouillon sera remplacé par les informations enregistrées dans l’école.")
+        }
+    }
+}
+
 extension SchoolProfileStatusSections {
     fileprivate func pendingNotes(_ pending: PendingSchoolCommand) -> [String] {
         var notes: [String] = []

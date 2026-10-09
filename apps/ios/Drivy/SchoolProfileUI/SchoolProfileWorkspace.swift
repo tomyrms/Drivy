@@ -23,6 +23,9 @@ final class SchoolProfileWorkspace: Identifiable {
     private(set) var isLoading = false
     private(set) var isBusy = false
     private(set) var needsReload = true
+    /// A field edited here was also changed by the school. Keep the draft and
+    /// its base version until the person explicitly chooses to reload it.
+    private(set) var hasProfileConflict = false
     private(set) var pendingRequiresReview = false
     /// Premier envoi d’une demande, juste après le geste : bref, il ne se présente pas comme une demande à vérifier.
     private(set) var isFirstSend = false
@@ -117,6 +120,7 @@ final class SchoolProfileWorkspace: Identifiable {
         errorMessage = nil; successMessage = nil; isLoading = false; isBusy = false; storageAccessible = false
         reviewGeneration = UUID(); publicationNotice = nil; reviewingPolicyID = nil; isLoadingPublication = false
         isFirstSend = false; isReplacingDraft = false
+        hasProfileConflict = false
     }
     func load(preserveDraft: Bool = true, receiptRefused: Bool = false) async {
         guard !invalidated, !isBusy else { return }
@@ -147,10 +151,15 @@ final class SchoolProfileWorkspace: Identifiable {
                     guard request == generation else { return }
                     guard SchoolProfileClient.valid(profile, schoolID: scope.schoolID, learnerID: learnerID) else { throw SchoolProfileFailure.invalidResponse }
                     // Comparé à la réception, pas au départ : ce qui a été saisi pendant la relecture est conservé.
-                    let changedKeys: Set<String> = preserveDraft
-                        ? Set(self.profile.map { draft.changes(from: $0, allowed: allowed).keys.map { $0 } } ?? []) : []
-                    draft = draft.rebased(on: profile, changedKeys: changedKeys)
-                    self.profile = profile
+                    let edits = preserveDraft ? self.profile.map { draft.changes(from: $0, allowed: allowed) } ?? [:] : [:]
+                    let remoteChanges = self.profile.map { SchoolProfileDraft(profile).changes(from: $0, allowed: allowed) } ?? [:]
+                    hasProfileConflict = edits.contains { key, value in
+                        remoteChanges[key].map { $0 != value } ?? false
+                    }
+                    if !hasProfileConflict {
+                        draft = draft.rebased(on: profile, changedKeys: Set(edits.keys))
+                        self.profile = profile
+                    }
                     let readiness = try await api.readiness(schoolID: scope.schoolID, learnerID: learnerID, action: "ENTER")
                     guard request == generation else { return }
                     guard readiness.learnerId == learnerID, readiness.action == "ENTER" else { throw SchoolProfileFailure.invalidResponse }
@@ -178,8 +187,10 @@ final class SchoolProfileWorkspace: Identifiable {
                     guard request == generation else { return }; self.notice = notice
                 }
             }
-            isLoading = false; isReplacingDraft = false; needsReload = false
-            errorMessage = storageError ?? (receiptRefused ? "Le résultat ne peut pas être consulté avec tes droits actuels. Sa référence reste conservée." : nil)
+            isLoading = false; isReplacingDraft = false; needsReload = hasProfileConflict
+            errorMessage = hasProfileConflict
+                ? "Ces informations ont changé dans l’école pendant ta saisie. Ton brouillon est conservé. Recharge les informations avant de les modifier à nouveau."
+                : storageError ?? (receiptRefused ? "Le résultat ne peut pas être consulté avec tes droits actuels. Sa référence reste conservée." : nil)
         } catch {
             guard request == generation else { return }
             // Relecture échouée : l’état de l’école n’est plus connu, toute écriture attend une relecture réussie.
@@ -243,18 +254,9 @@ final class SchoolProfileWorkspace: Identifiable {
         payload["operationId"] = .text(id.uuidString); payload["policyVersionId"] = .text(policy.id.uuidString)
         return await prepare(payload, id: id, kind: .updateProfile, resourceID: profile.id, version: profile.version, routeID: learnerID)
     }
-    @discardableResult
-    func saveOnboarding(step: SchoolOnboardingStep, skipOptional: Bool) async -> Bool {
-        guard canMutate, let onboarding, onboarding.status != "COMPLETED" else { return false }
-        let id = UUID()
-        let skipped = skipOptional ? ["PHOTO", "NOTIFICATIONS", "DEVICE"] : onboarding.skippedOptionalSteps
-        let payload = SchoolOnboardingCommand(operationId: id, kind: onboarding.kind, currentStep: step,
-            skippedOptionalSteps: skipped, policyVersionId: onboarding.policyVersionId)
-        return await prepare(payload, id: id, kind: .saveOnboarding, resourceID: onboarding.id, version: onboarding.version)
-    }
     /// Guided welcome: saves the step reached and adds only the optional steps the
     /// person explicitly passed. Steps already skipped stay skipped; nothing else is
-    /// marked on their behalf. Same command, outbox and confirmation as above.
+    /// marked on their behalf. Uses the same durable outbox as profile changes.
     @discardableResult
     func saveOnboarding(step: SchoolOnboardingStep, skipping passed: Set<String>) async -> Bool {
         guard canMutate, let onboarding, onboarding.status != "COMPLETED" else { return false }
@@ -351,6 +353,7 @@ final class SchoolProfileWorkspace: Identifiable {
         if failure == .unauthorized || failure == .forbidden || failure == .notFound {
             generation = UUID(); school = nil; policies = []; profile = nil; notice = nil; readiness = nil; onboarding = nil
             draft = SchoolProfileDraft(); storageAccessible = false; isLoading = false; isBusy = false; nextCursor = nil
+            hasProfileConflict = false
             isReplacingDraft = false
             accessFailure = failure
             reviewGeneration = UUID(); publicationNotice = nil; reviewingPolicyID = nil; isLoadingPublication = false

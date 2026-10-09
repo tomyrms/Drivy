@@ -27,7 +27,7 @@ export function TripsSection() {
       return { items: page.items.filter(trip => trip.learnerId === learner), nextCursor: null, truncated: page.truncated };
     }
     return { ...await readPage(schoolId, 'captures', tripSchema, cursor), truncated: false };
-  }, [schoolId, cursor, learner]);
+  }, [schoolId, cursor, learner], `${schoolId}/${learner ?? ''}/${cursor ?? ''}`);
   const dossier = (id: string) => navigate('eleves', { selection: id, week: routeQuery?.week, instructor: routeQuery?.instructor,
     ...(routeQuery?.week ? { from: 'agenda' } : {}) });
   return <div className="section-stack">

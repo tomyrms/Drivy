@@ -30,10 +30,13 @@ struct SchoolLesson: Codable, Sendable, Equatable, Identifiable {
 
     var startsAt: Date? { Self.date(plannedStart) }
     var endsAt: Date? { Self.date(plannedEnd) }
+    /// Seule une écriture confirmée par l’école prouve le démarrage, jamais l’horaire prévu.
+    var startedAt: Date? { actualStart.flatMap(Self.date) }
+    var hasStarted: Bool { startedAt != nil }
     var durationMinutes: Int { guard let start = startsAt, let end = endsAt else { return 0 }; return Int(end.timeIntervalSince(start) / 60) }
     var statusLabel: String {
         switch status {
-        case "PLANNED": "Planifiée"
+        case "PLANNED": hasStarted ? "En cours" : "Planifiée"
         case "COMPLETED": "Terminée"
         case "CANCELLED": "Annulée"
         case "NO_SHOW": "Absence"

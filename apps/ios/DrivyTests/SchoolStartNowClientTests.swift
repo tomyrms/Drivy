@@ -42,10 +42,21 @@ import Testing
         let model = SchoolStartNowWorkspace(scope: ConfigurationFixture.scope(), client: client, outbox: ConfigurationOutboxStub())
         await model.load()
         _ = await model.start()
-        #expect(model.conflicted && model.started == nil && model.pending == nil && !model.unsupported)
+        #expect(model.conflicted && model.started == nil && model.pending == nil)
         #expect(model.errorMessage == SchoolPlanningClient.startNowConflictMessage)
         model.planLater()
         #expect(model.planInstead)
+    }
+
+    @Test func aMissingStartDoesNotSilentlyOpenPlanningOrClaimAStartedLesson() async {
+        let server = LessonFinishServer(), outbox = ConfigurationOutboxStub()
+        let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+            tokenSource: HubToken(), transport: server)
+        let model = SchoolStartNowWorkspace(scope: ConfigurationFixture.scope(), client: client, outbox: outbox)
+        await model.load()
+        #expect(await model.start() == nil)
+        #expect(model.started == nil && !model.planInstead && model.pending == nil)
+        #expect(model.errorMessage != nil && outbox.value == nil)
     }
 
     @Test func learnerFromTheirFileIsChosenWithoutTheList() async throws {
@@ -119,7 +130,7 @@ import Testing
         let start = lesson.startsAt!
         #expect(SchoolTodayPresentation.moment(for: lesson, now: start.addingTimeInterval(-12 * 60)) == "Dans 12 min")
         #expect(SchoolTodayPresentation.moment(for: lesson, now: start.addingTimeInterval(-75 * 60)) == "Dans 1 h 15 min")
-        #expect(SchoolTodayPresentation.moment(for: lesson, now: start) == "Horaire commencé")
+        #expect(SchoolTodayPresentation.moment(for: lesson, now: start) == "En attente")
     }
 
     @Test(arguments: ["COMPLETED", "CANCELLED", "NO_SHOW", "UNKNOWN"])
@@ -129,15 +140,15 @@ import Testing
         #expect(SchoolTodayPresentation.upcomingLessons([lesson], now: now).isEmpty)
     }
 
-    @Test func todayUpcomingListKeepsTheCurrentSlotUntilItsEnd() {
+    @Test func todayKeepsUnstartedLessonsAccessibleAfterTheirPlannedEnd() {
         let lesson = HubFixture.lesson()
         let start = lesson.startsAt!, end = lesson.endsAt!
         for now in [start.addingTimeInterval(-60), start, end.addingTimeInterval(-1)] {
             #expect(SchoolTodayPresentation.upcomingLessons([lesson], now: now).map(\.id) == [lesson.id])
         }
         for now in [end, end.addingTimeInterval(60)] {
-            #expect(SchoolTodayPresentation.upcomingLessons([lesson], now: now).isEmpty)
-            #expect(lesson.drivyState(now: now) == .toFinish)
+            #expect(SchoolTodayPresentation.upcomingLessons([lesson], now: now).map(\.id) == [lesson.id])
+            #expect(lesson.drivyState(now: now) == .waiting)
         }
     }
 

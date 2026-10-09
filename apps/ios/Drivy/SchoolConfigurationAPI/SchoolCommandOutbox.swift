@@ -24,7 +24,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
     case savePreparation, saveWish, completeLesson, saveReportDraft, publishReportDraft, updateLessonSharing
     case createObservation, updateObservation, removeObservation
     case recordPermitCheck, markNoShow
-    case startLessonNow
+    case startLessonNow, startLesson
     case savePlanningDefaults
 
     var isObservation: Bool {
@@ -45,7 +45,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
     var isReport: Bool {
         switch self {
         case .savePreparation, .saveWish, .completeLesson, .saveReportDraft, .publishReportDraft, .updateLessonSharing,
-             .recordPermitCheck, .markNoShow: true
+             .recordPermitCheck, .markNoShow, .startLesson: true
         default: false
         }
     }
@@ -115,6 +115,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .recordPermitCheck: "RECORD_PERMIT_CHECK"
         case .markNoShow: "MARK_NO_SHOW"
         case .startLessonNow: "START_LESSON_NOW"
+        case .startLesson: "START_LESSON"
         case .savePlanningDefaults: "SAVE_PLANNING_DEFAULTS"
         }
     }
@@ -134,7 +135,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .createTraining: "Training"
         case .createAssignment: "Assignment"
         case .updateMember: "Member"
-        case .createLesson, .moveLesson, .cancelLesson, .completeLesson, .markNoShow, .startLessonNow: "Lesson"
+        case .createLesson, .moveLesson, .cancelLesson, .completeLesson, .markNoShow, .startLessonNow, .startLesson: "Lesson"
         case .createCommercialTerms: "CommercialTermsVersion"
         case .createServiceProduct: "ServiceProductVersion"
         case .createAvailabilityRule, .updateAvailabilityRule, .removeAvailabilityRule: "AvailabilityRule"
@@ -202,7 +203,7 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
         case .createLesson, .startLessonNow:
             return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
         case .moveLesson, .cancelLesson, .updateAvailabilityRule, .removeAvailabilityRule, .removeClosure, .completeLesson, .saveReportDraft, .updateLessonSharing,
-             .markNoShow:
+             .markNoShow, .startLesson:
             return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
         case .savePreparation, .saveWish:
             return resourceVersion > 0 && resourceID != nil && routeResourceID != nil && expectedVersion == nil

@@ -59,7 +59,7 @@ try{
  assert.equal((await call('PUT',`/captures/${capture.id}/segments/${segment}/chunks/0`,chunk)).statusCode,200);
  const accepted=await call('POST',route,anchored);assert.equal(accepted.statusCode,201,JSON.stringify(accepted.json()));
  const replayPage=await call('GET',`/captures/${capture.id}/replay`);assert.equal(replayPage.statusCode,200);assert.deepEqual(replayPage.json().data.observations.map((o:any)=>o.id),[accepted.json().data.id]);
- const completed=await call('POST',`/lessons/${lesson}/complete`,{operationId:randomUUID(),actualStart:new Date(Date.now()-60000).toISOString(),actualEnd:new Date().toISOString(),workedOn:'Travail synthétique',observationText:'Constat synthétique',nextStep:'Suite synthétique',anomalyReason:'Recette locale'},1);
+ const completed=await call('POST',`/lessons/${lesson}/complete`,{operationId:randomUUID(),actualStart:new Date(Date.now()-60000).toISOString(),actualEnd:new Date().toISOString(),workedOn:'Travail synthétique',observationText:'Constat synthétique',nextStep:'Suite synthétique',anomalyReason:'Recette locale'},2);
  assert.equal(completed.statusCode,200,JSON.stringify(completed.json()));const draft=completed.json().data.draft;
  assert.deepEqual(new Set(draft.geoObservationIds),new Set([marker.id,accepted.json().data.id]));
  let page=await call('GET',route);assert(page.json().data.items.every((o:any)=>o.draftId===draft.id));assert.equal(page.json().data.items.find((o:any)=>o.id===marker.id).version,3);

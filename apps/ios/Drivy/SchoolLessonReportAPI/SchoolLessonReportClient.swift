@@ -97,6 +97,9 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         case .saveWish:
             guard let target = command.routeResourceID else { throw SchoolReportFailure.invalidResponse }
             path = ["trainings", target.uuidString, "wish"]; method = "PUT"
+        case .startLesson:
+            guard let target = command.resourceID else { throw SchoolReportFailure.invalidResponse }
+            path = ["lessons", target.uuidString, "start"]; method = "POST"
         case .completeLesson:
             guard let target = command.resourceID else { throw SchoolReportFailure.invalidResponse }
             path = ["lessons", target.uuidString, "complete"]; method = "POST"
@@ -209,7 +212,8 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
             "REPORT_INCOMPLETE": "Complète le travail réalisé, le constat et la prochaine étape avant de publier.",
             "ANOMALY_REASON_REQUIRED": "Explique le constat avec un contrôle de permis non confirmé et les éventuels écarts horaires.",
             "INVALID_ACTUAL_INTERVAL": "La fin réelle doit suivre le début et ne pas être future.",
-            "LESSON_NOT_STARTED": "La leçon n’a pas encore commencé. Termine-la au plus tôt 15 minutes avant son début.",
+            "LESSON_NOT_STARTED": "Commence la leçon avant de la terminer.",
+            "LESSON_STARTED": "La leçon a déjà commencé. Actualise-la pour continuer.",
             "LESSON_NOT_ENDED": "Une absence se note après la fin prévue du rendez-vous.",
             "CORRECTION_REASON_REQUIRED": "Explique la correction avant de publier une nouvelle version.",
             "CURRICULUM_VERSION_MISMATCH": "Le référentiel de cette formation a changé. Relis les compétences.",

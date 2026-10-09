@@ -6,13 +6,13 @@ import SwiftUI
 
 /// Lesson state as shown to people. Same wording everywhere.
 enum DrivyLessonState {
-    case planned, inProgress, toFinish, completed, cancelled, noShow, unknown
+    case planned, waiting, inProgress, toFinish, completed, cancelled, noShow, unknown
 
-    init(status: String, start: Date?, end: Date?, now: Date = Date()) {
+    init(status: String, start: Date?, end: Date?, actualStart: Date? = nil, now: Date = Date()) {
         switch status {
         case "PLANNED":
-            if let start, let end, start <= now, now < end { self = .inProgress }
-            else if let end, end <= now { self = .toFinish }
+            if actualStart != nil { self = end.map { $0 <= now } == true ? .toFinish : .inProgress }
+            else if let start, start <= now { self = .waiting }
             else { self = .planned }
         case "COMPLETED": self = .completed
         case "CANCELLED": self = .cancelled
@@ -24,6 +24,7 @@ enum DrivyLessonState {
     var title: String {
         switch self {
         case .planned: "Planifiée"
+        case .waiting: "En attente"
         case .inProgress: "En cours"
         case .toFinish: "À terminer"
         case .completed: "Terminée"
@@ -35,7 +36,7 @@ enum DrivyLessonState {
 
     /// What a lesson screen flags: a lesson left without outcome, cancelled, missed,
     /// or whose state the app cannot read.
-    var isUnusual: Bool { self == .toFinish || self == .cancelled || self == .noShow || self == .unknown }
+    var isUnusual: Bool { self == .waiting || self == .toFinish || self == .cancelled || self == .noShow || self == .unknown }
 
     /// A lesson that will not be driven (cancelled, missed): its row steps back
     /// instead of competing with the lessons still to come.
@@ -48,7 +49,7 @@ enum DrivyLessonState {
     /// a closed fact (muted ink, struck times for a cancellation).
     var rowNote: DrivyRowNote? {
         switch self {
-        case .toFinish: return DrivyRowNote(text: title, tone: .warning)
+        case .waiting, .toFinish: return DrivyRowNote(text: title, tone: .warning)
         case .cancelled, .noShow, .unknown: return DrivyRowNote(text: title, tone: .neutral)
         case .planned, .inProgress, .completed: return nil
         }
@@ -79,7 +80,7 @@ struct DrivyRowNoteText: View {
 }
 
 extension SchoolLesson {
-    var drivyState: DrivyLessonState { DrivyLessonState(status: status, start: startsAt, end: endsAt) }
+    var drivyState: DrivyLessonState { drivyState(now: Date()) }
 }
 
 /// What a past lesson holds for its reader: a shared report, a trip that can be replayed.

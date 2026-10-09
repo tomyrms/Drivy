@@ -37,12 +37,12 @@ import Observation
     // pour AP55/56 : une indisponibilité de la progression ne doit pas masquer les bilans.
     var canOpenPedagogicalContent: Bool { hasPedagogicalRole && training != nil && !invalidated && !accessRevoked && !isLoading }
     var upcomingLessons: [SchoolLesson] { upcomingLessons(at: Date()) }
-    /// Une leçon passée sans constat reste à terminer ; elle ne prend pas la place du prochain rendez-vous.
+    /// Le souhait prépare une leçon non démarrée. Une ancienne leçon laissée
+    /// en attente au-delà de son créneau ne remplace pas le prochain rendez-vous.
     func upcomingLessons(at now: Date) -> [SchoolLesson] {
-        lessons.filter { $0.status == "PLANNED" && ($0.endsAt.map { $0 > now } ?? false) }
+        lessons.filter { $0.status == "PLANNED" && !$0.hasStarted && ($0.endsAt.map { $0 > now } ?? false) }
             .sorted { $0.plannedStart < $1.plannedStart }
     }
-    var pastLessons: [SchoolLesson] { lessons.filter { $0.status != "PLANNED" }.sorted { $0.plannedStart > $1.plannedStart } }
     var unobservedCompetencies: [SchoolCatalogCompetency] {
         guard let progress else { return [] }
         let ids = Set(progress.unobservedCompetencyIds)
@@ -74,6 +74,9 @@ import Observation
             guard value.learnerId == learnerID else { throw SchoolAPIError.invalidResponse }
             guard request == generation, !invalidated else { return }
             training = value
+            // A fresh authorized scope and training read restores this projection.
+            // A previous temporary refusal must not lock the shared model forever.
+            accessRevoked = false
         } catch {
             guard request == generation, !invalidated else { return }
             isLoading = false

@@ -1,8 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:drivy:contract:lesson-field-flow:1",
-  "$comment": "Extension du 29 septembre 2026 après essai terrain. OpenAPI canonique 3.11.0 conservé. Training reçoit un blocage de départ indicatif ; CompleteLesson conserve actualStart/actualEnd calculés par le client, et reste indépendant du transfert GPS.",
+  "$comment": "Extension du 29 septembre 2026 après essai terrain. OpenAPI canonique 3.11.0 conservé. Training reçoit un blocage de départ indicatif ; Depuis le 9 octobre 2026, actualStart est fixé durablement par le départ explicite (start-now, start ou capture). CompleteLesson conserve ce début ; actualEnd reste déclaré par le client, indépendamment du transfert GPS. Un constat rétrospectif explicite reste compatible sans départ préalable.",
   "$defs": {
+    "StartLessonBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId"],
+      "properties": {"operationId": {"type": "string", "format": "uuid"}},
+      "$comment": "POST /v1/schools/{schoolId}/lessons/{lessonId}/start ; If-Match et Idempotency-Key obligatoires. START_LESSON renvoie LessonEnvelope (200), version incrémentée, actualStart serveur, status PLANNED. Moniteur désigné affecté, école et formation actives. Aucun déclenchement temporel. Un départ déjà enregistré reçoit LESSON_STARTED sauf rejeu de la même opération."
+    },
     "TrainingExtension": {
       "type": "object",
       "required": ["startNowBlockerCode"],

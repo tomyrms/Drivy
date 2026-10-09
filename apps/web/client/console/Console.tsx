@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import type { ReactNode } from 'react';
 import { commandSpecs } from '../command-core';
 import { commandStore, useCommandSnapshot } from '../command-store';
-import { loginSchema, meSchema, okSchema, request, RequestFailure, roleLabel, sessionSchema } from '../protocol';
+import { endSession, loginSchema, meSchema, request, RequestFailure, roleLabel, sessionSchema } from '../protocol';
 import type { Me, Member, Session } from '../protocol';
 import { readSchool, schoolSchema, type School } from '../school-api';
 import { Loading, Notice, Symbol, formatDateTime } from '../ui';
@@ -34,6 +34,7 @@ export function ManagementConsole() {
   const [state, setState] = useState<State>({ status: 'loading' });
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationButton = useRef<HTMLButtonElement>(null);
   const csrf = useRef('');
@@ -77,8 +78,10 @@ export function ManagementConsole() {
   useEffect(() => { void load(route.schoolId); }, [route.schoolId]);
   useEffect(() => {
     const onPopState = () => setRoute(parseConsoleRoute(window.location.pathname, window.location.search));
+    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) void load(parseConsoleRoute(window.location.pathname, window.location.search).schoolId); };
     window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    window.addEventListener('pageshow', onPageShow);
+    return () => { generation.current++; window.removeEventListener('popstate', onPopState); window.removeEventListener('pageshow', onPageShow); };
   }, []);
   useEffect(() => {
     const school = state.status === 'ready' ? state.school.name : null;
@@ -105,10 +108,12 @@ export function ManagementConsole() {
 
   async function logout() {
     if (busy || !session) return;
-    setBusy(true);
-    try { await request('logout', okSchema, { csrf: csrf.current, body: {} }); } catch { /* Local session is closed anyway below. */ }
-    commandStore.clear();
-    window.location.assign('/app/');
+    setBusy(true); setLogoutError(null);
+    try {
+      await endSession();
+      commandStore.clear();
+      window.location.assign('/app/');
+    } catch (error) { setLogoutError(readError(error)); setBusy(false); }
   }
 
   const context = useMemo<ConsoleContextValue | null>(() => state.status !== 'ready' ? null : {
@@ -173,6 +178,7 @@ export function ManagementConsole() {
           onEscape={() => { setNavigationOpen(false); navigationButton.current?.focus(); }} />}
 
         <main id="main" className="console-main" aria-busy={state.status === 'loading'}>
+          {logoutError && <Notice tone="error" title="Déconnexion non confirmée"><p>{logoutError}</p></Notice>}
           {state.status === 'loading' && <Loading label="Ouverture de la gestion de l’école…" />}
           {state.status === 'error' && <Notice tone="error" title="La gestion ne peut pas s’ouvrir"
             actions={<button type="button" className="button retry" onClick={() => void load(route.schoolId)}><Symbol kind="refresh" bare />Réessayer</button>}>

@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { civilDateIn } from '../agenda-model';
 import {
   assignmentIsOpen, availableTrainingOfferings, createCommand, filled, isCivilDate, matchesSearch, latestPermit, permitBody, permitProblem, transitionProblem, trainingTransitions,
   type PermitDraft, type TrainingTransition,
 } from '../command-core';
-import { useCommandSnapshot } from '../command-store';
+import { useCommandSnapshot, type SubmitResult } from '../command-store';
 import { activeInstructors, offeringLabel, openOfferings } from '../invitation-model';
 import {
   assignmentSchema, curriculumSchema, learnerSchema, memberSchema, offeringSchema, permitSchema, readAll, trainingSchema,
@@ -45,6 +45,7 @@ export function LearnersSection() {
   const [acknowledged, setAcknowledged] = useState(false);
   // Une fois l'école a confirmé, les choix saisis ne doivent pas rester : sinon le moniteur affecté disparaît de la liste tout en restant « choisi ».
   const runner = useCommandRunner(() => { setOfferingId(''); setStartedOn(schoolToday()); setInstructorFor({}); setDialog(null); setReason(''); setPermit(emptyPermit()); });
+  useEffect(() => { setDialog(null); setReason(''); setPermit(emptyPermit()); setOfferingId(''); }, [selected]);
   const loaded = useLoad(async () => {
     const [learners, trainings, offerings, members, curricula] = await Promise.all([
       readAll(schoolId, 'learners', learnerSchema, { status: 'ALL' }), readAll(schoolId, 'trainings', trainingSchema),
@@ -61,7 +62,7 @@ export function LearnersSection() {
       return [training.id, { assignments: assignments.items, permits: permitResult.items, permitError: permitResult.error }] as const;
     }));
     return Object.fromEntries(entries);
-  }, [schoolId, selected, loaded.data]);
+  }, [schoolId, selected, loaded.data], `${schoolId}/${selected ?? ''}`);
 
   const data = loaded.data;
   const learners = useMemo(() => [...(data?.learners ?? [])]
@@ -103,37 +104,38 @@ export function LearnersSection() {
   async function confirm() {
     if (!dialog || !current || !canWrite) return;
     if (dialog.kind !== 'restore' && !canEdit) return;
+    let result: SubmitResult | undefined;
     if (dialog.kind === 'transition' && !transitionError) {
       const { training, transition } = dialog;
-      await runner.run(createCommand({ schoolId, kind: 'transitionTraining', path: `trainings/${training.id}/transition`, ifMatch: training.version,
+      result = await runner.run(createCommand({ schoolId, kind: 'transitionTraining', path: `trainings/${training.id}/transition`, ifMatch: training.version,
         resourceId: training.id, resourceVersion: training.version,
         body: { targetStatus: transition.target, reason: reason.trim() } }),
       transition.target === 'CANCELLED' ? 'La formation est annulée.' : transition.target === 'COMPLETED' ? 'La formation est terminée.' : transition.target === 'PAUSED' ? 'La formation est en pause.' : 'La formation reprend.');
     } else if (dialog.kind === 'end') {
       const { training, assignment } = dialog;
-      await runner.run(createCommand({ schoolId, kind: 'endAssignment', path: `trainings/${training.id}/assignments/${assignment.id}/end`, ifMatch: assignment.version,
+      result = await runner.run(createCommand({ schoolId, kind: 'endAssignment', path: `trainings/${training.id}/assignments/${assignment.id}/end`, ifMatch: assignment.version,
         resourceId: assignment.id, resourceVersion: assignment.version, body: {} }), 'L’affectation est terminée.');
     } else if (dialog.kind === 'permit' && !permitError) {
       const { training } = dialog;
-      await runner.run(createCommand({ schoolId, kind: 'recordPermitCheck', path: `trainings/${training.id}/permit-checks`, ifMatch: training.version,
+      result = await runner.run(createCommand({ schoolId, kind: 'recordPermitCheck', path: `trainings/${training.id}/permit-checks`, ifMatch: training.version,
         resourceVersion: 0, body: permitBody(permit, category(training)) }), permit.decision === 'APPROVED' ? 'Le permis est consigné.' : 'Le refus est consigné.');
     } else if (dialog.kind === 'archive' && !archiveError) {
-      const result = await runner.run(createCommand({ schoolId, kind: 'archiveLearner', path: `learners/${current.id}/archive`, ifMatch: current.version,
+      result = await runner.run(createCommand({ schoolId, kind: 'archiveLearner', path: `learners/${current.id}/archive`, ifMatch: current.version,
         resourceId: current.id, resourceVersion: current.version, body: { reason: reason.trim() } }), 'Le dossier est archivé.');
       if (result.status === 'confirmed') setSelected(null);
     } else if (dialog.kind === 'restore' && !archiveError && membership.roles.includes('ADMIN')) {
-      const result = await runner.run(createCommand({ schoolId, kind: 'restoreLearner', path: `learners/${current.id}/restore`, ifMatch: current.version,
+      result = await runner.run(createCommand({ schoolId, kind: 'restoreLearner', path: `learners/${current.id}/restore`, ifMatch: current.version,
         resourceId: current.id, resourceVersion: current.version, body: { reason: reason.trim() } }), 'Le dossier est restauré.');
       if (result.status === 'confirmed') setStatusFilter('active');
     }
-    setDialog(null);
+    if (result && result.status !== 'rejected') setDialog(null);
   }
 
   return (
     <div className="section-stack">
       {routeQuery?.from === 'agenda' && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('agenda', { week: routeQuery.week, instructor: routeQuery.instructor })}><Symbol kind="back" bare />Retour à l’agenda</button></div>}
       <SectionHeading title="Élèves" actions={!selected && <button type="button" className="button primary" onClick={() => navigate('invitations', { audience: 'learners' })}><Symbol kind="plus" bare />Inviter un élève</button>} />
-      <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
+      {!dialog && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des élèves…">{value => <SplitView mobileDetail={!!selected} onBack={() => setSelected(null)} backLabel="Tous les élèves"
         list={<>
@@ -220,6 +222,7 @@ export function LearnersSection() {
         disabledReason={!canWrite ? 'Actualisez le dossier avant de confirmer.' : permitError ?? transitionError ?? archiveError}
         {...(dialog?.kind === 'archive' || (dialog?.kind === 'transition' && dialog.transition.danger)
           ? { acknowledgement: dialog.kind === 'archive' ? 'Je confirme l’archivage de ce dossier.' : 'Je confirme l’annulation de cette formation.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
+        <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
         {dialog?.kind === 'transition' && <>
           <p className="dialog-lead">{title(dialog.training)}</p>
           <TextArea label="Motif" required={dialog.transition.reasonRequired} rows={3} maxLength={1000} value={reason} onChange={setReason} disabled={runner.busy} />

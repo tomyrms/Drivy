@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { readInvitationLink } from './invitation-link';
 import type { InvitationLink } from './invitation-link';
 import {
-  acceptedSchema, errorMessage, loginSchema, meSchema, okSchema, previewSchema,
+  acceptedSchema, endSession, errorMessage, loginSchema, meSchema, okSchema, previewSchema,
   request, RequestFailure, roleLabel, sessionSchema,
 } from './protocol';
 import type { InvitationPreview, Me, Member, Session } from './protocol';
@@ -153,12 +153,11 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
   }
 
   async function logout() {
-    const csrf = session?.csrfToken;
-    if (!csrf) return;
+    if (!session) return;
     await perform('Déconnexion en cours…', async current => {
-      setMe(null); setPreview(null); setSession(null); setAccepted(null); setReviewed(false);
-      await request('logout', okSchema, { csrf, body: {} });
+      await endSession();
       if (current !== generation.current) return;
+      setMe(null); setPreview(null); setSession(null); setAccepted(null); setReviewed(false);
       if (pageRef.current === 'invitation') setLinkMustReopen(true);
       await refresh(current);
     });
