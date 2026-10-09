@@ -375,6 +375,7 @@ struct SchoolReportTextSection: View {
             }
         }
         .padding(.vertical, DrivySpacing.xs)
+        .id(focus)
     }
 }
 

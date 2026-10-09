@@ -20,18 +20,25 @@ struct SchoolReportStepView: View {
     private var needsEditingSpace: Bool { verticalSizeClass == .compact && focusedReportField != nil }
 
     var body: some View {
-        Form {
-            SchoolReportStepMessages(model: model)
-            SchoolReportNotices(model: model)
-            content
+        ScrollViewReader { scroll in
+            Form {
+                SchoolReportStepMessages(model: model)
+                SchoolReportNotices(model: model)
+                content
+            }
+            .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .frame(maxWidth: DrivyLayout.formColumn)
+            .frame(maxWidth: .infinity)
+            .background(DrivyTheme.canvas)
+            // La rotation peut conserver le défilement en haut malgré le focus. Observer la taille seule
+            // permet de ramener le champ après le recalcul du clavier, sans réagir à chaque défilement.
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { _ in revealFocusedField(using: scroll) }
+            .onChange(of: focusedReportField) { _, _ in revealFocusedField(using: scroll) }
+            .onChange(of: needsEditingSpace) { _, _ in revealFocusedField(using: scroll) }
+            // En paysage bas, la saisie passe avant la barre fixe ; le formulaire garde son identité et son focus.
+            .safeAreaInset(edge: .bottom, spacing: 0) { if !needsEditingSpace { bar } }
         }
-        .scrollContentBackground(.hidden)
-        .scrollDismissesKeyboard(.interactively)
-        .frame(maxWidth: DrivyLayout.formColumn)
-        .frame(maxWidth: .infinity)
-        .background(DrivyTheme.canvas)
-        // En paysage bas, la saisie passe avant la barre fixe ; le formulaire garde son identité et son focus.
-        .safeAreaInset(edge: .bottom, spacing: 0) { if !needsEditingSpace { bar } }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -57,6 +64,11 @@ struct SchoolReportStepView: View {
         .modifier(SchoolReportLocalDraftKeeper(model: model))
         .onDisappear { model.persistLocalDraft() }
         .tint(DrivyTheme.accent)
+    }
+
+    private func revealFocusedField(using scroll: ScrollViewProxy) {
+        guard needsEditingSpace, let focusedReportField else { return }
+        scroll.scrollTo(focusedReportField, anchor: .center)
     }
 
     @ViewBuilder private var content: some View {
