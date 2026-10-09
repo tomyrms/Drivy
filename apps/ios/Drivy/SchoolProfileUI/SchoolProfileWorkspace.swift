@@ -27,6 +27,9 @@ final class SchoolProfileWorkspace: Identifiable {
     /// its base version until the person explicitly chooses to reload it.
     private(set) var hasProfileConflict = false
     private(set) var pendingRequiresReview = false
+    /// Demande que l’école a déclaré ne pas connaître : rien n’a été enregistré, elle peut être abandonnée.
+    private(set) var absentPendingID: UUID?
+    var pendingAbsent: Bool { pending != nil && pending?.id == absentPendingID }
     /// Premier envoi d’une demande, juste après le geste : bref, il ne se présente pas comme une demande à vérifier.
     private(set) var isFirstSend = false
     /// Relecture qui remplace le brouillon par la réponse de l’école (après notre propre enregistrement).
@@ -289,9 +292,18 @@ final class SchoolProfileWorkspace: Identifiable {
             await load(preserveDraft: false)
         } catch {
             guard request == generation else { return }; isBusy = false
-            if error as? SchoolProfileFailure == .forbidden { await load(receiptRefused: true) }
+            if error as? SchoolProfileFailure == .operationUnknown { absentPendingID = command.id; errorMessage = nil }
+            else if error as? SchoolProfileFailure == .forbidden { await load(receiptRefused: true) }
             else { fail(error) }
         }
+    }
+    /// Retire une demande que l’école ne connaît pas, puis relit : la saisie en cours est conservée.
+    func abandonPending() async {
+        guard canVerifyPending, pendingAbsent, let command = pending else { return }
+        do { try outbox.remove(command) }
+        catch { storageAccessible = false; fail(error); return }
+        pending = nil; absentPendingID = nil; pendingRequiresReview = false; errorMessage = nil
+        await load()
     }
     private func prepare<Value: Encodable>(_ payload: Value, id: UUID, kind: SchoolCommandKind,
         resourceID: UUID?, version: Int, routeID: UUID? = nil, expectedVersion: Int? = nil) async -> Bool {

@@ -33,6 +33,9 @@ final class SchoolInvitationWorkspace: Identifiable {
     private(set) var isBusy = false
     private(set) var needsReload = false
     private(set) var pendingRequiresReview = false
+    /// Demande que l’école a déclaré ne pas connaître : rien n’a été enregistré, elle peut être abandonnée.
+    private(set) var absentPendingID: UUID?
+    var pendingAbsent: Bool { pending != nil && pending?.id == absentPendingID }
     private(set) var errorMessage: String?
     private(set) var successMessage: String?
     private(set) var accessFailure: SchoolInvitationFailure?
@@ -262,6 +265,15 @@ final class SchoolInvitationWorkspace: Identifiable {
 
     func retryPending() async { _ = await transmit(firstAttempt: false) }
 
+    /// Retire une demande que l’école ne connaît pas, puis relit les invitations.
+    func abandonPending() async {
+        guard canVerifyPending, pendingAbsent, let command = pending else { return }
+        do { try outbox.remove(command) }
+        catch { storageAccessible = false; fail(error); return }
+        pending = nil; absentPendingID = nil; pendingRequiresReview = false; errorMessage = nil
+        await load()
+    }
+
     func verifyPending() async {
         guard canVerifyPending, let command = pending else { return }
         let request = generation
@@ -284,7 +296,9 @@ final class SchoolInvitationWorkspace: Identifiable {
         } catch {
             guard request == generation else { return }
             isBusy = false
-            if error as? SchoolInvitationFailure == .forbidden {
+            if error as? SchoolInvitationFailure == .operationUnknown {
+                absentPendingID = command.id; errorMessage = nil
+            } else if error as? SchoolInvitationFailure == .forbidden {
                 // AP72 permission depends on the original command type. A
                 // denied G1B receipt does not itself revoke invitation access.
                 await load(receiptRefused: true)

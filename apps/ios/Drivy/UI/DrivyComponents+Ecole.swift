@@ -356,13 +356,18 @@ struct DrivyPendingRequest<Details: View>: View {
     let retry: (() -> Void)?
     let canRetry: Bool
     let retryIdentifier: String?
+    /// Offert seulement quand l’école a répondu ne pas connaître la demande : l’abandon est alors sans risque.
+    let abandon: (() -> Void)?
+    let canAbandon: Bool
     let details: Details
+    @State private var confirmsAbandon = false
 
     init(message: String, notes: [String] = [], reference: UUID? = nil,
          verifyTitle: String = "Vérifier auprès de l’école", verify: (() -> Void)? = nil,
          canVerify: Bool = true, verifyIdentifier: String? = nil,
          retryTitle: String = "Renvoyer la même demande", retry: (() -> Void)? = nil,
          canRetry: Bool = true, retryIdentifier: String? = nil,
+         abandon: (() -> Void)? = nil, canAbandon: Bool = true,
          @ViewBuilder details: () -> Details) {
         self.message = message
         self.notes = notes
@@ -375,6 +380,8 @@ struct DrivyPendingRequest<Details: View>: View {
         self.retry = retry
         self.canRetry = canRetry
         self.retryIdentifier = retryIdentifier
+        self.abandon = abandon
+        self.canAbandon = canAbandon
         self.details = details()
     }
 
@@ -413,6 +420,22 @@ struct DrivyPendingRequest<Details: View>: View {
                 .disabled(!canRetry)
                 .accessibilityIdentifier(retryIdentifier ?? "")
             }
+            if let abandon {
+                Button(role: .destructive) { confirmsAbandon = true } label: {
+                    Text("Abandonner la demande")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(canAbandon ? DrivyTheme.danger : DrivyTheme.disabledText)
+                .disabled(!canAbandon)
+                .accessibilityIdentifier("pending-request-abandon")
+                .confirmationDialog("Abandonner cette demande ?", isPresented: $confirmsAbandon, titleVisibility: .visible) {
+                    Button("Abandonner la demande", role: .destructive) { abandon() }
+                    Button("Annuler", role: .cancel) { }
+                } message: { Text("Elle ne sera pas renvoyée.") }
+            }
             if let reference {
                 DisclosureGroup {
                     Text(reference.uuidString)
@@ -437,10 +460,12 @@ extension DrivyPendingRequest where Details == EmptyView {
          verifyTitle: String = "Vérifier auprès de l’école", verify: (() -> Void)? = nil,
          canVerify: Bool = true, verifyIdentifier: String? = nil,
          retryTitle: String = "Renvoyer la même demande", retry: (() -> Void)? = nil,
-         canRetry: Bool = true, retryIdentifier: String? = nil) {
+         canRetry: Bool = true, retryIdentifier: String? = nil,
+         abandon: (() -> Void)? = nil, canAbandon: Bool = true) {
         self.init(message: message, notes: notes, reference: reference,
                   verifyTitle: verifyTitle, verify: verify, canVerify: canVerify, verifyIdentifier: verifyIdentifier,
                   retryTitle: retryTitle, retry: retry, canRetry: canRetry, retryIdentifier: retryIdentifier,
+                  abandon: abandon, canAbandon: canAbandon,
                   details: { EmptyView() })
     }
 }

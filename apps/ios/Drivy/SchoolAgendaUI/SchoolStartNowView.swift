@@ -26,6 +26,8 @@ struct SchoolStartNowBody: Encodable, Sendable {
     private(set) var contextValid = false
     private(set) var errorMessage: String?
     private(set) var pending: PendingSchoolCommand?
+    /// Demande que l’école a déclaré ne pas connaître : elle peut être renvoyée comme neuve, ou abandonnée.
+    private(set) var absentPendingID: UUID?
     private(set) var started: SchoolLesson?
     /// Le serveur a refusé : un rendez-vous du moniteur ou de l’élève tombe pendant la leçon. Rien n’est forcé.
     private(set) var conflicted = false
@@ -46,6 +48,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
     /// L’élève est imposé par la fiche d’où l’on part, et il est bien parmi les élèves affectés.
     var hasPresetLearner: Bool { presetLearnerID != nil && presetLearnerID == learnerID }
     var learnerName: String? { learners.first { $0.id == learnerID }?.displayName }
+    var pendingAbsent: Bool { pending != nil && pending?.id == absentPendingID }
 
     func planLater() { if conflicted { planInstead = true } }
 
@@ -200,6 +203,44 @@ struct SchoolStartNowBody: Encodable, Sendable {
         return await send(pending, fresh: false)
     }
 
+    /// Demande son issue à l’école, quelle que soit l’action d’où la demande est partie. Confirmée, elle quitte
+    /// la file (une leçon démarrée ici s’ouvre) ; inconnue de l’école, elle peut être abandonnée.
+    func verify() async -> SchoolLesson? {
+        guard !invalidated, let command = pending, !isBusy else { return nil }
+        let request = generation
+        isBusy = true; errorMessage = nil
+        defer { if request == generation { isBusy = false } }
+        do {
+            let receipt = try await client.receipt(for: command)
+            try outbox.remove(command)
+            guard request == generation else { return nil }
+            pending = nil; absentPendingID = nil
+            guard command.kind == .startLessonNow, command.scope == scope else { return nil }
+            guard let lesson = try? await client.lesson(schoolID: scope.schoolID, id: receipt.resourceId), request == generation else {
+                errorMessage = "La leçon est enregistrée. Ferme cette fenêtre pour la retrouver dans Aujourd’hui."
+                return nil
+            }
+            started = lesson
+            return lesson
+        } catch SchoolPlanningFailure.notFound {
+            guard request == generation else { return nil }
+            absentPendingID = command.id
+        } catch {
+            guard request == generation else { return nil }
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription
+        }
+        return nil
+    }
+
+    /// Retire une demande que l’école ne connaît pas : rien n’a été enregistré, le parcours reprend.
+    func abandon() async {
+        guard !invalidated, let command = pending, pendingAbsent, !isBusy else { return }
+        do { try outbox.remove(command) }
+        catch { storageAvailable = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription; return }
+        pending = nil; absentPendingID = nil; errorMessage = nil
+        if !contextValid { await load() }
+    }
+
     func invalidate() {
         invalidated = true; generation = UUID(); learners = []; trainings = []; learnerID = nil; trainingID = nil
         pending = nil; started = nil; isBusy = false; isLoading = false; contextValid = false; storageAvailable = false; meetingPoint = ""
@@ -218,8 +259,10 @@ struct SchoolStartNowBody: Encodable, Sendable {
             return lesson
         } catch {
             guard request == generation else { return nil }
-            if fresh, let failure = error as? SchoolPlanningFailure, failure == .notFound || failure.definitiveRejection {
-                do { try outbox.remove(command); pending = nil }
+            // Une demande que l’école ne connaît pas se renvoie comme neuve : son refus est alors définitif.
+            if fresh || command.id == absentPendingID, let failure = error as? SchoolPlanningFailure,
+               failure == .notFound || failure.definitiveRejection {
+                do { try outbox.remove(command); pending = nil; absentPendingID = nil }
                 catch { storageAvailable = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription; return nil }
             }
             errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription
@@ -235,15 +278,23 @@ struct SchoolStartNowView: View {
     @Bindable var model: SchoolStartNowWorkspace
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// La recherche d’un élève prend toute la hauteur ; le formulaire, lui, tient dans une demi-feuille.
+    @State private var detent: PresentationDetent = .medium
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     if let pending = model.pending {
-                        DrivyPendingRequest(message: model.errorMessage ?? "Une demande attend sa confirmation.", reference: pending.id,
+                        // Toute demande restée en file se résout ici, même partie d’un autre écran : sans cela,
+                        // rien ne peut démarrer et rien n’explique pourquoi.
+                        let idle = !model.isBusy && !model.isLoading
+                        DrivyPendingRequest(message: pending.waitingMessage(absent: model.pendingAbsent),
+                            notes: model.errorMessage.map { [$0] } ?? [], reference: pending.id,
+                            verify: model.pendingAbsent ? nil : { Task { if await model.verify() != nil { dismiss() } } }, canVerify: idle,
                             retry: pending.kind == .startLessonNow && pending.scope == model.scope ? { Task { if await model.retry() != nil { dismiss() } } } : nil,
-                            canRetry: !model.isBusy && !model.isLoading)
+                            canRetry: idle,
+                            abandon: model.pendingAbsent ? { Task { await model.abandon() } } : nil, canAbandon: idle)
                     } else if let error = model.errorMessage {
                         SchoolErrorNotice(message: error, retry: !model.contextValid || model.learners.isEmpty || model.trainings.isEmpty || !model.storageAvailable
                             ? { Task { await reloadContext() } } : nil)
@@ -267,7 +318,8 @@ struct SchoolStartNowView: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
             .task { if model.learners.isEmpty { await model.load() } }
         }
-        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large], selection: $detent)
+        .onAppear { if typeSize.isAccessibilitySize { detent = .large } }
         .presentationDragIndicator(.visible)
         .presentationSizing(.form)
         .interactiveDismissDisabled(model.isBusy)
@@ -280,14 +332,22 @@ struct SchoolStartNowView: View {
                 if model.hasPresetLearner, let name = model.learnerName {
                     Text(name).fixedSize(horizontal: false, vertical: true)
                 } else {
-                    Picker("Élève", selection: Binding(get: { model.learnerID }, set: { id in
-                        if let id { Task { await model.select(id) } }
-                    })) {
-                        Text("Choisir un élève").tag(nil as UUID?)
-                        ForEach(model.learners) { learner in Text(learner.displayName).tag(Optional(learner.id)) }
+                    NavigationLink {
+                        SchoolLearnerSearchList(learners: model.learners, selectedID: model.learnerID) { id in
+                            Task { await model.select(id) }
+                        }
+                        .onAppear { detent = .large }
+                    } label: {
+                        HStack(spacing: DrivySpacing.xs) {
+                            Text(model.learnerName ?? "Choisir un élève").fixedSize(horizontal: false, vertical: true)
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
+                                .foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
+                        }
+                        .frame(minHeight: 44).contentShape(Rectangle())
                     }
-                    .pickerStyle(.menu).labelsHidden()
-                    .frame(minHeight: 44).contentShape(Rectangle())
+                    .accessibilityLabel("Élève")
+                    .accessibilityValue(model.learnerName ?? "Aucun élève choisi")
+                    .accessibilityIdentifier("start-now-learner")
                 }
             }
             if model.isLoading && model.trainings.isEmpty && model.learnerID != nil {

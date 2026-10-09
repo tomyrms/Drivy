@@ -318,11 +318,12 @@ struct SchoolProfileStatusSections: View {
             if let pending = model.pending, model.pendingAwaitsReview {
                 Section {
                     DrivyPendingRequest(
-                        message: "Une nouvelle modification sera possible après vérification du résultat.",
-                        notes: pendingNotes(pending),
+                        message: pending.waitingMessage(absent: model.pendingAbsent),
+                        notes: model.pendingAbsent ? [] : pendingNotes(pending),
                         reference: pending.id,
-                        verify: { Task { await model.verifyPending() } }, canVerify: model.canVerifyPending,
-                        retry: model.canRetryPending ? { Task { await model.retryPending() } } : nil)
+                        verify: model.pendingAbsent ? nil : { Task { await model.verifyPending() } }, canVerify: model.canVerifyPending,
+                        retry: model.canRetryPending ? { Task { await model.retryPending() } } : nil,
+                        abandon: model.pendingAbsent ? { Task { await model.abandonPending() } } : nil, canAbandon: model.canVerifyPending)
                 }
                     .drivyFormRows()
             }

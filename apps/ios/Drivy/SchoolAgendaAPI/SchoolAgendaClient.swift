@@ -87,9 +87,10 @@ struct SchoolLessonCommercialSelection: Codable, Sendable, Equatable {
 extension SchoolLesson: SchoolCatalogRecord {}
 
 enum SchoolAgendaFailure: Error, LocalizedError {
-    case unavailable, authentication, forbidden, invalidResponse
+    case unavailable, authentication, forbidden, invalidResponse, notFound
     var errorDescription: String? {
         switch self {
+        case .notFound: "Cette leçon n’est plus disponible avec tes accès."
         case .unavailable: "L’agenda est momentanément indisponible. Réessaie dans quelques instants."
         case .authentication: "Reconnecte-toi pour retrouver ton agenda."
         case .forbidden: "Ton accès à cet agenda a changé. Actualise ton école."
@@ -182,6 +183,7 @@ final class SchoolAgendaClient {
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolAgendaFailure.invalidResponse }
         if response.status == 401 { throw SchoolAgendaFailure.authentication }
         if response.status == 403 { throw SchoolAgendaFailure.forbidden }
+        if response.status == 404 { throw SchoolAgendaFailure.notFound }
         guard response.status == 200 else { throw SchoolAgendaFailure.unavailable }
         guard response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else { throw SchoolAgendaFailure.invalidResponse }
         do { return try JSONDecoder().decode(Envelope<Value>.self, from: response.data).data }

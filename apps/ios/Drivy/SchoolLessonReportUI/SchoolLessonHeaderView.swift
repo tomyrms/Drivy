@@ -28,7 +28,7 @@ struct SchoolLessonHeaderView: View {
                     .drivySkeleton("Chargement de la leçon…")
             }
             if let error = model.errorMessage {
-                SchoolErrorNotice(message: error, retry: model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
+                SchoolErrorNotice(message: error, retry: model.isBusy || model.isLoading || model.isInvalidated ? nil : { Task { await model.load() } })
             }
             if let finishError { DrivyInlineMessage(text: finishError, tone: .danger) }
             if let message = model.confirmation { DrivyInlineMessage(text: message) }

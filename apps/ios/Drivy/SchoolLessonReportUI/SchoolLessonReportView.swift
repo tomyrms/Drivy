@@ -228,7 +228,11 @@ private struct SchoolLessonReportContent: View {
             SchoolCapturePreparationView(model: preparation, schoolWorkspace: schoolWorkspace)
         }
         .sheet(item: $planningRoute, onDismiss: { Task { await model.load() } }) { route in
-            SchoolPlanningView(model: route.model, cancelling: route.cancelling)
+            SchoolPlanningView(model: route.model, cancelling: route.cancelling,
+                beforeCancellation: route.cancelling && captureStatus == .collecting ? { await capture?.stopAndSynchronize() ?? true } : nil)
+            .onChange(of: route.model.confirmedCancellationLessonID) { _, id in
+                if let id, id == model.lessonID, capture?.lessonID == id { capture?.closeSaved() }
+            }
         }
         .navigationDestination(isPresented: $showsLive) {
             if let capture {
@@ -295,6 +299,7 @@ private struct SchoolLessonReportContent: View {
                 } label: {
                     Label("Actualiser", systemImage: "arrow.clockwise")
                 }
+                .disabled(model.isInvalidated)
             }
             ToolbarItem(placement: .topBarTrailing) { lessonMenu(now: now) }
         }
@@ -525,8 +530,8 @@ private struct SchoolLessonReportContent: View {
 
     @ViewBuilder private func lessonMenu(now: Date) -> some View {
         if let lesson = model.lesson {
-            let moves = SchoolLessonHubRules.mayMove(lesson, roles: model.membership.roles, now: now)
-            let cancels = SchoolLessonHubRules.mayCancel(lesson, roles: model.membership.roles)
+            let moves = SchoolLessonHubRules.mayMove(lesson, roles: model.membership.roles, membershipID: model.membership.membershipId, now: now)
+            let cancels = SchoolLessonHubRules.mayCancel(lesson, roles: model.membership.roles, membershipID: model.membership.membershipId)
             let absent = model.mayMarkNoShow(now: now)
             let edits = offersEditInMenu, leaves = offersLeaveInMenu
             if moves || cancels || absent || edits || leaves {

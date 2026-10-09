@@ -543,9 +543,10 @@ struct SchoolReportNotices: View {
             : nil
         return Section {
             DrivyPendingRequest(
-                message: "La demande est conservée sur cet appareil. Vérifie son résultat avant une nouvelle action.",
-                verify: { Task { await model.verifyPending() } }, canVerify: idle,
-                retry: retry, canRetry: idle
+                message: model.pending?.waitingMessage(absent: model.pendingAbsent) ?? "",
+                verify: model.pendingAbsent ? nil : { Task { await model.verifyPending() } }, canVerify: idle,
+                retry: retry, canRetry: idle,
+                abandon: model.pendingAbsent ? { Task { await model.abandonPending() } } : nil, canAbandon: idle
             ) {
                 DisclosureGroup {
                     Text(model.pendingDescription)

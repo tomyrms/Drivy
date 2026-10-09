@@ -37,6 +37,9 @@ struct SchoolPlanningInstructor: Identifiable {
     private(set) var errorMessage: String?
     private(set) var successMessage: String?
     private(set) var pendingRequiresReview = false
+    /// Demande que l’école a déclaré ne pas connaître : elle peut être renvoyée comme neuve, ou abandonnée.
+    private(set) var absentPendingID: UUID?
+    var pendingAbsent: Bool { pending != nil && pending?.id == absentPendingID }
     private(set) var accessRevoked = false
     private(set) var isCheckingSlot = false
     private(set) var slotError: String?
@@ -273,7 +276,9 @@ struct SchoolPlanningInstructor: Identifiable {
             guard request == generation, !Task.isCancelled else { return }
             self.school = school; self.defaults = defaults; self.roles = membership.roles; self.grants = membership.grants
             self.offerings = offerings; self.policies = policies; self.products = products; self.terms = terms
-            self.instructors = instructors; self.learners = learners.filter { $0.archivedAt == nil }
+            self.instructors = instructors
+            self.learners = learners.filter { $0.archivedAt == nil }
+                .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
             originalLesson = refreshedLesson; agreementConfirmed = false
             needsReload = false; isLoading = false; errorMessage = storageError
             if let learnerID, self.learners.contains(where: { $0.id == learnerID }) { await selectLearner(learnerID) }
@@ -338,7 +343,8 @@ struct SchoolPlanningInstructor: Identifiable {
                 if let previousInstructorID, assignedInstructors.contains(where: { $0.id == previousInstructorID }) {
                     instructorID = previousInstructorID
                 } else {
-                    instructorID = assignedInstructors.contains(where: { $0.id == scope.membershipID }) ? scope.membershipID : nil
+                    instructorID = assignedInstructors.contains(where: { $0.id == scope.membershipID }) ? scope.membershipID
+                        : assignedInstructors.count == 1 ? assignedInstructors.first?.id : nil
                 }
             }
         } catch { guard request == selectionGeneration else { return }; isLoading = false; fail(error) }
@@ -468,7 +474,19 @@ struct SchoolPlanningInstructor: Identifiable {
             guard request == generation else { return }; pending = nil; isBusy = false; pendingRequiresReview = false
             if command.kind == .cancelLesson { confirmedCancellationLessonID = command.resourceID }
             successMessage = "Enregistrement confirmé par l’école."; await load()
+        } catch SchoolPlanningFailure.notFound {
+            // Le reçu absent ne dit rien des accès : l’école n’a simplement pas enregistré cette opération.
+            guard request == generation else { return }
+            isBusy = false; errorMessage = nil; absentPendingID = command.id; pendingRequiresReview = false
         } catch { guard request == generation else { return }; isBusy = false; fail(error) }
+    }
+    /// Retire une demande que l’école ne connaît pas, puis relit le planning : rien n’est supposé enregistré.
+    func abandonPending() async {
+        guard !invalidated, !isBusy, let command = pending, pendingAbsent else { return }
+        do { try outbox.remove(command) }
+        catch { storageAvailable = false; fail(error); return }
+        pending = nil; absentPendingID = nil; errorMessage = nil
+        await load()
     }
     private func transmit(firstAttempt: Bool) async -> Bool {
         guard canRetry, let command = pending else { return false }
@@ -481,9 +499,11 @@ struct SchoolPlanningInstructor: Identifiable {
             await load(); return true
         } catch {
             guard request == generation else { return false }
-            if let failure = error as? SchoolPlanningFailure, failure.definitiveRejection {
-                if firstAttempt {
-                    do { try outbox.remove(command); pending = nil; needsReload = true }
+            if let failure = error as? SchoolPlanningFailure, failure.definitiveRejection || failure == .notFound {
+                // Une demande que l’école ne connaît pas se renvoie comme neuve : son refus est alors définitif.
+                // Un 404 est aussi une réponse de l’école : rien n’a été enregistré.
+                if firstAttempt || command.id == absentPendingID {
+                    do { try outbox.remove(command); pending = nil; absentPendingID = nil; needsReload = true }
                     catch { storageAvailable = false; isBusy = false; fail(error); return false }
                 } else { pendingRequiresReview = true }
             }

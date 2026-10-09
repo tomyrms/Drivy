@@ -76,11 +76,16 @@ struct SchoolLessonHubTests {
 
     @Test func movingAndCancellingStayWithStaffOnPlannedLessons() {
         let lesson = HubFixture.lesson(), before = HubFixture.date("2026-09-28T11:00:00Z"), after = HubFixture.date("2026-09-28T12:30:00Z")
-        #expect(SchoolLessonHubRules.mayMove(lesson, roles: ["INSTRUCTOR"], now: before))
-        #expect(SchoolLessonHubRules.mayMove(lesson, roles: ["INSTRUCTOR"], now: after))
-        #expect(SchoolLessonHubRules.mayCancel(lesson, roles: ["ADMIN"]))
-        #expect(!SchoolLessonHubRules.mayCancel(lesson, roles: ["LEARNER"]))
-        #expect(!SchoolLessonHubRules.mayCancel(HubFixture.lesson(status: "CANCELLED"), roles: ["ADMIN"]))
+        let own = lesson.instructorMembershipId, colleague = UUID()
+        #expect(SchoolLessonHubRules.mayMove(lesson, roles: ["INSTRUCTOR"], membershipID: own, now: before))
+        #expect(SchoolLessonHubRules.mayMove(lesson, roles: ["INSTRUCTOR"], membershipID: own, now: after))
+        #expect(SchoolLessonHubRules.mayCancel(lesson, roles: ["ADMIN"], membershipID: colleague))
+        #expect(!SchoolLessonHubRules.mayCancel(lesson, roles: ["LEARNER"], membershipID: own))
+        #expect(!SchoolLessonHubRules.mayCancel(HubFixture.lesson(status: "CANCELLED"), roles: ["ADMIN"], membershipID: own))
+        // L’école refuse à un moniteur la leçon d’un collègue : l’app ne la lui propose pas.
+        #expect(!SchoolLessonHubRules.mayMove(lesson, roles: ["INSTRUCTOR"], membershipID: colleague, now: before))
+        #expect(!SchoolLessonHubRules.mayCancel(lesson, roles: ["INSTRUCTOR"], membershipID: colleague))
+        #expect(SchoolLessonHubRules.mayCancel(lesson, roles: ["ADMIN", "INSTRUCTOR"], membershipID: colleague))
     }
 
     // MARK: Constat
@@ -333,10 +338,11 @@ struct SchoolLessonHubTests {
         #expect(model.errorMessage == SchoolReportFailure.permitReviewRequired.localizedDescription)
     }
 
-    @Test func withoutTheGrantThePermitButtonIsNotOffered() async {
+    /// L’école n’exige plus le grant `permit_review` : le moniteur de la leçon voit le bouton, l’école relit son affectation.
+    @Test func thePermitButtonIsOfferedToTheLessonInstructorWithoutAnyGrant() async {
         let model = HubFixture.workspace(server: HubServer(grants: []), outbox: ConfigurationOutboxStub(), grants: [])
         await model.load()
-        #expect(model.lesson != nil && !model.mayRecordPermit)
+        #expect(model.lesson != nil && model.mayRecordPermit)
     }
 
     @Test func changedServerPreparationDoesNotEraseOrSilentlyRebaseLocalEdits() async {

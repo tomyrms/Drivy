@@ -81,12 +81,17 @@ struct SchoolPlanningView: View {
     @ViewBuilder private var bookingFields: some View {
         Section {
             if model.originalLesson == nil {
-                Picker("Élève", selection: Binding(get: { model.learnerID }, set: { id in
-                    if let id { Task { await model.selectLearner(id) } }
-                })) {
-                    Text("Choisir un élève").tag(nil as UUID?)
-                    ForEach(model.learners) { learner in Text(learner.displayName).tag(Optional(learner.id)) }
-                }.disabled(!model.canMutate)
+                NavigationLink {
+                    SchoolLearnerSearchList(learners: model.learners, selectedID: model.learnerID) { id in
+                        Task { await model.selectLearner(id) }
+                    }
+                } label: {
+                    LabeledContent("Élève") {
+                        Text(model.learners.first(where: { $0.id == model.learnerID })?.displayName ?? "Choisir un élève")
+                    }
+                }
+                .disabled(!model.canMutate)
+                .accessibilityIdentifier("planning-learner")
                 if model.learners.isEmpty && !model.isLoading { formNote("Aucun dossier d’élève actif n’est accessible avec ton rôle.") }
                 if model.learnerID != nil {
                     trainingChoice
@@ -444,11 +449,13 @@ struct SchoolPlanningFeedback: View {
         }
         if let command = model.pending {
             Section {
-                DrivyPendingRequest(message: "La demande est conservée. Vérifie son résultat avant d’en envoyer une nouvelle.",
+                DrivyPendingRequest(message: command.waitingMessage(absent: model.pendingAbsent),
                     notes: !model.canRetry && command.scope != model.scope ? ["Tes accès ont changé. La demande initiale reste conservée."] : [],
                     reference: command.id,
-                    verify: { Task { await model.verify() } }, canVerify: !(model.isBusy || model.isLoading),
-                    retry: model.canRetry ? { Task { _ = await model.retry() } } : nil)
+                    verify: model.pendingAbsent ? nil : { Task { await model.verify() } }, canVerify: !(model.isBusy || model.isLoading),
+                    retry: model.canRetry ? { Task { _ = await model.retry() } } : nil,
+                    abandon: model.pendingAbsent ? { Task { await model.abandonPending() } } : nil,
+                    canAbandon: !(model.isBusy || model.isLoading))
             }
                 .drivyFormRows()
         }

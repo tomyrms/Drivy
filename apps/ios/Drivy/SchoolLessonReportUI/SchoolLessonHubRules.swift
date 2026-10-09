@@ -134,11 +134,15 @@ enum SchoolLessonHubRules {
     }
 
     static func mayManage(_ roles: [String]) -> Bool { roles.contains("ADMIN") || roles.contains("INSTRUCTOR") }
-    static func mayMove(_ lesson: SchoolLesson, roles: [String], now: Date) -> Bool {
-        mayManage(roles) && lesson.status == "PLANNED" && !lesson.hasStarted
+    /// Déplacer ou annuler : l’administration, ou le moniteur de cette leçon. L’école refuse un collègue.
+    static func mayReschedule(_ lesson: SchoolLesson, roles: [String], membershipID: UUID?) -> Bool {
+        roles.contains("ADMIN") || (roles.contains("INSTRUCTOR") && lesson.instructorMembershipId == membershipID)
     }
-    static func mayCancel(_ lesson: SchoolLesson, roles: [String]) -> Bool {
-        mayManage(roles) && lesson.status == "PLANNED"
+    static func mayMove(_ lesson: SchoolLesson, roles: [String], membershipID: UUID?, now: Date) -> Bool {
+        mayReschedule(lesson, roles: roles, membershipID: membershipID) && lesson.status == "PLANNED" && !lesson.hasStarted
+    }
+    static func mayCancel(_ lesson: SchoolLesson, roles: [String], membershipID: UUID?) -> Bool {
+        mayReschedule(lesson, roles: roles, membershipID: membershipID) && lesson.status == "PLANNED"
     }
 
     /// Départ durable de la leçon et instant du geste de fin. Le GPS facultatif ne réduit pas la séance.

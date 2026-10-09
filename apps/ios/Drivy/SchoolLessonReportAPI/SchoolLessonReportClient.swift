@@ -5,6 +5,8 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
     /// Contrôle du permis refusé à ce compte (grant `permit_review` ou affectation absents) :
     /// ce n’est pas une perte d’accès à la leçon.
     case permitReviewRequired
+    /// Vérification d’une demande : l’école répond qu’elle n’a aucune trace de cette opération.
+    case operationUnknown
     var errorDescription: String? {
         switch self {
         case .unauthorized: "Reconnecte-toi pour retrouver cette leçon."
@@ -16,6 +18,7 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         case .rejected(let message): message
         case .uncertain: "La confirmation reste à vérifier. Conserve cette demande et vérifie son résultat avant toute nouvelle modification."
         case .permitReviewRequired: "Tu n’as pas le droit de contrôler ce permis. Précise la situation du permis."
+        case .operationUnknown: "L’école n’a aucune trace de cette demande : rien n’a été enregistré."
         }
     }
     var permitsFreshCorrection: Bool { switch self { case .conflict, .rejected, .permitReviewRequired: true; default: false } }
@@ -79,7 +82,10 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         return value
     }
     func receipt(for command: PendingSchoolCommand) async throws -> SchoolOperationReceipt {
-        let value: SchoolOperationReceipt = try await request(command.scope.schoolID, ["operations", command.id.uuidString])
+        let value: SchoolOperationReceipt
+        // Un 404 sur le reçu ne dit rien des droits sur la leçon : l’opération n’existe simplement pas pour l’école.
+        do { value = try await request(command.scope.schoolID, ["operations", command.id.uuidString]) }
+        catch SchoolReportFailure.notFound { throw SchoolReportFailure.operationUnknown }
         guard command.scope.apiBaseURL == baseURL.absoluteString, command.matches(value) else { throw SchoolReportFailure.invalidResponse }
         return value
     }

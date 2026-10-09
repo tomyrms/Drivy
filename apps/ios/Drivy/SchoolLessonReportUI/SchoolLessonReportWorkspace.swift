@@ -43,7 +43,11 @@ import Observation
     /// Vrai uniquement après le reçu de sauvegarde de ce bilan et le retrait durable de sa demande.
     private(set) var reportSaveConfirmed = false
     private(set) var pendingReviewed = false
+    /// Demande que l’école a déclaré ne pas connaître : elle peut être renvoyée comme neuve, ou abandonnée.
+    private(set) var absentPendingID: UUID?
     private(set) var needsReload = true
+    /// Accès retiré : plus aucune relecture n’aboutira depuis cette fiche.
+    var isInvalidated: Bool { invalidated }
     /// Premier envoi d’une demande, juste après le geste : bref, il ne se présente pas comme une demande à vérifier.
     private(set) var isFirstSend = false
     /// L’école vient de confirmer un contenu qu’aucune relecture n’a encore appliqué. La saisie attend cette
@@ -93,6 +97,7 @@ import Observation
     }
     /// Demande restée en attente après un envoi sans réponse sûre. Le premier envoi, en cours, n’en est pas une.
     var pendingAwaitsReview: Bool { pending != nil && !(isBusy && isFirstSend) }
+    var pendingAbsent: Bool { pending != nil && pending?.id == absentPendingID }
     /// Envoi qui retient la fiche jusqu’à son résultat ; un réglage de partage, bref, ne la retient pas.
     var holdsScreen: Bool { isBusy && !isSendingSharing }
     var validTexts: Bool { [workedOn, observationText, nextStep].allSatisfy { $0.unicodeScalars.count <= 4_000 } }
@@ -203,9 +208,9 @@ import Observation
         guard let lesson else { return (now.addingTimeInterval(-3_000), now) }
         return SchoolLessonHubRules.completionTimes(lesson: lesson, captures: captures, now: now)
     }
-    /// Permis d’élève vu : grant `permit_review` du moniteur de la leçon ; l’affectation est relue par le serveur.
+    /// Permis d’élève vu : par le moniteur de la leçon ; l’école relit son affectation et peut refuser.
     var mayRecordPermit: Bool {
-        isAuthor && membership.grants.contains("permit_review") && !permitReviewDenied && !permitRecorded
+        isAuthor && !permitReviewDenied && !permitRecorded
             && lesson?.status == "PLANNED" && training != nil && training?.id == lesson?.trainingId
     }
     var reportShared: Bool { !(optimisticSharing?.reportPrivate ?? sharing?.reportPrivate ?? false) }
@@ -250,7 +255,7 @@ import Observation
         case .updateLessonSharing: title = "Partage avec l’élève"
         case .recordPermitCheck: title = "Permis d’élève vu"
         case .markNoShow: title = "Élève absent"
-        default: return "Une demande provenant d’un autre écran est en attente dans cette école."
+        default: return pending.kind.requestTitle
         }
         guard let body = try? JSONSerialization.jsonObject(with: pending.body) as? [String: Any] else { return title }
         let fields = [("workedOn", "Travail"), ("observationText", "À retenir"), ("nextStep", "Prochaine étape"), ("text", "Souhait"), ("anomalyReason", "Motif"), ("reason", "Motif")]
@@ -622,7 +627,19 @@ import Observation
             announceConfirmedChange(pending)
             if confirmsThisReport(pending) { discardLocalDraft(); reportSaveConfirmed = true; return }
             await load()
+        } catch SchoolReportFailure.operationUnknown {
+            // L’école répond sans ambiguïté : la fiche reste lisible et la demande peut être renvoyée ou abandonnée.
+            guard request == generation, !invalidated else { return }
+            isBusy = false; absentPendingID = pending.id
         } catch { guard request == generation, !invalidated else { return }; isBusy = false; fail(error) }
+    }
+    /// Retire une demande que l’école ne connaît pas, puis relit la leçon : rien n’est supposé enregistré.
+    func abandonPending() async {
+        guard let pending, pendingAbsent, !invalidated, !isLoading, !isBusy else { return }
+        do { try outbox.remove(pending) }
+        catch { storageAccessible = false; fail(error); return }
+        self.pending = nil; absentPendingID = nil; errorMessage = nil
+        await load()
     }
     private func prepare<Value: Encodable>(_ value: Value, id: UUID, kind: SchoolCommandKind, version: Int, resourceID: UUID? = nil, routeID: UUID? = nil, expectedVersion: Int? = nil) async -> Bool {
         guard canMutate else { return false }
@@ -657,11 +674,21 @@ import Observation
             }
             await load(); return true
         } catch {
-            if firstAttempt, let failure = error as? SchoolReportFailure, failure.permitsFreshCorrection {
+            // Une demande que l’école ne connaît pas se renvoie comme neuve : son refus motivé est définitif.
+            // Un 404 ou un 403 à l’envoi est aussi une réponse de l’école : rien n’a été enregistré.
+            let fresh = firstAttempt || command.id == absentPendingID
+            let refused = error as? SchoolReportFailure == .notFound || error as? SchoolReportFailure == .forbidden
+            if fresh, let failure = error as? SchoolReportFailure, failure.permitsFreshCorrection || refused {
                 do { try outbox.remove(command) }
                 catch { guard request == generation else { return false }; isBusy = false; storageAccessible = false; fail(error); return false }
                 guard request == generation, !invalidated else { return false }
-                pending = nil; needsReload = failure == .conflict
+                pending = nil; absentPendingID = nil; needsReload = failure == .conflict || refused
+                if failure == .notFound {
+                    // L’accès à la leçon se juge à sa relecture, pas au refus d’une commande.
+                    isBusy = false; pendingReviewed = false
+                    errorMessage = "L’école n’a pas pu traiter « \(command.kind.requestTitle) » : la leçon n’est plus accessible, ou le service de l’école n’est pas à jour. Rien n’a été enregistré."
+                    return false
+                }
             }
             guard request == generation, !invalidated else { return false }
             isBusy = false; pendingReviewed = false; fail(error); return false
@@ -706,6 +733,7 @@ import Observation
     private func fail(_ error: any Error) {
         if error as? SchoolReportFailure == .permitReviewRequired { permitReviewDenied = true }
         let denied = isAccessRevoked(error) || error as? SchoolReportFailure == .notFound || error as? SchoolAPIError == .notFound
+            || error as? SchoolAgendaFailure == .notFound
         if denied { invalidate() }
         if error is CancellationError, pending == nil {
             // Écran relancé ou fermé pendant la lecture : ce n’est pas une panne de l’école.
@@ -714,7 +742,8 @@ import Observation
         }
         errorMessage = (error as? SchoolReportFailure)?.localizedDescription
             ?? (error as? SchoolConfigurationFailure)?.localizedDescription
-            ?? (error as? SchoolAPIError)?.localizedDescription ?? SchoolReportFailure.unavailable.localizedDescription
+            ?? (error as? SchoolAPIError)?.localizedDescription ?? (error as? SchoolAgendaFailure)?.localizedDescription
+            ?? SchoolReportFailure.unavailable.localizedDescription
     }
     private func isAccessRevoked(_ error: any Error) -> Bool {
         if SchoolTrainingAccess.isRevoked(error) || error as? SchoolAPIError == .identityNotLinked { return true }

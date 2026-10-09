@@ -13,6 +13,9 @@ import Foundation
     private(set) var errorMessage: String?
     private(set) var successMessage: String?
     private(set) var pending: PendingSchoolCommand?
+    /// Demande que l’école a déclaré ne pas connaître : elle peut être renvoyée comme neuve, ou abandonnée.
+    private(set) var absentPendingID: UUID?
+    var pendingAbsent: Bool { pending != nil && pending?.id == absentPendingID }
     private(set) var storageAvailable = false
     private(set) var contextCurrent = false
     private(set) var conflictingDefaults: SchoolPlanningDefaults?
@@ -106,14 +109,26 @@ import Foundation
         guard canRetry, let pending else { return }
         await send(pending, fresh: false)
     }
+    /// Toute demande restée en file se vérifie ici, même partie d’un autre écran : sans cela rien ne la résout.
     func verify() async {
-        guard !isBusy, !isLoading, let command = pending, command.kind == .savePlanningDefaults else { return }
+        guard !isBusy, !isLoading, let command = pending else { return }
         isBusy = true; errorMessage = nil
         do {
             _ = try await client.receipt(for: command)
-            try outbox.remove(command); pending = nil; successMessage = "Préférences enregistrées."
-            isBusy = false; await load(keepingEdits: false)
+            try outbox.remove(command); pending = nil; absentPendingID = nil
+            successMessage = command.kind == .savePlanningDefaults ? "Préférences enregistrées." : nil
+            isBusy = false; await load(keepingEdits: command.kind != .savePlanningDefaults)
+        } catch SchoolPlanningFailure.notFound {
+            isBusy = false; absentPendingID = command.id
         } catch { isBusy = false; errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription }
+    }
+    /// Retire une demande que l’école ne connaît pas : rien n’a été enregistré.
+    func abandon() async {
+        guard !isBusy, !isLoading, let command = pending, pendingAbsent else { return }
+        do { try outbox.remove(command) }
+        catch { storageAvailable = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription; return }
+        pending = nil; absentPendingID = nil; errorMessage = nil
+        await load(keepingEdits: true)
     }
     private func send(_ command: PendingSchoolCommand, fresh: Bool) async {
         isBusy = true; errorMessage = nil; successMessage = nil
@@ -123,8 +138,8 @@ import Foundation
             try outbox.remove(command); pending = nil; successMessage = "Préférences enregistrées."
             isBusy = false; await load(keepingEdits: false)
         } catch {
-            if fresh, let failure = error as? SchoolPlanningFailure, failure.definitiveRejection {
-                do { try outbox.remove(command); pending = nil }
+            if fresh || command.id == absentPendingID, let failure = error as? SchoolPlanningFailure, failure.definitiveRejection {
+                do { try outbox.remove(command); pending = nil; absentPendingID = nil }
                 catch { storageAvailable = false }
             }
             isBusy = false; errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription
@@ -159,10 +174,12 @@ struct SchoolPlanningSettingsView: View {
                 }
                 if let success = model.successMessage, !model.hasChanges { DrivyFormMessage(text: success, tone: .success) }
                 if let pending = model.pending {
-                    DrivyPendingRequest(message: "Une demande attend sa confirmation.", reference: pending.id,
-                        verify: pending.kind == .savePlanningDefaults ? { Task { await model.verify() } } : nil,
+                    DrivyPendingRequest(message: pending.waitingMessage(absent: model.pendingAbsent), reference: pending.id,
+                        verify: model.pendingAbsent ? nil : { Task { await model.verify() } },
                         canVerify: !model.isBusy && !model.isLoading,
-                        retry: model.canRetry ? { Task { await model.retry() } } : nil)
+                        retry: model.canRetry ? { Task { await model.retry() } } : nil,
+                        abandon: model.pendingAbsent ? { Task { await model.abandon() } } : nil,
+                        canAbandon: !model.isBusy && !model.isLoading)
                 }
                 if model.saved != nil {
                     DrivyRowGroup {

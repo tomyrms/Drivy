@@ -9,7 +9,7 @@ import Testing
             #expect(lesson.drivyState(now: now) == .waiting)
             #expect(lesson.drivyState(now: now).rowNote?.text == "En attente")
             #expect(!SchoolLessonHubRules.mayFinish(lesson, now: now))
-            #expect(SchoolLessonHubRules.mayCancel(lesson, roles: ["INSTRUCTOR"]))
+            #expect(SchoolLessonHubRules.mayCancel(lesson, roles: ["INSTRUCTOR"], membershipID: lesson.instructorMembershipId))
         }
     }
 
@@ -18,7 +18,7 @@ import Testing
             let lesson = HubFixture.lesson(actualStart: instant)
             let now = lesson.startedAt!.addingTimeInterval(120)
             #expect(SchoolLessonHubRules.mayFinish(lesson, now: now))
-            #expect(!SchoolLessonHubRules.mayMove(lesson, roles: ["INSTRUCTOR"], now: now))
+            #expect(!SchoolLessonHubRules.mayMove(lesson, roles: ["INSTRUCTOR"], membershipID: lesson.instructorMembershipId, now: now))
             let times = SchoolLessonHubRules.completionTimes(lesson: lesson,
                 captures: [HubFixture.capture(authorizedAt: "2026-09-28T12:20:00Z", stoppedAt: "2026-09-28T12:30:00Z", state: .stopped)], now: now)
             #expect(times.start == lesson.startedAt && times.end == now)

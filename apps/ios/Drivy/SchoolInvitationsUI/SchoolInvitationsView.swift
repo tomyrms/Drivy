@@ -127,14 +127,13 @@ private struct InvitationPendingNotice: View {
     let pending: PendingSchoolCommand
     var body: some View {
         DrivyPendingRequest(
-            message: pending.kind.isInvitation
-                ? "La demande est conservée sur cet appareil. Vérifie son résultat avant une nouvelle action."
-                : "Une modification de l’école attend sa confirmation. La consultation des invitations reste disponible.",
-            notes: notes,
-            verify: { Task { await model.verifyPending() } }, canVerify: model.canVerifyPending,
+            message: pending.waitingMessage(absent: model.pendingAbsent),
+            notes: model.pendingAbsent ? [] : notes,
+            verify: model.pendingAbsent ? nil : { Task { await model.verifyPending() } }, canVerify: model.canVerifyPending,
             verifyIdentifier: "invitation-verify-command",
             retry: model.canRetryPending ? { Task { await model.retryPending() } } : nil,
-            retryIdentifier: "invitation-retry-command")
+            retryIdentifier: "invitation-retry-command",
+            abandon: model.pendingAbsent ? { Task { await model.abandonPending() } } : nil, canAbandon: model.canVerifyPending)
     }
     private var notes: [String] {
         if pending.scope != model.scope { return ["Tes accès ont changé. La demande ne sera pas renvoyée avec ces nouveaux accès."] }
