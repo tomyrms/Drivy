@@ -138,7 +138,10 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
   const capture=await command(r,'START_CAPTURE',bound,expected,{lessonId},async(db,actor,school)=>{
    if(school.status!=='ACTIVE'||!school.modules.gpsEnabled)throw error('CAPTURE_DISABLED','Le GPS scolaire n’est pas activé. La leçon reste disponible sans GPS.');
    const lesson=await getLesson(db,school.id,lessonId,true);checkVersion(lesson.version,expected);if(lesson.status!=='PLANNED')throw error('LESSON_CLOSED','Cette leçon ne permet plus de démarrer une capture.');
-   const training=(await db.query<{status:string}>('SELECT status FROM drivy.training WHERE school_id=$1 AND id=$2',[school.id,lesson.training_id])).rows[0];if(training?.status!=='ACTIVE')throw error('TRAINING_NOT_ACTIVE','La formation doit être active.');
+   if(!(await db.query<{ok:boolean}>('SELECT drivy.lesson_learner_active($1) AS ok',[lesson.training_id])).rows[0]?.ok)throw error('LEARNER_NOT_ACTIVE','Le compte élève doit avoir une appartenance active.',422);
+   const training=(await db.query<{status:string;archived_at:Date|null}>(`SELECT t.status,l.archived_at FROM drivy.training t JOIN drivy.learner_profile l ON l.school_id=t.school_id AND l.id=t.learner_id
+    WHERE t.school_id=$1 AND t.id=$2`,[school.id,lesson.training_id])).rows[0];
+   if(training?.status!=='ACTIVE'||training.archived_at)throw error('TRAINING_NOT_ACTIVE','La formation doit être active dans un dossier non archivé.');
    const now=Date.now();if(!lesson.actual_start&&(now<lesson.planned_start.getTime()-1_800_000||now>=lesson.planned_end.getTime()+1_800_000))throw error('CAPTURE_START_WINDOW','Commencez la leçon avant de démarrer le trajet en dehors du créneau prévu.');
    const choice=await getChoice(db,school.id,lesson.learner_id,lessonId),n=await notice(db,school.id);
    if(choice.status!=='ALLOWED')throw error('RECORDING_NOT_ALLOWED','Le choix actuel de l’élève ne permet pas de capturer le GPS.',403);

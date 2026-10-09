@@ -18,8 +18,6 @@ export const invitationSchema = z.object({
 });
 export type Invitation = z.infer<typeof invitationSchema>;
 
-export const invitationCodeValidityDays = 7;
-
 const envelope = z.object({ data: invitationSchema, requestId: z.string().min(1), serverTime: z.string().datetime({ offset: true }) });
 
 /**

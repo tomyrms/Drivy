@@ -8,7 +8,7 @@
       "additionalProperties": false,
       "required": ["operationId"],
       "properties": {"operationId": {"type": "string", "format": "uuid"}},
-      "$comment": "POST /v1/schools/{schoolId}/lessons/{lessonId}/start ; If-Match et Idempotency-Key obligatoires. START_LESSON renvoie LessonEnvelope (200), version incrémentée, actualStart serveur, status PLANNED. Moniteur désigné affecté, école et formation actives. Aucun déclenchement temporel. Un départ déjà enregistré reçoit LESSON_STARTED sauf rejeu de la même opération."
+      "$comment": "POST /v1/schools/{schoolId}/lessons/{lessonId}/start ; If-Match et Idempotency-Key obligatoires. START_LESSON renvoie LessonEnvelope (200), version incrémentée, actualStart serveur, status PLANNED. Moniteur désigné affecté, école, formation et appartenance élève actives, dossier non archivé. Aucun déclenchement temporel. Un départ déjà enregistré reçoit LESSON_STARTED sauf rejeu de la même opération."
     },
     "TrainingExtension": {
       "type": "object",

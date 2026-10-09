@@ -30,7 +30,7 @@ L’incident historique signalé n’a pas été reproduit sur les données de l
 | Bureau web | [Revue dédiée](stabilite-web-20261009.md) |
 | Serveur et migration | [Revue dédiée](stabilite-api-20261009.md) |
 
-Le démarrage sans GPS retourne à la fiche de la leçon manuelle pour continuer le travail. Les objectifs gardent leur enregistrement dans la fiche. La branche devenue inaccessible de la barre « objectifs / trajet dès… » et ses calculs horaires ont été retirés après vérification des appels ; les autres retraits vérifiés sont listés dans les revues dédiées.
+Le démarrage sans GPS retourne à la fiche de la leçon manuelle pour continuer le travail. Les objectifs et la note saisis sont enregistrés avant le départ de la leçon ou du GPS ; un refus conserve la saisie et bloque cette transition. Les relectures d’Aujourd’hui attendent la fermeture de la chaîne de feuilles du démarrage manuel, pour éviter de détruire leur vue porteuse. La branche devenue inaccessible de la barre « objectifs / trajet dès… » et ses calculs horaires ont été retirés après vérification des appels ; les autres retraits vérifiés sont listés dans les revues dédiées.
 
 ## Qualification
 

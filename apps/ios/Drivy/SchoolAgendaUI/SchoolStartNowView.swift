@@ -378,6 +378,8 @@ struct SchoolStartNowButton<Content: View>: View {
     var learnerID: UUID?
     /// Appelé quand le geste est terminé (feuille fermée) pour que l’écran d’origine se relise.
     var onFinished: () -> Void = {}
+    /// La chaîne entière garde son hôte : création, préparation du GPS, puis fiche de leçon ou planification.
+    var onPresentationChanged: (Bool) -> Void = { _ in }
     @ViewBuilder let label: Content
 
     @State private var startNow: SchoolStartNowWorkspace?
@@ -402,6 +404,7 @@ struct SchoolStartNowButton<Content: View>: View {
                 lastStartNow?.invalidate(); lastStartNow = nil; startNow = nil
                 preparation?.invalidate(); preparation = nil; preparingLesson = nil
                 planning?.invalidate(); planning = nil; opened = nil
+                onPresentationChanged(false)
             }
             .sheet(item: $startNow, onDismiss: { closed() }) { model in
                 SchoolStartNowView(model: model)
@@ -409,15 +412,15 @@ struct SchoolStartNowButton<Content: View>: View {
             .sheet(item: $preparation, onDismiss: {
                 if let lesson = preparingLesson, SchoolLessonCaptureStatus(controller: captureController, lessonID: lesson.id) != .collecting {
                     opened = lesson
-                } else { onFinished() }
+                } else { finished() }
                 preparingLesson = nil
             }) { model in
                 SchoolCapturePreparationView(model: model, schoolWorkspace: workspace)
             }
-            .sheet(item: $planning, onDismiss: { onFinished() }) { model in
+            .sheet(item: $planning, onDismiss: { finished() }) { model in
                 SchoolPlanningView(model: model)
             }
-            .sheet(item: $opened, onDismiss: { onFinished() }) { lesson in
+            .sheet(item: $opened, onDismiss: { finished() }) { lesson in
                 if let agendaClient {
                     NavigationStack {
                         SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace, lessonID: lesson.id,
@@ -433,7 +436,13 @@ struct SchoolStartNowButton<Content: View>: View {
         guard let agendaClient, let person = workspace.person, let membership = workspace.membership, instructs else { return }
         let model = SchoolStartNowWorkspace(scope: agendaClient.scope(person: person, membership: membership),
             client: agendaClient.planningClient, learnerID: learnerID)
+        onPresentationChanged(true)
         lastStartNow = model; startNow = model
+    }
+
+    private func finished() {
+        onPresentationChanged(false)
+        onFinished()
     }
 
     /// Leçon créée : le trajet part aussitôt si possible, sinon la leçon s’ouvre. En cas de conflit,
@@ -448,12 +457,12 @@ struct SchoolStartNowButton<Content: View>: View {
                     lessonID: lesson.id, controller: captureController)
             } else { opened = lesson }
         } else if model.planInstead {
-            guard let agendaClient, let person = workspace.person, let membership = workspace.membership else { return onFinished() }
+            guard let agendaClient, let person = workspace.person, let membership = workspace.membership else { return finished() }
             let planned = SchoolPlanningWorkspace(scope: agendaClient.scope(person: person, membership: membership),
                 client: agendaClient.planningClient, date: Date().addingTimeInterval(120))
             planned.learnerID = model.learnerID
             planning = planned
-        } else { onFinished(); return }
+        } else { finished(); return }
         // Une feuille de suite vient d’être demandée : l’écran d’origine ne se relit qu’à sa fermeture (onDismiss).
         // Relire aussitôt fait apparaître la leçon créée, l’écran d’origine remplace alors ce bouton par « Démarrer le
         // trajet », la vue qui porte la feuille disparaît et la feuille de suite n’est jamais affichée.

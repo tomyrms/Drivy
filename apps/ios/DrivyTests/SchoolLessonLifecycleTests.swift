@@ -55,6 +55,61 @@ import Testing
         #expect(model.lesson?.hasStarted == true && model.pending == nil && outbox.value == nil)
     }
 
+    @Test func startingSavesObjectivesBeforeStartingTheLesson() async throws {
+        let server = LifecycleServer(), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox)
+        await model.load()
+        let goals = [SchoolLessonGoal(label: "Contrôler les angles morts")]
+        model.goals = goals; model.administrativeNote = "Revoir le départ."
+        #expect(await model.start())
+        #expect(model.lesson?.hasStarted == true && !model.preparationChanged)
+        #expect(model.preparation?.goals == goals && model.preparation?.administrativeCheckNote == "Revoir le départ.")
+        #expect(outbox.removals.map(\.kind) == [.savePreparation, .startLesson])
+        let body = try #require(outbox.saves.first?.body)
+        let saved = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect((saved["goals"] as? [[String: Any]])?.first?["label"] as? String == goals.first?.label)
+        #expect(saved["administrativeCheckNote"] as? String == "Revoir le départ.")
+    }
+
+    @Test func failedObjectivesSavePreventsStartingAndKeepsTheDraft() async {
+        let server = LifecycleServer(), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox)
+        await model.load()
+        let goals = [SchoolLessonGoal(label: "Contrôler les angles morts")]
+        model.goals = goals
+        await server.setPreparationRejected(true)
+        #expect(!(await model.start()))
+        #expect(model.lesson?.hasStarted == false && model.goals == goals && model.preparationChanged)
+        #expect(model.errorMessage != nil)
+        #expect(!outbox.saves.isEmpty && outbox.saves.allSatisfy { $0.kind == .savePreparation })
+    }
+
+    @Test func invalidObjectivesCannotBeDiscardedByStarting() async {
+        let outbox = ConfigurationOutboxStub()
+        let model = workspace(LifecycleServer(), outbox)
+        await model.load()
+        model.goals = [SchoolLessonGoal(label: "")]
+        #expect(!(await model.start()))
+        #expect(model.lesson?.hasStarted == false && model.goals.count == 1 && model.preparationChanged)
+        #expect(model.errorMessage != nil && outbox.saves.isEmpty)
+    }
+
+    @Test func laterGPSDepartureAlsoWaitsForSavedObjectives() async {
+        let server = LifecycleServer(), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox)
+        await model.load()
+        #expect(await model.start())
+        let goals = [SchoolLessonGoal(label: "Priorités à droite")]
+        model.goals = goals
+        await server.setPreparationRejected(true)
+        #expect(!(await model.savePreparationBeforeDeparture()))
+        #expect(model.goals == goals && model.preparationChanged)
+        await server.setPreparationRejected(false)
+        #expect(await model.savePreparationBeforeDeparture())
+        #expect(model.preparation?.goals == goals && !model.preparationChanged)
+        #expect(Set(outbox.saves.filter { $0.kind == .startLesson }.map(\.id)).count == 1)
+    }
+
     @Test func anUnstartedLessonCannotSendCompletion() async {
         let outbox = ConfigurationOutboxStub()
         let model = workspace(LifecycleServer(), outbox)
@@ -76,7 +131,11 @@ private actor LifecycleServer: SchoolHTTPTransport {
     private let fallback = HubServer()
     private var started = false, completed = false, receiptAvailable = true
     private var operation: UUID?, command = "START_LESSON"
+    private let preparationID = UUID(uuidString: "70000000-0000-4000-8000-000000000001")!
+    private var preparationGoals: [[String: Any]] = [], preparationNote = "", preparationVersion = 1
+    private var preparationRejected = false
     func setReceiptAvailable(_ value: Bool) { receiptAvailable = value }
+    func setPreparationRejected(_ value: Bool) { preparationRejected = value }
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         let url = request.url!, leaf = url.lastPathComponent.lowercased()
@@ -91,6 +150,22 @@ private actor LifecycleServer: SchoolHTTPTransport {
             else { completed = true; command = "COMPLETE_LESSON" }
             return try ok([:])
         }
+        if leaf == "preparation" {
+            if request.httpMethod == "PUT" {
+                if preparationRejected {
+                    return SchoolHTTPResponse(data: Data("{\"code\":\"INVALID_REQUEST\",\"title\":\"Objectifs refusés\"}".utf8),
+                        status: 422, url: url, contentType: "application/problem+json")
+                }
+                let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+                operation = UUID(uuidString: body["operationId"] as! String); command = "SAVE_PREPARATION"
+                preparationGoals = body["goals"] as! [[String: Any]]
+                preparationNote = body["administrativeCheckNote"] as? String ?? ""
+                preparationVersion += 1
+            }
+            return try ok(["id": preparationID.uuidString, "schoolId": HubFixture.schoolID.uuidString,
+                "lessonId": HubFixture.lessonID.uuidString, "version": preparationVersion, "goals": preparationGoals,
+                "administrativeCheckNote": preparationNote, "plannedWaypoints": [] as [Any]])
+        }
         if leaf == HubFixture.lessonID.uuidString.lowercased() {
             let lesson = HubFixture.lesson(status: completed ? "COMPLETED" : "PLANNED", permitWarning: false,
                 actualStart: started ? "2026-09-28T11:00:00Z" : nil)
@@ -100,8 +175,9 @@ private actor LifecycleServer: SchoolHTTPTransport {
         }
         if let operation, leaf == operation.uuidString.lowercased() {
             guard receiptAvailable else { throw SchoolReportFailure.unavailable }
-            return try ok(["operationId": operation.uuidString, "commandType": command, "resourceType": "Lesson",
-                "resourceId": HubFixture.lessonID.uuidString, "resourceVersion": completed ? 4 : 3,
+            let preparation = command == "SAVE_PREPARATION"
+            return try ok(["operationId": operation.uuidString, "commandType": command, "resourceType": preparation ? "Preparation" : "Lesson",
+                "resourceId": (preparation ? preparationID : HubFixture.lessonID).uuidString, "resourceVersion": preparation ? preparationVersion : completed ? 4 : 3,
                 "committedAt": "2026-09-28T11:00:00Z"])
         }
         return try await fallback.send(request)

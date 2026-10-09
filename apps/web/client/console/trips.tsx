@@ -44,7 +44,7 @@ export function TripsSection() {
       </div>
       {page.truncated && <Notice tone="warning" title="Historique partiel" live={false}><p>Ce filtre porte sur les 1 000 derniers trajets de l’école. Ouvrez tous les trajets pour parcourir les plus anciens.</p></Notice>}
       {visible.length === 0 ? <EmptyState symbol="route" title={page.items.length ? 'Aucun trajet trouvé' : page.truncated ? 'Aucun trajet dans cette partie de l’historique' : 'Aucun trajet'} message="" />
-        : <table className="data-table trip-table"><caption className="visually-hidden">Trajets de l’école</caption>
+        : <table className="data-table trip-table"><caption className="visually-hidden">{learner ? 'Trajets de l’élève' : 'Trajets de l’école'}</caption>
           <thead><tr><th scope="col">Élève et moniteur</th><th scope="col">Trajet</th></tr></thead>
           <tbody>{visible.map(trip => <tr key={trip.id}>
             <th scope="row"><button type="button" className="row-button" onClick={() => dossier(trip.learnerId)}>{trip.learnerName}</button>

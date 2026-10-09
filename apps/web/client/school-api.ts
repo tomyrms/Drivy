@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RequestFailure } from './protocol';
+import { RequestFailure } from './protocol.js';
 
 /* Read models returned by /v1/schools/{schoolId}/… (OpenAPI 3.11.0), validated before display. */
 const id = z.string().uuid();

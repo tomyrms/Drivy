@@ -32,7 +32,7 @@ export function lessonProjection(row:LessonRow){return {id:row.id,schoolId:row.s
 type Lesson=ReturnType<typeof lessonProjection>;
 /** R07 : l'avertissement de permis est relu à chaque projection (décision courante, catégorie, date locale de la leçon). */
 /** Extension : les noms affichés (élève, moniteur) sont résolus par des fonctions qui revérifient le droit de lecture de la leçon. */
-export const lessonColumns=`*,drivy.lesson_permit_warning(training_id,(planned_start AT TIME ZONE time_zone)::date) AS permit_warning,
+export const lessonColumns=`*,drivy.lesson_permit_warning(training_id,(coalesce(actual_start,planned_start) AT TIME ZONE time_zone)::date) AS permit_warning,
  drivy.lesson_learner_name(school_id,training_id,instructor_membership_id,learner_id) AS learner_display_name,
  drivy.lesson_instructor_name(school_id,training_id,instructor_membership_id) AS instructor_display_name,
  (SELECT jsonb_build_object('hasCapture',true,'syncState',c.sync_state,'publicationState',c.publication_state)
@@ -305,8 +305,10 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
    if(old.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Cette leçon possède déjà un résultat.');
    if(old.actual_start)throw new ApiError(409,'LESSON_STARTED','Cette leçon a déjà commencé. Continuez la leçon.');
    if(school.status!=='ACTIVE')throw new ApiError(409,'SCHOOL_NOT_ACTIVE','L’école doit être active pour commencer une leçon.');
-   const training=(await db.query<{status:string}>('SELECT status FROM drivy.training WHERE school_id=$1 AND id=$2',[school.id,old.training_id])).rows[0];
-   if(training?.status!=='ACTIVE')throw new ApiError(409,'TRAINING_NOT_ACTIVE','La formation doit être active pour commencer la leçon.');
+   if(!(await db.query<{ok:boolean}>('SELECT drivy.lesson_learner_active($1) AS ok',[old.training_id])).rows[0]?.ok)throw new ApiError(422,'LEARNER_NOT_ACTIVE','Le compte élève doit avoir une appartenance active.');
+   const training=(await db.query<{status:string;archived_at:Date|null}>(`SELECT t.status,l.archived_at FROM drivy.training t JOIN drivy.learner_profile l ON l.school_id=t.school_id AND l.id=t.learner_id
+    WHERE t.school_id=$1 AND t.id=$2`,[school.id,old.training_id])).rows[0];
+   if(training?.status!=='ACTIVE'||training.archived_at)throw new ApiError(409,'TRAINING_NOT_ACTIVE','La formation doit être active dans un dossier non archivé.');
    const row=await startLesson(db,old,body.operationId,new Date());
    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonStarted',changedFields:['actualStart']};
   },['INSTRUCTOR'],{...lessonCommandGuards(schoolId,{lessonId}),authorize,replay:async(db,_actor,previous)=>{await authorize(db);return previous;}});

@@ -19,6 +19,7 @@ struct SchoolTodayView: View {
     @State private var requestID = UUID()
     @State private var error: String?
     @State private var opened: OpenedLesson?
+    @State private var presentsStartNow = false
     @State private var showsDay = false
     @State private var cardHeight: CGFloat = 0
     @State private var location = SchoolTodayLocationPermission()
@@ -88,7 +89,7 @@ struct SchoolTodayView: View {
             if opened == nil { Task { await load() } }
         }
         .onChange(of: scopeKey) { _, _ in
-            opened = nil
+            opened = nil; presentsStartNow = false
         }
         .sheet(item: $opened, onDismiss: { Task { await load() } }) { item in
             if let agendaClient {
@@ -319,7 +320,10 @@ struct SchoolTodayView: View {
     /// « Démarrer une leçon » : élève, leçon créée maintenant par le serveur, puis départ du trajet (voir SchoolStartNowButton).
     @ViewBuilder private func startNowButton(prominent: Bool) -> some View {
         let button = SchoolStartNowButton(workspace: workspace, agendaClient: agendaClient, captureController: captureController,
-            onFinished: { Task { await load() } }) {
+            onFinished: { Task { await load() } }, onPresentationChanged: { presented in
+                presentsStartNow = presented
+                if presented { requestID = UUID(); isLoading = false }
+            }) {
             Label("Démarrer une leçon", systemImage: "location.fill")
         }
         if prominent {
@@ -331,6 +335,8 @@ struct SchoolTodayView: View {
 
     /// Relit la journée sans effacer ce qui est affiché.
     @MainActor private func load() async {
+        // Ce bouton porte plusieurs feuilles successives. Un refresh le remplaçant ne doit pas fermer la chaîne.
+        guard !presentsStartNow else { return }
         guard let agendaClient, let membership = workspace.membership else {
             lessons = []; loadedKey = nil; error = "L’agenda n’est pas disponible. Actualise ton école."
             return

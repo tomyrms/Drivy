@@ -20,6 +20,7 @@ import { TripsSection } from './trips';
 import { FormationsSection } from './formations';
 import { isLocalItemCurrent, parentSection, sectionTitles, workspaceFor, workspaces } from './navigation';
 import { consolePath, parseConsoleRoute, type NavigationQuery } from './route';
+import { ConsoleAccessReader } from './access-reader';
 
 type State =
   | { status: 'loading' }
@@ -39,6 +40,7 @@ export function ManagementConsole() {
   const navigationButton = useRef<HTMLButtonElement>(null);
   const csrf = useRef('');
   const generation = useRef(0);
+  const accessReader = useRef(new ConsoleAccessReader(() => request('me', meSchema).then(result => result.data), schoolId => readSchool(schoolId, '', schoolSchema)));
   const snapshot = useCommandSnapshot();
   const draftScope = state.status === 'ready'
     ? `${state.me.personId}/${state.membership.schoolId}/${state.membership.membershipId}/${state.membership.accessEpoch}` : null;
@@ -46,6 +48,7 @@ export function ManagementConsole() {
 
   const load = useCallback(async (schoolId: string | null) => {
     const current = ++generation.current;
+    accessReader.current.invalidate();
     setState({ status: 'loading' });
     try {
       const next = await request('session', sessionSchema);
@@ -81,7 +84,7 @@ export function ManagementConsole() {
     const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) void load(parseConsoleRoute(window.location.pathname, window.location.search).schoolId); };
     window.addEventListener('popstate', onPopState);
     window.addEventListener('pageshow', onPageShow);
-    return () => { generation.current++; window.removeEventListener('popstate', onPopState); window.removeEventListener('pageshow', onPageShow); };
+    return () => { generation.current++; accessReader.current.invalidate(); window.removeEventListener('popstate', onPopState); window.removeEventListener('pageshow', onPageShow); };
   }, []);
   useEffect(() => {
     const school = state.status === 'ready' ? state.school.name : null;
@@ -116,15 +119,20 @@ export function ManagementConsole() {
     } catch (error) { setLogoutError(readError(error)); setBusy(false); }
   }
 
-  const context = useMemo<ConsoleContextValue | null>(() => state.status !== 'ready' ? null : {
+  const context = useMemo<ConsoleContextValue | null>(() => {
+    if (state.status !== 'ready') return null;
+    const scope = generation.current;
+    return {
     schoolId: state.membership.schoolId, me: state.me, membership: state.membership, school: state.school,
     canConfigureCatalog: state.membership.grants.includes('CONFIGURE_CATALOG'),
     drafts,
     reloadSchool: async () => {
-      try {
-        const school = await readSchool(state.membership.schoolId, '', schoolSchema);
-        setState(previous => previous.status === 'ready' && previous.membership.schoolId === school.id ? { ...previous, school } : previous);
-      } catch { /* The section keeps showing its own error; the stale version is refused by If-Match. */ }
+      if (scope !== generation.current) return;
+      const access = await accessReader.current.read(state.membership.schoolId);
+      if (!access || scope !== generation.current) return;
+      if (access.status === 'unavailable') setState({ status: 'error', message: readError(access.error) });
+      else setState(access);
+      if (access.status === 'signin') setSession(null);
     },
     csrf: () => csrf.current,
     refreshCsrf: async () => { const next = await request('session', sessionSchema); csrf.current = next.csrfToken; return next.csrfToken; },
@@ -141,6 +149,7 @@ export function ManagementConsole() {
       setNavigationOpen(false);
     },
     login: options => { void login(options); },
+    };
   }, [state, route.query, route.section, drafts]);
 
   const personName = state.status === 'ready' || state.status === 'choose' || state.status === 'denied' ? state.me.displayName : session?.user?.displayName;

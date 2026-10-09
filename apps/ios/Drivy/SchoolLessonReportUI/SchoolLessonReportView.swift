@@ -578,7 +578,7 @@ private struct SchoolLessonReportContent: View {
             switch bar {
             case .begin:
                 Button { Task { await startLesson() } } label: {
-                    DrivyBusyLabel(title: "Commencer la leçon", isBusy: isSending(.startLesson))
+                    DrivyBusyLabel(title: "Commencer la leçon", isBusy: isSending(.startLesson) || isSending(.savePreparation))
                 }
                 .buttonStyle(DrivyPrimaryButtonStyle())
                 .disabled(!model.acceptsInput)
@@ -590,8 +590,9 @@ private struct SchoolLessonReportContent: View {
                     .accessibilityIdentifier("lesson-live-capture")
                 completeButton(primary: false)
             case .start:
-                Button { openCapturePreparation() } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
+                Button { Task { await openCapturePreparation() } } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
                     .buttonStyle(DrivyPrimaryButtonStyle())
+                    .disabled(!model.acceptsInput)
                     .accessibilityIdentifier("lesson-prepare-gps")
                 completeButton(primary: false)
             case .finish:
@@ -613,7 +614,7 @@ private struct SchoolLessonReportContent: View {
 
     private func startLesson() async {
         guard await model.start() else { return }
-        if mayStartCapture(now: Date()) { openCapturePreparation() }
+        if mayStartCapture(now: Date()) { await openCapturePreparation() }
     }
 
     @ViewBuilder private func completeButton(primary: Bool) -> some View {
@@ -646,8 +647,10 @@ private struct SchoolLessonReportContent: View {
         return SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: model.isAuthor, school: schoolWorkspace.school,
             capture: captureStatus, controllerCanPrepare: capture.canPrepareCapture, now: now)
     }
-    private func openCapturePreparation() {
-        guard let capture, mayStartCapture(now: Date()) else { return }
+    private func openCapturePreparation() async {
+        guard capturePreparation == nil, let capture, mayStartCapture(now: Date()),
+              await model.savePreparationBeforeDeparture(), capturePreparation == nil,
+              mayStartCapture(now: Date()) else { return }
         capturePreparation = agenda.capturePreparation(scope: model.scope, lessonID: model.lessonID, controller: capture)
     }
 

@@ -508,9 +508,20 @@ import Observation
     }
     /// Motif exigé seulement tant que le permis n’est pas confirmé (R07).
     var completionNeedsReason: Bool { lesson?.permitWarning ?? true }
+    /// Le départ peut remplacer la fiche par le trajet : sa préparation doit être durable avant cette transition.
+    func savePreparationBeforeDeparture() async -> Bool {
+        await settled()
+        guard canMutate, isAuthor, lesson?.status == "PLANNED" else { return false }
+        guard preparationChanged else { return true }
+        guard preparationValid else {
+            errorMessage = "Vérifie les objectifs et la note avant de continuer."
+            return false
+        }
+        return await savePreparation() && !preparationChanged && canMutate
+    }
     /// Même file durable et même preuve d’opération que la fin de leçon.
     func start() async -> Bool {
-        await settled()
+        guard await savePreparationBeforeDeparture() else { return false }
         guard let lesson, canMutate, isAuthor, lesson.status == "PLANNED", !lesson.hasStarted else { return false }
         struct Start: Encodable { let operationId: UUID }
         let operation = UUID()

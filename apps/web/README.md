@@ -35,17 +35,22 @@ Variables obligatoires : `WEB_ORIGIN` (origine HTTPS sans chemin), `API_BASE_URL
 - Le lien `/app/invitation#token=…` est nettoyé immédiatement dans le navigateur. `POST /app/bff/invitation {token}` retient l’invitation en mémoire serveur durant l’aller-retour OIDC. Le jeton n’est jamais placé dans une query string ou un stockage navigateur.
 - `POST /app/bff/invitation/preview {}` rend l’école, le rôle, la notice et une confirmation opaque. `POST /app/bff/invitation/accept {invitationId,confirmation}` vérifie l’aperçu présenté, puis envoie AP04 avec `operationId` et `Idempotency-Key` identiques. Une seconde fenêtre ne peut pas changer la cible du premier clic.
 - Une réponse perdue conserve l’intention et sa clé. Réessayer relit l’autorisation API ; aucun contexte de membership n’est accepté depuis un cache. Fermer/remplacer cette intention est refusé tant que son résultat reste incertain. Après perte de session serveur, rouvrir le même lien et se reconnecter permet la récupération métier contrôlée par AP04, sans recréer un dossier déjà accepté.
-- `POST /app/bff/logout {}` détruit la session locale et demande la révocation du refresh token. Il ne prétend pas effacer la session SSO du fournisseur ; la prochaine connexion exige le formulaire. L’invitation préparée est aussi supprimée : rouvrir le lien pour changer de compte.
+- `POST /app/bff/logout {}` détruit la session locale et demande la révocation du refresh token. Le client relit le CSRF et attend la confirmation avant d’effacer son état ; un refus ou une réponse perdue laisse une erreur et permet de réessayer. Il ne prétend pas effacer la session SSO du fournisseur ; la prochaine connexion exige le formulaire. L’invitation préparée est aussi supprimée : rouvrir le lien pour changer de compte.
 
 Les sessions sont en mémoire d’un **seul processus**, bornées à 10 000, avec 10 minutes d’inactivité anonyme, 30 minutes authentifiée et 2 heures absolues. Un redémarrage déconnecte les navigateurs. Pas de promesse multi-instance ni de continuité du brouillon après fermeture ; aucune donnée scolaire ou refresh token dans localStorage, IndexedDB ou service worker. Les droits restent relus par l’API à chaque opération.
 
 ## Web de gestion (administration)
 
-Les activités d’ordinateur de l’administrateur quittent l’iPhone pour une console de bureau : navigation latérale (repliée en barre horizontale sous 64 rem), liste + panneau de détail, formulaires à libellés permanents, relecture dans une boîte de dialogue native avant toute écriture. Les tokens sont ceux de `client/styles.css` (même système que `DrivyTheme.swift`, clair/sombre, contraste accru, couleurs forcées).
+Les activités d’ordinateur de l’administrateur quittent l’iPhone pour une console de bureau : navigation latérale avec menu sur petit écran, liste + panneau de détail, formulaires à libellés permanents et confirmation des commandes sensibles. La direction « Encre et papier » et les tokens de `client/styles.css` sont propres au web ; clair/sombre, contraste accru et couleurs forcées restent pris en charge.
 
 | Écran (chemin) | Lectures | Écritures (commande, If-Match) |
 |---|---|---|
-| Vue d’ensemble (`/app/gestion/{id}`) | école, readiness, data-policy, listes du catalogue et des champs | — (prochaines étapes calculées, une seule action primaire) |
+| Préparation (`apercu`) | école, readiness, data-policy, listes du catalogue et des champs | — (prochaines étapes calculées) |
+| Agenda (`agenda`) | leçons de la semaine, élèves actifs ou archivés, moniteurs | Lecture seule ; démarrage et fin dans l’app. `actualStart` distingue une leçon commencée ; un horaire dépassé sans démarrage reste « En attente ». |
+| Disponibilités (`disponibilites`) | moniteurs, horaires et absences | Ajout et retrait versionné des horaires et absences |
+| Dossiers (`eleves`) | élèves, formations, affectations, permis, progression, bilans publiés | Ouverture et transition des formations, affectation/retrait du moniteur, permis, archivage/restauration |
+| Trajets (`trajets`) | captures autorisées dans l’école, filtre élève ou pages de l’historique | Lecture seule |
+| Formations (`formations`) | offres et versions liées de catalogue | Navigation contextuelle vers offres, compétences, procédures et tarifs |
 | Configuration (`configuration`) | école, setup, data-policy, readiness | `PATCH /` coordonnées (version école) · `PUT data-policy` adoption (version politique) · `PATCH setup` avancement (version setup) · `POST activate` (version école + `expectedConfigurationVersion`) |
 | Champs du profil (`champs-profil`) | profile-field-policies, data-policy (+ notice liée `?noticeVersionId=`) | `POST profile-field-policies` (If-Match version école) · `POST …/{id}/publish` (version politique) |
 | Offres (`offres`) | offerings, curricula, policy-versions | `POST offerings` (nouvelle version, désactivée sauf activation cochée) |
@@ -54,7 +59,9 @@ Les activités d’ordinateur de l’administrateur quittent l’iPhone pour une
 | Équipe et accès (`equipe`) | members | `PATCH members/{id}` rôles, autorisations, motif (version membre ; `REAUTH_REQUIRED` → reconnexion) |
 | Invitations (`invitations`) | invitations | `POST invitations` · `POST …/{id}/resend` · `POST …/{id}/revoke` (version invitation) |
 
-Rien n’est approuvé implicitement : approbation et activation sont décochées par défaut, et « Approuver… » sur un brouillon crée une nouvelle version identique approuvée (les versions existantes ne sont jamais réécrites). Les droits affichés viennent de `/v1/me` (rôle Administration requis pour ouvrir la console, `CONFIGURE_CATALOG` pour le commercial) ; ils masquent ou désactivent seulement, l’API reste l’autorité.
+L’entrée sans rubrique ouvre l’agenda d’une école active, sinon sa préparation. Les liens et le retour navigateur conservent les identifiants de sélection et les filtres autorisés. Changer de semaine, filtre, dossier ou page masque immédiatement les données de l’ancien contexte ; une relecture du même contexte conserve les données avec erreur explicite si elle échoue.
+
+Rien n’est approuvé implicitement : approbation et activation sont décochées par défaut, et « Approuver… » sur un brouillon crée une nouvelle version identique approuvée (les versions existantes ne sont jamais réécrites). Les droits affichés viennent de `/v1/me`, relu après confirmation d’une commande et au retour depuis le cache de navigation (rôle Administration requis pour ouvrir la console, `CONFIGURE_CATALOG` pour le commercial) ; ils masquent ou désactivent seulement, l’API reste l’autorité.
 
 **Commandes et reprise AP72.** Chaque écriture reçoit un `operationId` envoyé aussi comme `Idempotency-Key` ; l’If-Match porte la version affichée (`"n"`). Aucun succès n’est affiché avant une réponse 200/201 vérifiée (école, version postérieure). Règles (`client/command-core.ts`, reprises de `SchoolCommandOutbox.swift`) :
 
@@ -81,8 +88,10 @@ Lectures : session requise. Écritures : Origin exacte, `X-CSRF-Token`, `Content
 ### Reste à qualifier ou à construire
 
 - Pas de test navigateur automatisé en CI : la console a été relue par captures Chromium locales sur un faux BFF synthétique (clair, sombre, 390 px). Aucun essai avec l’API et Keycloak réels, ni lecteur d’écran réel.
-- Non couverts ici : disponibilités et fermetures des moniteurs, dossiers élèves, formations et affectations, profil administratif d’un élève, logo et modules.
+- Hors des parcours web implémentés : capture GPS, démarrage/fin de leçon, édition détaillée du profil administratif d’un élève, règlements, packs/cours collectifs et documents. Les disponibilités, dossiers, formations et affectations existent dans les rubriques ci-dessus.
 - Les listes chargent au plus 1 000 éléments (10 pages) ; au-delà, la liste est signalée partielle.
+
+Passe de stabilité du 9 octobre 2026 : [corrections, contrôles locaux et limites](../../docs/implementation/stabilite-web-20261009.md). Les refus de permis, formation, archivage ou accès gardent la saisie et présentent l’erreur dans le dialogue ouvert.
 
 ## Preuves de cette tranche
 

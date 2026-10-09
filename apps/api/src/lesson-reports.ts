@@ -149,7 +149,8 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
    const actualStart=old.actual_start?.toISOString()??body.actualStart;
    if(Date.parse(body.actualEnd)<=Date.parse(actualStart)||Date.parse(body.actualEnd)>Date.now()+300_000)throw new ApiError(422,'INVALID_ACTUAL_INTERVAL','La fin réelle doit suivre le début et ne pas être future.');
    // R07 : sans contrôle de permis approuvé et valide à la date de la leçon, la réalisation reste déclarable avec anomalie motivée.
-   if(old.permit_warning!==false&&!body.anomalyReason?.trim())throw new ApiError(422,'ANOMALY_REASON_REQUIRED','Indiquez le motif du constat avec contrôle de permis non confirmé et, le cas échéant, des écarts horaires.');
+   const permitWarning=(await db.query<{warning:boolean}>('SELECT drivy.lesson_permit_warning($1,($2::timestamptz AT TIME ZONE $3)::date) AS warning',[old.training_id,actualStart,old.time_zone])).rows[0]?.warning;
+   if(permitWarning!==false&&!body.anomalyReason?.trim())throw new ApiError(422,'ANOMALY_REASON_REQUIRED','Indiquez le motif du constat avec contrôle de permis non confirmé et, le cas échéant, des écarts horaires.');
    if(old.commercial_selection.mode!=='UNIT_PRICE')throw new ApiError(409,'ENTITLEMENT_NOT_READY','Le constat couvert par un pack exige le registre de consommation des droits.');
    // Compatibilité du constat rétrospectif AP49 : les heures déclarées restent nécessaires lorsqu'aucun départ n'a été enregistré.
    // Un départ durable prime toujours sur le créneau prévu, y compris lorsque la leçon a commencé en avance.

@@ -81,6 +81,12 @@ describe('départ explicite et durable, avec ou sans agenda',()=>{
   await pool.query("UPDATE drivy.training SET status='PAUSED' WHERE id=$1",[id.aliceTraining]);
   try{expect((await call('POST',route,{operationId:randomUUID()},lesson.version)).json().code).toBe('TRAINING_NOT_ACTIVE');}
   finally{await pool.query("UPDATE drivy.training SET status='ACTIVE' WHERE id=$1",[id.aliceTraining]);}
+  await pool.query("UPDATE drivy.membership SET status='REVOKED' WHERE id=$1",[id.aliceMember]);
+  try{expect((await call('POST',route,{operationId:randomUUID()},lesson.version)).json().code).toBe('LEARNER_NOT_ACTIVE');}
+  finally{await pool.query("UPDATE drivy.membership SET status='ACTIVE' WHERE id=$1",[id.aliceMember]);}
+  await pool.query('UPDATE drivy.learner_profile SET archived_at=now() WHERE id=$1',[id.aliceLearner]);
+  try{expect((await call('POST',route,{operationId:randomUUID()},lesson.version)).json().code).toBe('TRAINING_NOT_ACTIVE');}
+  finally{await pool.query('UPDATE drivy.learner_profile SET archived_at=NULL WHERE id=$1',[id.aliceLearner]);}
   await pool.query("UPDATE drivy.instructor_assignment SET valid_until=now()-interval '1 second' WHERE id=$1",[id.assignment]);
   try{expect((await call('POST',route,{operationId:randomUUID()},lesson.version)).statusCode).toBe(404);}
   finally{await pool.query('UPDATE drivy.instructor_assignment SET valid_until=NULL WHERE id=$1',[id.assignment]);}
@@ -106,6 +112,27 @@ describe('départ explicite et durable, avec ou sans agenda',()=>{
   expect(saved.status==='CANCELLED'?saved.actualStart===null:typeof saved.actualStart==='string').toBe(true);
  });
 
+ it('revérifie le permis à la date réelle du départ et du constat rétrospectif',async()=>{
+  const lesson=await plan();await moveToPast(pool,lesson.id,48);
+  const planned=await read(lesson.id),expiry=(await pool.query("SELECT (planned_start AT TIME ZONE time_zone)::date::text AS day FROM drivy.lesson WHERE id=$1",[lesson.id])).rows[0].day;
+  await pool.query(`INSERT INTO drivy.permit_check(school_id,training_id,physical_seen,category_code,valid_until,decision,reviewer_membership_id,operation_id)
+   VALUES($1,$2,true,'B',$3,'APPROVED',$4,$5)`,[id.schoolA,id.aliceTraining,expiry,id.adminMember,randomUUID()]);
+  expect((await read(lesson.id)).permitWarning).toBe(false);
+  const start=await call('POST',`/lessons/${lesson.id}/start`,{operationId:randomUUID()},lesson.version);expect(start.statusCode,start.body).toBe(200);
+  expect(start.json().data.permitWarning).toBe(true);expect((await read(lesson.id,'demo-alice')).permitWarning).toBe(true);
+  const refused=await call('POST',`/lessons/${lesson.id}/complete`,{...completeBody(start.json().data.actualStart),anomalyReason:null},start.json().data.version);
+  expect(refused.json().code).toBe('ANOMALY_REASON_REQUIRED');
+  const done=await call('POST',`/lessons/${lesson.id}/complete`,completeBody(start.json().data.actualStart),start.json().data.version);
+  expect(done.statusCode,done.body).toBe(200);expect(done.json().data.lesson.permitWarning).toBe(true);
+  // AP49 sans départ : ce sont les heures déclarées qui déterminent la date de contrôle, pas le créneau.
+  const retrospective=await plan();await moveToPast(pool,retrospective.id,49);
+  expect((await read(retrospective.id)).permitWarning).toBe(false);
+  const late=await call('POST',`/lessons/${retrospective.id}/complete`,{...completeBody(new Date(Date.now()-60_000).toISOString()),anomalyReason:null},retrospective.version);
+  expect(late.json().code).toBe('ANOMALY_REASON_REQUIRED');
+  const historic=await call('POST',`/lessons/${retrospective.id}/complete`,{...completeBody(planned.plannedStart),actualEnd:planned.plannedEnd,anomalyReason:null},retrospective.version);
+  expect(historic.statusCode,historic.body).toBe(200);expect(historic.json().data.lesson.permitWarning).toBe(false);
+ });
+
  it('répare les anciens départs manuels prouvés sans transformer les rendez-vous simplement dépassés',async()=>{
   const manual=await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining});expect(manual.statusCode,manual.body).toBe(201);
   const known=manual.json().data,waiting=await plan();await moveToPast(pool,waiting.id);
@@ -119,5 +146,32 @@ describe('départ explicite et durable, avec ou sans agenda',()=>{
   expect(await read(waiting.id)).toMatchObject({actualStart:null,status:'PLANNED',version:1});
   const forced=await pool.query("SELECT bool_and(relforcerowsecurity) AS forced FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND c.relkind='r'");
   expect(forced.rows[0].forced).toBe(true);
+ });
+});
+
+describe('cohérence des leçons encore ouvertes avec la formation et les affectations',()=>{
+ it('les leçons dépassées, en attente ou démarrées, empêchent la clôture et restent comptées au retrait du moniteur',async()=>{
+  const assignment=await call('POST',`/trainings/${id.bobTraining}/assignments`,{operationId:randomUUID(),instructorMembershipId:id.instructorMember,validFrom:'2026-01-01T00:00:00Z'},null,'demo-admin');
+  expect(assignment.statusCode,assignment.body).toBe(201);
+  const create=async()=>{
+   const result=await call('POST','/lessons',lessonBody(commercial,school.policy,nextDay++,8,{trainingId:id.bobTraining}));
+   expect(result.statusCode,result.body).toBe(201);const lesson=result.json().data;await moveToPast(pool,lesson.id);return lesson;
+  };
+  for(const shouldStart of [false,true]){
+   const lesson=await create();
+   if(shouldStart){const start=await call('POST',`/lessons/${lesson.id}/start`,{operationId:randomUUID()},lesson.version);expect(start.statusCode,start.body).toBe(200);}
+   const before=(await call('GET',`/trainings/${id.bobTraining}`,undefined,null,'demo-admin')).json().data;
+   for(const targetStatus of ['COMPLETED','CANCELLED']){
+    const result=await call('POST',`/trainings/${id.bobTraining}/transition`,{operationId:randomUUID(),targetStatus,reason:'Clôture de recette'},before.version,'demo-admin');
+    expect(result.json().code).toBe('TRAINING_HAS_PLANNED_LESSONS');
+   }
+   expect((await call('GET',`/trainings/${id.bobTraining}`,undefined,null,'demo-admin')).json().data).toMatchObject({status:'ACTIVE',version:before.version});
+   const current=await read(lesson.id),cancel=await call('POST',`/lessons/${lesson.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},current.version,'demo-admin');
+   expect(cancel.statusCode,cancel.body).toBe(200);
+  }
+  const waiting=await create();
+  const ended=await call('POST',`/trainings/${id.bobTraining}/assignments/${assignment.json().data.id}/end`,{operationId:randomUUID(),reason:'Affectation de recette terminée'},assignment.json().data.version,'demo-admin');
+  expect(ended.statusCode,ended.body).toBe(200);expect(ended.json().data.plannedLessonCount).toBe(1);
+  expect(await read(waiting.id,'demo-admin')).toMatchObject({status:'PLANNED',actualStart:null});
  });
 });

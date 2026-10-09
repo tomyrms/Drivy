@@ -45,6 +45,18 @@ try{
  a=await call('POST',`/devices/${device}/assessments`,{...aBody,operationId:randomUUID()});assert.equal(a.json().data.status,'QUALIFIED');
  const choice=await call('POST',`/learners/${id.aliceLearner}/recording-choice`,{operationId:randomUUID(),lessonId:lesson,status:'ALLOWED',noticeVersionId:notice,source:'SELF'},undefined,'demo-alice');assert.equal(choice.statusCode,200,JSON.stringify(choice.json()));
  const startBody={operationId:randomUUID(),deviceId:device,choiceId:choice.json().data.id,choiceVersion:choice.json().data.version,noticeVersionId:notice,explicitStartConfirmed:true,deviceAssessmentId:a.json().data.id};
+ await pool.query("UPDATE drivy.membership SET status='REVOKED' WHERE id=$1",[id.aliceMember]);
+ try{
+  const blocked=await call('POST',`/lessons/${lesson}/captures`,{...startBody,operationId:randomUUID()},1);
+  assert.equal(blocked.json().code,'LEARNER_NOT_ACTIVE');assert.equal((await call('GET',`/lessons/${lesson}`)).json().data.actualStart,null);
+  assert.equal((await pool.query('SELECT count(*)::int AS n FROM drivy.capture_session WHERE lesson_id=$1',[lesson])).rows[0].n,0);
+ }finally{await pool.query("UPDATE drivy.membership SET status='ACTIVE' WHERE id=$1",[id.aliceMember]);}
+ await pool.query('UPDATE drivy.learner_profile SET archived_at=now() WHERE id=$1',[id.aliceLearner]);
+ try{
+  const blocked=await call('POST',`/lessons/${lesson}/captures`,{...startBody,operationId:randomUUID()},1);
+  assert.equal(blocked.json().code,'TRAINING_NOT_ACTIVE');assert.equal((await call('GET',`/lessons/${lesson}`)).json().data.actualStart,null);
+  assert.equal((await pool.query('SELECT count(*)::int AS n FROM drivy.capture_session WHERE lesson_id=$1',[lesson])).rows[0].n,0);
+ }finally{await pool.query('UPDATE drivy.learner_profile SET archived_at=NULL WHERE id=$1',[id.aliceLearner]);}
  const rejected=await call('POST',`/lessons/${lesson}/captures`,{...startBody,operationId:randomUUID(),choiceVersion:choice.json().data.version+1},1);
  assert.equal(rejected.json().code,'RECORDING_CHOICE_CHANGED');assert.equal((await call('GET',`/lessons/${lesson}`)).json().data.actualStart,null);
  const start=await call('POST',`/lessons/${lesson}/captures`,startBody,1);assert.equal(start.statusCode,201,JSON.stringify(start.json()));const authorization=start.json().data,capture=authorization.capture;

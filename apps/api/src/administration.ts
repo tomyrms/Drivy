@@ -33,10 +33,10 @@ export function registerAdministration(app:FastifyInstance,options:{pool:Pool;ve
  const adminScope=(actor:{personId:string;membershipId:string;roles:string[]})=>({
   actor:{personId:actor.personId,displayName:'',locale:'',version:1},member:{id:actor.membershipId,roles:actor.roles,grants:[] as string[],accessEpoch:1}});
  const plannedLessons=async(db:PoolClient,schoolId:string,filter:string,values:unknown[])=>
-  (await db.query<{n:number}>(`SELECT count(*)::int AS n FROM drivy.lesson WHERE school_id=$1 AND status='PLANNED' AND planned_end>statement_timestamp() AND ${filter}`,[schoolId,...values])).rows[0]!.n;
+  (await db.query<{n:number}>(`SELECT count(*)::int AS n FROM drivy.lesson WHERE school_id=$1 AND status='PLANNED' AND ${filter}`,[schoolId,...values])).rows[0]!.n;
 
  // Retrait d'accès : l'appartenance passe à REVOKED (access_epoch+1), ses affectations de moniteur prennent fin, jamais le dernier ADMIN.
- // Les leçons futures restent planifiées : leur nombre est rendu pour que l'école les déplace ou les annule (l'ADMIN y conserve l'accès).
+ // Toutes les leçons sans résultat restent planifiées : leur nombre est rendu pour que l'école les traite (l'ADMIN y conserve l'accès).
  app.post(`${base}/members/:membershipId/deactivate`,async(r,reply)=>{
   empty.parse(r.query);const body=deactivateBody.parse(r.body),{schoolId,membershipId}=params(r);checkIdempotency(r.headers['idempotency-key'],body.operationId);
   const expected=requireVersion(r.headers['if-match']),identity=await options.verifyToken(r.headers.authorization);reauthenticate(identity,age);
@@ -113,7 +113,7 @@ export function registerAdministration(app:FastifyInstance,options:{pool:Pool;ve
   reply.header('ETag',`"${data.version}"`);return envelope(data,r);
  });
 
- // Cycle de vie d'une formation. Un état final exige qu'aucune leçon planifiée ne reste à venir ; la date de clôture est celle du fuseau de l'école.
+ // Une formation ne se clôt pas tant qu'une leçon attend un résultat, même après son créneau prévu.
  app.post(`${base}/trainings/:trainingId/transition`,async(r,reply)=>{
   empty.parse(r.query);const body=transitionBody.parse(r.body),{schoolId,trainingId}=params(r);checkIdempotency(r.headers['idempotency-key'],body.operationId);
   const expected=requireVersion(r.headers['if-match']),identity=await options.verifyToken(r.headers.authorization);
