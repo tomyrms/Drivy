@@ -5,7 +5,7 @@ Refonte native iPhone/iPad centrée sur la leçon, les observations et le bilan 
 ## Réalisation en cours
 
 - `apps/ios` : application native de terrain pour moniteurs et élèves : connexion OIDC, agenda, dossiers par permis, démarrage explicite des leçons, GPS facultatif, observations, bilan et progression. Les demandes et brouillons locaux sont chiffrés.
-- `apps/api` : service TypeScript/Fastify et PostgreSQL ; droits scolaires revérifiés au serveur, commandes idempotentes et partage avec l’élève selon les choix du moniteur.
+- `apps/api` : service TypeScript/Fastify et PostgreSQL ; droits scolaires revérifiés au serveur, commandes idempotentes et partage automatique des leçons réalisées avec l’élève, hors contenus gardés privés par le moniteur.
 - `apps/web` : bureau de l’école : configuration, catalogue, équipe, invitations, dossiers et planning.
 - `docs/implementation` : décisions, périmètre réellement livré, tests et limites de qualification.
 
@@ -17,7 +17,11 @@ Les builds récents sont disponibles dans les [GitHub Actions du dépôt](https:
 
 Le workflow **IPA d'essai · iLoader** compile et vérifie le paquet indépendamment des tests sur simulateurs. Sa réussite ne qualifie donc pas tous les parcours natifs. Le workflow **Refonte · iOS** exécute séparément les tests iPhone/iPad et ne produit son artefact `Drivy-unsigned-<commit>` qu'après leur réussite.
 
-La cible minimale provisoire des essais est iOS/iPadOS 26.0. Ce n'est pas encore le minimum commercial. Les instructions détaillées sont dans [la recette G0](docs/implementation/recette-g0.md).
+Pour requalifier une correction limitée aux tests, l’option manuelle `unit_only` relance `DrivyTests` sur iPhone. Pour une correction d’interface ciblée, `ui_test_suite` relance la classe UITest nommée sur iPhone et iPad. Ces deux options s’excluent, ne produisent aucune IPA et ne remplacent pas une campagne complète ; le suivi attribue les résultats au périmètre et au commit effectivement exécutés.
+
+La passe de stabilité du 9 octobre exige la migration 023 et l’API correspondante avant l’installation de la nouvelle app : elles enregistrent le démarrage réel des leçons. Effectuer la sauvegarde avant cette mise à jour serveur ; voir [l’ordre de livraison](docs/implementation/stabilite-api-20261009.md#migration-et-conservation-des-données).
+
+La cible minimale provisoire des essais est iOS/iPadOS 26.0. Ce n'est pas encore le minimum commercial. Les commandes utilisées par la CI sont dans [le script de construction IPA](scripts/ios/build-ipa.sh) et [les tests sur simulateurs](scripts/ios/test-simulator.sh).
 
 ## Serveur en développement
 
