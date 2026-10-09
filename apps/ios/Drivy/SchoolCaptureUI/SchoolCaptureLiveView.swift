@@ -359,7 +359,13 @@ struct SchoolCaptureLiveView: View {
                 observationMoment = ObservationMoment(instant: instant, recorder: recorder, anchor: controller.observationAnchor(at: instant))
             }
         } label: {
-            Label("Signaler", systemImage: "text.bubble.fill")
+            Label {
+                Text("Signaler")
+            } icon: {
+                Image("Brand-marker").resizable().scaledToFit()
+                    .frame(width: 28, height: 28)
+                    .accessibilityHidden(true)
+            }
         }
         Group {
             if isDominant {

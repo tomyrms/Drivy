@@ -55,7 +55,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   app.addHook('onRequest',async (request,reply) => {
     reply.headers({ 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'no-referrer',
       'X-Frame-Options':'DENY', 'Cross-Origin-Opener-Policy':'same-origin',
-      'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+      'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()' });
     if (request.headers['sec-fetch-site'] === 'cross-site' && request.url.startsWith('/app/bff/') && !request.url.startsWith('/app/bff/callback?')) {
       throw new WebError(403,'CROSS_SITE_REQUEST');

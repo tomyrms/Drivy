@@ -206,6 +206,7 @@ describe('Entrée anonyme, limites et cache',()=>{
   test('les fichiers construits sont immuables, jamais une page ni un fichier absent',async()=>{
     const root=mkdtempSync(join(tmpdir(),'drivy-web-'));mkdirSync(join(root,'assets'));
     writeFileSync(join(root,'index.html'),'<!doctype html><title>x</title>');writeFileSync(join(root,'assets','index-abc123.js'),'export {}');
+    writeFileSync(join(root,'site.webmanifest'),JSON.stringify({name:'Drivy',start_url:'/app/'}));
     try {
       const h=await harness(undefined,{staticRoot:root});
       const asset=await h.app.inject({url:'/app/assets/index-abc123.js'});
@@ -214,6 +215,11 @@ describe('Entrée anonyme, limites et cache',()=>{
       expect(missing.statusCode).toBe(404);expect(missing.headers['cache-control']).toBe('no-store');
       const page=await h.app.inject({url:'/app/gestion'});
       expect(page.statusCode).toBe(200);expect(page.headers['cache-control']).toBe('no-store');
+      expect(page.headers['content-security-policy']).toContain("manifest-src 'self'");
+      expect(page.headers['content-security-policy']).toContain("default-src 'none'");
+      const manifest=await h.app.inject({url:'/app/site.webmanifest'});
+      expect(manifest.statusCode).toBe(200);expect(manifest.headers['content-type']).toContain('application/manifest+json');
+      expect(manifest.headers['cache-control']).toBe('no-store');expect(manifest.json().start_url).toBe('/app/');
     } finally { rmSync(root,{recursive:true,force:true}); }
   });
 

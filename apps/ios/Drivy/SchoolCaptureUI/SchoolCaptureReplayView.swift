@@ -45,6 +45,9 @@ struct SchoolReplayTimeline {
     let fragments: [Fragment]
     let samples: [Sample]
     let gaps: [ClosedRange<TimeInterval>]
+    /// Dashed map connections require a silence in the original measurements.
+    /// Display-filter gaps remain gaps in playback, without inventing GPS loss.
+    let mapGaps: [SchoolMapRouteGap]
     /// Observations with an instant, chronological; then those without an instant.
     let items: [Item]
 
@@ -74,10 +77,16 @@ struct SchoolReplayTimeline {
         var coordinateByKey: [String: CLLocationCoordinate2D] = [:]
         var lastSourceOffset: TimeInterval = 0
         var filteredTails: [ClosedRange<TimeInterval>] = []
+        var mapGaps: [SchoolMapRouteGap] = []
+        var previousSource: SchoolCapturePoint?
+        var previousDisplayed: SchoolCapturePoint?
         for fragment in orderedSource {
             // One date parse per fragment; the other points follow their monotonic elapsed time.
             guard let first = fragment.points.min(by: { $0.sequence < $1.sequence }),
-                  let base = SchoolLesson.date(first.capturedAt) else { continue }
+                  let base = SchoolLesson.date(first.capturedAt) else {
+                previousSource = nil; previousDisplayed = nil
+                continue
+            }
             let baseOffset = base.timeIntervalSince(origin)
             let lastOffset = baseOffset + Double((fragment.points.map(\.elapsedMs).max() ?? first.elapsedMs) - first.elapsedMs) / 1000
             lastSourceOffset = max(lastSourceOffset, lastOffset)
@@ -86,6 +95,16 @@ struct SchoolReplayTimeline {
             var part = 0
             coordinates.reserveCapacity(fragment.points.count)
             let selected = SchoolCaptureDisplayRoute.select(fragment.points, maximumGap: maxPointAge)
+            mapGaps.append(contentsOf: SchoolMapRouteGap.withinSegment(fragment.points, displayed: selected,
+                idPrefix: fragment.id, maximumGap: maxPointAge))
+            if let previousSource, let previousDisplayed, let nextDisplayed = selected.first?.point,
+               let gap = SchoolMapRouteGap.betweenSegments(id: "before:\(fragment.id)",
+                    previousSource: previousSource, nextSource: first,
+                    previousDisplayed: previousDisplayed, nextDisplayed: nextDisplayed, maximumGap: maxPointAge) {
+                mapGaps.append(gap)
+            }
+            previousSource = fragment.points.max(by: { $0.sequence < $1.sequence })
+            previousDisplayed = selected.last?.point
             for sample in selected {
                 let point = sample.point
                 let coordinate = CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
@@ -140,6 +159,7 @@ struct SchoolReplayTimeline {
         fragments = built
         self.samples = samples
         self.gaps = gaps
+        self.mapGaps = mapGaps
         self.items = items.enumerated().sorted { left, right in
             switch (left.element.offset, right.element.offset) {
             case let (l?, r?): return l == r ? left.offset < right.offset : l < r
@@ -668,15 +688,31 @@ private struct SchoolReplayMap: View {
 
     var body: some View {
         Map(position: $camera) {
+            ForEach(timeline.mapGaps) { gap in
+                MapPolyline(gap.line).stroke(DrivyTheme.controlBorder,
+                    style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [5, 5]))
+            }
             ForEach(timeline.fragments) { fragment in
                 if fragment.line.pointCount > 1 {
-                    MapPolyline(fragment.line).stroke(DrivyTheme.routeHalo, lineWidth: 11)
-                    MapPolyline(fragment.line).stroke(DrivyTheme.route, lineWidth: 6)
+                    MapPolyline(fragment.line).stroke(DrivyTheme.routeHalo,
+                        style: StrokeStyle(lineWidth: 11, lineCap: .round, lineJoin: .round))
+                    MapPolyline(fragment.line).stroke(DrivyTheme.route,
+                        style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
                 } else if let coordinate = fragment.firstCoordinate {
                     Annotation("Position enregistrée", coordinate: coordinate) {
                         Circle().fill(DrivyTheme.route).frame(width: 8, height: 8)
                     }.annotationTitles(.hidden)
                 }
+            }
+            if let first = timeline.samples.first {
+                Annotation("Début du tracé enregistré", coordinate: first.coordinate) {
+                    SchoolMapEndpointMarker(kind: .start)
+                }.annotationTitles(.hidden)
+            }
+            if timeline.samples.count > 1, let last = timeline.samples.last {
+                Annotation("Fin du tracé enregistré", coordinate: last.coordinate) {
+                    SchoolMapEndpointMarker(kind: .end)
+                }.annotationTitles(.hidden)
             }
             ForEach(timeline.items.filter { $0.coordinate != nil }) { item in
                 if let coordinate = item.coordinate {
@@ -694,7 +730,7 @@ private struct SchoolReplayMap: View {
                 }.annotationTitles(.hidden)
             }
         }
-        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
+        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
         .mapControls { }
         .onAppear { if followsPosition, current != nil { follow() } else { fitRoute() } }
         .onMapCameraChange(frequency: .continuous) { context in
@@ -706,18 +742,12 @@ private struct SchoolReplayMap: View {
         .onChange(of: current?.offset) { _, _ in if followsPosition && !camera.positionedByUser { follow() } }
         .onChange(of: resetCameraID) { _, _ in followsPosition = false; fitRoute() }
         .accessibilityLabel("Carte du trajet reconstruit par l’école")
+        .accessibilityValue(timeline.mapGaps.isEmpty ? "" : "Portions sans mesure indiquées en pointillé")
     }
 
     private func marker(_ item: SchoolReplayTimeline.Item) -> some View {
         let selected = selectedID == item.id
-        return Image(systemName: item.symbol)
-            .font(selected ? .body.weight(.bold) : .caption.weight(.bold))
-            .foregroundStyle(selected ? DrivyTheme.onAccent : item.tone.foreground)
-            .frame(width: selected ? 40 : 26, height: selected ? 40 : 26)
-            .background(selected ? DrivyTheme.accent : DrivyTheme.surface, in: Circle())
-            .overlay(Circle().strokeBorder(selected ? DrivyTheme.routeHalo : item.tone.foreground, lineWidth: selected ? 3 : 2))
-            .shadow(color: DrivyTheme.shadow.opacity(0.25), radius: 3, y: 1)
-            .dynamicTypeSize(...DynamicTypeSize.xLarge)
+        return SchoolMapObservationMarker(symbol: item.symbol, color: item.tone.foreground, isSelected: selected)
             .animation(DrivyMotion.context(reduceMotion), value: selected)
             .frame(width: 44, height: 44)
             .contentShape(Circle())

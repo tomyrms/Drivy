@@ -1,0 +1,408 @@
+{
+  "date": "2026-10-09",
+  "scope": "La trace, portrait, jeux fictifs de simulateur",
+  "captureMethod": "xcrun simctl io screenshot",
+  "imagesModified": false,
+  "reviewMethod": "Chaque PNG ouvert avec view_image ; viewport visible seulement",
+  "imagesReviewed": 56,
+  "campaigns": [
+    {
+      "commit": "aecdac10e76523c85ceaa85918cace769c5ade15",
+      "run": 37857758496,
+      "url": "https://github.com/tomyrms/Drivy/actions/runs/37857758496",
+      "conclusion": "success",
+      "devices": [
+        {
+          "deviceFamily": "iPhone",
+          "simulatorName": "iPhone 17 Pro",
+          "compactIPadRequested": false,
+          "requestedContentSize": "accessibility-extra-large",
+          "reportedContentSize": "accessibility-extra-large"
+        },
+        {
+          "deviceFamily": "iPad",
+          "simulatorName": "iPad Pro 13-inch (M5)",
+          "compactIPadRequested": false,
+          "requestedContentSize": "accessibility-extra-large",
+          "reportedContentSize": "accessibility-extra-large"
+        }
+      ],
+      "files": [
+        {
+          "file": "iPad-agenda-dark-synthetic.png",
+          "bytes": 345148,
+          "sha256": "685049d2956f3375e59c797f3df61ee40bad3b565ceac44f617cea9bf20aa5b5",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-agenda-light-synthetic.png",
+          "bytes": 340082,
+          "sha256": "2f91c35630b04babc3ec6aa980dea11505b6d654c8b604f03c16efe920467cc1",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-design-system-dark-synthetic.png",
+          "bytes": 323408,
+          "sha256": "e380cc8ddc5100c138f50d4e02edc8439d149e660d07c2fefb3f0a646c409be6",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-design-system-light-synthetic.png",
+          "bytes": 320624,
+          "sha256": "1e115348acb8ea8d576c169208666dad166d58f929d7ee0ea58e72c272996304",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-lesson-dark-synthetic.png",
+          "bytes": 408326,
+          "sha256": "aad3326be0297e23e93b0705d81c4a90de0041289b82d811d5892488f87d044e",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-lesson-light-synthetic.png",
+          "bytes": 409616,
+          "sha256": "afcfa4ad864f1bf843e9be05d854944066c360e200a106583238d65a65fd736c",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-live-dark-synthetic.png",
+          "bytes": 715550,
+          "sha256": "cf9f7b811ba8f94dcb9aa0461e493a7325bdf34b61c7be0ae0ddfef26bef1f59",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-live-light-synthetic.png",
+          "bytes": 725171,
+          "sha256": "fc7f307af1b6ac24777737bc4ab39e65eb2f40bc7c180fb01a3fdc39c5e81593",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-progression-multi-dark-synthetic.png",
+          "bytes": 368878,
+          "sha256": "01bce539adc6e4b40c5dab5b43b509bb96f8093113f2f8744eb43ce5c3470d5c",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-progression-multi-light-synthetic.png",
+          "bytes": 366454,
+          "sha256": "4e108afb655ded3f3acfadd1f091ce4c238eb299d9c1535cad73880da9810a52",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-replay-dark-synthetic.png",
+          "bytes": 340441,
+          "sha256": "16ac2f720f86decf1ca665172980b82a166b2cfbb5c3f0a62052a7a35c8e4cc4",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-replay-light-synthetic.png",
+          "bytes": 354200,
+          "sha256": "01f1e1d3fc4827686bebc105a4640967cd945555aa5f9bbe4e529a0c3a908e4c",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-sign-in-dark-synthetic.png",
+          "bytes": 185662,
+          "sha256": "2956442cf4a9668f38812faed1c92c8f61e3bc820b9a660f1e7ea2bb3b7855ad",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-sign-in-light-synthetic.png",
+          "bytes": 183408,
+          "sha256": "2ab366d9c628d069c21d7f4e3caf05123b875265ce93b874ff1274cf6865684d",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-agenda-dark-synthetic.png",
+          "bytes": 352008,
+          "sha256": "66a112ab7cb9d3e7fb1dc6bd88813cb7063522a658fb843931dcdd4756540edf",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-agenda-light-synthetic.png",
+          "bytes": 307536,
+          "sha256": "5ff329e9faa3014115af313167bf0f958ce4fc5d5674d652e10b1c3555e49e72",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-design-system-dark-synthetic.png",
+          "bytes": 215437,
+          "sha256": "5533e3ed4d5e6cd570a8c296b0b594ee37817f4253a89f0c6934e828703b620e",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-design-system-light-synthetic.png",
+          "bytes": 211888,
+          "sha256": "67a4ddd228b23c89dc5c19a97575867b2c4f0dd51afbca16ef0a46b6f2bf8799",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-lesson-dark-synthetic.png",
+          "bytes": 276512,
+          "sha256": "1fbffa33e06759c46b318705bb12a0184500af623fee0a5f68c064c2500eb7e7",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-lesson-light-synthetic.png",
+          "bytes": 280226,
+          "sha256": "49a3510d9949085a3691c307f0d3a931a8be73ff0b6622b0b92af58b001ff4e8",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-live-dark-synthetic.png",
+          "bytes": 404800,
+          "sha256": "74dd09d72026ebd1efa4a38193fd50ea3b0f03fe13daff99bf2bae694bd21bf5",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-live-light-synthetic.png",
+          "bytes": 406120,
+          "sha256": "ba19b79ef58e617532b8f734e611b646c36ec0858f3eb3b8873c652d9cd7d367",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-progression-multi-dark-synthetic.png",
+          "bytes": 263120,
+          "sha256": "9891852b6277eb50417e3a930901c7d3ab5cbec74919a1096ef286cecb0b6746",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-progression-multi-light-synthetic.png",
+          "bytes": 261472,
+          "sha256": "47fca3278b06142b6c0c4270cf79a0562d6a68ce4a7420b5732c84aaeea017e6",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-replay-dark-synthetic.png",
+          "bytes": 262573,
+          "sha256": "04d56935d3e04037dbfe3ba5104b4439f9573ac7a0799af6eef399628a0f467e",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-replay-light-synthetic.png",
+          "bytes": 287989,
+          "sha256": "eb5133437e7c99eb221889e9c7a044baad43c8ee1194577f76d0db102a97d9ee",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-sign-in-dark-synthetic.png",
+          "bytes": 184561,
+          "sha256": "bc68b31c9e97109c639e939032366eb21ee9533beeedf167d82512678ee9f11b",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-sign-in-light-synthetic.png",
+          "bytes": 182631,
+          "sha256": "23bc9faa2978ba9596c3a7543bdfa7975960a678e6c9ea3d008b03bc0641b08d",
+          "reviewed": true
+        }
+      ]
+    },
+    {
+      "commit": "bb75ae55872b6c0458d80f76f35f4a2d0f1cbca7",
+      "run": 37858834138,
+      "url": "https://github.com/tomyrms/Drivy/actions/runs/37858834138",
+      "conclusion": "success",
+      "devices": [
+        {
+          "deviceFamily": "iPhone",
+          "simulatorName": "iPhone 17 Pro",
+          "compactIPadRequested": false,
+          "requestedContentSize": "large",
+          "reportedContentSize": "large"
+        },
+        {
+          "deviceFamily": "iPad",
+          "simulatorName": "iPad Pro 13-inch (M5)",
+          "compactIPadRequested": false,
+          "requestedContentSize": "large",
+          "reportedContentSize": "large"
+        }
+      ],
+      "files": [
+        {
+          "file": "iPad-agenda-dark-synthetic.png",
+          "bytes": 248100,
+          "sha256": "3e84f7679b6ea00cc9c832a7e7d5958c2bb937be2c10788890b35fe5d0255855",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-agenda-light-synthetic.png",
+          "bytes": 250269,
+          "sha256": "3500ea7bfd9590db5ff0d917622b027068154f95f46143491038316aa900211c",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-design-system-dark-synthetic.png",
+          "bytes": 434893,
+          "sha256": "50ffb092c61dd6c876fb21831100add3b0094d57376713963242e5b1eab193e2",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-design-system-light-synthetic.png",
+          "bytes": 430798,
+          "sha256": "ce331b5d746678f9c80759ee3a5b34a154c99b114e6b90d55041dfa2bece46ed",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-lesson-dark-synthetic.png",
+          "bytes": 334078,
+          "sha256": "9035f5022a7642782ebd454c0c4815df570845a0228ebd163332a1ebac323416",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-lesson-light-synthetic.png",
+          "bytes": 344784,
+          "sha256": "1f46787b2fd20febaebbac847862759b2dc2b7666a209127a2f3bcb23e0134de",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-live-dark-synthetic.png",
+          "bytes": 1405544,
+          "sha256": "db8f0fff84d83523bc523da22ee660671c6ca34cb369369b24c089a53daf4068",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-live-light-synthetic.png",
+          "bytes": 1349898,
+          "sha256": "06dc9eb422e8dc5c0dc443b3c00853874a508ca0d0a123bd685dfe174a82a878",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-progression-multi-dark-synthetic.png",
+          "bytes": 357868,
+          "sha256": "0f5d42a8b85cbf364b3c20c0d72ce71a3630d2e1dfd42e417edaabf27793f3f9",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-progression-multi-light-synthetic.png",
+          "bytes": 353642,
+          "sha256": "59b4416dc36b63c73ff18e56b220d5c3a93a73f8a81abeb36ae7322431b688b1",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-replay-dark-synthetic.png",
+          "bytes": 279664,
+          "sha256": "ecb195b89f7365658af3bd05a60fe259d1c277576bda2a208169235bcbb6e720",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-replay-light-synthetic.png",
+          "bytes": 301769,
+          "sha256": "0ffeaca746ad2d7fefa14ef1e0bde29d08328f2d3f20d3f021fae4a2a280574c",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-sign-in-dark-synthetic.png",
+          "bytes": 167233,
+          "sha256": "12b54658650063eb7d2165966b4b5e9470df73e560bf94cd80152dd2df8e956d",
+          "reviewed": true
+        },
+        {
+          "file": "iPad-sign-in-light-synthetic.png",
+          "bytes": 165011,
+          "sha256": "8535e481d5533735bb28e0c2a00f09168c9b6ee28e708d813433eb50ba922d8d",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-agenda-dark-synthetic.png",
+          "bytes": 265272,
+          "sha256": "1a9e00fa9c05b1546c4fa906d36da49428bc97e592be2b63cc46919d685e1069",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-agenda-light-synthetic.png",
+          "bytes": 256992,
+          "sha256": "5ba4975bb18d4b4b7824b8d170a218873966fa37bfc498e9a47fcaa4ae7deb54",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-design-system-dark-synthetic.png",
+          "bytes": 265451,
+          "sha256": "85fe0bf06464577687ce76418bb4ca82d25f1668f39f8d17c656269af7371b0f",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-design-system-light-synthetic.png",
+          "bytes": 261366,
+          "sha256": "deea604a54a31f10b97e6ce9cb126c13a49628b72c6dd457be8f086f0806e5f2",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-lesson-dark-synthetic.png",
+          "bytes": 279054,
+          "sha256": "fb2e0779d755bec7f1947422355c896a5c66d0696a7c856af784bc497512705b",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-lesson-light-synthetic.png",
+          "bytes": 282901,
+          "sha256": "5fdd4f9f8cdff24b4e41a50d4ef237dbd8d5dea34767c1da22d100baf0a2ab2e",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-live-dark-synthetic.png",
+          "bytes": 1210128,
+          "sha256": "1d4e3679fa978544092914bd473001d107201ee883d3e33eabac6f62f10751da",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-live-light-synthetic.png",
+          "bytes": 1197753,
+          "sha256": "1b8355f9586923508beea4bd1d4409b1d67cb74f9c001906f6071e8cbb5d1f2f",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-progression-multi-dark-synthetic.png",
+          "bytes": 251652,
+          "sha256": "5a568fb2e9ede382144ec506a912851d94c9515b8ff6d53fecb36183991e10aa",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-progression-multi-light-synthetic.png",
+          "bytes": 249721,
+          "sha256": "74034bd7b9bad560809911445d81f8d387e6a5341ae440b5d632cb33fc5b181d",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-replay-dark-synthetic.png",
+          "bytes": 318754,
+          "sha256": "e141236d0b7368cea2c5efc09988e10562635753d97b33d05bc89e2f2fb89ab2",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-replay-light-synthetic.png",
+          "bytes": 431208,
+          "sha256": "1370e01bc483acdff5a3667af57c7795b38cf4ea68b654e22d9991992ca7bfc0",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-sign-in-dark-synthetic.png",
+          "bytes": 147888,
+          "sha256": "c2c8e4174241fd90ae7f3451ef004ac3e6a6f741fca8031dba7513415c541a86",
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-sign-in-light-synthetic.png",
+          "bytes": 145755,
+          "sha256": "41420f2483df5815cb592a9bafd9ecaab33528690b191da8fa1873188dbe95bb",
+          "reviewed": true
+        }
+      ]
+    }
+  ],
+  "findings": [
+    "Aucun débordement horizontal établi dans les blocs métier entièrement visibles.",
+    "Symbole de connexion et quatre états du parcours visibles à taille normale.",
+    "Rails agenda/progression alignés ; iPad passe de deux colonnes à une aux tailles AX.",
+    "Live normal : départ, position, trait, halo et commandes visibles sur les quatre variantes.",
+    "MapKit atténué conserve ses teintes de fond ; il ne devient pas strictement gris."
+  ],
+  "limitations": [
+    "Aucune interaction, rotation, mesure VoiceOver, animation ou qualification physique.",
+    "Contenu sous le viewport non qualifié ; observations du bilan, singleton et sélection passée non visibles.",
+    "AX provient de aecdac1, avant les deux corrections de trait de bb75ae5 ; tailles normales proviennent de bb75ae5.",
+    "La galerie de développement coupe certains noms techniques sur plusieurs lignes, surtout en AX iPad.",
+    "Le replay fictif commence à (0,0) : ses annotations de départ et position à t0 sont absentes sur les images malgré des données présentes ; cause non établie. Arrivée et lacunes cartographiques hors cadrage initial."
+  ]
+}

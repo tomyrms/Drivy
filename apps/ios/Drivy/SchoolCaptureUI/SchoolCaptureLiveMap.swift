@@ -13,6 +13,9 @@ struct SchoolCaptureLiveMap: View {
     @State private var followDistance = 650.0
     @State private var heading: Double?
     @State private var drawnSegments: [SchoolMapRouteFragment] = []
+    @State private var drawnGaps: [SchoolMapRouteGap] = []
+    @State private var gapsBySegment: [UUID: [SchoolMapRouteGap]] = [:]
+    @State private var sourceBounds: [UUID: (first: SchoolCapturePoint, last: SchoolCapturePoint)] = [:]
     @State private var selectedSamples: [UUID: [SchoolCaptureDisplayRoute.Sample]] = [:]
     @State private var cachedCounts: [UUID: Int] = [:]
     @State private var last: SchoolCapturePoint?
@@ -28,16 +31,27 @@ struct SchoolCaptureLiveMap: View {
 
     var body: some View {
         Map(position: $camera) {
+            ForEach(drawnGaps) { gap in
+                MapPolyline(gap.line).stroke(DrivyTheme.controlBorder,
+                    style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [5, 5]))
+            }
             ForEach(drawnSegments) { segment in
                 if segment.line.pointCount > 1 {
                     // Trait épais : lisible d’un regard, en plein soleil comme de nuit.
-                    MapPolyline(segment.line).stroke(DrivyTheme.routeHalo, lineWidth: 11)
-                    MapPolyline(segment.line).stroke(DrivyTheme.route, lineWidth: 6)
+                    MapPolyline(segment.line).stroke(DrivyTheme.routeHalo,
+                        style: StrokeStyle(lineWidth: 11, lineCap: .round, lineJoin: .round))
+                    MapPolyline(segment.line).stroke(DrivyTheme.route,
+                        style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
                 } else if let coordinate = segment.firstCoordinate {
                     Annotation("Position enregistrée", coordinate: coordinate) {
                         Circle().fill(DrivyTheme.route).frame(width: 8, height: 8)
                     }.annotationTitles(.hidden)
                 }
+            }
+            if let coordinate = drawnSegments.first?.firstCoordinate {
+                Annotation("Début du tracé enregistré", coordinate: coordinate) {
+                    SchoolMapEndpointMarker(kind: .start)
+                }.annotationTitles(.hidden)
             }
             ForEach(observations) { observation in
                 if let coordinate = coordinate(for: observation) {
@@ -55,7 +69,7 @@ struct SchoolCaptureLiveMap: View {
                 }.annotationTitles(.hidden)
             }
         }
-        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
+        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
         .mapControls { }
         .background(SchoolLiveHeadingWindowReader(source: compass).accessibilityHidden(true))
         .onAppear {
@@ -88,8 +102,9 @@ struct SchoolCaptureLiveMap: View {
             else { camera = .automatic }
         }
         .accessibilityLabel("Carte du trajet enregistré")
-        .accessibilityValue(followMode == .heading && compass.degrees == nil
+        .accessibilityValue((followMode == .heading && compass.degrees == nil
             ? "Suivi de position, orientation du téléphone indisponible" : followMode.label)
+            + (drawnGaps.isEmpty ? "" : ", portions sans mesure indiquées en pointillé"))
     }
 
     private func coordinate(for observation: SchoolLiveMapObservation) -> CLLocationCoordinate2D? {
@@ -106,12 +121,7 @@ struct SchoolCaptureLiveMap: View {
         case .positive: DrivyTone.success.foreground
         case nil: DrivyTheme.text
         }
-        return Image(systemName: status?.symbol ?? "bookmark.fill")
-            .font(DrivyMapGlyph.compactObservation)
-            .foregroundStyle(color)
-            .frame(width: 28, height: 28)
-            .background(DrivyTheme.surface, in: Circle())
-            .overlay(Circle().strokeBorder(color, style: StrokeStyle(lineWidth: 2, dash: observation.isPending ? [3, 2] : [])))
+        return SchoolMapObservationMarker(symbol: status?.symbol ?? "bookmark.fill", color: color, isPending: observation.isPending)
             .accessibilityLabel("\(observation.body.text), \(status?.label ?? "Repère")\(observation.isPending ? ", envoi en attente" : "")")
     }
 
@@ -130,12 +140,21 @@ struct SchoolCaptureLiveMap: View {
     }
 
     private func updateRoute() {
+        let currentIDs = Set(segments.map(\.id))
+        selectedSamples = selectedSamples.filter { currentIDs.contains($0.key) }
+        cachedCounts = cachedCounts.filter { currentIDs.contains($0.key) }
+        gapsBySegment = gapsBySegment.filter { currentIDs.contains($0.key) }
+        sourceBounds = sourceBounds.filter { currentIDs.contains($0.key) }
         drawnSegments = segments.flatMap { segment -> [SchoolMapRouteFragment] in
             let prefix = segment.id.uuidString + ":"
             let previous = drawnSegments.filter { $0.id.hasPrefix(prefix) }
             if cachedCounts[segment.id] == segment.measurements.count { return previous }
             let samples = segment.displaySamples
+            let source = segment.points
             selectedSamples[segment.id] = samples
+            gapsBySegment[segment.id] = SchoolMapRouteGap.withinSegment(source, displayed: samples, idPrefix: prefix)
+            if let first = source.first, let last = source.last { sourceBounds[segment.id] = (first, last) }
+            else { sourceBounds.removeValue(forKey: segment.id) }
             cachedCounts[segment.id] = segment.measurements.count
             var fragments: [SchoolMapRouteFragment] = []
             var coordinates: [CLLocationCoordinate2D] = []
@@ -149,6 +168,16 @@ struct SchoolCaptureLiveMap: View {
             }
             if !coordinates.isEmpty { fragments.append(.init(id: "\(prefix)\(fragments.count)", coordinates: coordinates)) }
             return fragments
+        }
+        drawnGaps = segments.flatMap { gapsBySegment[$0.id] ?? [] }
+        for (previous, next) in zip(segments, segments.dropFirst()) {
+            guard let previousSource = sourceBounds[previous.id]?.last, let nextSource = sourceBounds[next.id]?.first,
+                  let previousDisplayed = selectedSamples[previous.id]?.last?.point,
+                  let nextDisplayed = selectedSamples[next.id]?.first?.point,
+                  let gap = SchoolMapRouteGap.betweenSegments(id: "between:\(previous.id):\(next.id)",
+                    previousSource: previousSource, nextSource: nextSource,
+                    previousDisplayed: previousDisplayed, nextDisplayed: nextDisplayed) else { continue }
+            drawnGaps.append(gap)
         }
     }
 

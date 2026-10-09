@@ -149,11 +149,12 @@ struct SchoolAgendaView: View {
                 }
             } else if loadedScope == scopeKey {
                 LazyVStack(spacing: 0) {
-                    ForEach(dailyLessons) { lesson in
-                        Button { selectedLesson = lesson } label: { lessonRow(lesson) }
+                    ForEach(Array(dailyLessons.enumerated()), id: \.element.id) { index, lesson in
+                        Button { selectedLesson = lesson } label: {
+                            lessonRow(lesson, position: .at(index, count: dailyLessons.count))
+                        }
                             .buttonStyle(DrivyRowButtonStyle())
                             .accessibilityHint("Ouvre la leçon")
-                        Divider().overlay(DrivyTheme.border)
                     }
                 }
             }
@@ -284,11 +285,11 @@ struct SchoolAgendaView: View {
     /// Same row anatomy as the training dossier and the report lists: the time column already
     /// gives start and end, so the meta lines keep only who and where. An unusual state
     /// (à terminer, annulée, absence) is one word at the head of the detail line, no capsule.
-    private func lessonRow(_ lesson: SchoolLesson) -> some View {
+    private func lessonRow(_ lesson: SchoolLesson, position: DrivyThreadPosition) -> some View {
         var details = [lesson.meetingPoint]
         if showsInstructor, let instructor = lesson.providedInstructorName { details.insert(instructor, at: 0) }
         return DrivyLessonRow(start: time(lesson.startsAt), end: time(lesson.endsAt), title: learnerName(lesson),
-            details: details, state: lesson.drivyState)
+            details: details, state: lesson.drivyState, railPosition: position)
     }
 
     /// Nom fourni avec la leçon, sinon celui d’un dossier déjà chargé ; jamais deviné.

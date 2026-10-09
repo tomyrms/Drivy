@@ -1,0 +1,305 @@
+{
+  "date": "2026-10-09",
+  "scope": "Aujourd’hui et protection, fixtures de simulateur",
+  "captureMethod": "XCUIScreen.main.screenshot",
+  "imagesModified": false,
+  "reviewMethod": "Chaque PNG ouvert avec view_image ; viewport visible seulement",
+  "imagesReviewed": 20,
+  "campaigns": [
+    {
+      "commit": "86ef790158244c9de8e16f002efa1c7764474ccf",
+      "run": 37863242193,
+      "url": "https://github.com/tomyrms/Drivy/actions/runs/37863242193",
+      "conclusion": "success",
+      "devices": [
+        {
+          "deviceFamily": "iPad",
+          "simulatorName": "iPad Air 11-inch (M4)",
+          "compactIPadRequested": true,
+          "requestedContentSize": "large",
+          "reportedContentSize": "large"
+        },
+        {
+          "deviceFamily": "iPhone",
+          "simulatorName": "iPhone 17 Pro",
+          "compactIPadRequested": false,
+          "requestedContentSize": "large",
+          "reportedContentSize": "large"
+        }
+      ],
+      "targetedUITestsPassed": 4,
+      "files": [
+        {
+          "file": "iPad-app-lock-dark-portrait-synthetic.png",
+          "storedWidthPixels": 1640,
+          "storedHeightPixels": 2360,
+          "displayWidthPixels": 1640,
+          "displayHeightPixels": 2360,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "0a327c95ded2e87a6b7a10a374178c72a776760bbb37ee7a5a1f75ede8d1e0ec",
+          "bytes": 93055,
+          "reviewed": true
+        },
+        {
+          "file": "iPad-app-privacy-dark-portrait-synthetic.png",
+          "storedWidthPixels": 1640,
+          "storedHeightPixels": 2360,
+          "displayWidthPixels": 1640,
+          "displayHeightPixels": 2360,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "7dd3045b3739625a250fdbc057d2eadda57704ac58d4e5fd322732d0315259f2",
+          "bytes": 80675,
+          "reviewed": true
+        },
+        {
+          "file": "iPad-home-tabs-dark-portrait-synthetic.png",
+          "storedWidthPixels": 1640,
+          "storedHeightPixels": 2360,
+          "displayWidthPixels": 1640,
+          "displayHeightPixels": 2360,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "80bdf223ac684c60849d157c8fc4aa263fe75f4f31e2fd667fb80df0a791f8a1",
+          "bytes": 150635,
+          "reviewed": true
+        },
+        {
+          "file": "iPad-home-to-finish-dark-portrait-synthetic.png",
+          "storedWidthPixels": 1640,
+          "storedHeightPixels": 2360,
+          "displayWidthPixels": 1640,
+          "displayHeightPixels": 2360,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "5bdfea980b3dd0ab8c059060da1eca579ffa45fac64c1d2e54a81abf005c2de8",
+          "bytes": 169954,
+          "reviewed": true
+        },
+        {
+          "file": "iPad-app-lock-light-portrait-synthetic.png",
+          "storedWidthPixels": 1640,
+          "storedHeightPixels": 2360,
+          "displayWidthPixels": 1640,
+          "displayHeightPixels": 2360,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "5f0adb123fe1eab4456c017e9192e67b5875d6132824c76e9cc593f1d6549020",
+          "bytes": 91465,
+          "reviewed": true
+        },
+        {
+          "file": "iPad-app-privacy-light-portrait-synthetic.png",
+          "storedWidthPixels": 1640,
+          "storedHeightPixels": 2360,
+          "displayWidthPixels": 1640,
+          "displayHeightPixels": 2360,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "4d811019f2b68303623b77379f713a77bf00239fa7f746004721b8b563a539fa",
+          "bytes": 80078,
+          "reviewed": true
+        },
+        {
+          "file": "iPad-home-tabs-light-portrait-synthetic.png",
+          "storedWidthPixels": 1640,
+          "storedHeightPixels": 2360,
+          "displayWidthPixels": 1640,
+          "displayHeightPixels": 2360,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "0e9320a59da1fcfe375b7a76e7e2ee47f7eb9843875d672cd32c3d14fee36bf8",
+          "bytes": 181138,
+          "reviewed": true
+        },
+        {
+          "file": "iPad-home-to-finish-light-portrait-synthetic.png",
+          "storedWidthPixels": 1640,
+          "storedHeightPixels": 2360,
+          "displayWidthPixels": 1640,
+          "displayHeightPixels": 2360,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "2b895633cbed5b58bd2e5823d12cfc674cf9f5c6e1fb1bc822ee86349539c505",
+          "bytes": 204987,
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-app-lock-dark-portrait-synthetic.png",
+          "storedWidthPixels": 1206,
+          "storedHeightPixels": 2622,
+          "displayWidthPixels": 1206,
+          "displayHeightPixels": 2622,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "959517349e39ff9bb412bac56249bbd2ad397f43af7a43cf4ad163c2dbe65ecc",
+          "bytes": 94708,
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-app-privacy-dark-portrait-synthetic.png",
+          "storedWidthPixels": 1206,
+          "storedHeightPixels": 2622,
+          "displayWidthPixels": 1206,
+          "displayHeightPixels": 2622,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "f4044babc12711f805db7add83daa590c4bed7c1b73c66d47ae2673f1f51296f",
+          "bytes": 78254,
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-home-tabs-dark-portrait-synthetic.png",
+          "storedWidthPixels": 1206,
+          "storedHeightPixels": 2622,
+          "displayWidthPixels": 1206,
+          "displayHeightPixels": 2622,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "b6035c6ec56be276f74a4aee4d957b910dae5322c53a0692baec49b19542e981",
+          "bytes": 197284,
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-home-to-finish-dark-portrait-synthetic.png",
+          "storedWidthPixels": 1206,
+          "storedHeightPixels": 2622,
+          "displayWidthPixels": 1206,
+          "displayHeightPixels": 2622,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "8c17e0c7562286055f692a50b4a7223606fa2eda24e543e101e52e8d126b9373",
+          "bytes": 228796,
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-app-lock-light-portrait-synthetic.png",
+          "storedWidthPixels": 1206,
+          "storedHeightPixels": 2622,
+          "displayWidthPixels": 1206,
+          "displayHeightPixels": 2622,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "d4f96723e467510dd1413b89385938594813d44772728cb35bc5690765f00063",
+          "bytes": 93631,
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-app-privacy-light-portrait-synthetic.png",
+          "storedWidthPixels": 1206,
+          "storedHeightPixels": 2622,
+          "displayWidthPixels": 1206,
+          "displayHeightPixels": 2622,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "65f74d332ec810a94f5634dcf2453377c6b3aac770e2cee3f4be65fa3854865c",
+          "bytes": 78193,
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-home-tabs-light-portrait-synthetic.png",
+          "storedWidthPixels": 1206,
+          "storedHeightPixels": 2622,
+          "displayWidthPixels": 1206,
+          "displayHeightPixels": 2622,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "6271295301da96ceef58f19b3d3f3dda85879a19fa50ae7f3527432c15186082",
+          "bytes": 247219,
+          "reviewed": true
+        },
+        {
+          "file": "iPhone-home-to-finish-light-portrait-synthetic.png",
+          "storedWidthPixels": 1206,
+          "storedHeightPixels": 2622,
+          "displayWidthPixels": 1206,
+          "displayHeightPixels": 2622,
+          "exifOrientation": 1,
+          "orientation": "portrait",
+          "sha256": "3a471e956f092f78f453239b26a0c5c9892263d8c1338dea44ab7bd84bc667b0",
+          "bytes": 287618,
+          "reviewed": true
+        }
+      ]
+    },
+    {
+      "commit": "86ef790158244c9de8e16f002efa1c7764474ccf",
+      "run": 37863347673,
+      "url": "https://github.com/tomyrms/Drivy/actions/runs/37863347673",
+      "conclusion": "success",
+      "devices": [
+        {
+          "deviceFamily": "iPad",
+          "simulatorName": "iPad Air 11-inch (M4)",
+          "compactIPadRequested": true,
+          "requestedContentSize": "large",
+          "reportedContentSize": "large"
+        }
+      ],
+      "targetedUITestsPassed": 2,
+      "files": [
+        {
+          "file": "iPad-home-tabs-dark-landscape-synthetic.png",
+          "storedWidthPixels": 1640,
+          "storedHeightPixels": 2360,
+          "displayWidthPixels": 2360,
+          "displayHeightPixels": 1640,
+          "exifOrientation": 8,
+          "orientation": "landscape",
+          "sha256": "7b2681fa27945c309555525112b0c5fa744e6ad81cad48043c475519f55b361a",
+          "bytes": 155789,
+          "reviewed": true
+        },
+        {
+          "file": "iPad-home-to-finish-dark-landscape-synthetic.png",
+          "storedWidthPixels": 1640,
+          "storedHeightPixels": 2360,
+          "displayWidthPixels": 2360,
+          "displayHeightPixels": 1640,
+          "exifOrientation": 8,
+          "orientation": "landscape",
+          "sha256": "a5a949d31d5b2948f80f055db7e23fe455d8a21259d80cdf1b02dac6861f2933",
+          "bytes": 165287,
+          "reviewed": true
+        },
+        {
+          "file": "iPad-home-tabs-light-landscape-synthetic.png",
+          "storedWidthPixels": 1640,
+          "storedHeightPixels": 2360,
+          "displayWidthPixels": 2360,
+          "displayHeightPixels": 1640,
+          "exifOrientation": 8,
+          "orientation": "landscape",
+          "sha256": "99cf66ad75fbf8ad13f51c669d8bd42fe74cd4e22677092ca84cfd12e5e07b8b",
+          "bytes": 163558,
+          "reviewed": true
+        },
+        {
+          "file": "iPad-home-to-finish-light-landscape-synthetic.png",
+          "storedWidthPixels": 1640,
+          "storedHeightPixels": 2360,
+          "displayWidthPixels": 2360,
+          "displayHeightPixels": 1640,
+          "exifOrientation": 8,
+          "orientation": "landscape",
+          "sha256": "9f18484a8b70034ae37f5019d7e73fbfce63df54e955c65c143dd0fa9afdd96d",
+          "bytes": 173717,
+          "reviewed": true
+        }
+      ]
+    }
+  ],
+  "findings": [
+    "Résumé Aujourd’hui compact, état À terminer et prochaine leçon visibles.",
+    "Groupe des autres leçons initialement replié, y compris sur iPad large.",
+    "Logo Drivy présent sur les deux écrans de protection, clair et sombre."
+  ],
+  "limits": [
+    "Données synthétiques ; localisation indisponible dans les captures Aujourd’hui.",
+    "Aucun lieu très long, état Démarrer dès… ou trajet démarrable dans cette sélection.",
+    "Réduction de hauteur par rapport à l’ancienne version non mesurée.",
+    "Pas de qualification des transitions Face ID/app switcher sur appareil physique.",
+    "Suite native métier complète non répétée ; tests de capture ciblés exécutés."
+  ]
+}

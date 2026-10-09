@@ -7,6 +7,7 @@ import {
 } from './protocol';
 import type { InvitationPreview, Me, Member, Session } from './protocol';
 import { StatusBadge, Symbol } from './ui';
+import { BrandSymbol } from './BrandSymbol';
 
 type Preview = { data: InvitationPreview; confirmation: string };
 type Page = 'account' | 'invitation';
@@ -216,7 +217,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
       <a className="skip-link" href="#main">Aller au contenu</a>
       <header className="site-header">
         <a className="brand" href="/app/" aria-label="Drivy, votre espace">
-          <span className="brand-symbol" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="m11 24 5-16 5 16-5-4Z" /></svg></span>
+          <BrandSymbol />
           <span>Drivy</span>
         </a>
         {session?.authenticated && <button className="button quiet" type="button" onClick={() => void logout()} disabled={isBusy}>Se déconnecter</button>}

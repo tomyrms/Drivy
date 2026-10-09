@@ -109,7 +109,7 @@ enum SchoolLessonHubRules {
         return shared ? "Enregistrer et partager le bilan" : "Enregistrer le bilan pour moi"
     }
 
-    /// CAPTURE_START_WINDOW : le serveur n’autorise un départ qu’à 30 minutes près de l’horaire prévu.
+    /// Avant un départ confirmé, compatibilité GPS à 30 minutes près du créneau ; ensuite la leçon fait foi.
     static func withinCaptureWindow(_ lesson: SchoolLesson, now: Date) -> Bool {
         if lesson.hasStarted { return true }
         guard let start = lesson.startsAt, let end = lesson.endsAt else { return false }

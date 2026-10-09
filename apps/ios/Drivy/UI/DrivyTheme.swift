@@ -21,6 +21,8 @@ enum DrivyTheme {
     static let dangerSurface = adaptive(0xFDECEF, 0x40252D)
     static let border = adaptive(0xD9E0E9, 0x34445A)
     static let controlBorder = adaptive(0x78869A, 0x71849D)
+    /// Decorative continuation only; stations and labels carry the information.
+    static let rail = adaptive(0xC3CDD9, 0x3A4757)
     static let disabledText = adaptive(0x5D6A7C, 0xB0BCCC)
     static let disabledSurface = adaptive(0xE8EDF3, 0x222E3E)
     static let route = adaptive(0x245BD6, 0x91B5FF)
@@ -119,6 +121,8 @@ extension View {
 
 /// Custom motion only; system transitions are never overridden.
 enum DrivyMotion {
+    static func trace(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : .easeOut(duration: 0.35) }
+    static func settle(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : .easeOut(duration: 0.18) }
     /// Press feedback reacts to the finger: a spring without bounce, interruptible.
     static func press(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : .spring(duration: 0.18, bounce: 0) }
     /// System-initiated feedback (state change): short ease-out.

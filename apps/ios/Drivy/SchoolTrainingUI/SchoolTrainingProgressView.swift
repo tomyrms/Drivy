@@ -103,11 +103,7 @@ struct SchoolTrainingProgressSection: View {
             DisclosureGroup(isExpanded: $showsUnseen) {
                 DrivyRowGroup {
                     ForEach(competencies) { competency in
-                        Text(competency.displayLabel)
-                            .font(.body)
-                            .foregroundStyle(DrivyTheme.text)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        SchoolProgressRow(label: competency.displayLabel, level: "", opensLesson: false)
                     }
                 }
             } label: {
@@ -134,13 +130,14 @@ private struct SchoolProgressGroupTitle: View {
     }
 }
 
-/// Une compétence évaluée : libellé, niveau en mots, situation, date, et la jauge à trois points du bilan.
+/// Une compétence : libellé, niveau en mots, situation, date, et le parcours partagé avec le bilan.
 private struct SchoolProgressRow: View {
     let label: String
     let level: String
     /// La situation notée par le moniteur (« Slalom sur le plateau »), si elle existe.
     var context: String? = nil
-    let date: String
+    var date: String? = nil
+    var opensLesson = true
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -148,13 +145,16 @@ private struct SchoolProgressRow: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
             : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.m))
         layout {
-            DrivyCompetencyNote(label: label, level: SchoolTrainingFormatting.level(level), context: context, date: date)
+            DrivyCompetencyNote(label: label, level: level.isEmpty ? "Pas encore vue" : SchoolTrainingFormatting.level(level),
+                context: context, date: date)
             HStack(spacing: DrivySpacing.s) {
                 DrivyCompetencyMeter(level: level)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.muted)
-                    .accessibilityHidden(true)
+                if opensLesson {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.muted)
+                        .accessibilityHidden(true)
+                }
             }
             .padding(.top, DrivySpacing.xs)
         }
@@ -165,8 +165,8 @@ private struct SchoolProgressRow: View {
     }
 }
 
-/// La dernière leçon évaluée, en tête de la progression : sa date, la prochaine étape de son bilan,
-/// les compétences qu’elle a fait avancer. Du texte sur la page, sans carte.
+/// La dernière leçon et la prochaine étape du même bilan suivent un seul fil.
+/// Une étape absente ne produit ni station vide ni texte déduit des compétences.
 private struct SchoolLastLessonSummary: View {
     let lessonID: UUID
     let day: String
@@ -174,13 +174,33 @@ private struct SchoolLastLessonSummary: View {
     let worked: [String]
 
     var body: some View {
-        HStack(alignment: .top, spacing: DrivySpacing.m) {
-            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                Text("Dernière leçon évaluée · \(day)")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.muted)
+        VStack(alignment: .leading, spacing: 0) {
+            DrivyThreadItem(position: nextStep.isEmpty ? .only : .first) {
+                HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        Text("Dernière leçon évaluée")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(DrivyTheme.muted)
+                        Text(day)
+                            .font(.headline)
+                            .monospacedDigit()
+                            .foregroundStyle(DrivyTheme.text)
+                        if !worked.isEmpty {
+                            Text("Travaillé : \(worked.joined(separator: ", "))")
+                                .font(.subheadline)
+                                .foregroundStyle(DrivyTheme.muted)
+                        }
+                    }
                     .fixedSize(horizontal: false, vertical: true)
-                if !nextStep.isEmpty {
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.muted)
+                        .accessibilityHidden(true)
+                }
+            }
+            if !nextStep.isEmpty {
+                DrivyThreadItem(position: .last, isCurrent: true, isPast: false) {
                     VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                         Text("Prochaine étape")
                             .font(.headline)
@@ -191,22 +211,9 @@ private struct SchoolLastLessonSummary: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                if !worked.isEmpty {
-                    Text("Travaillé : \(worked.joined(separator: ", "))")
-                        .font(.subheadline)
-                        .foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(DrivyTheme.muted)
-                .padding(.top, DrivySpacing.xxs)
-                .accessibilityHidden(true)
         }
-        .padding(.vertical, DrivySpacing.s)
+        .multilineTextAlignment(.leading)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)

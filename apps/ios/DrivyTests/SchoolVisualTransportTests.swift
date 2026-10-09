@@ -70,7 +70,7 @@ struct SchoolVisualTransportTests {
             let progress = try await context.client.reports.progress(schoolID: schoolID, trainingID: training.id)
             #expect(progress.trainingId == training.id)
         }
-        #expect(states == ["Planifiée", "À terminer", "Terminée", "Annulée", "Absence"])
+        #expect(states == ["Planifiée", "En attente", "Terminée", "Annulée", "Absence"])
     }
 
     @MainActor @Test func twoPermitFixtureServesTheFirstTwoTrainings() async throws {

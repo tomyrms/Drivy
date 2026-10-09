@@ -12,9 +12,34 @@
 
 **Non déployé.** Les corrections restent sur la branche de travail. Mise à jour API/migration avant distribution de l’app ; sauvegarde obligatoire avant migration lors du déploiement.
 
-**Livraison web distincte.** Pendant cette passe, le porteur prépare séparément le web de `claude/marque-la-trace-20261006`, commit `b710303c40b8f4462e8a4b39817544ecb53bde65`. Ses changements d’identité visuelle et d’icônes ne sont pas intégrés ici. La release web séparée doit garder l’API et le lien de release commun hors de sa bascule ; le résultat de ce déploiement n’est pas vérifié par cette passe. Avant une future livraison commune, réunir les modifications des deux branches sans perdre ces ajustements.
+**Fusion demandée par le porteur.** La branche `claude/marque-la-trace-20261006`, au commit `b710303c40b8f4462e8a4b39817544ecb53bde65`, est réunie à cette passe : marque et icônes web/iOS, carte Aujourd’hui compacte, cartes et écrans de protection conservés. Les conflits d’Aujourd’hui conservent le démarrage durable et la stabilité des feuilles ; les deux historiques documentaires sont conservés. Les tests finaux portent sur la version fusionnée. Le déploiement web séparé préparé par le porteur garde l’API hors de sa bascule ; son résultat n’est pas vérifié ici.
 
 **Non qualifié.** Aucun essai physique GPS, batterie ou VoiceOver. Le navigateur utilise uniquement des données synthétiques ; la CI native utilise des simulateurs et transports synthétiques. La revue ne vaut pas qualification exhaustive de tous les écrans, tailles de texte, volumes ou usages sur appareil.
+
+## 9 octobre 2026 — carte Aujourd’hui et logo de protection
+
+À la demande du porteur : résumé Aujourd’hui réduit à horaire, élève, lieu et état inhabituel ; prochaines leçons repliées initialement sur iPad aussi. Le masque d’arrière-plan et l’écran verrouillé montrent le logo Drivy. Face ID et les règles métier restent identiques. [Décisions et suivi](today-privacy-20261009.md).
+
+**Vérifié sur `86ef790`** : relecture indépendante, diff propre, deux contrôles du harnais ; 238 tests API/PostgreSQL et 104 tests web ; compilation Release/simulateur. Six tests d’interface ciblés réussissent ; 20 captures en taille usuelle inspectées sur iPhone 17 Pro et iPad Air 11 pouces M4, clair/sombre, portrait et iPad paysage. Résumé lisible, état À terminer et suivante préservés, logo centré sur les deux écrans de protection. [Preuve et limites](proofs/today-privacy-20261009.json).
+
+**Livré** : IPA 0.7.0 **build 121**, non signée pour iLoader, téléchargée et SHA-256 vérifié. La suite native métier complète n’est pas répétée pour cette passe graphique. Face ID et les transitions d’arrière-plan sur appareil physique restent à qualifier.
+
+## 9 octobre 2026 — intégration de La trace
+
+Le chantier de marque reprend à la demande du porteur. [Décisions et périmètre](brand-integration-20261009.md).
+
+- **Implémenté** : primitives ligne/repère, parcours des compétences, fils de l’agenda, de la progression et des observations ; cartes atténuées, bornes et lacunes mesurées ; symbole de connexion animé, icônes d’application, marque/cobalt/favicons web.
+- **Vérifié** : 238 tests API/PostgreSQL et 104 tests web, types/builds et intégrité documentaire réussis sur `bb75ae5` ([CI](https://github.com/tomyrms/Drivy/actions/runs/37858824079)) ; 52 couples de contraste web conformes aux seuils mesurés. Tests natifs et parcours iPhone/iPad réussis sur `aecdac1` ([campagne](https://github.com/tomyrms/Drivy/actions/runs/37857755974)). Les deux corrections graphiques ultérieures de `bb75ae5` ont été compilées et capturées, sans nouvelle campagne complète.
+- **Vu** : 56 captures des écrans natifs sur iPhone 17 Pro et iPad Pro 13 pouces M5, clair/sombre, 28 en grands caractères sur `aecdac1` et 28 à taille normale sur `bb75ae5`. Toutes ouvertes pour inspection, [preuve et limites](proofs/brand-native-visual-20261009.json), [six aperçus](assets/brand-integration-20261009). Quatre vues web inspectées. Contenu hors viewport, interactions et détails du replay synthétique non qualifiés : voir le [suivi](brand-integration-20261009.md#limites-des-captures).
+- **Livré** : IPA 0.7.0 **build 120**, source `bb75ae5`, [compilation Release réussie](https://github.com/tomyrms/Drivy/actions/runs/37858824190), téléchargée et SHA-256 vérifié ; paquet non signé pour iLoader.
+- **Différé** : vignettes de trajet dans les listes (aucune géométrie dans leur contrat), déploiement homelab, validation physique et recherche de marque. Aucune donnée ni règle d’accès modifiée.
+
+## 6 octobre 2026 — passe de marque « La trace » (proposition, non codée)
+
+Trois territoires explorés, « La trace » retenu : [compte rendu](brand-pass-20261006.md), [Drivy Brand System](brand-system.md), [fichiers](assets/brand-20261006).
+
+- **Exécuté** : audit du code et des captures ; rendus et audits SVG du logo, de l'icône et des pictogrammes ; contrastes calculés ; onze maquettes avant/après capturées sous Windows (police de repli, carte schématique).
+- **Reste à qualifier** : validation du porteur ; toute l'implémentation Swift et web ; rendu MapKit atténué ; icône sur appareil (Liquid Glass, mode teinté) ; Dynamic Type et VoiceOver sur le rail et le parcours ; mouvement ; impression ; recherche d'antériorité de la marque.
 
 ## 5 et 6 octobre 2026 — dossier par permis, fiche et récapitulatif de leçon, bilan en étapes, Leçons du moniteur
 

@@ -406,14 +406,31 @@ extension String {
     var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }
 
-/// Selected app identity, shared with the Home Screen icon.
+/// Transparent « La trace » symbol. The Home Screen uses its own full-bleed icon.
 struct DrivyBrandMark: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appeared = false
+
     var body: some View {
-        Image("DrivyBrand")
-            .resizable()
-            .scaledToFit()
-            .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
-            .accessibilityHidden(true)
+        ZStack {
+            Image("DrivyBrandTrace")
+                .resizable()
+                .scaledToFit()
+                .mask(alignment: .top) {
+                    Rectangle().scaleEffect(y: appeared || reduceMotion ? 1 : 0, anchor: .top)
+                }
+                .animation(DrivyMotion.trace(reduceMotion), value: appeared)
+            Image("DrivyBrandMarker")
+                .resizable()
+                .scaledToFit()
+                .scaleEffect(appeared || reduceMotion ? 1 : 0.9)
+                .opacity(appeared || reduceMotion ? 1 : 0)
+                .animation(DrivyMotion.settle(reduceMotion)?.delay(0.35), value: appeared)
+        }
+        .opacity(reduceMotion && !appeared ? 0 : 1)
+        .animation(reduceMotion ? .easeOut(duration: 0.12) : nil, value: appeared)
+        .onAppear { appeared = true }
+        .accessibilityHidden(true)
     }
 }
 

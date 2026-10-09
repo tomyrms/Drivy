@@ -63,8 +63,6 @@ struct SchoolTodayView: View {
                             }
                             .frame(width: DrivyMapLayout.sidebarWidth)
                             .background(DrivyTheme.canvas)
-                            // La colonne a la place : la journée s’y ouvre d’emblée au lieu de laisser un fond vide.
-                            .onAppear { showsDay = true }
                         }
                 } else {
                     let maxHeight = geometry.size.height * TodayLayout.bottomPanelMaxRatio
@@ -133,7 +131,7 @@ struct SchoolTodayView: View {
     @ViewBuilder private var map: some View {
         if location.permitted {
             Map(position: $camera, scope: mapScope) { UserAnnotation() }
-                .mapStyle(.standard(pointsOfInterest: .excludingAll))
+                .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
                 .mapControls { }
                 // Avant les insets du panneau : le contrôle suit la carte visible sans déplacer ses mentions.
                 .overlay(alignment: .bottomTrailing) {
@@ -184,13 +182,8 @@ struct SchoolTodayView: View {
         let next = planned.first { !$0.hasStarted }
         let featured = active ?? next
         DrivyMapDock(floating: floating) {
-            Text(SchoolDateFormat.template("EEEEdMMMM", now, zone: workspace.school?.timeZone ?? "Europe/Zurich").capitalizedFirst)
-                .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
             if let lesson = featured {
-                lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote,
-                    moment: lesson.drivyState(now: now).rowNote == nil ? SchoolTodayPresentation.moment(for: lesson, now: now) : nil)
+                lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote)
                 if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId {
                     Button { opened = OpenedLesson(lesson: lesson, completing: false, starting: !lesson.hasStarted) } label: {
                         Text(lesson.hasStarted ? "Continuer la leçon" : "Commencer la leçon")
@@ -220,45 +213,15 @@ struct SchoolTodayView: View {
         }
     }
 
-    /// Point focal du panneau : l’heure de départ en grand chiffre tabulaire, puis l’élève (avatar, nom, lieu).
-    /// Un état inhabituel (« À terminer ») est un mot de texte au-dessus de l’heure, sans pastille.
-    private func lessonSummary(_ lesson: SchoolLesson, note: DrivyRowNote?, moment: String?) -> some View {
-        let stacked = typeSize.isAccessibilitySize
-        let layout = stacked
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.xs))
-        return Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
-            VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                if let note { DrivyRowNoteText(note: note) }
-                if let moment {
-                    Text(moment).font(.headline).foregroundStyle(DrivyTheme.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                layout {
-                    Text(startTime(lesson)).font(.drivyScreenTitle.monospacedDigit()).foregroundStyle(DrivyTheme.text)
-                    Text("– \(endTime(lesson))").font(.title3.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-                }
-                HStack(spacing: DrivySpacing.s) {
-                    if !stacked { DrivyAvatar(name: name(lesson), size: 44) }
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Text(name(lesson)).font(.headline).foregroundStyle(DrivyTheme.text)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if !lesson.meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    if !stacked {
-                        Spacer(minLength: DrivySpacing.xs)
-                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                            .foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+    /// Même lecture compacte que l’agenda : horaire, élève, lieu et éventuel état inhabituel.
+    /// La fiche de leçon reste accessible depuis toute la ligne.
+    private func lessonSummary(_ lesson: SchoolLesson, note: DrivyRowNote?) -> some View {
+        Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
+            DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
+                details: [lesson.meetingPoint], note: note)
         }
         .buttonStyle(DrivyRowButtonStyle())
+        .accessibilityIdentifier("today-focus-lesson")
         .accessibilityHint("Ouvre la leçon")
     }
 
@@ -284,14 +247,14 @@ struct SchoolTodayView: View {
             Divider().overlay(DrivyTheme.border)
             DisclosureGroup(isExpanded: $showsDay) {
                 VStack(spacing: 0) {
-                    ForEach(others) { lesson in
+                    ForEach(Array(others.enumerated()), id: \.element.id) { index, lesson in
                         Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
                             DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                                details: [lesson.meetingPoint], state: lesson.drivyState(now: now), showsChevron: false)
+                                details: [lesson.meetingPoint], state: lesson.drivyState(now: now), showsChevron: false,
+                                railPosition: .at(index, count: others.count))
                         }
                         .buttonStyle(DrivyRowButtonStyle())
                         .accessibilityHint("Ouvre la leçon")
-                        Divider().overlay(DrivyTheme.border)
                     }
                 }
             } label: {

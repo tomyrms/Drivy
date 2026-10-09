@@ -202,7 +202,7 @@ private struct SchoolLessonSummaryReport: View {
     }
 }
 
-/// Une ligne par compétence évaluée : son nom, le niveau en mots, la situation, et la jauge commune à la progression.
+/// Une ligne par compétence évaluée : son nom, le niveau en mots, la situation, et le parcours commun à la progression.
 private struct SchoolLessonSummaryCompetencies: View {
     let levels: [SchoolReportObservation]
     let competencies: [SchoolCatalogCompetency]
@@ -282,9 +282,14 @@ private struct SchoolLessonSummaryObservations: View {
         let visible = showsAll ? observations : fold.shown
         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             DrivySectionHeader(title: "Observations")
-            DrivyRowGroup {
-                ForEach(visible) { observation in
-                    SchoolLessonSummaryObservationRow(model: model, router: router, observation: observation)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, observation in
+                    DrivyThreadItem(position: .at(index, count: visible.count),
+                        isCurrent: router.selectedObservation == observation.id,
+                        markerColor: SchoolReportObservationsSection.color(observation),
+                        markerSymbol: SchoolLessonHubRules.status(of: observation)?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble")) {
+                        SchoolLessonSummaryObservationRow(model: model, router: router, observation: observation)
+                    }
                 }
             }
             if !showsAll && !fold.hidden.isEmpty {
@@ -300,6 +305,7 @@ private struct SchoolLessonSummaryObservationRow: View {
     let model: SchoolLessonReportWorkspace
     let router: SchoolReportRouter
     let observation: SchoolObservation
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var competency: String? {
         guard let id = observation.competencyId else { return nil }
@@ -309,19 +315,21 @@ private struct SchoolLessonSummaryObservationRow: View {
     private var isKept: Bool { model.isAuthor && model.isPrivate(observation) }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.s))
+        layout {
             summary
             if isKept {
                 Text("Pour moi").font(.caption).foregroundStyle(DrivyTheme.muted)
             }
         }
-        .padding(.vertical, DrivySpacing.s)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
     }
 
     @ViewBuilder private var summary: some View {
         let content = DrivyObservationSummary(observation: observation, competency: competency,
-            detail: SchoolReportFlowRules.observationDetail(observation, zone: model.lesson?.timeZone))
+            detail: SchoolReportFlowRules.observationDetail(observation, zone: model.lesson?.timeZone), showsStatusSymbol: false)
         if isAnchored {
             content
                 .contentShape(Rectangle())

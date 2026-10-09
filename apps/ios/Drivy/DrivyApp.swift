@@ -82,13 +82,7 @@ struct DrivyApp: App {
                     if appLock.isLocked {
                         AppLockView(lock: appLock)
                     } else if scenePhase != .active {
-                        DrivyTheme.canvas
-                            .ignoresSafeArea()
-                            .overlay {
-                                Image(systemName: "map.fill")
-                                    .font(.largeTitle)
-                                    .foregroundStyle(DrivyTheme.muted)
-                            }
+                        AppPrivacyShield()
                     }
                 }
     }

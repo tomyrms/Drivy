@@ -41,7 +41,17 @@ Navigateur intégré, uniquement sur `http://127.0.0.1:5173/app/test/visual.html
 - Dossier à largeur mobile : ouverture depuis la liste, gestion de la formation, formulaire de permis. Après refus synthétique, la case et le motif restent saisis, l’erreur reste visible, les boutons Retour/Consigner restent accessibles.
 - Passage dossier → trajets filtrés : nom de l’élève, moniteur, date et durée synthétiques présents ; retour au dossier proposé.
 
-Captures relues, sans données réelles : [agenda bureau](assets/stabilite-web-20261009/agenda-desktop.jpg), [changement de semaine en cours](assets/stabilite-web-20261009/agenda-loading.jpg), [refus du permis sur petit écran](assets/stabilite-web-20261009/permit-refused-mobile.jpg). Le harnais `visual.tsx` ajoute les états `slow` et `mutation-error` pour reproduire les refus et lectures lentes ; il n’entre pas dans le build de production.
+Captures relues le 9 octobre, **avant la fusion de l’identité La trace**, sans données réelles : [agenda bureau](assets/stabilite-web-20261009/agenda-desktop.jpg), [changement de semaine en cours](assets/stabilite-web-20261009/agenda-loading.jpg), [refus du permis sur petit écran](assets/stabilite-web-20261009/permit-refused-mobile.jpg). Le harnais `visual.tsx` ajoute les états `slow` et `mutation-error` pour reproduire les refus et lectures lentes ; il n’entre pas dans le build de production.
+
+## Vérification de la fusion de La trace
+
+Le 9 octobre 2026, relecture du web auto-fusionné depuis `claude/marque-la-trace-20261006` (`b710303`) dans la branche de stabilité, avant commit de fusion. Les modifications de marque remplacent les deux anciens symboles par `BrandSymbol`, mettent à jour le cobalt et ajoutent les icônes et le manifeste. La relecture confirme que les corrections de déconnexion, concurrence des droits, périmètre de lecture, formulaires refusés et états de leçon sont toujours présentes.
+
+Contrôles post-fusion exécutés sur ces sources : **125/125 tests**, typage et build réussis. Le bundle principal mesure environ **512 kB minifié / 143 kB gzip**, avec le même avertissement Vite de dépassement de 500 kB. Aucun marqueur de conflit dans `apps/web` ; contrôle des espaces réussi.
+
+Le HTML construit référence les ressources sous `/app/`. Les sept fichiers de `public` — icônes SVG, PNG et ICO, icône Apple et manifeste — sont copiés à l’identique dans `dist/client` (empreintes SHA-256 comparées). Le manifeste reste limité à `/app/`, en langue française, avec `display=browser`. L’icône PNG 192 px a été ouverte et inspectée. Le test BFF confirme `manifest-src 'self'`, le maintien de `default-src 'none'`, le type `application/manifest+json` et l’absence de cache du manifeste ; aucun accès externe ou script supplémentaire n’est autorisé.
+
+La nouvelle recette visuelle à deux largeurs a été tentée, mais le navigateur intégré était indisponible et l’inventaire CUA ne contenait aucune surface. **Aucune capture post-fusion n’est revendiquée.** Les captures de stabilité ci-dessus restent antérieures à la fusion ; les preuves propres à La trace restent celles de [l’intégration de marque](brand-integration-20261009.md) et de [ses contrastes](proofs/brand-web-contrast-20261009.json). Elles ne sont pas présentées comme une qualification supplémentaire du code fusionné.
 
 ## Limites de preuve
 

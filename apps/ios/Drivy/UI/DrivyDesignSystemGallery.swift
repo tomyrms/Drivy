@@ -20,6 +20,7 @@ struct DrivyDesignSystemGallery: View {
                     if loadingOnly {
                         loadingSection
                     } else {
+                    traceSection
                     colorsSection
                     typographySection
                     spacingSection
@@ -44,6 +45,27 @@ struct DrivyDesignSystemGallery: View {
     }
 
     // MARK: Tokens
+
+    private var traceSection: some View {
+        GallerySection(title: "La trace") {
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                DrivyBrandMark().frame(width: 64, height: 64)
+                VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                    ForEach(["", "DISCOVERING", "GUIDED", "INDEPENDENT"], id: \.self) { level in
+                        DrivyCompetencyTrack(level: level)
+                    }
+                }
+                VStack(spacing: 0) {
+                    DrivyLessonRow(start: "09:00", end: "09:50", title: "Camille Martin",
+                        details: ["Gare de Neuchâtel"], state: .completed, railPosition: .first)
+                    DrivyLessonRow(start: "10:00", end: "10:50", title: "Alex Morel",
+                        details: ["Place de la Gare"], state: .inProgress, railPosition: .middle)
+                    DrivyLessonRow(start: "11:00", end: "11:50", title: "Sarah Girard",
+                        details: ["Cernier"], state: .planned, railPosition: .last)
+                }
+            }
+        }
+    }
 
     private var colorsSection: some View {
         GallerySection(title: "Couleurs") {

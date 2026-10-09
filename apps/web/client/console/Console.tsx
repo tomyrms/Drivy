@@ -6,6 +6,7 @@ import { endSession, loginSchema, meSchema, request, RequestFailure, roleLabel, 
 import type { Me, Member, Session } from '../protocol';
 import { readSchool, schoolSchema, type School } from '../school-api';
 import { Loading, Notice, Symbol, formatDateTime } from '../ui';
+import { BrandSymbol } from '../BrandSymbol';
 import { ConsoleContext, readError, sectionKeys, type ConsoleContextValue, type SectionKey } from './context';
 import { OverviewSection } from './overview';
 import { ConfigurationSection } from './configuration';
@@ -166,7 +167,7 @@ export function ManagementConsole() {
             if (!context || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
             event.preventDefault(); context.navigate(context.school.status === 'ACTIVE' ? 'agenda' : 'apercu');
           }}>
-          <span className="brand-symbol" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="m11 24 5-16 5 16-5-4Z" /></svg></span>
+          <BrandSymbol />
           <span>Drivy</span>
         </a>
         {state.status === 'ready' && (adminSchools.length > 1

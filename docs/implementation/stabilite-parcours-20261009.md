@@ -34,6 +34,8 @@ Le démarrage sans GPS retourne à la fiche de la leçon manuelle pour continuer
 
 ## Qualification
 
+À la demande du porteur pendant cette passe, la branche `claude/marque-la-trace-20261006` à `b710303c40b8f4462e8a4b39817544ecb53bde65` est fusionnée dans la branche de stabilité. Ses ajustements visuels existants sont conservés ; Aujourd’hui garde le résumé compact tout en distinguant attente et démarrage réel. Les anciennes preuves de marque restent historiques ; les résultats de la version réunie sont consignés séparément dans le suivi.
+
 Les résultats exécutés et les liens de CI sont consignés dans [STATUS](STATUS.md). Aucun trajet physique, mesure de batterie ni résultat VoiceOver sur appareil n’est déduit du simulateur. Une revue de code, même étendue, ne prouve pas que chaque écran est exempt de défaut. Les parcours non exécutés et les limites visuelles doivent rester explicites.
 
 Aucun déploiement public ni modification des données de l’école dans cette passe. La migration exige une sauvegarde préalable lors du déploiement autorisé ; l’IPA reste non signée jusqu’à son installation par le porteur.
