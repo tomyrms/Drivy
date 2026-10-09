@@ -655,8 +655,11 @@ private struct SchoolLessonReportContent: View {
 
     /// Annuler pendant un trajet l’arrête d’abord, comme depuis l’écran du trajet : aucune position après l’annulation.
     private func planningSheet(_ route: PlanningRoute) -> some View {
-        let stopsCapture = route.cancelling && captureStatus == .collecting
-        let beforeCancellation: (@MainActor () async -> Bool)? = stopsCapture ? { await capture?.stopAndSynchronize() ?? true } : nil
+        let controller = capture
+        var beforeCancellation: (@MainActor () async -> Bool)?
+        if route.cancelling && captureStatus == .collecting {
+            beforeCancellation = { @MainActor in await controller?.stopAndSynchronize() ?? true }
+        }
         return SchoolPlanningView(model: route.model, cancelling: route.cancelling, beforeCancellation: beforeCancellation)
             .onChange(of: route.model.confirmedCancellationLessonID) { _, id in
                 if let id, id == model.lessonID, capture?.lessonID == id { capture?.closeSaved() }
