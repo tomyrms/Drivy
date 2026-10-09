@@ -287,7 +287,7 @@ struct SchoolTodayView: View {
                 presentsStartNow = presented
                 if presented { requestID = UUID(); isLoading = false }
             }) {
-            Label("Démarrer une leçon", systemImage: "location.fill")
+            Label(prominent ? "Démarrer une leçon" : "Leçon sans rendez-vous", systemImage: "location.fill")
         }
         if prominent {
             button.buttonStyle(DrivyPrimaryButtonStyle(size: .field)).accessibilityIdentifier("today-start-now")
