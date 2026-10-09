@@ -5,7 +5,7 @@ import XCTest
     // Keep aligned with capture-screens.sh; test_visual_capture.py checks both.
     // Unknown legacy names must not silently capture the default dossier.
     private let supportedScreens: Set<String> = [
-        "dossier", "progression", "home-tabs", "school-choice", "no-school",
+        "dossier", "progression", "home-tabs", "home-to-finish", "school-choice", "no-school",
         "profile-tab", "learner-home", "learner-progress", "start-now", "planning-settings",
         "agenda", "learners", "learner", "lesson", "lesson-planned",
         "lesson-observations", "lesson-evidence", "lesson-permit", "invitation-code", "lessons-history",
@@ -13,7 +13,7 @@ import XCTest
         "signal-status", "observations", "capture-preparation", "live", "live-waiting",
         "planning", "planning-details", "planning-confirmation", "invitations", "invitation-create",
         "invitation-detail", "lesson-finish", "lesson-modal", "lesson-tariff", "sign-in",
-        "sign-in-error", "sign-in-loading", "sign-in-unconfigured", "account", "app-lock",
+        "sign-in-error", "sign-in-loading", "sign-in-unconfigured", "account", "app-lock", "app-privacy",
         "join-code", "join-code-preview", "join-code-error", "join-code-pending", "join-code-confirmed",
         "join-link", "join-link-preview", "profile", "profile-error", "onboarding-welcome",
         "onboarding-information", "onboarding-formation", "onboarding-gps", "onboarding-review", "onboarding-ready",
@@ -77,10 +77,13 @@ import XCTest
                     case "lessons-multi", "lessons-two", "progression-multi": "training-permit-filter"
                     case "lesson-cancelled": "lesson-state"
                     case "account": "account-heading"
+                    case "app-lock": "app-unlock"
+                    case "app-privacy": "app-privacy-shield"
                     case "profile-tab": "profile-open-lessons"
                     case "lessons-history": "lessons-history"
                     case "onboarding-staff": "onboarding-start"
                     case "home-tabs": "today-day-list"
+                    case "home-to-finish": "today-finish-lesson"
                     case "live", "live-waiting": "capture-signal-observation"
                     case "replay": "replay-play"
                     case "signal": "live-observation-theme-Priorité à droite"
@@ -90,6 +93,10 @@ import XCTest
                     if let readyIdentifier {
                         guard requireVisual(app.descendants(matching: .any)[readyIdentifier].waitForExistence(timeout: 30),
                             "Élément de l’écran absent : \(readyIdentifier).", app: app, name: captureName) else { return }
+                    }
+                    if screen == "home-to-finish" {
+                        guard requireVisual(app.buttons["today-next-lesson"].waitForExistence(timeout: 10),
+                            "La prochaine leçon n’est pas visible après celle à terminer.", app: app, name: captureName) else { return }
                     }
                     if screen == "learner" || screen == "dossier" || screen == "dossier-multi" {
                         let firstName = app.descendants(matching: .any)["learner-profile-first-name"]

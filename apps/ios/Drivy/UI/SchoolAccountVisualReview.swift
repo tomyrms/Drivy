@@ -4,7 +4,7 @@ import SwiftUI
 /// Les vrais écrans, des transports et journaux exclusivement en mémoire.
 /// Aucune connexion OIDC, requête réseau ou permission GPS n'est demandée.
 struct SchoolAccountVisualReview: View {
-    static let screenNames: Set<String> = ["sign-in", "sign-in-error", "sign-in-loading", "sign-in-unconfigured", "account", "app-lock",
+    static let screenNames: Set<String> = ["sign-in", "sign-in-error", "sign-in-loading", "sign-in-unconfigured", "account", "app-lock", "app-privacy",
         "join-code", "join-code-preview", "join-code-error", "join-code-pending", "join-code-confirmed",
         "join-link", "join-link-preview", "profile", "profile-error", "onboarding-welcome", "onboarding-information",
         "onboarding-formation", "onboarding-gps", "onboarding-review", "onboarding-ready", "onboarding-staff"]
@@ -27,6 +27,8 @@ struct SchoolAccountVisualReview: View {
                 }
             } else if screen == "app-lock" {
                 AppLockView(lock: lock, automaticallyUnlocks: false)
+            } else if screen == "app-privacy" {
+                AppPrivacyShield()
             } else if let codeModel {
                 SchoolCodeJoinView(model: codeModel, openSchool: { _ in }, useLink: {}, loadsOnAppear: false)
             } else if let linkModel {
@@ -50,7 +52,7 @@ struct SchoolAccountVisualReview: View {
     }
 
     @MainActor private func prepare() async throws {
-        if screen.hasPrefix("sign-in") || screen == "app-lock" { return }
+        if screen.hasPrefix("sign-in") || screen == "app-lock" || screen == "app-privacy" { return }
         if screen.hasPrefix("join-") {
             let configuration = AppConfiguration(apiBaseURL: URL(string: "https://visual.drivy.invalid")!,
                 issuer: URL(string: "https://visual.drivy.invalid/identity")!, clientID: "visual", redirectURL: AppConfiguration.callback)

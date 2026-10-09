@@ -85,6 +85,25 @@ final class AppLock {
     }
 }
 
+/// Opaque immediately, including in the app switcher. The static mark cannot delay
+/// hiding a lesson or be captured halfway through its sign-in animation.
+struct AppPrivacyShield: View {
+    var body: some View {
+        DrivyTheme.canvas
+            .ignoresSafeArea()
+            .overlay {
+                Image("DrivyBrand")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 96, height: 96)
+                    .accessibilityHidden(true)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Drivy")
+            .accessibilityIdentifier("app-privacy-shield")
+    }
+}
+
 struct AppLockView: View {
     let lock: AppLock
     var automaticallyUnlocks = true
@@ -96,13 +115,11 @@ struct AppLockView: View {
         GeometryReader { proxy in
             ScrollView {
                 VStack(spacing: DrivySpacing.l) {
-                    // Même aplat de marque que l’écran de connexion : le verrou reste dans la famille.
-                    Image(systemName: "lock.fill")
-                        .font(.largeTitle.weight(.semibold))
-                        .foregroundStyle(DrivyTheme.accent)
+                    // The full mark is visible immediately while system authentication opens.
+                    Image("DrivyBrand")
+                        .resizable()
+                        .scaledToFit()
                         .frame(width: plate, height: plate)
-                        .background(DrivyTheme.accentSoft, in: Circle())
-                        .overlay { Circle().strokeBorder(DrivyTheme.border, lineWidth: 0.5) }
                         .accessibilityHidden(true)
                     Text("Drivy verrouillé")
                         .font(.drivyTitle)

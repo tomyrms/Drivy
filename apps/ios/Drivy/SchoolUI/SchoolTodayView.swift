@@ -62,8 +62,6 @@ struct SchoolTodayView: View {
                             }
                             .frame(width: DrivyMapLayout.sidebarWidth)
                             .background(DrivyTheme.canvas)
-                            // La colonne a la place : la journée s’y ouvre d’emblée au lieu de laisser un fond vide.
-                            .onAppear { showsDay = true }
                         }
                 } else {
                     let maxHeight = geometry.size.height * TodayLayout.bottomPanelMaxRatio
@@ -185,12 +183,8 @@ struct SchoolTodayView: View {
         let toFinish = planned.filter { ($0.endsAt ?? .distantFuture) <= now }
         let next = planned.first { ($0.endsAt ?? .distantPast) > now }
         DrivyMapDock(floating: floating) {
-            Text(SchoolDateFormat.template("EEEEdMMMM", now, zone: workspace.school?.timeZone ?? "Europe/Zurich").capitalizedFirst)
-                .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
             if let lesson = toFinish.first {
-                lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote, moment: nil)
+                lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote)
                 if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId {
                     Button { opened = OpenedLesson(lesson: lesson, completing: true) } label: {
                         Text("Terminer la leçon")
@@ -203,7 +197,7 @@ struct SchoolTodayView: View {
                     upcomingLesson(next, now: now)
                 }
             } else if let next {
-                lessonSummary(next, note: nil, moment: SchoolTodayPresentation.moment(for: next, now: now))
+                lessonSummary(next, note: nil)
                 if mayStart(next, now: now) {
                     Button { start(next) } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
                         .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
@@ -213,7 +207,7 @@ struct SchoolTodayView: View {
                         Text("Démarrer dès \(opening)")
                             .font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(DrivyTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .accessibilityIdentifier("today-start-later")
                     }
                     // Ni en cours ni imminente : le moniteur peut lancer une autre leçon sans la planifier.
@@ -236,45 +230,15 @@ struct SchoolTodayView: View {
         }
     }
 
-    /// Point focal du panneau : l’heure de départ en grand chiffre tabulaire, puis l’élève (avatar, nom, lieu).
-    /// Un état inhabituel (« À terminer ») est un mot de texte au-dessus de l’heure, sans pastille.
-    private func lessonSummary(_ lesson: SchoolLesson, note: DrivyRowNote?, moment: String?) -> some View {
-        let stacked = typeSize.isAccessibilitySize
-        let layout = stacked
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.xs))
-        return Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
-            VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                if let note { DrivyRowNoteText(note: note) }
-                if let moment {
-                    Text(moment).font(.headline).foregroundStyle(DrivyTheme.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                layout {
-                    Text(startTime(lesson)).font(.drivyScreenTitle.monospacedDigit()).foregroundStyle(DrivyTheme.text)
-                    Text("– \(endTime(lesson))").font(.title3.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
-                }
-                HStack(spacing: DrivySpacing.s) {
-                    if !stacked { DrivyAvatar(name: name(lesson), size: 44) }
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Text(name(lesson)).font(.headline).foregroundStyle(DrivyTheme.text)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if !lesson.meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text(lesson.meetingPoint).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    if !stacked {
-                        Spacer(minLength: DrivySpacing.xs)
-                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                            .foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+    /// Même lecture compacte que l’agenda : horaire, élève, lieu et éventuel état inhabituel.
+    /// La fiche de leçon reste accessible depuis toute la ligne.
+    private func lessonSummary(_ lesson: SchoolLesson, note: DrivyRowNote?) -> some View {
+        Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
+            DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
+                details: [lesson.meetingPoint], note: note)
         }
         .buttonStyle(DrivyRowButtonStyle())
+        .accessibilityIdentifier("today-focus-lesson")
         .accessibilityHint("Ouvre la leçon")
     }
 

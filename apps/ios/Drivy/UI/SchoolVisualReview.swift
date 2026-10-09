@@ -5,7 +5,7 @@ import SwiftUI
 /// No production credentials, persistent school store or network transport is created.
 struct SchoolVisualReview: View {
     /// Shell screens routed here directly by DrivyApp, with the real tab bar.
-    static let shellScreens: Set<String> = ["home-tabs", "agenda", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "live", "live-waiting", "dossier-multi"]
+    static let shellScreens: Set<String> = ["home-tabs", "home-to-finish", "agenda", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "live", "live-waiting", "dossier-multi"]
 
     let screen: String
     @State private var context: SchoolVisualContext?
@@ -68,7 +68,7 @@ struct SchoolVisualReview: View {
                     }
                 case "replay":
                     SchoolCaptureReplayView(model: context.replay, learnerName: "Trajet synthétique", lessonTimeZone: "Europe/Zurich")
-                case "home-tabs":
+                case "home-tabs", "home-to-finish":
                     SchoolVisualShell(context: context, tab: .session)
                 case "agenda":
                     SchoolVisualShell(context: context, tab: .agenda)
@@ -260,6 +260,19 @@ struct SchoolVisualShell: View {
                 "actualStart": actualStart, "actualEnd": actualEnd, "permitWarning": false,
                 "publicationVersion": 0, "currentPublishedRevisionId": NSNull(), "commercialRevisionVersion": 1]
             result.append(object)
+        }
+        if ProcessInfo.processInfo.environment["DRIVY_VISUAL_SCREEN"] == "home-to-finish" {
+            // A past unresolved lesson and two upcoming ones, independently of the runner's hour.
+            // Only the isolated visual transport receives these synthetic lesson times.
+            let now = Date()
+            for (index, minutes) in [-90, 45, 150].enumerated() {
+                let start = now.addingTimeInterval(TimeInterval(minutes * 60))
+                result[index]["plannedStart"] = iso.string(from: start)
+                result[index]["plannedEnd"] = iso.string(from: start.addingTimeInterval(50 * 60))
+                result[index]["status"] = "PLANNED"
+                result[index]["actualStart"] = NSNull()
+                result[index]["actualEnd"] = NSNull()
+            }
         }
         return result
     }

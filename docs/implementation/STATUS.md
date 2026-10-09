@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 9 octobre 2026 — carte Aujourd’hui et logo de protection
+
+À la demande du porteur : résumé Aujourd’hui réduit à horaire, élève, lieu et état inhabituel ; prochaines leçons repliées initialement sur iPad aussi. Le masque d’arrière-plan et l’écran verrouillé montrent le logo Drivy. Face ID et les règles métier restent identiques. [Décisions et suivi](today-privacy-20261009.md).
+
+**Exécuté** : relecture des branches, diff propre et deux contrôles du harnais de capture. **En cours** : compilation Release/simulateur et captures natives des deux états d’Aujourd’hui et des deux écrans de protection. Aucune qualification physique revendiquée.
+
 ## 9 octobre 2026 — intégration de La trace
 
 Le chantier de marque reprend à la demande du porteur. [Décisions et périmètre](brand-integration-20261009.md).
