@@ -1,5 +1,21 @@
 # État de la réalisation
 
+## 9 octobre 2026 — stabilité des parcours, démarrage réel des leçons et nettoyage
+
+À la demande du porteur, revue de l’existant sans ajout de fonctionnalités ni refonte visuelle. Décisions et périmètre : [stabilite-parcours-20261009.md](stabilite-parcours-20261009.md), [serveur](stabilite-api-20261009.md), [iOS](stabilite-ios-parcours-20261009.md), [web](stabilite-web-20261009.md).
+
+- **Leçons** : départ explicite durable (`actualStart`) depuis agenda ou manuellement ; « En attente » après dépassement sans départ, « Continuer »/« À terminer » seulement après départ confirmé. Fin fondée sur les heures réelles de la leçon, indépendante du trajet facultatif. Aucune annulation ni réalisation automatiques. Migration 023 reprend uniquement les départs prouvés par une commande ou capture.
+- **Données et droits** : réponses anciennes ignorées, conflit de profil conservé jusqu’au rechargement explicite, dossier accessible après nouvelle lecture autorisée ; les détails web suivent immédiatement le filtre et le périmètre affichés. Les formulaires refusés gardent leur saisie et la déconnexion attend une confirmation réelle.
+- **Navigation et nettoyage** : refus de démarrage manuel conservé sur son écran ; parcours sans GPS vers la fiche ; retraits d’états et de branches sans lecteurs vérifiés. Les écrans de recette visuelle sont conservés. README remis en accord avec l’application actuelle.
+
+**Exécuté.** Sur `84f2cce` : **248 tests API/PostgreSQL et 125 tests web réussis**, typage, builds et contrôles documentaires ([run37931070865](https://github.com/tomyrms/Drivy/actions/runs/37931070865)). Agenda web, changement de semaine lent et refus du formulaire de permis vérifiés dans le navigateur à 1280 × 900 et 390 × 844 ; captures synthétiques dans la revue web. Compilation des cibles natives réussie sur `083fbc0` ; parcours iPhone/iPad et captures encore en cours. Les résultats finaux remplacent ce suivi avant clôture de la passe.
+
+**Non déployé.** Les corrections restent sur la branche de travail. Mise à jour API/migration avant distribution de l’app ; sauvegarde obligatoire avant migration lors du déploiement.
+
+**Livraison web distincte.** Pendant cette passe, le porteur prépare séparément le web de `claude/marque-la-trace-20261006`, commit `b710303c40b8f4462e8a4b39817544ecb53bde65`. Ses changements d’identité visuelle et d’icônes ne sont pas intégrés ici. La release web séparée doit garder l’API et le lien de release commun hors de sa bascule ; le résultat de ce déploiement n’est pas vérifié par cette passe. Avant une future livraison commune, réunir les modifications des deux branches sans perdre ces ajustements.
+
+**Non qualifié.** Aucun essai physique GPS, batterie ou VoiceOver. Le navigateur utilise uniquement des données synthétiques ; la CI native utilise des simulateurs et transports synthétiques. La revue ne vaut pas qualification exhaustive de tous les écrans, tailles de texte, volumes ou usages sur appareil.
+
 ## 5 et 6 octobre 2026 — dossier par permis, fiche et récapitulatif de leçon, bilan en étapes, Leçons du moniteur
 
 À la demande du porteur. Décisions : [passe-ui-20261005-soir.md](passe-ui-20261005-soir.md), conception : [conception-dossier-lecon-20261006.md](conception-dossier-lecon-20261006.md), reprise : [reprise-passe-ui-20261005-soir.md](reprise-passe-ui-20261005-soir.md).
