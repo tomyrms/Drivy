@@ -335,9 +335,16 @@ private struct SchoolReportObservationRow: View {
 
 // MARK: Bilan : rédaction
 
+enum SchoolReportTextField: Hashable {
+    case workedOn, observation, nextStep
+}
+
 /// Les trois textes du bilan et son partage. Tout est facultatif.
 struct SchoolReportTextSection: View {
     @Bindable var model: SchoolLessonReportWorkspace
+    /// L’étape compacte peut fermer le clavier ; la rédaction en colonnes conserve un focus local.
+    var focusedField: FocusState<SchoolReportTextField?>.Binding? = nil
+    @FocusState private var localFocusedField: SchoolReportTextField?
 
     var body: some View {
         Section {
@@ -346,18 +353,19 @@ struct SchoolReportTextSection: View {
                     set: { shared in Task { await model.updateSharing(reportPrivate: !shared) } }))
                     .disabled(!model.acceptsInput)
             }
-            field("Travail réalisé", text: $model.workedOn)
-            field("À retenir", text: $model.observationText)
-            field("Prochaine étape", text: $model.nextStep)
+            field("Travail réalisé", text: $model.workedOn, focus: .workedOn)
+            field("À retenir", text: $model.observationText, focus: .observation)
+            field("Prochaine étape", text: $model.nextStep, focus: .nextStep)
         } header: { Text("Bilan").drivyFormSectionHeader() }
             .drivyFormRows()
     }
 
-    private func field(_ label: String, text: Binding<String>) -> some View {
+    private func field(_ label: String, text: Binding<String>, focus: SchoolReportTextField) -> some View {
         let count = text.wrappedValue.unicodeScalars.count
         return VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
             TextField("Facultatif", text: text, axis: .vertical).lineLimit(1...10).disabled(!model.acceptsInput)
+                .focused(focusedField ?? $localFocusedField, equals: focus)
                 .accessibilityLabel(label)
                 .accessibilityHint("Facultatif")
             // Le compteur n’apparaît qu’à l’approche de la limite.

@@ -10,11 +10,14 @@ struct SchoolReportStepView: View {
     let index: Int
     @State private var router = SchoolReportRouter()
     @State private var showsNext = false
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @FocusState private var focusedReportField: SchoolReportTextField?
 
     private var step: SchoolReportStep { steps[index] }
     private var isLast: Bool { index == steps.count - 1 }
     private var hasTrip: Bool { !model.captures.isEmpty || !model.track.isEmpty }
     private var title: String { SchoolReportFlowRules.title(of: step, hasTrip: hasTrip) }
+    private var needsEditingSpace: Bool { verticalSizeClass == .compact && focusedReportField != nil }
 
     var body: some View {
         Form {
@@ -27,12 +30,22 @@ struct SchoolReportStepView: View {
         .frame(maxWidth: DrivyLayout.formColumn)
         .frame(maxWidth: .infinity)
         .background(DrivyTheme.canvas)
-        .safeAreaInset(edge: .bottom, spacing: 0) { bar }
+        // En paysage bas, la saisie passe avant la barre fixe ; le formulaire garde son identité et son focus.
+        .safeAreaInset(edge: .bottom, spacing: 0) { if !needsEditingSpace { bar } }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 SchoolReportStepTitle(title: title, position: SchoolReportFlowRules.position(of: index, count: steps.count))
+            }
+            if needsEditingSpace {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { focusedReportField = nil } label: {
+                        Label("Fermer le clavier", systemImage: "keyboard.chevron.compact.down")
+                    }
+                    .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("lesson-report-dismiss-keyboard")
+                }
             }
         }
         .navigationDestination(isPresented: $showsNext) {
@@ -56,7 +69,7 @@ struct SchoolReportStepView: View {
         case .competencies:
             SchoolReportCompetenciesSection(model: model)
         case .report:
-            SchoolReportTextSection(model: model)
+            SchoolReportTextSection(model: model, focusedField: $focusedReportField)
         }
     }
 

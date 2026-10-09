@@ -43,15 +43,35 @@ import UIKit
         let original = try XCTUnwrap(field.value as? String)
         field.tap()
         field.typeText(" Rotation 29")
-        let expected = try XCTUnwrap(field.value as? String)
+        var expected = try XCTUnwrap(field.value as? String)
         XCTAssertNotEqual(expected, original)
         XCTAssertTrue(expected.contains("Rotation 29"))
 
         rotate(app, to: .landscapeLeft)
         XCTAssertTrue(reportField(in: app).waitForExistence(timeout: 5))
         XCTAssertEqual(reportField(in: app).value as? String, expected)
-        XCTAssertTrue(save.exists)
-        capture(name: "lesson-unsaved-landscape")
+        if app.frame.height < 500 {
+            // La fenêtre iPhone en paysage doit laisser une vraie ligne de saisie entre la barre de navigation
+            // et le clavier. L’existence et la valeur du champ seules ne prouvent pas qu’on peut encore l’utiliser.
+            let closeKeyboard = app.buttons["lesson-report-dismiss-keyboard"]
+            XCTAssertTrue(waitUntil { closeKeyboard.exists && closeKeyboard.isHittable && !save.exists }, app.debugDescription)
+            XCTAssertTrue(waitUntil { reportFieldIsVisibleAboveKeyboard(in: app, save: save) }, app.debugDescription)
+            let beforeLandscapeInput = expected
+            reportField(in: app).typeText(" Paysage")
+            expected = try XCTUnwrap(reportField(in: app).value as? String)
+            XCTAssertTrue(expected.contains(" Paysage"))
+            XCTAssertEqual(expected.replacingOccurrences(of: " Paysage", with: ""), beforeLandscapeInput)
+            XCTAssertTrue(waitUntil { reportFieldIsVisibleAboveKeyboard(in: app, save: save) }, app.debugDescription)
+            capture(name: "lesson-unsaved-landscape")
+
+            closeKeyboard.tap()
+            XCTAssertTrue(waitUntil { !app.keyboards.firstMatch.exists && save.exists && save.isHittable }, app.debugDescription)
+            XCTAssertEqual(reportField(in: app).value as? String, expected)
+            capture(name: "lesson-unsaved-landscape-keyboard-closed")
+        } else {
+            XCTAssertTrue(save.exists)
+            capture(name: "lesson-unsaved-landscape")
+        }
 
         rotate(app, to: .portrait)
         XCTAssertTrue(reportField(in: app).waitForExistence(timeout: 5))
@@ -67,6 +87,26 @@ import UIKit
             format: "label == %@ AND (elementType == %lu OR elementType == %lu)",
             "Travail réalisé", XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.textView.rawValue
         )).firstMatch
+    }
+
+    private func reportFieldIsVisibleAboveKeyboard(in app: XCUIApplication, save: XCUIElement) -> Bool {
+        let field = reportField(in: app)
+        let keyboard = app.keyboards.firstMatch
+        guard field.exists, field.isHittable, keyboard.exists, field.frame.height > 0 else { return false }
+        let navigation = app.navigationBars.firstMatch
+        let top = navigation.exists ? max(app.frame.minY, navigation.frame.maxY) : app.frame.minY
+        let bottom = save.exists && save.isHittable ? min(keyboard.frame.minY, save.frame.minY) : keyboard.frame.minY
+        let viewport = CGRect(x: app.frame.minX, y: top, width: app.frame.width, height: max(0, bottom - top))
+        let visible = field.frame.intersection(viewport)
+        return !visible.isNull && visible.height >= min(24, field.frame.height) && visible.width >= min(44, field.frame.width)
+    }
+
+    private func waitUntil(timeout: TimeInterval = 5, _ condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        return condition()
     }
 
     private func rotate(_ app: XCUIApplication, to orientation: UIDeviceOrientation) {

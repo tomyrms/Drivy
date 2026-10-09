@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+ui_test_suite=${DRIVY_IOS_UI_TEST_SUITE:-}
+if [[ -n "$ui_test_suite" ]]; then
+  [[ "${DRIVY_IOS_UNIT_ONLY:-0}" != 1 ]] || { echo 'Choisir soit les tests métier, soit une suite UI.' >&2; exit 1; }
+  [[ "$ui_test_suite" =~ ^[A-Za-z][A-Za-z0-9_]*$ && -f "apps/ios/DrivyUITests/$ui_test_suite.swift" ]] || { echo 'Suite UI inconnue.' >&2; exit 1; }
+fi
 mkdir -p artifacts/ios
 device_id=$(xcrun simctl list devices available -j | python3 -c '
 import json,sys
@@ -13,6 +18,7 @@ xcrun simctl bootstatus "$device_id" -b
 phone_status=0
 test_options=()
 if [[ "${DRIVY_IOS_UNIT_ONLY:-0}" == 1 ]]; then test_options+=(-only-testing:DrivyTests); fi
+if [[ -n "$ui_test_suite" ]]; then test_options+=("-only-testing:DrivyUITests/$ui_test_suite"); fi
 xcodebuild test-without-building \
   -project apps/ios/Drivy.xcodeproj -scheme Drivy \
   -destination "platform=iOS Simulator,id=$device_id" \
@@ -45,11 +51,13 @@ xcrun simctl shutdown "$device_id"
 xcrun simctl boot "$ipad_id" || true
 xcrun simctl bootstatus "$ipad_id" -b
 ipad_status=0
+ipad_test_options=(-only-testing:DrivyUITests -only-testing:DrivyTests/SchoolPresentationTests)
+if [[ -n "$ui_test_suite" ]]; then ipad_test_options=("-only-testing:DrivyUITests/$ui_test_suite"); fi
 xcodebuild test-without-building \
   -project apps/ios/Drivy.xcodeproj -scheme Drivy \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -skip-testing:DrivyUITests/VisualOrientationTests \
-  -only-testing:DrivyUITests -only-testing:DrivyTests/SchoolPresentationTests -parallel-testing-enabled NO \
+  "${ipad_test_options[@]}" -parallel-testing-enabled NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/iPadTests.xcresult \
   2>&1 | tee artifacts/ios/ipad-test.log || ipad_status=$?

@@ -12,6 +12,10 @@ on:
         description: Relancer uniquement DrivyTests sur iPhone, sans parcours UI, iPad ni IPA
         type: boolean
         default: false
+      ui_test_suite:
+        description: Suite UITest à relancer sur iPhone et iPad sans IPA ; vide pour la campagne complète
+        type: string
+        default: ''
       visual_screens:
         description: Écrans à capturer, séparés par des espaces
         type: string
@@ -40,8 +44,8 @@ permissions:
   contents: read
 concurrency:
   # A long screen matrix must not exceed GitHub's 400-character group limit.
-  # Visual runs are independent; full test campaigns stay serial on each branch.
-  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only && github.run_id || 'tests' }}
+  # Visual runs are independent; each test scope stays serial on its branch.
+  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only && github.run_id || inputs.unit_only && 'unit' || inputs.ui_test_suite != '' && 'ui' || 'tests' }}
   cancel-in-progress: false
 jobs:
   apple:
@@ -110,6 +114,7 @@ jobs:
         shell: bash
         env:
           DRIVY_IOS_UNIT_ONLY: ${{ inputs.unit_only && '1' || '0' }}
+          DRIVY_IOS_UI_TEST_SUITE: ${{ inputs.ui_test_suite }}
         run: bash scripts/ios/test-simulator.sh
       - name: Capturer les écrans pour la revue visuelle
         if: inputs.visual_only == true
@@ -126,11 +131,11 @@ jobs:
           DRIVY_VISUAL_LARGE_TEXT: ${{ inputs.visual_large_text && '1' || '0' }}
         run: bash scripts/ios/capture-screens.sh
       - name: Construire l'IPA pour iLoader
-        if: inputs.visual_only != true && inputs.unit_only != true
+        if: inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == ''
         shell: bash
         run: bash scripts/ios/build-ipa.sh
       - name: Artefact IPA
-        if: inputs.visual_only != true && inputs.unit_only != true
+        if: inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Drivy-unsigned-${{ github.sha }}
