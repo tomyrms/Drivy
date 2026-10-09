@@ -51,6 +51,11 @@ Incident du porteur : impossible de commencer une leçon (« Demande à vérifie
 **Fusion demandée par le porteur.** La branche `claude/marque-la-trace-20261006`, au commit `b710303c40b8f4462e8a4b39817544ecb53bde65`, est réunie à cette passe : marque et icônes web/iOS, carte Aujourd’hui compacte, cartes et écrans de protection conservés. Les conflits d’Aujourd’hui conservent le démarrage durable et la stabilité des feuilles ; les deux historiques documentaires sont conservés. Les tests finaux portent sur la version fusionnée. Le déploiement web séparé préparé par le porteur garde l’API hors de sa bascule ; son résultat n’est pas vérifié ici.
 
 **Non qualifié.** Aucun essai physique GPS, batterie ou VoiceOver. Le navigateur utilise uniquement des données synthétiques ; la CI native utilise des simulateurs et transports synthétiques. La revue ne vaut pas qualification exhaustive de tous les écrans, tailles de texte, volumes ou usages sur appareil.
+## 9 octobre 2026 — branding web en ligne
+
+**Déployé à 14:36 Europe/Zurich** sur `https://drivy.shulker.ch/app`, source `b710303` : logo, cobalt, favicon et manifeste. Release web isolée, seul `drivy-refonte-web` redémarré. API et lien partagé restent sur `ef0ea216` ; ancienne release conservée, sauvegarde privée vérifiée avant bascule. Aucun fichier de la passe stabilité `codex/stabilite-parcours-20261009` livré.
+
+**Vérifié** : build Linux sous Node verrouillé, onze fichiers publics avec empreintes exactes, routes d’entrée et protections anonymes, rendu du logo dans le navigateur sans erreur. [Détails, preuve et retour arrière](web-brand-deployment-20261009.md). Le prochain déploiement global doit traiter le drop-in `90-brand-web-release.conf` pour mettre le web à jour ; une simple bascule du lien partagé n’y suffit plus.
 
 ## 9 octobre 2026 — carte Aujourd’hui et logo de protection
 

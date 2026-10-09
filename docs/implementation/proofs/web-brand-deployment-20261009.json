@@ -1,0 +1,166 @@
+{
+  "before": {
+    "current": "/opt/drivy-refonte/releases/ef0ea216d2cdcff183e9b6446c59b8c387b78bfd",
+    "baseSourceFilesChecked": 63,
+    "sourceMismatches": [],
+    "web": {
+      "MainPID": "549",
+      "WorkingDirectory": "/opt/drivy-refonte/current/apps/web",
+      "ActiveState": "active",
+      "DropInPaths": "",
+      "actualDirectory": "/opt/drivy-refonte/releases/ef0ea216d2cdcff183e9b6446c59b8c387b78bfd/apps/web"
+    },
+    "api": {
+      "MainPID": "148",
+      "WorkingDirectory": "/opt/drivy-refonte/current/apps/api",
+      "ActiveState": "active",
+      "DropInPaths": "",
+      "actualDirectory": "/opt/drivy-refonte/releases/ef0ea216d2cdcff183e9b6446c59b8c387b78bfd/apps/api"
+    }
+  },
+  "backup": {
+    "createdAt": "2026-10-09T12:34:53.862623+00:00",
+    "backups": [
+      {
+        "database": "drivy_refonte",
+        "path": "/root/drivy_refonte-before-web-brand-20261009T123453Z-82933341.dump",
+        "bytes": 2705631,
+        "sha256": "751d894d7555110e535c459615d5e8025290d9aa6a494e0a50e11e0e31d08e5d",
+        "verified": true,
+        "mode": "0600"
+      }
+    ]
+  },
+  "prepared": {
+    "sourceCommit": "b710303c40b8f4462e8a4b39817544ecb53bde65",
+    "apiBase": "ef0ea216d2cdcff183e9b6446c59b8c387b78bfd",
+    "release": "/opt/drivy-refonte/web-releases/b710303c40b8f4462e8a4b39817544ecb53bde65",
+    "workingDirectory": "/opt/drivy-refonte/web-releases/b710303c40b8f4462e8a4b39817544ecb53bde65/apps/web",
+    "archiveSHA256": "e42a34824de9c5a7ca12ffd933aba50563849536a46ca5311d1b3a96b874697e",
+    "assets": {
+      "apple-touch-icon.png": "993f15b06297a3cab640ff68c40356f750632e1eb39d88ba8037e8915722b71f",
+      "assets/SourceSans3VF-Upright-BsWL4Kly.woff2": "5f16566f7a40d39b339ad26be151fa5a1ab1f0c2574c7a2e619765584a1acbd8",
+      "assets/index-BjxvFHR9.css": "7a9e7ba9ef6c019be6f251d59cba1203389ab52c8fd5c1f852ad22c7b34a0b70",
+      "assets/index-D4cKXvD2.js": "919ffeb59d84b340047e34fa552531bf37e316cdec80e26025b37925efaa28c6",
+      "favicon-32.png": "e4851a47ac2a25057b4676a539781335f9473855a77e2bec0d163e65a42392ed",
+      "favicon.ico": "0e4b08d3d040a6c29b4007008429be466ae1be40f93a682120d4354370f12820",
+      "favicon.svg": "912c5c3a0b7b038ccf434722dfc48727fa7298626d3670f70d870fc21c29fdd9",
+      "icon-192.png": "8e031bf07a0fbfa312930ec917fc65a6d0b4859fa7766185c7249efcfaa732f3",
+      "icon-512.png": "f6f34cf69ad7803738081dfaf6620416293e3b7ed8b87005cfd54f9e424569a5",
+      "index.html": "b9cf4c1ab962a96989b8d3d11c99894f2943ce5011ff125f3956c44c6d614786",
+      "site.webmanifest": "4cf15553b61153d5f461effa735740554487fd256b87d088168c3eef05bedd67"
+    },
+    "nodeVersion": "v24.21.0",
+    "builtAt": "2026-10-09T12:36:31.701327+00:00"
+  },
+  "activation": {
+    "activatedAt": "2026-10-09T12:36:41.405247+00:00",
+    "webBefore": {
+      "MainPID": "549",
+      "WorkingDirectory": "/opt/drivy-refonte/current/apps/web",
+      "ActiveState": "active",
+      "DropInPaths": "",
+      "actualDirectory": "/opt/drivy-refonte/releases/ef0ea216d2cdcff183e9b6446c59b8c387b78bfd/apps/web"
+    },
+    "webAfter": {
+      "MainPID": "10537",
+      "WorkingDirectory": "/opt/drivy-refonte/web-releases/b710303c40b8f4462e8a4b39817544ecb53bde65/apps/web",
+      "ActiveState": "active",
+      "DropInPaths": "/etc/systemd/system/drivy-refonte-web.service.d/90-brand-web-release.conf",
+      "actualDirectory": "/opt/drivy-refonte/web-releases/b710303c40b8f4462e8a4b39817544ecb53bde65/apps/web"
+    },
+    "apiUnchanged": true,
+    "sharedCurrentUnchanged": true,
+    "webConfigurationUnchanged": true,
+    "dropIn": "/etc/systemd/system/drivy-refonte-web.service.d/90-brand-web-release.conf"
+  },
+  "public-check": {
+    "origin": "https://drivy.shulker.ch",
+    "sourceCommit": "b710303c40b8f4462e8a4b39817544ecb53bde65",
+    "assetsVerified": [
+      {
+        "file": "apple-touch-icon.png",
+        "status": 200,
+        "sha256": "993f15b06297a3cab640ff68c40356f750632e1eb39d88ba8037e8915722b71f"
+      },
+      {
+        "file": "assets/SourceSans3VF-Upright-BsWL4Kly.woff2",
+        "status": 200,
+        "sha256": "5f16566f7a40d39b339ad26be151fa5a1ab1f0c2574c7a2e619765584a1acbd8"
+      },
+      {
+        "file": "assets/index-BjxvFHR9.css",
+        "status": 200,
+        "sha256": "7a9e7ba9ef6c019be6f251d59cba1203389ab52c8fd5c1f852ad22c7b34a0b70"
+      },
+      {
+        "file": "assets/index-D4cKXvD2.js",
+        "status": 200,
+        "sha256": "919ffeb59d84b340047e34fa552531bf37e316cdec80e26025b37925efaa28c6"
+      },
+      {
+        "file": "favicon-32.png",
+        "status": 200,
+        "sha256": "e4851a47ac2a25057b4676a539781335f9473855a77e2bec0d163e65a42392ed"
+      },
+      {
+        "file": "favicon.ico",
+        "status": 200,
+        "sha256": "0e4b08d3d040a6c29b4007008429be466ae1be40f93a682120d4354370f12820"
+      },
+      {
+        "file": "favicon.svg",
+        "status": 200,
+        "sha256": "912c5c3a0b7b038ccf434722dfc48727fa7298626d3670f70d870fc21c29fdd9"
+      },
+      {
+        "file": "icon-192.png",
+        "status": 200,
+        "sha256": "8e031bf07a0fbfa312930ec917fc65a6d0b4859fa7766185c7249efcfaa732f3"
+      },
+      {
+        "file": "icon-512.png",
+        "status": 200,
+        "sha256": "f6f34cf69ad7803738081dfaf6620416293e3b7ed8b87005cfd54f9e424569a5"
+      },
+      {
+        "file": "index.html",
+        "status": 200,
+        "sha256": "b9cf4c1ab962a96989b8d3d11c99894f2943ce5011ff125f3956c44c6d614786"
+      },
+      {
+        "file": "site.webmanifest",
+        "status": 200,
+        "sha256": "4cf15553b61153d5f461effa735740554487fd256b87d088168c3eef05bedd67"
+      }
+    ],
+    "manifestCSP": true,
+    "htmlNoStore": true,
+    "anonymousSession": {
+      "status": 200,
+      "noStore": true,
+      "authenticated": false
+    },
+    "unauthenticatedAPI": {
+      "status": 401,
+      "noStore": true
+    },
+    "entryRoutes": [
+      "/app",
+      "/app/invitation",
+      "/app/gestion"
+    ],
+    "result": "PASSED"
+  },
+  "browser": {
+    "url": "https://drivy.shulker.ch/app",
+    "anonymous": true,
+    "appearance": "dark",
+    "symbolVisible": true,
+    "accent": "#91b5ff",
+    "manifest": "/app/site.webmanifest",
+    "consoleErrors": 0,
+    "consoleWarnings": 0,
+    "scope": "En-tête et connexion, aucune session scolaire ouverte"
+  }
+}
