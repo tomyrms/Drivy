@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 9 octobre 2026 — branding web en ligne
+
+**Déployé à 14:36 Europe/Zurich** sur `https://drivy.shulker.ch/app`, source `b710303` : logo, cobalt, favicon et manifeste. Release web isolée, seul `drivy-refonte-web` redémarré. API et lien partagé restent sur `ef0ea216` ; ancienne release conservée, sauvegarde privée vérifiée avant bascule. Aucun fichier de la passe stabilité `codex/stabilite-parcours-20261009` livré.
+
+**Vérifié** : build Linux sous Node verrouillé, onze fichiers publics avec empreintes exactes, routes d’entrée et protections anonymes, rendu du logo dans le navigateur sans erreur. [Détails, preuve et retour arrière](web-brand-deployment-20261009.md). Le prochain déploiement global doit traiter le drop-in `90-brand-web-release.conf` pour mettre le web à jour ; une simple bascule du lien partagé n’y suffit plus.
+
 ## 9 octobre 2026 — carte Aujourd’hui et logo de protection
 
 À la demande du porteur : résumé Aujourd’hui réduit à horaire, élève, lieu et état inhabituel ; prochaines leçons repliées initialement sur iPad aussi. Le masque d’arrière-plan et l’écran verrouillé montrent le logo Drivy. Face ID et les règles métier restent identiques. [Décisions et suivi](today-privacy-20261009.md).
