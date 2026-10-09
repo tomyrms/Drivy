@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { addDays, civilDateIn, dayOf, formatTimeRange, formatWeek, groupByDay, lessonPhase, weekStart, weekWindow } from '../client/agenda-model.js';
+import { addDays, civilDateIn, dayOf, formatTimeRange, formatWeek, groupByDay, lessonPhase, lessonsOfLearners, weekStart, weekWindow } from '../client/agenda-model.js';
 
 describe('Agenda : heure prévue distincte du démarrage enregistré', () => {
   const lesson = { status: 'PLANNED', plannedStart: '2026-10-09T12:00:00Z', plannedEnd: '2026-10-09T13:00:00Z', actualStart: null };
@@ -16,6 +16,19 @@ describe('Agenda : heure prévue distincte du démarrage enregistré', () => {
   });
   test.each([['COMPLETED', 'completed'], ['CANCELLED', 'cancelled'], ['NO_SHOW', 'absent']] as const)('préserve le constat %s', (status, expected) => {
     expect(lessonPhase({ ...lesson, status, actualStart: '2026-10-09T12:05:00Z' }, Date.parse('2026-10-10T12:30:00Z'))).toBe(expected);
+  });
+});
+
+describe('Agenda : recherche d’un élève dans la semaine', () => {
+  const learners = [{ id: 'a', displayName: 'Élodie Müller' }, { id: 'b', displayName: 'Noé Favre' }];
+  const lessons = [{ id: '1', learnerId: 'a' }, { id: '2', learnerId: 'b' }, { id: '3', learnerId: 'inconnu' }, { id: '4', learnerId: 'a' }];
+  test('sans recherche, toutes les leçons restent, même celles d’un élève absent de la liste', () => {
+    expect(lessonsOfLearners(lessons, learners, '  ').map(lesson => lesson.id)).toEqual(['1', '2', '3', '4']);
+  });
+  test('la recherche ignore accents et casse et ne garde que les leçons de l’élève trouvé', () => {
+    expect(lessonsOfLearners(lessons, learners, 'elodie').map(lesson => lesson.id)).toEqual(['1', '4']);
+    expect(lessonsOfLearners(lessons, learners, 'FAVRE').map(lesson => lesson.id)).toEqual(['2']);
+    expect(lessonsOfLearners(lessons, learners, 'personne')).toEqual([]);
   });
 });
 

@@ -750,7 +750,7 @@ select, textarea { font: inherit; color: inherit; }
 .agenda-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-s); padding-block-end: var(--space-s); border-block-end: 1px solid var(--border); }
 .agenda-toolbar > .field { display: flex; flex: 0 1 19rem; align-items: center; gap: var(--space-xs); }
 .agenda-toolbar > .field > label { flex: none; }
-.agenda-toolbar > .field > .select-control { flex: 1; }
+.agenda-toolbar > .field > .select-control, .agenda-toolbar > .field > input { flex: 1; min-inline-size: 0; }
 .agenda-toolbar .week-nav { gap: var(--space-xxs); }
 .agenda-toolbar .week-label { font-size: 1rem; min-inline-size: 11rem; padding-inline: var(--space-s); }
 .agenda-day { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); align-items: start; gap: var(--space-l); }

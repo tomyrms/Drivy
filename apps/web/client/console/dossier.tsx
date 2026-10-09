@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { permitState, type PermitState } from '../command-core';
 import { reportHistory } from '../dossier-model';
 import { lessonSchema, progressSchema, readAll, readSchool, reportSchema, type Lesson, type Permit, type Progress, type Report, type Training } from '../school-api';
-import { EmptyState, Loading, Notice, SelectField, formatCivilDate, formatDateTime, type Tone } from '../ui';
+import { EmptyState, Loading, Notice, SelectField, Symbol, formatCivilDate, formatDateTime, type Tone } from '../ui';
 import { readError, useLoad } from './context';
 
 const levelLabels = { DISCOVERING: 'En découverte', GUIDED: 'Avec accompagnement', INDEPENDENT: 'En autonomie' } as const;
@@ -51,7 +51,7 @@ function LessonReport({ schoolId, lesson, competencies }: { schoolId: string; le
       <details className="disclosure report-disclosure" onToggle={event => setOpen(event.currentTarget.open)}>
       <summary><time dateTime={lesson.plannedStart}>{formatDateTime(lesson.plannedStart, lesson.timeZone)}</time></summary>
       {open && loaded.status === 'loading' && !loaded.data && <Loading label="Lecture du bilan…" />}
-      {open && loaded.status === 'error' && <Notice tone="error" title="Bilan indisponible" live={false}><p>{loaded.error}</p></Notice>}
+      {open && loaded.status === 'error' && <Notice tone="error" title="Bilan indisponible" live={false} actions={<button type="button" className="button retry" onClick={loaded.reload}><Symbol kind="refresh" bare />Réessayer</button>}><p>{loaded.error}</p></Notice>}
       {open && loaded.data && (latest ? <ReportBody report={latest} competencies={competencies} /> : <p className="caption">Aucun bilan publié.</p>)}
       </details>
     </li>
@@ -83,7 +83,7 @@ export function TrainingFollowUp({ schoolId, training, competencies, timeZone }:
     <details className="disclosure" onToggle={event => setOpen(event.currentTarget.open)}>
       <summary>Progression et bilans</summary>
       {open && loaded.status === 'loading' && !data && <Loading label="Lecture de la progression…" />}
-      {open && loaded.status === 'error' && <Notice tone="error" title="Lecture impossible" live={false}><p>{loaded.error ?? readError(null)}</p></Notice>}
+      {open && loaded.status === 'error' && <Notice tone="error" title="Lecture impossible" live={false} actions={<button type="button" className="button retry" onClick={loaded.reload}><Symbol kind="refresh" bare />Réessayer</button>}><p>{loaded.error ?? readError(null)}</p></Notice>}
       {data && <div className="follow-up">
         <h4 className="section-title">Compétences</h4>
         {progression.length > 0 ? <ul className="competency-progress">{progression.map(item => <li key={item.id} className="competency-row">

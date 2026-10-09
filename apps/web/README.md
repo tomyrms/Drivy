@@ -65,11 +65,13 @@ Rien n’est approuvé implicitement : approbation et activation sont décochée
 
 **Commandes et reprise AP72.** Chaque écriture reçoit un `operationId` envoyé aussi comme `Idempotency-Key` ; l’If-Match porte la version affichée (`"n"`). Aucun succès n’est affiché avant une réponse 200/201 vérifiée (école, version postérieure). Règles (`client/command-core.ts`, reprises de `SchoolCommandOutbox.swift`) :
 
-- réponse perdue, 429, 5xx, session expirée, CSRF périmé : la demande reste **incertaine** ; le panneau « Résultat à vérifier » (sur tous les écrans) propose « Vérifier auprès de l’école » (`GET operations/{operationId}`, reçu comparé : opération, type, ressource, version) puis « Renvoyer la même demande » (mêmes corps, clé et If-Match) ;
-- refus métier explicite (412, 400, 409/422 connus, `REAUTH_REQUIRED`) sur le **premier** envoi : libérée, saisie conservée, rechargement proposé ; après une incertitude, le même refus ne prouve rien et la demande reste à vérifier ;
+- réponse perdue, 408, 429, 5xx, session perdue pendant la réponse, CSRF périmé : la demande reste **incertaine** ; le panneau « Demande à vérifier » (sur tous les écrans) nomme la demande (type, date) et propose « Vérifier auprès de l’école » (`GET operations/{operationId}`, reçu comparé : opération, type, ressource, version) puis « Renvoyer la même demande » (mêmes corps, clé et If-Match) ;
+- tout refus 4xx (hors 408, 429 et `IDEMPOTENCY_MISMATCH`), avec ou sans code lisible, tant qu’aucun envoi antérieur n’a pu atteindre l’école : libérée, saisie conservée, rechargement proposé ; après une incertitude, le même refus ne prouve rien et la demande reste à vérifier ;
+- vérification 404 (l’école ne retrouve pas la demande) : le panneau le dit et propose « Renvoyer la même demande » ou « Abandonner la demande… » (confirmation) ; un refus de ce renvoi est alors définitif. Après abandon, arrêt du suivi ou refus d’un renvoi, les rubriques relisent l’école ;
+- vérification refusée (403) ou reçu illisible : « Arrêter le suivi… » devient disponible, avec avertissement ;
 - une seule demande en attente par école ; les autres écritures sont désactivées avec leur raison.
 
-La demande complète vit en mémoire de la page. `sessionStorage` (onglet courant) garde seulement ses identifiants (`operationId`, école, type, ressource, version, date), jamais le contenu saisi : après un rechargement ou une reconnexion, le résultat peut encore être vérifié ; si l’école ne l’a pas enregistré, la modification est à refaire. « Arrêter le suivi » n’est proposé qu’avec un avertissement (contenu perdu, refus lors d’une reprise, ou reçu absent). La déconnexion efface ce suivi.
+La demande complète vit en mémoire de la page. `sessionStorage` (onglet courant) garde seulement ses identifiants (`operationId`, école, type, ressource, version, date), jamais le contenu saisi : après un rechargement ou une reconnexion, le résultat peut encore être vérifié ; si l’école ne l’a pas enregistré, la modification est à refaire. « Arrêter le suivi » n’est proposé qu’avec un avertissement (contenu perdu, refus lors d’une reprise, reçu absent, vérification refusée ou illisible). La déconnexion efface ce suivi.
 
 ### Routes BFF de gestion
 

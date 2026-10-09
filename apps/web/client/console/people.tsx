@@ -223,6 +223,8 @@ export function InvitationsSection() {
   const offerings = useMemo(() => openOfferings(data?.offerings ?? []), [data]);
   const instructors = useMemo(() => activeInstructors(data?.members ?? []), [data]);
   const current = items.find(item => item.id === selected) ?? null;
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | Invitation['status']>('all');
   const active = school.status === 'ACTIVE';
   const canWrite = active && !runner.pending && !runner.busy;
   const emailProblem = isEmail(email.trim()) ? null : 'Indiquez l’adresse e-mail de la personne invitée.';
@@ -235,6 +237,7 @@ export function InvitationsSection() {
 
   const label = (item: Invitation) => invitationLabel(item, data?.offerings ?? [], data?.members ?? []);
   const expiryOf = (value: string) => formatDateTime(value, school.timeZone);
+  const visible = items.filter(item => (statusFilter === 'all' || item.status === statusFilter) && matchesSearch([label(item)], search));
   function openCode() {
     runner.clearOutcome(); setSelected(null); setShowErrors(false); setCodeMissing(false);
     setOfferingIds(offerings.length === 1 ? [offerings[0]!.id] : []);
@@ -300,12 +303,21 @@ export function InvitationsSection() {
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des invitations…">{() => <SplitView mobileDetail={!!selected || !!creating} onBack={() => { setSelected(null); setCreating(null); }} backLabel="Toutes les invitations"
         list={items.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation" message="" />
+          : <>
+          <div className="list-toolbar directory-toolbar">
+            <TextField label="Rechercher une invitation" value={search} onChange={setSearch} placeholder={team ? 'Adresse' : 'Permis ou moniteur'} />
+            <SelectField label="État" value={statusFilter} onChange={setStatusFilter}
+              options={[{ value: 'all', label: 'Toutes' }, ...(['PENDING', 'ACCEPTED', 'EXPIRED', 'REVOKED'] as const).map(status => ({ value: status, label: invitationStatus(status).label }))]} />
+            {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
+          </div>
+          {visible.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation trouvée" message="" />
           : <ul className="directory-list" aria-label="Invitations de l’école, les plus récentes d’abord">
-            {items.map(item => <DirectoryRow key={item.id} title={label(item)} selected={item.id === selected && !creating}
+            {visible.map(item => <DirectoryRow key={item.id} title={label(item)} selected={item.id === selected && !creating}
               onSelect={() => { setCreating(null); setCodeMissing(false); setSelected(item.id); }}
               meta={<>{team && <>{rolesText(item.roles)} · </>}Expire le <time dateTime={item.expiresAt}>{formatDateTime(item.expiresAt, school.timeZone)}</time></>}
               detail={<InvitationState status={item.status} />} />)}
           </ul>}
+          </>}
         detail={creating === 'code' ? <DetailPanel focusKey="create-code" title="Code élève">
             <form className="form-grid" onSubmit={event => { event.preventDefault(); setShowErrors(true); if (!trainingProblem) void confirm('create'); }}>
               <fieldset className="fieldset"><legend>Permis</legend>

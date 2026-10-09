@@ -142,28 +142,28 @@ export function receiptMatches(command: CommandMetadata, receipt: OperationRecei
 }
 
 /**
- * A refusal the API sends only after rolling the command back (any 4xx carrying a problem code) proves that
- * this emission had no effect. These codes say nothing about it: an unreadable refusal, a key reused for other
- * content (an earlier emission may exist).
+ * A 4xx answer to an emission proves that this emission had no effect, readable code or not. Only a key reused
+ * for other content says nothing: an earlier emission may exist under the same reference.
  */
-const undecidedRefusals = new Set(['REQUEST_FAILED', 'API_UNAVAILABLE', 'IDEMPOTENCY_MISMATCH', 'INVALID_RESPONSE']);
+const undecidedRefusals = new Set(['IDEMPOTENCY_MISMATCH']);
 
 export type CommandOutcome =
-  /** Refused before any effect on a fresh first emission: release it, reload, let the person correct. */
+  /** Refused before any effect, while no earlier emission can have reached the school: release it, let the person correct. */
   | { readonly type: 'rejected'; readonly code: string; readonly needsLogin: boolean }
-  /** Result unknown (lost response, 5xx, session lost while the school was answering): keep the same request, verify or resend it. */
+  /** Result unknown (lost response, timeout, 429, 5xx, session lost while the school was answering): keep the same request, verify or resend it. */
   | { readonly type: 'uncertain'; readonly code: string; readonly needsLogin: boolean }
   /** A refusal that does not disprove a previous emission: keep it, verify with AP72 only. */
   | { readonly type: 'review'; readonly code: string; readonly needsLogin: boolean };
 
+/** `firstAttempt`: no earlier emission of this operation can have reached the school (never sent, or AP72 answered 404 since). */
 export function classifyFailure(status: number, code: string, firstAttempt: boolean): CommandOutcome {
-  if (status === 0 || status === 429 || status >= 500) return { type: 'uncertain', code, needsLogin: false };
+  if (status === 0 || status === 408 || status === 429 || status >= 500) return { type: 'uncertain', code, needsLogin: false };
   // The session ended while the school was answering: the command may have been committed.
   if (code === 'SESSION_LOST_RESULT_UNKNOWN') return { type: 'uncertain', code, needsLogin: true };
   // Rejected by the BFF itself, before the API: the same request can be sent again after refresh.
   if (code === 'CSRF_REJECTED') return { type: 'uncertain', code, needsLogin: false };
   const needsLogin = status === 401;
-  const definitive = status >= 400 && status < 500 && status !== 408 && !undecidedRefusals.has(code);
+  const definitive = status >= 400 && status < 500 && !undecidedRefusals.has(code);
   if (definitive) return firstAttempt ? { type: 'rejected', code, needsLogin } : { type: 'review', code, needsLogin };
   return { type: 'review', code, needsLogin };
 }
@@ -231,6 +231,7 @@ export function commandMessage(code: string): string {
     ACCESS_DENIED: 'Vos accès ne permettent plus cette opération dans l’école.',
     FORBIDDEN: 'Vos accès ne permettent plus cette opération dans l’école.',
     NOT_FOUND: 'Cette information n’est plus disponible avec vos accès actuels.',
+    REQUEST_FAILED: 'L’école a refusé cette demande.',
   };
   return messages[code] ?? 'La demande n’a pas pu être confirmée. Vérifiez son résultat auprès de l’école avant de continuer.';
 }

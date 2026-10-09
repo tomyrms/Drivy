@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { commandSpecs } from '../command-core';
-import { commandStore, useCommandSnapshot } from '../command-store';
+import { commandStore, pendingActions, useCommandSnapshot } from '../command-store';
 import { endSession, loginSchema, meSchema, request, RequestFailure, roleLabel, sessionSchema } from '../protocol';
 import type { Me, Member, Session } from '../protocol';
 import { readSchool, schoolSchema, type School } from '../school-api';
@@ -313,31 +313,49 @@ function Denied({ membership }: { membership: Member | null }) {
   );
 }
 
+/** How the last followed request ended, kept on screen until dismissed or until another request is followed. */
+type Settled = { tone: 'success' | 'info' | 'error'; title: string; message?: string; needsLogin?: boolean };
+
 /** The request whose result is unknown, shown on every section until the school answers. */
 function PendingPanel() {
   const snapshot = useCommandSnapshot();
   const context = useContextSafe();
   const entry = context ? snapshot.entries.get(context.schoolId) : undefined;
-  const [confirmedAt, setConfirmedAt] = useState<number | null>(null);
+  const [settled, setSettled] = useState<Settled | null>(null);
   const [releasing, setReleasing] = useState(false);
-  useEffect(() => { if (entry) setConfirmedAt(null); setReleasing(false); }, [entry?.meta.operationId]);
+  const releaseTitle = useRef<HTMLElement>(null);
+  useEffect(() => { if (entry) setSettled(null); setReleasing(false); }, [entry?.meta.operationId]);
+  useEffect(() => { if (releasing) releaseTitle.current?.focus(); }, [releasing]);
   if (!context) return null;
   if (!entry) {
-    return confirmedAt ? <Notice tone="success" title="Résultat confirmé par l’école"
-      actions={<button type="button" className="button quiet" onClick={() => setConfirmedAt(null)}>Masquer</button>}><p>La demande en attente a bien été appliquée.</p></Notice> : null;
+    return settled ? <Notice tone={settled.tone} title={settled.title} actions={<>
+      {settled.needsLogin && <button type="button" className="button secondary" onClick={() => context.login()}>Se reconnecter</button>}
+      <button type="button" className="button quiet" onClick={() => setSettled(null)}>Masquer</button>
+    </>}>{settled.message && <p>{settled.message}</p>}</Notice> : null;
   }
   const working = entry.phase === 'sending' || entry.phase === 'verifying';
-  const canResend = entry.command !== null && entry.phase === 'uncertain';
-  const canRelease = !working && (entry.command === null || entry.phase === 'review' || entry.notRecorded);
+  const followed = pendingActions(entry);
+  const what = `${commandSpecs[entry.meta.kind].label} · demandée le ${formatDateTime(new Date(entry.meta.createdAt).toISOString(), context.school.timeZone)}`;
+  const confirmed: Settled = { tone: 'success', title: 'Résultat confirmé par l’école', message: `${what}.` };
   async function verify() {
     const result = await commandStore.verify(context!.schoolId);
-    if (result.status === 'confirmed') { setConfirmedAt(Date.now()); void context!.reloadSchool(); }
+    if (result.status === 'confirmed') { setSettled(confirmed); void context!.reloadSchool(); }
   }
   async function resend() {
     let token = context!.csrf();
     try { token = await context!.refreshCsrf(); } catch { /* keep the current token */ }
     const result = await commandStore.resend(context!.schoolId, token);
-    if (result.status === 'confirmed') { setConfirmedAt(Date.now()); void context!.reloadSchool(); }
+    if (result.status === 'confirmed') { setSettled(confirmed); void context!.reloadSchool(); }
+    // Refused while the school held no trace of it: the request is over and nothing was changed.
+    if (result.status === 'rejected') {
+      setSettled({ tone: 'error', title: 'Demande refusée par l’école', message: `${what}. ${result.message}`, needsLogin: result.needsLogin });
+      void context!.reloadSchool();
+    }
+  }
+  function release() {
+    commandStore.release(context!.schoolId);
+    setSettled({ tone: 'info', title: entry!.notRecorded ? 'Demande abandonnée' : 'Suivi arrêté', message: `${what}.` });
+    void context!.reloadSchool();
   }
   if (entry.phase === 'sending' && entry.attempts <= 1) return null;
   return (
@@ -345,28 +363,27 @@ function PendingPanel() {
       <div className="pending-heading">
         <Symbol kind="clock" />
         <div className="row-text">
-          <h2 id="pending-title" className="row-title" tabIndex={-1}>{working ? entry.phase === 'verifying' ? 'Vérification auprès de l’école…' : 'Envoi de la même demande…' : 'Demande à vérifier'}</h2>
-          <p className="row-meta">{commandSpecs[entry.meta.kind].label} · demandée le {formatDateTime(new Date(entry.meta.createdAt).toISOString(), context.school.timeZone)}</p>
+          <h2 id="pending-title" className="row-title" tabIndex={-1}>{working ? entry.phase === 'verifying' ? 'Vérification auprès de l’école…' : 'Envoi de la même demande…'
+            : entry.notRecorded ? 'Demande introuvable auprès de l’école' : 'Demande à vérifier'}</h2>
+          <p className="row-meta">{what}</p>
         </div>
       </div>
       {entry.message && <p>{entry.message}</p>}
-      <p className="caption">Référence de la demande : <code>{entry.meta.operationId}</code>.{canResend ? ' Renvoyer la même demande ne peut pas l’appliquer deux fois.' : ''}</p>
+      <p className="caption">Référence de la demande : <code>{entry.meta.operationId}</code>.{followed.resend ? ' Renvoyer la même demande ne peut pas l’appliquer deux fois.' : ''}</p>
       <div className="button-row compact">
-        <button type="button" className="button primary" onClick={() => void verify()} disabled={working}>Vérifier auprès de l’école</button>
-        {canResend && <button type="button" className="button secondary" onClick={() => void resend()} disabled={working}>Renvoyer la même demande</button>}
+        <button type="button" className={entry.notRecorded && followed.resend ? 'button secondary' : 'button primary'} onClick={() => void verify()} disabled={working}>Vérifier auprès de l’école</button>
+        {followed.resend && <button type="button" className={entry.notRecorded ? 'button primary' : 'button secondary'} onClick={() => void resend()} disabled={working}>Renvoyer la même demande</button>}
         {entry.needsLogin && <button type="button" className="button secondary" onClick={() => context.login()}>Se reconnecter</button>}
-        {canRelease && !releasing && (entry.notRecorded
-          ? <button type="button" className="button quiet" onClick={() => commandStore.release(context.schoolId)}>Abandonner la demande</button>
-          : <button type="button" className="button quiet" onClick={() => setReleasing(true)}>Arrêter le suivi…</button>)}
+        {followed.release && !releasing && <button type="button" className="button quiet" onClick={() => setReleasing(true)}>{entry.notRecorded ? 'Abandonner la demande…' : 'Arrêter le suivi…'}</button>}
       </div>
-      {releasing && <div className="notice warning">
+      {releasing && followed.release && <div className="notice warning">
         <Symbol kind="alert" />
         <div className="notice-body">
-          <strong>Arrêter le suivi de cette demande ?</strong>
-          <p>{entry.notRecorded ? 'L’école n’a enregistré aucun effet pour cette référence.' : 'Son résultat restera inconnu : vérifiez ensuite les informations de l’école avant de refaire la modification.'}</p>
+          <strong ref={releaseTitle} tabIndex={-1}>{entry.notRecorded ? 'Abandonner cette demande ?' : 'Arrêter le suivi de cette demande ?'}</strong>
+          <p>{entry.notRecorded ? 'L’école n’en a aucune trace : rien n’a été modifié.' : 'Son résultat restera inconnu : vérifiez ensuite les informations de l’école avant de refaire la modification.'}</p>
           <div className="notice-actions">
-            <button type="button" className="button secondary" onClick={() => commandStore.release(context.schoolId)}>Arrêter le suivi</button>
-            <button type="button" className="button quiet" onClick={() => setReleasing(false)}>Continuer le suivi</button>
+            <button type="button" className="button secondary" onClick={release}>{entry.notRecorded ? 'Abandonner la demande' : 'Arrêter le suivi'}</button>
+            <button type="button" className="button quiet" onClick={() => setReleasing(false)}>{entry.notRecorded ? 'Garder la demande' : 'Continuer le suivi'}</button>
           </div>
         </div>
       </div>}

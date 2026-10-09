@@ -1,4 +1,4 @@
-import { isCivilDate, schoolTimeToInstant } from './command-core.js';
+import { isCivilDate, matchesSearch, schoolTimeToInstant } from './command-core.js';
 
 /** A planned time is never evidence that teaching started or finished. */
 export function lessonPhase(lesson: { status: string; plannedStart: string; plannedEnd: string; actualStart?: string | null | undefined }, now = Date.now()): 'planned' | 'waiting' | 'started' | 'to-finish' | 'completed' | 'cancelled' | 'absent' {
@@ -53,6 +53,13 @@ export function groupByDay<T extends { plannedStart: string }>(lessons: readonly
     days.set(key, [...(days.get(key) ?? []), lesson]);
   }
   return [...days.entries()].map(([day, items]) => ({ day, items }));
+}
+
+/** Lessons of the learners whose name matches the search; an empty search keeps every lesson, known learner or not. */
+export function lessonsOfLearners<T extends { learnerId: string }>(lessons: readonly T[], learners: readonly { id: string; displayName: string }[], query: string): T[] {
+  if (query.trim() === '') return [...lessons];
+  const wanted = new Set(learners.filter(learner => matchesSearch([learner.displayName], query)).map(learner => learner.id));
+  return lessons.filter(lesson => wanted.has(lesson.learnerId));
 }
 
 export function formatDayHeading(civil: string): string {

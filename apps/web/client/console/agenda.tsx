@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { civilDateIn, addDays, formatDayHeading, formatTimeRange, formatWeek, groupByDay, lessonPhase, weekStart, weekWindow } from '../agenda-model';
+import { civilDateIn, addDays, formatDayHeading, formatTimeRange, formatWeek, groupByDay, lessonPhase, lessonsOfLearners, weekStart, weekWindow } from '../agenda-model';
 import { useCommandSnapshot } from '../command-store';
 import { activeInstructors } from '../invitation-model';
 import { learnerSchema, lessonSchema, memberSchema, readAll } from '../school-api';
-import { EmptyState, Notice, SelectField, StatusBadge, Symbol, type Tone } from '../ui';
+import { EmptyState, Notice, SelectField, StatusBadge, Symbol, TextField, type Tone } from '../ui';
 import { useConsole, useLoad } from './context';
 import { LoadState, SectionHeading } from './layout';
 
@@ -23,6 +23,7 @@ export function AgendaSection() {
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
   const [localMonday, setLocalMonday] = useState(() => weekStart(civilDateIn(school.timeZone)));
   const [localInstructor, setLocalInstructor] = useState('');
+  const [search, setSearch] = useState('');
   const monday = routeQuery ? weekStart(routeQuery.week ?? civilDateIn(school.timeZone)) : localMonday;
   const instructor = routeQuery ? routeQuery.instructor ?? '' : localInstructor;
   const setMonday = (week: string) => { setLocalMonday(week); setRouteQuery?.({ ...routeQuery, week }); };
@@ -39,7 +40,8 @@ export function AgendaSection() {
   }, [schoolId, revision, bounds?.from, bounds?.to, instructor], `${schoolId}/${monday}/${instructor}`);
   const data = loaded.data;
   const instructors = useMemo(() => activeInstructors(directory.data?.members ?? []), [directory.data]);
-  const days = useMemo(() => groupByDay(data?.lessons ?? [], school.timeZone), [data, school.timeZone]);
+  const days = useMemo(() => groupByDay(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], search), school.timeZone),
+    [data, directory.data, search, school.timeZone]);
   const learnerName = (id: string) => directory.data?.learners.find(item => item.id === id)?.displayName ?? 'Élève';
   const memberName = (id: string) => directory.data?.members.find(item => item.id === id)?.displayName ?? 'Moniteur';
   const thisWeek = weekStart(civilDateIn(school.timeZone));
@@ -58,11 +60,13 @@ export function AgendaSection() {
         {(instructors.length > 1 || instructor) && <SelectField label="Moniteur" value={instructor} onChange={setInstructor}
           options={[{ value: '', label: 'Tous les moniteurs' }, ...instructors.map(item => ({ value: item.id, label: item.displayName })),
             ...(instructor && !instructors.some(item => item.id === instructor) ? [{ value: instructor, label: memberName(instructor) }] : [])]} />}
+        <TextField label="Élève" value={search} onChange={setSearch} placeholder="Nom" />
+        {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
       </div>
       <LoadState loaded={directory} label="Lecture des élèves et moniteurs…">{() => null}</LoadState>
       <LoadState loaded={loaded} label="Lecture de l’agenda…">{value => <>
         {value.truncated && <Notice tone="warning" title="Semaine partielle" live={false}><p>Trop de leçons pour cette semaine : choisissez un moniteur.</p></Notice>}
-        {days.length === 0 ? <EmptyState symbol="clock" title="Aucune leçon cette semaine" message="" />
+        {days.length === 0 ? <EmptyState symbol="clock" title={search && value.lessons.length ? 'Aucune leçon trouvée' : 'Aucune leçon cette semaine'} message="" />
           : days.map(day => {
             const [weekday, ...date] = formatDayHeading(day.day).split(' ');
             return <section key={day.day} className="agenda-day" aria-labelledby={`day-${day.day}`}>

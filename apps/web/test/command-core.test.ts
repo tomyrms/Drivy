@@ -50,10 +50,17 @@ describe('Commande de gestion : même demande jusqu’à confirmation', () => {
     }
   });
 
-  test('un refus illisible ou une clé déjà utilisée ne prouvent rien, même au premier envoi', () => {
-    for (const [status, code] of [[409, 'IDEMPOTENCY_MISMATCH'], [400, 'REQUEST_FAILED'], [400, 'API_UNAVAILABLE'], [408, 'TIMEOUT']] as const) {
-      expect(classifyFailure(status, code, true), code).toEqual({ type: 'review', code, needsLogin: false });
+  test('seule une clé déjà utilisée ne prouve rien au premier envoi ; un refus 4xx illisible reste un refus', () => {
+    expect(classifyFailure(409, 'IDEMPOTENCY_MISMATCH', true)).toEqual({ type: 'review', code: 'IDEMPOTENCY_MISMATCH', needsLogin: false });
+    for (const [status, code] of [[400, 'REQUEST_FAILED'], [400, 'API_UNAVAILABLE'], [413, 'REQUEST_FAILED'], [422, 'INVALID_RESPONSE']] as const) {
+      expect(classifyFailure(status, code, true), code).toEqual({ type: 'rejected', code, needsLogin: false });
+      expect(classifyFailure(status, code, false), code).toEqual({ type: 'review', code, needsLogin: false });
     }
+  });
+
+  test('un délai dépassé (408) laisse le résultat inconnu : la même demande peut être renvoyée', () => {
+    expect(classifyFailure(408, 'TIMEOUT', true)).toEqual({ type: 'uncertain', code: 'TIMEOUT', needsLogin: false });
+    expect(classifyFailure(408, 'REQUEST_FAILED', false).type).toBe('uncertain');
   });
 
   test('reçu AP72 : opération, type, ressource et version postérieure doivent correspondre', () => {
