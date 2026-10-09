@@ -63,3 +63,7 @@ Réduire le résumé dominant à l’horaire, l’élève et le lieu, en réutil
 ## Design documentation
 
 - After acceptance and validation: consigner dans `docs/implementation/` le résumé compact d’Aujourd’hui et ses états préservés ; mettre `STATUS.md` à jour avec les essais réellement exécutés et leurs limites. Ne pas modifier le dossier de conception livré.
+
+## Implementation follow-up
+
+Implémenté sur `86ef790`. Le résumé emploie la rangée partagée sans modifier cette primitive ni le panneau commun. La relecture indépendante ne relève pas de changement des actions, droits ou choix de leçon. Le contrôle Apple retenu pour cette passe est la compilation et les tests d’interface de captures ciblées ; la suite native métier complète proposée plus haut n’est pas répétée. Les résultats effectifs et leurs limites sont consignés dans [le suivi de réalisation](../docs/implementation/today-privacy-20261009.md).

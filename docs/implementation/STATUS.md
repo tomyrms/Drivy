@@ -4,7 +4,9 @@
 
 À la demande du porteur : résumé Aujourd’hui réduit à horaire, élève, lieu et état inhabituel ; prochaines leçons repliées initialement sur iPad aussi. Le masque d’arrière-plan et l’écran verrouillé montrent le logo Drivy. Face ID et les règles métier restent identiques. [Décisions et suivi](today-privacy-20261009.md).
 
-**Exécuté** : relecture des branches, diff propre et deux contrôles du harnais de capture. **En cours** : compilation Release/simulateur et captures natives des deux états d’Aujourd’hui et des deux écrans de protection. Aucune qualification physique revendiquée.
+**Vérifié sur `86ef790`** : relecture indépendante, diff propre, deux contrôles du harnais ; 238 tests API/PostgreSQL et 104 tests web ; compilation Release/simulateur. Six tests d’interface ciblés réussissent ; 20 captures en taille usuelle inspectées sur iPhone 17 Pro et iPad Air 11 pouces M4, clair/sombre, portrait et iPad paysage. Résumé lisible, état À terminer et suivante préservés, logo centré sur les deux écrans de protection. [Preuve et limites](proofs/today-privacy-20261009.json).
+
+**Livré** : IPA 0.7.0 **build 121**, non signée pour iLoader, téléchargée et SHA-256 vérifié. La suite native métier complète n’est pas répétée pour cette passe graphique. Face ID et les transitions d’arrière-plan sur appareil physique restent à qualifier.
 
 ## 9 octobre 2026 — intégration de La trace
 
