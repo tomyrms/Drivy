@@ -547,7 +547,12 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
             return try json(["keys": keys.keys.map { ["kty": $0.kty, "crv": $0.crv, "x": $0.x,
                 "kid": $0.kid, "alg": $0.alg, "use": $0.use] }])
         }
-        if leaf == scope.schoolID.uuidString.lowercased() { return try ok(HubFixture.school(gps: true)) }
+        if leaf == scope.schoolID.uuidString.lowercased() {
+            return try json(["id": scope.schoolID.uuidString, "schoolId": scope.schoolID.uuidString, "version": 1,
+                "name": "École synthétique", "timeZone": "Europe/Zurich", "status": "ACTIVE", "contactEmail": "ecole@example.invalid",
+                "contactPhone": NSNull(), "logoAssetId": NSNull(), "configurationVersion": 1,
+                "modules": ["gpsEnabled": true, "packsEnabled": false, "collectiveCoursesEnabled": false, "courseOffersVisibleByDefault": false]])
+        }
         if leaf == capture.lessonId.uuidString.lowercased() {
             return try ok(SchoolLesson(id: capture.lessonId, schoolId: scope.schoolID, version: 1, trainingId: HubFixture.trainingID,
                 learnerId: capture.learnerId, instructorMembershipId: scope.membershipID, plannedStart: capture.authorizedAt,
@@ -556,9 +561,9 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
                 publicationVersion: 0, currentPublishedRevisionId: nil, commercialRevisionVersion: 1))
         }
         if leaf == capture.learnerId.uuidString.lowercased() {
-            return try ok(SchoolLearner(id: capture.learnerId, schoolId: scope.schoolID, personId: UUID(), version: 1,
-                displayName: "Élève synthétique", contactEmail: nil, contactPhone: nil, archivedAt: nil,
-                profileReadiness: nil, profilePhotoDocumentId: nil))
+            return try json(["id": capture.learnerId.uuidString, "schoolId": scope.schoolID.uuidString, "personId": UUID().uuidString,
+                "version": 1, "displayName": "Élève synthétique", "contactEmail": NSNull(), "contactPhone": NSNull(), "archivedAt": NSNull(),
+                "profileReadiness": NSNull(), "profilePhotoDocumentId": NSNull()])
         }
         if leaf == "recording-notice" {
             return try json(["noticeVersionId": noticeID.uuidString, "noticeText": "Information GPS synthétique",
