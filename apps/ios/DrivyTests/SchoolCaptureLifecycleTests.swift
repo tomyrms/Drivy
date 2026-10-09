@@ -8,7 +8,7 @@ import Testing
         let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
         let model = fixture.preparation(holdAdoption: true)
         let starting = Task { await model.begin() }
-        await fixture.waitForScopeRead()
+        try await fixture.waitForScopeRead(model: model, starting: starting)
         #expect(fixture.controller.captureID == fixture.capture.id && fixture.controller.state == .preparing)
         #expect(!fixture.source.isRunning)
         // Aujourd’hui remplace la préparation par le trajet pendant le dernier GET /me du contrôleur.
@@ -25,7 +25,7 @@ import Testing
         let model = fixture.preparation()
         await fixture.server.holdScopeReads()
         let starting = Task { await model.begin() }
-        await fixture.waitForScopeRead()
+        try await fixture.waitForScopeRead(model: model, starting: starting)
         model.suspend()
         await fixture.server.releaseScopeReads()
         #expect(!(await starting.value))
@@ -37,7 +37,7 @@ import Testing
         let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
         let model = fixture.preparation(holdAdoption: true)
         let starting = Task { await model.begin() }
-        await fixture.waitForScopeRead()
+        try await fixture.waitForScopeRead(model: model, starting: starting)
         model.invalidate()
         fixture.controller.setScope(nil)
         await fixture.server.releaseScopeReads()
@@ -49,7 +49,7 @@ import Testing
         let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
         let model = fixture.preparation(holdAdoption: true)
         let starting = Task { await model.begin() }
-        await fixture.waitForScopeRead()
+        try await fixture.waitForScopeRead(model: model, starting: starting)
         model.suspend()
         await fixture.server.releaseScopeReads(refused: true)
         #expect(!(await starting.value))
@@ -420,12 +420,20 @@ import Testing
             }, onRefusalConfirmed: { _, _ in }, canUseDiagnostic: { controller.canPrepareCapture }, makeLocationSource: { source })
     }
 
-    func waitForScopeRead() async {
+    func waitForScopeRead(model: SchoolCapturePreparationWorkspace, starting: Task<Bool, Never>) async throws {
         for _ in 0..<600 {
             if await server.isWaitingForScope() { return }
             try? await Task.sleep(for: .milliseconds(5))
         }
-        #expect(await server.isWaitingForScope())
+        let waiting = await server.isWaitingForScope()
+        let diagnostic = "Lecture des droits non atteinte : \(String(describing: model.quickBlock)); \(model.errorMessage ?? "aucune erreur de préparation")."
+        if !waiting {
+            starting.cancel()
+            model.invalidate()
+            await server.releaseScopeReads()
+            _ = await starting.value
+        }
+        try #require(waiting, "\(diagnostic)")
     }
 
     func waitUntilSettled() async {
@@ -515,8 +523,10 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
         recorded.append(request)
         let url = request.url!
         func json(_ value: Any) throws -> SchoolHTTPResponse {
-            SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["data": value, "requestId": UUID().uuidString,
-                "serverTime": capture.authorizedAt]), status: 200, url: url, contentType: "application/json")
+            // Les créations de diagnostic et de capture répondent 201 ; le client refuse correctement un simple 200.
+            let created = request.httpMethod == "POST" && ["assessments", "captures"].contains(url.lastPathComponent)
+            return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["data": value, "requestId": UUID().uuidString,
+                "serverTime": capture.authorizedAt]), status: created ? 201 : 200, url: url, contentType: "application/json")
         }
         func ok<T: Encodable>(_ value: T) throws -> SchoolHTTPResponse {
             try json(JSONSerialization.jsonObject(with: JSONEncoder().encode(value)))

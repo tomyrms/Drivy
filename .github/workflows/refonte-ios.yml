@@ -8,6 +8,10 @@ on:
         description: Capturer les écrans iPhone et iPad sans lancer la campagne de tests
         type: boolean
         default: false
+      unit_only:
+        description: Relancer uniquement DrivyTests sur iPhone, sans parcours UI, iPad ni IPA
+        type: boolean
+        default: false
       visual_screens:
         description: Écrans à capturer, séparés par des espaces
         type: string
@@ -104,6 +108,8 @@ jobs:
       - name: Tests natifs et parcours iPhone puis iPad
         if: inputs.visual_only != true
         shell: bash
+        env:
+          DRIVY_IOS_UNIT_ONLY: ${{ inputs.unit_only && '1' || '0' }}
         run: bash scripts/ios/test-simulator.sh
       - name: Capturer les écrans pour la revue visuelle
         if: inputs.visual_only == true
@@ -120,11 +126,11 @@ jobs:
           DRIVY_VISUAL_LARGE_TEXT: ${{ inputs.visual_large_text && '1' || '0' }}
         run: bash scripts/ios/capture-screens.sh
       - name: Construire l'IPA pour iLoader
-        if: inputs.visual_only != true
+        if: inputs.visual_only != true && inputs.unit_only != true
         shell: bash
         run: bash scripts/ios/build-ipa.sh
       - name: Artefact IPA
-        if: inputs.visual_only != true
+        if: inputs.visual_only != true && inputs.unit_only != true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Drivy-unsigned-${{ github.sha }}

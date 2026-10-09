@@ -11,14 +11,18 @@ print(candidates[0]["udid"])
 xcrun simctl boot "$device_id" || true
 xcrun simctl bootstatus "$device_id" -b
 phone_status=0
+test_options=()
+if [[ "${DRIVY_IOS_UNIT_ONLY:-0}" == 1 ]]; then test_options+=(-only-testing:DrivyTests); fi
 xcodebuild test-without-building \
   -project apps/ios/Drivy.xcodeproj -scheme Drivy \
   -destination "platform=iOS Simulator,id=$device_id" \
   -skip-testing:DrivyUITests/VisualOrientationTests \
+  "${test_options[@]}" \
   -parallel-testing-enabled NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/Tests.xcresult \
   2>&1 | tee artifacts/ios/simulator-test.log || phone_status=$?
+if [[ "${DRIVY_IOS_UNIT_ONLY:-0}" == 1 ]]; then exit "$phone_status"; fi
 xcrun simctl launch "$device_id" ch.drivy.qualification || true
 sleep 2
 xcrun simctl io "$device_id" screenshot artifacts/ios/iphone-light.png || true
