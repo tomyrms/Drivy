@@ -547,7 +547,8 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
         }
         if leaf == capture.learnerId.uuidString.lowercased() {
             return try ok(SchoolLearner(id: capture.learnerId, schoolId: scope.schoolID, personId: UUID(), version: 1,
-                displayName: "Élève synthétique", contactEmail: nil, contactPhone: nil, archivedAt: nil))
+                displayName: "Élève synthétique", contactEmail: nil, contactPhone: nil, archivedAt: nil,
+                profileReadiness: nil, profilePhotoDocumentId: nil))
         }
         if leaf == "recording-notice" {
             return try json(["noticeVersionId": noticeID.uuidString, "noticeText": "Information GPS synthétique",

@@ -409,7 +409,8 @@ struct SchoolCaptureLiveView: View {
     }
 
     private func commandDock(floating: Bool = true) -> some View {
-        commandPanel(floating: floating)
+        let noticeSpacing = observationNotice == nil ? DrivySpacing.s : DrivySpacing.xl
+        return commandPanel(floating: floating)
             .overlay(alignment: .top) {
                 VStack(alignment: .trailing, spacing: DrivySpacing.s) {
                     if controller.displayedPointCount > 0 { mapControls(axis: .horizontal) }
@@ -417,7 +418,7 @@ struct SchoolCaptureLiveView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 // Le bandeau laisse aussi la ligne des mentions Apple Plans visible au bas de la carte.
-                .alignmentGuide(.top) { $0[.bottom] + (observationNotice == nil ? DrivySpacing.s : DrivySpacing.xl) }
+                .alignmentGuide(.top) { $0[.bottom] + noticeSpacing }
             }
     }
 
