@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 11 octobre 2026 — parcours terrain fluides, deuxième passe
+
+« Commencer la leçon » part directement sous le rideau quand rien n’est à demander ; la fin de leçon n’a plus qu’une attente et revient proprement à Aujourd’hui ; l’écran du trajet garde son dock stable. [Détail](parcours-fluides-20261011.md).
+
+**Exécuté** : compilation de l’IPA d’essai sur chaque lot. **Non exécuté** : tests Swift, à la demande du porteur. **Reste à qualifier** : tout le parcours sur iPhone.
+
 ## 10 octobre 2026 — démarrage instantané en un seul parcours
 
 Le geste « Démarrer une leçon » devient une seule interface : élève, récapitulatif et accord GPS dans une même feuille, puis le trajet sous le rideau ou la leçon ouverte sur place. [Causes, décisions et limites](demarrage-instantane-20261010.md).

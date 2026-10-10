@@ -125,7 +125,9 @@ struct SchoolCaptureLiveView: View {
         screen
         .sensoryFeedback(.success, trigger: observationNotice?.id) { _, newValue in newValue != nil }
         // Pause et reprise se sentent quand l’état durable change ; un arrêt en échec avertit.
-        .sensoryFeedback(.impact(weight: .light), trigger: shownState == .paused)
+        .sensoryFeedback(trigger: shownState) { old, new in
+            (old == .recording && new == .paused) || (old == .paused && new == .recording) ? .impact(weight: .light) : nil
+        }
         .sensoryFeedback(trigger: controller.state) { _, state in state == .failed ? .warning : nil }
         .alert("Terminer la leçon ?", isPresented: $confirmsFinish) {
             Button("Terminer") { finishLesson() }
@@ -657,9 +659,12 @@ struct SchoolCaptureLiveView: View {
     private func finishLesson() {
         guard !isFinishing, let lessonID = controller.lessonID, let captureID = controller.captureID,
               controller.presentsStopEnabled || controller.state == .saved else { return }
-        // La fiche s’ouvre tout de suite sur sa seule attente : elle arrête le trajet sur l’appareil (même tâche
-        // d’arrêt, écriture durable d’abord) puis demande la fin à l’école. Plus de « Préparation du bilan… » ici.
+        // « Terminer » arrête le GPS à l’instant, sur l’appareil et sans réseau : la borne d’arrêt est prise ici, rien
+        // n’est enregistré après. La fiche s’ouvre aussitôt sur sa seule attente ; sa fin de leçon reprend la même
+        // tâche d’arrêt durable avant de demander la fin à l’école. Plus de « Préparation du bilan… » ici.
         if let openLesson {
+            let controller = controller
+            Task { _ = await controller.stopAndSynchronize() }
             openLesson(lessonID, true)
             return
         }

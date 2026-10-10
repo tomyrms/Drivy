@@ -31,6 +31,8 @@ struct SchoolLessonReportView: View {
     @State private var startIssueDismissed = false
     /// Bilan enregistré : le trajet terminé se referme une fois la feuille descendue, pas pendant sa descente.
     @State private var closesLessonFlowOnDisappear = false
+    /// La racine de la fiche est à l’écran (une étape du bilan poussée la cache).
+    @State private var isOnScreen = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var hasUnsavedChanges: Bool { model?.hasLocalEdits ?? false }
@@ -100,7 +102,9 @@ struct SchoolLessonReportView: View {
         }
         .onChange(of: model?.reportSaveConfirmed) { _, confirmed in
             guard confirmed == true else { return }
-            closesLessonFlowOnDisappear = true
+            // Racine visible : le trajet se ferme après la descente de la feuille. Bilan enregistré depuis une étape
+            // poussée : la racine a déjà disparu, le trajet se ferme tout de suite, sous la feuille.
+            if isOnScreen { closesLessonFlowOnDisappear = true } else { capture?.closeLessonFlow(lessonID: lessonID) }
             model?.close()
             dismiss()
         }
@@ -108,7 +112,9 @@ struct SchoolLessonReportView: View {
             Button("Quitter sans enregistrer", role: .destructive) { model?.discardLocalDraft(); model?.close(); dismiss() }
             Button("Continuer", role: .cancel) { }
         }
+        .onAppear { isOnScreen = true }
         .onDisappear {
+            isOnScreen = false
             if closesLessonFlowOnDisappear { capture?.closeLessonFlow(lessonID: lessonID) }
         }
         .task(id: scopeKey) {

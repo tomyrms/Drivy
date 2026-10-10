@@ -346,12 +346,14 @@ struct SchoolTodayView: View {
             opened = OpenedLesson(lesson: lesson, completing: false, starting: !lesson.hasStarted)
             return
         }
-        let scope = agendaClient.scope(person: person, membership: membership)
+        let scope = agendaClient.scope(person: person, membership: membership), startKey = scopeKey
         // Lecture seule de l’accord, l’attente se lit dans le bouton : le rideau ne se montre jamais pour une question.
         checkingStart = true
         let allowed = await SchoolPlannedStart.consentAllows(lesson, scope: scope, client: agendaClient.captureClient)
         checkingStart = false
-        guard allowed, opened == nil, mayStartDirectly(lesson) else {
+        // Une autre fiche ouverte entre-temps, ou un autre compte : rien n’est remplacé.
+        guard opened == nil, scopeKey == startKey else { return }
+        guard allowed, mayStartDirectly(lesson) else {
             opened = OpenedLesson(lesson: lesson, completing: false, starting: true)
             return
         }
@@ -360,7 +362,7 @@ struct SchoolTodayView: View {
             agenda: agendaClient, controller: captureController)
         startingPlanned = false
         // Trajet parti : la carte remplace déjà cet écran. Sinon la fiche s’ouvre sous le rideau, puis il se lève.
-        if case .lesson(let issue) = outcome {
+        if case .lesson(let issue) = outcome, scopeKey == startKey {
             opened = OpenedLesson(lesson: lesson, completing: false, issue: issue)
             await DrivyLaunchCurtain.shared.hide(afterSequence: true)
         }
@@ -428,6 +430,7 @@ struct SchoolTodayView: View {
             guard key == dayKey(Date()), requestID == request, !Task.isCancelled, !(error is CancellationError) else { return }
             switch error as? SchoolAgendaFailure {
             case .authentication, .forbidden:
+                SchoolTodayMemory.forget()
                 lessons = []; unfinished = []; loadedKey = nil; opened = nil
                 self.error = (error as? LocalizedError)?.errorDescription ?? "Les leçons du jour n’ont pas pu être chargées."
                 // « Réessayer » seul ne sortirait jamais d’une session expirée ou d’un accès retiré : le compte est
@@ -488,7 +491,7 @@ enum SchoolTodayPresentation {
 
 /// Dernière journée lue, en mémoire seulement, par compte, école, droits et jour (la clé `dayKey`) : aucun autre
 /// compte ni aucun autre jour ne la retrouve, et rien n’est écrit sur l’appareil.
-@MainActor private enum SchoolTodayMemory {
+@MainActor enum SchoolTodayMemory {
     private static var key: String?
     private static var lessons: [SchoolLesson] = []
     private static var unfinished: [SchoolLesson] = []
@@ -499,6 +502,11 @@ enum SchoolTodayPresentation {
 
     static func day(for key: String) -> (lessons: [SchoolLesson], unfinished: [SchoolLesson])? {
         self.key == key ? (lessons, unfinished) : nil
+    }
+
+    /// Une leçon a changé (début, fin, annulation) ou l’accès a été refusé : la journée retenue n’est plus sûre.
+    static func forget() {
+        key = nil; lessons = []; unfinished = []
     }
 }
 

@@ -26,7 +26,6 @@ struct SchoolHomeView: View {
     @State private var captureLesson: CaptureLessonRoute?
     /// Élève du trajet en cours, lu à part quand il n’est pas dans la page d’élèves affichée.
     @State private var captureLearner: (id: UUID, name: String)?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Group {
@@ -68,12 +67,13 @@ struct SchoolHomeView: View {
                 .environment(captureController)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { _ in SchoolTodayMemory.forget() }
         .onChange(of: workspace.membership?.membershipId) { _, _ in resetScope() }
         .onChange(of: workspace.membership?.accessEpoch) { _, _ in resetScope() }
         // Seul le départ d’un trajet ramène sur « Aujourd’hui ». L’identifiant du trajet reste le même pendant
         // la pause et la reprise ; l’état « en collecte », lui, repasse à vrai à chaque reprise.
         .onChange(of: captureController?.captureID) { previous, current in
-            if current != nil && current != previous { selectedTab = .session }
+            if current != nil && current != previous { selectedTab = .session; SchoolTodayMemory.forget() }
         }
         .onChange(of: selectedTab) { previous, _ in
             // A trip the school has confirmed (complete or partial) is over: leaving the live
@@ -140,8 +140,6 @@ struct SchoolHomeView: View {
                 }
             }
             .toolbar { staffToolbar }
-            // Trajet fermé : « Aujourd’hui » revient en fondu (au départ, ce passage se fait sous le rideau).
-            .animation(DrivyMotion.reveal(reduceMotion), value: captureController?.captureID == nil)
             .task(id: captureController?.learnerID) {
                 guard let id = captureController?.learnerID, captureLearner?.id != id,
                       let name = await workspace.learnerName(id) else { return }
