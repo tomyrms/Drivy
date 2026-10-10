@@ -35,7 +35,8 @@ struct SchoolLiveObservationPalette: View {
     @Environment(\.dismiss) private var dismiss
     @AccessibilityFocusState private var focusedStatus: String?
 
-    private var motion: Animation? { reduceMotion ? nil : .easeOut(duration: 0.16) }
+    /// Changement de thème : un fondu bref même sous Réduire les animations, jamais un remplacement sec.
+    private var motion: Animation { reduceMotion ? .easeInOut(duration: 0.16) : .easeOut(duration: 0.16) }
     private let statuses: [SchoolObservationStatus] = [.toWorkOn, .attention, .positive]
     /// Une écriture attend : demande à vérifier, ou signalement précédent encore en cours d’envoi.
     private var writesWait: Bool { !recorder.canRecord && !isClosingAfterRecord }

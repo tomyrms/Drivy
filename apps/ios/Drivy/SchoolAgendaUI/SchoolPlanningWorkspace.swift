@@ -44,6 +44,12 @@ struct SchoolPlanningInstructor: Identifiable {
     private(set) var isCheckingSlot = false
     private(set) var slotError: String?
     private(set) var slotAvailability: SchoolPlanningSlotAvailability?
+    /// Le dernier créneau vérifié était libre : pendant la vérification d’un horaire retouché, le formulaire garde
+    /// ses sections et sa barre au lieu de les retirer puis de les remettre.
+    private(set) var lastSlotWasAvailable = false
+    /// L’école a confirmé l’écriture : la feuille se ferme sur ce résultat. Rien ne change à l’écran pendant sa
+    /// descente ; seul un second envoi est empêché, jusqu’à une nouvelle lecture.
+    private(set) var writeConfirmed = false
     private(set) var checkedSlotRequest: SchoolPlanningSlotRequest?
     private(set) var selectedDurationMinutes: Int?
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
@@ -206,11 +212,17 @@ struct SchoolPlanningInstructor: Identifiable {
         slotRequest != nil && checkedSlotRequest == slotRequest && !isCheckingSlot && slotAvailability?.available == true
     }
     var slotValidationRequest: SchoolPlanningSlotRequest? { canMutate ? slotRequest : nil }
+    /// Sections du créneau (motif, accord, documents) et barre d’action : visibles quand le créneau est libre, et
+    /// pendant la vérification d’un horaire retouché après un créneau libre. Seul le bouton attend la réponse.
+    var showsSlotDetails: Bool {
+        guard slotRequest != nil, slotInputMessage == nil else { return false }
+        return slotIsAvailable || (lastSlotWasAvailable && slotError == nil && slotAvailability?.available != false)
+    }
     /// The API trims the value then applies JavaScript's 500 UTF-16 code-unit limit.
     var meetingPointTooLong: Bool { meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count > 500 }
     var reasonTooLong: Bool { reason.utf16.count > 1000 }
     var validBooking: Bool {
-        guard canMutate, slotIsAvailable, let training = selectedTraining, training.learnerId == learnerID,
+        guard canMutate, !writeConfirmed, slotIsAvailable, let training = selectedTraining, training.learnerId == learnerID,
               learners.contains(where: { $0.id == learnerID }), let instructorID, assignedInstructors.contains(where: { $0.id == instructorID }),
               !meetingPointTooLong, (1...480).contains(duration), (0...240).contains(bufferMinutes), startsAt > Date() else { return false }
         if let originalLesson {
@@ -240,7 +252,7 @@ struct SchoolPlanningInstructor: Identifiable {
         // Keep this instructor's last confirmed data while the same scope is reread.
         // A changed instructor or revoked access still clears it immediately.
         isLoadingAvailability = false; availabilityError = nil
-        isLoading = true; needsReload = true; errorMessage = nil; storageAvailable = false
+        isLoading = true; needsReload = true; errorMessage = nil; storageAvailable = false; writeConfirmed = false
         defer { if request == generation { isLoading = false } }
         var storageError: String?
         do { pending = try outbox.pending(for: scope); storageAvailable = true }
@@ -369,9 +381,10 @@ struct SchoolPlanningInstructor: Identifiable {
             try Task.checkCancellation()
             let result = try await client.availability(schoolID: scope.schoolID, slot: slot)
             guard requestGeneration == slotGeneration, slot == slotRequest, !Task.isCancelled else { return }
-            slotAvailability = result
+            slotAvailability = result; lastSlotWasAvailable = result.available
         } catch {
             guard requestGeneration == slotGeneration, slot == slotRequest, !Task.isCancelled else { return }
+            lastSlotWasAvailable = false
             if error as? SchoolPlanningFailure == .forbidden || error as? SchoolPlanningFailure == .unauthorized {
                 fail(error)
             } else {
@@ -381,6 +394,7 @@ struct SchoolPlanningInstructor: Identifiable {
     }
     private func clearSlot() {
         slotGeneration = UUID(); checkedSlotRequest = nil; slotAvailability = nil; slotError = nil; isCheckingSlot = false
+        lastSlotWasAvailable = false
     }
     func loadAvailability() async {
         guard let instructorID, !invalidated, !accessRevoked else { clearAvailability(); return }
@@ -437,7 +451,7 @@ struct SchoolPlanningInstructor: Identifiable {
         return await submit(.createLesson, body: body, routeID: trainingID)
     }
     func cancel() async -> Bool {
-        guard let lesson = originalLesson, lesson.status == "PLANNED", !reasonTooLong,
+        guard !writeConfirmed, let lesson = originalLesson, lesson.status == "PLANNED", !reasonTooLong,
               ["LEARNER_REQUEST", "INSTRUCTOR_UNAVAILABLE", "SCHOOL_CLOSURE", "OTHER"].contains(cancellationReason) else { return false }
         return await submit(.cancelLesson, body: ["reasonCode": cancellationReason, "comment": reason], resourceID: lesson.id, version: lesson.version)
     }
@@ -473,7 +487,9 @@ struct SchoolPlanningInstructor: Identifiable {
             _ = try await client.receipt(for: command); try outbox.remove(command)
             guard request == generation else { return }; pending = nil; isBusy = false; pendingRequiresReview = false
             if command.kind == .cancelLesson { confirmedCancellationLessonID = command.resourceID }
-            successMessage = "Enregistrement confirmé par l’école."; await load()
+            successMessage = "Enregistrement confirmé par l’école."
+            NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil)
+            await load()
         } catch SchoolPlanningFailure.notFound {
             // Le reçu absent ne dit rien des accès : l’école n’a simplement pas enregistré cette opération.
             guard request == generation else { return }
@@ -496,7 +512,11 @@ struct SchoolPlanningInstructor: Identifiable {
             guard request == generation else { return true }
             pending = nil; isBusy = false; successMessage = "Enregistrement confirmé par l’école."
             if command.kind == .cancelLesson { confirmedCancellationLessonID = command.resourceID }
-            await load(); return true
+            // La feuille se ferme sur ce résultat : relire tout le planning derrière elle ne faisait que retarder sa
+            // fermeture et changer le formulaire sous les yeux. Une nouvelle saisie exigerait une relecture.
+            writeConfirmed = true
+            NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil)
+            return true
         } catch {
             guard request == generation else { return false }
             if let failure = error as? SchoolPlanningFailure, failure.definitiveRejection || failure == .notFound {

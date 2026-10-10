@@ -29,10 +29,16 @@ struct SchoolTodayView: View {
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
     @Namespace private var mapScope
 
+    /// « Commencer la leçon » direct en cours (accord lu, puis rideau) : un second appui ne lance rien.
+    @State private var startingPlanned = false
+    @State private var checkingStart = false
+
     private struct OpenedLesson: Identifiable {
         let lesson: SchoolLesson
         let completing: Bool
         var starting = false
+        /// Départ direct qui n’a pas abouti : la fiche s’ouvre avec sa raison.
+        var issue: String? = nil
         var id: UUID { lesson.id }
     }
 
@@ -80,7 +86,8 @@ struct SchoolTodayView: View {
                     }
                 }
             }
-            .task(id: dayKey(context.date)) { await load() }
+            .onAppear { restoreRememberedDay() }
+            .task(id: dayKey(context.date)) { restoreRememberedDay(); await load() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { location.refresh(); Task { await load() } }
@@ -100,7 +107,8 @@ struct SchoolTodayView: View {
             if let agendaClient {
                 NavigationStack {
                     SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace, lessonID: item.lesson.id,
-                        learnerName: name(item.lesson), opensCompletion: item.completing, opensStart: item.starting)
+                        learnerName: name(item.lesson), opensCompletion: item.completing, opensStart: item.starting,
+                        startIssue: item.issue)
                 }
                 .tint(DrivyTheme.accent)
                 .environment(captureController)
@@ -192,8 +200,9 @@ struct SchoolTodayView: View {
             if let lesson = featured {
                 lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote)
                 if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId {
-                    Button { opened = OpenedLesson(lesson: lesson, completing: false, starting: !lesson.hasStarted) } label: {
-                        Text(lesson.hasStarted ? "Continuer la leçon" : "Commencer la leçon")
+                    Button { Task { await commence(lesson) } } label: {
+                        DrivyBusyLabel(title: lesson.hasStarted ? "Continuer la leçon" : "Commencer la leçon",
+                            busyTitle: "Commencer la leçon", isBusy: checkingStart || startingPlanned)
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                     .accessibilityIdentifier(lesson.hasStarted ? "today-continue-lesson" : "today-start")
@@ -327,10 +336,59 @@ struct SchoolTodayView: View {
         }
     }
 
+    /// « Commencer la leçon » : quand l’accord de l’élève vaut déjà et que la localisation est accordée, la leçon
+    /// commence et le trajet part sous le rideau, sans ouvrir la fiche ; sinon la fiche s’ouvre et commence comme
+    /// avant (la question d’accord s’y pose). « Continuer » ouvre toujours la fiche.
+    private func commence(_ lesson: SchoolLesson) async {
+        guard !checkingStart, !startingPlanned, opened == nil else { return }
+        guard !lesson.hasStarted, mayStartDirectly(lesson), let agendaClient, let captureController,
+              let person = workspace.person, let membership = workspace.membership else {
+            opened = OpenedLesson(lesson: lesson, completing: false, starting: !lesson.hasStarted)
+            return
+        }
+        let scope = agendaClient.scope(person: person, membership: membership), startKey = scopeKey
+        // Lecture seule de l’accord, l’attente se lit dans le bouton : le rideau ne se montre jamais pour une question.
+        checkingStart = true
+        let allowed = await SchoolPlannedStart.consentAllows(lesson, scope: scope, client: agendaClient.captureClient)
+        checkingStart = false
+        // Une autre fiche ouverte entre-temps, ou un autre compte : rien n’est remplacé.
+        guard opened == nil, scopeKey == startKey else { return }
+        guard allowed, mayStartDirectly(lesson) else {
+            opened = OpenedLesson(lesson: lesson, completing: false, starting: true)
+            return
+        }
+        startingPlanned = true
+        let outcome = await SchoolPlannedStart.run(lesson: lesson, membership: membership, scope: scope,
+            agenda: agendaClient, controller: captureController)
+        startingPlanned = false
+        // Trajet parti : la carte remplace déjà cet écran. Sinon la fiche s’ouvre sous le rideau, puis il se lève.
+        if case .lesson(let issue) = outcome, scopeKey == startKey {
+            opened = OpenedLesson(lesson: lesson, completing: false, issue: issue)
+            await DrivyLaunchCurtain.shared.hide(afterSequence: true)
+        }
+    }
+
+    /// Rien à demander côté appareil et école : moniteur de la leçon, GPS de l’école, localisation exacte accordée.
+    private func mayStartDirectly(_ lesson: SchoolLesson) -> Bool {
+        guard instructs, let captureController, location.permitted, location.precise else { return false }
+        return SchoolLessonHubRules.mayStartCapture(lesson: lesson,
+            isAuthor: lesson.instructorMembershipId == workspace.membership?.membershipId, school: workspace.school,
+            capture: SchoolLessonCaptureStatus(controller: captureController, lessonID: lesson.id),
+            controllerCanPrepare: captureController.canPrepareCapture, now: Date())
+    }
+
+    /// Un nouvel « Aujourd’hui » (retour d’un trajet, changement d’onglet) reprend la journée déjà lue pour ce compte
+    /// et ce jour : pas de squelette, la relecture suit sans rien effacer.
+    private func restoreRememberedDay() {
+        let key = dayKey(Date())
+        guard loadedKey == nil, let day = SchoolTodayMemory.day(for: key) else { return }
+        lessons = day.lessons; unfinished = day.unfinished; loadedKey = key
+    }
+
     /// Relit la journée sans effacer ce qui est affiché.
     @MainActor private func load() async {
         // Ce bouton porte plusieurs feuilles successives. Un refresh le remplaçant ne doit pas fermer la chaîne.
-        guard !presentsStartNow else { return }
+        guard !presentsStartNow, !startingPlanned else { return }
         guard let agendaClient, let membership = workspace.membership else {
             lessons = []; unfinished = []; loadedKey = nil; error = "L’agenda n’est pas disponible. Actualise ton école."
             return
@@ -359,6 +417,7 @@ struct SchoolTodayView: View {
             var unique: [UUID: SchoolLesson] = [:]
             for lesson in all { unique[lesson.id] = lesson }
             lessons = Array(unique.values); loadedKey = key
+            SchoolTodayMemory.remember(key: key, lessons: lessons, unfinished: unfinished)
             // Lecture discrète : la page la plus récente des leçons passées du moniteur suffit à retrouver celles
             // restées sans fin. Une panne garde le rappel déjà affiché et ne dit rien : la journée reste lisible.
             guard let instructor = instructorFilter else { unfinished = []; return }
@@ -366,10 +425,12 @@ struct SchoolTodayView: View {
                 instructorMembershipID: instructor, cursor: nil) else { return }
             guard key == dayKey(Date()), requestID == request, !Task.isCancelled else { return }
             unfinished = SchoolTodayPresentation.unfinishedLessons(earlier.items, before: dayStart)
+            SchoolTodayMemory.remember(key: key, lessons: lessons, unfinished: unfinished)
         } catch {
             guard key == dayKey(Date()), requestID == request, !Task.isCancelled, !(error is CancellationError) else { return }
             switch error as? SchoolAgendaFailure {
             case .authentication, .forbidden:
+                SchoolTodayMemory.forget()
                 lessons = []; unfinished = []; loadedKey = nil; opened = nil
                 self.error = (error as? LocalizedError)?.errorDescription ?? "Les leçons du jour n’ont pas pu être chargées."
                 // « Réessayer » seul ne sortirait jamais d’une session expirée ou d’un accès retiré : le compte est
@@ -414,16 +475,39 @@ enum SchoolTodayPresentation {
 /// Observe seulement l’autorisation : aucune collecte ni position conservée par cet écran.
 @MainActor @Observable private final class SchoolTodayLocationPermission: NSObject, @preconcurrency CLLocationManagerDelegate {
     private(set) var status: CLAuthorizationStatus = .notDetermined
+    /// Position exacte accordée (sinon le trajet ne pourrait pas partir).
+    private(set) var precise = false
     @ObservationIgnored private let manager = CLLocationManager()
     var permitted: Bool { status == .authorizedWhenInUse || status == .authorizedAlways }
     override init() {
         super.init()
-        status = manager.authorizationStatus
+        refresh()
         manager.delegate = self
     }
-    func refresh() { status = manager.authorizationStatus }
+    func refresh() { status = manager.authorizationStatus; precise = manager.accuracyAuthorization == .fullAccuracy }
     func request() { if status == .notDetermined { manager.requestWhenInUseAuthorization() } }
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) { status = manager.authorizationStatus }
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) { refresh() }
+}
+
+/// Dernière journée lue, en mémoire seulement, par compte, école, droits et jour (la clé `dayKey`) : aucun autre
+/// compte ni aucun autre jour ne la retrouve, et rien n’est écrit sur l’appareil.
+@MainActor enum SchoolTodayMemory {
+    private static var key: String?
+    private static var lessons: [SchoolLesson] = []
+    private static var unfinished: [SchoolLesson] = []
+
+    static func remember(key: String, lessons: [SchoolLesson], unfinished: [SchoolLesson]) {
+        self.key = key; self.lessons = lessons; self.unfinished = unfinished
+    }
+
+    static func day(for key: String) -> (lessons: [SchoolLesson], unfinished: [SchoolLesson])? {
+        self.key == key ? (lessons, unfinished) : nil
+    }
+
+    /// Une leçon a changé (début, fin, annulation) ou l’accès a été refusé : la journée retenue n’est plus sûre.
+    static func forget() {
+        key = nil; lessons = []; unfinished = []
+    }
 }
 
 /// Seuils d’Aujourd’hui : panneau latéral dès 960 pt (380 pt de leçon, au moins 580 pt de carte),

@@ -75,6 +75,33 @@ import Testing
         model.invalidate()
     }
 
+    @Test func aOneStepStartReviewsTheLessonOnceAndWakesTheReceiverAfterTheChoice() async throws {
+        let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
+        let model = fixture.preparation()
+        // L’accord et la leçon se lisent avant tout rideau : le départ peut partir sans question.
+        await model.load()
+        #expect(model.readyForOneStepStart)
+        #expect(await model.begin(reload: false))
+        #expect(model.captureStarted && fixture.source.isRunning && fixture.source.warmUps > 0)
+        // Une seule relecture du départ : l’école (GET) n’est lue qu’une fois, et les droits jamais deux fois d’affilée.
+        let requests = await fixture.server.requests()
+        let school = fixture.scope.schoolID.uuidString.lowercased()
+        #expect(requests.filter { $0.httpMethod == "GET" && $0.url?.lastPathComponent.lowercased() == school }.count == 1)
+        #expect(requests.filter { $0.httpMethod == "POST" && $0.url?.lastPathComponent == "captures" }.count == 1)
+        #expect(await fixture.controller.stopAndSynchronize())
+        await fixture.waitUntilSettled()
+    }
+
+    @Test func aClosedPreparationIsNeverReadyForAOneStepStart() async throws {
+        let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
+        let model = fixture.preparation()
+        #expect(!model.readyForOneStepStart)
+        await model.load()
+        #expect(model.readyForOneStepStart)
+        model.invalidate()
+        #expect(!model.readyForOneStepStart)
+    }
+
     @Test func slowFirstFixDoesNotBecomeASignalBreak() throws {
         let policy = try SchoolCaptureLocationPolicy()
         #expect(!policy.requiresNewSegment(previousElapsedMs: nil, nextElapsedMs: 90_000))
@@ -467,6 +494,11 @@ import Testing
     var permission: SchoolCaptureLocationPermission { .foreground }
     private(set) var isRunning = false
     private(set) var startCount = 0
+    private(set) var warmUps = 0
+    private var warming = false
+    var isWarming: Bool { warming }
+    func warmUp() { warmUps += 1; warming = true }
+    func coolDown() { warming = false }
     private var segment: SchoolCaptureLocationSegment?
     private var handle: SchoolCaptureSegmentHandle?
     private var boundary: SchoolCaptureLocationStop?

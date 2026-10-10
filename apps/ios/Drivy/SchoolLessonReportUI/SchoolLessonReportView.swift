@@ -19,6 +19,8 @@ struct SchoolLessonReportView: View {
     var completionConfirmed = false
     /// Élève : le souhait se modifie sur la prochaine leçon seulement ; `nil` quand l’appelant ne le sait pas.
     var isNextPlanned: Bool? = nil
+    /// « Commencer la leçon » direct depuis Aujourd’hui qui n’a pas abouti : sa raison, au-dessus de la fiche.
+    var startIssue: String? = nil
     var outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()
     @State private var model: SchoolLessonReportWorkspace?
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
@@ -26,6 +28,12 @@ struct SchoolLessonReportView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var confirmsDiscard = false
     @State private var isCompletingLesson = false
+    @State private var startIssueDismissed = false
+    /// Bilan enregistré : le trajet terminé se referme une fois la feuille descendue, pas pendant sa descente.
+    @State private var closesLessonFlowOnDisappear = false
+    /// La racine de la fiche est à l’écran (une étape du bilan poussée la cache).
+    @State private var isOnScreen = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var hasUnsavedChanges: Bool { model?.hasLocalEdits ?? false }
 
@@ -58,6 +66,14 @@ struct SchoolLessonReportView: View {
                 ContentUnavailableView("Choisis ton école", systemImage: "building.2")
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let startIssue, !startIssueDismissed {
+                SchoolTripIssueBanner(text: startIssue) {
+                    withAnimation(DrivyMotion.reveal(reduceMotion)) { startIssueDismissed = true }
+                }
+                .transition(.opacity)
+            }
+        }
         // La fiche reste « Leçon » : le bilan se rédige dans des étapes qui portent leur propre titre.
         .navigationTitle("Leçon")
         .navigationBarTitleDisplayMode(.inline)
@@ -69,7 +85,7 @@ struct SchoolLessonReportView: View {
                         confirmsDiscard = true
                     } else {
                         // Sans saisie à garder, le brouillon local éventuel est retiré avec la fiche.
-                        model?.persistLocalDraft(); model?.invalidate(); dismiss()
+                        model?.persistLocalDraft(); model?.close(); dismiss()
                     }
                 }
                 // Un réglage de partage, bref, ne grise pas « Fermer » : sa demande reste dans la file chiffrée.
@@ -86,13 +102,20 @@ struct SchoolLessonReportView: View {
         }
         .onChange(of: model?.reportSaveConfirmed) { _, confirmed in
             guard confirmed == true else { return }
-            capture?.closeLessonFlow(lessonID: lessonID)
-            model?.invalidate()
+            // Racine visible : le trajet se ferme après la descente de la feuille. Bilan enregistré depuis une étape
+            // poussée : la racine a déjà disparu, le trajet se ferme tout de suite, sous la feuille.
+            if isOnScreen { closesLessonFlowOnDisappear = true } else { capture?.closeLessonFlow(lessonID: lessonID) }
+            model?.close()
             dismiss()
         }
         .alert("Quitter sans enregistrer ?", isPresented: $confirmsDiscard) {
-            Button("Quitter sans enregistrer", role: .destructive) { model?.discardLocalDraft(); model?.invalidate(); dismiss() }
+            Button("Quitter sans enregistrer", role: .destructive) { model?.discardLocalDraft(); model?.close(); dismiss() }
             Button("Continuer", role: .cancel) { }
+        }
+        .onAppear { isOnScreen = true }
+        .onDisappear {
+            isOnScreen = false
+            if closesLessonFlowOnDisappear { capture?.closeLessonFlow(lessonID: lessonID) }
         }
         .task(id: scopeKey) {
             // Une feuille enfant plein écran peut faire réapparaître cette vue : garder le modèle
@@ -143,6 +166,7 @@ private struct SchoolLessonReportContent: View {
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var lessonSheet: LessonSheet?
     @State private var router = SchoolReportRouter()
     /// Origine de la rédaction en cours ; `nil` : la fiche se lit. Seul `openReport` lui donne une valeur.
@@ -159,6 +183,8 @@ private struct SchoolLessonReportContent: View {
     /// Départs et fins de leçon que l’école vient de confirmer depuis cette fiche : un retour haptique chacun.
     @State private var confirmedSteps = 0
     @State private var completionOpened = false
+    /// Leçon terminée depuis la feuille du permis : la rédaction attend que cette feuille soit descendue.
+    @State private var opensReportAfterPermit = false
     @State private var startOpened = false
     @State private var confirmsCompletion = false
     @State private var completionQueued = false
@@ -166,6 +192,8 @@ private struct SchoolLessonReportContent: View {
     @State private var confirmsNoShow = false
     @State private var showsLive = false
     @State private var capturePreparation: SchoolCapturePreparationWorkspace?
+    /// L’accord GPS de l’élève se lit avant tout rideau : l’attente se lit dans le bouton « Démarrer le trajet ».
+    @State private var isOpeningTrip = false
     @State private var planningRoute: PlanningRoute?
 
     private enum LessonSheet: String, Identifiable {
@@ -221,7 +249,9 @@ private struct SchoolLessonReportContent: View {
             Button("Élève absent", role: .destructive) { Task { _ = await model.markNoShow(reason: "Élève absent au rendez-vous.") } }
             Button("Annuler", role: .cancel) {}
         }
-        .sheet(item: $lessonSheet) { sheet in
+        .sheet(item: $lessonSheet, onDismiss: {
+            if opensReportAfterPermit { opensReportAfterPermit = false; opensReportWhenReady = true }
+        }) { sheet in
             switch sheet {
             case .permit: SchoolLessonCompletionSheet(model: model, finish: finishLesson, finishError: finishError)
             }
@@ -481,22 +511,30 @@ private struct SchoolLessonReportContent: View {
     /// L’arrêt est écrit sur l’appareil avant le constat. Le transfert du trajet continue sans retenir le bilan.
     private func finishLesson(_ reason: String) async -> Bool {
         guard !isFinishing, model.canMutate, isPlanned, model.lesson?.hasStarted == true, model.isAuthor else { return false }
+        if model.completionNeedsReason && reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // La question du permis vient tout de suite, sans attente devant elle. Le trajet s’arrête pendant ce
+            // temps (même tâche d’arrêt durable, que la fin reprendra) : rien n’est enregistré après « Terminer ».
+            if let capture {
+                let lessonID = model.lessonID
+                Task { _ = await capture.finishForLesson(lessonID: lessonID) }
+            }
+            lessonSheet = .permit
+            return false
+        }
         isFinishing = true; finishError = nil
         defer { isFinishing = false }
         if let capture, !(await capture.finishForLesson(lessonID: model.lessonID)) {
             finishError = capture.errorMessage ?? "Le trajet n’a pas pu être enregistré. Réessaie pour terminer la leçon."
             return false
         }
-        if model.completionNeedsReason && reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            lessonSheet = .permit
-            return false
-        }
-        await model.refreshCaptures()
+        // Leçon démarrée : ses heures sont celles de son départ et de maintenant, sans relire les trajets.
         let times = model.completionTimes()
         let completed = await model.complete(start: times.start, end: times.end, reason: reason, localCaptureStopped: true)
         // La leçon est terminée : la rédaction du bilan s’ouvre d’elle-même dès que la fiche revient à l’écran.
         if completed {
-            opensReportWhenReady = true; confirmedSteps += 1
+            capture?.noteLessonCompleted(model.lessonID)
+            if lessonSheet != nil { opensReportAfterPermit = true } else { opensReportWhenReady = true }
+            confirmedSteps += 1
         } else if model.errorMessage == nil, model.pending == nil, !model.isInvalidated {
             // Le constat n’est pas parti et le modèle n’en dit rien (objectif laissé vide, horloge de l’appareil en
             // retard sur celle de l’école) : le geste ne reste jamais sans réponse.
@@ -510,7 +548,7 @@ private struct SchoolLessonReportContent: View {
     /// Départ réussi depuis cette feuille : elle se ferme pour laisser le trajet en cours à l’écran.
     private func captureSheetClosed() {
         guard captureStatus == .collecting else { Task { await model.load() }; return }
-        if model.hasLocalEdits { showsLive = true } else { model.invalidate(); dismiss() }
+        if model.hasLocalEdits { showsLive = true } else { model.close(); dismiss() }
     }
 
     // MARK: En-tête
@@ -601,7 +639,13 @@ private struct SchoolLessonReportContent: View {
                     .accessibilityIdentifier("lesson-live-capture")
                 completeButton(primary: false)
             case .start:
-                Button { Task { await openCapturePreparation() } } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
+                Button { Task { await openCapturePreparation() } } label: {
+                    if isOpeningTrip {
+                        DrivyBusyLabel(title: "Démarrer le trajet", busyTitle: "Vérification de l’accord GPS…", isBusy: true)
+                    } else {
+                        Label("Démarrer le trajet", systemImage: "location.fill")
+                    }
+                }
                     .buttonStyle(DrivyPrimaryButtonStyle())
                     .disabled(!model.acceptsInput)
                     .accessibilityIdentifier("lesson-prepare-gps")
@@ -659,12 +703,19 @@ private struct SchoolLessonReportContent: View {
         return SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: model.isAuthor, school: schoolWorkspace.school,
             capture: captureStatus, controllerCanPrepare: capture.canPrepareCapture, now: now)
     }
+    /// La préparation se lit d’abord (leçon, accord de l’élève) : le rideau ne se lève que pour un départ qui peut
+    /// partir sans question. Sinon la feuille s’ouvre sur la question d’accord, sans rideau qui se couperait.
     private func openCapturePreparation() async {
-        guard capturePreparation == nil, let capture, mayStartCapture(now: Date()),
-              await model.savePreparationBeforeDeparture(), capturePreparation == nil,
+        guard capturePreparation == nil, !isOpeningTrip, let capture, mayStartCapture(now: Date()) else { return }
+        isOpeningTrip = true
+        defer { isOpeningTrip = false }
+        guard await model.savePreparationBeforeDeparture(), capturePreparation == nil,
               mayStartCapture(now: Date()) else { return }
-        DrivyLaunchCurtain.shared.show()
-        capturePreparation = agenda.capturePreparation(scope: model.scope, lessonID: model.lessonID, controller: capture)
+        let preparation = agenda.capturePreparation(scope: model.scope, lessonID: model.lessonID, controller: capture)
+        await preparation.load()
+        guard capturePreparation == nil else { preparation.invalidate(); return }
+        if preparation.readyForOneStepStart { DrivyLaunchCurtain.shared.show() }
+        capturePreparation = preparation
     }
 
     /// Annuler pendant un trajet l’arrête d’abord, comme depuis l’écran du trajet : aucune position après l’annulation.
@@ -747,14 +798,19 @@ private struct SchoolLessonReportContent: View {
         Section {
             if model.isOwnLearner {
                 TextField("Ce que j’aimerais travailler", text: $model.wishText, axis: .vertical).lineLimit(2...6).disabled(!model.acceptsInput)
-                Button { Task { await model.saveWish() } } label: {
-                    DrivyBusyLabel(title: "Enregistrer le souhait", isBusy: isSending(.saveWish))
+                // Comme pour les objectifs : le bouton n’apparaît qu’après une modification, il reste pendant l’envoi.
+                if model.wishChanged || isSending(.saveWish) {
+                    Button { Task { await model.saveWish() } } label: {
+                        DrivyBusyLabel(title: "Enregistrer le souhait", isBusy: isSending(.saveWish))
+                    }
+                    .disabled(!model.acceptsInput || model.wishText.unicodeScalars.count > 500)
+                    .transition(.opacity)
                 }
-                .disabled(!model.acceptsInput || model.wishText.unicodeScalars.count > 500 || model.wishText == wish.text)
             } else {
                 Text(wish.text)
             }
         } header: { Text(model.isOwnLearner ? "Mon souhait" : "Souhait de l’élève").drivyFormSectionHeader() }
             .drivyFormRows()
+            .animation(DrivyMotion.reveal(reduceMotion), value: model.wishChanged)
     }
 }

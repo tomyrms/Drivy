@@ -49,6 +49,8 @@ struct SchoolCaptureStartReview: Identifiable {
     private(set) var captureStarted = false
     private(set) var startMessage: String?
     private(set) var quickStep: String?
+    /// Suit les étapes du départ hors de tout écran : le rideau les annonce quand la préparation tourne sans vue.
+    @ObservationIgnored var onQuickStep: (@MainActor (String?) -> Void)?
     private(set) var quickBlock: SchoolCaptureQuickStartBlock?
     @ObservationIgnored private let journalProvider: @MainActor () async throws -> SQLCipherSchoolCaptureStore
     @ObservationIgnored private let onCaptureAuthorized: SchoolCaptureStartHandler?
@@ -108,6 +110,8 @@ struct SchoolCaptureStartReview: Identifiable {
         } catch { await failedMutation(error, request: request) }
     }
     var collectionIsIntegrated: Bool { onCaptureAuthorized != nil && onRefusalConfirmed != nil }
+    /// Un départ en un geste est en cours (ou attend l’adoption du trajet par l’app).
+    var isStarting: Bool { beginRun != nil }
     var diagnosticIsAvailable: Bool { canUseDiagnostic() }
     var hasOldScope: Bool { pending.contains { $0.mutation.scope != scope } }
     var mayDiagnose: Bool {
@@ -127,6 +131,13 @@ struct SchoolCaptureStartReview: Identifiable {
             && assessment.flatMap { SchoolLesson.date($0.expiresAt) }.map { $0 > Date() } == true
     }
     var mayConfirmStart: Bool { mayDiagnose && collectionIsIntegrated && !isSampling && store != nil && storageError == nil }
+    /// Après lecture : le départ en un geste peut partir sans question à poser (accord valable pour l’information
+    /// actuelle de l’école, aucune demande en suspens). Le rideau de marque n’est montré que dans ce cas.
+    var readyForOneStepStart: Bool {
+        guard !invalidated, contextIsCurrent, isInstructor, let notice, let choice, storageError == nil,
+              pendingAssessments.isEmpty, pendingStarts.isEmpty, !hasOldScope else { return false }
+        return choice.status == .allowed && choice.noticeVersionId == notice.noticeVersionId
+    }
 
     func learnerRefused(_ learnerID: UUID, lessonID: UUID?) {
         closeDiagnostic()
@@ -186,7 +197,9 @@ struct SchoolCaptureStartReview: Identifiable {
 
     func load() async {
         guard !invalidated, !isBusy else { return }
-        closeDiagnostic()
+        // Un réveil GPS en cours survit à la relecture : le couper ici retardait la première position du trajet.
+        // La source garde la même portée ; un changement de droits passe toujours par invalidate().
+        if source?.isWarming == true { snapshot = nil; isSampling = false } else { closeDiagnostic() }
         generation = UUID()
         let request = generation
         isLoading = true; contextIsCurrent = false; errorMessage = nil; storageError = nil
@@ -318,14 +331,17 @@ struct SchoolCaptureStartReview: Identifiable {
         } catch { if isCurrent(request) { fail(error) }; return nil }
     }
 
-    func confirmStart(_ review: SchoolCaptureStartReview, acknowledged: Bool) async -> Bool {
+    /// `revalidate` relit tout ce que la relecture a montré, pour détecter un changement pendant qu’une personne la
+    /// lisait. Le départ en un geste confirme une relecture faite à l’instant : la relire aussitôt coûtait une
+    /// douzaine d’allers-retours sans rien protéger, l’école revérifiant elle-même leçon, accord et diagnostic.
+    func confirmStart(_ review: SchoolCaptureStartReview, acknowledged: Bool, revalidate: Bool = true) async -> Bool {
         guard acknowledged, mayConfirmStart, let store,
               let onCaptureAuthorized else { return false }
         let request = generation
         isBusy = true; errorMessage = nil; startMessage = nil
         var authorizationMayExist = false
         do {
-            let fresh = try await freshStartReview(resuming: review.pendingMutation)
+            let fresh = revalidate ? try await freshStartReview(resuming: review.pendingMutation) : review
             guard isCurrent(request) else { return false }
             guard sameStartReview(review, fresh) else {
                 throw SchoolCaptureFailure.rejected("La préparation a changé. Reviens à la leçon et relis les informations avant de confirmer.")
@@ -420,9 +436,9 @@ struct SchoolCaptureStartReview: Identifiable {
                 quickBlock = nil; startMessage = nil
                 if reload || !contextIsCurrent || notice == nil {
                     // Le libellé évite d’afficher un instant le bouton inactif entre deux étapes.
-                    quickStep = "Vérification de la leçon…"
+                    setQuickStep("Vérification de la leçon…")
                     await load()
-                    quickStep = nil
+                    setQuickStep(nil)
                 }
                 guard !Task.isCancelled, !invalidated else { return false }
                 return await startInOneStep()
@@ -441,8 +457,10 @@ struct SchoolCaptureStartReview: Identifiable {
     func startInOneStep() async -> Bool {
         guard !invalidated, quickStep == nil else { return false }
         quickBlock = nil; startMessage = nil
-        defer { quickStep = nil }
-        quickStep = "Vérification de la leçon…"
+        defer { setQuickStep(nil) }
+        setQuickStep("Vérification de la leçon…")
+        // Un réveil déjà demandé (départ immédiat, accord connu) continue ; `load()` ne le coupe plus.
+        if source?.isWarming == true { warmLocation() }
         if !contextIsCurrent || notice == nil { await load() }
         guard !invalidated else { return false }
         guard contextIsCurrent, isInstructor, lesson?.status == "PLANNED" else {
@@ -461,7 +479,10 @@ struct SchoolCaptureStartReview: Identifiable {
         }
         guard choice.status == .allowed else { quickBlock = .refused; return false }
 
-        quickStep = "Localisation…"
+        setQuickStep("Localisation…")
+        // L’accord est confirmé : le récepteur GPS se réveille pendant les vérifications qui suivent, pour que la
+        // première position du trajet arrive dès l’ouverture du segment.
+        warmLocation()
         refreshSnapshot()
         if snapshot?.permission.permitsLocation != true {
             guard snapshot?.permission != .denied, snapshot?.permission != .restricted else {
@@ -483,12 +504,18 @@ struct SchoolCaptureStartReview: Identifiable {
                 quickBlock = .permission(denied: snapshot?.permission != .notDetermined); return false
             }
         }
+        // Position exacte refusée : le trajet ne pourrait pas démarrer. Le dire avant toute requête à l’école.
+        if snapshot?.preciseLocation == false {
+            return quickFailure("Active « Position exacte » pour Drivy dans Réglages pour enregistrer le trajet.")
+        }
 
+        // Autorisation tout juste accordée : le réveil n’avait pas pu commencer.
+        warmLocation()
         let assessmentIsValid = assessment.map { value in
             value.status == .qualified && (SchoolLesson.date(value.expiresAt).map { $0.timeIntervalSinceNow > 30 } ?? false)
         } ?? false
         if !assessmentIsValid {
-            quickStep = "Mesure GPS…"
+            setQuickStep("Mesure GPS…")
             await requestSample()
             // Une mesure refusée d’emblée (services désactivés, app au second plan) dit sa vraie cause,
             // au lieu de partir vers un diagnostic sans mesure.
@@ -499,11 +526,12 @@ struct SchoolCaptureStartReview: Identifiable {
                 waited += 1
             }
             guard !Task.isCancelled, !invalidated else { return false }
-            if isSampling {
+            // Sans mesure, le diagnostic serait refusé par l’école : le dire ici, sans requête.
+            if isSampling || snapshot?.sampleAgeSeconds == nil {
                 closeDiagnostic()
                 return quickFailure("Aucune position GPS reçue. Place-toi à découvert puis réessaie.")
             }
-            quickStep = "Vérification de l’appareil…"
+            setQuickStep("Vérification de l’appareil…")
             await assess()
             guard let value = assessment, value.status == .qualified else {
                 let reasons = assessment?.blockers.map(\.message).joined(separator: "\n")
@@ -511,21 +539,33 @@ struct SchoolCaptureStartReview: Identifiable {
             }
         }
 
-        quickStep = "Démarrage du trajet…"
+        setQuickStep("Démarrage du trajet…")
         guard let review = await reviewStart() else {
             return quickFailure(errorMessage ?? "Le départ n’a pas pu être préparé.")
         }
-        guard await confirmStart(review, acknowledged: true) else {
+        guard await confirmStart(review, acknowledged: true, revalidate: false) else {
             return quickFailure(errorMessage ?? startMessage ?? "Le trajet n’a pas démarré.")
         }
         return true
     }
 
+    private func setQuickStep(_ step: String?) {
+        guard quickStep != step else { return }
+        quickStep = step
+        onQuickStep?(step)
+    }
+
     private func quickFailure(_ message: String) -> Bool {
         // Une exécution annulée (feuille fermée) ne laisse pas d’échec périmé à la réouverture.
         if Task.isCancelled { return false }
+        source?.coolDown()
         quickBlock = .failed(message)
         return false
+    }
+
+    private func warmLocation() {
+        guard !invalidated, !sourceTransferred, diagnosticIsAvailable else { return }
+        diagnosticSource().warmUp()
     }
 
     private func refreshSnapshot() {
@@ -570,12 +610,20 @@ struct SchoolCaptureStartReview: Identifiable {
     private func freshStartReview(resuming mutation: SchoolCapturePendingMutation?) async throws -> SchoolCaptureStartReview {
         let context = try await readContext()
         guard context.isInstructor, context.lesson.status == "PLANNED", let store else { throw SchoolCaptureFailure.forbidden }
-        let school = try await reader.school(id: scope.schoolID)
+        // École, information et accord ne dépendent pas l’un de l’autre : ils se lisent ensemble.
+        let schoolID = scope.schoolID, learnerID = context.learner.id, choiceLessonID = self.lessonID
+        let schoolRead = Task { @MainActor in try await reader.school(id: schoolID) }
+        let noticeRead = Task { @MainActor in try await client.recordingNotice(schoolID: schoolID) }
+        let choiceRead = Task { @MainActor in
+            try await client.recordingChoice(schoolID: schoolID, learnerID: learnerID, lessonID: choiceLessonID)
+        }
+        defer { schoolRead.cancel(); noticeRead.cancel(); choiceRead.cancel() }
+        let school = try await schoolRead.value
         guard school.status == "ACTIVE", school.modules.gpsEnabled else {
             throw SchoolCaptureFailure.rejected("Le GPS scolaire n’est pas activé dans cette école. La leçon peut continuer sans GPS.")
         }
-        let notice = try await client.recordingNotice(schoolID: scope.schoolID)
-        guard let choice = try await client.recordingChoice(schoolID: scope.schoolID, learnerID: context.learner.id, lessonID: lessonID),
+        let notice = try await noticeRead.value
+        guard let choice = try await choiceRead.value,
               choice.status == .allowed, choice.noticeVersionId == notice.noticeVersionId else {
             throw SchoolCaptureFailure.rejected("Un accord correspondant à l’information actuelle de l’école est nécessaire pour démarrer le GPS.")
         }
@@ -685,14 +733,17 @@ struct SchoolCaptureStartReview: Identifiable {
         let learner: SchoolLearner
         let isInstructor: Bool
     }
+    /// Les droits sont relus une fois, en même temps que la leçon ; l’école les revérifie à chaque écriture.
     private func readContext() async throws -> Context {
-        let member = try await currentMembership()
-        let lesson = try await agenda.lesson(schoolID: scope.schoolID, id: lessonID)
+        let membership = Task { @MainActor in try await currentMembership() }
+        let lesson: SchoolLesson
+        do { lesson = try await agenda.lesson(schoolID: scope.schoolID, id: lessonID) }
+        catch { membership.cancel(); _ = try? await membership.value; throw error }
+        let member = try await membership.value
         let learner = try await reader.learner(schoolID: scope.schoolID, id: lesson.learnerId)
         let assigned = member.roles.contains("INSTRUCTOR") && lesson.instructorMembershipId == member.membershipId
         let own = member.roles.contains("LEARNER") && learner.personId == scope.personID
         guard assigned || own else { throw SchoolCaptureFailure.forbidden }
-        _ = try await currentMembership()
         return .init(lesson: lesson, learner: learner, isInstructor: assigned)
     }
     private func currentMembership() async throws -> SchoolMembership {
@@ -709,9 +760,15 @@ struct SchoolCaptureStartReview: Identifiable {
         notice = nil; choice = nil; noticeError = nil
         guard let learner else { return }
         do {
-            let notice = try await client.recordingNotice(schoolID: scope.schoolID)
-            let choice = try await client.recordingChoice(schoolID: scope.schoolID, learnerID: learner.id, lessonID: lessonID)
-            _ = try await currentMembership()
+            // Lus ensemble ; les droits viennent d’être relus avec la leçon (`readContext`).
+            let schoolID = scope.schoolID, learnerID = learner.id, choiceLessonID = lessonID
+            let noticeRead = Task { @MainActor in try await client.recordingNotice(schoolID: schoolID) }
+            let choiceRead = Task { @MainActor in
+                try await client.recordingChoice(schoolID: schoolID, learnerID: learnerID, lessonID: choiceLessonID)
+            }
+            defer { noticeRead.cancel(); choiceRead.cancel() }
+            let notice = try await noticeRead.value
+            let choice = try await choiceRead.value
             guard isCurrent(request) else { return }
             self.notice = notice; self.choice = choice
         } catch {

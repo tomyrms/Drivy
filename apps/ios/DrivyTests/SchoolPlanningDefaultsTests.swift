@@ -139,7 +139,8 @@ import Testing
         model.cancellationReason = "OTHER"
         #expect(await model.cancel())
         #expect(model.confirmedCancellationLessonID == HubFixture.lessonID)
-        #expect(model.originalLesson?.status == "PLANNED" && model.errorMessage != nil)
+        // La feuille se ferme sur la confirmation : aucune relecture ne suit, une nouvelle saisie en exigerait une.
+        #expect(model.originalLesson?.status == "PLANNED" && model.errorMessage == nil && model.writeConfirmed)
         #expect(model.pending == nil && outbox.value == nil)
     }
 

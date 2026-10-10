@@ -48,7 +48,15 @@ struct SchoolHomeView: View {
             SchoolPlanningView(model: model)
         }
         // Une demande abandonnée ou vérifiée depuis la fiche ne reste pas affichée par l'enregistreur du trajet.
-        .sheet(item: $captureLesson, onDismiss: { captureController?.liveObservations?.refreshPending() }) { route in
+        .sheet(item: $captureLesson, onDismiss: {
+            captureController?.liveObservations?.refreshPending()
+            // Leçon terminée depuis cette fiche : son trajet arrêté ne reste pas à l’écran avec « Terminer la leçon ».
+            // L’envoi du trajet continue de lui-même.
+            if let captureController, let lessonID = captureController.lessonID, captureController.state == .saved,
+               captureController.completedLessonID == lessonID {
+                captureController.closeLessonFlow(lessonID: lessonID)
+            }
+        }) { route in
             if let agendaClient {
                 NavigationStack {
                     SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace,
@@ -59,12 +67,15 @@ struct SchoolHomeView: View {
                 .environment(captureController)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { _ in
+            SchoolTodayMemory.forget(); SchoolAgendaMemory.forget()
+        }
         .onChange(of: workspace.membership?.membershipId) { _, _ in resetScope() }
         .onChange(of: workspace.membership?.accessEpoch) { _, _ in resetScope() }
         // Seul le départ d’un trajet ramène sur « Aujourd’hui ». L’identifiant du trajet reste le même pendant
         // la pause et la reprise ; l’état « en collecte », lui, repasse à vrai à chaque reprise.
         .onChange(of: captureController?.captureID) { previous, current in
-            if current != nil && current != previous { selectedTab = .session }
+            if current != nil && current != previous { selectedTab = .session; SchoolTodayMemory.forget() }
         }
         .onChange(of: selectedTab) { previous, _ in
             // A trip the school has confirmed (complete or partial) is over: leaving the live

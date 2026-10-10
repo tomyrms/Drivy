@@ -3,7 +3,8 @@ import Observation
 
 struct SchoolRecordingChoiceReview: Identifiable, Sendable {
     let id = UUID()
-    let lessonID: UUID
+    /// `nil` : choix de l’élève lu avant toute leçon (démarrage immédiat).
+    let lessonID: UUID?
     let learnerID: UUID
     let learnerName: String
     let notice: SchoolRecordingNotice
@@ -13,10 +14,13 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
 }
 
 /// AP152/AP153 only. This screen has no collector or capture authorization.
+/// Depuis une leçon (`lessonID`), ou depuis l’élève seul (`learnerID`) quand la leçon n’existe pas encore :
+/// le choix lu est alors le choix général de l’élève, celui qui s’applique à une leçon neuve.
 @MainActor @Observable final class SchoolRecordingChoiceWorkspace: Identifiable {
     let id = UUID()
     let scope: SchoolCommandScope
-    let lessonID: UUID
+    let lessonID: UUID?
+    let learnerID: UUID?
     private(set) var lesson: SchoolLesson?
     private(set) var learner: SchoolLearner?
     private(set) var notice: SchoolRecordingNotice?
@@ -35,22 +39,24 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
     @ObservationIgnored private let agenda: SchoolAgendaClient
     @ObservationIgnored private let onRefusalConfirmed: @MainActor (UUID, UUID?) -> Void
     @ObservationIgnored private var store: SQLCipherSchoolCaptureStore?
+    @ObservationIgnored private let journalProvider: (@MainActor () async throws -> SQLCipherSchoolCaptureStore)?
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
 
-    init(scope: SchoolCommandScope, lessonID: UUID, client: SchoolCaptureClient,
+    init(scope: SchoolCommandScope, lessonID: UUID?, learnerID: UUID? = nil, client: SchoolCaptureClient,
          reader: any SchoolAPI, agenda: SchoolAgendaClient,
          onRefusalConfirmed: @escaping @MainActor (UUID, UUID?) -> Void,
-         store: SQLCipherSchoolCaptureStore? = nil) {
-        self.scope = scope; self.lessonID = lessonID; self.client = client
-        self.reader = reader; self.agenda = agenda; self.store = store
+         store: SQLCipherSchoolCaptureStore? = nil,
+         journalProvider: (@MainActor () async throws -> SQLCipherSchoolCaptureStore)? = nil) {
+        self.scope = scope; self.lessonID = lessonID; self.learnerID = learnerID; self.client = client
+        self.reader = reader; self.agenda = agenda; self.store = store; self.journalProvider = journalProvider
         self.onRefusalConfirmed = onRefusalConfirmed
     }
 
     var relatedPending: [SchoolCaptureQueuedMutation] {
         pending.filter { queued in
             guard queued.mutation.kind == .recordChoice else { return false }
-            if let learner { return queued.mutation.targetID == learner.id }
+            if let id = learner?.id ?? learnerID { return queued.mutation.targetID == id }
             let body = try? JSONDecoder().decode(SchoolRecordingChoiceBody.self, from: queued.mutation.body)
             return body?.lessonId == lessonID
         }
@@ -83,7 +89,10 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
         generation = UUID(); let request = generation
         isLoading = true; needsReload = true; errorMessage = nil; storageError = nil
         do {
-            if store == nil { store = try await SQLCipherSchoolCaptureStore.openDefault() }
+            if store == nil {
+                if let journalProvider { store = try await journalProvider() }
+                else { store = try await SQLCipherSchoolCaptureStore.openDefault() }
+            }
             try await reloadQueue(request: request)
         } catch {
             guard request == generation, !invalidated else { return }
@@ -226,7 +235,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
     }
 
     private struct Context {
-        let lesson: SchoolLesson
+        let lesson: SchoolLesson?
         let learner: SchoolLearner
         let notice: SchoolRecordingNotice
         let choice: SchoolRecordingChoice?
@@ -234,8 +243,15 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
     }
     private func loadContext() async throws -> Context {
         let member = try await currentMembership()
-        let lesson = try await agenda.lesson(schoolID: scope.schoolID, id: lessonID)
-        let learner = try await reader.learner(schoolID: scope.schoolID, id: lesson.learnerId)
+        let lesson: SchoolLesson?, learner: SchoolLearner
+        if let lessonID {
+            let value = try await agenda.lesson(schoolID: scope.schoolID, id: lessonID)
+            lesson = value
+            learner = try await reader.learner(schoolID: scope.schoolID, id: value.learnerId)
+        } else if let learnerID {
+            lesson = nil
+            learner = try await reader.learner(schoolID: scope.schoolID, id: learnerID)
+        } else { throw SchoolCaptureFailure.invalidResponse }
         let source: SchoolRecordingChoice.Source
         if member.roles.contains("LEARNER"), learner.personId == scope.personID { source = .own }
         else if member.roles.contains("INSTRUCTOR") { source = .verbal }

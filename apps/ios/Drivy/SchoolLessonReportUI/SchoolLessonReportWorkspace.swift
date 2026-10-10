@@ -262,6 +262,13 @@ import Observation
         return ([title] + fields.compactMap { key, label in (body[key] as? String).map { "\(label) : \($0)" } }).joined(separator: "\n\n")
     }
     func reviewPending() { pendingReviewed = true }
+    /// Fiche qui se ferme : plus aucune lecture ni écriture ne s’applique, mais ce qui est affiché reste en place
+    /// pendant que la feuille descend (vider l’écran à cet instant faisait apparaître un formulaire vide).
+    func close() {
+        invalidated = true; generation = UUID(); isLoading = false; isBusy = false
+        wake()
+    }
+
     func invalidate() {
         invalidated = true; generation = UUID(); lesson = nil; preparation = nil; wish = nil; draft = nil; revisions = []
         competencies = []; pending = nil; goals = []; administrativeNote = ""; wishText = ""; optimisticSharing = nil
@@ -328,97 +335,96 @@ import Observation
             // Hors de sa propre leçon, un moniteur ne lit le souhait et le bilan partagé que s’il est affecté à la
             // formation : un refus de l’école laisse alors la section absente, sans message de panne.
             let asColleague = !author && !isOwn
-            var wishRead: (value: SchoolLearnerWish?, message: String?) = (nil, nil)
-            if author || isOwn || (lesson.status == "PLANNED" && current.roles.contains("INSTRUCTOR")) {
-                wishRead = try await readSupplement(request: request, unavailable: "Le souhait de l’élève n’a pas pu être chargé.", absentWhenRefused: asColleague) {
-                    try await self.client.wish(schoolID: self.scope.schoolID, trainingID: lesson.trainingId)
-                }
+            let id = lessonID, schoolID = scope.schoolID, trainingID = lesson.trainingId
+            let learnerID = lesson.learnerId, membershipID = current.membershipId
+            let completed = lesson.status == "COMPLETED" && readsContent
+            // Leçon à terminer, annulée ou manquée dont l’école dit qu’elle a un trajet : il reste à revoir depuis la
+            // fiche. Lecture discrète : un refus ou une panne laisse la section absente, sans message.
+            let discreetCaptures = !completed && readsContent && lesson.captureSummary?.hasCapture == true
+            // Lectures indépendantes, lancées ensemble : chacune garde sa règle d’absence et son message, et rien n’est
+            // publié avant la fin de toutes (une seule mise à jour de l’écran).
+            let wishTask = supplement(request, when: author || isOwn || (lesson.status == "PLANNED" && current.roles.contains("INSTRUCTOR")),
+                unavailable: "Le souhait de l’élève n’a pas pu être chargé.", absentWhenRefused: asColleague) {
+                try await self.client.wish(schoolID: schoolID, trainingID: trainingID)
             }
-            var revisionsRead: (value: [SchoolReportRevision]?, message: String?) = (nil, nil)
-            if author || isOwn || current.roles.contains("INSTRUCTOR") {
-                revisionsRead = try await readSupplement(request: request, unavailable: "Les bilans partagés n’ont pas pu être chargés. Actualise pour les retrouver.", absentWhenRefused: asColleague) {
-                    try await self.client.revisions(schoolID: self.scope.schoolID, lessonID: self.lessonID)
-                }
+            let revisionsTask = supplement(request, when: author || isOwn || current.roles.contains("INSTRUCTOR"),
+                unavailable: "Les bilans partagés n’ont pas pu être chargés. Actualise pour les retrouver.", absentWhenRefused: asColleague) {
+                try await self.client.revisions(schoolID: schoolID, lessonID: id)
             }
-            var preparationRead: (value: SchoolLessonPreparation?, message: String?) = (nil, nil)
-            var draftsRead: (value: [SchoolReportDraft]?, message: String?) = (nil, nil)
-            var accountRead: (value: SchoolLessonAccount?, message: String?) = (nil, nil)
             // Les objectifs sont partagés avec l’élève ; la note administrative lui reste masquée par le serveur.
-            if author || isOwn {
-                preparationRead = try await readSupplement(request: request, unavailable: "Les objectifs n’ont pas pu être chargés.") {
-                    try await self.client.preparation(schoolID: self.scope.schoolID, lessonID: self.lessonID)
-                }
+            let preparationTask = supplement(request, when: author || isOwn, unavailable: "Les objectifs n’ont pas pu être chargés.") {
+                try await self.client.preparation(schoolID: schoolID, lessonID: id)
             }
-            if author {
-                if lesson.status == "COMPLETED" {
-                    draftsRead = try await readSupplement(request: request, unavailable: "Le brouillon privé n’a pas pu être chargé. Actualise avant de le modifier.") {
-                        let values = try await self.client.drafts(schoolID: self.scope.schoolID, lessonID: self.lessonID)
-                        guard values.count <= 1, values.allSatisfy({ $0.authorMembershipId == current.membershipId }) else { throw SchoolReportFailure.invalidResponse }
-                        return values
-                    }
-                }
+            let draftsTask = supplement(request, when: author && lesson.status == "COMPLETED",
+                unavailable: "Le brouillon privé n’a pas pu être chargé. Actualise avant de le modifier.") {
+                let values = try await self.client.drafts(schoolID: schoolID, lessonID: id)
+                guard values.count <= 1, values.allSatisfy({ $0.authorMembershipId == membershipID }) else { throw SchoolReportFailure.invalidResponse }
+                return values
             }
-            var observationsRead: (value: [SchoolObservation]?, message: String?) = (nil, nil)
-            var capturesRead: (value: [SchoolCaptureSession]?, message: String?) = (nil, nil)
-            var trackRead: (value: (segments: [[SchoolCapturePoint]], observations: [SchoolPrivateGeoObservation], pointsByAnchor: [String: SchoolCapturePoint])?, message: String?) = (nil, nil)
-            var sharingRead: (value: SchoolLessonSharing?, message: String?) = (nil, nil)
             // Leçon planifiée : le moniteur retrouve ce qu’il a noté pendant le trajet (et le constat le reprend).
-            if (lesson.status == "COMPLETED" && (author || isOwn)) || (lesson.status == "PLANNED" && author) {
-                observationsRead = try await readSupplement(request: request, unavailable: "Les observations de la leçon n’ont pas pu être chargées.") {
-                    try await self.client.agenda.observationClient.observations(scope: self.scope, lessonID: self.lessonID, trainingID: lesson.trainingId, authorOnly: author)
-                }
+            let observationsTask = supplement(request, when: (lesson.status == "COMPLETED" && (author || isOwn)) || (lesson.status == "PLANNED" && author),
+                unavailable: "Les observations de la leçon n’ont pas pu être chargées.") {
+                try await self.client.agenda.observationClient.observations(scope: self.scope, lessonID: id, trainingID: trainingID, authorOnly: author)
             }
-            if lesson.status == "COMPLETED" && readsContent {
-                accountRead = try await readSupplement(request: request, unavailable: "Le solde n’a pas pu être chargé.") {
-                    try await self.client.account(schoolID: self.scope.schoolID, lessonID: self.lessonID)
-                }
-                capturesRead = try await readSupplement(request: request, unavailable: "Les trajets n’ont pas pu être chargés. Actualise pour ouvrir le replay.") {
-                    try await self.client.agenda.captureClient.lessonCaptures(schoolID: self.scope.schoolID, lessonID: self.lessonID)
-                }
-                if let capture = capturesRead.value?.last(where: { SchoolTripsWorkspace.isReplayable($0) }) {
-                    trackRead = try await readSupplement(request: request, unavailable: "L’aperçu du trajet n’a pas pu être chargé. Tu peux ouvrir le replay pour réessayer.") {
-                        try await self.client.agenda.captureClient.replayTrack(schoolID: self.scope.schoolID, captureID: capture.id)
-                    }
-                }
-                if author {
-                    sharingRead = try await readSupplement(request: request, unavailable: "Le réglage du partage n’a pas pu être chargé.") {
-                        try await self.client.sharing(schoolID: self.scope.schoolID, lessonID: self.lessonID)
-                    }
-                }
-            } else if readsContent, lesson.captureSummary?.hasCapture == true {
-                // Leçon à terminer, annulée ou manquée : son trajet reste à revoir depuis la fiche. L’école dit
-                // elle-même qu’un trajet existe ; sans cela, rien n’est demandé. Lecture discrète : un refus ou une
-                // panne laisse la section absente, sans message.
-                capturesRead.value = try await readSupplement(request: request, unavailable: "", absentWhenRefused: true) {
-                    try await self.client.agenda.captureClient.lessonCaptures(schoolID: self.scope.schoolID, lessonID: self.lessonID)
-                }.value
-                if let capture = capturesRead.value?.last(where: { SchoolTripsWorkspace.isReplayable($0) }) {
-                    trackRead.value = try await readSupplement(request: request, unavailable: "", absentWhenRefused: true) {
-                        try await self.client.agenda.captureClient.replayTrack(schoolID: self.scope.schoolID, captureID: capture.id)
-                    }.value
-                }
+            let accountTask = supplement(request, when: completed, unavailable: "Le solde n’a pas pu être chargé.") {
+                try await self.client.account(schoolID: schoolID, lessonID: id)
             }
-            let trainingRead = try await readSupplement(request: request, unavailable: "Le référentiel est momentanément indisponible. Le bilan textuel peut être enregistré sans ajouter de compétence.") {
-                let training = try await self.client.reader.training(schoolID: self.scope.schoolID, id: lesson.trainingId)
-                guard training.id == lesson.trainingId, training.learnerId == lesson.learnerId else { throw SchoolReportFailure.invalidResponse }
+            let capturesTask = supplement(request, when: completed || discreetCaptures,
+                unavailable: "Les trajets n’ont pas pu être chargés. Actualise pour ouvrir le replay.", absentWhenRefused: discreetCaptures) {
+                try await self.client.agenda.captureClient.lessonCaptures(schoolID: schoolID, lessonID: id)
+            }
+            let sharingTask = supplement(request, when: completed && author, unavailable: "Le réglage du partage n’a pas pu être chargé.") {
+                try await self.client.sharing(schoolID: schoolID, lessonID: id)
+            }
+            let curriculumUnavailable = "Le référentiel est momentanément indisponible. Le bilan textuel peut être enregistré sans ajouter de compétence."
+            let trainingTask = supplement(request, unavailable: curriculumUnavailable) {
+                let training = try await self.client.reader.training(schoolID: schoolID, id: trainingID)
+                guard training.id == trainingID, training.learnerId == learnerID else { throw SchoolReportFailure.invalidResponse }
                 return training
             }
+            // Niveaux actuels de l’élève : ils ne servent qu’au bilan que rédige le moniteur de la leçon. Lecture
+            // facultative, leur absence ne bloque ni le bilan ni les autres sections.
+            let progressTask = supplement(request, when: author, unavailable: "Les niveaux actuels n’ont pas pu être chargés.") {
+                let value = try await self.client.progress(schoolID: schoolID, trainingID: trainingID)
+                guard value.trainingId == trainingID else { throw SchoolReportFailure.invalidResponse }
+                return value
+            }
+            defer {
+                wishTask.cancel(); revisionsTask.cancel(); preparationTask.cancel(); draftsTask.cancel()
+                observationsTask.cancel(); accountTask.cancel(); capturesTask.cancel(); sharingTask.cancel()
+                trainingTask.cancel(); progressTask.cancel()
+            }
+            // Les lectures qui en attendent une autre partent dès qu’elle répond : l’aperçu du trajet, le référentiel.
+            var capturesRead = try await capturesTask.value
+            if discreetCaptures { capturesRead.message = nil }
+            var trackRead: (value: (segments: [[SchoolCapturePoint]], observations: [SchoolPrivateGeoObservation], pointsByAnchor: [String: SchoolCapturePoint])?, message: String?) = (nil, nil)
+            if let capture = capturesRead.value?.last(where: { SchoolTripsWorkspace.isReplayable($0) }) {
+                trackRead = try await readSupplement(request: request,
+                    unavailable: "L’aperçu du trajet n’a pas pu être chargé. Tu peux ouvrir le replay pour réessayer.",
+                    absentWhenRefused: discreetCaptures) {
+                    try await self.client.agenda.captureClient.replayTrack(schoolID: schoolID, captureID: capture.id)
+                }
+                if discreetCaptures { trackRead.message = nil }
+            }
+            let trainingRead = try await trainingTask.value
             var curriculumRead: (value: [SchoolCatalogCompetency]?, message: String?) = (nil, trainingRead.message)
             if let training = trainingRead.value {
-                curriculumRead = try await readSupplement(request: request, unavailable: "Le référentiel est momentanément indisponible. Le bilan textuel peut être enregistré sans ajouter de compétence.") {
-                    let offerings = try await self.collect { try await self.client.catalog.offerings(schoolID: self.scope.schoolID, cursor: $0) }
+                curriculumRead = try await readSupplement(request: request, unavailable: curriculumUnavailable) {
+                    let offerings = try await self.collect { try await self.client.catalog.offerings(schoolID: schoolID, cursor: $0) }
                     guard let offering = offerings.first(where: { $0.id == training.offeringId }) else { throw SchoolReportFailure.notFound }
-                    let curricula = try await self.collect { try await self.client.catalog.curricula(schoolID: self.scope.schoolID, cursor: $0) }
+                    let curricula = try await self.collect { try await self.client.catalog.curricula(schoolID: schoolID, cursor: $0) }
                     guard let curriculum = curricula.first(where: { $0.id == offering.curriculumVersionId }) else { throw SchoolReportFailure.notFound }
                     return curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }
                 }
             }
-            // Niveaux actuels de l’élève : lecture facultative, leur absence ne bloque ni le bilan ni les autres sections.
-            let progressRead = try await readSupplement(request: request, unavailable: "Les niveaux actuels n’ont pas pu être chargés.") {
-                let value = try await self.client.progress(schoolID: self.scope.schoolID, trainingID: lesson.trainingId)
-                guard value.trainingId == lesson.trainingId else { throw SchoolReportFailure.invalidResponse }
-                return value
-            }
+            let wishRead = try await wishTask.value
+            let revisionsRead = try await revisionsTask.value
+            let preparationRead = try await preparationTask.value
+            let draftsRead = try await draftsTask.value
+            let observationsRead = try await observationsTask.value
+            let accountRead = try await accountTask.value
+            let sharingRead = try await sharingTask.value
+            let progressRead = try await progressTask.value
             guard request == generation, !invalidated else { return }
             let draftPolicy = SchoolLessonRefreshPolicy.decide(previous: draft.map(DraftContent.init),
                 edited: DraftContent(id: draft?.id ?? UUID(), workedOn: workedOn, observationText: observationText,
@@ -484,6 +490,17 @@ import Observation
     // and transient failures leave that section unavailable, never editable as empty data.
     // `absentWhenRefused` : the school answers 404 to a colleague who is not assigned to the training. That is a
     // right the reader does not hold, not an outage: the section stays absent and no message is shown.
+    /// `readSupplement` dans sa propre tâche, pour lancer ensemble les lectures indépendantes de `load()`.
+    /// `when` faux : aucune requête, la section est simplement absente.
+    private func supplement<Value: Sendable>(_ request: UUID, when condition: Bool = true, unavailable: String,
+                                             absentWhenRefused: Bool = false,
+                                             fetch: @escaping @Sendable @MainActor () async throws -> Value) -> Task<(value: Value?, message: String?), Error> {
+        Task { @MainActor in
+            guard condition else { return (nil, nil) }
+            return try await self.readSupplement(request: request, unavailable: unavailable,
+                absentWhenRefused: absentWhenRefused, fetch: fetch)
+        }
+    }
     private func readSupplement<Value>(request: UUID, unavailable: String, absentWhenRefused: Bool = false,
                                        fetch: () async throws -> Value) async throws -> (value: Value?, message: String?) {
         guard request == generation, !invalidated else { throw CancellationError() }

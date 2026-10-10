@@ -10,6 +10,14 @@ protocol SchoolCaptureLocationProviding: AnyObject {
     var isRunning: Bool { get }
     func requestPermission()
     func requestDiagnosticSample() throws
+    /// Réveille le récepteur GPS pendant les vérifications du départ, sans conserver aucune coordonnée.
+    func warmUp()
+    /// Arrête ce réveil quand le départ n’aura pas lieu.
+    func coolDown()
+    /// Un réveil est demandé et n’a été ni arrêté ni épuisé.
+    var isWarming: Bool { get }
+    /// Position exacte accordée à l’app (précision réduite sinon).
+    var preciseLocation: Bool { get }
     func diagnosticSnapshot() throws -> SchoolCaptureDeviceSnapshot
     func diagnosticBody(operationID: UUID, networkAvailable: Bool) throws -> SchoolDeviceAssessmentBody
     func updateScope(_ scope: SchoolCommandScope?)
@@ -18,6 +26,25 @@ protocol SchoolCaptureLocationProviding: AnyObject {
                         policy: SchoolCaptureLocationPolicy) throws -> SchoolCaptureLocationSegment
     func start(segment: SchoolCaptureLocationSegment, handle: SchoolCaptureSegmentHandle) throws
     @discardableResult func stop() -> SchoolCaptureLocationStop?
+}
+
+extension SchoolCaptureLocationProviding {
+    func warmUp() {}
+    func coolDown() {}
+    var isWarming: Bool { false }
+    var preciseLocation: Bool { true }
+}
+
+/// Mesure de diagnostic déjà disponible : seuls son âge et sa précision comptent, jamais ses coordonnées.
+enum SchoolCaptureDiagnosticSample {
+    /// Au-delà, une mesure ponctuelle est demandée : le serveur refuse une mesure trop ancienne ou imprécise.
+    static let reusableAgeSeconds: TimeInterval = 5
+    static let reusableAccuracyMeters: Double = 35
+
+    static func isReusable(ageSeconds: TimeInterval, accuracyMeters: Double) -> Bool {
+        ageSeconds.isFinite && accuracyMeters.isFinite && (0...reusableAgeSeconds).contains(ageSeconds)
+            && (0...reusableAccuracyMeters).contains(accuracyMeters)
+    }
 }
 
 // Les managers sont construits sur la boucle principale et y livrent leur delegate.
@@ -29,6 +56,13 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
     }
     private let permissionManager = CLLocationManager()
     private var manager: CLLocationManager?
+    /// Récepteur tenu éveillé entre le geste de départ et la première position du trajet.
+    private var warmManager: CLLocationManager?
+    private var warmTask: Task<Void, Never>?
+    /// Réveil demandé : il reprend au retour au premier plan tant qu’il n’est ni arrêté ni épuisé.
+    private var warmWanted = false
+    /// Seules les mesures prises après ce réveil servent au diagnostic, jamais celles du cache.
+    private var warmStartedAt: Date?
     private var currentScope: SchoolCommandScope?
     private var preparedSegmentID: UUID?
     private var segment: SchoolCaptureLocationSegment?
@@ -62,9 +96,50 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
 
     var permission: SchoolCaptureLocationPermission { Self.permission(permissionManager.authorizationStatus) }
     var isRunning: Bool { manager != nil && segment != nil && handle != nil }
+    var isWarming: Bool { warmWanted }
+    var preciseLocation: Bool { permissionManager.accuracyAuthorization == .fullAccuracy }
 
     func requestPermission() {
         if permission == .notDetermined { permissionManager.requestWhenInUseAuthorization() }
+    }
+
+    // Un récepteur GPS endormi met plusieurs secondes à donner sa première position. Ce flux le tient éveillé
+    // pendant les vérifications du départ : aucune coordonnée n’en est conservée ni envoyée ; seuls l’âge et la
+    // précision de sa dernière mesure servent au diagnostic, comme une mesure ponctuelle, et seules les mesures
+    // postérieures à l’ouverture du segment entrent dans le trajet. Chaque appel repousse son arrêt automatique
+    // de trente secondes ; il s’arrête aussi à la première position du trajet, à l’arrêt et au changement de
+    // portée. Au passage en arrière-plan il se suspend, et reprend au retour tant qu’il reste demandé.
+    func warmUp() {
+        // Une localisation désactivée dans Réglages se lit aussi comme un refus : pas d’appel bloquant ici.
+        guard !isRunning, permission.permitsLocation else { return }
+        warmWanted = true
+        warmTask?.cancel()
+        warmTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(30)) } catch { return }
+            guard let self, !self.isRunning else { return }
+            self.coolDown()
+        }
+        guard warmManager == nil, UIApplication.shared.applicationState == .active else { return }
+        let warm = CLLocationManager()
+        warm.delegate = self
+        warm.desiredAccuracy = kCLLocationAccuracyBest
+        warm.activityType = .automotiveNavigation
+        warmStartedAt = Date()
+        warm.startUpdatingLocation()
+        warmManager = warm
+    }
+
+    func coolDown() {
+        warmWanted = false
+        warmTask?.cancel(); warmTask = nil
+        suspendWarmUp()
+    }
+
+    private func suspendWarmUp() {
+        warmManager?.stopUpdatingLocation()
+        warmManager?.delegate = nil
+        warmManager = nil
+        warmStartedAt = nil
     }
 
     // Diagnostic ponctuel explicite, mémoire seulement. Il ne crée ni point scolaire
@@ -73,9 +148,22 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         guard CLLocationManager.locationServicesEnabled() else { throw SchoolCaptureLocationFailure.servicesDisabled }
         guard permission.permitsLocation else { throw SchoolCaptureLocationFailure.permissionRequired }
         guard UIApplication.shared.applicationState == .active else { throw SchoolCaptureLocationFailure.foregroundRequired }
-        if isRunning { onEvent?(.diagnosticChanged); return }
+        // La réponse arrive toujours après le retour de cet appel : l’appelant marque d’abord la mesure en cours,
+        // une réponse synchrone serait effacée et la mesure attendue jusqu’à son délai.
+        if isRunning || hasReusableDiagnostic {
+            Task { @MainActor [weak self] in self?.onEvent?(.diagnosticChanged) }
+            return
+        }
         diagnosticRequested = true
+        // Récepteur éveillé : sa prochaine mesure assez précise répond aussi (voir `didUpdateLocations`).
         permissionManager.requestLocation()
+    }
+
+    /// Une mesure du réveil assez récente et précise sert de mesure ponctuelle, sans nouvelle demande.
+    private var hasReusableDiagnostic: Bool {
+        guard let sample = lastDiagnostic else { return false }
+        let age = sample.ageAtReceipt + SchoolCaptureLocationTime.seconds(sample.receivedAt.duration(to: .now))
+        return SchoolCaptureDiagnosticSample.isReusable(ageSeconds: age, accuracyMeters: sample.accuracy)
     }
 
     func diagnosticSnapshot() throws -> SchoolCaptureDeviceSnapshot {
@@ -120,6 +208,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
             diagnosticRequested = false
             lastDiagnostic = nil
             permissionManager.stopUpdatingLocation()
+            coolDown()
             if isRunning { interrupt(.scopeChanged) }
         }
     }
@@ -214,6 +303,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         }
         diagnosticRequested = false
         permissionManager.stopUpdatingLocation()
+        coolDown()
         deadlineTask?.cancel(); deadlineTask = nil
         gapTask?.cancel(); gapTask = nil
         gapGeneration = UUID()
@@ -238,7 +328,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
             if !Self.permission(manager.authorizationStatus).permitsLocation { interrupt(.permissionLost) }
             else if segment.policy.requiresPreciseLocation && manager.accuracyAuthorization != .fullAccuracy { interrupt(.precisionReduced) }
         }
-        if !permission.permitsLocation { lastDiagnostic = nil; diagnosticRequested = false }
+        if !permission.permitsLocation { lastDiagnostic = nil; diagnosticRequested = false; coolDown() }
         // Un changement d’autorisation (y compris le rappel initial du système ou le retour au premier
         // plan) ne termine pas une mesure ponctuelle en cours : seule sa réponse ou son échec le fait.
         // Sinon le départ en un geste croyait la mesure finie et envoyait un diagnostic sans mesure.
@@ -248,6 +338,22 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         let wall = Date(), now = ContinuousClock.now
+        if manager === warmManager {
+            // Flux de réveil : aucune coordonnée n’est conservée. L’âge et la précision de sa dernière mesure,
+            // prise après le réveil (jamais le cache), tiennent lieu de mesure ponctuelle pour le diagnostic.
+            guard !isRunning, let started = warmStartedAt,
+                  let latest = locations.last(where: { Self.usableSource($0) && $0.timestamp >= started }) else { return }
+            // Une mesure précise déjà retenue n’est remplacée que par une mesure aussi exploitable : le diagnostic
+            // envoyé quelques requêtes plus tard ne se dégrade pas.
+            if latest.horizontalAccuracy <= SchoolCaptureDiagnosticSample.reusableAccuracyMeters || !hasReusableDiagnostic {
+                recordDiagnostic(latest, wall: wall, now: now)
+            }
+            if diagnosticRequested, hasReusableDiagnostic {
+                diagnosticRequested = false
+                onEvent?(.diagnosticChanged)
+            }
+            return
+        }
         if manager === permissionManager {
             guard diagnosticRequested, !isRunning else { return }
             diagnosticRequested = false
@@ -295,13 +401,19 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
             recordDiagnostic(location, wall: wall, now: now)
         }
         guard !admitted.isEmpty else { return }
+        // Le trajet reçoit ses positions : le réveil n’a plus d’utilité.
+        coolDown()
         if let lastMeasurementInstant { armGap(segment, lastMeasurement: lastMeasurementInstant) }
         onEvent?(.signalChanged(.receiving))
         onEvent?(.measurements(handle: handle, values: admitted))
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        if manager === permissionManager { diagnosticRequested = false; lastDiagnostic = nil; onEvent?(.diagnosticChanged); return }
+        if manager === permissionManager {
+            // Une mesure déjà fournie par le réveil n’est pas annulée par l’échec tardif de la demande ponctuelle.
+            guard diagnosticRequested else { return }
+            diagnosticRequested = false; lastDiagnostic = nil; onEvent?(.diagnosticChanged); return
+        }
         guard manager === self.manager else { return }
         let code = (error as? CLError)?.code
         // Core Location peut ne pas avoir de fix pour l'instant. Arrêter ici
@@ -413,10 +525,13 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         if isRunning { interrupt(.clockChanged) }
     }
     @objc private func enteredBackground() {
+        // Jamais de GPS en arrière-plan sans trajet en cours ; un réveil demandé reprend au retour.
+        if segment == nil { suspendWarmUp() }
         if let segment, !segment.policy.allowsBackground { interrupt(.systemPaused) }
     }
     @objc private func becameActive() {
         if let segment, !segment.lease.permitsCollection() { interrupt(.expired) }
+        if warmWanted, warmManager == nil, segment == nil { warmUp() }
         locationManagerDidChangeAuthorization(permissionManager)
     }
 }
