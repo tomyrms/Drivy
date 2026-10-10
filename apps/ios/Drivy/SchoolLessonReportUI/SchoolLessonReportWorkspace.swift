@@ -262,6 +262,13 @@ import Observation
         return ([title] + fields.compactMap { key, label in (body[key] as? String).map { "\(label) : \($0)" } }).joined(separator: "\n\n")
     }
     func reviewPending() { pendingReviewed = true }
+    /// Fiche qui se ferme : plus aucune lecture ni écriture ne s’applique, mais ce qui est affiché reste en place
+    /// pendant que la feuille descend (vider l’écran à cet instant faisait apparaître un formulaire vide).
+    func close() {
+        invalidated = true; generation = UUID(); isLoading = false; isBusy = false
+        wake()
+    }
+
     func invalidate() {
         invalidated = true; generation = UUID(); lesson = nil; preparation = nil; wish = nil; draft = nil; revisions = []
         competencies = []; pending = nil; goals = []; administrativeNote = ""; wishText = ""; optimisticSharing = nil

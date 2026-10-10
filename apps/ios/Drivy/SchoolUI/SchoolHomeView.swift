@@ -48,7 +48,15 @@ struct SchoolHomeView: View {
             SchoolPlanningView(model: model)
         }
         // Une demande abandonnée ou vérifiée depuis la fiche ne reste pas affichée par l'enregistreur du trajet.
-        .sheet(item: $captureLesson, onDismiss: { captureController?.liveObservations?.refreshPending() }) { route in
+        .sheet(item: $captureLesson, onDismiss: {
+            captureController?.liveObservations?.refreshPending()
+            // Leçon terminée depuis cette fiche : son trajet arrêté ne reste pas à l’écran avec « Terminer la leçon ».
+            // L’envoi du trajet continue de lui-même.
+            if let captureController, let lessonID = captureController.lessonID, captureController.state == .saved,
+               captureController.completedLessonID == lessonID {
+                captureController.closeLessonFlow(lessonID: lessonID)
+            }
+        }) { route in
             if let agendaClient {
                 NavigationStack {
                     SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace,

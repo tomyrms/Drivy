@@ -27,6 +27,8 @@ struct SchoolCaptureLiveView: View {
     @State private var isOpeningCancellation = false
     /// Passage (pause, reprise) qui dure assez pour être nommé sur sa commande ; un passage bref ne montre rien.
     @State private var slowTransition: SchoolCaptureSessionController.Transition?
+    /// Origine fixe des horloges à la seconde : recalculée à chaque rendu, elle rendait les secondes irrégulières.
+    @State private var clockOrigin = Date()
 
     /// Délai avant de nommer un passage en cours. Il retarde un indicateur, jamais un résultat.
     private static let slowTransitionDelay = Duration.milliseconds(400)
@@ -112,6 +114,9 @@ struct SchoolCaptureLiveView: View {
         .toolbar(.hidden, for: .navigationBar)
         .interactiveDismissDisabled(isFinishing)
         .sensoryFeedback(.success, trigger: observationNotice?.id) { _, newValue in newValue != nil }
+        // Pause et reprise se sentent quand l’état durable change ; un arrêt en échec avertit.
+        .sensoryFeedback(.impact(weight: .light), trigger: shownState == .paused)
+        .sensoryFeedback(trigger: controller.state) { _, state in state == .failed ? .warning : nil }
         .alert("Terminer la leçon ?", isPresented: $confirmsFinish) {
             Button("Terminer") { finishLesson() }
                 .accessibilityIdentifier("capture-confirm-finish")
@@ -208,7 +213,7 @@ struct SchoolCaptureLiveView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     observationNoticeView
-                    actions
+                    actions()
                 }
                     .padding(DrivySpacing.m)
                     .frame(maxWidth: DrivyMapLayout.accessibleMaxWidth)
@@ -258,7 +263,7 @@ struct SchoolCaptureLiveView: View {
 
     /// Identité et état GPS ; les actions secondaires de leçon sont dans le menu.
     private func heading(floating: Bool = true) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { _ in
+        TimelineView(.periodic(from: clockOrigin, by: 1)) { _ in
             DrivyLiveTopBar(
                 context: learnerName,
                 elapsed: showsElapsed ? elapsedLabel : nil,
@@ -276,11 +281,13 @@ struct SchoolCaptureLiveView: View {
         [SchoolCaptureSessionController.State.recording, .paused, .preparing, .stopping].contains(controller.state)
     }
 
-    private func commandPanel(floating: Bool = true) -> some View {
+    /// `feedbackInPanel` : l’état d’envoi d’une observation s’insère dans le panneau (colonne, grand texte). Dans le
+    /// dock posé sur la carte, il flotte au-dessus (`commandDock`) : « Signaler » ne se déplace jamais sous le doigt.
+    private func commandPanel(floating: Bool = true, feedbackInPanel: Bool = true) -> some View {
         DrivyMapDock(floating: floating) {
             // Pas de bloc vide : sans information, le dock commence directement par l’action.
             if hasSessionInformation { sessionInformation }
-            actions
+            actions(feedbackInPanel: feedbackInPanel)
         }
     }
 
@@ -309,14 +316,14 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    @ViewBuilder private var actions: some View {
+    @ViewBuilder private func actions(feedbackInPanel: Bool = true) -> some View {
         if isFinishing {
             DrivyLoadingState(title: "Préparation du bilan…")
         } else {
             switch shownState {
             case .recording, .paused:
                 // Un seul bloc en route et en pause : ses commandes changent, le panneau reste en place.
-                collectingActions
+                collectingActions(feedbackInPanel: feedbackInPanel)
             case .preparing:
                 DrivyLoadingState(title: "Préparation du GPS…")
             case .stopping:
@@ -337,7 +344,7 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    private var collectingActions: some View {
+    private func collectingActions(feedbackInPanel: Bool) -> some View {
         let paused = shownState == .paused
         return VStack(spacing: DrivySpacing.s) {
             // Une seule action principale, en grand format terrain : « Signaler » en route,
@@ -345,7 +352,7 @@ struct SchoolCaptureLiveView: View {
             // L’aplat bleu ne se fond pas : seul son libellé change d’un état à l’autre.
             if paused { resumeControls.transition(.identity) }
             else if let recorder = controller.liveObservations { signalButton(recorder, isDominant: true).transition(.identity) }
-            if let recorder = controller.liveObservations { observationFeedback(recorder) }
+            if feedbackInPanel, let recorder = controller.liveObservations { observationFeedback(recorder) }
             // Côte à côte quand les deux libellés tiennent sur une ligne ; sinon empilés
             // (colonne iPad de 380 pt, grand texte) plutôt qu’un « Terminer / la leçon » coupé.
             if dynamicTypeSize.isAccessibilitySize {
@@ -365,7 +372,7 @@ struct SchoolCaptureLiveView: View {
     @ViewBuilder private func signalButton(_ recorder: SchoolLiveObservationRecorder, isDominant: Bool) -> some View {
         let signal = Button {
             let instant = Date()
-            withAnimation(reduceMotion ? nil : .snappy(duration: 0.24, extraBounce: 0)) {
+            withAnimation(DrivyMotion.present(reduceMotion)) {
                 observationMoment = ObservationMoment(instant: instant, recorder: recorder, anchor: controller.observationAnchor(at: instant))
             }
         } label: {
@@ -387,7 +394,8 @@ struct SchoolCaptureLiveView: View {
         // L’envoi qui suit un signalement est bref : il ne grise pas la commande. La palette s’ouvre, l’écriture
         // suivante attend la fin de cet envoi et le double envoi reste refusé par l’enregistreur.
         .disabled(!recorder.acceptsSignal || isFinishing)
-        .sensoryFeedback(.impact(weight: .medium), trigger: observationMoment?.id)
+        // À l’ouverture seulement : la fermeture (enregistrée ou non) ne double pas le retour de succès.
+        .sensoryFeedback(trigger: observationMoment?.id) { _, moment in moment != nil ? .impact(weight: .medium) : nil }
         .accessibilityIdentifier("capture-signal-observation")
         .popover(item: observationPopover, attachmentAnchor: .rect(.bounds)) { moment in
             SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant, anchor: moment.anchor,
@@ -399,12 +407,12 @@ struct SchoolCaptureLiveView: View {
     }
 
     private func closeObservation() {
-        withAnimation(reduceMotion ? nil : .snappy(duration: 0.24, extraBounce: 0)) { observationMoment = nil }
+        withAnimation(DrivyMotion.present(reduceMotion)) { observationMoment = nil }
     }
 
     private func showObservationNotice(_ recorder: SchoolLiveObservationRecorder) {
         guard let receipt = recorder.lastAdded else { return }
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+        withAnimation(DrivyMotion.reveal(reduceMotion)) {
             observationNotice = ObservationNotice(receipt: receipt, recorder: recorder)
         }
     }
@@ -413,19 +421,29 @@ struct SchoolCaptureLiveView: View {
         if let notice = observationNotice {
             SchoolObservationUndoBanner(recorder: notice.recorder, receipt: notice.receipt) {
                 guard observationNotice?.id == notice.id else { return }
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { observationNotice = nil }
+                withAnimation(DrivyMotion.reveal(reduceMotion)) { observationNotice = nil }
             }
         }
     }
 
     private func commandDock(floating: Bool = true) -> some View {
-        let noticeSpacing = observationNotice == nil ? DrivySpacing.s : DrivySpacing.xl
-        return commandPanel(floating: floating)
+        let floatsFeedback = floatingFeedbackRecorder != nil
+        let noticeSpacing = observationNotice == nil && !floatsFeedback ? DrivySpacing.s : DrivySpacing.xl
+        return commandPanel(floating: floating, feedbackInPanel: false)
             .overlay(alignment: .top) {
                 VStack(alignment: .trailing, spacing: DrivySpacing.s) {
                     if controller.displayedPointCount > 0 { mapControls(axis: .horizontal) }
                     observationNoticeView
+                    if let recorder = floatingFeedbackRecorder {
+                        VStack(alignment: .leading, spacing: DrivySpacing.s) { observationFeedback(recorder) }
+                            .padding(DrivySpacing.s)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                            .drivyShadow(radius: 12, y: 4)
+                            .transition(.opacity)
+                    }
                 }
+                .animation(DrivyMotion.reveal(reduceMotion), value: floatsFeedback)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 // Le bandeau laisse aussi la ligne des mentions Apple Plans visible au bas de la carte.
                 .alignmentGuide(.top) { $0[.bottom] + noticeSpacing }
@@ -437,6 +455,21 @@ struct SchoolCaptureLiveView: View {
             observationNoticeView
             commandPanel(floating: false)
         }
+    }
+
+    /// L’enregistreur dont l’état d’envoi s’affiche au-dessus du dock (en route ou en pause, hors fin de leçon).
+    private var floatingFeedbackRecorder: SchoolLiveObservationRecorder? {
+        guard !isFinishing, shownState == .recording || shownState == .paused,
+              let recorder = controller.liveObservations, hasObservationFeedback(recorder) else { return nil }
+        return recorder
+    }
+
+    /// Même règle que `observationFeedback` : vrai quand elle montre quelque chose.
+    private func hasObservationFeedback(_ recorder: SchoolLiveObservationRecorder) -> Bool {
+        if recorder.isSending { return observationNotice == nil && !recorder.isSettlingGesture }
+        if recorder.pending != nil { return true }
+        if recorder.errorMessage != nil { return !(observationNotice != nil && recorder.undoState == .refused) }
+        return false
     }
 
     @ViewBuilder private func observationFeedback(_ recorder: SchoolLiveObservationRecorder) -> some View {
@@ -520,7 +553,7 @@ struct SchoolCaptureLiveView: View {
 
     /// La reprise dépend d’une autorisation qui expire : elle seule est relue chaque seconde.
     private var resumeControls: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { _ in
+        TimelineView(.periodic(from: clockOrigin, by: 1)) { _ in
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
                 resumeButton
                 if !controller.presentsResumeEnabled {
@@ -531,9 +564,11 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    /// L’icône d’une commande ne devient un indicateur que si son passage dure.
-    @ViewBuilder private func commandIcon(_ symbol: String, isBusy: Bool, tint: Color) -> some View {
-        if isBusy { ProgressView().tint(tint) } else { Image(systemName: symbol) }
+    /// L’icône d’une commande ne devient un indicateur que si son passage dure. Cadre fixe : la rangée ne se
+    /// redimensionne pas quand le symbole devient un indicateur.
+    private func commandIcon(_ symbol: String, isBusy: Bool, tint: Color) -> some View {
+        Group { if isBusy { ProgressView().tint(tint) } else { Image(systemName: symbol) } }
+            .frame(width: 24, height: 24)
     }
 
     private var savedActions: some View {
@@ -545,8 +580,14 @@ struct SchoolCaptureLiveView: View {
                 }.buttonStyle(DrivySecondaryButtonStyle())
             }
             if let state = controller.finalizedSyncState { finalizationResult(state) }
-            Button("Terminer la leçon") { confirmsFinish = true }
-                .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(isFinishing)
+            if controller.completedLessonID != nil && controller.completedLessonID == controller.lessonID {
+                Button("Fermer le trajet") { controller.closeSaved() }
+                    .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+                    .accessibilityIdentifier("capture-close-completed")
+            } else {
+                Button("Terminer la leçon") { confirmsFinish = true }
+                    .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(isFinishing)
+            }
         }
     }
 
@@ -598,6 +639,12 @@ struct SchoolCaptureLiveView: View {
     private func finishLesson() {
         guard !isFinishing, let lessonID = controller.lessonID, let captureID = controller.captureID,
               controller.presentsStopEnabled || controller.state == .saved else { return }
+        // La fiche s’ouvre tout de suite sur sa seule attente : elle arrête le trajet sur l’appareil (même tâche
+        // d’arrêt, écriture durable d’abord) puis demande la fin à l’école. Plus de « Préparation du bilan… » ici.
+        if let openLesson {
+            openLesson(lessonID, true)
+            return
+        }
         isFinishing = true
         Task { @MainActor in
             let saved = await controller.stopAndSynchronize()

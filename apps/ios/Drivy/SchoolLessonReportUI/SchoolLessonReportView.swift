@@ -29,6 +29,8 @@ struct SchoolLessonReportView: View {
     @State private var confirmsDiscard = false
     @State private var isCompletingLesson = false
     @State private var startIssueDismissed = false
+    /// Bilan enregistré : le trajet terminé se referme une fois la feuille descendue, pas pendant sa descente.
+    @State private var closesLessonFlowOnDisappear = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var hasUnsavedChanges: Bool { model?.hasLocalEdits ?? false }
@@ -81,7 +83,7 @@ struct SchoolLessonReportView: View {
                         confirmsDiscard = true
                     } else {
                         // Sans saisie à garder, le brouillon local éventuel est retiré avec la fiche.
-                        model?.persistLocalDraft(); model?.invalidate(); dismiss()
+                        model?.persistLocalDraft(); model?.close(); dismiss()
                     }
                 }
                 // Un réglage de partage, bref, ne grise pas « Fermer » : sa demande reste dans la file chiffrée.
@@ -98,13 +100,16 @@ struct SchoolLessonReportView: View {
         }
         .onChange(of: model?.reportSaveConfirmed) { _, confirmed in
             guard confirmed == true else { return }
-            capture?.closeLessonFlow(lessonID: lessonID)
-            model?.invalidate()
+            closesLessonFlowOnDisappear = true
+            model?.close()
             dismiss()
         }
         .alert("Quitter sans enregistrer ?", isPresented: $confirmsDiscard) {
-            Button("Quitter sans enregistrer", role: .destructive) { model?.discardLocalDraft(); model?.invalidate(); dismiss() }
+            Button("Quitter sans enregistrer", role: .destructive) { model?.discardLocalDraft(); model?.close(); dismiss() }
             Button("Continuer", role: .cancel) { }
+        }
+        .onDisappear {
+            if closesLessonFlowOnDisappear { capture?.closeLessonFlow(lessonID: lessonID) }
         }
         .task(id: scopeKey) {
             // Une feuille enfant plein écran peut faire réapparaître cette vue : garder le modèle
@@ -505,11 +510,12 @@ private struct SchoolLessonReportContent: View {
             lessonSheet = .permit
             return false
         }
-        await model.refreshCaptures()
+        // Leçon démarrée : ses heures sont celles de son départ et de maintenant, sans relire les trajets.
         let times = model.completionTimes()
         let completed = await model.complete(start: times.start, end: times.end, reason: reason, localCaptureStopped: true)
         // La leçon est terminée : la rédaction du bilan s’ouvre d’elle-même dès que la fiche revient à l’écran.
         if completed {
+            capture?.noteLessonCompleted(model.lessonID)
             opensReportWhenReady = true; confirmedSteps += 1
         } else if model.errorMessage == nil, model.pending == nil, !model.isInvalidated {
             // Le constat n’est pas parti et le modèle n’en dit rien (objectif laissé vide, horloge de l’appareil en
@@ -524,7 +530,7 @@ private struct SchoolLessonReportContent: View {
     /// Départ réussi depuis cette feuille : elle se ferme pour laisser le trajet en cours à l’écran.
     private func captureSheetClosed() {
         guard captureStatus == .collecting else { Task { await model.load() }; return }
-        if model.hasLocalEdits { showsLive = true } else { model.invalidate(); dismiss() }
+        if model.hasLocalEdits { showsLive = true } else { model.close(); dismiss() }
     }
 
     // MARK: En-tête

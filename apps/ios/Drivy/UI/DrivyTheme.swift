@@ -135,6 +135,9 @@ enum DrivyMotion {
     static func step(_ reduceMotion: Bool) -> Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.38, bounce: 0.12) }
     /// Contenu qui arrive après une lecture (accord, formation) : il se pose sans pousser brutalement le reste.
     static func reveal(_ reduceMotion: Bool) -> Animation { reduceMotion ? .easeInOut(duration: 0.2) : .smooth(duration: 0.3) }
+    /// Ouverture et fermeture d’un panneau posé sur l’écran (palette de signalement) : vif, sans rebond. Sous
+    /// Réduire les animations, la transition du panneau devient un fondu, jamais une apparition sèche.
+    static func present(_ reduceMotion: Bool) -> Animation { reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.24, extraBounce: 0) }
 }
 
 /// The single dominant action of a view. Pressed state is immediate; the
