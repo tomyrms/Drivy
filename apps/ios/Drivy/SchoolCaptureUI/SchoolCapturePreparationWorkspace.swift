@@ -389,6 +389,10 @@ struct SchoolCaptureStartReview: Identifiable {
             if authorizationMayExist && !sourceTransferred {
                 await sealReadyAuthorization(store: store)
             }
+            // L’adoption a échoué : le contrôleur a fermé la source reçue et scellé le départ. La préparation
+            // redevient propriétaire de son diagnostic, sinon un nouvel essai ne pouvait plus relire
+            // l’autorisation de localisation et concluait à tort qu’elle manquait.
+            if sourceTransferred && !captureStarted { sourceTransferred = false }
             await failedMutation(error, request: request)
             return false
         }
@@ -464,6 +468,9 @@ struct SchoolCaptureStartReview: Identifiable {
                 quickBlock = .permission(denied: true); return false
             }
             await requestPermission()
+            // La demande du système n’a pas pu être présentée (école injoignable, droits à relire) : dire
+            // cette cause tout de suite, au lieu d’attendre une minute une réponse qui ne viendra pas.
+            if !invalidated, snapshot?.permission.permitsLocation != true, let reason = errorMessage { return quickFailure(reason) }
             // La réponse arrive quand la personne répond à la demande du système.
             var waited = 0
             while !invalidated && snapshot?.permission == .notDetermined && waited < 240 {

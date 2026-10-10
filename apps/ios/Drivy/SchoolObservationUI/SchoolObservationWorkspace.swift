@@ -71,6 +71,9 @@ struct SchoolObservationEditor: Identifiable {
             && pending.kind.isObservation && pending.routeResourceID == lessonID
     }
     var pendingBelongsHere: Bool { pending?.kind.isObservation == true && pending?.routeResourceID == lessonID }
+    /// Demande que l’école a déclaré ne pas connaître : rien n’a été enregistré, elle peut être renvoyée ou abandonnée.
+    private(set) var absentPendingID: UUID?
+    var pendingAbsent: Bool { pending != nil && pending?.id == absentPendingID }
     var pendingText: String {
         guard let pending, pendingBelongsHere else {
             guard let pending else { return "" }
@@ -137,7 +140,7 @@ struct SchoolObservationEditor: Identifiable {
         generation = UUID(); accessRevoked = true; loaded = false; isLoading = false; isBusy = false
         lesson = nil; learnerName = ""; observations = []; competencies = []; draft = nil; pending = nil
         storageAccessible = false; confirmation = nil; competenciesMessage = nil; draftMessage = nil
-        isFirstSend = false; live = nil
+        isFirstSend = false; live = nil; absentPendingID = nil
     }
 
     func load() async {
@@ -147,6 +150,7 @@ struct SchoolObservationEditor: Identifiable {
         isLoading = true; errorMessage = nil
         do { pending = try outbox.pending(for: scope); storageAccessible = true }
         catch { storageAccessible = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
+        if pending?.id != absentPendingID { absentPendingID = nil }
         do {
             let current = try await authorizedLesson()
             let learner = try await client.reader.learner(schoolID: scope.schoolID, id: current.learnerId)
@@ -233,7 +237,32 @@ struct SchoolObservationEditor: Identifiable {
             pending = nil; isBusy = false
             confirmation = command.observationUndoOperationID != nil ? "Observation retirée." : "L’école confirme l’enregistrement de la demande."
             await load()
+        } catch SchoolObservationFailure.notFound {
+            // L’école répond sans ambiguïté qu’elle n’a pas ce reçu : ce n’est pas un retrait de droits.
+            guard valid(request) else { return }
+            var observationExists = false
+            if command.observationUndoOperationID != nil {
+                // Annulation en attente : la création peut exister sans son retrait. Elle seule décide.
+                do { _ = try await client.receipt(for: command.withoutObservationUndo); observationExists = true }
+                catch SchoolObservationFailure.notFound { }
+                catch { guard valid(request) else { return }; isBusy = false; fail(error); return }
+                guard valid(request) else { return }
+            }
+            isBusy = false
+            if observationExists {
+                errorMessage = "L’école a enregistré l’observation, pas encore son retrait. Renvoie la demande pour le terminer."
+            } else {
+                absentPendingID = command.id
+            }
         } catch { guard valid(request) else { return }; isBusy = false; fail(error) }
+    }
+    /// Retire une demande que l’école ne connaît pas, puis relit la leçon : rien n’est supposé enregistré.
+    func abandonPending() async {
+        guard pendingAbsent, canRetry, let command = rereadPending(), command.id == absentPendingID else { return }
+        do { try outbox.remove(command) }
+        catch { storageAccessible = false; fail(error); return }
+        pending = nil; absentPendingID = nil; errorMessage = nil; confirmation = nil
+        await load()
     }
     func retryPending() async -> Bool {
         guard canRetry, let command = rereadPending() else { return false }

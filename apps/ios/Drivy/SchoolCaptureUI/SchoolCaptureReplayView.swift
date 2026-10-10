@@ -228,6 +228,8 @@ struct SchoolCaptureReplayView: View {
     private var contentKey: String {
         "\(model.contentRevision):\(model.isComplete)"
     }
+    /// Largeur maximale du libellé d’une pastille du rail : au-delà, il est tronqué.
+    private static let chipTitleMaxWidth: CGFloat = 240
 
     var body: some View {
         Group {
@@ -509,8 +511,12 @@ struct SchoolCaptureReplayView: View {
                     .accessibilityHidden(true)
                 Text(item.offset.map { DrivyReplayScrubber.clock($0) } ?? "—")
                     .font(.subheadline.weight(.semibold).monospacedDigit())
+                // Une note de relecture peut compter des centaines de caractères : la pastille garde une
+                // ligne, le texte entier se lit dans le détail et par VoiceOver.
                 Text(item.title)
                     .font(.subheadline)
+                    .lineLimit(1)
+                    .frame(maxWidth: Self.chipTitleMaxWidth)
             }
             .foregroundStyle(DrivyTheme.text)
             .padding(.horizontal, DrivySpacing.s)

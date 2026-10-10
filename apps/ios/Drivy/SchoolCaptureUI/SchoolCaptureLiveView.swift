@@ -87,7 +87,7 @@ struct SchoolCaptureLiveView: View {
                         // Pause et reprise : seuls les éléments qui en dépendent changent, par une transition courte.
                         .animation(DrivyMotion.context(reduceMotion), value: shownState == .paused)
                         if usesInlineObservation, let moment = observationMoment {
-                            Color.black.opacity(0.16)
+                            DrivyTheme.shadow.opacity(0.16)
                                 .ignoresSafeArea(edges: .top)
                                 .onTapGesture { closeObservation() }
                                 .accessibilityHidden(true)
@@ -95,9 +95,9 @@ struct SchoolCaptureLiveView: View {
                                 anchor: moment.anchor, onRecorded: { showObservationNotice(moment.recorder) }, onClose: closeObservation)
                                 .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
                                 .frame(height: min(DrivyMapLayout.reportPaletteHeight, max(0, geometry.size.height - DrivySpacing.xl)))
-                                .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel))
-                                .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel))
-                                .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 8)
+                                .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+                                .drivyShadow(radius: 18, y: 8)
                                 .padding(DrivySpacing.m)
                                 .accessibilityAddTraits(.isModal)
                                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
@@ -446,7 +446,8 @@ struct SchoolCaptureLiveView: View {
                 Button("Actualiser", systemImage: "arrow.clockwise") { recorder.refreshPending() }
                     .buttonStyle(DrivySecondaryButtonStyle())
             }
-        } else if let error = recorder.errorMessage {
+        } else if let error = recorder.errorMessage, !(observationNotice != nil && recorder.undoState == .refused) {
+            // Un refus de l’école se lit déjà dans le bandeau du signalement : pas deux fois le même texte.
             DrivyInlineMessage(text: error, tone: .warning)
         }
     }

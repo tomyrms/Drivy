@@ -10,6 +10,9 @@ struct SchoolCapturePreparationView: View {
     @State private var resendRoute: SchoolCaptureQueuedMutation?
     @State private var confirmsResend = false
     @State private var startReview: SchoolCaptureStartReview?
+    /// Demande dont l’abandon attend sa confirmation, comme sur les autres écrans de l’école.
+    @State private var abandonCandidate: SchoolCaptureQueuedMutation?
+    @State private var confirmsAbandon = false
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
 
     private struct ChoiceRoute: Identifiable {
@@ -111,6 +114,14 @@ struct SchoolCapturePreparationView: View {
             }
             .sheet(item: $resendRoute) { queued in resendSheet(queued) }
             .sheet(item: $startReview) { review in SchoolCaptureStartReviewView(model: model, review: review) }
+            // Un seul dialogue pour toutes les demandes : l’abandon se confirme, comme sur les autres écrans.
+            .confirmationDialog("Abandonner cette demande ?", isPresented: $confirmsAbandon, titleVisibility: .visible) {
+                Button("Abandonner la demande", role: .destructive) {
+                    if let queued = abandonCandidate { Task { await model.abandon(queued) } }
+                    abandonCandidate = nil
+                }
+                Button("Conserver", role: .cancel) { abandonCandidate = nil }
+            } message: { Text("Elle est retirée de cet appareil et ne sera pas envoyée à l’école.") }
             .onChange(of: model.captureStarted) { _, started in
                 guard started else { return }
                 // Départ confirmé par l’école : la préparation se referme sous le rideau, qui attend la fin de
@@ -421,8 +432,9 @@ struct SchoolCapturePreparationView: View {
     @ViewBuilder private func abandonButton(_ queued: SchoolCaptureQueuedMutation) -> some View {
         if model.unknownRequestIDs.contains(queued.id) {
             DrivyInlineMessage(text: "L’école n’a pas reçu cette demande : rien n’a été enregistré.", tone: .warning)
-            Button("Abandonner la demande", role: .destructive) { Task { await model.abandon(queued) } }
-                .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.danger)
+            Button("Abandonner la demande", role: .destructive) { abandonCandidate = queued; confirmsAbandon = true }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(model.mayAbandon(queued) ? DrivyTheme.danger : DrivyTheme.disabledText)
                 .frame(minHeight: 44).disabled(!model.mayAbandon(queued))
                 .accessibilityIdentifier("capture-request-abandon")
         }

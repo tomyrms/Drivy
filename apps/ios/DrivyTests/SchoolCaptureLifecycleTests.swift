@@ -58,6 +58,23 @@ import Testing
         #expect(stored.state == .stopped && stored.manifest?.isEmpty == true)
     }
 
+    @Test func aFailedAdoptionLeavesThePreparationAbleToRetryInsteadOfBlamingThePermission() async throws {
+        let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
+        let model = fixture.preparation()
+        // L’école autorise le départ, puis la dernière lecture des droits du contrôleur échoue (réseau).
+        await fixture.server.failScopeReadAfterNextAuthorization()
+        #expect(!(await model.begin()))
+        #expect(!fixture.source.isRunning && fixture.source.startCount == 0 && fixture.controller.captureID == nil)
+        #expect(!model.captureStarted && !model.accessRevoked && model.errorMessage != nil)
+        let stored = try await fixture.store.storedSession(captureID: fixture.capture.id, scope: fixture.scope)
+        #expect(stored.state == .stopped)
+        // Nouvel essai : la localisation est toujours autorisée, la préparation ne doit pas prétendre le contraire.
+        _ = await model.begin()
+        if case .permission = model.quickBlock { Issue.record("Un départ échoué ne retire pas l’autorisation de localisation") }
+        #expect(model.mayDiagnose)
+        model.invalidate()
+    }
+
     @Test func slowFirstFixDoesNotBecomeASignalBreak() throws {
         let policy = try SchoolCaptureLocationPolicy()
         #expect(!policy.requiresNewSegment(previousElapsedMs: nil, nextElapsedMs: 90_000))
@@ -498,6 +515,7 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
     private let keys: SchoolCapturePublicKeys
     private let noticeID = UUID()
     private var scopeHeld = false, scopeRefused = false
+    private var failsScopeAfterAuthorization = false, failsNextScopeRead = false
     private var scopeWaiters: [CheckedContinuation<Void, Never>] = []
     private var recorded: [URLRequest] = []
     private var held = false
@@ -510,6 +528,7 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
     }
     func requests() -> [URLRequest] { recorded }
     func holdScopeReads() { scopeHeld = true }
+    func failScopeReadAfterNextAuthorization() { failsScopeAfterAuthorization = true }
     func isWaitingForScope() -> Bool { !scopeWaiters.isEmpty }
     func releaseScopeReads(refused: Bool = false) {
         scopeHeld = false; scopeRefused = refused
@@ -533,6 +552,7 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
         }
         if url.lastPathComponent == "me" {
             if scopeHeld { await withCheckedContinuation { scopeWaiters.append($0) } }
+            if failsNextScopeRead { failsNextScopeRead = false; throw URLError(.notConnectedToInternet) }
             if scopeRefused {
                 return SchoolHTTPResponse(data: Data("{\"code\":\"FORBIDDEN\"}".utf8), status: 403,
                     url: url, contentType: "application/problem+json")
@@ -580,7 +600,10 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
                 modelCode: "test-phone", osVersion: "26.0", appBuild: "1", qualificationProfileVersion: "test",
                 status: .qualified, assessedAt: capture.authorizedAt, expiresAt: capture.expiresAt, blockers: []))
         }
-        if leaf == "captures", request.httpMethod == "POST" { return try ok(authorization) }
+        if leaf == "captures", request.httpMethod == "POST" {
+            if failsScopeAfterAuthorization { failsScopeAfterAuthorization = false; failsNextScopeRead = true }
+            return try ok(authorization)
+        }
         if url.lastPathComponent == "stop" {
             let body = try JSONDecoder().decode(SchoolStopCaptureBody.self, from: request.httpBody!)
             capture = changed(stoppedAt: body.stoppedAt, sync: .uploading)

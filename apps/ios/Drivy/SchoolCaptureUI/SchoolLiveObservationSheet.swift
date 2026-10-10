@@ -167,8 +167,9 @@ struct SchoolLiveObservationPalette: View {
             LazyVGrid(columns: themeColumns, spacing: DrivySpacing.xxs) {
                 ForEach(recorder.themes) { theme in themeButton(theme) }
             }
-            if let message = recorder.competenciesMessage {
-                // Le marqueur de l’en-tête reste disponible même sans référentiel.
+            if let message = recorder.competenciesMessage, !recorder.isLoadingCompetencies {
+                // Le marqueur de l’en-tête reste disponible même sans référentiel. Pendant un nouvel essai,
+                // seul le chargement se montre : ni l’échec précédent ni un second « Réessayer ».
                 DrivyInlineMessage(text: message, tone: .warning)
                 Button("Réessayer", systemImage: "arrow.clockwise") { Task { await recorder.loadCompetencies() } }
                     .buttonStyle(DrivySecondaryButtonStyle())
@@ -205,12 +206,12 @@ struct SchoolLiveObservationPalette: View {
             .padding(.vertical, DrivySpacing.xs)
             .frame(maxWidth: .infinity, minHeight: 80)
             .background(isSelected ? DrivyTheme.accentSoft : .clear,
-                        in: RoundedRectangle(cornerRadius: DrivyRadius.field))
+                        in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: DrivyRadius.field)
+                RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
                     .strokeBorder(isSelected ? DrivyTheme.accent : .clear, lineWidth: 1.5)
             }
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field))
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
         }
         .buttonStyle(SchoolObservationChoiceStyle())
         // Choisir un thème n’écrit rien : le choix reste possible pendant l’envoi du signalement précédent.
@@ -302,7 +303,7 @@ private struct SchoolAppraisalLabel: View {
         .foregroundStyle(DrivyTheme.text)
         .padding(DrivySpacing.xs)
         .frame(maxWidth: .infinity, minHeight: isVertical ? 76 : 56)
-        .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field))
+        .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
     }
 
     private var symbol: some View {
@@ -320,7 +321,7 @@ private struct SchoolObservationChoiceStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(configuration.isPressed ? DrivyTheme.accentSoft : .clear,
-                        in: RoundedRectangle(cornerRadius: DrivyRadius.field))
+                        in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
             .scaleEffect(configuration.isPressed && !reduceMotion ? DrivyPress.scale : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }

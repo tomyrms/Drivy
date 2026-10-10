@@ -56,6 +56,9 @@ struct SchoolRecordingChoiceView: View {
     @Bindable var model: SchoolRecordingChoiceWorkspace
     @Environment(\.dismiss) private var dismiss
     @State private var document: RecordingDocument?
+    /// Demande dont l’abandon attend sa confirmation, comme sur les autres écrans de l’école.
+    @State private var abandonCandidate: SchoolCaptureQueuedMutation?
+    @State private var confirmsAbandon = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -96,6 +99,13 @@ struct SchoolRecordingChoiceView: View {
             .task { await model.load() }
             .refreshable { await model.load() }
             .sheet(item: $document) { RecordingDocumentView(document: $0) }
+            .confirmationDialog("Abandonner cette demande ?", isPresented: $confirmsAbandon, titleVisibility: .visible) {
+                Button("Abandonner la demande", role: .destructive) {
+                    if let queued = abandonCandidate { Task { await model.abandon(queued) } }
+                    abandonCandidate = nil
+                }
+                Button("Conserver", role: .cancel) { abandonCandidate = nil }
+            } message: { Text("Elle est retirée de cet appareil et ne sera pas envoyée à l’école.") }
         }
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .presentationDragIndicator(.visible)
@@ -186,8 +196,9 @@ struct SchoolRecordingChoiceView: View {
                     .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(!model.mayResume(queued))
                     if model.unknownRequestIDs.contains(queued.id) {
                         DrivyInlineMessage(text: "L’école n’a pas reçu ce choix : rien n’a été enregistré.", tone: .warning)
-                        Button("Abandonner la demande", role: .destructive) { Task { await model.abandon(queued) } }
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.danger)
+                        Button("Abandonner la demande", role: .destructive) { abandonCandidate = queued; confirmsAbandon = true }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(model.mayResume(queued) ? DrivyTheme.danger : DrivyTheme.disabledText)
                             .frame(minHeight: 44).disabled(!model.mayResume(queued))
                     } else {
                         Button("Vérifier auprès de l’école") { Task { await model.verify(queued) } }

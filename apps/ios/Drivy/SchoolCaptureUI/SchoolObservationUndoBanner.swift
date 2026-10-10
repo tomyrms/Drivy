@@ -40,8 +40,10 @@ struct SchoolObservationUndoBanner: View {
         .padding(.leading, DrivySpacing.m)
         .padding(.trailing, DrivySpacing.xxs)
         .padding(.vertical, DrivySpacing.xxs)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content))
-        .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 4)
+        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+        .drivyShadow(radius: 12, y: 4)
+        // Le moniteur ne regarde pas l’écran : un refus de l’école se signale aussi au toucher.
+        .sensoryFeedback(.error, trigger: recorder.undoState) { _, state in state == .refused }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("live-observation-notice")
         .onChange(of: title, initial: true) { _, message in
@@ -58,12 +60,12 @@ struct SchoolObservationUndoBanner: View {
     }
 
     private var message: some View {
-        Label(title, systemImage: recorder.undoState == .pending ? "clock" : "checkmark")
+        Label(title, systemImage: symbol)
             .font(.subheadline.weight(.medium))
             .foregroundStyle(DrivyTheme.text)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityLabel(title)
-            .accessibilityValue(receipt.displayTitle)
+            .accessibilityValue(recorder.undoState == .refused ? "" : receipt.displayTitle)
     }
 
     private var title: String {
@@ -71,6 +73,15 @@ struct SchoolObservationUndoBanner: View {
         case .none: "Ajouté à la leçon"
         case .pending: "Annulation en attente"
         case .confirmed: "Signalement annulé"
+        case .refused: "Non enregistré"
+        }
+    }
+
+    private var symbol: String {
+        switch recorder.undoState {
+        case .pending: "clock"
+        case .refused: "exclamationmark.triangle"
+        case .none, .confirmed: "checkmark"
         }
     }
 

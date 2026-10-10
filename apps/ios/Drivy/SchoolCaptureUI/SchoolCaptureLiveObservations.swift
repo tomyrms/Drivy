@@ -20,7 +20,8 @@ struct SchoolLiveObservationReceipt: Identifiable, Equatable {
     let displayTitle: String
 }
 
-enum SchoolLiveObservationUndoState: Equatable { case none, pending, confirmed }
+/// `refused` : l’école a refusé définitivement le signalement dès son premier envoi ; rien n’a été enregistré.
+enum SchoolLiveObservationUndoState: Equatable { case none, pending, confirmed, refused }
 
 /// Les sous-thèmes précisent une compétence existante, sans créer de référentiel parallèle.
 struct SchoolLiveObservationTheme: Identifiable, Equatable {
@@ -218,8 +219,12 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     }
     func retry() async {
         guard canRetry, let initial = pending else { return }
+        // Une demande retirée ou remplacée depuis un autre écran (abandon, vérification réussie) n’est pas
+        // réécrite dans la file : l’état relu fait foi.
+        guard let stored = try? outbox.pending(for: scope),
+              stored.withoutObservationUndo == initial.withoutObservationUndo else { refreshPending(); return }
         isSending = true
-        await transmit(initial)
+        await transmit(stored)
     }
 
     /// L’envoi est réclamé dans le tour même de l’écriture durable : aucune image ne montre « attend son
@@ -233,6 +238,8 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     private func transmit(_ initial: PendingSchoolCommand) async {
         // Arrêt survenu entre le geste et le départ : la demande reste dans la file, sans réécriture.
         guard !stopped else { isSending = false; isSettlingGesture = false; return }
+        // Premier envoi, dans le tour du geste : aucune réponse antérieure de l’école ne peut exister.
+        let followsGesture = isSettlingGesture
         var command = initial
         while true {
             do {
@@ -284,6 +291,20 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
                    current.observationUndoOperationID != nil {
                     command = current; pending = current; undoState = .pending
                     continue
+                }
+                // Refus définitif de l’école au premier envoi (leçon close, limite atteinte, position qui n’est
+                // plus admissible) : rien n’a été enregistré et le même envoi serait refusé à nouveau. La demande
+                // quitte la file, qu’elle bloquerait pour toute autre écriture, et le bandeau cesse d’annoncer un ajout.
+                if !stopped, followsGesture, command.observationUndoOperationID == nil,
+                   let refusal = error as? SchoolObservationFailure, refusal.permitsFreshCorrection,
+                   (try? outbox.remove(command)) != nil {
+                    pending = nil
+                    mapObservations.removeAll { $0.id == command.id }
+                    errorMessage = "Observation non enregistrée. \(refusal.errorDescription ?? "L’école l’a refusée.")"
+                    if lastAdded?.id == command.id {
+                        lastAddedCommand = nil; undoState = .refused; undoErrorMessage = errorMessage
+                    }
+                    break
                 }
                 if !stopped {
                     errorMessage = command.observationUndoOperationID == nil

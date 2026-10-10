@@ -179,7 +179,15 @@ struct SchoolObservationView: View {
                 // Même bouton, même symbole que « Signaler » sur le trajet en cours : une action, une apparence.
                 Button {
                     if let recorder = model.liveRecorder() { route = .signal(.init(recorder: recorder)) }
-                } label: { Label("Signaler", systemImage: "text.bubble.fill") }
+                } label: {
+                    Label {
+                        Text("Signaler")
+                    } icon: {
+                        Image("Brand-marker").resizable().scaledToFit()
+                            .frame(width: 28, height: 28)
+                            .accessibilityHidden(true)
+                    }
+                }
                     .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).accessibilityIdentifier("school-observation-signal")
             } else {
                 Button("Ajouter une observation") {
@@ -452,6 +460,7 @@ private struct SchoolObservationPendingView: View {
     let command: PendingSchoolCommand
     @Environment(\.dismiss) private var dismiss
     @State private var acknowledged = false
+    @State private var confirmsAbandon = false
     var body: some View {
         NavigationStack {
             Form {
@@ -469,6 +478,21 @@ private struct SchoolObservationPendingView: View {
                         Button("Renvoyer exactement cette demande") {
                             Task { if await model.retryPending() { dismiss() } }
                         }.disabled(!acknowledged || !model.canRetry)
+                        if model.pendingAbsent {
+                            // Offert seulement après la réponse de l’école : elle n’a jamais reçu cette demande.
+                            Label("L’école n’a pas reçu cette demande : rien n’a été enregistré.", systemImage: "exclamationmark.circle")
+                                .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Button("Abandonner la demande", role: .destructive) { confirmsAbandon = true }
+                                .disabled(!model.canRetry)
+                                .accessibilityIdentifier("pending-request-abandon")
+                                .confirmationDialog("Abandonner cette demande ?", isPresented: $confirmsAbandon, titleVisibility: .visible) {
+                                    Button("Abandonner la demande", role: .destructive) {
+                                        Task { await model.abandonPending(); if model.pending == nil { dismiss() } }
+                                    }
+                                    Button("Conserver", role: .cancel) { }
+                                } message: { Text("Elle est retirée de cet appareil et ne sera pas envoyée à l’école.") }
+                        }
                     }
                 } footer: { Text("Le contenu et la référence restent identiques. Une absence de réponse ne signifie pas que l’école a refusé la demande.") }
                     .drivyFormRows()
