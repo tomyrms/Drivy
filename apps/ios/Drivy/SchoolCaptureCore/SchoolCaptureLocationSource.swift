@@ -343,7 +343,11 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
             // prise après le réveil (jamais le cache), tiennent lieu de mesure ponctuelle pour le diagnostic.
             guard !isRunning, let started = warmStartedAt,
                   let latest = locations.last(where: { Self.usableSource($0) && $0.timestamp >= started }) else { return }
-            recordDiagnostic(latest, wall: wall, now: now)
+            // Une mesure précise déjà retenue n’est remplacée que par une mesure aussi exploitable : le diagnostic
+            // envoyé quelques requêtes plus tard ne se dégrade pas.
+            if latest.horizontalAccuracy <= SchoolCaptureDiagnosticSample.reusableAccuracyMeters || !hasReusableDiagnostic {
+                recordDiagnostic(latest, wall: wall, now: now)
+            }
             if diagnosticRequested, hasReusableDiagnostic {
                 diagnosticRequested = false
                 onEvent?(.diagnosticChanged)

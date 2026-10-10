@@ -46,3 +46,10 @@ Depuis une leçon planifiée, « Démarrer le trajet » lit d’abord leçon et 
 - La création de la leçon et le diagnostic de l’appareil restent séquentiels : le diagnostic dépend encore de la leçon dans la préparation. Le faire en parallèle demanderait un diagnostic indépendant de la leçon (même journal, mêmes garde-fous).
 - Réseau très lent : le rideau reste jusqu’au garde-fou (40 s sans étape), sans issue intermédiaire.
 - Un trajet démarré depuis la fiche d’un élève fait passer l’app sur « Aujourd’hui » ; la feuille est fermée explicitement sous le rideau.
+- Échec du départ dans la toute dernière vérification des droits (après l’autorisation de l’école) : la carte a déjà remplacé « Aujourd’hui », la feuille a disparu avec lui ; le rideau se lève sur « Aujourd’hui » et la leçon créée, sans la raison de l’échec. Cas rare (coupure réseau à cet instant précis).
+- Depuis une leçon planifiée, au tout premier usage de l’app, l’alerte d’autorisation d’iOS peut encore apparaître au-dessus du rideau (le démarrage immédiat, lui, la pose avant).
+- L’accord donné dans le récapitulatif est enregistré au départ, en même temps que la leçon : il reste enregistré si l’école refuse ensuite la leçon (conflit), puisqu’il exprime le choix de l’élève et non la leçon.
+
+## Relecture QA (agent dédié, même jour)
+
+Aucune régression bloquante. Corrigés : départ possible pendant la lecture de l’accord (bouton désormais inactif tant que l’accord se lit ; accord de l’élève imposé lu en même temps que la feuille), récapitulatif bloqué après l’abandon d’une demande sans élève choisi (retour à la liste), échec d’enregistrement de l’accord muet dans la question (message affiché), récepteur laissé réveillé après un départ refusé (préparation invalidée), refus de localisation à l’alerte d’iOS sans explication (message au-dessus de la leçon), garde-fou du rideau non réarmé quand sa barre plafonne, mesure de diagnostic précise remplacée par une moins précise du réveil, protection du bilan modifié concurrencée par celle de la feuille.

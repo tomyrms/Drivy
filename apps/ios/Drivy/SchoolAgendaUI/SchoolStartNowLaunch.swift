@@ -53,6 +53,8 @@ import UIKit
     var consentIsClear: Bool {
         consent.notice != nil && consent.relatedPending.isEmpty && !consent.hasOldScope && !consent.accessRevoked
     }
+    /// L’accord se lit encore (ni réponse ni erreur) : le départ attend, pour ne pas partir sans GPS par mégarde.
+    var isReading: Bool { consent.notice == nil && consent.errorMessage == nil && !consent.accessRevoked }
     /// Le trajet est voulu et cet appareil peut l’enregistrer (l’autorisation d’iOS peut encore être demandée).
     var wantsTrip: Bool { answer == .allowed && consentIsClear && (device == .ready || device == .needsPermission) }
 
@@ -172,6 +174,8 @@ import UIKit
 
     /// Lecture (ou nouvel essai) de la feuille : l’accord GPS suit l’élève retenu, même choisi d’emblée.
     func reload() async {
+        // Élève imposé par sa fiche : son accord se lit pendant que la feuille se charge.
+        if let preset = form.presetLearnerID { prepareGPS(for: preset) }
         await form.load()
         guard !invalidated, let learnerID = form.learnerID else { return }
         prepareGPS(for: learnerID)
@@ -190,6 +194,12 @@ import UIKit
     }
 
     func dismissTripIssue() { tripIssue = nil }
+
+    /// Demande en file abandonnée, ou confirmée sans leçon à ouvrir ici : sans élève choisi, retour à la liste.
+    func pendingCleared() {
+        guard phase == .editing, !invalidated, form.pending == nil, form.learnerID == nil, !form.learners.isEmpty else { return }
+        withAnimation(Self.stepMotion) { step = .learner }
+    }
 
     /// Une demande restée en file est confirmée par l’école : la leçon s’ouvre, sans départ automatique.
     func resolved(_ lesson: SchoolLesson) {
@@ -232,7 +242,8 @@ import UIKit
 
     private func run() async {
         let curtain = DrivyLaunchCurtain.shared
-        var tripPlanned = gps?.wantsTrip == true
+        let tripWanted = gps?.wantsTrip == true
+        var tripPlanned = tripWanted
         if tripPlanned, let gps, gps.device == .needsPermission {
             // L’alerte d’iOS passe avant le rideau, sur la feuille : elle ne coupe aucune animation.
             phase = .requestingPermission
@@ -261,6 +272,9 @@ import UIKit
             if tripPlanned {
                 tripIssue = consentReady ? "Le trajet ne peut pas démarrer pour cette leçon. Elle continue sans GPS."
                     : "L’accord GPS n’a pas pu être enregistré. La leçon continue sans GPS."
+            } else if tripWanted {
+                // Localisation refusée à l’instant dans l’alerte d’iOS : l’accord de l’élève reste enregistré.
+                tripIssue = "La localisation n’est pas autorisée pour Drivy. La leçon continue sans GPS."
             }
             showLesson(lesson)
             if tripPlanned { await curtain.hide(afterSequence: true) }
@@ -299,6 +313,8 @@ import UIKit
         } else {
             // La leçon existe : elle s’ouvre dans la feuille, avec la raison. Aucune position n’est inventée.
             tripIssue = Self.issue(of: prep)
+            // Plus de départ depuis cette préparation : le récepteur reçu réveillé s’arrête avec elle.
+            prep.invalidate()
             showLesson(lesson)
             await curtain.hide(afterSequence: true)
         }

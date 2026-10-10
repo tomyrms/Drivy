@@ -74,7 +74,11 @@ import UIKit
     }
 
     /// Une étape du départ est franchie ; le dernier quart reste au trajet confirmé et à sa première position.
-    func advanceStep() { advance(to: min(0.75, progress + 0.14)) }
+    func advanceStep() {
+        advance(to: min(0.75, progress + 0.14))
+        // La barre plafonne, pas le garde-fou : chaque étape franchie le repousse.
+        if window != nil { armWatchdog(generation) }
+    }
 
     /// Efface le rideau. `afterSequence` (départ abouti) laisse le symbole s’assembler (`minimumShown`), puis
     /// attend `ready` (la première position du trajet, par exemple) sans dépasser `atMost` secondes après l’appel.

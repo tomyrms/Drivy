@@ -89,6 +89,7 @@ struct SchoolRecordingChoiceInline: View {
                 DrivyInlineMessage(text: "L’élève a refusé depuis son compte. Lui seul peut modifier ce choix.", tone: .warning)
             }
             if let error = model.storageError { DrivyInlineMessage(text: error, tone: .warning) }
+            else if let error = model.errorMessage { DrivyInlineMessage(text: error, tone: .warning) }
             if let notice = model.notice {
                 Button("Information et conservation") {
                     document = .init(id: "notice", title: "Information et conservation",

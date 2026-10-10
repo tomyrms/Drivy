@@ -307,7 +307,6 @@ struct SchoolStartNowView: View {
         .presentationDragIndicator(.visible)
         .presentationSizing(.form)
         .presentationBackground(DrivyTheme.canvas)
-        .interactiveDismissDisabled(launch.isBusy)
         .tint(DrivyTheme.accent)
         .sensoryFeedback(.start, trigger: launch.launches)
         .task { await launch.open() }
@@ -355,6 +354,8 @@ struct SchoolStartNowView: View {
         }
         .navigationTitle("Démarrer une leçon").navigationBarTitleDisplayMode(.inline)
         .toolbar { closeItem }
+        // Réglé par étape : la leçon ouverte sur place garde sa propre protection (bilan modifié).
+        .interactiveDismissDisabled(launch.isBusy)
     }
 
     // MARK: - Récapitulatif
@@ -381,6 +382,7 @@ struct SchoolStartNowView: View {
         }
         .navigationTitle("Démarrer une leçon").navigationBarTitleDisplayMode(.inline)
         .toolbar { closeItem }
+        .interactiveDismissDisabled(launch.isBusy)
     }
 
     @ViewBuilder private var notices: some View {
@@ -390,12 +392,14 @@ struct SchoolStartNowView: View {
             let idle = !form.isBusy && !form.isLoading
             DrivyPendingRequest(message: pending.waitingMessage(absent: form.pendingAbsent),
                 notes: form.errorMessage.map { [$0] } ?? [], reference: pending.id,
-                verify: form.pendingAbsent ? nil : { Task { if let lesson = await form.verify() { launch.resolved(lesson) } } },
+                verify: form.pendingAbsent ? nil : { Task {
+                    if let lesson = await form.verify() { launch.resolved(lesson) } else { launch.pendingCleared() }
+                } },
                 canVerify: idle,
                 retry: pending.kind == .startLessonNow && pending.scope == form.scope
                     ? { Task { if let lesson = await form.retry() { launch.resolved(lesson) } } } : nil,
                 canRetry: idle,
-                abandon: form.pendingAbsent ? { Task { await form.abandon() } } : nil, canAbandon: idle)
+                abandon: form.pendingAbsent ? { Task { await form.abandon(); launch.pendingCleared() } } : nil, canAbandon: idle)
         } else if let error = form.errorMessage {
             SchoolErrorNotice(message: error, retry: !form.contextValid || form.learners.isEmpty || form.trainings.isEmpty || !form.storageAvailable
                 ? { Task { await launch.reload() } } : nil)
@@ -417,7 +421,7 @@ struct SchoolStartNowView: View {
                     .accessibilityIdentifier("start-now-learner")
                 }
             }
-        } else if form.pending == nil && (form.isLoading || form.errorMessage == nil) {
+        } else if form.pending == nil && (form.isLoading || (form.learners.isEmpty && form.errorMessage == nil)) {
             DrivySkeletonRow(leading: .avatar, lines: 2).drivySkeleton("Chargement de l’élève…")
         }
     }
@@ -525,7 +529,8 @@ struct SchoolStartNowView: View {
                     isBusy: launch.isBusy)
             }
             .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
-            .disabled(!form.canStart || launch.phase != .editing)
+            // L’accord de l’élève se lit encore : un départ maintenant partirait sans GPS sans l’avoir voulu.
+            .disabled(!form.canStart || launch.phase != .editing || launch.gps?.isReading == true)
             .accessibilityIdentifier("start-now-confirm")
         }
     }
