@@ -176,6 +176,8 @@ private struct SchoolLessonReportContent: View {
     /// Départs et fins de leçon que l’école vient de confirmer depuis cette fiche : un retour haptique chacun.
     @State private var confirmedSteps = 0
     @State private var completionOpened = false
+    /// Leçon terminée depuis la feuille du permis : la rédaction attend que cette feuille soit descendue.
+    @State private var opensReportAfterPermit = false
     @State private var startOpened = false
     @State private var confirmsCompletion = false
     @State private var completionQueued = false
@@ -240,7 +242,9 @@ private struct SchoolLessonReportContent: View {
             Button("Élève absent", role: .destructive) { Task { _ = await model.markNoShow(reason: "Élève absent au rendez-vous.") } }
             Button("Annuler", role: .cancel) {}
         }
-        .sheet(item: $lessonSheet) { sheet in
+        .sheet(item: $lessonSheet, onDismiss: {
+            if opensReportAfterPermit { opensReportAfterPermit = false; opensReportWhenReady = true }
+        }) { sheet in
             switch sheet {
             case .permit: SchoolLessonCompletionSheet(model: model, finish: finishLesson, finishError: finishError)
             }
@@ -500,14 +504,20 @@ private struct SchoolLessonReportContent: View {
     /// L’arrêt est écrit sur l’appareil avant le constat. Le transfert du trajet continue sans retenir le bilan.
     private func finishLesson(_ reason: String) async -> Bool {
         guard !isFinishing, model.canMutate, isPlanned, model.lesson?.hasStarted == true, model.isAuthor else { return false }
+        if model.completionNeedsReason && reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // La question du permis vient tout de suite, sans attente devant elle. Le trajet s’arrête pendant ce
+            // temps (même tâche d’arrêt durable, que la fin reprendra) : rien n’est enregistré après « Terminer ».
+            if let capture {
+                let lessonID = model.lessonID
+                Task { _ = await capture.finishForLesson(lessonID: lessonID) }
+            }
+            lessonSheet = .permit
+            return false
+        }
         isFinishing = true; finishError = nil
         defer { isFinishing = false }
         if let capture, !(await capture.finishForLesson(lessonID: model.lessonID)) {
             finishError = capture.errorMessage ?? "Le trajet n’a pas pu être enregistré. Réessaie pour terminer la leçon."
-            return false
-        }
-        if model.completionNeedsReason && reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            lessonSheet = .permit
             return false
         }
         // Leçon démarrée : ses heures sont celles de son départ et de maintenant, sans relire les trajets.
@@ -516,7 +526,8 @@ private struct SchoolLessonReportContent: View {
         // La leçon est terminée : la rédaction du bilan s’ouvre d’elle-même dès que la fiche revient à l’écran.
         if completed {
             capture?.noteLessonCompleted(model.lessonID)
-            opensReportWhenReady = true; confirmedSteps += 1
+            if lessonSheet != nil { opensReportAfterPermit = true } else { opensReportWhenReady = true }
+            confirmedSteps += 1
         } else if model.errorMessage == nil, model.pending == nil, !model.isInvalidated {
             // Le constat n’est pas parti et le modèle n’en dit rien (objectif laissé vide, horloge de l’appareil en
             // retard sur celle de l’école) : le geste ne reste jamais sans réponse.

@@ -86,7 +86,8 @@ struct SchoolTodayView: View {
                     }
                 }
             }
-            .task(id: dayKey(context.date)) { await load() }
+            .onAppear { restoreRememberedDay() }
+            .task(id: dayKey(context.date)) { restoreRememberedDay(); await load() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { location.refresh(); Task { await load() } }
@@ -374,6 +375,14 @@ struct SchoolTodayView: View {
             controllerCanPrepare: captureController.canPrepareCapture, now: Date())
     }
 
+    /// Un nouvel « Aujourd’hui » (retour d’un trajet, changement d’onglet) reprend la journée déjà lue pour ce compte
+    /// et ce jour : pas de squelette, la relecture suit sans rien effacer.
+    private func restoreRememberedDay() {
+        let key = dayKey(Date())
+        guard loadedKey == nil, let day = SchoolTodayMemory.day(for: key) else { return }
+        lessons = day.lessons; unfinished = day.unfinished; loadedKey = key
+    }
+
     /// Relit la journée sans effacer ce qui est affiché.
     @MainActor private func load() async {
         // Ce bouton porte plusieurs feuilles successives. Un refresh le remplaçant ne doit pas fermer la chaîne.
@@ -406,6 +415,7 @@ struct SchoolTodayView: View {
             var unique: [UUID: SchoolLesson] = [:]
             for lesson in all { unique[lesson.id] = lesson }
             lessons = Array(unique.values); loadedKey = key
+            SchoolTodayMemory.remember(key: key, lessons: lessons, unfinished: unfinished)
             // Lecture discrète : la page la plus récente des leçons passées du moniteur suffit à retrouver celles
             // restées sans fin. Une panne garde le rappel déjà affiché et ne dit rien : la journée reste lisible.
             guard let instructor = instructorFilter else { unfinished = []; return }
@@ -413,6 +423,7 @@ struct SchoolTodayView: View {
                 instructorMembershipID: instructor, cursor: nil) else { return }
             guard key == dayKey(Date()), requestID == request, !Task.isCancelled else { return }
             unfinished = SchoolTodayPresentation.unfinishedLessons(earlier.items, before: dayStart)
+            SchoolTodayMemory.remember(key: key, lessons: lessons, unfinished: unfinished)
         } catch {
             guard key == dayKey(Date()), requestID == request, !Task.isCancelled, !(error is CancellationError) else { return }
             switch error as? SchoolAgendaFailure {
@@ -473,6 +484,22 @@ enum SchoolTodayPresentation {
     func refresh() { status = manager.authorizationStatus; precise = manager.accuracyAuthorization == .fullAccuracy }
     func request() { if status == .notDetermined { manager.requestWhenInUseAuthorization() } }
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) { refresh() }
+}
+
+/// Dernière journée lue, en mémoire seulement, par compte, école, droits et jour (la clé `dayKey`) : aucun autre
+/// compte ni aucun autre jour ne la retrouve, et rien n’est écrit sur l’appareil.
+@MainActor private enum SchoolTodayMemory {
+    private static var key: String?
+    private static var lessons: [SchoolLesson] = []
+    private static var unfinished: [SchoolLesson] = []
+
+    static func remember(key: String, lessons: [SchoolLesson], unfinished: [SchoolLesson]) {
+        self.key = key; self.lessons = lessons; self.unfinished = unfinished
+    }
+
+    static func day(for key: String) -> (lessons: [SchoolLesson], unfinished: [SchoolLesson])? {
+        self.key == key ? (lessons, unfinished) : nil
+    }
 }
 
 /// Seuils d’Aujourd’hui : panneau latéral dès 960 pt (380 pt de leçon, au moins 580 pt de carte),
