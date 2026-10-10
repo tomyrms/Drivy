@@ -162,13 +162,19 @@ import UIKit
 
     func open() async {
         guard !invalidated, form.learners.isEmpty else { return }
-        await form.load()
+        await reload()
         guard !invalidated else { return }
-        if let learnerID = form.learnerID { prepareGPS(for: learnerID) }
         // Élève unique ou demande à résoudre : le récapitulatif, qui les montre.
         if step == .learner, form.learnerID != nil || form.pending != nil {
             withAnimation(Self.stepMotion) { step = .summary }
         }
+    }
+
+    /// Lecture (ou nouvel essai) de la feuille : l’accord GPS suit l’élève retenu, même choisi d’emblée.
+    func reload() async {
+        await form.load()
+        guard !invalidated, let learnerID = form.learnerID else { return }
+        prepareGPS(for: learnerID)
     }
 
     func choose(_ learnerID: UUID) {

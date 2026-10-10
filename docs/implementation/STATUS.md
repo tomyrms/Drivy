@@ -1,5 +1,18 @@
 # État de la réalisation
 
+## 10 octobre 2026 — démarrage instantané en un seul parcours
+
+Le geste « Démarrer une leçon » devient une seule interface : élève, récapitulatif et accord GPS dans une même feuille, puis le trajet sous le rideau ou la leçon ouverte sur place. [Causes, décisions et limites](demarrage-instantane-20261010.md).
+
+- **Accord GPS** demandé dans le récapitulatif, au niveau de l’élève, enregistré au départ avec la leçon ; plus jamais pendant le rideau. Même chose depuis « Démarrer le trajet » d’une leçon planifiée.
+- **GPS** : récepteur réveillé dès que le trajet est voulu et permis, conservé jusqu’au segment ; mesure de diagnostic tirée du réveil ; une seule relecture du départ et lectures en parallèle (environ 18 requêtes de moins).
+- **Rideau** : plus de séquence fixe de 2 s ; levé à la première position (7 s au plus), hors de toute vue ; la carte montre la position de l’appareil tant qu’aucune n’est enregistrée.
+- **Fiabilité** : garde contre le double appui, autorisation de capture toujours enregistrée pour être scellée, attente du premier plan avant le départ.
+
+**Exécuté** : compilation de l’IPA d’essai (workflow « IPA d’essai · iLoader »). **Non exécuté**, à la demande du porteur : tests Swift (nouveaux tests écrits, cible de tests non compilée).
+
+**Reste à qualifier** : parcours vu tourner sur iPhone, délai réel de première position, question d’iOS au premier usage.
+
 ## 10 octobre 2026 — audit global et corrections
 
 Audit technique et UI/UX de toute l’application en cinq lots (API, web, trois lots iOS) suivis d’une revue croisée. [Corrections, limites et constats laissés au porteur](audit-global-20261010.md).

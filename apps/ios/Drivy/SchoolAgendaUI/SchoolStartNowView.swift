@@ -342,7 +342,7 @@ struct SchoolStartNowView: View {
             } else if form.learners.isEmpty {
                 ScrollView {
                     if let error = form.errorMessage {
-                        SchoolErrorNotice(message: error, retry: { Task { await form.load() } })
+                        SchoolErrorNotice(message: error, retry: { Task { await launch.reload() } })
                             .disabled(form.isLoading)
                             .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
                     }
@@ -398,7 +398,7 @@ struct SchoolStartNowView: View {
                 abandon: form.pendingAbsent ? { Task { await form.abandon() } } : nil, canAbandon: idle)
         } else if let error = form.errorMessage {
             SchoolErrorNotice(message: error, retry: !form.contextValid || form.learners.isEmpty || form.trainings.isEmpty || !form.storageAvailable
-                ? { Task { await form.load() } } : nil)
+                ? { Task { await launch.reload() } } : nil)
                 .disabled(form.isBusy || form.isLoading)
         }
     }

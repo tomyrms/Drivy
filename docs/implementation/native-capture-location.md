@@ -61,3 +61,13 @@ Retour du porteur : après le rideau de départ, la carte attendait encore sa pr
 Décision : `SchoolCaptureLocationSource.warmUp()` ouvre un flux de localisation dès le geste de départ, si l’autorisation est déjà accordée et l’app au premier plan. Ses positions ne sont ni lues, ni conservées, ni envoyées ; le trajet ne reçoit toujours que des mesures postérieures à l’ouverture de son segment. Le flux s’arrête à la première position admise, à l’arrêt, à un échec du départ, au changement de portée, au retrait de l’autorisation, au passage en arrière-plan sans trajet, et au plus tard après trente secondes.
 
 Le rideau attend cette première position sept secondes au plus après la confirmation de l’école, et porte une barre de progression sans texte. Gain réel non mesuré : aucun essai sur appareil.
+
+### Mise à jour du même jour : réveil durable et diagnostic tiré du réveil
+
+Le réveil était coupé par chaque relecture de la préparation (`load()` fermait la source) et ne commençait qu’après la création de la leçon. Désormais :
+
+- Démarrage immédiat : le réveil commence dès que l’accord de l’élève est « avec GPS » et que l’autorisation d’iOS est accordée, pendant le récapitulatif ; la même source passe à la préparation. Depuis une leçon planifiée : dès que l’accord est confirmé.
+- Chaque appel repousse l’arrêt automatique de trente secondes ; en arrière-plan sans trajet, le réveil se suspend et reprend au retour tant qu’il reste demandé. `load()` conserve un réveil en cours (même portée).
+- La phrase « positions ni lues » ci-dessus est remplacée : aucune coordonnée du réveil n’est conservée ni envoyée, mais l’âge et la précision de sa dernière mesure (prise après le réveil, ni simulée ni d’accessoire) tiennent lieu de mesure de diagnostic, exactement comme une mesure ponctuelle. Une mesure de 5 s au plus et de 35 m au plus évite `requestLocation()` ; sinon la demande ponctuelle part et la prochaine mesure du réveil assez précise y répond. La réponse est toujours asynchrone.
+- Position exacte désactivée ou absence de mesure : échec local, avec sa raison, sans requête à l’école.
+- Le filtre de distance du segment est « aucun » (`distanceFilterMeters = 0`) ; la valeur de 3 mètres citée plus haut est périmée.
