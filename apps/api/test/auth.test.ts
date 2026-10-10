@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
+import { createLocalJWKSet, errors, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { createTokenVerifier, type TokenVerifier } from '../src/auth.js';
 import { readConfig } from '../src/config.js';
 
@@ -31,6 +31,25 @@ describe('Vérification OIDC cryptographique', () => {
   });
   it.each([undefined,'','Bearer unsigned','Basic xyz'])('refuse une session absente ou invalide %s', async header => {
     await expect(verify(header)).rejects.toMatchObject({ status: 401 });
+  });
+});
+describe('Fournisseur d’identité injoignable', () => {
+  // Quand les clés publiques ne peuvent pas être lues, le jeton n'est pas en cause : répondre 401 ferait déconnecter l'utilisateur.
+  const failing = (error: unknown) => createTokenVerifier(config, async () => { throw error; });
+  it.each([
+    ['délai dépassé', () => new errors.JWKSTimeout()],
+    ['réponse HTTP non 200', () => new errors.JOSEError('Expected 200 OK from the JSON Web Key Set HTTP response')],
+    ['réseau coupé', () => Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } })],
+    ['requête interrompue', () => Object.assign(new Error('The operation was aborted'), { name: 'AbortError' })]
+  ])('répond 503 (temporaire) et non 401 : %s', async (_name, make) => {
+    await expect(failing(make())(`Bearer ${await token()}`)).rejects.toMatchObject({ status: 503, code: 'SERVICE_UNAVAILABLE' });
+  });
+  it.each([
+    ['clé inconnue', () => new errors.JWKSNoMatchingKey()],
+    ['signature invalide', () => new errors.JWSSignatureVerificationFailed()],
+    ['erreur de programmation', () => new TypeError('x is not a function')]
+  ])('reste 401 quand le jeton est en cause : %s', async (_name, make) => {
+    await expect(failing(make())(`Bearer ${await token()}`)).rejects.toMatchObject({ status: 401, code: 'INVALID_SESSION' });
   });
 });
 describe('Configuration fermée', () => {

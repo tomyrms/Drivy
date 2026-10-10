@@ -42,6 +42,34 @@ export function lowercaseIds(value: unknown): unknown {
   return value;
 }
 
+/**
+ * PostgreSQL ne stocke pas le caractère NUL (texte : 22021, jsonb : 22P05) : une écriture qui en contient échouerait à chaque essai.
+ * Rendu en 503, ce refus ferait rejouer sans fin la commande par les apps ; il est donc refusé dès l'entrée, valeurs et clés comprises.
+ */
+export function containsNul(value: unknown): boolean {
+  if (typeof value === 'string') return value.includes('\u0000');
+  if (Array.isArray(value)) return value.some(containsNul);
+  if (value !== null && typeof value === 'object') return Object.entries(value).some(([key, item]) => key.includes('\u0000') || containsNul(item));
+  return false;
+}
+
+/**
+ * Classe 22 de PostgreSQL (« data exception ») : la valeur envoyée est inacceptable (trop longue, hors bornes, date impossible,
+ * texte invalide). Un nouvel essai échouerait de la même façon : c'est un refus définitif, pas une panne temporaire.
+ */
+const dataExceptionCodes = new Set(['22001', '22003', '22007', '22008', '22021', '22023', '22P02', '22P05']);
+export function dataError(error: unknown): ApiError | undefined {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+  return typeof code === 'string' && dataExceptionCodes.has(code) ? new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.') : undefined;
+}
+
+/** Cause d'une panne pour l'exploitation : le nom de l'erreur et son code technique seulement, jamais le message ni la pile. */
+function failureSummary(error: unknown): { errorName: string; errorCode?: string } {
+  const errorName = error instanceof Error && /^[A-Za-z0-9_]{1,60}$/.test(error.name) ? error.name : 'Error';
+  const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+  return typeof code === 'string' && /^[A-Za-z0-9_]{1,40}$/.test(code) ? { errorName, errorCode: code } : { errorName };
+}
+
 /** Erreurs de transport client : un JSON invalide ne doit pas créer une commande incertaine à rejouer. */
 export function clientError(error: unknown): ApiError | undefined {
   const status = typeof error === 'object' && error !== null && 'statusCode' in error ? error.statusCode : undefined;
@@ -58,6 +86,7 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   // Un UUID se lit sans tenir compte de la casse (RFC 9562) : l'app iOS écrit en majuscules, PostgreSQL rend des minuscules.
   // Normaliser à l'entrée évite qu'une comparaison JavaScript refuse un identifiant pourtant identique.
   app.addHook('preValidation', async request => {
+    if (containsNul(request.params) || containsNul(request.query) || containsNul(request.body)) throw new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
     request.params = lowercaseIds(request.params) as typeof request.params;
     request.query = lowercaseIds(request.query) as typeof request.query;
     if (request.body !== undefined) request.body = lowercaseIds(request.body);
@@ -65,8 +94,8 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   app.setErrorHandler((error, request, reply) => {
     const known = error instanceof ApiError ? error : error instanceof ZodError
       ? new ApiError(400, 'INVALID_REQUEST', 'Paramètres invalides.')
-      : clientError(error) ?? new ApiError(503, 'SERVICE_UNAVAILABLE', 'Service temporairement indisponible.');
-    if (known.status >= 500) request.log.error({ requestId: request.id }, 'Échec de traitement API');
+      : clientError(error) ?? dataError(error) ?? new ApiError(503, 'SERVICE_UNAVAILABLE', 'Service temporairement indisponible.');
+    if (known.status >= 500) request.log.error({ requestId: request.id, ...failureSummary(error) }, 'Échec de traitement API');
     if (known.status === 401) reply.header('WWW-Authenticate','Bearer');
     return reply.status(known.status).type('application/problem+json').send({
       type: `urn:drivy:problem:${known.code.toLowerCase()}`, title: known.message,

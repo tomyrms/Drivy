@@ -2,6 +2,7 @@ import { createCipheriv,createDecipheriv,randomBytes,randomUUID } from 'node:cry
 import nodemailer from 'nodemailer';
 import type { Pool,PoolClient } from 'pg';
 import { z } from 'zod';
+import { rollbackQuietly } from './database.js';
 
 export interface InvitationMailConfig {
   webURL:string; encryptionKey:string; host:string; port:number; secure:boolean; from:string;
@@ -44,9 +45,9 @@ export async function cancelInvitationMail(db:PoolClient,invitationId:string) {
 }
 interface Job { id:string; payload:Buffer; invitation_id:string; invitation_version:number; lease_id:string; attempts:number }
 async function workerTransaction<T>(pool:Pool,work:(db:PoolClient)=>Promise<T>):Promise<T> {
-  const db=await pool.connect();try {await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_invitation_mailer');
+  const db=await pool.connect();let broken=false;try {await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_invitation_mailer');
     const result=await work(db);await db.query('COMMIT');return result;
-  } catch(error) {await db.query('ROLLBACK');throw error;} finally {db.release();}
+  } catch(error) {broken=!(await rollbackQuietly(db));throw error;} finally {db.release(broken);}
 }
 /** Une itération bornée ; aucune adresse, jeton ou réponse SMTP n'est journalisée. */
 export async function deliverOneInvitation(pool:Pool,config:InvitationMailConfig):Promise<boolean> {

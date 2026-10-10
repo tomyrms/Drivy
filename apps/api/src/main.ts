@@ -4,9 +4,10 @@ import { createTokenVerifier } from './auth.js';
 import { readConfig } from './config.js';
 import { invitationMailConfig } from './invitation-mail.js';
 import { readCaptureConfig } from './capture-crypto.js';
+import { guardPool } from './database.js';
 
 const config = readConfig();
-const pool = new Pool({ connectionString: config.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000, statement_timeout: 5000 });
+const pool = guardPool(new Pool({ connectionString: config.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000, statement_timeout: 5000 }));
 try {
   const role = await pool.query<{ rolsuper: boolean; rolbypassrls: boolean }>('SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user');
   const applicationRole = await pool.query<{ rolsuper: boolean; rolbypassrls: boolean }>("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname='drivy_app'");

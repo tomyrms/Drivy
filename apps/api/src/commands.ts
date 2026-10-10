@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import type { Identity } from './auth.js';
+import { rollbackQuietly } from './database.js';
 import { ApiError, forbidden, notFound } from './errors.js';
 
 export interface CommandActor { personId: string; membershipId: string; roles:string[] }
@@ -55,6 +56,7 @@ export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId:
   work: (db:PoolClient, actor:CommandActor, school:SchoolRow)=>Promise<CommandEffect<T>>, allowedRoles:string[]=['ADMIN'],guards:CommandGuards<T>={}): Promise<T> {
   const hash = commandHash(body,expectedVersion);
   const db = await pool.connect();
+  let broken = false;
   try {
     await db.query('BEGIN');
     await db.query("SET LOCAL lock_timeout='5s'");
@@ -102,7 +104,7 @@ export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId:
     await db.query('COMMIT');
     return effect.data;
   } catch (error) {
-    await db.query('ROLLBACK');
+    broken = !(await rollbackQuietly(db));
     throw error;
-  } finally { db.release(); }
+  } finally { db.release(broken); }
 }

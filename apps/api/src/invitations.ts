@@ -3,7 +3,7 @@ import type { FastifyInstance,FastifyRequest } from 'fastify';
 import type { Pool,PoolClient } from 'pg';
 import { z } from 'zod';
 import type { Identity,TokenVerifier } from './auth.js';
-import { withActor } from './database.js';
+import { rollbackQuietly,withActor } from './database.js';
 import { checkIdempotency,checkVersion,commandHash,recordCommand,requireVersion,schoolColumns,schoolCommand,type CommandActor,type SchoolRow } from './commands.js';
 import { Cursors } from './cursor.js';
 import { ApiError,forbidden,notFound } from './errors.js';
@@ -85,7 +85,7 @@ async function memberContext(db:PoolClient,school:SchoolRow,personId:string) {
   const {version,...data}=member;return {data:{...data,schoolId:school.id,schoolName:school.name},version};
 }
 async function preview(pool:Pool,identity:Identity,token:string) {
-  const db=await pool.connect();try {
+  const db=await pool.connect();let broken=false;try {
     await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');const personId=await context(db,identity,token);
     const invitation=await target(db);usable(invitation,personId);await db.query("SELECT set_config('app.school_id',$1,true)",[invitation.school_id]);
     const school=(await db.query<SchoolRow>(`SELECT ${schoolColumns} FROM drivy.school WHERE id=$1`,[invitation.school_id])).rows[0];
@@ -100,7 +100,7 @@ async function preview(pool:Pool,identity:Identity,token:string) {
     if(!notice) throw new ApiError(409,'POLICY_REVIEW_REQUIRED','La notice de l’école n’est pas disponible.');
     await db.query('COMMIT');const dto=projection(invitation);
     return {invitationId:invitation.id,schoolId:school.id,schoolName:school.name,roles:invitation.roles,maskedEmail:dto.maskedEmail,expiresAt:dto.expiresAt,notice};
-  } catch(error) {await db.query('ROLLBACK');throw error;} finally {db.release();}
+  } catch(error) {broken=!(await rollbackQuietly(db));throw error;} finally {db.release(broken);}
 }
 /** Une invitation avec formation : rôle Élève seul, offre ouverte, moniteur actif ; un moniteur ne s'affecte que lui-même. */
 async function trainingIntentValid(db:PoolClient,schoolId:string,actor:CommandActor,roles:string[],training:z.infer<typeof trainingIntent>) {
@@ -141,7 +141,7 @@ async function openInvitedTraining(db:PoolClient,schoolId:string,personId:string
 const acceptedContext=<T extends object>(data:T,trainingOpened:boolean)=>trainingOpened?data:{...data,trainingOpened:false as const};
 
 async function accept(pool:Pool,identity:Identity,body:z.infer<typeof acceptBody>) {
-  const db=await pool.connect();try {
+  const db=await pool.connect();let broken=false;try {
     await db.query('BEGIN');await db.query("SET LOCAL lock_timeout='5s'");await db.query("SET LOCAL statement_timeout='10s'");
     // L'identité OIDC est sérialisée avant la création d'une personne, même entre deux écoles.
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`oidc:${identity.issuer}:${identity.subject}`]);
@@ -206,14 +206,14 @@ async function accept(pool:Pool,identity:Identity,body:z.infer<typeof acceptBody
         action:invitation.status==='ACCEPTED'?'InvitationAcceptanceConfirmed':'InvitationAccepted',
         changedFields:invitation.status==='ACCEPTED'?[]:['membership','learnerProfile','status',...(trainingOpened?[]:['trainingNotOpened'])]});
     await db.query('COMMIT');return result;
-  } catch(error) {await db.query('ROLLBACK');throw error;} finally {db.release();}
+  } catch(error) {broken=!(await rollbackQuietly(db));throw error;} finally {db.release(broken);}
 }
 /**
  * Aperçu d'un code : lecture seule, aucune personne ni adhésion requise. Tout échec (inconnu, expiré, utilisé, révoqué, émetteur
  * sans droit, école inactive) répond de la même façon pour ne rien apprendre à qui essaie des codes.
  */
 async function previewCode(pool:Pool,hashed:string) {
-  const db=await pool.connect();try {
+  const db=await pool.connect();let broken=false;try {
     await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');await db.query('SET LOCAL ROLE drivy_app');
     await db.query("SELECT set_config('app.invitation_code_hash',$1,true)",[hashed]);
     const invitation=(await db.query<InvitationRow>("SELECT * FROM drivy.invitation WHERE token_hash=current_setting('app.invitation_code_hash') AND delivery='CODE'")).rows[0];
@@ -232,11 +232,11 @@ async function previewCode(pool:Pool,hashed:string) {
     }
     await db.query('COMMIT');
     return {schoolName:school.name,roles:invitation.roles,trainingCategoryCode:categories[0] ?? null,trainingCategoryCodes:categories,expiresAt:invitation.expires_at.toISOString()};
-  } catch(error) {await db.query('ROLLBACK');throw error;} finally {db.release();}
+  } catch(error) {broken=!(await rollbackQuietly(db));throw error;} finally {db.release(broken);}
 }
 /** Comme l'acceptation par jeton (mêmes verrous, mêmes écritures, même preuve), sans adresse vérifiée : le code prouve l'invitation. */
 async function acceptCode(pool:Pool,identity:Identity,body:z.infer<typeof codeAcceptBody>,hashed:string) {
-  const db=await pool.connect();try {
+  const db=await pool.connect();let broken=false;try {
     await db.query('BEGIN');await db.query("SET LOCAL lock_timeout='5s'");await db.query("SET LOCAL statement_timeout='10s'");
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`oidc:${identity.issuer}:${identity.subject}`]);
     await db.query('SET LOCAL ROLE drivy_app');
@@ -307,7 +307,7 @@ async function acceptCode(pool:Pool,identity:Identity,body:z.infer<typeof codeAc
         action:invitation.status==='ACCEPTED'?'InvitationAcceptanceConfirmed':'InvitationAccepted',
         changedFields:invitation.status==='ACCEPTED'?[]:['membership','learnerProfile','status',...(trainingOpened?[]:['trainingNotOpened'])]});
     await db.query('COMMIT');return result;
-  } catch(error) {await db.query('ROLLBACK');throw error;} finally {db.release();}
+  } catch(error) {broken=!(await rollbackQuietly(db));throw error;} finally {db.release(broken);}
 }
 export function registerInvitations(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string;invitationMail?:InvitationMailConfig;codeAttempts?:AttemptLimiter;invitationCodeSecret?:string}) {
   const cursors=new Cursors(options.cursorSecret);const attempts=options.codeAttempts ?? new AttemptLimiter();
