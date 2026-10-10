@@ -1,0 +1,54 @@
+{
+  "commit": "52c355f5e71028866ae9bdf6a7dd83d07ad66f9c",
+  "servicesActive": true,
+  "backupVerified": true,
+  "apiEnvironmentUnchanged": true,
+  "ipadTrialProfilePreserved": true,
+  "backedUpDatabases": [
+    "drivy_refonte"
+  ],
+  "backupAttempt": "20261004T163538Z-cfb4ef93ebbd",
+  "migrationHashesVerified": true,
+  "migrations": {
+    "001_g1a.sql": "ab648269d745bffe74cfb07a39066d80a7985482e06b622d434fcddd3db0cd17",
+    "002_g1b_school_setup.sql": "769f78bbceec1b5bca629a92e26907dbadc32d0358cf8e3115da8a822c1aed9e",
+    "003_g1c_invitations.sql": "d1a35b84e4e33e43935b97fc274e89526b6fd839a6923258fd443e9c1d430edb",
+    "004_g1d_profiles.sql": "68c5905af2c45d514adbf468a0ee3b6f437a4db35ddc306b2e7f537f8261f5ca",
+    "005_g1d_catalogue.sql": "59ae7b56acad88294fe32f67538ca346ec525fcf7eb0036e27476e9ec7d699da",
+    "006_lessons.sql": "4212873103e767c9242b9cfd2990b74a2485050d60a6d581b8f4e3f4cf122a3e",
+    "007_lesson_reports.sql": "1568b7265e813e37a87eb29cb4aaf6cd48b9e5236ad40b5a306e4078ef87a176",
+    "008_capture.sql": "ca2fea2c610d2ce5deeee8cf68fc72c28d68f06d1b5120ee5005146e77221049",
+    "009_capture_observations.sql": "28e61c0bd55224dcb96a81ef04fdaa06e7d35ad42150fb7cf4b9b6024ff01c47",
+    "010_permit_checks.sql": "ee887828e69b74cadda8288bb244213ec54f2e7b0f26acc9ea0874ef210a7d5b",
+    "011_lesson_outcomes.sql": "2a0667b975febeaf8e8d8189e12f3b2d252422f9ab2f6dad9df7c33078b4c324",
+    "012_learner_sharing.sql": "d10c40236282e1fb43311a0742ddb8fbfcb84ed5ea76dacc11390335c8d38244",
+    "013_invitation_training.sql": "7d70c9fa7451f87d10af0316142c160955d0132091c3fb702420e989a75ec6c4",
+    "014_admin_trip_access.sql": "728807c7e61d46e485521b7d876329df8450e5d059893f55e634c9b0bd55c2ef",
+    "015_invitation_code.sql": "dcec3bc1325817b6cf49ad06da2d0dc66f547efa13e5fbad0d39ce229be6e968",
+    "016_access_lifecycle.sql": "4b4c8bb9a92505db9fe2959bda474ea2797f8e11c2b9a299f37c8377e25c1807",
+    "017_planning_corrections.sql": "57635de78ccc286c4142d62d22d7fde17587f2ea0ebe090a6075c235291016fc",
+    "018_invitation_trainings.sql": "4edd96984ac5de98b70ee10e0d8c4276ca3989c738743b2e37eba7f0caafac86",
+    "019_optional_report_content.sql": "c9b5a061e2a7a6267ae4772b28097b74ad9574325f05c0a0545601dfd1f2b99c",
+    "020_admin_progress_read.sql": "12dd9dffd9ea0237cf30d8f8621df4d8a9b4debf7a421270a9f3c7ad147ff30f",
+    "021_planning_defaults.sql": "68a3518c0eeff111bbfaff154a6e0a854017a0dc1b68c65e9a91d97f52a6b93f",
+    "022_lesson_availability.sql": "5d21396574781c924b340e29d6deb133523f9fa32fc6ee880c8366edbbe71bb0"
+  },
+  "backupPaths": [
+    "/root/drivy_refonte-before-52c355f5e71028866ae9bdf6a7dd83d07ad66f9c-20261004T163538Z-cfb4ef93ebbd.dump"
+  ],
+  "archiveSHA256": "f82d135e3a9b81ed75eb2ed6fd3572d7e17e10fb544f5d6d8e52f5adb6f0bef9",
+  "services": {
+    "drivy-refonte-api": "active",
+    "drivy-refonte-web": "active",
+    "drivy-refonte-identity": "active"
+  },
+  "runtimePathsMatch": true,
+  "internalReady": true,
+  "readinessHost": "192.168.1.153",
+  "publicHttp": {
+    "/refonte/v1/me": 401,
+    "/app/": 200,
+    "/refonte/health/ready": 404,
+    "/identity/admin/": 404
+  }
+}

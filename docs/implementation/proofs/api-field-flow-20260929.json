@@ -1,0 +1,47 @@
+{
+  "date": "2026-09-29",
+  "baseCommit": "0a93c587a71d811f84d5bb6a53c06935c25d0322",
+  "scope": "API : départ immédiat, bilan facultatif, choix GPS général et transfert indépendant",
+  "runtime": {
+    "node": "24.21.0",
+    "postgresql": "16.14 (Debian 16.14-1.pgdg12+1)",
+    "databaseEncoding": "UTF8",
+    "isolatedDatabase": "drivy_test",
+    "isolatedPort": 55439,
+    "productionDatabaseUsedForTests": false,
+    "migrationCount": 19,
+    "lastMigration": "019_optional_report_content.sql"
+  },
+  "fullSuite": {
+    "command": "npm run test --workspace @drivy/api -- --reporter=dot",
+    "files": 18,
+    "passed": 215,
+    "failed": 0,
+    "durationSeconds": 79.8,
+    "startedAtUtc": "2026-09-29T13:49:05Z"
+  },
+  "targetedSuite": {
+    "files": 4,
+    "passed": 50,
+    "failed": 0
+  },
+  "localChecks": {
+    "typecheck": "PASS",
+    "build": "PASS",
+    "diffCheck": "PASS"
+  },
+  "verifiedBehaviors": [
+    "ADMIN lecture de dossier ne donne pas une affectation de conduite",
+    "Filtre moniteur et startNowBlockerCode reflètent les affectations réelles",
+    "Une affectation commencée dans la minute permet un départ à l'instant exact",
+    "Bilan vide durable, publication explicite vide et appréciation sans commentaire",
+    "Complétion concurrente rejouée sans doubler brouillon, charge, événement ou audit",
+    "Complétion avant transfert GPS puis transfert tardif et partage élève",
+    "Choix GPS général réutilisé par deux leçons ; refus personnel et notice protégés",
+    "Libellé Anticipation affiché sans réécriture du référentiel"
+  ],
+  "privateTestServicesStopped": true,
+  "personalDataTokensOrPositionsIncluded": false,
+  "physicalDeviceQualificationPerformed": false,
+  "sourceCommit": "f054bc683c79b7ea342a299d646f8676c838a27b"
+}

@@ -1,0 +1,443 @@
+/**
+ * Pure rules of the management commands, shared by the React console and the unit tests.
+ * No DOM, no network, no relative import: this file is type-checked for the browser and for Node.
+ *
+ * A command keeps one operationId (sent as Idempotency-Key) from its first emission until the
+ * school confirms it — by a verified response or by an AP72 receipt. Nothing is shown as
+ * succeeded before that. Mirrors apps/ios/Drivy/SchoolConfigurationAPI/SchoolCommandOutbox.swift.
+ */
+
+export type CommandKind =
+  | 'updateSchool' | 'saveSetup' | 'activate' | 'saveDataPolicy'
+  | 'createInvitation' | 'resendInvitation' | 'revokeInvitation'
+  | 'createProfilePolicy' | 'publishProfilePolicy'
+  | 'createOffering' | 'createCurriculum' | 'createCatalogPolicy' | 'updateMember'
+  | 'createCommercialTerms' | 'createServiceProduct'
+  | 'createTraining' | 'createAssignment' | 'transitionTraining' | 'endAssignment' | 'archiveLearner' | 'restoreLearner' | 'deactivateMember'
+  | 'updateModules' | 'recordPermitCheck'
+  | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure';
+export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
+
+interface CommandSpec {
+  readonly operationType: string;
+  readonly resourceType: string;
+  /** Which identifier the AP72 receipt must carry: the school, the targeted resource, or a new one. */
+  readonly target: 'school' | 'resource' | 'created';
+  readonly method: CommandMethod;
+  readonly expectedStatus: 200 | 201;
+  readonly label: string;
+}
+
+export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
+  updateSchool: { operationType: 'UPDATE_SCHOOL', resourceType: 'School', target: 'school', method: 'PATCH', expectedStatus: 200, label: 'Modification des coordonnées' },
+  saveSetup: { operationType: 'SAVE_SCHOOL_SETUP', resourceType: 'SchoolSetup', target: 'school', method: 'PATCH', expectedStatus: 200, label: 'Enregistrement de l’avancement' },
+  activate: { operationType: 'ACTIVATE_SCHOOL', resourceType: 'School', target: 'school', method: 'POST', expectedStatus: 200, label: 'Activation de l’école' },
+  saveDataPolicy: { operationType: 'ADOPT_SCHOOL_DATA_POLICY', resourceType: 'SchoolDataPolicy', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Adoption des textes d’information' },
+  createInvitation: { operationType: 'CREATE_INVITATION', resourceType: 'Invitation', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une invitation' },
+  resendInvitation: { operationType: 'RESEND_INVITATION', resourceType: 'Invitation', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Renouvellement d’une invitation' },
+  revokeInvitation: { operationType: 'REVOKE_INVITATION', resourceType: 'Invitation', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Révocation d’une invitation' },
+  createProfilePolicy: { operationType: 'CREATE_PROFILE_FIELD_POLICY', resourceType: 'ProfileFieldPolicy', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une version des champs du profil' },
+  publishProfilePolicy: { operationType: 'PUBLISH_PROFILE_FIELD_POLICY', resourceType: 'ProfileFieldPolicy', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Publication des champs du profil' },
+  createOffering: { operationType: 'CREATE_OFFERING_VERSION', resourceType: 'Offering', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une version d’offre' },
+  createCurriculum: { operationType: 'CREATE_CURRICULUM_VERSION', resourceType: 'Curriculum', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une révision de référentiel' },
+  createCatalogPolicy: { operationType: 'CREATE_SCHOOL_POLICY', resourceType: 'SchoolPolicy', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une version de procédure' },
+  updateMember: { operationType: 'UPDATE_MEMBER', resourceType: 'Member', target: 'resource', method: 'PATCH', expectedStatus: 200, label: 'Modification des accès d’un membre' },
+  createCommercialTerms: { operationType: 'CREATE_COMMERCIAL_TERMS', resourceType: 'CommercialTermsVersion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création de conditions commerciales' },
+  createServiceProduct: { operationType: 'CREATE_SERVICE_PRODUCT', resourceType: 'ServiceProductVersion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une prestation' },
+  createTraining: { operationType: 'CREATE_TRAINING', resourceType: 'Training', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ouverture d’une formation' },
+  createAssignment: { operationType: 'CREATE_ASSIGNMENT', resourceType: 'Assignment', target: 'created', method: 'POST', expectedStatus: 201, label: 'Affectation d’un moniteur' },
+  transitionTraining: { operationType: 'TRANSITION_TRAINING', resourceType: 'Training', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Changement d’état d’une formation' },
+  endAssignment: { operationType: 'END_ASSIGNMENT', resourceType: 'Assignment', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Fin d’une affectation' },
+  archiveLearner: { operationType: 'ARCHIVE_LEARNER', resourceType: 'Learner', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Archivage d’un dossier élève' },
+  restoreLearner: { operationType: 'RESTORE_LEARNER', resourceType: 'Learner', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Restauration d’un dossier élève' },
+  deactivateMember: { operationType: 'DEACTIVATE_MEMBER', resourceType: 'Member', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait de l’accès d’un membre' },
+  updateModules: { operationType: 'UPDATE_SCHOOL_MODULES', resourceType: 'School', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Modification des modules de l’école' },
+  recordPermitCheck: { operationType: 'RECORD_PERMIT_CHECK', resourceType: 'PermitCheck', target: 'created', method: 'POST', expectedStatus: 200, label: 'Contrôle du permis' },
+  createAvailabilityRule: { operationType: 'CREATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ajout d’une disponibilité' },
+  updateAvailabilityRule: { operationType: 'UPDATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'PUT', expectedStatus: 200, label: 'Modification d’une disponibilité' },
+  removeAvailabilityRule: { operationType: 'REMOVE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une disponibilité' },
+  createClosure: { operationType: 'CREATE_CLOSURE', resourceType: 'Closure', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ajout d’une absence' },
+  removeClosure: { operationType: 'REMOVE_CLOSURE', resourceType: 'Closure', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une absence' },
+};
+
+export interface SchoolCommand {
+  readonly operationId: string;
+  readonly schoolId: string;
+  readonly kind: CommandKind;
+  /** Path below /schools/{schoolId}, without leading slash ('' for the school itself). */
+  readonly path: string;
+  readonly body: Readonly<Record<string, unknown>> & { readonly operationId: string };
+  /** Strong version sent as If-Match, when the route requires one. */
+  readonly ifMatch?: number;
+  /** Targeted resource (member, invitation, policy); absent for a creation. */
+  readonly resourceId?: string;
+  /** Version the command starts from; 0 for a creation. The receipt must be strictly newer. */
+  readonly resourceVersion: number;
+  readonly createdAt: number;
+}
+
+/** What survives a page reload: identifiers only, never the typed content. */
+export interface CommandMetadata {
+  readonly operationId: string;
+  readonly schoolId: string;
+  readonly kind: CommandKind;
+  readonly resourceId?: string;
+  readonly resourceVersion: number;
+  readonly createdAt: number;
+}
+
+export interface OperationReceipt {
+  readonly operationId: string;
+  readonly commandType: string;
+  readonly resourceType: string;
+  readonly resourceId: string;
+  readonly committedAt: string;
+  readonly resourceVersion: number;
+}
+
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isUUID = (value: unknown): value is string => typeof value === 'string' && uuid.test(value);
+
+export function newOperationId(): string {
+  return globalThis.crypto.randomUUID();
+}
+
+export function createCommand(input: {
+  schoolId: string; kind: CommandKind; path: string; body: Record<string, unknown>;
+  ifMatch?: number; resourceId?: string; resourceVersion: number; operationId?: string; now?: number;
+}): SchoolCommand {
+  const operationId = input.operationId ?? newOperationId();
+  if (!isUUID(operationId) || !isUUID(input.schoolId)) throw new Error('Identifiant de commande invalide.');
+  if (input.resourceId !== undefined && !isUUID(input.resourceId)) throw new Error('Ressource invalide.');
+  if (!Number.isSafeInteger(input.resourceVersion) || input.resourceVersion < 0) throw new Error('Version invalide.');
+  if (input.ifMatch !== undefined && (!Number.isSafeInteger(input.ifMatch) || input.ifMatch < 1)) throw new Error('Version invalide.');
+  if (!/^[a-z0-9/-]*$/.test(input.path)) throw new Error('Chemin invalide.');
+  const spec = commandSpecs[input.kind];
+  if (spec.target === 'resource' && !input.resourceId) throw new Error('Ressource requise.');
+  if (spec.target === 'created' && (input.resourceId || input.resourceVersion !== 0)) throw new Error('Une création part de zéro.');
+  return {
+    operationId, schoolId: input.schoolId, kind: input.kind, path: input.path,
+    body: Object.freeze({ ...input.body, operationId }),
+    ...(input.ifMatch !== undefined ? { ifMatch: input.ifMatch } : {}),
+    ...(input.resourceId ? { resourceId: input.resourceId } : {}),
+    resourceVersion: input.resourceVersion, createdAt: input.now ?? Date.now(),
+  };
+}
+
+/** Headers of one emission. A resend reuses exactly the same values. */
+export function commandHeaders(command: SchoolCommand, csrf: string): Record<string, string> {
+  return {
+    'Content-Type': 'application/json', 'X-CSRF-Token': csrf, 'Idempotency-Key': command.operationId,
+    ...(command.ifMatch !== undefined ? { 'If-Match': `"${command.ifMatch}"` } : {}),
+  };
+}
+
+export function receiptMatches(command: CommandMetadata, receipt: OperationReceipt): boolean {
+  const spec = commandSpecs[command.kind];
+  const expected = spec.target === 'school' ? command.schoolId : spec.target === 'resource' ? command.resourceId : undefined;
+  return receipt.operationId.toLowerCase() === command.operationId.toLowerCase()
+    && receipt.commandType === spec.operationType && receipt.resourceType === spec.resourceType
+    && Number.isSafeInteger(receipt.resourceVersion) && receipt.resourceVersion > command.resourceVersion
+    && (expected === undefined || receipt.resourceId.toLowerCase() === expected.toLowerCase());
+}
+
+/**
+ * A 4xx answer to an emission proves that this emission had no effect, readable code or not. Only a key reused
+ * for other content says nothing: an earlier emission may exist under the same reference.
+ */
+const undecidedRefusals = new Set(['IDEMPOTENCY_MISMATCH']);
+
+export type CommandOutcome =
+  /** Refused before any effect, while no earlier emission can have reached the school: release it, let the person correct. */
+  | { readonly type: 'rejected'; readonly code: string; readonly needsLogin: boolean }
+  /** Result unknown (lost response, timeout, 429, 5xx, session lost while the school was answering): keep the same request, verify or resend it. */
+  | { readonly type: 'uncertain'; readonly code: string; readonly needsLogin: boolean }
+  /** A refusal that does not disprove a previous emission: keep it, verify with AP72 only. */
+  | { readonly type: 'review'; readonly code: string; readonly needsLogin: boolean };
+
+/** `firstAttempt`: no earlier emission of this operation can have reached the school (never sent, or AP72 answered 404 since). */
+export function classifyFailure(status: number, code: string, firstAttempt: boolean): CommandOutcome {
+  if (status === 0 || status === 408 || status === 429 || status >= 500) return { type: 'uncertain', code, needsLogin: false };
+  // The session ended while the school was answering: the command may have been committed.
+  if (code === 'SESSION_LOST_RESULT_UNKNOWN') return { type: 'uncertain', code, needsLogin: true };
+  // Rejected by the BFF itself, before the API: the same request can be sent again after refresh.
+  if (code === 'CSRF_REJECTED') return { type: 'uncertain', code, needsLogin: false };
+  const needsLogin = status === 401;
+  const definitive = status >= 400 && status < 500 && !undecidedRefusals.has(code);
+  if (definitive) return firstAttempt ? { type: 'rejected', code, needsLogin } : { type: 'review', code, needsLogin };
+  return { type: 'review', code, needsLogin };
+}
+
+export function commandMessage(code: string): string {
+  const messages: Record<string, string> = {
+    NETWORK_UNAVAILABLE: 'La réponse n’a pas été reçue. Vérifiez le résultat auprès de l’école avant de continuer.',
+    SERVICE_UNAVAILABLE: 'La réponse n’a pas été reçue. Vérifiez le résultat auprès de l’école avant de continuer.',
+    API_UNAVAILABLE: 'L’école est momentanément inaccessible. Votre demande reste conservée jusqu’à vérification.',
+    INVALID_RESPONSE: 'La réponse de l’école n’a pas pu être vérifiée. La modification n’est pas confirmée.',
+    SESSION_EXPIRED: 'Votre connexion a expiré. Reconnectez-vous puis refaites la demande : rien n’a été modifié.',
+    SESSION_LOST_RESULT_UNKNOWN: 'Votre connexion a expiré pendant l’envoi. Reconnectez-vous, puis vérifiez le résultat de la demande.',
+    CSRF_REJECTED: 'La session de cette page a changé. La demande n’a pas été transmise : renvoyez la même demande.',
+    REAUTH_REQUIRED: 'Reconnectez-vous avec le même compte pour confirmer ce changement d’accès. Rien n’a été modifié.',
+    INVALID_REQUEST: 'L’école a refusé ces informations. Vérifiez la saisie avant de confirmer à nouveau.',
+    PAYLOAD_TOO_LARGE: 'Le contenu dépasse la taille acceptée. Raccourcissez les textes avant de confirmer.',
+    VERSION_CONFLICT: 'Les informations ont changé entre-temps. Rechargez et relisez avant de confirmer à nouveau.',
+    PRECONDITION_REQUIRED: 'La version affichée est requise. Rechargez les informations avant de confirmer.',
+    IDEMPOTENCY_MISMATCH: 'Cette référence de demande a déjà servi pour un autre contenu. Vérifiez son résultat auprès de l’école.',
+    SETUP_INCOMPLETE: 'L’école n’est pas encore prête. Vérifiez les éléments à compléter.',
+    CONFIG_IMPACT_REVIEW_REQUIRED: 'Cette modification demande une analyse d’impact dédiée (par exemple un changement de fuseau).',
+    MODULE_NOT_READY: 'Ce changement n’est pas encore disponible.',
+    POLICY_REVIEW_REQUIRED: 'Adoptez d’abord les textes d’information et de conservation de l’école.',
+    SCHOOL_ALREADY_ACTIVE: 'Cette école est déjà active.',
+    SCHOOL_ARCHIVED: 'Cette école est archivée et ne peut plus être modifiée.',
+    SETUP_NOT_INITIALIZED: 'Le provisionnement de cette école doit d’abord être complété.',
+    INVALID_TIME_ZONE: 'Le fuseau horaire de l’école est invalide.',
+    SCHOOL_NOT_ACTIVE: 'Cette école doit être active avant cette modification.',
+    LAST_ADMIN: 'L’école doit conserver au moins un membre de l’administration.',
+    CANNOT_DEACTIVATE_SELF: 'Un autre administrateur doit retirer votre accès à cette école.',
+    MEMBER_ALREADY_DEACTIVATED: 'Cet accès est déjà retiré. Actualisez l’équipe.',
+    ASSIGNMENT_ALREADY_ENDED: 'Cette affectation est déjà terminée. Actualisez le dossier.',
+    LEARNER_ALREADY_ARCHIVED: 'Ce dossier est déjà archivé. Retrouvez-le dans les dossiers archivés.',
+    LEARNER_NOT_ARCHIVED: 'Ce dossier est déjà actif. Actualisez la liste.',
+    LEARNER_HAS_OPEN_TRAININGS: 'Terminez ou annulez les formations de cet élève avant d’archiver son dossier.',
+    TRAINING_HAS_PLANNED_LESSONS: 'Annulez ou terminez les leçons prévues de cette formation avant de la clore.',
+    TRAINING_STATUS_UNCHANGED: 'La formation est déjà dans cet état. Actualisez le dossier.',
+    TRAINING_TRANSITION_INVALID: 'Cet état ne peut plus être choisi. Actualisez le dossier.',
+    MEMBER_RELATIONS_REQUIRE_REVIEW: 'Les affectations ou le dossier de cette personne doivent être traités avant de retirer ce rôle.',
+    OFFERING_NOT_READY: 'Le référentiel et la procédure de cette catégorie doivent être approuvés pour activer l’offre.',
+    OFFERING_CATEGORY_CHANGED: 'Une offre conserve sa catégorie. Utilisez une nouvelle référence pour une autre catégorie.',
+    ALREADY_MEMBER: 'Cette adresse correspond déjà à un membre de l’école.',
+    INVITATION_ALREADY_PENDING: 'Une invitation est déjà en attente pour cette adresse.',
+    INVITATION_USED: 'Cette invitation a déjà été utilisée.',
+    INVITATION_REVOKED: 'Cette invitation a déjà été révoquée.',
+    INVITATION_ROLE_FORBIDDEN: 'Vos accès ne permettent pas d’inviter avec ce rôle.',
+    INVITATION_DELIVERY_UNAVAILABLE: 'L’envoi par e-mail n’est pas disponible. Aucune invitation n’a été créée : utilisez un code élève.',
+    INVITATION_TRAINING_INVALID: 'Choisissez une offre ouverte et un moniteur actif.',
+    INVITATION_CODE_INVALID: 'Ce code n’est plus valable. Créez-en un nouveau.',
+    PROFILE_POLICY_RULE_INVALID: 'Vérifiez les champs, leur utilité et le moment où ils sont demandés.',
+    PROFILE_POLICY_ALREADY_PUBLISHED: 'Cette version est déjà publiée.',
+    PROFILE_POLICY_DATE_CONFLICT: 'Une version publiée utilise déjà cette date d’effet.',
+    INVALID_INTERVAL: 'La période indiquée n’est pas valide : la fin précède le début.',
+    INVALID_SERVICE_PRODUCT: 'Une leçon individuelle exige une catégorie et une durée.',
+    COMMERCIAL_TERMS_NOT_APPROVED: 'Choisissez des conditions commerciales approuvées pour activer cette prestation.',
+    SITE_SETUP_REQUIRED: 'Les prestations par site ne sont pas encore disponibles.',
+    ACTIVE_TRAINING_EXISTS: 'Cet élève suit déjà cette formation.',
+    LEARNER_NOT_ACTIVE: 'Cet élève n’a plus d’accès actif à l’école.',
+    LEARNER_ARCHIVED: 'Ce dossier est archivé.',
+    TRAINING_NOT_ACTIVE: 'Cette formation n’est plus active.',
+    INSTRUCTOR_REQUIRED: 'Choisissez un moniteur actif de l’école.',
+    ASSIGNMENT_CONFLICT: 'Ce moniteur suit déjà cette formation.',
+    EXISTING_BOOKINGS: 'Des leçons prévues tombent dans cette période : déplacez-les d’abord.',
+    SETUP_ACCESS_REQUIRED: 'Vos accès ne permettent plus cette opération dans l’école.',
+    ACCESS_DENIED: 'Vos accès ne permettent plus cette opération dans l’école.',
+    FORBIDDEN: 'Vos accès ne permettent plus cette opération dans l’école.',
+    NOT_FOUND: 'Cette information n’est plus disponible avec vos accès actuels.',
+    REQUEST_FAILED: 'L’école a refusé cette demande.',
+  };
+  return messages[code] ?? 'La demande n’a pas pu être confirmée. Vérifiez son résultat auprès de l’école avant de continuer.';
+}
+
+export function toMetadata(command: SchoolCommand): CommandMetadata {
+  return { operationId: command.operationId, schoolId: command.schoolId, kind: command.kind,
+    ...(command.resourceId ? { resourceId: command.resourceId } : {}), resourceVersion: command.resourceVersion, createdAt: command.createdAt };
+}
+
+export function parseMetadata(value: unknown): CommandMetadata | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const item = value as Record<string, unknown>;
+  const keys = Object.keys(item);
+  if (keys.some(key => !['operationId', 'schoolId', 'kind', 'resourceId', 'resourceVersion', 'createdAt'].includes(key))) return null;
+  if (!isUUID(item.operationId) || !isUUID(item.schoolId) || typeof item.kind !== 'string' || !(item.kind in commandSpecs)) return null;
+  if (item.resourceId !== undefined && !isUUID(item.resourceId)) return null;
+  if (!Number.isSafeInteger(item.resourceVersion) || (item.resourceVersion as number) < 0) return null;
+  if (!Number.isSafeInteger(item.createdAt) || (item.createdAt as number) <= 0) return null;
+  const kind = item.kind as CommandKind;
+  const target = commandSpecs[kind].target;
+  if (target === 'resource' && item.resourceId === undefined) return null;
+  return { operationId: item.operationId, schoolId: item.schoolId, kind,
+    ...(item.resourceId ? { resourceId: item.resourceId as string } : {}),
+    resourceVersion: item.resourceVersion as number, createdAt: item.createdAt as number };
+}
+
+/* ---------- Input rules shared with the Apple client ---------- */
+
+export const characters = (value: string): number => [...value].length;
+export const filled = (value: string, maximum: number): boolean => value.trim().length > 0 && characters(value) <= maximum;
+
+export function isEmail(value: string): boolean {
+  const pieces = value.split('@');
+  return pieces.length === 2 && pieces.every(piece => piece.length > 0) && characters(value) <= 254 && !/\s/.test(value)
+    && /\.[^.]+$/.test(pieces[1]!);
+}
+
+/** CHF amount typed as « 95 », « 95.50 » or « 95,5 » → cents; anything else is refused. */
+export function parseCents(text: string): number | null {
+  const value = text.trim().replace(',', '.');
+  const match = /^(\d{1,13})(?:\.(\d{1,2}))?$/.exec(value);
+  if (!match) return null;
+  const cents = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0') || '0');
+  return Number.isSafeInteger(cents) ? cents : null;
+}
+
+export function formatCents(cents: number): string {
+  return new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' }).format(cents / 100);
+}
+
+export function centsToInput(cents: number): string {
+  return cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
+}
+
+export function isCivilDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]);
+}
+
+export function isHttpURL(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password && value.length <= 2048;
+  } catch { return false; }
+}
+
+function offsetMinutes(instant: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(instant));
+  const part = (type: string) => Number(parts.find(item => item.type === type)?.value);
+  const asUTC = Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'), part('second'));
+  return Math.round((asUTC - Math.floor(instant / 1000) * 1000) / 60_000);
+}
+
+/**
+ * Wall-clock time of the school ('YYYY-MM-DDTHH:mm' in its IANA zone) → ISO instant.
+ * Returns null for an invalid value or a local time skipped by a daylight-saving change.
+ */
+export function schoolTimeToInstant(local: string, timeZone: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(local);
+  if (!match || !isCivilDate(local.slice(0, 10)) || Number(match[4]) > 23 || Number(match[5]) > 59) return null;
+  const wall = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]));
+  try {
+    let instant = wall - offsetMinutes(wall, timeZone) * 60_000;
+    instant = wall - offsetMinutes(instant, timeZone) * 60_000;
+    if (instant + offsetMinutes(instant, timeZone) * 60_000 !== wall) return null;
+    return new Date(instant).toISOString();
+  } catch { return null; }
+}
+
+/** ISO instant → wall-clock 'YYYY-MM-DDTHH:mm' of the school, for a datetime-local field. */
+export function instantToSchoolTime(instant: string, timeZone: string): string {
+  const time = Date.parse(instant);
+  const shifted = new Date(time + offsetMinutes(time, timeZone) * 60_000);
+  return shifted.toISOString().slice(0, 16);
+}
+
+/* ---------- Profile field policy (same rules as the API and SchoolProfileRule.isValid) ---------- */
+
+export const profileFields = ['firstName', 'lastName', 'birthDate', 'postalAddress', 'contactEmail', 'contactPhone', 'profilePhotoDocumentId'] as const;
+export type ProfileField = typeof profileFields[number];
+export type ProfileRequirement = 'REQUIRED' | 'CONDITIONAL' | 'OPTIONAL';
+export type ProfileStage = 'JOIN' | 'BEFORE_LESSON' | 'BEFORE_COURSE' | 'OPTIONAL';
+export type ProfilePurpose = 'IDENTIFICATION' | 'LESSON_CONTACT' | 'COURSE_ELIGIBILITY' | 'CERTIFICATE' | 'POSTAL_CONTACT' | 'PERSONALISATION';
+export interface ProfileRule { field: ProfileField; requirement: ProfileRequirement; stage: ProfileStage; purposeCode: ProfilePurpose; explanation: string }
+
+export const fieldPurposes: Readonly<Record<ProfileField, readonly ProfilePurpose[]>> = {
+  firstName: ['IDENTIFICATION'], lastName: ['IDENTIFICATION'], birthDate: ['COURSE_ELIGIBILITY', 'CERTIFICATE'],
+  postalAddress: ['POSTAL_CONTACT', 'CERTIFICATE'], contactEmail: ['LESSON_CONTACT'], contactPhone: ['LESSON_CONTACT'],
+  profilePhotoDocumentId: ['PERSONALISATION'],
+};
+
+export function profileRuleProblem(rule: ProfileRule): string | null {
+  if (!filled(rule.explanation, 1000)) return 'Expliquez à la personne pourquoi ce champ est demandé (1 000 caractères au plus).';
+  if (rule.field === 'firstName' || rule.field === 'lastName') {
+    return rule.requirement === 'REQUIRED' && rule.stage === 'JOIN' && rule.purposeCode === 'IDENTIFICATION' ? null
+      : 'Le prénom et le nom sont requis à l’entrée pour identifier la personne.';
+  }
+  if (rule.field === 'profilePhotoDocumentId') {
+    return rule.requirement === 'OPTIONAL' && rule.stage === 'OPTIONAL' && rule.purposeCode === 'PERSONALISATION' ? null
+      : 'La photo reste facultative et sert uniquement à personnaliser le profil.';
+  }
+  if (!fieldPurposes[rule.field].includes(rule.purposeCode)) return 'Cette utilité ne correspond pas à ce champ.';
+  if (rule.requirement === 'OPTIONAL' && rule.stage !== 'OPTIONAL') return 'Un champ facultatif se demande sans étape obligatoire.';
+  if (rule.requirement === 'CONDITIONAL' && rule.stage !== 'BEFORE_COURSE') return 'Un champ demandé selon la situation se demande avant un cours.';
+  if (rule.requirement === 'REQUIRED' && rule.stage !== 'BEFORE_LESSON' && rule.stage !== 'BEFORE_COURSE') return 'Un champ requis se demande avant une leçon ou avant un cours.';
+  return null;
+}
+
+export function profilePolicyProblem(rules: readonly ProfileRule[]): string | null {
+  if (rules.length < 2 || rules.length > 7) return 'Choisissez entre deux et sept champs.';
+  if (new Set(rules.map(rule => rule.field)).size !== rules.length) return 'Chaque champ ne peut figurer qu’une fois.';
+  if (!rules.some(rule => rule.field === 'firstName') || !rules.some(rule => rule.field === 'lastName')) return 'Le prénom et le nom sont toujours demandés.';
+  for (const rule of rules) { const problem = profileRuleProblem(rule); if (problem) return problem; }
+  return null;
+}
+
+/* ---------- Dossier de l'élève : formation, permis, recherche ---------- */
+
+export type TrainingStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+export interface TrainingTransition { readonly target: TrainingStatus; readonly label: string; readonly reasonRequired: boolean; readonly danger: boolean }
+const transitions: Readonly<Record<'pause' | 'resume' | 'reopen' | 'complete' | 'cancel', TrainingTransition>> = {
+  pause: { target: 'PAUSED', label: 'Mettre en pause', reasonRequired: true, danger: false },
+  resume: { target: 'ACTIVE', label: 'Reprendre', reasonRequired: true, danger: false },
+  reopen: { target: 'ACTIVE', label: 'Rouvrir la formation', reasonRequired: true, danger: false },
+  complete: { target: 'COMPLETED', label: 'Terminer', reasonRequired: true, danger: false },
+  cancel: { target: 'CANCELLED', label: 'Annuler la formation', reasonRequired: true, danger: true },
+};
+/** Changes allowed by the existing administration API; every transition carries its audit reason. */
+export function trainingTransitions(status: TrainingStatus): readonly TrainingTransition[] {
+  if (status === 'ACTIVE') return [transitions.pause, transitions.complete, transitions.cancel];
+  if (status === 'PAUSED') return [transitions.resume, transitions.complete, transitions.cancel];
+  return [transitions.reopen];
+}
+
+/** A new catalogue revision does not make a second active training for the same offering possible. */
+/** A future assignment cancelled before its start has an empty interval, so it is already ended. */
+export function assignmentIsOpen(assignment: { validFrom: string; validUntil: string | null }, now = Date.now()): boolean {
+  if (assignment.validUntil === null) return true;
+  const end = Date.parse(assignment.validUntil);
+  return end > now && end > Date.parse(assignment.validFrom);
+}
+
+export function availableTrainingOfferings<T extends { id: string; offeringKey: string }>(
+  ready: readonly T[], all: readonly { id: string; offeringKey: string }[],
+  trainings: readonly { offeringId: string; status: TrainingStatus }[],
+): T[] {
+  const active = trainings.filter(training => training.status === 'ACTIVE' || training.status === 'PAUSED');
+  const keys = new Set(active.map(training => all.find(offering => offering.id === training.offeringId)?.offeringKey).filter(Boolean));
+  const ids = new Set(active.map(training => training.offeringId));
+  return ready.filter(offering => !ids.has(offering.id) && !keys.has(offering.offeringKey));
+}
+export function transitionProblem(transition: TrainingTransition, reason: string): string | null {
+  if (characters(reason) > 1000) return '1 000 caractères au plus.';
+  return transition.reasonRequired && !filled(reason, 1000) ? 'Indiquez le motif (1 000 caractères au plus).' : null;
+}
+
+export interface PermitDraft { physicalSeen: boolean; validUntil: string; decision: 'APPROVED' | 'REJECTED'; reason: string }
+/** Same rules as the API (AP30): an approval needs the original seen and a date still in force; a refusal needs a reason. */
+export function permitProblem(draft: PermitDraft, today: string): string | null {
+  if (draft.validUntil !== '' && !isCivilDate(draft.validUntil)) return 'Indiquez une date valide.';
+  if (characters(draft.reason) > 2000) return '2 000 caractères au plus.';
+  if (draft.decision === 'REJECTED') return filled(draft.reason, 2000) ? null : 'Indiquez le motif du refus.';
+  if (!draft.physicalSeen) return 'Attestez avoir vu l’original du permis.';
+  if (draft.validUntil !== '' && draft.validUntil < today) return 'Cette date est dépassée : le permis n’est plus valable.';
+  return null;
+}
+export function permitBody(draft: PermitDraft, categoryCode: string): Record<string, unknown> {
+  return { documentId: null, physicalSeen: draft.physicalSeen, categoryCode, validUntil: draft.validUntil === '' ? null : draft.validUntil,
+    decision: draft.decision, reason: draft.reason.trim() === '' ? null : draft.reason.trim() };
+}
+export type PermitState = 'none' | 'valid' | 'expired' | 'rejected';
+export function permitState(latest: { decision: 'APPROVED' | 'REJECTED'; isExpired: boolean } | undefined): PermitState {
+  if (!latest) return 'none';
+  return latest.decision === 'REJECTED' ? 'rejected' : latest.isExpired ? 'expired' : 'valid';
+}
+/** The history is in recording order: the last decision of the category is the current one. */
+export function latestPermit<T extends { categoryCode: string }>(history: readonly T[], categoryCode: string): T | undefined {
+  return [...history].reverse().find(item => item.categoryCode === categoryCode);
+}
+
+/** Lower case without accents, so « eleve » finds « Élève ». */
+export const normalizeSearch = (value: string): string => value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('fr').trim();
+export function matchesSearch(fields: readonly (string | null | undefined)[], query: string): boolean {
+  const wanted = normalizeSearch(query);
+  return wanted === '' || fields.some(field => field != null && normalizeSearch(field).includes(wanted));
+}

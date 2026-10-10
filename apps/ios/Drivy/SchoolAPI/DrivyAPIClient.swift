@@ -7,6 +7,18 @@ struct SchoolHTTPResponse: Sendable {
     let contentType: String?
 }
 
+extension Error {
+    /// Une requête interrompue parce que l’écran s’est fermé ou relancé : ce n’est pas une panne du réseau
+    /// et elle ne doit jamais s’afficher comme telle.
+    var isRequestCancellation: Bool { self is CancellationError || (self as? URLError)?.code == .cancelled }
+
+    /// L’interruption reste une interruption ; toute autre panne devient l’erreur du domaine.
+    func unlessCancelled(_ failure: any Error) -> any Error {
+        if isRequestCancellation { return CancellationError() }
+        return failure
+    }
+}
+
 protocol SchoolHTTPTransport: Sendable {
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse
 }
@@ -45,6 +57,8 @@ actor SchoolURLSessionTransport: SchoolHTTPTransport {
             throw SchoolAPIError.tooLarge
         }
         var data = Data()
+        // Taille annoncée et déjà bornée : une seule allocation au lieu de doublements successifs.
+        if http.expectedContentLength > 0 { data.reserveCapacity(Int(http.expectedContentLength)) }
         for try await byte in bytes {
             guard data.count < Self.maximumResponseBytes else { throw SchoolAPIError.tooLarge }
             data.append(byte)
@@ -87,7 +101,12 @@ final class DrivyAPIClient: SchoolAPI {
     }
 
     func learners(schoolID: UUID, query: String, cursor: String?) async throws -> SchoolPage<SchoolLearner> {
+        try await learners(schoolID: schoolID, query: query, cursor: cursor, instructorMembershipID: nil)
+    }
+
+    func learners(schoolID: UUID, query: String, cursor: String?, instructorMembershipID: UUID?) async throws -> SchoolPage<SchoolLearner> {
         var items = [URLQueryItem(name: "limit", value: "50")]
+        if let instructorMembershipID { items.append(URLQueryItem(name: "instructorMembershipId", value: instructorMembershipID.uuidString)) }
         if !query.isEmpty { items.append(URLQueryItem(name: "q", value: query)) }
         if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }
         let page: SchoolPage<SchoolLearner> = try await read(["v1", "schools", schoolID.uuidString, "learners"], query: items)
@@ -153,7 +172,12 @@ final class DrivyAPIClient: SchoolAPI {
             components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         }
         guard let target = components.url else { throw SchoolAPIError.invalidConfiguration }
-        let token = try await tokenSource.accessToken()
+        let token: String
+        do { token = try await tokenSource.accessToken() }
+        catch IdentityFailure.reauthentication { throw SchoolAPIError.unauthorized }
+        catch let error where error.isRequestCancellation { throw CancellationError() }
+        catch let error as SchoolAPIError { throw error }
+        catch { throw SchoolAPIError.unavailable }
         try Task.checkCancellation()
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolAPIError.unauthorized }
         var request = URLRequest(url: target)
@@ -181,7 +205,7 @@ final class DrivyAPIClient: SchoolAPI {
         case 400:
             let problem = try? JSONDecoder().decode(ProblemCode.self, from: response.data)
             throw problem?.code == "INVALID_CURSOR" ? SchoolAPIError.invalidCursor : .invalidResponse
-        case 429, 500...599: throw SchoolAPIError.unavailable
+        case 408, 429, 500...599: throw SchoolAPIError.unavailable
         default: throw SchoolAPIError.invalidResponse
         }
         guard response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else {

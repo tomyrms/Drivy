@@ -36,6 +36,14 @@ struct AppConfiguration: Codable, Equatable, Sendable {
             && !url.absoluteString.contains("$(")
     }
 
+    /// La gestion de l'école vit sur le portail web, servi par la même origine que l'API.
+    func managementURL(schoolID: UUID) -> URL? {
+        var parts = URLComponents()
+        parts.scheme = apiBaseURL.scheme; parts.host = apiBaseURL.host; parts.port = apiBaseURL.port
+        parts.path = "/app/gestion/\(schoolID.uuidString.lowercased())"
+        return parts.url
+    }
+
     func acceptsIdentityEndpoint(_ url: URL) -> Bool {
         Self.isSecureEndpoint(url) && url.host == issuer.host && (url.port ?? 443) == (issuer.port ?? 443)
     }

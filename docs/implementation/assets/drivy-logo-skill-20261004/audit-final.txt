@@ -1,0 +1,23 @@
+
+=== drivy-symbol-black.svg  (335 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 1: #111111 · gradients 0 · anchors 10
+margins L28.2 R44.0 T16.0 B24.1 · bbox fill 0.605
+· INFO [off-centre-x] Horizontal margins differ (left 28.2, right 44.0). Intentional optical centring? Otherwise centre it.
+· INFO [off-centre-y] Vertical margins differ (top 16.0, bottom 24.1). Remember the optical centre sits slightly above the geometric centre.
+production-readiness score: 98/100 (heuristic)
+
+=== drivy-symbol-white.svg  (368 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 1: #ffffff · gradients 0 · anchors 10
+margins L29.0 R44.8 T16.8 B24.9 · bbox fill 0.596
+· INFO [off-centre-x] Horizontal margins differ (left 29.0, right 44.8). Intentional optical centring? Otherwise centre it.
+· INFO [off-centre-y] Vertical margins differ (top 16.8, bottom 24.9). Remember the optical centre sits slightly above the geometric centre.
+production-readiness score: 98/100 (heuristic)
+
+=== drivy-app-icon.svg  (447 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 2: #245bd6 #ffffff · gradients 0 · anchors 15
+margins L0.0 R0.0 T0.0 B0.0 · bbox fill 1.0
+· INFO [on-tile] White artwork on a full-canvas tile/container — fine for app icons and avatars; make sure a version without the tile exists for other uses.
+production-readiness score: 99/100 (heuristic)

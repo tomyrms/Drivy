@@ -15,7 +15,19 @@ const learnerColumns = `l.id, l.school_id AS "schoolId", l.version, l.person_id 
   l.archived_at AS "archivedAt", l.profile_readiness AS "profileReadiness"`;
 const trainingColumns = `t.id, t.school_id AS "schoolId", t.version, t.learner_id AS "learnerId",
   t.offering_id AS "offeringId", o.category_code AS "categoryCode", t.status,
-  to_char(t.started_on,'YYYY-MM-DD') AS "startedOn", to_char(t.closed_on,'YYYY-MM-DD') AS "closedOn"`;
+  to_char(t.started_on,'YYYY-MM-DD') AS "startedOn", to_char(t.closed_on,'YYYY-MM-DD') AS "closedOn",
+  CASE
+    WHEN NOT ('INSTRUCTOR'=ANY($4::text[])) THEN 'INSTRUCTOR_REQUIRED'
+    WHEN NOT EXISTS(SELECT 1 FROM drivy.school s WHERE s.id=t.school_id AND s.status='ACTIVE') THEN 'SCHOOL_NOT_ACTIVE'
+    WHEN t.status<>'ACTIVE' OR l.archived_at IS NOT NULL THEN 'TRAINING_NOT_ACTIVE'
+    WHEN NOT EXISTS(SELECT 1 FROM drivy.instructor_assignment a WHERE a.school_id=t.school_id AND a.training_id=t.id
+      AND a.instructor_membership_id=$3 AND a.valid_from<=statement_timestamp() AND (a.valid_until IS NULL OR a.valid_until>statement_timestamp())) THEN 'INSTRUCTOR_NOT_ASSIGNED'
+    WHEN NOT o.enabled OR o.default_duration_minutes IS NULL OR NOT EXISTS(SELECT 1 FROM drivy.school_policy_version p
+      WHERE p.school_id=o.school_id AND p.id=o.policy_version_id AND p.approved) THEN 'OFFERING_NOT_READY'
+    WHEN NOT EXISTS(SELECT 1 FROM drivy.instructor_assignment a WHERE a.school_id=t.school_id AND a.training_id=t.id
+      AND a.instructor_membership_id=$3 AND a.valid_from<=statement_timestamp()
+      AND (a.valid_until IS NULL OR a.valid_until>=statement_timestamp()+make_interval(mins=>o.default_duration_minutes))) THEN 'ASSIGNMENT_ENDS_BEFORE_LESSON_END'
+    ELSE NULL END AS "startNowBlockerCode"`;
 // $1 école, $2 personne authentifiée, $3 appartenance courante, $4 rôles relus en base.
 const assigned = (alias: string) => `EXISTS (SELECT 1 FROM drivy.instructor_assignment a
   WHERE a.school_id=$1 AND a.training_id=${alias}.id AND a.instructor_membership_id=$3
@@ -40,13 +52,16 @@ export async function getTraining(db: PoolClient, schoolId: string, actor: Actor
   if (!result.rows[0]) throw notFound();
   return result.rows[0];
 }
+/** Recherche sans casse ni accents (« helene » trouve « Hélène »), sans dépendre de l’extension unaccent. */
+const foldedName = (expression: string) =>
+  `translate(lower(${expression}),'àâäáãåçéèêëíìîïñóòôöõúùûüýÿ','aaaaaaceeeeiiiinooooouuuuyy')`;
 export async function listLearners(db: PoolClient, schoolId: string, actor: Actor, member: Membership,
   filters: LearnerFilters, limit: number, position: Position | undefined): Promise<PageRow[]> {
   const values: unknown[] = params(schoolId, actor, member);
   const bind = (value: unknown) => { values.push(value); return `$${values.length}`; };
   const conditions = ['l.school_id=$1', visibleLearner];
   if (filters.status !== 'ALL') conditions.push(`l.archived_at IS ${filters.status === 'ACTIVE' ? '' : 'NOT '}NULL`);
-  if (filters.q) conditions.push(`strpos(lower(l.display_name), lower(${bind(filters.q)})) > 0`);
+  if (filters.q) conditions.push(`strpos(${foldedName('l.display_name')}, ${foldedName(bind(filters.q))}) > 0`);
   if (filters.requiresAction !== undefined) conditions.push(`(l.profile_readiness='ACTION_REQUIRED')=${bind(filters.requiresAction)}`);
   const trainingConditions = ['ft.school_id=$1', 'ft.learner_id=l.id', visibleTraining('ft')];
   if (filters.trainingStatus) trainingConditions.push(`ft.status=${bind(filters.trainingStatus)}`);

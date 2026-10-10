@@ -1,0 +1,68 @@
+{
+  "renderer": "sharp/librsvg",
+  "scale": 10,
+  "files": 6,
+  "failures": [],
+  "checks": [
+    {
+      "slug": "speed",
+      "bounds": [
+        8.4,
+        9.7,
+        55.6,
+        50.6
+      ],
+      "template_matches_selected": true
+    },
+    {
+      "slug": "placement",
+      "bounds": [
+        12.4,
+        8.4,
+        51.6,
+        55.6
+      ],
+      "template_matches_selected": true
+    },
+    {
+      "slug": "manoeuvres",
+      "bounds": [
+        11.4,
+        8.4,
+        52.6,
+        55.6
+      ],
+      "template_matches_selected": true
+    },
+    {
+      "slug": "motorway",
+      "bounds": [
+        8.4,
+        8.4,
+        55.6,
+        55.6
+      ],
+      "template_matches_selected": true
+    },
+    {
+      "slug": "anticipation",
+      "bounds": [
+        8.4,
+        8.4,
+        55.6,
+        53.6
+      ],
+      "template_matches_selected": true
+    },
+    {
+      "slug": "marker",
+      "bounds": [
+        17.4,
+        8.4,
+        46.6,
+        55.6
+      ],
+      "template_matches_selected": true
+    }
+  ]
+}

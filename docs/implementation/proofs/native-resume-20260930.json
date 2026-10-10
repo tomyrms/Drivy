@@ -1,0 +1,27 @@
+{
+  "sourceCommit": "8547d95811ca05f39edccfa07f7b1ca9fe63769c",
+  "runUrl": "https://github.com/tomyrms/Drivy/actions/runs/36716875435",
+  "result": "success",
+  "tests": [
+    {
+      "suite": "Tests",
+      "device": "iPhone 17 Pro",
+      "osVersion": "26.4.1",
+      "passed": 198,
+      "failed": 0,
+      "skipped": 0,
+      "summarySHA256": "9b4f720e1e7d7353aee9ef97dd101eef876a80345609be36156f23cc73d92733"
+    },
+    {
+      "suite": "iPadTests",
+      "device": "iPad Air 11-inch (M4)",
+      "osVersion": "26.4.1",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "summarySHA256": "05443e8fd0a9e6d93866310d16ab2cee3ce0b81d1678b78e87ea6b2e9f5a1b77"
+    }
+  ],
+  "physicalQualification": "NOT_EXECUTED",
+  "coversLaterUserChanges": false
+}

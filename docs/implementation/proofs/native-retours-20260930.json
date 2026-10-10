@@ -1,0 +1,548 @@
+{
+  "schemaVersion": 1,
+  "reviewedAtUTC": "2026-09-30 14:47:28 UTC",
+  "scope": "Validation Apple des retours du 30 septembre 2026 : résultats natifs et inspection des captures synthétiques iPhone/iPad.",
+  "nativeTests": {
+    "runId": 36722630436,
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/36722630436",
+    "sourceSHA": "fe9fe6bf655d6ba4ce695aa908bc543b675d83e8",
+    "status": "COMPLETED",
+    "conclusion": "failure",
+    "completedAt": "2026-09-30T14:04:18Z",
+    "compilation": "SUCCESS",
+    "testResult": "FAILED",
+    "excludedByRunner": [
+      "DrivyUITests/VisualOrientationTests"
+    ],
+    "artifactDownloaded": true,
+    "artifactId": 11103555388,
+    "artifactName": "Drivy-native-results-fe9fe6bf655d6ba4ce695aa908bc543b675d83e8",
+    "iPhone": {
+      "summaryPath": "artifacts/retours-20260930/native/36722630436/test-reports/Tests/summary.json",
+      "device": "iPhone 17 Pro",
+      "iOS": "26.4.1",
+      "total": 218,
+      "passed": 212,
+      "failed": 6,
+      "skipped": 0,
+      "swiftTesting": {
+        "total": 208,
+        "passed": 202,
+        "failed": 6,
+        "issues": 13
+      },
+      "presentation": {
+        "total": 3,
+        "passed": 3
+      },
+      "ui": {
+        "total": 7,
+        "passed": 7
+      }
+    },
+    "iPad": {
+      "summaryPath": "artifacts/retours-20260930/native/36722630436/test-reports/iPadTests/summary.json",
+      "device": "iPad Air 11-inch (M4)",
+      "iOS": "26.4.1",
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "scope": "3 tests de présentation et 7 tests UI ; la suite Swift Testing complète tourne seulement sur iPhone."
+    },
+    "diagnosis": [
+      {
+        "file": "apps/ios/DrivyTests/SchoolPlanningDefaultsTests.swift",
+        "failedTests": 5,
+        "cause": "PlanningDefaultsServer encode SchoolDetails avec JSONEncoder, qui omet contactPhone et logoAssetId nuls. Le décodeur SchoolDetails exige explicitement ces clés nullable. load échoue avant les comportements testés. La fixture learners omet aussi contactEmail et contactPhone exigés par SchoolLearner.",
+        "correction": "Réponses synthétiques complétées avec NSNull et préconditions de chargement explicites ; aucune modification du client produit.",
+        "retestStatus": "PASSED"
+      },
+      {
+        "file": "apps/ios/DrivyTests/SchoolLiveObservationRecorderTests.swift",
+        "failedTests": 1,
+        "test": "revokedAnchorRequiresAnotherExplicitGestureInsteadOfMovingTheMarker",
+        "cause": "L’unique assertion en échec est la négation d’un appel avec argument .init inline. Le diagnostic Swift Testing indique un résultat () et un appel non évalué. Les assertions suivantes d’absence d’écriture, présence d’erreur et geste sans ancre réussissent ; aucun défaut produit certain établi.",
+        "correction": "Ancre et résultat Bool évalués explicitement avant #expect(accepted == false). Assertion et scénario complets réussis dans la reprise 36727211560, sans changement du code produit.",
+        "retestStatus": "PASSED"
+      }
+    ],
+    "ipaBuild": "SKIPPED_AFTER_TEST_FAILURE"
+  },
+  "nativeRetest": {
+    "runId": 36727211560,
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/36727211560",
+    "sourceSHA": "e4eea1ca365f021045866d4fe2406ff91a037e54",
+    "createdAt": "2026-09-30T14:11:22Z",
+    "status": "COMPLETED",
+    "testResult": "PASSED",
+    "excludedByRunner": [
+      "DrivyUITests/VisualOrientationTests"
+    ],
+    "changedFiles": [
+      "apps/ios/DrivyTests/SchoolPlanningDefaultsTests.swift",
+      "apps/ios/DrivyTests/SchoolLiveObservationRecorderTests.swift"
+    ],
+    "workflowChanged": false,
+    "productSourceChanged": false,
+    "artifactDownloaded": true,
+    "conclusion": "success",
+    "completedAt": "2026-09-30T14:45:48Z",
+    "compilation": "SUCCESS",
+    "artifactId": 11105117302,
+    "artifactName": "Drivy-native-results-e4eea1ca365f021045866d4fe2406ff91a037e54",
+    "compilationStartedAt": "2026-09-30T14:12:11Z",
+    "compilationCompletedAt": "2026-09-30T14:15:10Z",
+    "testsStartedAt": "2026-09-30T14:15:10Z",
+    "testsCompletedAt": "2026-09-30T14:38:26Z",
+    "iPhone": {
+      "summaryPath": "artifacts/retours-20260930/native/36727211560/results/test-reports/Tests/summary.json",
+      "summarySHA256": "250079df6aa5fef33e40ef79fcc085097a1922cd11222acbac8a07a4a9ab16d6",
+      "device": "iPhone 17 Pro",
+      "iOS": "26.4.1",
+      "total": 218,
+      "passed": 218,
+      "failed": 0,
+      "skipped": 0,
+      "swiftTesting": {
+        "total": 208,
+        "passed": 208
+      },
+      "presentation": {
+        "total": 3,
+        "passed": 3
+      },
+      "ui": {
+        "total": 7,
+        "passed": 7
+      }
+    },
+    "iPad": {
+      "summaryPath": "artifacts/retours-20260930/native/36727211560/results/test-reports/iPadTests/summary.json",
+      "summarySHA256": "6eaf4b27e2076ae62ddae9900766df3050499d7fd450f58337ea7a8ab0267797",
+      "device": "iPad Air 11-inch (M4)",
+      "iOS": "26.4.1",
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "scope": "3 tests de présentation et 7 tests UI ; la suite Swift Testing complète tourne seulement sur iPhone."
+    },
+    "previouslyFailedTestsPassed": 6,
+    "ipa": {
+      "build": "129",
+      "version": "0.7.0",
+      "bundleIdentifier": "ch.drivy.qualification",
+      "ipaSHA256": "96ae49c04bee0bffd536aa11229af92166ed45b542c897eb4a26b45fca1e6c06",
+      "manifestHashesVerified": {
+        "Drivy.ipa": true,
+        "build-info.json": true,
+        "Package.resolved": true
+      },
+      "zipCRCVerified": true,
+      "signatureResourcesAbsent": true,
+      "productionConfigurationMatchesIPA87": true,
+      "binaries": [
+        {
+          "path": "Payload/Drivy.app/Drivy",
+          "sha256": "f1326fc4289c7ea2f2cb645177946f22c20749aaf14a2eebb09225e00e4ebfcc",
+          "arm64": true,
+          "platform": "iOS",
+          "codeSignatureLoadCommandAbsent": true,
+          "identicalToIPA87": true
+        },
+        {
+          "path": "Payload/Drivy.app/Frameworks/SQLCipher.framework/SQLCipher",
+          "sha256": "ec36b9a465db3abc5cdedf285a34288b9163b3c00993694bd9e6e7e7104b3dcb",
+          "arm64": true,
+          "platform": "iOS",
+          "codeSignatureLoadCommandAbsent": true,
+          "identicalToIPA87": true
+        }
+      ],
+      "physicalQualification": "NOT_EXECUTED",
+      "artifactId": 11105197186,
+      "artifactName": "Drivy-unsigned-e4eea1ca365f021045866d4fe2406ff91a037e54",
+      "sourceSHA": "e4eea1ca365f021045866d4fe2406ff91a037e54",
+      "path": "artifacts/retours-20260930/native/36727211560/ipa/Drivy.ipa",
+      "buildInfoPath": "artifacts/retours-20260930/native/36727211560/ipa/build-info.json",
+      "signed": false,
+      "archiveCreated": true,
+      "ciSignatureVerification": "PASSED",
+      "comparisonIPA87Path": "artifacts/retours-20260930/ipa/Drivy.ipa",
+      "verificationMethod": "Python zipfile.testzip, SHA-256 des fichiers du manifeste et des binaires extraits, plistlib, lecture des commandes Mach-O ; comparaison octet par octet des deux exécutables avec IPA87.",
+      "installation": "Non exécutée ; signature et installation iLoader par le porteur."
+    }
+  },
+  "visualRuns": [
+    {
+      "runId": 36722303236,
+      "url": "https://github.com/tomyrms/Drivy/actions/runs/36722303236",
+      "sourceSHA": "9c77dd64298f5417845a042d1c0e1f88961fa2e0",
+      "conclusion": "success",
+      "artifactId": 11101029460,
+      "artifactName": "Drivy-native-results-9c77dd64298f5417845a042d1c0e1f88961fa2e0",
+      "downloaded": true,
+      "retainedScreens": [
+        "dossier",
+        "lesson",
+        "observations",
+        "progression",
+        "replay"
+      ],
+      "excludedScreens": [
+        {
+          "screen": "planning",
+          "reason": "Remplacé par le run 36723305491 ; aucune conclusion tirée des quatre anciennes captures."
+        }
+      ],
+      "productTests": "SKIPPED_VISUAL_ONLY"
+    },
+    {
+      "runId": 36723305491,
+      "url": "https://github.com/tomyrms/Drivy/actions/runs/36723305491",
+      "sourceSHA": "cd5a394dd5f87d219837e570c8043f9c5af7f1ed",
+      "conclusion": "success",
+      "artifactId": 11102433165,
+      "artifactName": "Drivy-native-results-cd5a394dd5f87d219837e570c8043f9c5af7f1ed",
+      "downloaded": true,
+      "retainedScreens": [
+        "planning"
+      ],
+      "productTests": "SKIPPED_VISUAL_ONLY"
+    }
+  ],
+  "environment": {
+    "xcode": "26.6",
+    "xcodeBuild": "17F113",
+    "iOSSimulatorSDK": "26.5",
+    "macOS": "26.6.2",
+    "macOSBuild": "25G83",
+    "swift": "6.3.3"
+  },
+  "visualDevices": [
+    {
+      "device": "iPhone 17 Pro",
+      "pixelWidth": 1206,
+      "pixelHeight": 2622,
+      "orientation": "portrait",
+      "appearances": [
+        "light",
+        "dark"
+      ],
+      "reportedContentSize": "large",
+      "accessibilityTextSizes": false
+    },
+    {
+      "device": "iPad Air 11-inch (M4)",
+      "pixelWidth": 1640,
+      "pixelHeight": 2360,
+      "orientation": "portrait",
+      "appearances": [
+        "light",
+        "dark"
+      ],
+      "reportedContentSize": "large",
+      "compactIPadRequested": true,
+      "accessibilityTextSizes": false
+    }
+  ],
+  "visualInspection": {
+    "method": "Ouverture des PNG originaux téléchargés via view_image ; aucune retouche.",
+    "imagesDownloaded": 28,
+    "imagesInspected": 24,
+    "imagesExcluded": 4,
+    "conclusion": "PARTIAL_VISUAL_REVIEW",
+    "certainProductLayoutDefects": [],
+    "observations": [
+      {
+        "id": "VISUAL-01",
+        "kind": "ARTIFACT_LIMITATION",
+        "screen": "iPhone-progression-light-synthetic.png",
+        "runId": 36722303236,
+        "detail": "Une notification système Apple Intelligence masque le haut de l’écran et une partie du titre. La liste reste lisible. Ce n’est pas un défaut Drivy ; zone masquée non qualifiée."
+      },
+      {
+        "id": "VISUAL-02",
+        "kind": "COVERAGE_LIMITATION",
+        "screens": [
+          "observations",
+          "lesson"
+        ],
+        "detail": "Les quatre captures Observations montrent uniquement l’état vide. Le panneau Pendant la leçon visible sur iPad est également vide. Ces captures ne qualifient pas les lignes compactes d’observations ni leurs changements de visibilité."
+      },
+      {
+        "id": "VISUAL-03",
+        "kind": "COVERAGE_LIMITATION",
+        "screens": [
+          "replay",
+          "lesson"
+        ],
+        "detail": "Les coordonnées des fixtures sont synthétiques autour de l’origine ; les captures montrent un fond marin sans route réelle. Les commandes du replay, la séparation iPad et la lacune de timeline sont visibles. Précision GPS, suivi de route, direction et animation du point ne sont pas qualifiés par une image fixe."
+      },
+      {
+        "id": "VISUAL-04",
+        "kind": "COVERAGE_LIMITATION",
+        "screens": [
+          "planning"
+        ],
+        "detail": "Le run corrigé montre formation, moniteur et tarif présélectionnés, détails du rendez-vous repliés et confirmation désactivée tant que les conditions ne sont pas acceptées. Sur iPhone, le bas du tarif et l’accord sont hors du cadrage initial : aucun essai de défilement ou d’acceptation n’a été réalisé par cette revue."
+      },
+      {
+        "id": "VISUAL-05",
+        "kind": "OBSERVATION",
+        "screens": [
+          "dossier",
+          "progression",
+          "planning",
+          "lesson",
+          "replay"
+        ],
+        "detail": "Aucun chevauchement ni libellé tronqué certain dans les zones de contenu effectivement visibles et non masquées. Les parties hors écran des formulaires et menus fermés restent non examinées."
+      }
+    ]
+  },
+  "sourceRelationship": {
+    "betweenVisualAndTests": [
+      "apps/ios/Drivy/SchoolCaptureUI/SchoolCaptureLiveView.swift"
+    ],
+    "betweenTestsAndCorrectedPlanning": [
+      "apps/ios/Drivy/UI/SchoolVisualReview.swift"
+    ],
+    "note": "Diffs restreints à apps/ios, scripts/ios et .github/workflows/refonte-ios.yml. Les captures à 9c77dd6 ne qualifient pas les changements LiveView à fe9fe6b ; la capture planning à cd5a394 corrige sa fixture."
+  },
+  "images": [
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPad-dossier-dark-synthetic.png",
+      "sha256": "c829f7ddfb9e54de73ab4e0b2629f226942a8802cf6d2fa7209e31ef7035d7fa",
+      "width": 1640,
+      "height": 2360,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPad-dossier-light-synthetic.png",
+      "sha256": "7bda21fdf8e9f6e67db946679cd401aed6d4d03a8713ca62307d593b10ce4949",
+      "width": 1640,
+      "height": 2360,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPad-lesson-dark-synthetic.png",
+      "sha256": "74a5b4de213e00452996196c5277809bfe6cd4cdb2af714e35d7b44086cb1f33",
+      "width": 1640,
+      "height": 2360,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPad-lesson-light-synthetic.png",
+      "sha256": "3ba9ef80156948c54ea71a489e4fbf513c41448de1e3b8c28db4e9e00a9f0f6e",
+      "width": 1640,
+      "height": 2360,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPad-observations-dark-synthetic.png",
+      "sha256": "ad9f4f0014e5e36df76d8eab1ada1cb637c7587afba31f9bab6d286b4416140d",
+      "width": 1640,
+      "height": 2360,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPad-observations-light-synthetic.png",
+      "sha256": "8adb287a5b8421eeec2e53ef252698a3ad847f08613a93af35be80e80810240f",
+      "width": 1640,
+      "height": 2360,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPad-planning-dark-synthetic.png",
+      "sha256": "dd91d3379eb9c403316fdc75f9e5b5097d302d1b9be48d32e53b214d46e4e9b2",
+      "width": 1640,
+      "height": 2360,
+      "included": false
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPad-planning-light-synthetic.png",
+      "sha256": "f9ceecec1dc06356206bfc988648c895e9cac18d261a3536457d60e62765e53b",
+      "width": 1640,
+      "height": 2360,
+      "included": false
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPad-progression-dark-synthetic.png",
+      "sha256": "725d82ed0f5c87a7485db74e1ea56ab6e5a4efeef75fb681f4f6b1e96f3fc2f5",
+      "width": 1640,
+      "height": 2360,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPad-progression-light-synthetic.png",
+      "sha256": "b50345f4b773a67dba717275181fbbdc6ce4b14332f4aea2c9fe22264ec3576a",
+      "width": 1640,
+      "height": 2360,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPad-replay-dark-synthetic.png",
+      "sha256": "6c942ff3bf8a8922ce4fa8365226a7b56cf93e26465b8b0140efdf37c3859302",
+      "width": 1640,
+      "height": 2360,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPad-replay-light-synthetic.png",
+      "sha256": "42659c327d71d88d135c5ab8fc8bf9de898b717cbd2599bad5de12b671779586",
+      "width": 1640,
+      "height": 2360,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPhone-dossier-dark-synthetic.png",
+      "sha256": "3d14e5265ca3470701713f29a691bb486fd4ad6406b84f82d0118c870afe40e2",
+      "width": 1206,
+      "height": 2622,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPhone-dossier-light-synthetic.png",
+      "sha256": "8d95163cc86e825a13c6f81aadcf712eb971ea3b5812be224988b08871cafa60",
+      "width": 1206,
+      "height": 2622,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPhone-lesson-dark-synthetic.png",
+      "sha256": "b25b89e4743e6bbeed96a10c06ad1848a8bc40a8beee64867b0f961d0f3e3ae1",
+      "width": 1206,
+      "height": 2622,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPhone-lesson-light-synthetic.png",
+      "sha256": "b0bdc148413f8b22b6a63047d64dc523b53bab8accc4347e21c31cebf921927c",
+      "width": 1206,
+      "height": 2622,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPhone-observations-dark-synthetic.png",
+      "sha256": "bc7e0516d46d12e3d85b86ccb09eef68062ded13a8190f647971ffa114eaca23",
+      "width": 1206,
+      "height": 2622,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPhone-observations-light-synthetic.png",
+      "sha256": "38180333405f4b9259e1d16e95d6dc473a2db7b37a291789fb1d3f78dac6d61b",
+      "width": 1206,
+      "height": 2622,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPhone-planning-dark-synthetic.png",
+      "sha256": "571d6c6ec87b81ca0f3ca42dd7814d1b5fdf86bf5703a91dcd99fdccd8ad2fbe",
+      "width": 1206,
+      "height": 2622,
+      "included": false
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPhone-planning-light-synthetic.png",
+      "sha256": "ef2f4b044876cf6456ed2cbc1de8483a590432e6f20dba20788449d2f9c1df9b",
+      "width": 1206,
+      "height": 2622,
+      "included": false
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPhone-progression-dark-synthetic.png",
+      "sha256": "bb601b67a71dac92094b211fb6d34fc71d73107798796ebc40740927644deb94",
+      "width": 1206,
+      "height": 2622,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPhone-progression-light-synthetic.png",
+      "sha256": "2a42a0a46b387939cc3ba51e50fcf711eed8f0ea9203c76ae1c0bd54a8dd3459",
+      "width": 1206,
+      "height": 2622,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPhone-replay-dark-synthetic.png",
+      "sha256": "556edc8a09bc42ddd10dd8dc5161400b3e1e11442c4cbd5964a8be899bb41523",
+      "width": 1206,
+      "height": 2622,
+      "included": true
+    },
+    {
+      "runId": "36722303236",
+      "path": "artifacts/retours-20260930/visual/36722303236/iPhone-replay-light-synthetic.png",
+      "sha256": "569ac47664cc2a3037351016945b2309d2dac6c18cdc84accc2b8691af8c5d85",
+      "width": 1206,
+      "height": 2622,
+      "included": true
+    },
+    {
+      "runId": "36723305491",
+      "path": "artifacts/retours-20260930/visual/36723305491/iPad-planning-dark-synthetic.png",
+      "sha256": "266b0485d4eebbfaeef868e3d0705849da93fbb306c12291cf80add6c53a1e91",
+      "width": 1640,
+      "height": 2360,
+      "included": true
+    },
+    {
+      "runId": "36723305491",
+      "path": "artifacts/retours-20260930/visual/36723305491/iPad-planning-light-synthetic.png",
+      "sha256": "72b563831d6d258bbbb6f7e7688a7213a687664e14c8660f19e14048c5da7844",
+      "width": 1640,
+      "height": 2360,
+      "included": true
+    },
+    {
+      "runId": "36723305491",
+      "path": "artifacts/retours-20260930/visual/36723305491/iPhone-planning-dark-synthetic.png",
+      "sha256": "bf7c0d1bc3cee967ce212a6c0ef22953cf708a612de33848366c2fcd1fa53b90",
+      "width": 1206,
+      "height": 2622,
+      "included": true
+    },
+    {
+      "runId": "36723305491",
+      "path": "artifacts/retours-20260930/visual/36723305491/iPhone-planning-light-synthetic.png",
+      "sha256": "a1259add1255961140f3fee538478f6499d6a0961420c46587f62371cddf4584",
+      "width": 1206,
+      "height": 2622,
+      "included": true
+    }
+  ],
+  "limitations": [
+    "Données synthétiques uniquement ; aucun compte ni trajet réel consulté.",
+    "Simulateurs Apple ; aucune validation physique GPS, batterie, VoiceOver, haptique ou installation iLoader.",
+    "Portrait et taille de texte standard large uniquement pour les campagnes visuelles inspectées ; paysage et tailles d’accessibilité non qualifiés ici.",
+    "Captures statiques : navigation, synchronisation entre appareils, persistance réseau, retour à Pas encore vu et suivi animé de caméra ne sont pas prouvés visuellement.",
+    "Les résultats s’appliquent aux SHA indiqués, pas automatiquement au HEAD courant.",
+    "IPA 87 déjà vérifiée par root ; ici ses deux binaires et sa configuration ont seulement servi de référence de comparaison pour IPA129. Aucune installation effectuée."
+  ]
+}

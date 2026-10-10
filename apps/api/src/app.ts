@@ -1,3 +1,4 @@
+import {registerCaptureObservations} from './capture-observations.js';
 import { randomUUID } from 'node:crypto';
 import Fastify, { LogController, type FastifyReply, type FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
@@ -9,7 +10,19 @@ import { Cursors } from './cursor.js';
 import { getLearner, getTraining, listLearners, listTrainings } from './queries.js';
 import { registerSchoolSetup } from './school-setup.js';
 import { registerInvitations } from './invitations.js';
+import { registerProfiles } from './profiles.js';
+import { registerCatalogue } from './catalogue.js';
+import { registerLessons } from './lessons.js';
+import { registerLessonSetup } from './lesson-setup.js';
+import { registerLessonReports } from './lesson-reports.js';
 import type { InvitationMailConfig } from './invitation-mail.js';
+import { registerCaptures } from './captures.js';
+import type { CaptureConfig } from './capture-crypto.js';
+import { registerHealth } from './health.js';
+import { registerPermits } from './permits.js';
+import { registerLessonOutcomes } from './lesson-outcomes.js';
+import { registerSharing } from './sharing.js';
+import { registerAdministration } from './administration.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
 const schoolParams = z.object({ schoolId: z.uuid() });
@@ -21,15 +34,68 @@ const learnerQuery = z.object({ ...pagination, q: z.string().max(200).optional()
 const trainingQuery = z.object({ ...pagination, learnerId: z.uuid().optional() }).strict();
 const emptyQuery = z.object({}).strict();
 
-export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig }) {
+const uuidText = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function lowercaseIds(value: unknown): unknown {
+  if (typeof value === 'string') return uuidText.test(value) ? value.toLowerCase() : value;
+  if (Array.isArray(value)) return value.map(lowercaseIds);
+  if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, lowercaseIds(item)]));
+  return value;
+}
+
+/**
+ * PostgreSQL ne stocke pas le caractère NUL (texte : 22021, jsonb : 22P05) : une écriture qui en contient échouerait à chaque essai.
+ * Rendu en 503, ce refus ferait rejouer sans fin la commande par les apps ; il est donc refusé dès l'entrée, valeurs et clés comprises.
+ */
+export function containsNul(value: unknown): boolean {
+  if (typeof value === 'string') return value.includes('\u0000');
+  if (Array.isArray(value)) return value.some(containsNul);
+  if (value !== null && typeof value === 'object') return Object.entries(value).some(([key, item]) => key.includes('\u0000') || containsNul(item));
+  return false;
+}
+
+/**
+ * Classe 22 de PostgreSQL (« data exception ») : la valeur envoyée est inacceptable (trop longue, hors bornes, date impossible,
+ * texte invalide). Un nouvel essai échouerait de la même façon : c'est un refus définitif, pas une panne temporaire.
+ */
+const dataExceptionCodes = new Set(['22001', '22003', '22007', '22008', '22021', '22023', '22P02', '22P05']);
+export function dataError(error: unknown): ApiError | undefined {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+  return typeof code === 'string' && dataExceptionCodes.has(code) ? new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.') : undefined;
+}
+
+/** Cause d'une panne pour l'exploitation : le nom de l'erreur et son code technique seulement, jamais le message ni la pile. */
+function failureSummary(error: unknown): { errorName: string; errorCode?: string } {
+  const errorName = error instanceof Error && /^[A-Za-z0-9_]{1,60}$/.test(error.name) ? error.name : 'Error';
+  const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+  return typeof code === 'string' && /^[A-Za-z0-9_]{1,40}$/.test(code) ? { errorName, errorCode: code } : { errorName };
+}
+
+/** Erreurs de transport client : un JSON invalide ne doit pas créer une commande incertaine à rejouer. */
+export function clientError(error: unknown): ApiError | undefined {
+  const status = typeof error === 'object' && error !== null && 'statusCode' in error ? error.statusCode : undefined;
+  if (typeof status !== 'number' || !Number.isInteger(status) || status < 400 || status > 499) return undefined;
+  if (status === 413) return new ApiError(413, 'PAYLOAD_TOO_LARGE', 'Le contenu envoyé est trop volumineux.');
+  if (status === 415) return new ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Le format du contenu n’est pas pris en charge.');
+  return new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
+}
+
+export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig }) {
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384 });
   const cursors = new Cursors(options.cursorSecret);
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options','nosniff'); });
+  // Un UUID se lit sans tenir compte de la casse (RFC 9562) : l'app iOS écrit en majuscules, PostgreSQL rend des minuscules.
+  // Normaliser à l'entrée évite qu'une comparaison JavaScript refuse un identifiant pourtant identique.
+  app.addHook('preValidation', async request => {
+    if (containsNul(request.params) || containsNul(request.query) || containsNul(request.body)) throw new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
+    request.params = lowercaseIds(request.params) as typeof request.params;
+    request.query = lowercaseIds(request.query) as typeof request.query;
+    if (request.body !== undefined) request.body = lowercaseIds(request.body);
+  });
   app.setErrorHandler((error, request, reply) => {
     const known = error instanceof ApiError ? error : error instanceof ZodError
       ? new ApiError(400, 'INVALID_REQUEST', 'Paramètres invalides.')
-      : new ApiError(503, 'SERVICE_UNAVAILABLE', 'Service temporairement indisponible.');
-    if (!(error instanceof ApiError) && !(error instanceof ZodError)) request.log.error({ requestId: request.id }, 'Échec de traitement API');
+      : clientError(error) ?? dataError(error) ?? new ApiError(503, 'SERVICE_UNAVAILABLE', 'Service temporairement indisponible.');
+    if (known.status >= 500) request.log.error({ requestId: request.id, ...failureSummary(error) }, 'Échec de traitement API');
     if (known.status === 401) reply.header('WWW-Authenticate','Bearer');
     return reply.status(known.status).type('application/problem+json').send({
       type: `urn:drivy:problem:${known.code.toLowerCase()}`, title: known.message,
@@ -110,7 +176,19 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
     });
     versionHeader(data, reply); return envelope(data, request);
   });
+  registerHealth(app,options);
+  registerPermits(app,options);
+  registerLessonOutcomes(app,options);
   registerSchoolSetup(app,options);
   registerInvitations(app,options);
+  registerProfiles(app,options);
+  registerCatalogue(app,options);
+  registerLessonSetup(app,options);
+  registerLessons(app,options);
+  registerLessonReports(app,options);
+  registerCaptures(app,options);
+  registerCaptureObservations(app,options);
+  registerSharing(app,options);
+  registerAdministration(app,options);
   return app;
 }

@@ -5,6 +5,32 @@ import Testing
 
 @MainActor
 struct SchoolCommandOutboxTests {
+    @Test func profileRouteAndSchoolPreconditionSurviveEncryptedRecreation() throws {
+        try inDirectory { directory in
+            let original = try ProfileFixture.command()
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(original)
+            let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            #expect(try reopened.pending(for: original.scope) == original)
+            #expect(original.resourceID != original.routeResourceID && original.hasValidTarget)
+            try reopened.remove(original)
+            let id = UUID()
+            let create = PendingSchoolCommand(id: id, scope: original.scope, kind: .createProfilePolicy,
+                resourceVersion: 0, createdAt: Date(), body: try JSONEncoder().encode(SchoolEmptyProfileCommand(operationId: id)), expectedVersion: 8)
+            try reopened.save(create)
+            #expect(try store.pending(for: create.scope)?.expectedVersion == 8)
+            #expect(try store.pending(for: create.scope)?.resourceVersion == 0)
+        }
+    }
+
+    @Test func historicalArchiveWithoutProfileRoutingFieldsStillDecodes() throws {
+        let original = try command()
+        var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as? [String: Any])
+        object.removeValue(forKey: "routeResourceID"); object.removeValue(forKey: "expectedVersion")
+        let restored = try JSONDecoder().decode(PendingSchoolCommand.self, from: JSONSerialization.data(withJSONObject: object))
+        #expect(restored == original && restored.hasValidTarget)
+        #expect(restored.routeResourceID == nil && restored.expectedVersion == nil)
+    }
     private let key = Data(repeating: 0xA7, count: 32)
     private let person = UUID(uuidString: "10000000-0000-4000-8000-000000000001")!
     private let school = UUID(uuidString: "20000000-0000-4000-8000-000000000001")!
@@ -20,6 +46,16 @@ struct SchoolCommandOutboxTests {
         let body = try JSONSerialization.data(withJSONObject: ["operationId": id.uuidString, "name": text], options: [.sortedKeys])
         return PendingSchoolCommand(id: id, scope: scope ?? self.scope(), kind: .updateSchool,
             resourceVersion: 1, createdAt: Date(timeIntervalSince1970: 1_790_000_000), body: body)
+    }
+
+    private func observationCommand(scope: SchoolCommandScope? = nil) throws -> PendingSchoolCommand {
+        let id = UUID()
+        let body = SchoolObservationBody(operationId: id, draftId: nil, captureId: nil,
+            segmentId: nil, pointSequence: nil, competencyId: nil, text: "Moment à revoir",
+            origin: "LIVE", observedAt: "2026-10-04T10:00:00Z", eventKind: "MARKER", eventStatus: nil)
+        return PendingSchoolCommand(id: id, scope: scope ?? self.scope(), kind: .createObservation,
+            resourceVersion: 0, createdAt: Date(timeIntervalSince1970: 1_790_000_000),
+            body: try JSONEncoder().encode(body), routeResourceID: UUID())
     }
 
     private func inDirectory(_ run: (URL) throws -> Void) throws {
@@ -187,6 +223,157 @@ struct SchoolCommandOutboxTests {
             let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
             #expect(try store.pending(for: scope()) == expected)
             try store.save(expected)
+        }
+    }
+
+    @Test func historicalObservationArchiveWithoutUndoMetadataStillOpens() throws {
+        try inDirectory { directory in
+            let original = try observationCommand()
+            var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as? [String: Any])
+            object.removeValue(forKey: "observationUndoOperationID")
+            let clear = try JSONSerialization.data(withJSONObject: ["version": 1, "commands": [object]])
+            let encrypted = try AES.GCM.seal(clear, using: SymmetricKey(data: key),
+                authenticating: Data("drivy-school-commands-v1".utf8)).combined!
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try encrypted.write(to: directory.appendingPathComponent("pending-v1.bin"))
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            let restored = try #require(try store.pending(for: original.scope))
+            #expect(restored == original && restored.observationUndoOperationID == nil)
+            try store.save(restored)
+        }
+    }
+
+    @Test func observationUndoSurvivesEncryptedReopeningWithTheOriginalRequestIntact() throws {
+        try inDirectory { directory in
+            let original = try observationCommand()
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(original)
+            let undoID = UUID()
+            let requested = original.requestingObservationUndo(operationID: undoID)
+            try store.save(requested)
+            let bytes = try Data(contentsOf: directory.appendingPathComponent("pending-v1.bin"))
+            #expect(bytes.range(of: original.body) == nil)
+            #expect(bytes.range(of: Data(undoID.uuidString.utf8)) == nil)
+            let clear = try AES.GCM.open(AES.GCM.SealedBox(combined: bytes), using: SymmetricKey(data: key),
+                authenticating: Data("drivy-school-commands-v1".utf8))
+            let archive = try #require(JSONSerialization.jsonObject(with: clear) as? [String: Any])
+            #expect(archive["version"] as? Int == 2) // A v1 binary cannot silently discard the undo metadata.
+            let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            let restored = try #require(try reopened.pending(for: original.scope))
+            #expect(restored == requested && restored.observationUndoOperationID == undoID)
+            #expect(restored.withoutObservationUndo == original)
+            try reopened.save(restored)
+            #expect(try store.pending(for: original.scope) == requested)
+        }
+    }
+
+    @Test func aCreationReceiptCannotSettleAnObservationWithADurableWithdrawal() throws {
+        try inDirectory { directory in
+            let original = try observationCommand()
+            let requested = original.requestingObservationUndo(operationID: UUID())
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(original)
+            try store.save(requested)
+            let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            let restored = try #require(try reopened.pending(for: original.scope))
+            let receipt = SchoolOperationReceipt(operationId: original.id, commandType: original.kind.operationType,
+                resourceType: original.kind.resourceType, resourceId: UUID(),
+                committedAt: "2026-10-04T10:00:01Z", resourceVersion: 1)
+            #expect(original.matches(receipt))
+            #expect(restored.withoutObservationUndo.matches(receipt))
+            #expect(!restored.matches(receipt))
+
+            // The profile, planning and report verifiers all use this gate before removal.
+            let file = directory.appendingPathComponent("pending-v1.bin")
+            let before = try Data(contentsOf: file)
+            if restored.matches(receipt) { try reopened.remove(restored) }
+            #expect(try store.pending(for: original.scope) == requested)
+            #expect(try Data(contentsOf: file) == before)
+        }
+    }
+
+    @Test func staleObservationCompletionCannotEraseOrReplaceTheDurableUndo() throws {
+        try inDirectory { directory in
+            let original = try observationCommand()
+            let staleStore = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try staleStore.save(original)
+            let currentStore = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            let requested = original.requestingObservationUndo(operationID: UUID())
+            try currentStore.save(requested)
+            let file = directory.appendingPathComponent("pending-v1.bin")
+            let before = try Data(contentsOf: file)
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) { try staleStore.save(original) }
+            #expect(throws: SchoolConfigurationFailure.storage) { try staleStore.remove(original) }
+            let replacement = original.requestingObservationUndo(operationID: UUID())
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) { try staleStore.save(replacement) }
+            #expect(try Data(contentsOf: file) == before)
+            #expect(try staleStore.pending(for: original.scope) == requested)
+            try currentStore.remove(requested)
+            #expect(try staleStore.pending(for: original.scope) == nil)
+        }
+    }
+
+    @Test func observationUndoKeepsOnePendingCommandPerSchool() throws {
+        try inDirectory { directory in
+            let original = try observationCommand()
+            let requested = original.requestingObservationUndo(operationID: UUID())
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(original)
+            try store.save(requested)
+            let next = try observationCommand()
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(next) }
+            let otherSchool = try observationCommand(scope: scope(schoolID: UUID()))
+            try store.save(otherSchool)
+            let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            #expect(try reopened.pending(for: original.scope) == requested)
+            #expect(try reopened.pending(for: otherSchool.scope) == otherSchool)
+            try reopened.remove(requested)
+            try reopened.save(next)
+            #expect(try store.pending(for: original.scope) == next)
+            #expect(try store.pending(for: otherSchool.scope) == otherSchool)
+        }
+    }
+
+    @Test func observationUndoRequiresACreationAndADistinctOperationIdentifier() throws {
+        try inDirectory { directory in
+            let original = try observationCommand()
+            var nonCreations = [try command()]
+            for kind in [SchoolCommandKind.updateObservation, .removeObservation] {
+                nonCreations.append(PendingSchoolCommand(id: original.id, scope: original.scope, kind: kind,
+                    resourceVersion: 1, createdAt: original.createdAt, body: original.body,
+                    resourceID: UUID(), routeResourceID: original.routeResourceID))
+            }
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            for command in nonCreations {
+                #expect(command.hasValidTarget)
+                let invalid = command.requestingObservationUndo(operationID: UUID())
+                #expect(!invalid.hasValidTarget)
+                #expect(throws: SchoolConfigurationFailure.storage) { try store.save(invalid) }
+            }
+            let sameOperation = original.requestingObservationUndo(operationID: original.id)
+            #expect(!sameOperation.hasValidTarget)
+            #expect(throws: SchoolConfigurationFailure.storage) { try store.save(sameOperation) }
+            #expect(!FileManager.default.fileExists(atPath: directory.path))
+        }
+    }
+
+    @Test func observationUndoCannotChangeTheOriginalRequestWhileBeingQueued() throws {
+        try inDirectory { directory in
+            let original = try observationCommand()
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(original)
+            let file = directory.appendingPathComponent("pending-v1.bin")
+            let before = try Data(contentsOf: file)
+            var body = try #require(JSONSerialization.jsonObject(with: original.body) as? [String: Any])
+            body["text"] = "Un autre moment"
+            let changed = PendingSchoolCommand(id: original.id, scope: original.scope, kind: original.kind,
+                resourceVersion: original.resourceVersion, createdAt: original.createdAt,
+                body: try JSONSerialization.data(withJSONObject: body), routeResourceID: original.routeResourceID,
+                observationUndoOperationID: UUID())
+            #expect(changed.hasValidTarget)
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(changed) }
+            #expect(try Data(contentsOf: file) == before)
+            #expect(try store.pending(for: original.scope) == original)
         }
     }
 }

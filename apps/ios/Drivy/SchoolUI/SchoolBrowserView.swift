@@ -1,109 +1,167 @@
 import SwiftUI
 
+/// Les élèves du moniteur : rechercher, inviter, ouvrir un dossier. La gestion administrative vit sur le web.
 struct SchoolBrowserView: View {
     @Bindable var workspace: SchoolWorkspace
-    let openAccount: () -> Void
-    var openInvitations: (() -> Void)? = nil
-    @State private var choosesSchool = false
+    /// Nil pour le moniteur et l’administration : leur compte vit dans l’onglet Profil.
+    var openAccount: (() -> Void)? = nil
+    var chooseSchool: (() -> Void)? = nil
+    var inviteLearner: (() -> Void)? = nil
+    var openProfile: ((SchoolLearner) -> Void)? = nil
+    var makeLearnerProfile: ((SchoolLearner) -> SchoolProfileWorkspace?)? = nil
+    var openPlanning: ((SchoolLearner) -> Void)? = nil
+    var trainingClient: SchoolTrainingClient? = nil
+    var agendaClient: SchoolAgendaClient? = nil
+    var captureController: SchoolCaptureSessionController? = nil
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        NavigationSplitView {
-            VStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(workspace.school?.name ?? workspace.membership?.schoolName ?? "École")
-                        .font(.headline)
-                    if let membership = workspace.membership {
-                        Text(SchoolPresentation.roles(membership.roles))
-                            .font(.subheadline)
-                            .foregroundStyle(DrivyTheme.muted)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                learnerList
-            }
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            searchableMaster
             .background(DrivyTheme.canvas)
-            .navigationTitle(workspace.isLearnerOnly ? "Mon dossier" : "Élèves")
-            .searchable(text: Binding(get: { workspace.searchText }, set: { workspace.setSearchText($0) }), prompt: "Rechercher un nom")
+            .navigationTitle("Élèves")
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { choosesSchool = true } label: {
-                        Label("Écoles", systemImage: "building.2")
-                    }
-                    .accessibilityIdentifier("choose-school")
+                if let chooseSchool {
+                    DrivySchoolToolbarItem(schoolName: workspace.school?.name ?? workspace.membership?.schoolName, chooseSchool: chooseSchool)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: openAccount) { Label("Compte", systemImage: "person.crop.circle") }
-                        .accessibilityIdentifier("school-account")
-                }
-                if let openInvitations {
+                if let inviteLearner {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button(action: openInvitations) { Label("Invitations", systemImage: "envelope") }
-                            .accessibilityIdentifier("open-school-invitations")
+                        Button(action: inviteLearner) { Label("Inviter un élève", systemImage: "person.badge.plus") }
+                            .accessibilityIdentifier("add-school-learner")
                     }
+                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 }
+                if let openAccount { DrivyAccountToolbarItem(openAccount: openAccount) }
             }
-            .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 440)
+            .navigationSplitViewColumnWidth(min: DrivyLayout.splitListMinWidth, ideal: DrivyLayout.splitListIdealWidth,
+                max: DrivyLayout.splitListMaxWidth)
         } detail: {
             if workspace.selectedLearnerID != nil {
-                SchoolLearnerDetailView(workspace: workspace)
+                SchoolLearnerDossierView(workspace: workspace, openProfile: openProfile, makeLearnerProfile: makeLearnerProfile,
+                    openPlanning: openPlanning, trainingClient: trainingClient,
+                    agendaClient: agendaClient, captureController: captureController)
+                    .id(detailScopeKey)
             } else {
                 SchoolOverviewView(workspace: workspace)
             }
         }
-        .sheet(isPresented: $choosesSchool) {
-            NavigationStack {
-                SchoolChooserView(workspace: workspace, onSelect: { choosesSchool = false })
-                    .navigationTitle("Mes écoles")
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Fermer") { choosesSchool = false }
-                        }
-                    }
-            }
+        .navigationSplitViewStyle(.balanced)
+        .tint(DrivyTheme.accent)
+    }
+
+    /// A pushed page always belongs to the selected learner and the current school rights.
+    private var detailScopeKey: String {
+        "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.joined(separator: ",") ?? ""):\(workspace.membership?.grants.joined(separator: ",") ?? ""):\(workspace.selectedLearnerID?.uuidString ?? "")"
+    }
+
+    @ViewBuilder private var searchableMaster: some View {
+        if workspace.school?.status == "ACTIVE" {
+            learnerList.searchable(text: Binding(get: { workspace.searchText }, set: { workspace.setSearchText($0) }),
+                placement: .navigationBarDrawer(displayMode: .always), prompt: "Rechercher un élève")
+        } else {
+            learnerList
         }
     }
 
+    private var trimmedSearch: String { workspace.searchText.trimmingCharacters(in: .whitespacesAndNewlines) }
+
     private var learnerList: some View {
         List(selection: Binding(get: { workspace.selectedLearnerID }, set: { workspace.selectLearner($0) })) {
-            if workspace.isLoadingSchool || workspace.isSearching {
-                ProgressView(workspace.isLoadingSchool ? "Ouverture de l’école…" : "Recherche en cours…")
-                    .frame(maxWidth: .infinity, minHeight: 80)
+            if (workspace.isLoadingSchool || workspace.isSearching) && workspace.learners.isEmpty {
+                DrivySkeletonRows(count: 5, leading: .avatar)
+                    .drivySkeleton(workspace.isSearching ? "Recherche des élèves…" : "Chargement des élèves…")
+                    .listRowSeparator(.hidden)
+                    .drivyFormRows()
             }
             if let error = workspace.schoolError {
                 SchoolErrorNotice(message: error, retry: {
                     if let membership = workspace.membership { Task { await workspace.selectSchool(membership) } }
                 })
+                .listRowSeparator(.hidden)
+                .drivyFormRows()
             } else if let error = workspace.learnersError {
                 SchoolErrorNotice(message: error, retry: { Task { await workspace.searchLearners(workspace.searchText) } })
+                    .listRowSeparator(.hidden)
+                    .drivyFormRows()
             }
-            if !workspace.isSearching && !workspace.isLoadingSchool && workspace.school != nil && workspace.learners.isEmpty && workspace.learnersError == nil {
-                ContentUnavailableView(
-                    workspace.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Aucun dossier accessible" : "Aucun résultat",
-                    systemImage: "person.crop.rectangle.stack",
-                    description: Text(workspace.searchText.isEmpty ? "Les dossiers autorisés par votre école apparaîtront ici." : "Essayez un autre nom ou effacez la recherche.")
-                )
+            if let school = workspace.school, school.status != "ACTIVE" {
+                DrivyEmptyState(title: school.status == "ARCHIVED" ? "École archivée" : "L’école se prépare",
+                    message: school.status == "ARCHIVED" ? "" : "Termine sa préparation sur le web.",
+                    symbol: school.status == "ARCHIVED" ? "archivebox" : "building.2")
+                    .listRowSeparator(.hidden)
+                    .drivyFormRows()
+            } else if !workspace.isSearching && !workspace.isLoadingSchool && workspace.school != nil && workspace.learners.isEmpty && workspace.learnersError == nil {
+                emptyLearners
+                    .buttonStyle(.borderless)
+                    .listRowSeparator(.hidden)
+                    .drivyFormRows()
             }
             ForEach(workspace.learners) { learner in
                 NavigationLink(value: learner.id) {
                     SchoolLearnerRow(learner: learner, isSelected: workspace.selectedLearnerID == learner.id)
                 }
                 .accessibilityIdentifier("school-learner-\(learner.id.uuidString)")
+                .listRowInsets(EdgeInsets(top: DrivySpacing.xxs, leading: DrivySpacing.m, bottom: DrivySpacing.xxs, trailing: DrivySpacing.m))
+                .listRowSeparatorTint(DrivyTheme.border)
+                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+                .drivyFormRows(isSelected: workspace.selectedLearnerID == learner.id)
             }
             if workspace.nextLearnersCursor != nil {
                 Button { Task { await workspace.loadMoreLearners() } } label: {
-                    if workspace.isLoadingMoreLearners { ProgressView("Chargement…") }
-                    else { Text("Afficher la suite") }
+                    DrivyBusyLabel(title: "Afficher d’autres élèves", busyTitle: "Chargement…", isBusy: workspace.isLoadingMoreLearners)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .contentShape(Rectangle())
                 }
-                .frame(minHeight: 48)
                 .disabled(workspace.isLoadingMoreLearners || workspace.isSearching)
                 .accessibilityIdentifier("more-learners")
+                .onAppear { Task { await workspace.loadMoreLearners() } }
+                .listRowSeparator(.hidden)
+                .drivyFormRows()
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .refreshable { await workspace.searchLearners(workspace.searchText) }
+        .background(DrivyTheme.surface)
+        .refreshable {
+            guard workspace.school?.status == "ACTIVE" else { return }
+            await workspace.searchLearners(workspace.searchText)
+        }
+    }
+
+    @ViewBuilder private var emptyLearners: some View {
+        if !trimmedSearch.isEmpty {
+            DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass",
+                actionTitle: "Effacer la recherche", action: { workspace.setSearchText("") })
+        } else if let inviteLearner {
+            DrivyEmptyState(title: "Aucun élève", symbol: "person.2", actionTitle: "Inviter un élève", action: inviteLearner)
+        } else {
+            DrivyEmptyState(title: "Aucun élève", symbol: "person.2")
+        }
+    }
+}
+
+
+/// School chooser presented from the leading toolbar button of every tab.
+struct SchoolChooserSheet: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Bindable var workspace: SchoolWorkspace
+    let close: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            SchoolChooserView(workspace: workspace, onSelect: close)
+                .navigationTitle("Changer d’école")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Fermer", action: close) }
+                }
+        }
+        .tint(DrivyTheme.accent)
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationSizing(.form)
     }
 }
 
@@ -112,234 +170,104 @@ struct SchoolChooserView: View {
     var onSelect: (() -> Void)? = nil
 
     var body: some View {
-        List {
-            Section {
-                ForEach(workspace.person?.memberships ?? []) { membership in
-                    Button {
-                        workspace.leaveSchool()
-                        onSelect?()
-                        Task { await workspace.selectSchool(membership) }
-                    } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "building.2")
-                                .foregroundStyle(DrivyTheme.accent)
-                                .frame(width: 44, height: 44)
-                                .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: 14))
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(membership.schoolName).font(.headline).foregroundStyle(DrivyTheme.text)
-                                Text(SchoolPresentation.roles(membership.roles))
-                                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                            }
-                            Spacer(minLength: 8)
-                            Image(systemName: "chevron.right").foregroundStyle(DrivyTheme.muted)
+        ScrollView { choices }
+            .scrollBounceBehavior(.basedOnSize)
+            .background(DrivyTheme.surface)
+    }
+
+    private var choices: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            ForEach(workspace.person?.memberships ?? []) { membership in
+                let isCurrent = workspace.membership?.membershipId == membership.membershipId
+                Button {
+                    // L’école déjà ouverte : on ferme sans tout reconstruire.
+                    guard !isCurrent else { onSelect?(); return }
+                    workspace.leaveSchool()
+                    onSelect?()
+                    Task { await workspace.selectSchool(membership) }
+                } label: {
+                    // Pas de symbole d’école sur chaque choix : la coche porte l’école ouverte.
+                    HStack(spacing: DrivySpacing.m) {
+                        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                            Text(membership.schoolName).font(.headline).foregroundStyle(DrivyTheme.text)
+                            Text(SchoolPresentation.roles(membership.roles))
+                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         }
-                        .padding(.vertical, 8)
-                        .contentShape(Rectangle())
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        DrivySelectionMark(isSelected: isCurrent)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("school-choice-\(membership.schoolId.uuidString)")
                 }
-            } header: {
-                Text("Choisissez votre école")
+                .buttonStyle(DrivySelectionCardStyle(isSelected: isCurrent))
+                .accessibilityAddTraits(isCurrent ? .isSelected : [])
+                .accessibilityIdentifier("school-choice-\(membership.schoolId.uuidString)")
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(DrivyTheme.canvas)
+        .drivyPageContent()
     }
 }
 
 private struct SchoolLearnerRow: View {
     let learner: SchoolLearner
     let isSelected: Bool
+
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(SchoolPresentation.initials(learner.displayName))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isSelected ? DrivyTheme.onAccent : DrivyTheme.text)
-                .frame(width: 44, height: 44)
-                .background(isSelected ? DrivyTheme.onAccent.opacity(0.16) : DrivyTheme.surfaceMuted, in: Circle())
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(learner.displayName).font(.headline)
-                    .foregroundStyle(isSelected ? DrivyTheme.onAccent : DrivyTheme.text)
-                if let email = learner.contactEmail, !email.isEmpty {
-                    Text(email).font(.subheadline).foregroundStyle(isSelected ? DrivyTheme.onAccent : DrivyTheme.muted)
-                }
-                if learner.archivedAt != nil {
-                    Label("Dossier archivé", systemImage: "archivebox")
-                        .font(.caption).foregroundStyle(isSelected ? DrivyTheme.onAccent : DrivyTheme.muted)
-                }
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.vertical, 8)
-        .accessibilityElement(children: .combine)
+        DrivyEntityRow(title: learner.displayName, leading: .avatar(learner.displayName), badge: badge, isSelected: isSelected)
+    }
+
+    /// Seul ce qui demande une action reste en badge.
+    private var badge: DrivyStatusBadge? {
+        if learner.archivedAt != nil { return DrivyStatusBadge(title: "Archivé") }
+        if learner.profileReadiness == "ACTION_REQUIRED" { return DrivyStatusBadge(title: "À vérifier", symbol: "exclamationmark.triangle", tone: .warning) }
+        return nil
     }
 }
 
+/// Colonne de détail de l’iPad avant une sélection.
 private struct SchoolOverviewView: View {
     @Bindable var workspace: SchoolWorkspace
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                if let school = workspace.school {
-                    Image(systemName: "building.2")
-                        .font(.largeTitle).foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
-                    Text(school.name).font(.largeTitle.weight(.bold))
-                    Text("Choisissez un dossier pour consulter ses informations et ses formations.")
-                        .foregroundStyle(DrivyTheme.muted)
-                    DrivyPanel {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Contacter l’école").font(.headline)
-                            SchoolInfoRow(title: "E-mail", value: school.contactEmail)
-                            if let phone = school.contactPhone { SchoolInfoRow(title: "Téléphone", value: phone) }
-                        }
-                    }
-                } else if workspace.isLoadingSchool {
-                    ProgressView("Ouverture de l’école…")
-                } else if let error = workspace.schoolError {
-                    SchoolErrorNotice(message: error, retry: {
-                        if let membership = workspace.membership { Task { await workspace.selectSchool(membership) } }
-                    })
-                }
+        Group {
+            if workspace.school != nil {
+                ContentUnavailableView("Sélectionne un élève", systemImage: "person.text.rectangle")
+            } else if workspace.isLoadingSchool {
+                DrivySkeletonRows(count: 3, leading: .avatar)
+                    .drivySkeleton("Chargement de l’école…")
+                    .drivyPageContent()
+            } else if let error = workspace.schoolError {
+                SchoolErrorNotice(message: error, retry: {
+                    if let membership = workspace.membership { Task { await workspace.selectSchool(membership) } }
+                })
+                .drivyPageContent()
             }
-            .padding(24)
-            .frame(maxWidth: 680, alignment: .leading)
-            .frame(maxWidth: .infinity)
         }
-        .background(DrivyTheme.canvas)
-        .navigationTitle("Mon école")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(DrivyTheme.surface)
+        .navigationTitle("Élèves")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
 
-private struct SchoolLearnerDetailView: View {
-    @Bindable var workspace: SchoolWorkspace
-    @State private var showsTraining = false
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                if workspace.isLoadingLearner {
-                    ProgressView("Ouverture du dossier…").frame(maxWidth: .infinity, minHeight: 120)
-                } else if let error = workspace.learnerError {
-                    SchoolErrorNotice(message: error, retry: { Task { await workspace.loadSelectedLearner() } })
-                } else if let learner = workspace.learner {
-                    Text(learner.displayName).font(.largeTitle.weight(.bold))
-                    if learner.archivedAt != nil {
-                        Label("Dossier archivé", systemImage: "archivebox").foregroundStyle(DrivyTheme.muted)
-                    }
-                    if learner.contactEmail != nil || learner.contactPhone != nil {
-                        DrivyPanel {
-                            VStack(alignment: .leading, spacing: 16) {
-                                Text("Coordonnées").font(.headline)
-                                if let email = learner.contactEmail { SchoolInfoRow(title: "E-mail", value: email) }
-                                if let phone = learner.contactPhone { SchoolInfoRow(title: "Téléphone", value: phone) }
-                            }
-                        }
-                    }
-                    trainings
-                }
-            }
-            .padding(20)
-            .frame(maxWidth: 760)
-            .frame(maxWidth: .infinity)
-        }
-        .background(DrivyTheme.canvas)
-        .navigationTitle("Dossier")
-        .navigationBarTitleDisplayMode(.inline)
-        .task(id: workspace.selectedLearnerID) { await workspace.loadSelectedLearner() }
-        .sheet(isPresented: $showsTraining, onDismiss: { workspace.selectTraining(nil) }) {
-            SchoolTrainingDetailView(workspace: workspace)
-        }
+/// `tel:`, `sms:` and `mailto:` links built from what the school recorded, never guessed.
+enum SchoolContactLinks {
+    private static func dialable(_ phone: String) -> String? {
+        // Remove formatting only. A note, extension or misplaced + is not a new
+        // number: keep the recorded contact readable without offering a wrong call.
+        guard phone.allSatisfy({ ($0.isASCII && $0.isNumber) || $0 == "+" || $0.isWhitespace || "().-".contains($0) }) else { return nil }
+        let value = phone.filter { !$0.isWhitespace && !"().-".contains($0) }
+        guard !value.dropFirst().contains("+") else { return nil }
+        return value.filter(\.isNumber).count >= 3 ? value : nil
     }
-
-    private var trainings: some View {
-        DrivyPanel {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Formations").font(.title3.weight(.semibold))
-                if workspace.isLoadingTrainings { ProgressView("Chargement des formations…") }
-                if let error = workspace.trainingsError {
-                    SchoolErrorNotice(message: error, retry: { Task { await workspace.loadTrainings() } })
-                }
-                if !workspace.isLoadingTrainings && workspace.trainings.isEmpty && workspace.trainingsError == nil {
-                    Text("Aucune formation accessible dans ce dossier.")
-                        .foregroundStyle(DrivyTheme.muted)
-                }
-                ForEach(workspace.trainings) { training in
-                    Button {
-                        workspace.selectTraining(training.id)
-                        showsTraining = true
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "steeringwheel").foregroundStyle(DrivyTheme.accent)
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Catégorie \(training.categoryCode)").font(.headline)
-                                Text(SchoolPresentation.trainingStatus(training.status))
-                                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                            }
-                            Spacer(minLength: 8)
-                            Image(systemName: "chevron.right").foregroundStyle(DrivyTheme.muted)
-                        }
-                        .padding(.vertical, 12)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("school-training-\(training.id.uuidString)")
-                    if training.id != workspace.trainings.last?.id { Divider() }
-                }
-                if workspace.nextTrainingsCursor != nil {
-                    Button { Task { await workspace.loadMoreTrainings() } } label: {
-                        if workspace.isLoadingMoreTrainings { ProgressView("Chargement…") }
-                        else { Text("Afficher les autres formations") }
-                    }
-                    .frame(minHeight: 48)
-                    .disabled(workspace.isLoadingMoreTrainings)
-                }
-            }
-        }
-    }
-}
-
-private struct SchoolTrainingDetailView: View {
-    @Bindable var workspace: SchoolWorkspace
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    if workspace.isLoadingTraining {
-                        ProgressView("Ouverture de la formation…")
-                    } else if let error = workspace.trainingError {
-                        SchoolErrorNotice(message: error, retry: { Task { await workspace.loadSelectedTraining() } })
-                    } else if let training = workspace.training {
-                        Text("Catégorie \(training.categoryCode)").font(.largeTitle.weight(.bold))
-                        if let learner = workspace.learner { Text(learner.displayName).font(.title3) }
-                        DrivyPanel {
-                            VStack(alignment: .leading, spacing: 16) {
-                                SchoolInfoRow(title: "État", value: SchoolPresentation.trainingStatus(training.status))
-                                if let date = training.startedOn { SchoolInfoRow(title: "Début", value: SchoolPresentation.civilDate(date)) }
-                                if let date = training.closedOn { SchoolInfoRow(title: "Fin", value: SchoolPresentation.civilDate(date)) }
-                            }
-                        }
-                    } else {
-                        ContentUnavailableView("Formation indisponible", systemImage: "doc.questionmark")
-                    }
-                }
-                .padding(24)
-                .frame(maxWidth: 680, alignment: .leading)
-                .frame(maxWidth: .infinity)
-            }
-            .background(DrivyTheme.canvas)
-            .navigationTitle("Formation")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } }
-            }
-            .task(id: workspace.selectedTrainingID) { await workspace.loadSelectedTraining() }
-        }
-        .tint(DrivyTheme.accent)
+    static func call(_ phone: String) -> URL? { dialable(phone).flatMap { URL(string: "tel:\($0)") } }
+    static func message(_ phone: String) -> URL? { dialable(phone).flatMap { URL(string: "sms:\($0)") } }
+    static func mail(_ address: String) -> URL? {
+        let value = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = value.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2, parts.allSatisfy({ !$0.isEmpty }), !value.contains(where: \.isWhitespace) else { return nil }
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = value
+        return components.url
     }
 }
 
@@ -347,33 +275,24 @@ struct SchoolErrorNotice: View {
     let message: String
     var retry: (() -> Void)? = nil
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(message, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(DrivyTheme.danger)
-                .fixedSize(horizontal: false, vertical: true)
-            if let retry {
-                Button("Réessayer", action: retry)
-                    .buttonStyle(.bordered)
-                    .tint(DrivyTheme.danger)
-                    .frame(minHeight: 48)
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.subheadline)
+                    .accessibilityHidden(true)
+                Text(message)
+                    .font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .accessibilityElement(children: .combine)
+            if let retry { DrivyRetryButton(action: retry) }
         }
-        .padding(16)
+        .foregroundStyle(DrivyTheme.danger)
+        .padding(DrivySpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DrivyTheme.dangerSurface, in: RoundedRectangle(cornerRadius: 16))
-    }
-}
-
-private struct SchoolInfoRow: View {
-    let title: String
-    let value: String
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-            Text(value).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        .background(DrivyTheme.dangerSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+        .accessibilityElement(children: .contain)
     }
 }
 

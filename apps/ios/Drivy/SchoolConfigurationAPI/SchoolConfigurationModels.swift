@@ -46,6 +46,7 @@ struct SchoolDataPolicy: Codable, Sendable, Equatable {
     let contactEmail: String?
     let approvedAt: String?
     let approvedByMembershipId: UUID?
+    var noticeVersionId: UUID? = nil
 }
 
 struct SchoolIdentityCommand: Codable, Sendable, Equatable {
@@ -77,12 +78,6 @@ struct SchoolDataPolicyCommand: Codable, Sendable, Equatable {
     let reviewAcknowledged: Bool
 }
 
-enum SchoolCommandResult: Sendable {
-    case school(SchoolDetails)
-    case setup(SchoolSetup)
-    case dataPolicy(SchoolDataPolicy)
-}
-
 struct SchoolOperationReceipt: Codable, Sendable, Equatable {
     let operationId: UUID
     let commandType: String
@@ -106,26 +101,16 @@ enum SchoolConfigurationFailure: Error, LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .unauthorized: "Votre session a expiré. Connectez-vous à nouveau."
-        case .forbidden: "Vous n’avez plus accès à la configuration de cette école."
-        case .conflict: "La configuration a changé. Rechargez-la avant de confirmer à nouveau."
-        case .incomplete: "L’école n’est pas encore prête. Vérifiez les éléments à compléter."
-        case .rejected: "Cette modification a été refusée. Vérifiez les informations saisies."
-        case .unavailable: "La réponse n’a pas été reçue. Vérifiez le résultat avec la même demande avant de continuer."
+        case .unauthorized: "Ta session a expiré. Connecte-toi à nouveau."
+        case .forbidden: "Tu n’as plus accès à la configuration de cette école."
+        case .conflict: "La configuration a changé. Recharge-la avant de confirmer à nouveau."
+        case .incomplete: "L’école n’est pas encore prête. Vérifie les éléments à compléter."
+        case .rejected: "Cette modification a été refusée. Vérifie les informations saisies."
+        case .unavailable: "La réponse n’a pas été reçue. Vérifie le résultat avec la même demande avant de continuer."
         case .invalidResponse: "La réponse n’a pas pu être vérifiée. La modification n’est pas confirmée."
-        case .storage: "Le suivi protégé de la demande est inaccessible. Vérifiez son résultat avant une nouvelle modification."
-        case .pendingCommand: "Une demande attend encore sa confirmation. Vérifiez son résultat avant une autre modification."
+        case .storage: "Le suivi protégé de la demande est inaccessible. Vérifie son résultat avant une nouvelle modification."
+        case .pendingCommand: "Une demande attend encore sa confirmation. Vérifie son résultat avant une autre modification."
         case .operationUnknown: "Le résultat n’a pas encore pu être établi. La demande reste protégée sur cet appareil."
         }
     }
-}
-
-@MainActor
-protocol SchoolConfigurationAPI: AnyObject {
-    func school(id: UUID) async throws -> SchoolDetails
-    func setup(schoolID: UUID) async throws -> SchoolSetup
-    func readiness(schoolID: UUID) async throws -> SchoolReadiness
-    func dataPolicy(schoolID: UUID) async throws -> SchoolDataPolicy
-    func operation(schoolID: UUID, id: UUID) async throws -> SchoolOperationReceipt
-    func send(_ command: PendingSchoolCommand) async throws -> SchoolCommandResult
 }

@@ -1,0 +1,89 @@
+{
+  "method": "WCAG relative luminance; source tokens matched rendered browser tokens in both schemes",
+  "pairs": {
+    "light": [
+      {
+        "foreground": "text",
+        "background": "surface",
+        "ratio": 14.94
+      },
+      {
+        "foreground": "muted",
+        "background": "surface",
+        "ratio": 5.8
+      },
+      {
+        "foreground": "muted",
+        "background": "canvas",
+        "ratio": 5.41
+      },
+      {
+        "foreground": "accent",
+        "background": "surface",
+        "ratio": 8.15
+      },
+      {
+        "foreground": "on-accent",
+        "background": "accent",
+        "ratio": 8.15
+      },
+      {
+        "foreground": "on-accent",
+        "background": "accent-pressed",
+        "ratio": 11.0
+      },
+      {
+        "foreground": "accent",
+        "background": "accent-soft",
+        "ratio": 7.03
+      },
+      {
+        "foreground": "control-border",
+        "background": "surface",
+        "ratio": 3.68
+      }
+    ],
+    "dark": [
+      {
+        "foreground": "text",
+        "background": "surface",
+        "ratio": 14.14
+      },
+      {
+        "foreground": "muted",
+        "background": "surface",
+        "ratio": 8.2
+      },
+      {
+        "foreground": "muted",
+        "background": "canvas",
+        "ratio": 9.13
+      },
+      {
+        "foreground": "accent",
+        "background": "surface",
+        "ratio": 8.71
+      },
+      {
+        "foreground": "on-accent",
+        "background": "accent",
+        "ratio": 6.74
+      },
+      {
+        "foreground": "on-accent",
+        "background": "accent-pressed",
+        "ratio": 8.29
+      },
+      {
+        "foreground": "accent",
+        "background": "accent-soft",
+        "ratio": 6.37
+      },
+      {
+        "foreground": "control-border",
+        "background": "surface",
+        "ratio": 4.99
+      }
+    ]
+  }
+}

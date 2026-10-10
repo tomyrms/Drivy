@@ -3,16 +3,17 @@ import Security
 @preconcurrency import AppAuth
 
 enum IdentityFailure: Error, LocalizedError {
-    case notConfigured, unavailable, invalidProvider, reauthentication, storage, invalidArchive
+    case notConfigured, unavailable, invalidProvider, reauthentication, storage, invalidArchive, differentAccount
 
     var errorDescription: String? {
         switch self {
         case .notConfigured: "La connexion à l’école n’est pas configurée dans cette version."
-        case .unavailable: "La connexion n’a pas abouti. Vérifiez le réseau puis réessayez."
+        case .unavailable: "La connexion n’a pas abouti. Vérifie le réseau puis réessaie."
         case .invalidProvider: "La configuration du fournisseur d’identité ne correspond pas à cette application."
-        case .reauthentication: "Votre session a expiré. Connectez-vous à nouveau."
-        case .storage: "Le Trousseau de cet appareil est inaccessible. Déverrouillez l’appareil puis réessayez."
-        case .invalidArchive: "La session enregistrée est illisible. Connectez-vous à nouveau."
+        case .reauthentication: "Ta session a expiré. Connecte-toi à nouveau."
+        case .storage: "Le Trousseau de cet appareil est inaccessible. Déverrouille l’appareil puis réessaie."
+        case .invalidArchive: "La session enregistrée est illisible. Connecte-toi à nouveau."
+        case .differentAccount: "La confirmation doit être faite avec le même compte. Ta session actuelle est conservée."
         }
     }
 }

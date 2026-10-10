@@ -66,6 +66,8 @@ struct SchoolTraining: Codable, Sendable, Equatable, Identifiable {
     // Dates civiles, jamais interprétées comme des instants UTC.
     let startedOn: String?
     let closedOn: String?
+    /// Projection indicative de l’école ; le démarrage recontrôle toujours l’affectation.
+    var startNowBlockerCode: String? = nil
 }
 
 struct SchoolPage<Item: Codable & Sendable & Equatable>: Codable, Sendable, Equatable {
@@ -132,6 +134,7 @@ extension SchoolTraining {
         status = try c.decode(String.self, forKey: .status)
         startedOn = try c.decode(String?.self, forKey: .startedOn)
         closedOn = try c.decode(String?.self, forKey: .closedOn)
+        startNowBlockerCode = try c.decodeIfPresent(String.self, forKey: .startNowBlockerCode)
     }
 }
 
@@ -156,15 +159,15 @@ enum SchoolAPIError: Error, LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .unauthorized: "Votre session a expiré. Reconnectez-vous pour continuer."
-        case .forbidden: "Vous n’avez plus accès à cet espace. Actualisez vos écoles."
-        case .identityNotLinked: "Ce compte n’a pas encore accès à Drivy. Contactez votre école."
-        case .notFound: "Ce dossier n’est plus disponible dans votre espace."
-        case .invalidResponse: "Les données reçues ne peuvent pas être affichées. Réessayez."
-        case .unavailable: "Connexion au serveur impossible. Vérifiez votre connexion et réessayez."
-        case .invalidConfiguration: "La connexion à votre école n’est pas encore configurée pour cette version."
-        case .invalidCursor: "Cette liste a changé. Actualisez-la pour continuer."
-        case .tooLarge: "La réponse du serveur dépasse la taille prévue. Réessayez."
+        case .unauthorized: "Ta session a expiré. Reconnecte-toi pour continuer."
+        case .forbidden: "Tu n’as plus accès à cet espace. Actualise tes écoles."
+        case .identityNotLinked: "Ce compte n’a pas encore accès à Drivy. Contacte ton école."
+        case .notFound: "Ce dossier n’est plus disponible dans ton espace."
+        case .invalidResponse: "Les données reçues ne peuvent pas être affichées. Réessaie."
+        case .unavailable: "Connexion au serveur impossible. Vérifie ta connexion et réessaie."
+        case .invalidConfiguration: "La connexion à ton école n’est pas encore configurée pour cette version."
+        case .invalidCursor: "Cette liste a changé. Actualise-la pour continuer."
+        case .tooLarge: "La réponse du serveur dépasse la taille prévue. Réessaie."
         }
     }
 }

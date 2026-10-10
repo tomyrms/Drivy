@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-09-29",
+  "sourceCommit": "e720c4579d8e12c6d0aedb7d0ada6f2f529f30a0",
+  "runId": 36584682257,
+  "runURL": "https://github.com/tomyrms/Drivy/actions/runs/36584682257",
+  "jobConclusion": "failure",
+  "captureTests": [
+    {
+      "suite": "Visual-iPad-dark",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "syntheticData": true,
+  "originalPNGBytesPreserved": true,
+  "fileRotationApplied": false,
+  "fileReencodingApplied": false,
+  "reviewedFileCount": 4,
+  "files": [
+    {
+      "name": "iPad-agenda-dark-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584682257/test-reports/Visual-iPad-dark/attachments/45E58779-596B-4151-B656-A2C07408F082.png",
+      "device": "iPad Pro 13-inch (M5)",
+      "sha256": "81837d86d61899bfa82a33367a9058dc8f236e830c769b1aa9932d3105dff8f2",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "visuallyInspected": true,
+      "findings": []
+    },
+    {
+      "name": "iPad-live-signal-dark-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584682257/test-reports/Visual-iPad-dark/attachments/CFEB1B17-D747-46E1-A235-79F526680BA9.png",
+      "device": "iPad Pro 13-inch (M5)",
+      "sha256": "a4d3b10c4cdad9a1d3053f5f8bfb407390152cf4a30f9beea04b3143c0585ef1",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "visuallyInspected": true,
+      "findings": []
+    },
+    {
+      "name": "iPad-profile-dark-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584682257/test-reports/Visual-iPad-dark/attachments/823FCF9C-6E48-45DB-A428-E10B2936570E.png",
+      "device": "iPad Pro 13-inch (M5)",
+      "sha256": "7590f80217175ca2f72df2d8c5c5f9c4c87a2063d78eca2f00d8565a4751359b",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "visuallyInspected": true,
+      "findings": []
+    },
+    {
+      "name": "iPad-signal-status-dark-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584682257/test-reports/Visual-iPad-dark/attachments/117445F0-6714-467C-A753-100DBBDE18A9.png",
+      "device": "iPad Pro 13-inch (M5)",
+      "sha256": "adebc672838d3ced01500375ab99f4c7d574b6236e19cd0f19d0f9df564aecb3",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "visuallyInspected": true,
+      "findings": []
+    }
+  ],
+  "failureStage": "Capture XCTest passed; export validation incorrectly ignored EXIF orientation.",
+  "reviewNotes": [
+    "All four originals inspected. Theme grid, statuses, agenda and profile remain readable in landscape dark mode.",
+    "The selected-theme close control was rechecked individually at original detail and is visible. No header defect established."
+  ],
+  "dynamicType": "default",
+  "dynamicTypeEvidence": {
+    "runId": 36584682257,
+    "step": "Capturer les écrans pour la revue visuelle",
+    "logTimestamp": "2026-09-29T15:08:53.0190650Z",
+    "environment": {
+      "DRIVY_VISUAL_LARGE_TEXT": "0"
+    }
+  }
+}

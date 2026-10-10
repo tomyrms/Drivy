@@ -1,0 +1,115 @@
+{
+  "date": "2026-09-29",
+  "sourceCommit": "fb809bc009c6f8b5dfd366916e57955d883d58b0",
+  "runId": 36581808488,
+  "artifactId": 11041133636,
+  "artifactName": "Drivy-native-results-fb809bc009c6f8b5dfd366916e57955d883d58b0",
+  "runConclusion": "success",
+  "filesPresent": 14,
+  "uniqueImagesVisuallyInspected": 14,
+  "montageOrRetouchPerformed": false,
+  "syntheticFixturesOnly": true,
+  "appearance": "light",
+  "orientation": "portrait",
+  "physicalGPSOrVoiceOverQualification": false,
+  "files": [
+    {
+      "file": "iPad-capture-preparation-light-synthetic.png",
+      "sha256": "0f2ea64c600b286f67c064d6d7dced06ef72823e2108a1b4c01818d6a725fc0f",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-gps-choice-light-synthetic.png",
+      "sha256": "977990158580124b887d87d76b8ff6cfdd368872663137d1b6d252460986cb34",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-live-light-synthetic.png",
+      "sha256": "c63fd4e397dd8295b4d5744425a970870d24c295070ff10e0e85193332ee020a",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-live-waiting-light-synthetic.png",
+      "sha256": "9f24c0838e128bd87262b6a0bce925fa207100687e8da641d307611fe34b130d",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-observations-light-synthetic.png",
+      "sha256": "e0eac183c9385d023f002394c548eb6663efabc9bc29bd93d37fe01e5b660226",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-replay-light-synthetic.png",
+      "sha256": "eb0f0135a8d56266ddac5fb16d858ed343fb5c733823cd02dae5e302513baef7",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPad-signal-light-synthetic.png",
+      "sha256": "3b913b3609de5aeb9c483a0124c30c5cbe57eee49dce2611a5fb115d3a82eb0a",
+      "widthPixels": 2064,
+      "heightPixels": 2752,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-capture-preparation-light-synthetic.png",
+      "sha256": "2b10ccc6b0542d79954412c3241e351f26c4f543124f8ecec669a1df1061e227",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-gps-choice-light-synthetic.png",
+      "sha256": "0058c91ce9c3b913ab3845ff20b5d9b53820e6b4637a68258d87929e8c9b0f1b",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-live-light-synthetic.png",
+      "sha256": "a9e19901a5d671c1ea111d5fcbccd66bf8cbffe4cc5a37acaf6b071da823b235",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-live-waiting-light-synthetic.png",
+      "sha256": "086a1a6aa9e4bb6b587563dfb913a0cc15a72657e8a59993c02b61709ae634e3",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-observations-light-synthetic.png",
+      "sha256": "2cbe818df80d69f5a8f9eed2931a6da0769677cb0ba88da50921eaeab0e8b0e6",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-replay-light-synthetic.png",
+      "sha256": "7516b215412699c922473a7bdf5743cb0df791272770c2227a2a380b7c35f577",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "file": "iPhone-signal-light-synthetic.png",
+      "sha256": "9f001adf07d784fb5dfdd067bc8f6bf4cd3ed1a3f11678b8758ab37678e6452c",
+      "widthPixels": 1206,
+      "heightPixels": 2622,
+      "openedIndividuallyWithViewImage": true
+    }
+  ]
+}

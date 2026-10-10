@@ -26,6 +26,19 @@ private actor InvitationTransport: SchoolHTTPTransport {
 
 @MainActor
 struct SchoolInvitationClientTests {
+    @Test func unavailableDeliveryIsADefinitiveRefusalThatPointsToCodes() async throws {
+        let command = try InvitationFixture.command()
+        for status in [409, 503] {
+            let transport = InvitationTransport(Data("{\"code\":\"INVITATION_DELIVERY_UNAVAILABLE\"}".utf8),
+                status: status, mediaType: "application/problem+json")
+            let client = SchoolInvitationClient(baseURL: URL(string: "https://api.example.invalid")!, tokenSource: InvitationToken(), transport: transport)
+            await #expect(throws: SchoolInvitationFailure.deliveryUnavailable) { try await client.send(command) }
+        }
+        #expect(SchoolInvitationFailure.deliveryUnavailable.permitsCorrectionOfFreshRequest)
+        #expect(SchoolInvitationFailure.deliveryUnavailable.provesNotCommitted)
+        #expect(!SchoolInvitationFailure.conflict.provesNotCommitted)
+        #expect(SchoolInvitationFailure.deliveryUnavailable.localizedDescription.contains("avec un code"))
+    }
     private let base = URL(string: "https://api.example.invalid")!
     private let school = ConfigurationFixture.schoolID
     private func envelope<T: Encodable>(_ value: T) throws -> Data {
@@ -131,7 +144,8 @@ struct SchoolInvitationClientTests {
             (409, "INVITATION_USED", .invitationUsed), (409, "INVITATION_REVOKED", .invitationRevoked),
             (409, "POLICY_REVIEW_REQUIRED", .policyRequired), (409, "SCHOOL_ARCHIVED", .schoolInactive),
             (412, "VERSION_CONFLICT", .conflict), (400, "INVALID_REQUEST", .rejected),
-            (503, "INVITATION_DELIVERY_UNAVAILABLE", .unavailable), (409, "IDEMPOTENCY_MISMATCH", .pendingCommand),
+            (503, "INVITATION_DELIVERY_UNAVAILABLE", .deliveryUnavailable), (503, "SERVICE_UNAVAILABLE", .unavailable),
+            (409, "IDEMPOTENCY_MISMATCH", .pendingCommand),
             (403, "INVITATION_ROLE_FORBIDDEN", .forbidden)
         ]
         for (status, code, expected) in cases {

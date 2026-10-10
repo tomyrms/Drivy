@@ -1,0 +1,304 @@
+{
+  "date": "2026-10-09",
+  "scope": "Stabilité des leçons après fusion de La trace ; fixtures synthétiques",
+  "imagesModified": false,
+  "reviewMethod": "Chaque PNG ouvert avec view_image ; viewport visible seulement",
+  "imagesReviewed": 26,
+  "campaigns": [
+    {
+      "commit": "6443d023ae6700df0dae627d0cffe30153b78a95",
+      "run": 37932243065,
+      "url": "https://github.com/tomyrms/Drivy/actions/runs/37932243065",
+      "conclusion": "success",
+      "captureMethod": "xcrun simctl io screenshot",
+      "orientation": "portrait",
+      "devices": [
+        {
+          "deviceFamily": "iPhone",
+          "simulatorName": "iPhone 17 Pro",
+          "compactIPadRequested": false,
+          "requestedContentSize": "large",
+          "reportedContentSize": "large"
+        },
+        {
+          "deviceFamily": "iPad",
+          "simulatorName": "iPad Pro 13-inch (M5)",
+          "compactIPadRequested": false,
+          "requestedContentSize": "large",
+          "reportedContentSize": "large"
+        }
+      ],
+      "files": [
+        {
+          "file": "iPad-agenda-dark-synthetic.png",
+          "widthPixels": 2064,
+          "heightPixels": 2752,
+          "bytes": 254105,
+          "sha256": "957ed29e96b1adfce07c8fef08608261885ade02b1b0d7dff9c731788ba468af",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPad-agenda-light-synthetic.png",
+          "widthPixels": 2064,
+          "heightPixels": 2752,
+          "bytes": 256407,
+          "sha256": "c5154432cddab75f2838a216079e368a8de95aeced5d9275f50dec325e6425df",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPad-dossier-multi-dark-synthetic.png",
+          "widthPixels": 2064,
+          "heightPixels": 2752,
+          "bytes": 393199,
+          "sha256": "531117a43485a927ca8c793f97265373b17d7c262f92b8efccc8dce09a978356",
+          "reviewed": true,
+          "retainedInRepository": true
+        },
+        {
+          "file": "iPad-dossier-multi-light-synthetic.png",
+          "widthPixels": 2064,
+          "heightPixels": 2752,
+          "bytes": 398164,
+          "sha256": "ed101da87eaa12ba8ab7969b99716ef9a0818a24af28c92ddbdc7228a41e28bc",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPad-home-tabs-dark-synthetic.png",
+          "widthPixels": 2064,
+          "heightPixels": 2752,
+          "bytes": 198547,
+          "sha256": "bf251c765a62a65ce5cc93177aba29187efc8c9240912bc291dc1f097b75ccbc",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPad-home-tabs-light-synthetic.png",
+          "widthPixels": 2064,
+          "heightPixels": 2752,
+          "bytes": 201869,
+          "sha256": "8937d7f48e700f97468189b52597f95ba51b04aaa5240103a7af0a597d7e244c",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPad-home-to-finish-dark-synthetic.png",
+          "widthPixels": 2064,
+          "heightPixels": 2752,
+          "bytes": 198306,
+          "sha256": "78b1b77c6c47091fe33cdb2ae20b87f12f545bd5a8bbf26fddf2f03105011979",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPad-home-to-finish-light-synthetic.png",
+          "widthPixels": 2064,
+          "heightPixels": 2752,
+          "bytes": 201946,
+          "sha256": "866b9c2a1d71d91555592519865a5158b4f87f189d0f4b06b4eee5ce1a45bed2",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPad-lesson-finish-dark-synthetic.png",
+          "widthPixels": 2064,
+          "heightPixels": 2752,
+          "bytes": 241739,
+          "sha256": "463b76fe26c5c3a656d93e7cd5db3d737c067dc59140041936047a2538db02a5",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPad-lesson-finish-light-synthetic.png",
+          "widthPixels": 2064,
+          "heightPixels": 2752,
+          "bytes": 269351,
+          "sha256": "a7c4f7ca5e865584a98182e2caec18785b901038b4b0f5ce691c805a6aa242ac",
+          "reviewed": true,
+          "retainedInRepository": true
+        },
+        {
+          "file": "iPad-lessons-history-dark-synthetic.png",
+          "widthPixels": 2064,
+          "heightPixels": 2752,
+          "bytes": 195148,
+          "sha256": "8daac4d9be91ced7d8e06b7e97cc453750b8bafce415b12c9eb878f799d60c1d",
+          "reviewed": true,
+          "retainedInRepository": true
+        },
+        {
+          "file": "iPad-lessons-history-light-synthetic.png",
+          "widthPixels": 2064,
+          "heightPixels": 2752,
+          "bytes": 202374,
+          "sha256": "4d96b973170c178c49147768fc54c5b08ee130f4a83fc8f497784c462dc472df",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPhone-agenda-dark-synthetic.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 275789,
+          "sha256": "1f99a2db60c1df557dca543e11ebd39bee5fb8906f14e579f8830c8d0a68fbfb",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPhone-agenda-light-synthetic.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 266670,
+          "sha256": "67c311994ec11ebbd4d2f08f6e2ebddf2a62b50716ee842de50349ec43d9b79e",
+          "reviewed": true,
+          "retainedInRepository": true
+        },
+        {
+          "file": "iPhone-dossier-multi-dark-synthetic.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 267829,
+          "sha256": "4e987441f6b4c965ef451e342378dc5fa560ad4ce936809bae7f5a81ddc9c36f",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPhone-dossier-multi-light-synthetic.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 261596,
+          "sha256": "fa2124b3709efb49d10b11d1a5295db47736e55011fdda273cd41e978f646f93",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPhone-home-tabs-dark-synthetic.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 262141,
+          "sha256": "fe390cf8192c278075a753aae6a64b377a2d454804f048a183a7a6708a1e4522",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPhone-home-tabs-light-synthetic.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 330614,
+          "sha256": "ea28c55c43157639df3e1b216c993e6101462dacf4039eed2d0edd59e80ece9b",
+          "reviewed": true,
+          "retainedInRepository": true
+        },
+        {
+          "file": "iPhone-home-to-finish-dark-synthetic.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 261301,
+          "sha256": "d8b02306d347cf0a2f12ea818da893f583e56b5a65e9178ab0558a37011a03e0",
+          "reviewed": true,
+          "retainedInRepository": true
+        },
+        {
+          "file": "iPhone-home-to-finish-light-synthetic.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 331799,
+          "sha256": "b4a5414527c262c6772617a5b5ef70f776a55933228affd980d549a846f4d5ce",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPhone-lesson-finish-dark-synthetic.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 219805,
+          "sha256": "75e86a6719e7ca4da8ec7e03bbf7e040f70e20248800eb0e89bb2c143564b8cf",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPhone-lesson-finish-light-synthetic.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 233546,
+          "sha256": "a3165fe4731a8c3f30b44ea30f9afddc4a67b99c6daf1106cd8ca684221caac3",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPhone-lessons-history-dark-synthetic.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 187199,
+          "sha256": "b34c3ee64edb0343652b261669c5e338f8160851afb10ecd0db2c19a834a9aa4",
+          "reviewed": true,
+          "retainedInRepository": false
+        },
+        {
+          "file": "iPhone-lessons-history-light-synthetic.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 204009,
+          "sha256": "25fdef6f3ba70a9e2d630cfa38cc1e40ee7aaa140f24a5bd51d296bb3be6d3d2",
+          "reviewed": true,
+          "retainedInRepository": false
+        }
+      ]
+    },
+    {
+      "commit": "45691dbcf387131dd02022d522276eddf0dbd63f",
+      "run": 37935879096,
+      "url": "https://github.com/tomyrms/Drivy/actions/runs/37935879096",
+      "conclusion": "success",
+      "captureMethod": "xcrun simctl io screenshot",
+      "orientation": "portrait",
+      "devices": [
+        {
+          "deviceFamily": "iPhone",
+          "simulatorName": "iPhone 17 Pro",
+          "compactIPadRequested": false,
+          "requestedContentSize": "large",
+          "reportedContentSize": "large"
+        }
+      ],
+      "files": [
+        {
+          "file": "iPhone-home-tabs-dark-synthetic.png",
+          "repositoryFile": "iPhone-home-tabs-dark-synthetic-45691db.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 264582,
+          "sha256": "44fda394b6cefe4efea2e86c790c052a57dbf20df0f12365f3f3c839a649a759",
+          "reviewed": true,
+          "retainedInRepository": true
+        },
+        {
+          "file": "iPhone-home-tabs-light-synthetic.png",
+          "repositoryFile": "iPhone-home-tabs-light-synthetic-45691db.png",
+          "widthPixels": 1206,
+          "heightPixels": 2622,
+          "bytes": 334246,
+          "sha256": "add914b04d3ef567227b2305b8b93e495b1f49b0a2cde77ec8a3d6c7f078a8d9",
+          "reviewed": true,
+          "retainedInRepository": true
+        }
+      ]
+    }
+  ],
+  "findings": [
+    "Attente sans départ : action Commencer ; début durable : action Continuer.",
+    "Agenda, dossier, historique et fiche lisibles, sans superposition ni contenu coupé dans les viewports inspectés.",
+    "Ambiguïté des deux actions de départ dans Aujourd’hui : libellé secondaire clarifié ensuite en Leçon sans rendez-vous, commit 45691db.",
+    "Le libellé secondaire final Leçon sans rendez-vous tient sur une ligne, avec commandes distinctes et sans chevauchement, dans les captures iPhone clair/sombre de 45691db."
+  ],
+  "limits": [
+    "Taille large du simulateur = taille usuelle, pas une taille d’accessibilité ; pas de rotation dans cette campagne.",
+    "La barre système est figée à 9:41, sans figer l’horloge métier ; les états de retard suivent la véritable heure de capture.",
+    "La fixture lesson-finish montre ici une fiche non démarrée ; ces 24 images ne qualifient pas le formulaire final du bilan.",
+    "La fixture lessons-history ne renseigne pas learnerDisplayName ; son libellé de repli Élève ne qualifie pas les noms servis en production.",
+    "Captures statiques synthétiques : aucune preuve de GPS physique, batterie, VoiceOver, OIDC réel, clavier ou transitions complètes.",
+    "Le libellé secondaire des captures 6443d02 précède la clarification 45691db ; capture ciblée consignée séparément."
+  ]
+}

@@ -206,6 +206,273 @@ struct SchoolWorkspaceTests {
         #expect(workspace.learners.isEmpty)
         #expect(workspace.learnersError == SchoolAPIError.invalidResponse.localizedDescription)
     }
+
+    @Test func returningToTheAppKeepsTheScreenAndOnlyARightsChangeReloadsTheSchool() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let now = Date()
+        let calls = RefreshCounter()
+        api.meHandler = { calls.value += 1; throw SchoolAPIError.unavailable }
+        // Within five minutes of the last read, nothing is asked.
+        await workspace.refreshAccount(now: now.addingTimeInterval(10))
+        #expect(calls.value == 0)
+        // Offline: everything stays on screen, nothing is revoked.
+        await workspace.refreshAccount(now: now.addingTimeInterval(400))
+        #expect(calls.value == 1)
+        #expect(workspace.person != nil && workspace.membership != nil && workspace.school != nil)
+        #expect(workspace.accountError == nil && !workspace.accessRevoked && !workspace.isLoadingAccount)
+        // Same rights: the school is not reloaded.
+        let loadedSchool = workspace.school
+        api.meHandler = { api.person }
+        await workspace.refreshAccount(now: now.addingTimeInterval(800))
+        #expect(workspace.school == loadedSchool && !workspace.isLoadingSchool)
+        // A new access epoch reloads the school with the new membership.
+        let promoted = SchoolMembership(membershipId: WorkspaceFixture.firstMembership.membershipId, schoolId: WorkspaceFixture.firstSchool,
+            schoolName: "École test A", roles: ["INSTRUCTOR", "ADMIN"], grants: [], accessEpoch: 2)
+        api.meHandler = { SchoolPerson(personId: api.person.personId, version: 2, displayName: "Compte de test", locale: "fr", memberships: [promoted]) }
+        await workspace.refreshAccount(now: now.addingTimeInterval(1_200))
+        #expect(workspace.membership?.accessEpoch == 2 && workspace.school != nil)
+        // A refusal closes the account, as any read does.
+        api.meHandler = { throw SchoolAPIError.forbidden }
+        await workspace.refreshAccount(now: now.addingTimeInterval(1_600))
+        #expect(workspace.person == nil && workspace.accessRevoked)
+    }
+
+    @Test func reloadingTheDossierKeepsItsTrainingsOnScreenUntilTheAnswerReplacesThem() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        let before = workspace.trainings
+        #expect(before.count == 1)
+        let held = WorkspaceResponse<SchoolPage<SchoolTraining>>()
+        api.trainingsHandler = { _, _, _ in try await held.value() }
+        let reload = Task { await workspace.loadTrainings() }
+        await held.waitUntilRequested()
+        // The screen (and the sheets it carries) depends on these rows: they stay while the list is read again.
+        #expect(workspace.trainings == before)
+        #expect(workspace.isLoadingTrainings)
+        let fresh = WorkspaceFixture.training()
+        held.succeed(.init(items: [fresh], nextCursor: nil))
+        await reload.value
+        #expect(workspace.trainings == [fresh])
+        #expect(!workspace.isLoadingTrainings)
+    }
+
+    @Test func aFailedReloadOfTheTrainingsKeepsTheRowsAndSaysSo() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        let before = workspace.trainings
+        api.trainingsHandler = { _, _, _ in throw SchoolAPIError.unavailable }
+        await workspace.loadTrainings()
+        #expect(workspace.trainings == before)
+        #expect(workspace.trainingsError != nil)
+        #expect(!workspace.isLoadingTrainings)
+        #expect(!workspace.accessRevoked)
+    }
+
+    @Test func refreshingAPartialTrainingListNeverMakesItLookComplete() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        api.trainingsHandler = { school, learner, _ in
+            .init(items: [WorkspaceFixture.training(school: school, learner: learner)], nextCursor: "more-trainings")
+        }
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        let held = WorkspaceResponse<SchoolPage<SchoolTraining>>()
+        api.trainingsHandler = { _, _, _ in try await held.value() }
+        let reload = Task { await workspace.loadTrainings() }
+        await held.waitUntilRequested()
+        // Le dossier ne doit pas basculer vers une formation unique tant qu'une autre page est connue.
+        #expect(workspace.trainings.count == 1 && workspace.nextTrainingsCursor == "more-trainings")
+        held.fail(SchoolAPIError.unavailable)
+        await reload.value
+        #expect(workspace.trainings.count == 1 && workspace.nextTrainingsCursor == "more-trainings")
+        #expect(workspace.trainingsError != nil && !workspace.isLoadingTrainings)
+    }
+
+    @Test func reopeningTheOpenDossierShowsNoLoadingScreen() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learner != nil)
+        let again = Task { await workspace.loadSelectedLearner() }
+        await Task.yield()
+        #expect(workspace.learner != nil)
+        #expect(!workspace.isLoadingLearner)
+        await again.value
+        #expect(workspace.learner?.id == WorkspaceFixture.learnerID)
+        #expect(workspace.trainings.count == 1)
+    }
+
+    @Test func rereadingTheDossierUpdatesItsRowInTheLearnerListWithoutReorderingIt() async throws {
+        let api = WorkspaceAPIStub()
+        let before = WorkspaceFixture.learner(id: UUID(), name: "Élève précédent")
+        let stale = WorkspaceFixture.learner(name: "Ancien nom")
+        let after = WorkspaceFixture.learner(id: UUID(), name: "Élève suivant")
+        api.learnersHandler = { _, _, _ in .init(items: [before, stale, after], nextCursor: "page-2") }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        #expect(workspace.learners == [before, stale, after])
+        let corrected = WorkspaceFixture.learner(name: "Nom corrigé", version: 2)
+        api.learnerHandler = { _, _ in corrected }
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learner == corrected)
+        // La liste Élèves montre déjà le nom relu, à la même place, et sa pagination n'a pas bougé.
+        #expect(workspace.learners == [before, corrected, after])
+        #expect(workspace.nextLearnersCursor == "page-2")
+    }
+
+    @Test func rereadingADossierAbsentFromTheListNeverAddsARow() async throws {
+        let api = WorkspaceAPIStub()
+        let listed = WorkspaceFixture.learner(id: UUID(), name: "Élève listé")
+        api.learnersHandler = { _, _, _ in .init(items: [listed], nextCursor: nil) }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learner?.id == WorkspaceFixture.learnerID)
+        #expect(workspace.learners == [listed])
+    }
+
+    @Test func rereadingTheAccountNeverEmptiesTheScreenWhileTheSameAccountIsSignedIn() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        let held = WorkspaceResponse<SchoolPerson>()
+        api.meHandler = { try await held.value() }
+        let reread = Task { await workspace.loadAccount() }
+        await held.waitUntilRequested()
+        // A sheet opened on this membership would be closed by any purge: nothing is cleared.
+        #expect(workspace.person != nil && workspace.membership != nil && workspace.school != nil)
+        #expect(workspace.learner?.id == WorkspaceFixture.learnerID)
+        held.succeed(api.person)
+        await reread.value
+        #expect(workspace.membership == WorkspaceFixture.firstMembership)
+        #expect(workspace.learner?.id == WorkspaceFixture.learnerID)
+        #expect(workspace.accountError == nil && !workspace.accessRevoked)
+    }
+
+    @Test func retryingTheCurrentSchoolKeepsTheScopeButDropsItsLateAnswers() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let membership = try #require(workspace.membership)
+        let held = WorkspaceResponse<SchoolDetails>()
+        api.schoolHandler = { _ in try await held.value() }
+        let retry = Task { await workspace.selectSchool(membership) }
+        await held.waitUntilRequested()
+        #expect(workspace.membership == membership)
+        #expect(workspace.person != nil)
+        held.succeed(WorkspaceFixture.school(membership.schoolId))
+        await retry.value
+        #expect(workspace.school?.id == membership.schoolId && !workspace.isLoadingSchool)
+    }
+
+    @Test func retryingTheCurrentSchoolNeverLeavesTheOpenDossierLoadingForever() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let membership = try #require(workspace.membership)
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        let held = WorkspaceResponse<SchoolLearner>()
+        api.learnerHandler = { _, _ in try await held.value() }
+        let reading = Task { await workspace.loadSelectedLearner() }
+        await held.waitUntilRequested()
+        #expect(workspace.isLoadingLearner && workspace.learner == nil)
+        // Nouvel essai de l’école pendant la lecture du dossier : la réponse en vol sera écartée, le dossier est relu.
+        api.learnerHandler = nil
+        await workspace.selectSchool(membership)
+        #expect(workspace.selectedLearnerID == WorkspaceFixture.learnerID)
+        #expect(workspace.learner?.id == WorkspaceFixture.learnerID && !workspace.isLoadingLearner && !workspace.isLoadingTrainings)
+        #expect(workspace.trainings.count == 1 && workspace.learnerError == nil)
+        held.succeed(WorkspaceFixture.learner(name: "Réponse tardive"))
+        await reading.value
+        #expect(workspace.learner?.displayName == "Élève de test" && !workspace.isLoadingLearner)
+    }
+
+    @Test func aBriefNetworkFailureDoesNotPostponeTheNextAccountCheck() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let now = Date()
+        let calls = RefreshCounter()
+        api.meHandler = { calls.value += 1; throw SchoolAPIError.unavailable }
+        await workspace.refreshAccount(now: now.addingTimeInterval(400))
+        await workspace.refreshAccount(now: now.addingTimeInterval(410))
+        #expect(calls.value == 2)
+    }
+
+    @Test func closingTheAccountDropsTheSharedTrainingModel() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let membership = WorkspaceFixture.firstMembership
+        let scope = SchoolCommandScope(personID: api.person.personId, schoolID: membership.schoolId,
+            membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: "https://api.example.test")
+        let client = SchoolTrainingClient(baseURL: URL(string: "https://api.example.test")!, tokenSource: WorkspaceToken())
+        let learner = UUID(), training = UUID()
+        let first = SchoolTrainingModelCache.model(scope: scope, membership: membership, learnerID: learner, trainingID: training, client: client)
+        #expect(first.isNew)
+        workspace.reset()
+        #expect(first.model.invalidated)
+        let second = SchoolTrainingModelCache.model(scope: scope, membership: membership, learnerID: learner, trainingID: training, client: client)
+        #expect(second.isNew && second.model !== first.model)
+        SchoolTrainingModelCache.reset()
+    }
+
+    @Test(arguments: [false, true])
+    func anOlderAccountRefreshCannotReplaceNewerRightsOrCloseTheCurrentAccount(fails: Bool) async {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let held = WorkspaceResponse<SchoolPerson>()
+        api.meHandler = { try await held.value() }
+        let old = Task { await workspace.refreshAccount(minimumInterval: 0) }
+        await held.waitUntilRequested()
+        let membership = SchoolMembership(membershipId: WorkspaceFixture.firstMembership.membershipId,
+            schoolId: WorkspaceFixture.firstSchool, schoolName: "École actualisée", roles: ["INSTRUCTOR", "ADMIN"],
+            grants: [], accessEpoch: 2)
+        let updated = SchoolPerson(personId: api.person.personId, version: 2, displayName: "Nom actualisé",
+            locale: "fr", memberships: [membership])
+        api.meHandler = { updated }
+        await workspace.refreshAccount(minimumInterval: 0)
+        if fails { held.fail(SchoolAPIError.forbidden) }
+        else { held.succeed(api.person) }
+        await old.value
+        #expect(workspace.person == updated)
+        #expect(workspace.membership == membership && workspace.school != nil)
+        #expect(!workspace.accessRevoked && workspace.accountError == nil)
+    }
+
+    @Test func theGuidedWelcomeIsOfferedAtMostOnceAWeekPerMembership() throws {
+        let defaults = try #require(UserDefaults(suiteName: "drivy-tests-onboarding-\(UUID().uuidString)"))
+        let membership = UUID(), now = Date()
+        #expect(!SchoolOnboardingDeferral.isDeferred(membership, now: now, defaults: defaults))
+        SchoolOnboardingDeferral.record(membership, now: now, defaults: defaults)
+        #expect(SchoolOnboardingDeferral.isDeferred(membership, now: now.addingTimeInterval(6 * 86_400), defaults: defaults))
+        #expect(!SchoolOnboardingDeferral.isDeferred(membership, now: now.addingTimeInterval(7 * 86_400 + 1), defaults: defaults))
+        #expect(!SchoolOnboardingDeferral.isDeferred(UUID(), now: now, defaults: defaults))
+    }
+}
+
+@MainActor
+private final class RefreshCounter { var value = 0 }
+
+@MainActor
+private final class WorkspaceToken: AccessTokenSource {
+    func accessToken() async throws -> String { "test-token" }
 }
 
 @MainActor
@@ -215,6 +482,7 @@ private final class WorkspaceAPIStub: SchoolAPI {
     var schoolHandler: ((UUID) async throws -> SchoolDetails)?
     var learnersHandler: ((UUID, String, String?) async throws -> SchoolPage<SchoolLearner>)?
     var trainingsHandler: ((UUID, UUID, String?) async throws -> SchoolPage<SchoolTraining>)?
+    var learnerHandler: ((UUID, UUID) async throws -> SchoolLearner)?
     var learnerQueries: [String] = []
 
     init(memberships: [SchoolMembership] = [WorkspaceFixture.firstMembership]) {
@@ -234,7 +502,8 @@ private final class WorkspaceAPIStub: SchoolAPI {
         return .init(items: [WorkspaceFixture.learner(school: schoolID)], nextCursor: nil)
     }
     func learner(schoolID: UUID, id: UUID) async throws -> SchoolLearner {
-        WorkspaceFixture.learner(id: id, school: schoolID)
+        if let learnerHandler { return try await learnerHandler(schoolID, id) }
+        return WorkspaceFixture.learner(id: id, school: schoolID)
     }
     func trainings(schoolID: UUID, learnerID: UUID, cursor: String?) async throws -> SchoolPage<SchoolTraining> {
         if let trainingsHandler { return try await trainingsHandler(schoolID, learnerID, cursor) }

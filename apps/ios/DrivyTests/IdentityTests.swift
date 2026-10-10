@@ -166,6 +166,35 @@ struct IdentityTests {
         #expect(session.errorMessage == nil && !session.isAuthenticated && !session.isWorking)
     }
 
+    @Test func restoreKeepsAnAuthorizedSessionWhileTheIdentityProviderIsUnreachable() async throws {
+        let vault = TestIdentityVault()
+        vault.data = try StoredIdentity.encode(identityState(), configuration: identityConfiguration)
+        let authorizer = TestIdentityAuthorizer(state: try identityState())
+        authorizer.refreshFailure = IdentityFailure.unavailable
+        let session = IdentitySession(configuration: identityConfiguration, vault: vault, authorizer: authorizer)
+        await session.restore()
+        // Une panne n'est pas une session expirée : l'app s'ouvre, la session enregistrée est conservée.
+        #expect(session.isAuthenticated && session.errorMessage == nil && !session.isWorking)
+        #expect(vault.data != nil && authorizer.refreshCount == 1)
+        await #expect(throws: IdentityFailure.self) { try await session.accessToken() }
+        #expect(session.isAuthenticated)
+        authorizer.refreshFailure = nil
+        let token = try await session.accessToken()
+        #expect(token == "synthetic-test-access")
+        #expect(session.isAuthenticated && session.errorMessage == nil)
+    }
+
+    @Test func restoreStillAsksToSignInAgainWhenTheProviderRefusesTheSession() async throws {
+        let vault = TestIdentityVault()
+        vault.data = try StoredIdentity.encode(identityState(), configuration: identityConfiguration)
+        let authorizer = TestIdentityAuthorizer(state: try identityState())
+        authorizer.refreshFailure = IdentityFailure.reauthentication
+        let session = IdentitySession(configuration: identityConfiguration, vault: vault, authorizer: authorizer)
+        await session.restore()
+        #expect(!session.isAuthenticated)
+        #expect(session.errorMessage == IdentityFailure.reauthentication.localizedDescription)
+    }
+
     @Test func restoreRejectsConfigurationDriftBeforeRefresh() async throws {
         let vault = TestIdentityVault()
         vault.data = try StoredIdentity.encode(identityState(), configuration: identityConfiguration)
@@ -224,6 +253,7 @@ private final class TestIdentityAuthorizer: IdentityAuthorizing {
     var authorizationCount = 0
     var refreshCount = 0
     var authorizationFailure: Error?
+    var refreshFailure: Error?
     private var authorizationWaiter: CheckedContinuation<Void, Never>?
     private var refreshWaiter: CheckedContinuation<Void, Never>?
     init(state: OIDAuthState) { self.state = state }
@@ -236,6 +266,7 @@ private final class TestIdentityAuthorizer: IdentityAuthorizing {
     func freshToken(for state: OIDAuthState) async throws -> String {
         refreshCount += 1
         if holdRefresh { await withCheckedContinuation { refreshWaiter = $0 } }
+        if let refreshFailure { throw refreshFailure }
         return "synthetic-test-access"
     }
     // Simule volontairement une réponse réseau qui arrive malgré l'annulation.

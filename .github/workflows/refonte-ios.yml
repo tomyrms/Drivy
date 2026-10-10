@@ -1,22 +1,51 @@
 name: Refonte · iOS
 on:
-  push:
-    branches: [master, 'codex/**']
-    paths:
-      - 'apps/ios/**'
-      - 'scripts/ios/**'
-      - '.github/workflows/refonte-ios.yml'
-  pull_request:
-    branches: [master]
-    paths:
-      - 'apps/ios/**'
-      - 'scripts/ios/**'
-      - '.github/workflows/refonte-ios.yml'
+  # Full simulator campaign is run explicitly at the end of implementation.
+  # Every native delivery still builds its device IPA in ipa-essai.yml.
   workflow_dispatch:
+    inputs:
+      visual_only:
+        description: Capturer les écrans iPhone et iPad sans lancer la campagne de tests
+        type: boolean
+        default: false
+      unit_only:
+        description: Relancer uniquement DrivyTests sur iPhone, sans parcours UI, iPad ni IPA
+        type: boolean
+        default: false
+      ui_test_suite:
+        description: Suite UITest à relancer sur iPhone et iPad sans IPA ; vide pour la campagne complète
+        type: string
+        default: ''
+      visual_screens:
+        description: Écrans à capturer, séparés par des espaces
+        type: string
+        default: 'home-tabs agenda learners learner dossier progression design-system'
+      visual_devices:
+        description: Appareils à capturer, séparés par des espaces
+        type: string
+        default: 'iPhone iPad'
+      visual_compact_ipad:
+        description: Exiger un iPad Air 11 ou 10,9 pouces, sinon Pro 11 pouces
+        type: boolean
+        default: false
+      visual_appearances:
+        description: Apparences à capturer, séparées par des espaces
+        type: string
+        default: 'light dark'
+      visual_orientations:
+        description: 'Vide : portrait simctl existant ; sinon portrait et/ou landscape via XCUITest'
+        type: string
+        default: ''
+      visual_large_text:
+        description: Vérifier les grandes tailles de texte d’accessibilité
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
-  group: refonte-ios-${{ github.ref }}
+  # A long screen matrix must not exceed GitHub's 400-character group limit.
+  # Visual runs are independent; each test scope stays serial on its branch.
+  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only && github.run_id || inputs.unit_only && 'unit' || inputs.ui_test_suite != '' && 'ui' || 'tests' }}
   cancel-in-progress: false
 jobs:
   apple:
@@ -54,11 +83,17 @@ jobs:
           cp apps/ios/Package.resolved apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
           xcodebuild -resolvePackageDependencies -onlyUsePackageVersionsFromResolvedFile -project apps/ios/Drivy.xcodeproj -scheme Drivy
           cp apps/ios/Drivy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved artifacts/ios/Package.resolved
-      - name: Compiler l'application et les tests natifs
+      - name: Compiler l'application et les cibles nécessaires
         shell: bash
+        env:
+          VISUAL_ONLY: ${{ inputs.visual_only }}
+          VISUAL_ORIENTATIONS: ${{ inputs.visual_orientations }}
+          VISUAL_SCREENS: ${{ inputs.visual_screens }}
         run: |
           set -euo pipefail
-          xcodebuild build-for-testing \
+          action=build-for-testing
+          if [[ "$VISUAL_ONLY" == true && -z "$VISUAL_ORIENTATIONS" && ! " $VISUAL_SCREENS " =~ [[:space:]](live-signal|signal-status|lesson-evidence|lesson-permit|planning-details|planning-confirmation)[[:space:]] ]]; then action=build; fi
+          xcodebuild "$action" \
             -project apps/ios/Drivy.xcodeproj -scheme Drivy \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath artifacts/ios/DerivedData \
@@ -75,12 +110,32 @@ jobs:
           shutil.copyfile(matches[0], 'artifacts/ios/simulator-entitlements.plist')
           PY
       - name: Tests natifs et parcours iPhone puis iPad
+        if: inputs.visual_only != true
         shell: bash
+        env:
+          DRIVY_IOS_UNIT_ONLY: ${{ inputs.unit_only && '1' || '0' }}
+          DRIVY_IOS_UI_TEST_SUITE: ${{ inputs.ui_test_suite }}
         run: bash scripts/ios/test-simulator.sh
+      - name: Capturer les écrans pour la revue visuelle
+        if: inputs.visual_only == true
+        # Cold iPhone and iPad boots on macOS 26 can each take several minutes.
+        # Keep enough time for both devices and the complete requested matrix.
+        timeout-minutes: 35
+        shell: bash
+        env:
+          DRIVY_VISUAL_SCREENS: ${{ inputs.visual_screens }}
+          DRIVY_VISUAL_DEVICES: ${{ inputs.visual_devices }}
+          DRIVY_VISUAL_COMPACT_IPAD: ${{ inputs.visual_compact_ipad && '1' || '0' }}
+          DRIVY_VISUAL_APPEARANCES: ${{ inputs.visual_appearances }}
+          DRIVY_VISUAL_ORIENTATIONS: ${{ inputs.visual_orientations }}
+          DRIVY_VISUAL_LARGE_TEXT: ${{ inputs.visual_large_text && '1' || '0' }}
+        run: bash scripts/ios/capture-screens.sh
       - name: Construire l'IPA pour iLoader
+        if: inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == ''
         shell: bash
         run: bash scripts/ios/build-ipa.sh
       - name: Artefact IPA
+        if: inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Drivy-unsigned-${{ github.sha }}
@@ -116,6 +171,10 @@ jobs:
             artifacts/ios/*.xcresult
             artifacts/ios/test-reports/
             artifacts/ios/*.png
+            artifacts/ios/visual-orientation-*.json
+            artifacts/ios/visual-device-*.json
+            artifacts/ios/test-device-*.json
+            artifacts/ios/simctl-ui-help.txt
             artifacts/ios/*-build.log
             artifacts/ios/*-test.log
             artifacts/ios/Package.resolved
@@ -126,3 +185,51 @@ jobs:
             artifacts/ios/simulator-entitlements.plist
           if-no-files-found: warn
           retention-days: 14
+      # Dernière étape : les captures (fixtures fictives uniquement, voir
+      # SchoolVisualReview.swift et JourneyVisualReview.swift) sont réduites en
+      # JPEG et imprimées en base64 à la fin du journal, lisible par l'API des
+      # journaux quand le téléchargement des artefacts est impossible.
+      - name: Captures en base64 pour la revue
+        if: always() && inputs.visual_only == true && inputs.visual_orientations == '' && !contains(inputs.visual_screens, 'live-signal') && !contains(inputs.visual_screens, 'signal-status') && !contains(inputs.visual_screens, 'lesson-evidence') && !contains(inputs.visual_screens, 'lesson-permit') && !contains(inputs.visual_screens, 'planning-details') && !contains(inputs.visual_screens, 'planning-confirmation')
+        shell: bash
+        env:
+          DRIVY_VISUAL_SCREENS: ${{ inputs.visual_screens }}
+          DRIVY_VISUAL_DEVICES: ${{ inputs.visual_devices }}
+          DRIVY_VISUAL_APPEARANCES: ${{ inputs.visual_appearances }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/drivy-review"
+          mkdir -p "$out"
+          read -r -a screens <<< "${DRIVY_VISUAL_SCREENS:-home-tabs agenda learners learner school}"
+          read -r -a devices <<< "${DRIVY_VISUAL_DEVICES:-iPhone iPad}"
+          read -r -a appearances <<< "${DRIVY_VISUAL_APPEARANCES:-light dark}"
+          for value in "${screens[@]}" "${devices[@]}" "${appearances[@]}"; do
+            [[ "$value" =~ ^[A-Za-z-]+$ ]] || { echo 'Nom de capture invalide.' >&2; exit 1; }
+          done
+          count=0
+          for kind in "${devices[@]}"; do
+            for appearance in "${appearances[@]}"; do
+              for screen in "${screens[@]}"; do
+                png="artifacts/ios/${kind}-${screen}-${appearance}-synthetic.png"
+                if [[ ! -f "$png" ]]; then
+                  echo "Capture absente : $(basename "$png")"
+                  continue
+                fi
+                name="$(basename "$png" .png)"
+                jpg="$out/${name}.jpg"
+                width=$(sips -g pixelWidth "$png" | awk '/pixelWidth/ { print $2 }')
+                if [[ "$width" -gt 600 ]]; then
+                  sips -s format jpeg -s formatOptions 45 --resampleWidth 600 "$png" --out "$jpg" > /dev/null
+                else
+                  sips -s format jpeg -s formatOptions 45 "$png" --out "$jpg" > /dev/null
+                fi
+                echo "Capture ${name}.jpg : $(wc -c < "$jpg" | tr -d ' ') octets, sha256 $(shasum -a 256 "$jpg" | cut -d ' ' -f 1)"
+                echo "===DRIVY-CAPTURE-BEGIN ${name}.jpg==="
+                base64 < "$jpg" | tr -d '\n' | fold -w 3000
+                echo
+                echo "===DRIVY-CAPTURE-END ${name}.jpg==="
+                count=$((count + 1))
+              done
+            done
+          done
+          echo "Captures imprimées : $count"

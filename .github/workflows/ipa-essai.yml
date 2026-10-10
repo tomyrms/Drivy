@@ -1,7 +1,7 @@
 name: IPA d'essai · iLoader
 on:
   push:
-    branches: [master, 'codex/**']
+    branches: [master, 'codex/**', 'claude/**']
     paths:
       - '.github/workflows/ipa-essai.yml'
       - 'apps/ios/Drivy/**'
@@ -56,13 +56,13 @@ jobs:
           cat > artifacts/ios/LIRE-MOI.txt <<'EOF'
           Drivy Essais — iPhone/iPad avec iOS/iPadOS 26 minimum.
           Importer Drivy.ipa dans iLoader pour le signer et l'installer.
-          Ce workflow vérifie la compilation Release et le paquet iOS non signé.
+          Ce workflow vérifie la compilation Release, l'archive Xcode et le paquet iOS non signé.
           Les tests natifs s'exécutent séparément dans le workflow Refonte · iOS.
           L'IPA est fourni pour essai : sa production ne signifie pas que ces tests ont réussi.
           Qualification sur appareil physique : NOT_EXECUTED.
-          Laboratoire local : séances, GPS facultatif, observations, historique et bilan.
-          Accès scolaire : connexion, écoles, élèves et formations si les services sont configurés.
-          Configuration ADMIN : coordonnées, textes de données et activation explicite de l'école.
+          Leçons : agenda, élèves, GPS facultatif, observations et bilan.
+          Accès scolaire : connexion, formations, trajets et invitations par code.
+          Administration approfondie : console web de l'école.
           Voir schoolConnectionConfigured dans build-info.json ; sans configuration, les accès scolaires sont indisponibles.
           EOF
       - name: Télécharger l'IPA d'essai

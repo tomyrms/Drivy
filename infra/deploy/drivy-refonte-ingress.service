@@ -1,6 +1,6 @@
 [Unit]
-Description=Drivy refonte - filtrage des seuls ports 3001 et 8081
-Before=drivy-refonte-api.service drivy-refonte-identity.service
+Description=Drivy refonte - filtrage des seuls ports 3001, 3002 et 8081
+Before=drivy-refonte-api.service drivy-refonte-web.service drivy-refonte-identity.service
 After=network-pre.target
 
 [Service]

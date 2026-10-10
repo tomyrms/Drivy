@@ -1,0 +1,26 @@
+{
+  "commit": "9dcad86e6bda6c303b9379040ee31b2c6d4b52bb",
+  "run": "37217708082",
+  "version": "0.7.0",
+  "build": "102",
+  "ipaSHA256": "adff60719ab2e24cc4f0269be79c72d92f286fe5c4a6d33b2a61cb9a51575f26",
+  "archiveCreated": true,
+  "unsigned": true,
+  "zipAndBinaryHashesVerified": true,
+  "productionConfigurationVerified": true,
+  "debugVisualFixturesExcluded": true,
+  "physicalQualification": "NOT_EXECUTED",
+  "manifestHashesVerified": [
+    "Drivy.ipa",
+    "build-info.json",
+    "Package.resolved"
+  ],
+  "serverRelease": "52c355f5e71028866ae9bdf6a7dd83d07ad66f9c",
+  "serverChecksRun": "37217708094",
+  "apiTests": 234,
+  "webTests": 104,
+  "newAvailabilityPostgreSQLTests": 10,
+  "appleTests": "NOT_EXECUTED_AT_USER_REQUEST",
+  "screenshots": "NOT_EXECUTED",
+  "review": "Source review of UI, planning, encrypted outbox and undo; current observation version reread after finalization."
+}

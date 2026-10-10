@@ -1,0 +1,47 @@
+{
+  "appliedAtUtc": "2026-09-29T13:44:34Z",
+  "environment": "homelab",
+  "authorization": "Demande explicite du porteur : autoriser aussi son iPad",
+  "observedDevice": {
+    "platform": "IOS",
+    "deviceClass": "TABLET",
+    "modelCode": "iPad13,17",
+    "osVersion": "26.6",
+    "appBuild": "63",
+    "previousAssessmentStatus": "NEEDS_CHECK",
+    "previousProfileVersion": "UNQUALIFIED"
+  },
+  "trialProfile": {
+    "version": "ESSAI-PORTEUR-IPAD-2026-09-29",
+    "platform": "IOS",
+    "deviceClass": "TABLET",
+    "modelCode": "iPad13,17",
+    "osVersion": "26.*",
+    "appBuild": "*",
+    "expiresAt": "2026-12-31T23:59:59+01:00",
+    "maxSampleAgeSeconds": 10,
+    "maxHorizontalAccuracyMeters": 65,
+    "minimumFreeBytes": 1,
+    "requireBackground": false,
+    "requirePreciseLocation": true
+  },
+  "onlyEnvironmentKeyChanged": "CAPTURE_QUALIFICATION_PROFILES_JSON",
+  "existingPhoneProfilePreserved": true,
+  "runtimeParserValidatedCandidate": true,
+  "effectiveProcessProfilesVerified": true,
+  "apiActive": true,
+  "internalReadyHttpStatus": 200,
+  "backups": {
+    "database": "/root/drivy-refonte-before-ipad-trial-20260929T134434Z-061236636e03.dump",
+    "databaseRoot0600": true,
+    "pgRestoreListVerified": true,
+    "configuration": "/root/drivy-api-env-before-ipad-trial-20260929T134434Z-061236636e03.backup",
+    "configurationRoot0600": true,
+    "configurationContentsVerified": true
+  },
+  "databaseMutated": false,
+  "newDeviceAssessmentRequired": true,
+  "physicalQualification": "NOT_QUALIFIED",
+  "physicalGpsAccuracyBatteryOrBackgroundTestPerformed": false,
+  "containsAccountIdentifiersSecretsTokensOrPositions": false
+}

@@ -1,0 +1,91 @@
+{
+  "name": "Drivy",
+  "audience": "Moniteurs et élèves, application native iPhone/iPad sur le terrain ; bureau école sur le web",
+  "adjectives": [
+    "calme",
+    "précis",
+    "accessible",
+    "fiable"
+  ],
+  "preserve": [
+    "cobalt #245BD6",
+    "nom Drivy",
+    "courbes des pictogrammes"
+  ],
+  "avoid": [
+    "petits pointillés routiers",
+    "volant générique comme marque",
+    "aile automobile",
+    "flèche de vitesse",
+    "aspect compétition"
+  ],
+  "formats": [
+    "icône iOS",
+    "image accueil",
+    "symbole monochrome"
+  ],
+  "authorization": "Le porteur a demandé de choisir le meilleur des candidats et de peaufiner ; sélection autonome autorisée. Pas de kit marketing complet demandé.",
+  "longlist": [
+    [
+      "d continu",
+      "Letterform",
+      "Une seule contreforme dessine le virage dans un d compact.",
+      24
+    ],
+    [
+      "virage partagé",
+      "Abstract",
+      "Deux bandes parallèles suivent le même virage : accompagnement.",
+      22
+    ],
+    [
+      "D ouvert",
+      "Negative space",
+      "Une entrée franche ouvre la boucle du D vers la route.",
+      23
+    ],
+    [
+      "d ponctué",
+      "Letterform",
+      "Le point de départ devient une ouverture dans le d.",
+      18
+    ],
+    [
+      "deux sièges",
+      "Abstract",
+      "Deux formes voisines évoquent moniteur et élève.",
+      14
+    ],
+    [
+      "point de repère",
+      "Pictorial",
+      "Une borne ouverte devient un d.",
+      13
+    ],
+    [
+      "v en voie",
+      "Letterform",
+      "Le v central porte une voie à deux bords.",
+      17
+    ],
+    [
+      "horizon",
+      "Abstract",
+      "Un cadre arrondi rencontre une ligne stable.",
+      15
+    ],
+    [
+      "Drivy lié",
+      "Wordmark",
+      "Les courbes d et y prolongent le même mouvement.",
+      19
+    ],
+    [
+      "raccord",
+      "Abstract",
+      "Deux segments se rejoignent sans rupture.",
+      16
+    ]
+  ],
+  "scores": "Jugement interne sur25 : clarté, distinction, simplicité, pertinence et petite taille ; pas une mesure objective."
+}

@@ -100,6 +100,12 @@ export async function request<T>(path: string, schema: z.ZodType<T>, options?: {
   return parsed.data;
 }
 
+/** A lost response is not proof of logout. Refresh CSRF, then wait for the server. */
+export async function endSession(): Promise<void> {
+  const current = await request('session', sessionSchema);
+  if (current.authenticated) await request('logout', okSchema, { csrf: current.csrfToken, body: {} });
+}
+
 export function errorMessage(error: unknown): string {
   if (!(error instanceof RequestFailure)) return 'La demande n’a pas pu être vérifiée. Réessayez dans un instant.';
   const messages: Record<string, string> = {

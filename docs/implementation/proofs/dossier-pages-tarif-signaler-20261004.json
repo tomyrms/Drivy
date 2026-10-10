@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-04",
+  "sourceCommit": "9603eb3b76c109ae6ae67d3996a03ef7037c702a",
+  "branch": "codex/revue-integration-20260929",
+  "ipa": {
+    "commit": "9603eb3b76c109ae6ae67d3996a03ef7037c702a",
+    "run": "37219639586",
+    "version": "0.7.0",
+    "build": "103",
+    "ipaSHA256": "54dd5968e3deb9f1285216fefd04650efec2d43da2f9b4dfdff6878e3ffc2748",
+    "archiveCreated": true,
+    "unsigned": true,
+    "zipAndBinaryHashesVerified": true,
+    "productionConfigurationVerified": true,
+    "debugVisualFixturesExcluded": true,
+    "physicalQualification": "NOT_EXECUTED",
+    "localPath": "artifacts/ipa-20261004-dossier-pages/Drivy.ipa",
+    "workflowURL": "https://github.com/tomyrms/Drivy/actions/runs/37219639586",
+    "manifestFilesVerified": [
+      "Drivy.ipa",
+      "build-info.json",
+      "Package.resolved"
+    ]
+  },
+  "generalVerification": {
+    "status": "PASSED",
+    "runs": [
+      "37219642611",
+      "37219639580"
+    ]
+  },
+  "localSourceReview": {
+    "diffCheck": "PASSED",
+    "crossReview": "COMPLETED",
+    "impeccableLayoutFindings": [],
+    "captureHarnessSourceChecks": 2
+  },
+  "appleTests": "NOT_EXECUTED_AT_OWNER_REQUEST",
+  "visualCaptures": "NOT_EXECUTED_AT_OWNER_REQUEST",
+  "physicalQualification": {
+    "navigation": "NOT_EXECUTED",
+    "paletteClipping": "NOT_EXECUTED",
+    "voiceOver": "NOT_EXECUTED",
+    "gpsBattery": "NOT_EXECUTED"
+  },
+  "remainingProductScope": [
+    "Samaritains and sensibilisation course tracking is not implemented; no status is invented."
+  ],
+  "serverChanges": false,
+  "deployment": "NOT_NEEDED"
+}

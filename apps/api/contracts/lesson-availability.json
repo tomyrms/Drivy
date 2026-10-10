@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:lesson-availability:1",
+  "$comment": "Extension du 4 octobre 2026 : GET /v1/schools/{schoolId}/lessons/availability. Lecture anonyme et connectée avant le tarif ; aucune réservation temporaire. OpenAPI canonique 3.11.0 conservé. CREATE/MOVE recontrôlent droits, créneau et conditions commerciales au commit.",
+  "$defs": {
+    "Query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trainingId", "instructorMembershipId", "plannedStart", "plannedEnd", "timeZone", "bufferMinutes"],
+      "properties": {
+        "trainingId": {"type": "string", "format": "uuid"},
+        "instructorMembershipId": {"type": "string", "format": "uuid"},
+        "plannedStart": {"type": "string", "format": "date-time"},
+        "plannedEnd": {"type": "string", "format": "date-time"},
+        "timeZone": {"type": "string", "minLength": 1, "maxLength": 100},
+        "bufferMinutes": {"type": "integer", "minimum": 0, "maximum": 240},
+        "excludeLessonId": {"type": "string", "format": "uuid", "description": "Déplacement d’une leçon future PLANNED de la même formation, modifiable par l’appelant. Son tampon reste inchangé."}
+      },
+      "$comment": "Paramètres query encodés dans l’URL. Durée entière de 1 à 480 minutes, début futur, même journée et fuseau IANA de l’école. Lecture réservée à ADMIN ou au moniteur affecté. Un refus de droits ou de prérequis utilise une erreur HTTP, jamais available=true."
+    },
+    "Availability": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["available", "reasonCode"], "properties": {"available": {"const": true}, "reasonCode": {"type": "null"}}},
+        {"type": "object", "additionalProperties": false, "required": ["available", "reasonCode"], "properties": {"available": {"const": false}, "reasonCode": {"enum": ["SLOT_UNAVAILABLE", "SLOT_CONFLICT"]}}}
+      ],
+      "$comment": "SLOT_UNAVAILABLE : hors ouverture ou dans une fermeture. SLOT_CONFLICT : occupation du moniteur (tampon inclus) ou de l’élève, quelle que soit sa formation dans l’école. Aucun motif privé, identité, horaire ou identifiant du conflit n’est renvoyé."
+    },
+    "AvailabilityEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "data": {"$ref": "#/$defs/Availability"},
+        "requestId": {"type": "string", "format": "uuid"},
+        "serverTime": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

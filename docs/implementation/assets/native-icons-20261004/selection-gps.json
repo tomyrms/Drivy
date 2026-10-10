@@ -1,0 +1,260 @@
+{
+  "author_scope": "gps",
+  "method": "Créations vectorielles originales écrites en UTF-8 avec Python ; aucun pictogramme bitmap ni export de bibliothèque.",
+  "contract": {
+    "viewBox": "0 0 64 64",
+    "stroke": "#245BD6",
+    "stroke_width": 3.2,
+    "caps": "round",
+    "joins": "round",
+    "background": "transparent",
+    "content_bounds": [
+      8,
+      8,
+      56,
+      56
+    ]
+  },
+  "render_review": {
+    "engine": "sharp, moteur SVG librsvg",
+    "sheet": "gps-review.png",
+    "sizes_px": [
+      96,
+      40
+    ],
+    "actually_inspected": true,
+    "limit": "Comparaison de SVG rendus ; intégration SwiftUI et rendu Apple non qualifiés ici."
+  },
+  "categories": {
+    "speed": {
+      "selected_variant": 1,
+      "selected_file": "selected/speed.svg",
+      "reason": "Le cadran et son aiguille évoquent immédiatement la vitesse. Les graduations restent séparées à 40 px, sans imposer une valeur de limitation.",
+      "variants": [
+        {
+          "variant": 1,
+          "title": "Compteur à aiguille",
+          "file": "candidates/speed-01.svg",
+          "assessment": "Retenu : silhouette de compteur immédiatement reconnaissable."
+        },
+        {
+          "variant": 2,
+          "title": "Limitation de vitesse",
+          "file": "candidates/speed-02.svg",
+          "assessment": "Le panneau 50 évoque seulement une limitation fixe, alors que la catégorie couvre la maîtrise de la vitesse."
+        },
+        {
+          "variant": 3,
+          "title": "Voiture en mouvement",
+          "file": "candidates/speed-03.svg",
+          "assessment": "La voiture en mouvement traduit la vitesse, mais ses roues et traits ajoutent des détails à 40 px."
+        },
+        {
+          "variant": 4,
+          "title": "Chronomètre de vitesse",
+          "file": "candidates/speed-04.svg",
+          "assessment": "Le chronomètre évoque surtout une durée ou une performance."
+        },
+        {
+          "variant": 5,
+          "title": "Élan horizontal",
+          "file": "candidates/speed-05.svg",
+          "assessment": "La flèche d’élan reste lisible, mais pourrait signifier suivant ou accélérer."
+        }
+      ],
+      "optical_refinement": "Graduation supérieure droite supprimée : elle fusionnait avec l’aiguille. Aiguille conservée à sa longueur originale, pivot plein de rayon 2,4 ; séparation plus nette à 40 et 24 px."
+    },
+    "placement": {
+      "selected_variant": 1,
+      "selected_file": "selected/placement.svg",
+      "reason": "La voiture est encadrée par les bords de sa voie : le sujet est le placement du véhicule sur la chaussée. La composition verticale reste claire à 40 px.",
+      "variants": [
+        {
+          "variant": 1,
+          "title": "Voiture centrée dans sa voie",
+          "file": "candidates/placement-01.svg",
+          "assessment": "Retenu : relation explicite entre véhicule et voie, sans direction imposée."
+        },
+        {
+          "variant": 2,
+          "title": "Position dans la perspective routière",
+          "file": "candidates/placement-02.svg",
+          "assessment": "La perspective exprime surtout la route ; le véhicule devient petit à 40 px."
+        },
+        {
+          "variant": 3,
+          "title": "Changement de voie",
+          "file": "candidates/placement-03.svg",
+          "assessment": "Le changement de voie est précis mais ne couvre qu’un cas du placement."
+        },
+        {
+          "variant": 4,
+          "title": "Écart latéral",
+          "file": "candidates/placement-04.svg",
+          "assessment": "La double flèche suggère la largeur ou le centrage, avec une couche graphique supplémentaire."
+        },
+        {
+          "variant": 5,
+          "title": "Placement à une intersection",
+          "file": "candidates/placement-05.svg",
+          "assessment": "L’intersection et le virage évoquent davantage un changement de direction."
+        }
+      ],
+      "optical_refinement": "Vitres centrées ramenées de 8 à 6 unités : leurs extrémités se détachent mieux du contour de la voiture à 40 et 24 px. Aucun autre changement."
+    },
+    "manoeuvres": {
+      "selected_variant": 1,
+      "selected_file": "selected/manoeuvres.svg",
+      "reason": "Le véhicule entre dans une place ouverte : le stationnement est lisible sans lettre ni panneau. La flèche exprime la manœuvre et reste distincte du véhicule à 40 px.",
+      "variants": [
+        {
+          "variant": 1,
+          "title": "Entrée dans une place de stationnement",
+          "file": "candidates/manoeuvres-01.svg",
+          "assessment": "Retenu : place, véhicule et déplacement se lisent immédiatement."
+        },
+        {
+          "variant": 2,
+          "title": "Marche arrière courbe",
+          "file": "candidates/manoeuvres-02.svg",
+          "assessment": "La boucle et la voiture évoquent le recul, mais peuvent aussi évoquer un demi-tour."
+        },
+        {
+          "variant": 3,
+          "title": "Stationnement et recul",
+          "file": "candidates/manoeuvres-03.svg",
+          "assessment": "Le P est clair pour le stationnement ; la flèche latérale paraît ajoutée et déséquilibre la masse."
+        },
+        {
+          "variant": 4,
+          "title": "Braquage du volant",
+          "file": "candidates/manoeuvres-04.svg",
+          "assessment": "Le volant renvoie à la direction générale et au braquage plutôt qu’au stationnement."
+        },
+        {
+          "variant": 5,
+          "title": "Recul en angle dans un emplacement",
+          "file": "candidates/manoeuvres-05.svg",
+          "assessment": "Le recul en angle est concret, mais la place et la trajectoire se chevauchent davantage à 40 px."
+        }
+      ],
+      "optical_refinement": "Voiture harmonisée au gabarit 16 × 23 de placement, avec vitres de 6 unités espacées de 11. Flèche raccourcie pour garder un espace devant le véhicule. Moins d’empâtement à 24 px."
+    },
+    "motorway": {
+      "selected_variant": 1,
+      "selected_file": "selected/motorway.svg",
+      "reason": "La route en perspective traversée par un pont reprend la silhouette familière de l’autoroute. Elle se distingue du simple placement dans une voie et reste très lisible à 40 px.",
+      "variants": [
+        {
+          "variant": 1,
+          "title": "Autoroute et pont",
+          "file": "candidates/motorway-01.svg",
+          "assessment": "Retenu : signe autoroutier reconnaissable avec peu de traits."
+        },
+        {
+          "variant": 2,
+          "title": "Bretelle de sortie",
+          "file": "candidates/motorway-02.svg",
+          "assessment": "La bretelle représente seulement la sortie et pourrait être lue comme une voie secondaire."
+        },
+        {
+          "variant": 3,
+          "title": "Portique autoroutier",
+          "file": "candidates/motorway-03.svg",
+          "assessment": "Le portique est une alternative réelle, mais les petits panneaux deviennent denses à 40 px."
+        },
+        {
+          "variant": 4,
+          "title": "Chaussées séparées",
+          "file": "candidates/motorway-04.svg",
+          "assessment": "Les chaussées séparées sont claires ; les flèches opposées évoquent surtout les sens de circulation."
+        },
+        {
+          "variant": 5,
+          "title": "Insertion sur autoroute",
+          "file": "candidates/motorway-05.svg",
+          "assessment": "La jonction représente l’insertion plutôt que l’ensemble du parcours autoroutier."
+        }
+      ],
+      "optical_refinement": "Supports sous la traverse et minuscule tiret inférieur supprimés après comparaison : le pont et les deux bords de chaussée restent identifiables, sans petits amas à 24 px."
+    },
+    "anticipation": {
+      "selected_variant": 2,
+      "selected_file": "selected/anticipation.svg",
+      "reason": "La coexistence d’une voiture et d’un piéton rend le partage de la route explicite. À 40 px, les deux silhouettes restent distinctes et moins abstraites que le regard ou le radar.",
+      "variants": [
+        {
+          "variant": 1,
+          "title": "Regard vers la chaussée",
+          "file": "candidates/anticipation-01.svg",
+          "assessment": "L’œil sur la route exprime le regard, mais son assemblage est plus abstrait pour le partage de la route."
+        },
+        {
+          "variant": 2,
+          "title": "Voiture et piéton",
+          "file": "candidates/anticipation-02.svg",
+          "assessment": "Retenu : deux usagers identifiables et une relation de vigilance concrète."
+        },
+        {
+          "variant": 3,
+          "title": "Attention aux cyclistes",
+          "file": "candidates/anticipation-03.svg",
+          "assessment": "Le vélo est lisible mais réduit la catégorie à un seul type d’usager."
+        },
+        {
+          "variant": 4,
+          "title": "Piéton sur un passage",
+          "file": "candidates/anticipation-04.svg",
+          "assessment": "Le piéton au passage est clair mais réduit la catégorie à une traversée."
+        },
+        {
+          "variant": 5,
+          "title": "Veille radar",
+          "file": "candidates/anticipation-05.svg",
+          "assessment": "Le radar exprime la surveillance, avec une connotation technique éloignée du partage de la route."
+        }
+      ],
+      "optical_refinement": "Voiture légèrement moins large et à gauche ; piéton décalé de 2 unités à droite, tête relevée de 1. Phares supprimés : silhouettes séparées et moins de bruit à 40 et 24 px."
+    },
+    "marker": {
+      "selected_variant": 2,
+      "selected_file": "selected/marker.svg",
+      "reason": "Le signet représente un moment que l’on veut retrouver. Sa silhouette ouverte en bas reste nette à 40 px et ne laisse entendre ni qu’une position GPS est nécessaire, ni qu’un chronomètre démarre.",
+      "variants": [
+        {
+          "variant": 1,
+          "title": "Drapeau de repère",
+          "file": "candidates/marker-01.svg",
+          "assessment": "Le drapeau exprime un repère, mais peut évoquer une arrivée ou un objectif."
+        },
+        {
+          "variant": 2,
+          "title": "Signet de moment",
+          "file": "candidates/marker-02.svg",
+          "assessment": "Retenu : signe simple de conservation d’un moment, sans dépendance géographique."
+        },
+        {
+          "variant": 3,
+          "title": "Repère de lieu",
+          "file": "candidates/marker-03.svg",
+          "assessment": "Le pin de lieu suggère une position GPS, ce qui ne convient pas à tous les moments marqués."
+        },
+        {
+          "variant": 4,
+          "title": "Instant sur une chronologie",
+          "file": "candidates/marker-04.svg",
+          "assessment": "La chronologie est pertinente pour un instant, mais son losange peut être interprété comme une poignée de réglage."
+        },
+        {
+          "variant": 5,
+          "title": "Repère chronométré",
+          "file": "candidates/marker-05.svg",
+          "assessment": "Le chronomètre suggère le lancement ou la mesure d’une durée."
+        }
+      ],
+      "optical_refinement": "Conservé intégralement après confrontation à la critique A : la silhouette originale reste simple et lisible ; son emploi à 28 px et en teinte muted dans la commande assure déjà son poids secondaire. La réduction supplémentaire du SVG n’améliore pas suffisamment la lecture."
+    }
+  },
+  "refinement_report": "polish-gps.json",
+  "refinement_comparison": "gps-polish-before-after.png"
+}

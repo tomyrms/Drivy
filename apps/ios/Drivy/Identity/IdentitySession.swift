@@ -44,6 +44,14 @@ final class IdentitySession: AccessTokenSource {
             _ = try await accessToken()
         } catch {
             guard generation == expected else { return }
+            // Fournisseur d’identité injoignable (hors réseau, panne) : la session enregistrée reste autorisée,
+            // ce n’est pas une session expirée. L’app s’ouvre ; chaque lecture retentera le rafraîchissement
+            // et dira « connexion impossible » avec « Réessayer », au lieu d’imposer une reconnexion complète.
+            if error as? IdentityFailure == .unavailable, state?.isAuthorized == true {
+                isAuthenticated = true
+                errorMessage = nil
+                return
+            }
             isAuthenticated = false
             if !(error is CancellationError) { errorMessage = message(for: error) }
         }
@@ -136,6 +144,46 @@ final class IdentitySession: AccessTokenSource {
         return token
     }
 
+    /// A fresh provider login is checked against the current server Person before
+    /// replacing the durable session. The API still validates signed auth_time.
+    func reauthenticate(presenting: UIViewController, expectedPersonID: UUID) async -> Bool {
+        guard !isWorking, isAuthenticated, let configuration else { return false }
+        generation = UUID(); let expected = generation
+        authorizer.cancel(); refreshTask?.cancel(); refreshTask = nil; refreshID = nil
+        isWorking = true; errorMessage = nil
+        defer { if generation == expected { isWorking = false } }
+        do {
+            let candidate = try await withTaskCancellationHandler {
+                try await authorizer.reauthorize(configuration: configuration, presenting: presenting)
+            } onCancel: {
+                Task { @MainActor [weak self] in
+                    guard let self, self.generation == expected else { return }
+                    self.authorizer.cancel()
+                }
+            }
+            try Task.checkCancellation()
+            guard generation == expected else { return false }
+            guard candidate.isAuthorized, OIDCPolicy.accepts(candidate, configuration: configuration),
+                  candidate.lastTokenResponse?.tokenType?.lowercased() == "bearer",
+                  let token = candidate.lastTokenResponse?.accessToken, !token.isEmpty else { throw IdentityFailure.reauthentication }
+            let source = ReauthenticationTokenSource(token: token)
+            let person: SchoolPerson
+            do { person = try await DrivyAPIClient(baseURL: configuration.apiBaseURL, tokenSource: source).me() }
+            catch SchoolAPIError.identityNotLinked { throw IdentityFailure.differentAccount }
+            guard generation == expected, !Task.isCancelled else { return false }
+            guard person.personId == expectedPersonID else { throw IdentityFailure.differentAccount }
+            try vault.write(StoredIdentity.encode(candidate, configuration: configuration))
+            state = candidate
+            restored = true
+            isAuthenticated = true
+            return true
+        } catch {
+            guard generation == expected else { return false }
+            if !(error is CancellationError) { errorMessage = message(for: error) }
+            return false
+        }
+    }
+
     func signOut() async {
         // Changer la génération avant d'annuler : aucun callback tardif ne réécrit les jetons.
         generation = UUID()
@@ -149,7 +197,7 @@ final class IdentitySession: AccessTokenSource {
         isWorking = false
         errorMessage = nil
         do { try vault.clear() }
-        catch { errorMessage = "La session est fermée dans l’app, mais son effacement du Trousseau a échoué. Déverrouillez l’appareil puis réessayez de vous déconnecter." }
+        catch { errorMessage = "La session est fermée dans l’app, mais son effacement du Trousseau a échoué. Déverrouille l’appareil puis réessaie de te déconnecter." }
     }
 
     @discardableResult
@@ -163,4 +211,10 @@ final class IdentitySession: AccessTokenSource {
         // Les messages du fournisseur peuvent contenir des réponses sensibles : ne pas les exposer.
         (error as? IdentityFailure ?? .unavailable).localizedDescription
     }
+}
+
+@MainActor private final class ReauthenticationTokenSource: AccessTokenSource {
+    let token: String
+    init(token: String) { self.token = token }
+    func accessToken() async throws -> String { token }
 }

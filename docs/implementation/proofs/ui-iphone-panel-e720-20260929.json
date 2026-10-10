@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-09-29",
+  "sourceCommit": "e720c4579d8e12c6d0aedb7d0ada6f2f529f30a0",
+  "runId": 36584670696,
+  "runURL": "https://github.com/tomyrms/Drivy/actions/runs/36584670696",
+  "jobConclusion": "success",
+  "captureTests": [
+    {
+      "suite": "Visual-iPhone-dark",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "Visual-iPhone-light",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "syntheticData": true,
+  "originalPNGBytesPreserved": true,
+  "fileRotationApplied": false,
+  "fileReencodingApplied": false,
+  "reviewedFileCount": 8,
+  "files": [
+    {
+      "name": "iPhone-home-tabs-dark-portrait-synthetic",
+      "file": "artifacts/review-20260929/iphone-oriented/36584670696/test-reports/Visual-iPhone-dark/attachments/7281E89D-A5E4-41A3-A8F8-0DC1A5B26DF1.png",
+      "device": "iPhone 17 Pro",
+      "sha256": "4baebbdfaa084df9e19ce72b2892b204cb21770e15c36bc5eba9f10fd8408a12",
+      "storedWidthPixels": 1206,
+      "storedHeightPixels": 2622,
+      "displayWidthPixels": 1206,
+      "displayHeightPixels": 2622,
+      "exifOrientation": 1,
+      "visuallyInspected": true,
+      "findings": []
+    },
+    {
+      "name": "iPhone-home-tabs-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/iphone-oriented/36584670696/test-reports/Visual-iPhone-light/attachments/B4953E6E-A68A-4EC0-9AEC-4480F68528A8.png",
+      "device": "iPhone 17 Pro",
+      "sha256": "5a89b17c901897b4cebb7200951a72873684cde75730d385d726b71507e9bb26",
+      "storedWidthPixels": 1206,
+      "storedHeightPixels": 2622,
+      "displayWidthPixels": 1206,
+      "displayHeightPixels": 2622,
+      "exifOrientation": 1,
+      "visuallyInspected": true,
+      "findings": []
+    },
+    {
+      "name": "iPhone-live-signal-dark-portrait-synthetic",
+      "file": "artifacts/review-20260929/iphone-oriented/36584670696/test-reports/Visual-iPhone-dark/attachments/53BD86FE-4CE3-4E7C-BBFE-F5D47783480F.png",
+      "device": "iPhone 17 Pro",
+      "sha256": "03f89e552f1811806b80a77cc419ddd0283823787e7017efdad4853d67f391f4",
+      "storedWidthPixels": 1206,
+      "storedHeightPixels": 2622,
+      "displayWidthPixels": 1206,
+      "displayHeightPixels": 2622,
+      "exifOrientation": 1,
+      "visuallyInspected": true,
+      "findings": []
+    },
+    {
+      "name": "iPhone-live-signal-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/iphone-oriented/36584670696/test-reports/Visual-iPhone-light/attachments/66D762F2-86C0-475D-981D-867939025D28.png",
+      "device": "iPhone 17 Pro",
+      "sha256": "64c02e02017647cc73b6165eabd0699fceb0629ef9246d1bd6b703c22f45e8c6",
+      "storedWidthPixels": 1206,
+      "storedHeightPixels": 2622,
+      "displayWidthPixels": 1206,
+      "displayHeightPixels": 2622,
+      "exifOrientation": 1,
+      "visuallyInspected": true,
+      "findings": []
+    },
+    {
+      "name": "iPhone-profile-dark-portrait-synthetic",
+      "file": "artifacts/review-20260929/iphone-oriented/36584670696/test-reports/Visual-iPhone-dark/attachments/4377225C-393A-4CAB-A23E-31C319E49A8C.png",
+      "device": "iPhone 17 Pro",
+      "sha256": "38d35ee7731b17bef4ea02720001c4453fba771be4f7218d6819a51d6c271243",
+      "storedWidthPixels": 1206,
+      "storedHeightPixels": 2622,
+      "displayWidthPixels": 1206,
+      "displayHeightPixels": 2622,
+      "exifOrientation": 1,
+      "visuallyInspected": true,
+      "findings": []
+    },
+    {
+      "name": "iPhone-profile-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/iphone-oriented/36584670696/test-reports/Visual-iPhone-light/attachments/A9AFB55D-5ADE-43B5-85C4-84708672C51D.png",
+      "device": "iPhone 17 Pro",
+      "sha256": "40dbdd467b04b377ad5ac4e6bb778dbfdc5c8184e4260aee12e6efcb40cea787",
+      "storedWidthPixels": 1206,
+      "storedHeightPixels": 2622,
+      "displayWidthPixels": 1206,
+      "displayHeightPixels": 2622,
+      "exifOrientation": 1,
+      "visuallyInspected": true,
+      "findings": []
+    },
+    {
+      "name": "iPhone-signal-status-dark-portrait-synthetic",
+      "file": "artifacts/review-20260929/iphone-oriented/36584670696/test-reports/Visual-iPhone-dark/attachments/51384AB6-1000-467F-922D-FE53C18579DB.png",
+      "device": "iPhone 17 Pro",
+      "sha256": "a0c334e396fd4b3f1dcb0e226b0d395860d9e2040adc604a501bab5e39afce66",
+      "storedWidthPixels": 1206,
+      "storedHeightPixels": 2622,
+      "displayWidthPixels": 1206,
+      "displayHeightPixels": 2622,
+      "exifOrientation": 1,
+      "visuallyInspected": true,
+      "findings": []
+    },
+    {
+      "name": "iPhone-signal-status-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/iphone-oriented/36584670696/test-reports/Visual-iPhone-light/attachments/D4CE20F8-B004-4F95-80A4-BE783FD37A56.png",
+      "device": "iPhone 17 Pro",
+      "sha256": "c5125ceb4b704faf9def19b3376778c7b71725ed5f3be83ee1e942509077df9e",
+      "storedWidthPixels": 1206,
+      "storedHeightPixels": 2622,
+      "displayWidthPixels": 1206,
+      "displayHeightPixels": 2622,
+      "exifOrientation": 1,
+      "visuallyInspected": true,
+      "findings": []
+    }
+  ],
+  "dynamicType": "default",
+  "reviewNotes": [
+    "All eight originals inspected. Theme labels and three statuses remain readable; back and close are visible after theme selection in light and dark.",
+    "Today panel and profile retain readable controls; the geographic overview is a fixture without a user location, not a recorded trip."
+  ]
+}

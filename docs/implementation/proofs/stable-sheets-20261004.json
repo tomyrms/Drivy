@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-04",
+  "source": "9c1b12a52a8ffd77362b13dceef2319b6868eb85",
+  "pullRequest": "https://github.com/tomyrms/Drivy/pull/5",
+  "ipa": {
+    "run": "37213508972",
+    "version": "0.7.0",
+    "build": "100",
+    "signed": false,
+    "ipaSHA256": "edbfa3b3ff51c6c73a1a298db213ff39cb47046ba4afd7d835635633117503b8"
+  },
+  "downloadSHA256Verified": true,
+  "nativeBuild": "success",
+  "reason": "User reports incorrect opening height and jerky sheet expansion in build99.",
+  "change": "Removed custom geometry-driven resizing; ten presentations use native stable detents without controlled selection; iPad Signaler popover restored to 480x560.",
+  "review": {
+    "independentSourceReview": "No concrete issue found in ten files",
+    "diffCheck": "passed"
+  },
+  "tests": {
+    "nativeExecution": "not performed at user request",
+    "newNativeScreenshots": 0
+  },
+  "notQualified": [
+    "Opening and drag smoothness on device",
+    "Keyboard, rotation and iPad popover on device",
+    "Dynamic Type and VoiceOver on device",
+    "Physical heading and battery"
+  ],
+  "deployment": "none"
+}

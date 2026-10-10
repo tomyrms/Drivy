@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-60 -72 376 400" width="376" height="400" role="img" aria-labelledby="t">
+  <title id="t">Drivy : zone de protection (diamètre du trou de l'anneau)</title>
+  <rect x="-34" y="-52" width="324" height="360" fill="none" stroke="#245BD6" stroke-width="1.5" stroke-dasharray="6 6"/>
+  <rect x="46" y="28" width="164" height="200" fill="none" stroke="#C3CDD9" stroke-width="1"/>
+  <circle cx="6" cy="156" r="40" fill="#EAF0FE" stroke="#245BD6" stroke-width="1.5"/><circle cx="250" cy="128" r="40" fill="#EAF0FE" stroke="#245BD6" stroke-width="1.5"/><circle cx="128" cy="-12" r="40" fill="#EAF0FE" stroke="#245BD6" stroke-width="1.5"/><circle cx="128" cy="268" r="40" fill="#EAF0FE" stroke="#245BD6" stroke-width="1.5"/>
+  <path fill="#18212B" d="M170 48C170 36.95 178.95 28 190 28C201.05 28 210 36.95 210 48V208C210 219.05 201.05 228 190 228C180.45 228 172.46 221.3 170.47 212.35C185.56 198.29 195 178.25 195 156C195 133.52 185.37 113.29 170 99.21Z"/>
+  <path fill="#18212B" fill-rule="evenodd" d="M46 156 A72 72 0 1 0 190 156 A72 72 0 1 0 46 156 Z M78 156 A40 40 0 1 1 158 156 A40 40 0 1 1 78 156 Z"/>
+</svg>

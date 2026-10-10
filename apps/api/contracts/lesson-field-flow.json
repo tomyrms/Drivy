@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:lesson-field-flow:1",
+  "$comment": "Extension du 29 septembre 2026 après essai terrain. OpenAPI canonique 3.11.0 conservé. Training reçoit un blocage de départ indicatif ; Depuis le 9 octobre 2026, actualStart est fixé durablement par le départ explicite (start-now, start ou capture). CompleteLesson conserve ce début ; actualEnd reste déclaré par le client, indépendamment du transfert GPS. Un constat rétrospectif explicite reste compatible sans départ préalable.",
+  "$defs": {
+    "StartLessonBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId"],
+      "properties": {"operationId": {"type": "string", "format": "uuid"}},
+      "$comment": "POST /v1/schools/{schoolId}/lessons/{lessonId}/start ; If-Match et Idempotency-Key obligatoires. START_LESSON renvoie LessonEnvelope (200), version incrémentée, actualStart serveur, status PLANNED. Moniteur désigné affecté, école, formation et appartenance élève actives, dossier non archivé. Aucun déclenchement temporel. Un départ déjà enregistré reçoit LESSON_STARTED sauf rejeu de la même opération."
+    },
+    "TrainingExtension": {
+      "type": "object",
+      "required": ["startNowBlockerCode"],
+      "properties": {
+        "startNowBlockerCode": {
+          "enum": [null, "INSTRUCTOR_REQUIRED", "SCHOOL_NOT_ACTIVE", "TRAINING_NOT_ACTIVE", "INSTRUCTOR_NOT_ASSIGNED", "OFFERING_NOT_READY", "ASSIGNMENT_ENDS_BEFORE_LESSON_END"],
+          "description": "Null si rôle, école, formation, offre et affectation personnelle couvrant la durée par défaut autorisent à proposer un départ. La commande revérifie tous les droits, informations requises, conditions commerciales et occupations au moment de l'écriture."
+        }
+      }
+    },
+    "ReportObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["competencyId", "level"],
+      "properties": {
+        "competencyId": {"type": "string", "format": "uuid"},
+        "level": {"enum": ["DISCOVERING", "GUIDED", "INDEPENDENT"]},
+        "context": {"type": "string", "maxLength": 500, "default": ""}
+      }
+    },
+    "SaveReportDraftBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId"],
+      "properties": {
+        "operationId": {"type": "string", "format": "uuid"},
+        "workedOn": {"type": "string", "maxLength": 4000, "default": ""},
+        "observationText": {"type": "string", "maxLength": 4000, "default": ""},
+        "nextStep": {"type": "string", "maxLength": 4000, "default": ""},
+        "observations": {"type": "array", "items": {"$ref": "#/$defs/ReportObservation"}, "maxItems": 100, "default": [], "$comment": "Une seule appréciation par competencyId ; les références sont revérifiées dans la formation."},
+        "attachmentIds": {"type": "array", "items": {"type": "string", "format": "uuid"}, "maxItems": 10, "uniqueItems": true, "default": []}
+      },
+      "$comment": "PUT remplace le contenu : une propriété omise devient vide. If-Match et Idempotency-Key restent obligatoires. Un bilan vide est sauvegardé ; l'auto-partage ne crée pas de révision vide. La publication explicite historique peut publier un bilan vide grâce à la migration 019."
+    }
+  }
+}

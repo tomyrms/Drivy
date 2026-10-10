@@ -1,0 +1,45 @@
+{
+  "date": "2026-09-30",
+  "scope": "Reprise du backend et de la console web après la passe Claude",
+  "sourceCommit": "8547d95811ca05f39edccfa07f7b1ca9fe63769c",
+  "comparison": {
+    "previousReleaseCommit": "5406f65307eb4aee7c70536f309a1b4c7c5e6a5c",
+    "paths": ["apps/api", "apps/web", "infra/deploy"],
+    "difference": "none",
+    "method": "git diff 5406f65..8547d95 -- apps/api apps/web infra/deploy",
+    "remoteRuntimeVerification": "See separate deployment evidence; this comparison verifies repository contents only."
+  },
+  "ci": {
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/36716860267",
+    "serverJobId": 109891797276,
+    "conclusion": "success",
+    "headMatchesSourceCommit": true,
+    "postgresql": "17.11",
+    "postgresqlImage": "postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24",
+    "mailpitImage": "axllent/mailpit:v1.31.2@sha256:74d609a42ec279aa63c6b4622a6fa9b5408d1ad5b1d76a1c4be40a265ce0863d",
+    "api": {"testFiles": 18, "passed": 218, "failed": 0, "typecheck": "passed", "build": "passed"},
+    "web": {"testFiles": 7, "passed": 93, "failed": 0, "typecheck": "passed", "build": "passed"},
+    "documentationJob": "success",
+    "previousVerifiedRun": {"url": "https://github.com/tomyrms/Drivy/actions/runs/36693678804", "sourceCommit": "39704b6e0c89c4c6e09a660c1b1b724d6305dec8", "conclusion": "success", "apiPassed": 218, "webPassed": 93}
+  },
+  "local": {
+    "platform": "Windows",
+    "node": "24.6.0",
+    "npm": "11.7.0",
+    "api": {"testFiles": 18, "passed": 218, "failed": 0, "typecheck": "passed", "build": "passed", "durationSeconds": 66.46},
+    "web": {"testFiles": 7, "passed": 93, "failed": 0, "typecheck": "passed", "build": "passed"},
+    "integration": "passed",
+    "postgresql": "17.11",
+    "migrationCount": 20,
+    "dockerEngine": "29.8.0",
+    "databaseIsolation": "new container with PostgreSQL data in tmpfs, loopback port, no existing volume attached",
+    "mailIsolation": "new Mailpit container with loopback ports",
+    "testContainersStoppedAndAutomaticallyRemoved": true,
+    "dockerRecovery": "../docker-recovery-20260930.md"
+  },
+  "safety": {
+    "remoteDatabaseModifiedByThisVerification": false,
+    "personalDataTokensOrPositionsIncluded": false,
+    "physicalDeviceQualificationPerformed": false
+  }
+}

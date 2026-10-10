@@ -16,6 +16,24 @@ struct SchoolInvitationWorkspaceTests {
         #expect(model.mayEdit)
     }
 
+    @Test func instructorInvitesALearnerIntoTheOnlyOpenTrainingAndAssignsHimself() async throws {
+        let api = InvitationAPIStub()
+        let offering = SchoolOffering(id: UUID(), schoolId: ConfigurationFixture.schoolID, version: 1, offeringKey: "B",
+            categoryCode: "B", curriculumVersionId: UUID(), policyVersionId: UUID(), enabled: true,
+            defaultDurationMinutes: 50, defaultPriceCents: 9000)
+        api.offeringValues = [offering]
+        let model = InvitationFixture.workspace(api: api, roles: ["INSTRUCTOR"])
+        await model.load()
+        #expect(model.carriesTraining && model.selectedOfferingIDs == [offering.id])
+        #expect(await model.inviteAfterConfirmation(email: "eleve@example.invalid", roles: [.learner], offeringID: offering.id))
+        let body = try JSONDecoder().decode(SchoolInviteCommand.self, from: try #require(api.commands.last).body)
+        #expect(body.training == SchoolInvitationTraining(offeringId: offering.id, instructorMembershipId: ConfigurationFixture.membershipID))
+        // Une offre absente de la liste lue n'est jamais envoyée.
+        #expect(await model.inviteAfterConfirmation(email: "autre@example.invalid", roles: [.learner], offeringID: UUID()))
+        let other = try JSONDecoder().decode(SchoolInviteCommand.self, from: try #require(api.commands.last).body)
+        #expect(other.training == nil)
+    }
+
     @Test func inactiveSchoolOrLearnerRoleCannotManageInvitations() async {
         let api = InvitationAPIStub()
         api.schoolValue = ConfigurationFixture.school()
@@ -27,6 +45,31 @@ struct SchoolInvitationWorkspaceTests {
         await learner.load()
         #expect(learner.accessFailure == .forbidden)
         #expect(api.queries.isEmpty)
+    }
+
+    @Test func failedInstructorRefreshRetainsTheReviewedTrainingAndRequiresFreshOptionsBeforeCreation() async {
+        let api = InvitationAPIStub()
+        let offering = SchoolOffering(id: UUID(), schoolId: ConfigurationFixture.schoolID, version: 1, offeringKey: "B",
+            categoryCode: "B", curriculumVersionId: UUID(), policyVersionId: UUID(), enabled: true,
+            defaultDurationMinutes: 50, defaultPriceCents: 9000)
+        let instructor = SchoolInvitationInstructor(id: UUID(), displayName: "Moniteur exemple")
+        api.offeringValues = [offering]; api.instructorValues = [instructor]
+        let model = InvitationFixture.workspace(api: api)
+        await model.load()
+        #expect(model.codeDraftIsValid)
+        // The next response must not partly replace the reviewed context before the second read succeeds.
+        api.offeringValues = []; api.instructorFailure = .unavailable
+        await model.load()
+        #expect(model.offerings.map(\.id) == [offering.id])
+        #expect(model.instructors.map(\.id) == [instructor.id])
+        #expect(model.selectedOfferingIDs == [offering.id] && model.selectedInstructorID == instructor.id)
+        #expect(model.creationOptionsError != nil && !model.codeDraftIsValid)
+        #expect(await model.createCode() == false)
+        #expect(api.commands.isEmpty)
+        api.offeringValues = [offering]; api.instructorFailure = nil
+        await model.load()
+        #expect(model.creationOptionsError == nil && model.codeDraftIsValid)
+        #expect(model.selectedOfferingIDs == [offering.id] && model.selectedInstructorID == instructor.id)
     }
 
     @Test func creationRequiresConfirmationThenKeepsOnlyMaskedServerProjection() async throws {
@@ -89,6 +132,47 @@ struct SchoolInvitationWorkspaceTests {
         #expect(model.pendingRequiresReview && !model.canRetryPending)
         await model.retryPending()
         #expect(api.commands.count == 3)
+    }
+
+    @Test func anEmailInvitationWithoutDeliveryNoLongerBlocksTheSchoolOnceResent() async throws {
+        let id = UUID()
+        let stuck = PendingSchoolCommand(id: id, scope: ConfigurationFixture.scope(), kind: .createInvitation, resourceVersion: 0,
+            createdAt: Date(), body: try JSONEncoder().encode(SchoolInviteCommand(operationId: id, email: "eleve@example.invalid", roles: [.learner])))
+        let outbox = ConfigurationOutboxStub(value: stuck)
+        let api = InvitationAPIStub()
+        api.sendFailure = .deliveryUnavailable
+        let model = InvitationFixture.workspace(api: api, outbox: outbox)
+        await model.load()
+        #expect(model.pending == stuck && !model.mayEdit)
+        await model.retryPending()
+        #expect(api.commands == [stuck])
+        #expect(outbox.value == nil && model.pending == nil)
+        #expect(model.errorMessage == SchoolInvitationFailure.deliveryUnavailable.localizedDescription)
+        // Other refusals of a resent command still keep it for review.
+        api.sendFailure = .unavailable
+        await model.load()
+        #expect(await model.inviteAfterConfirmation(email: "autre@example.invalid", roles: [.learner]) == false)
+        let uncertain = try #require(outbox.value)
+        api.sendFailure = .conflict
+        await model.retryPending()
+        #expect(outbox.value == uncertain && model.pendingRequiresReview)
+    }
+
+    @Test func aResentRequestTheSchoolRefusesAsInvalidLeavesTheQueue() async throws {
+        let api = InvitationAPIStub()
+        api.sendFailure = .unavailable
+        let outbox = ConfigurationOutboxStub()
+        let model = InvitationFixture.workspace(api: api, outbox: outbox)
+        await model.load()
+        #expect(await model.inviteAfterConfirmation(email: "eleve@example.invalid", roles: [.learner]) == false)
+        let uncertain = try #require(outbox.value)
+        // 400 INVALID_REQUEST : refus définitif rendu avant toute écriture, même pour un renvoi.
+        api.sendFailure = .rejected
+        await model.retryPending()
+        #expect(api.commands == [uncertain, uncertain])
+        #expect(outbox.value == nil && model.pending == nil && !model.pendingRequiresReview)
+        #expect(model.errorMessage == SchoolInvitationFailure.rejected.localizedDescription)
+        #expect(SchoolInvitationFailure.rejected.provesNotCommitted)
     }
 
     @Test func resendAndRevocationPreserveReviewedTargetVersionAndReason() async throws {
@@ -211,12 +295,18 @@ struct SchoolInvitationWorkspaceTests {
         let command = try InvitationFixture.command()
         let outbox = ConfigurationOutboxStub(value: command)
         let api = InvitationAPIStub()
+        api.offeringValues = [SchoolOffering(id: UUID(), schoolId: ConfigurationFixture.schoolID, version: 1, offeringKey: "B",
+            categoryCode: "B", curriculumVersionId: UUID(), policyVersionId: UUID(), enabled: true,
+            defaultDurationMinutes: 50, defaultPriceCents: 9000)]
+        api.instructorValues = [.init(id: UUID(), displayName: "Moniteur exemple")]
         let model = InvitationFixture.workspace(api: api, outbox: outbox)
         await model.load()
         model.email = "private@example.invalid"
         api.sendFailure = .forbidden
         await model.retryPending()
         #expect(model.invitations.isEmpty && model.school == nil && model.email.isEmpty)
+        #expect(model.offerings.isEmpty && model.instructors.isEmpty && model.selectedOfferingIDs.isEmpty)
+        #expect(model.selectedInstructorID == nil && !model.hasLoaded)
         #expect(model.accessFailure == .forbidden)
         #expect(outbox.value == command)
     }
@@ -300,7 +390,23 @@ final class InvitationAPIStub: SchoolInvitationAPI {
     var receipt: SchoolOperationReceipt?
     var listHandler: ((String?) async throws -> SchoolPage<SchoolInvitation>)?
     var sendHandler: ((PendingSchoolCommand) async throws -> SchoolInvitation)?
+    var offeringValues: [SchoolOffering] = []
+    var offeringFailure: SchoolInvitationFailure?
+    var instructorValues: [SchoolInvitationInstructor] = []
+    var instructorFailure: SchoolInvitationFailure?
+    /// Code handed back when a code invitation is created (nil: a replayed answer, without code).
+    var creationCode: String? = "K7Q4MX2P"
+    /// Code handed back when a code invitation is renewed.
+    var renewalCode: String? = "M3N4P5Q6"
     func school(id: UUID) async throws -> SchoolDetails { schoolValue }
+    func trainingOfferings(schoolID: UUID) async throws -> [SchoolOffering] {
+        if let offeringFailure { throw offeringFailure }
+        return offeringValues
+    }
+    func instructors(schoolID: UUID) async throws -> [SchoolInvitationInstructor] {
+        if let instructorFailure { throw instructorFailure }
+        return instructorValues
+    }
     func invitations(schoolID: UUID, cursor: String?) async throws -> SchoolPage<SchoolInvitation> {
         queries.append(cursor)
         if let listHandler { return try await listHandler(cursor) }
@@ -318,7 +424,15 @@ final class InvitationAPIStub: SchoolInvitationAPI {
         let result: SchoolInvitation
         if command.kind == .createInvitation {
             let body = try JSONDecoder().decode(SchoolInviteCommand.self, from: command.body)
-            result = InvitationFixture.invitation(id: UUID(), email: "n***@example.invalid", roles: body.roles)
+            if body.delivery == .code {
+                result = InvitationFixture.codeInvitation(id: UUID(), code: creationCode)
+            } else {
+                result = InvitationFixture.invitation(id: UUID(), email: "n***@example.invalid", roles: body.roles)
+            }
+        } else if items.first(where: { $0.id == command.resourceID })?.isCode == true {
+            result = InvitationFixture.codeInvitation(id: command.resourceID!, version: command.resourceVersion + 1,
+                status: command.kind == .revokeInvitation ? .revoked : .pending,
+                code: command.kind == .resendInvitation ? renewalCode : nil)
         } else {
             result = InvitationFixture.invitation(id: command.resourceID!, version: command.resourceVersion + 1,
                 status: command.kind == .revokeInvitation ? .revoked : .pending)
@@ -335,6 +449,11 @@ enum InvitationFixture {
         roles: [SchoolInvitationRole] = [.learner], status: SchoolInvitationStatus = .pending) -> SchoolInvitation {
         .init(id: id, schoolId: ConfigurationFixture.schoolID, version: version, maskedEmail: email, roles: roles,
             status: status, expiresAt: "2026-10-01T14:30:00Z")
+    }
+    static func codeInvitation(id: UUID = invitationID, version: Int = 1, status: SchoolInvitationStatus = .pending,
+        code: String? = nil) -> SchoolInvitation {
+        .init(id: id, schoolId: ConfigurationFixture.schoolID, version: version, maskedEmail: nil, roles: [.learner],
+            status: status, expiresAt: "2026-10-01T14:30:00Z", delivery: .code, code: code)
     }
     @MainActor static func workspace(api: InvitationAPIStub, roles: [String] = ["ADMIN"],
         outbox: ConfigurationOutboxStub = ConfigurationOutboxStub()) -> SchoolInvitationWorkspace {

@@ -29,9 +29,18 @@ def main():
     directory = Path('/etc/drivy-refonte')
     if not directory.is_dir():
         raise RuntimeError('Installer la refonte API/identité avant le service web.')
-    # Mode appliqué avant écriture, y compris lorsque le fichier existait déjà.
+    # Conserver le journal déjà configuré : une réinstallation OIDC ne doit pas
+    # désactiver sa durabilité ni changer ses clés.
     config = directory / 'web.env'
-    descriptor = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    retained = {}
+    if config.exists() or config.is_symlink():
+        if config.is_symlink() or config.stat().st_uid != 0 or config.stat().st_mode & 0o077:
+            raise RuntimeError('Configuration web existante non privée.')
+        previous = dict(line.split('=', 1) for line in config.read_text().splitlines() if line and not line.startswith('#'))
+        retained = {key: previous[key] for key in ('WEB_COMMAND_DATABASE_URL', 'WEB_COMMAND_KEYRING_FILE',
+                    'WEB_COMMAND_RETENTION_DAYS') if key in previous}
+    temporary = config.with_name(config.name + '.next')
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, 'w') as stream:
         os.fchmod(stream.fileno(), 0o600)
         os.fchown(stream.fileno(), 0, 0)
@@ -39,7 +48,11 @@ def main():
                      'API_BASE_URL=https://drivy.shulker.ch/refonte\n'
                      'OIDC_ISSUER=https://drivy.shulker.ch/identity/realms/drivy\n'
                      'OIDC_WEB_CLIENT_ID=drivy-web\nOIDC_WEB_CLIENT_SECRET=' + credential + '\n'
-                     'WEB_HOST=192.168.1.153\nWEB_PORT=3002\nWEB_DEVELOPMENT=false\n')
+                     'WEB_HOST=192.168.1.153\nWEB_PORT=3002\nWEB_DEVELOPMENT=false\n' +
+                     ''.join(key + '=' + value + '\n' for key, value in retained.items()))
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, config)
     service = 'drivy-refonte-web.service'
     shutil.copyfile(Path(__file__).resolve().parent / service, Path('/etc/systemd/system') / service)
     subprocess.run(['systemctl', 'daemon-reload'], check=True, capture_output=True)

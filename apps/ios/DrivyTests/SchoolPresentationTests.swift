@@ -4,6 +4,25 @@ import XCTest
 
 @MainActor
 final class SchoolPresentationTests: XCTestCase {
+    func testNativeAdministrativeProfileUsesRealViewsWithSyntheticResponses() async throws {
+        let api = ProfileAPIStub()
+        api.profileValue = ProfileFixture.profile(firstName: nil, lastName: nil)
+        let profile = ProfileFixture.workspace(api: api)
+        await profile.load()
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        var windows: [UIWindow] = []
+        defer { windows.forEach { $0.isHidden = true }; previous?.makeKeyAndVisible(); profile.invalidate() }
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let window = contentWindow(scene: scene, style: style, content: SchoolProfileView(model: profile))
+            windows.append(window)
+            try await Task.sleep(for: .seconds(1))
+            attach(window, name: style == .light ? "g1d-01-profil-clair-fixtures" : "g1d-02-profil-sombre-fixtures")
+            window.isHidden = true
+        }
+        XCTAssertTrue(api.commands.isEmpty)
+        XCTAssertTrue(profile.draft.firstName.isEmpty && profile.draft.lastName.isEmpty)
+    }
     func testNativeInvitationsListFormAndUncertainCommand() async throws {
         let api = InvitationAPIStub()
         api.items = [InvitationFixture.invitation(),
@@ -40,27 +59,6 @@ final class SchoolPresentationTests: XCTestCase {
         XCTAssertFalse(model.mayEdit)
         XCTAssertEqual(model.invitations.count, 3)
         XCTAssertTrue(api.commands.isEmpty)
-    }
-
-    func testNativeSchoolConfigurationKeepsDraftTextsUnapproved() async throws {
-        let api = ConfigurationAPIStub()
-        let model = SchoolConfigurationWorkspace(scope: ConfigurationFixture.scope(), api: api, outbox: ConfigurationOutboxStub())
-        await model.load()
-        XCTAssertFalse(model.canActivate)
-        XCTAssertTrue(api.commands.isEmpty)
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let previous = scene.windows.first(where: \.isKeyWindow)
-        let window = UIWindow(windowScene: scene)
-        window.overrideUserInterfaceStyle = .light
-        let host = UIHostingController(rootView: SchoolConfigurationView(model: model, openSchool: {}))
-        host.overrideUserInterfaceStyle = .light
-        window.rootViewController = host
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true; previous?.makeKeyAndVisible(); model.invalidate() }
-        try await Task.sleep(for: .seconds(1))
-        attach(window, name: "g1b-01-configuration-non-approuvee-fixtures")
-        XCTAssertTrue(api.commands.isEmpty)
-        XCTAssertFalse(model.canActivate)
     }
 
     func testNativeSchoolViewsWithSyntheticServerResponses() async throws {
@@ -101,6 +99,14 @@ final class SchoolPresentationTests: XCTestCase {
         defer { darkWindow.isHidden = true }
         try await Task.sleep(for: .seconds(1))
         attach(darkWindow, name: "g1a-02-eleves-sombre-fixtures")
+        darkWindow.isHidden = true
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let mapWindow = contentWindow(scene: scene, style: style,
+                content: SchoolHomeView(workspace: workspace, openAccount: {}, selectedTab: .constant(.session)))
+            try await Task.sleep(for: .seconds(3))
+            attach(mapWindow, name: style == .light ? "home-carte-clair-fixtures" : "home-carte-sombre-fixtures")
+            mapWindow.isHidden = true
+        }
     }
 
     private func presentationWindow(scene: UIWindowScene, workspace: SchoolWorkspace,

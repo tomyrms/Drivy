@@ -1,0 +1,241 @@
+{
+  "date": "2026-10-09",
+  "commit": "602610457b703914b5154300dbfbcf8fb6d246da",
+  "run": 37933024011,
+  "url": "https://github.com/tomyrms/Drivy/actions/runs/37933024011",
+  "campaignConclusion": "failure",
+  "campaignFailure": "3 preparation tests stopped before adoption: fixture school/learner responses omitted required null fields; creation responses also used HTTP 200 instead of 201. Fixed only in tests by 843f7f7 and bc0bfa7. Unrelated UI tests passed.",
+  "swiftTests": {
+    "passed": 410,
+    "failed": 3,
+    "total": 413
+  },
+  "presentationTests": {
+    "iPhonePassed": 3,
+    "iPadPassed": 3
+  },
+  "uiTests": {
+    "iPhonePassed": 12,
+    "iPadPassed": 12
+  },
+  "devices": [
+    "iPhone 17 Pro",
+    "iPad Air 11-inch (M4)"
+  ],
+  "simulatedOS": "26.4.1",
+  "imagesModified": false,
+  "captureMethod": "XCTAttachment screenshot",
+  "imagesReviewed": 8,
+  "files": [
+    {
+      "attachment": "Tests/attachments/0768FEC0-9871-46C4-82BB-34436A731C69.png",
+      "repositoryFile": "iPhone-bilan-final.png",
+      "rawWidthPixels": 1206,
+      "rawHeightPixels": 2622,
+      "orientationFromTest": "portrait",
+      "bytes": 137947,
+      "sha256": "86227d89cf743d349a8760a3fe4c33c9d4155f7009f567e6fe1154ece2409dc6",
+      "reviewed": true,
+      "retainedInRepository": true
+    },
+    {
+      "attachment": "Tests/attachments/7F81B689-3A31-43B9-8B07-83A49E70B15C.png",
+      "repositoryFile": null,
+      "rawWidthPixels": 1206,
+      "rawHeightPixels": 2622,
+      "orientationFromTest": "portrait",
+      "bytes": 203556,
+      "sha256": "211e64d10da60662c6757dcba8fb7935002548a2670fd758bcb60a1b4192e544",
+      "reviewed": true,
+      "retainedInRepository": false
+    },
+    {
+      "attachment": "Tests/attachments/FE9CCAA9-0B60-469A-83E0-3D6044BE5753.png",
+      "repositoryFile": null,
+      "rawWidthPixels": 1206,
+      "rawHeightPixels": 2622,
+      "orientationFromTest": "portrait",
+      "bytes": 228207,
+      "sha256": "c94e733ec46bd7ec34bd00c35b3c69cf271d3b912d19424f572959e742cada36",
+      "reviewed": true,
+      "retainedInRepository": false
+    },
+    {
+      "attachment": "Tests/attachments/AAFB3621-5BA8-4A94-9860-F5E3FAB8D28B.png",
+      "repositoryFile": "iPhone-bilan-clavier-paysage-before.png",
+      "rawWidthPixels": 1206,
+      "rawHeightPixels": 2622,
+      "orientationFromTest": "landscape",
+      "bytes": 186527,
+      "sha256": "9056683477dae55f97720007077546643985997be6b25a7b08d9706fa5f4be2d",
+      "reviewed": true,
+      "retainedInRepository": true
+    },
+    {
+      "attachment": "iPadTests/attachments/1A92D54F-CAE4-4B93-9A8E-CF5B7B546E92.png",
+      "repositoryFile": "iPad-bilan-final.png",
+      "rawWidthPixels": 1640,
+      "rawHeightPixels": 2360,
+      "orientationFromTest": "portrait",
+      "bytes": 121677,
+      "sha256": "2b9839811bc4c556c4fd864dcebb78bec7e0c8a2fb40d25a3efe96f830abaaee",
+      "reviewed": true,
+      "retainedInRepository": true
+    },
+    {
+      "attachment": "iPadTests/attachments/3FC2BB50-046F-413D-A437-77B610D67A90.png",
+      "repositoryFile": null,
+      "rawWidthPixels": 1640,
+      "rawHeightPixels": 2360,
+      "orientationFromTest": "portrait",
+      "bytes": 169465,
+      "sha256": "5424f566c6e607b5b9e8978a098125f6252dae5c9eca504b54dfc5597a81d45a",
+      "reviewed": true,
+      "retainedInRepository": false
+    },
+    {
+      "attachment": "iPadTests/attachments/1A486F0A-6FC1-46FB-9FB1-A09ED84A51A3.png",
+      "repositoryFile": null,
+      "rawWidthPixels": 1640,
+      "rawHeightPixels": 2360,
+      "orientationFromTest": "portrait",
+      "bytes": 211186,
+      "sha256": "13c948e52a7a0760f6dd1a7155937d4ce9f1936ad95aa067f027d74288555d7a",
+      "reviewed": true,
+      "retainedInRepository": false
+    },
+    {
+      "attachment": "iPadTests/attachments/3705C46B-4E85-4A38-A69D-8A1D99CC7E31.png",
+      "repositoryFile": "iPad-bilan-clavier-paysage.png",
+      "rawWidthPixels": 1640,
+      "rawHeightPixels": 2360,
+      "orientationFromTest": "landscape",
+      "bytes": 260215,
+      "sha256": "40bba7ce1138b425f3f62bcddd128e52508cf82564491f7e278077ee558809e4",
+      "reviewed": true,
+      "retainedInRepository": true
+    }
+  ],
+  "observations": [
+    "Fiche en attente : Commencer visible, aucune action de fin avant le départ.",
+    "Dernière étape Bilan et son bouton Enregistrer lisibles sur les deux appareils, sans clavier.",
+    "iPad : saisie du travail visible avec clavier, portrait et paysage.",
+    "Défaut historique découvert sur ces images : champ masqué en iPhone paysage avec clavier. Corrigé et requalifié dans finalRegression ci-dessous."
+  ],
+  "limits": [
+    "Aucune preuve physique GPS, batterie ou VoiceOver.",
+    "Les tests d’interface réussis ne prouvent pas la lisibilité de chaque champ ; le défaut paysage est relevé par inspection des images.",
+    "Le bandeau Rendu de contrôle est propre au harnais synthétique."
+  ],
+  "intermediateRegression": {
+    "commit": "ccef297d4d488f670e91b6c642e7910e487e1eed",
+    "run": 37938162649,
+    "conclusion": "failure",
+    "iPhone": {
+      "passed": 0,
+      "failed": 1
+    },
+    "iPad": {
+      "passed": 1,
+      "failed": 0
+    },
+    "cause": "Removing the save bar alone left the active field outside the viewport. f8f5c63 restores scrolling to the focused row after geometry changes; visibility assertions were not weakened."
+  },
+  "finalRegression": {
+    "commit": "f8f5c63772aee0ee172b2eb3b5e5055e2bd0aa87",
+    "run": 37940876364,
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/37940876364",
+    "conclusion": "success",
+    "suite": "LayoutContinuityTests",
+    "imagesReviewed": 5,
+    "imagesModified": false,
+    "devices": [
+      {
+        "name": "iPhone 17 Pro",
+        "os": "26.4.1",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "summary": "stabilite-native-layout-iPhone-summary-20261009.json"
+      },
+      {
+        "name": "iPad Air 11-inch (M4)",
+        "os": "26.4.1",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "summary": "stabilite-native-layout-iPad-summary-20261009.json"
+      }
+    ],
+    "files": [
+      {
+        "attachment": "Tests/attachments/0C221CC1-ADC6-4C2A-BDA8-916ED00DBBF1.png",
+        "repositoryFile": "iPhone-lesson-unsaved-portrait-f8f5c63.png",
+        "rawWidthPixels": 1206,
+        "rawHeightPixels": 2622,
+        "orientationFromTest": "portrait",
+        "bytes": 202148,
+        "sha256": "31445b809721967da24babb7eb7b36a57f2cf0f4b9c28ac8ff98a2dc0aa42b7f",
+        "reviewed": true,
+        "retainedInRepository": true
+      },
+      {
+        "attachment": "Tests/attachments/24C36C6A-F4BB-4387-A459-B2D85E38BF38.png",
+        "repositoryFile": "iPhone-lesson-unsaved-landscape-keyboard-closed-f8f5c63.png",
+        "rawWidthPixels": 1206,
+        "rawHeightPixels": 2622,
+        "orientationFromTest": "landscape",
+        "bytes": 481052,
+        "sha256": "cf696e71405a31dd21596359e3c7314922dfd60bea91b8658333509a42072675",
+        "reviewed": true,
+        "retainedInRepository": true
+      },
+      {
+        "attachment": "Tests/attachments/0CA86DA8-BFDA-40F7-97FC-C82A5A0569DD.png",
+        "repositoryFile": "iPhone-lesson-unsaved-landscape-f8f5c63.png",
+        "rawWidthPixels": 1206,
+        "rawHeightPixels": 2622,
+        "orientationFromTest": "landscape",
+        "bytes": 484476,
+        "sha256": "32bfb58cc13806e3d56d4b7933ba73cc4479d19e6d1b1e10569635a697a64a05",
+        "reviewed": true,
+        "retainedInRepository": true
+      },
+      {
+        "attachment": "iPadTests/attachments/19CD0A30-DCA0-49AA-8E08-8059CCCD528A.png",
+        "repositoryFile": "iPad-lesson-unsaved-portrait-f8f5c63.png",
+        "rawWidthPixels": 1640,
+        "rawHeightPixels": 2360,
+        "orientationFromTest": "portrait",
+        "bytes": 211523,
+        "sha256": "fc9340ce429b7547d4134415d219ccf3f2c075e287a55c675cd52cb2f5d96a24",
+        "reviewed": true,
+        "retainedInRepository": true
+      },
+      {
+        "attachment": "iPadTests/attachments/C478C22A-7233-4905-B29D-07C6A660FE47.png",
+        "repositoryFile": "iPad-lesson-unsaved-landscape-f8f5c63.png",
+        "rawWidthPixels": 1640,
+        "rawHeightPixels": 2360,
+        "orientationFromTest": "landscape",
+        "bytes": 260475,
+        "sha256": "86523b0521165a3a87e7c96514191c1a65e7ebd615934815718469fc9293391c",
+        "reviewed": true,
+        "retainedInRepository": true
+      }
+    ],
+    "observations": [
+      "iPhone paysage avec clavier : Travail réalisé et sa ligne de texte visibles ; fermeture du clavier accessible, barre fixe retirée.",
+      "iPhone paysage après fermeture du clavier : texte conservé, barre Enregistrer et partager le bilan entièrement visible.",
+      "Retour portrait iPhone : ajout Rotation 29 Paysage conservé, trois champs et enregistrement lisibles.",
+      "iPad paysage puis portrait : champ Travail réalisé et saisie conservés, enregistrement visible avec le clavier."
+    ],
+    "limits": [
+      "Une suite ciblée, un test par appareil ; les douze parcours UI complets ne sont pas répétés après cette correction de disposition.",
+      "Le test saisit un champ court ; il ne qualifie ni les trois champs en cours de frappe ni les textes longs et leur curseur.",
+      "Les assertions géométriques, la seconde frappe et la fermeture du clavier sont propres au chemin iPhone compact. Sur iPad, le test contrôle le texte conservé et la présence de l’enregistrement ; la lisibilité est inspectée sur les captures.",
+      "Aucun enregistrement du bilan envoyé par cette recette de rotation ; aucune écriture distante ni qualification physique GPS, batterie, VoiceOver ou grand texte."
+    ]
+  },
+  "totalImagesReviewed": 13
+}

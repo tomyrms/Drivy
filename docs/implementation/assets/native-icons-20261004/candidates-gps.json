@@ -1,0 +1,164 @@
+{
+  "speed": [
+    {
+      "variant": 1,
+      "title": "Compteur à aiguille",
+      "file": "candidates/speed-01.svg"
+    },
+    {
+      "variant": 2,
+      "title": "Limitation de vitesse",
+      "file": "candidates/speed-02.svg"
+    },
+    {
+      "variant": 3,
+      "title": "Voiture en mouvement",
+      "file": "candidates/speed-03.svg"
+    },
+    {
+      "variant": 4,
+      "title": "Chronomètre de vitesse",
+      "file": "candidates/speed-04.svg"
+    },
+    {
+      "variant": 5,
+      "title": "Élan horizontal",
+      "file": "candidates/speed-05.svg"
+    }
+  ],
+  "placement": [
+    {
+      "variant": 1,
+      "title": "Voiture centrée dans sa voie",
+      "file": "candidates/placement-01.svg"
+    },
+    {
+      "variant": 2,
+      "title": "Position dans la perspective routière",
+      "file": "candidates/placement-02.svg"
+    },
+    {
+      "variant": 3,
+      "title": "Changement de voie",
+      "file": "candidates/placement-03.svg"
+    },
+    {
+      "variant": 4,
+      "title": "Écart latéral",
+      "file": "candidates/placement-04.svg"
+    },
+    {
+      "variant": 5,
+      "title": "Placement à une intersection",
+      "file": "candidates/placement-05.svg"
+    }
+  ],
+  "manoeuvres": [
+    {
+      "variant": 1,
+      "title": "Entrée dans une place de stationnement",
+      "file": "candidates/manoeuvres-01.svg"
+    },
+    {
+      "variant": 2,
+      "title": "Marche arrière courbe",
+      "file": "candidates/manoeuvres-02.svg"
+    },
+    {
+      "variant": 3,
+      "title": "Stationnement et recul",
+      "file": "candidates/manoeuvres-03.svg"
+    },
+    {
+      "variant": 4,
+      "title": "Braquage du volant",
+      "file": "candidates/manoeuvres-04.svg"
+    },
+    {
+      "variant": 5,
+      "title": "Recul en angle dans un emplacement",
+      "file": "candidates/manoeuvres-05.svg"
+    }
+  ],
+  "motorway": [
+    {
+      "variant": 1,
+      "title": "Autoroute et pont",
+      "file": "candidates/motorway-01.svg"
+    },
+    {
+      "variant": 2,
+      "title": "Bretelle de sortie",
+      "file": "candidates/motorway-02.svg"
+    },
+    {
+      "variant": 3,
+      "title": "Portique autoroutier",
+      "file": "candidates/motorway-03.svg"
+    },
+    {
+      "variant": 4,
+      "title": "Chaussées séparées",
+      "file": "candidates/motorway-04.svg"
+    },
+    {
+      "variant": 5,
+      "title": "Insertion sur autoroute",
+      "file": "candidates/motorway-05.svg"
+    }
+  ],
+  "anticipation": [
+    {
+      "variant": 1,
+      "title": "Regard vers la chaussée",
+      "file": "candidates/anticipation-01.svg"
+    },
+    {
+      "variant": 2,
+      "title": "Voiture et piéton",
+      "file": "candidates/anticipation-02.svg"
+    },
+    {
+      "variant": 3,
+      "title": "Attention aux cyclistes",
+      "file": "candidates/anticipation-03.svg"
+    },
+    {
+      "variant": 4,
+      "title": "Piéton sur un passage",
+      "file": "candidates/anticipation-04.svg"
+    },
+    {
+      "variant": 5,
+      "title": "Veille radar",
+      "file": "candidates/anticipation-05.svg"
+    }
+  ],
+  "marker": [
+    {
+      "variant": 1,
+      "title": "Drapeau de repère",
+      "file": "candidates/marker-01.svg"
+    },
+    {
+      "variant": 2,
+      "title": "Signet de moment",
+      "file": "candidates/marker-02.svg"
+    },
+    {
+      "variant": 3,
+      "title": "Repère de lieu",
+      "file": "candidates/marker-03.svg"
+    },
+    {
+      "variant": 4,
+      "title": "Instant sur une chronologie",
+      "file": "candidates/marker-04.svg"
+    },
+    {
+      "variant": 5,
+      "title": "Repère chronométré",
+      "file": "candidates/marker-05.svg"
+    }
+  ]
+}

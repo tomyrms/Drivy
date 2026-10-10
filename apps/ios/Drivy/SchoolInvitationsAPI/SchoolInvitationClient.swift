@@ -6,11 +6,60 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
     private let tokenSource: any AccessTokenSource
     private let transport: any SchoolHTTPTransport
     private let reader: DrivyAPIClient
+    private let catalog: SchoolCatalogClient
 
     init(baseURL: URL, tokenSource: any AccessTokenSource,
          transport: any SchoolHTTPTransport = SchoolURLSessionTransport()) {
         self.baseURL = baseURL; self.tokenSource = tokenSource; self.transport = transport
         reader = DrivyAPIClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport)
+        catalog = SchoolCatalogClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport)
+    }
+
+    func trainingOfferings(schoolID: UUID) async throws -> [SchoolOffering] {
+        do {
+            let offerings = try await collect { try await self.catalog.offerings(schoolID: schoolID, cursor: $0) }
+            let curricula = try await collect { try await self.catalog.curricula(schoolID: schoolID, cursor: $0) }
+            let policies = try await collect { try await self.catalog.policies(schoolID: schoolID, cursor: $0) }
+            let approvedCurricula = Set(curricula.filter(\.approved).map(\.id))
+            let approvedPolicies = Set(policies.filter(\.approved).map(\.id))
+            return Dictionary(grouping: offerings, by: \.offeringKey).values.compactMap { $0.max { $0.version < $1.version } }
+                .filter { $0.schoolId == schoolID && $0.enabled && approvedCurricula.contains($0.curriculumVersionId)
+                    && approvedPolicies.contains($0.policyVersionId) }
+                .sorted { ($0.categoryCode, $0.offeringKey) < ($1.categoryCode, $1.offeringKey) }
+        } catch SchoolCatalogFailure.unauthorized { throw SchoolInvitationFailure.unauthorized }
+        catch SchoolCatalogFailure.forbidden { throw SchoolInvitationFailure.forbidden }
+        catch { throw SchoolInvitationFailure.unavailable }
+    }
+
+    func instructors(schoolID: UUID) async throws -> [SchoolInvitationInstructor] {
+        let members: [SchoolMember] = try await collect { cursor in
+            var query = [URLQueryItem(name: "limit", value: "100")]
+            if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+            let page: SchoolPage<SchoolMember> = try await self.request(schoolID: schoolID, path: ["members"], query: query)
+            guard page.items.count <= 100,
+                  page.items.allSatisfy({ $0.schoolId == schoolID && $0.version > 0 }),
+                  page.nextCursor.map({ !$0.isEmpty && $0.utf8.count <= 6000 }) ?? true else {
+                throw SchoolInvitationFailure.invalidResponse
+            }
+            return page
+        }
+        guard Set(members.map(\.id)).count == members.count else { throw SchoolInvitationFailure.invalidResponse }
+        return members.filter { $0.status == "ACTIVE" && $0.roles.contains("INSTRUCTOR") }
+            .map { SchoolInvitationInstructor(id: $0.id, displayName: $0.displayName) }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
+    private func collect<Value: SchoolCatalogRecord>(_ fetch: (String?) async throws -> SchoolPage<Value>) async throws -> [Value] {
+        var values: [Value] = []
+        var cursor: String?
+        var seen = Set<String>()
+        repeat {
+            let page = try await fetch(cursor)
+            values.append(contentsOf: page.items); cursor = page.nextCursor
+            guard values.count <= 10_000 else { throw SchoolInvitationFailure.invalidResponse }
+            if let cursor, !seen.insert(cursor).inserted { throw SchoolInvitationFailure.invalidResponse }
+        } while cursor != nil
+        return values
     }
 
     func school(id: UUID) async throws -> SchoolDetails {
@@ -62,8 +111,11 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
         }
         if command.kind == .createInvitation {
             guard let original = try? JSONDecoder().decode(SchoolInviteCommand.self, from: command.body),
-                  Set(original.roles) == Set(result.roles) else { throw SchoolInvitationFailure.invalidResponse }
+                  Set(original.roles) == Set(result.roles),
+                  result.delivery == (original.delivery ?? .email) else { throw SchoolInvitationFailure.invalidResponse }
         }
+        // A code is only ever handed back for a code invitation, when it is created or renewed.
+        if result.code != nil, command.kind == .revokeInvitation { throw SchoolInvitationFailure.invalidResponse }
         return result
     }
 
@@ -81,7 +133,7 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolInvitationFailure.unauthorized }
         catch SchoolAPIError.unauthorized { throw SchoolInvitationFailure.unauthorized }
-        catch { throw SchoolInvitationFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolInvitationFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolInvitationFailure.unauthorized }
         try Task.checkCancellation()
         var request = URLRequest(url: target)
@@ -99,7 +151,7 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
         }
         let response: SchoolHTTPResponse
         do { response = try await transport.send(request) }
-        catch { throw SchoolInvitationFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolInvitationFailure.unavailable) }
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else {
             throw SchoolInvitationFailure.invalidResponse
         }
@@ -120,14 +172,17 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
                 case "INVITATION_ALREADY_PENDING": throw SchoolInvitationFailure.alreadyInvited
                 case "INVITATION_USED": throw SchoolInvitationFailure.invitationUsed
                 case "INVITATION_REVOKED": throw SchoolInvitationFailure.invitationRevoked
+                case "INVITATION_DELIVERY_UNAVAILABLE": throw SchoolInvitationFailure.deliveryUnavailable
                 default: throw SchoolInvitationFailure.pendingCommand
                 }
             case 412 where problem?.code == "VERSION_CONFLICT": throw SchoolInvitationFailure.conflict
             case 400 where problem?.code == "INVALID_REQUEST": throw SchoolInvitationFailure.rejected
+            case 422 where problem?.code == "INVITATION_TRAINING_INVALID": throw SchoolInvitationFailure.trainingInvalid
             case 400 where problem?.code == "INVALID_CURSOR": throw SchoolInvitationFailure.invalidCursor
             case 428 where problem?.code == "PRECONDITION_REQUIRED": throw SchoolInvitationFailure.rejected
             case 404 where path.first == "operations": throw SchoolInvitationFailure.operationUnknown
-            case 429, 500...599: throw SchoolInvitationFailure.unavailable
+            case 503 where problem?.code == "INVITATION_DELIVERY_UNAVAILABLE": throw SchoolInvitationFailure.deliveryUnavailable
+            case 408, 429, 500...599: throw SchoolInvitationFailure.unavailable
             default: throw SchoolInvitationFailure.invalidResponse
             }
         }
@@ -142,9 +197,20 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
     }
 
     static func valid(_ invitation: SchoolInvitation, schoolID: UUID) -> Bool {
-        invitation.schoolId == schoolID && invitation.version > 0 && !invitation.maskedEmail.isEmpty
-            && invitation.maskedEmail.unicodeScalars.count <= 320 && !invitation.roles.isEmpty
-            && Set(invitation.roles).count == invitation.roles.count && SchoolInvitation.date(invitation.expiresAt) != nil
+        guard invitation.schoolId == schoolID, invitation.version > 0, !invitation.roles.isEmpty,
+              Set(invitation.roles).count == invitation.roles.count, SchoolInvitation.date(invitation.expiresAt) != nil,
+              (invitation.maskedEmail?.unicodeScalars.count ?? 0) <= 320,
+              (invitation.trainingCategoryCode.map { !$0.isEmpty && $0.unicodeScalars.count <= 20 } ?? true) else { return false }
+        switch invitation.delivery {
+        case .email:
+            // An e-mail invitation always shows its masked address and never carries a code.
+            return !(invitation.maskedEmail ?? "").isEmpty && invitation.code == nil
+        case .code:
+            // Its code, when present, has the published format.
+            return invitation.maskedEmail == nil && invitation.roles == [.learner]
+                && (invitation.trainings.map { !$0.isEmpty && $0.count <= 16 && Set($0.map(\.offeringId)).count == $0.count } ?? true)
+                && (invitation.code.map { SchoolInvitationCode.normalized($0) != nil } ?? true)
+        }
     }
     private struct Envelope<Value: Decodable>: Decodable { let data: Value; let requestId: String; let serverTime: String }
     private struct Problem: Decodable { let code: String }

@@ -11,7 +11,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:unit": "vitest run test/auth.test.ts test/cursor.test.ts",
+    "test:unit": "vitest run test/auth.test.ts test/cursor.test.ts test/invitation-code.test.ts test/capture-anchoring.test.ts test/request-hardening.test.ts",
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "mail:worker": "node dist/invitation-mail-worker.js",

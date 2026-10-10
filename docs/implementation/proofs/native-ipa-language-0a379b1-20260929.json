@@ -1,0 +1,26 @@
+{
+  "runId": "36586171978",
+  "runURL": "https://github.com/tomyrms/Drivy/actions/runs/36586171978",
+  "headSha": "0a379b12021d136bedebdf5b8141eacc2fa6ed53",
+  "ipa": "artifacts/review-20260929/account-visual/36586171978/ipa/Drivy.ipa",
+  "sha256": "f10b86c72d0bf2e94b3c4941988b8dbdd069256e6ae0dafd85b2e569e67d5f65",
+  "plist": "Payload/Drivy.app/Info.plist",
+  "CFBundleVersion": "72",
+  "CFBundleShortVersionString": "0.7.0",
+  "CFBundleDevelopmentRegion": "fr",
+  "CFBundleLocalizations": [
+    "fr"
+  ],
+  "lprojPaths": [],
+  "assertionsPassed": true,
+  "runtimeVisiblePasteLabelVerified": true,
+  "physicalInstallVerified": false,
+  "runtimeProof": "native-full-0a379b1-20260929.json",
+  "runtimeRunId": "36586194920",
+  "runtimeDevices": [
+    "iPhone 17 Pro",
+    "iPad Air 11-inch (M4)"
+  ],
+  "runtimeVisiblePasteLabel": "Coller",
+  "runtimeLanguageLaunchArguments": []
+}

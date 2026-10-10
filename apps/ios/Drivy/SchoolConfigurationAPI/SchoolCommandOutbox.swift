@@ -17,6 +17,54 @@ struct SchoolCommandScope: Codable, Sendable, Equatable {
 enum SchoolCommandKind: String, Codable, Sendable {
     case updateSchool, saveSetup, activate, saveDataPolicy
     case createInvitation, resendInvitation, revokeInvitation
+    case createProfilePolicy, publishProfilePolicy, updateProfile, saveOnboarding, completeOnboarding
+    case createOffering, createCurriculum, createCatalogPolicy, createTraining, createAssignment, updateMember
+    case createLesson, moveLesson, cancelLesson, createCommercialTerms, createServiceProduct
+    case createAvailabilityRule, updateAvailabilityRule, createClosure, removeAvailabilityRule, removeClosure
+    case savePreparation, saveWish, completeLesson, saveReportDraft, publishReportDraft, updateLessonSharing
+    case createObservation, updateObservation, removeObservation
+    case recordPermitCheck, markNoShow
+    case startLessonNow, startLesson
+    case savePlanningDefaults
+
+    var isObservation: Bool {
+        switch self {
+        case .createObservation, .updateObservation, .removeObservation: true
+        default: false
+        }
+    }
+
+    var isPlanning: Bool {
+        switch self {
+        case .createLesson, .moveLesson, .cancelLesson, .createCommercialTerms, .createServiceProduct,
+             .createAvailabilityRule, .updateAvailabilityRule, .createClosure, .removeAvailabilityRule, .removeClosure,
+             .startLessonNow, .savePlanningDefaults: true
+        default: false
+        }
+    }
+    var isReport: Bool {
+        switch self {
+        case .savePreparation, .saveWish, .completeLesson, .saveReportDraft, .publishReportDraft, .updateLessonSharing,
+             .recordPermitCheck, .markNoShow, .startLesson: true
+        default: false
+        }
+    }
+
+    var isCatalog: Bool {
+        switch self {
+        case .createOffering, .createCurriculum, .createCatalogPolicy, .createTraining, .createAssignment, .updateMember: true
+        default: false
+        }
+    }
+
+    var isProfile: Bool {
+        switch self {
+        case .createProfilePolicy, .publishProfilePolicy, .updateProfile, .saveOnboarding, .completeOnboarding: true
+        default: false
+        }
+    }
+
+    var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog && !isPlanning && !isReport && !isObservation }
 
     var isInvitation: Bool {
         switch self {
@@ -34,6 +82,41 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .createInvitation: "CREATE_INVITATION"
         case .resendInvitation: "RESEND_INVITATION"
         case .revokeInvitation: "REVOKE_INVITATION"
+        case .createProfilePolicy: "CREATE_PROFILE_FIELD_POLICY"
+        case .publishProfilePolicy: "PUBLISH_PROFILE_FIELD_POLICY"
+        case .updateProfile: "UPDATE_ADMINISTRATIVE_PROFILE"
+        case .saveOnboarding: "SAVE_ONBOARDING"
+        case .completeOnboarding: "COMPLETE_ONBOARDING"
+        case .createOffering: "CREATE_OFFERING_VERSION"
+        case .createCurriculum: "CREATE_CURRICULUM_VERSION"
+        case .createCatalogPolicy: "CREATE_SCHOOL_POLICY"
+        case .createTraining: "CREATE_TRAINING"
+        case .createAssignment: "CREATE_ASSIGNMENT"
+        case .updateMember: "UPDATE_MEMBER"
+        case .createLesson: "CREATE_LESSON"
+        case .moveLesson: "MOVE_LESSON"
+        case .cancelLesson: "CANCEL_LESSON"
+        case .createCommercialTerms: "CREATE_COMMERCIAL_TERMS"
+        case .createServiceProduct: "CREATE_SERVICE_PRODUCT"
+        case .createAvailabilityRule: "CREATE_AVAILABILITY_RULE"
+        case .updateAvailabilityRule: "UPDATE_AVAILABILITY_RULE"
+        case .createClosure: "CREATE_CLOSURE"
+        case .removeAvailabilityRule: "REMOVE_AVAILABILITY_RULE"
+        case .removeClosure: "REMOVE_CLOSURE"
+        case .savePreparation: "SAVE_PREPARATION"
+        case .saveWish: "SAVE_WISH"
+        case .completeLesson: "COMPLETE_LESSON"
+        case .saveReportDraft: "SAVE_REPORT_DRAFT"
+        case .publishReportDraft: "PUBLISH_REPORT_DRAFT"
+        case .updateLessonSharing: "UPDATE_LESSON_SHARING"
+        case .createObservation: "CREATE_GEO_OBSERVATION"
+        case .updateObservation: "UPDATE_GEO_OBSERVATION"
+        case .removeObservation: "REMOVE_GEO_OBSERVATION"
+        case .recordPermitCheck: "RECORD_PERMIT_CHECK"
+        case .markNoShow: "MARK_NO_SHOW"
+        case .startLessonNow: "START_LESSON_NOW"
+        case .startLesson: "START_LESSON"
+        case .savePlanningDefaults: "SAVE_PLANNING_DEFAULTS"
         }
     }
 
@@ -43,6 +126,28 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .saveSetup: "SchoolSetup"
         case .saveDataPolicy: "SchoolDataPolicy"
         case .createInvitation, .resendInvitation, .revokeInvitation: "Invitation"
+        case .createProfilePolicy, .publishProfilePolicy: "ProfileFieldPolicy"
+        case .updateProfile: "AdministrativeProfile"
+        case .saveOnboarding, .completeOnboarding: "OnboardingProgress"
+        case .createOffering: "Offering"
+        case .createCurriculum: "Curriculum"
+        case .createCatalogPolicy: "SchoolPolicy"
+        case .createTraining: "Training"
+        case .createAssignment: "Assignment"
+        case .updateMember: "Member"
+        case .createLesson, .moveLesson, .cancelLesson, .completeLesson, .markNoShow, .startLessonNow, .startLesson: "Lesson"
+        case .createCommercialTerms: "CommercialTermsVersion"
+        case .createServiceProduct: "ServiceProductVersion"
+        case .createAvailabilityRule, .updateAvailabilityRule, .removeAvailabilityRule: "AvailabilityRule"
+        case .createClosure, .removeClosure: "Closure"
+        case .savePreparation: "Preparation"
+        case .saveWish: "Wish"
+        case .saveReportDraft: "ReportDraft"
+        case .publishReportDraft: "ReportRevision"
+        case .updateLessonSharing: "LessonSharing"
+        case .createObservation, .updateObservation, .removeObservation: "GeoObservation"
+        case .recordPermitCheck: "PermitCheck"
+        case .savePlanningDefaults: "PlanningDefaults"
         }
     }
 }
@@ -56,24 +161,75 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
     let body: Data
     // Absent in v1 G1B archives; creation has no server resource identifier yet.
     let resourceID: UUID?
+    let routeResourceID: UUID?
+    let expectedVersion: Int?
+    /// Local-only follow-up intent. The original request bytes and operation remain immutable.
+    let observationUndoOperationID: UUID?
+
+    var ifMatchVersion: Int { expectedVersion ?? resourceVersion }
 
     init(id: UUID, scope: SchoolCommandScope, kind: SchoolCommandKind, resourceVersion: Int,
-         createdAt: Date, body: Data, resourceID: UUID? = nil) {
+         createdAt: Date, body: Data, resourceID: UUID? = nil, routeResourceID: UUID? = nil, expectedVersion: Int? = nil,
+         observationUndoOperationID: UUID? = nil) {
         self.id = id; self.scope = scope; self.kind = kind; self.resourceVersion = resourceVersion
         self.createdAt = createdAt; self.body = body; self.resourceID = resourceID
+        self.routeResourceID = routeResourceID; self.expectedVersion = expectedVersion
+        self.observationUndoOperationID = observationUndoOperationID
+    }
+
+    func requestingObservationUndo(operationID: UUID) -> Self {
+        .init(id: id, scope: scope, kind: kind, resourceVersion: resourceVersion, createdAt: createdAt,
+              body: body, resourceID: resourceID, routeResourceID: routeResourceID, expectedVersion: expectedVersion,
+              observationUndoOperationID: operationID)
+    }
+
+    var withoutObservationUndo: Self {
+        .init(id: id, scope: scope, kind: kind, resourceVersion: resourceVersion, createdAt: createdAt,
+              body: body, resourceID: resourceID, routeResourceID: routeResourceID, expectedVersion: expectedVersion)
     }
 
     var hasValidTarget: Bool {
+        if let observationUndoOperationID, kind != .createObservation || observationUndoOperationID == id { return false }
+        if !kind.isProfile && !kind.isCatalog && !kind.isPlanning && !kind.isReport && !kind.isObservation && (routeResourceID != nil || expectedVersion != nil) { return false }
         switch kind {
-        case .createInvitation: resourceVersion == 0 && resourceID == nil
-        case .resendInvitation, .revokeInvitation: resourceVersion > 0 && resourceID != nil
-        default: resourceVersion > 0 && resourceID == nil
+        case .savePlanningDefaults:
+            return resourceVersion > 0 && resourceID == scope.membershipID && routeResourceID == nil && expectedVersion == nil
+        case .createObservation:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
+        case .updateObservation, .removeObservation:
+            return (1...2_147_483_647).contains(resourceVersion) && resourceID != nil && routeResourceID != nil && expectedVersion == nil
+        case .createCommercialTerms, .createServiceProduct, .createAvailabilityRule, .createClosure:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && expectedVersion == nil
+        case .createLesson, .startLessonNow:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
+        case .moveLesson, .cancelLesson, .updateAvailabilityRule, .removeAvailabilityRule, .removeClosure, .completeLesson, .saveReportDraft, .updateLessonSharing,
+             .markNoShow, .startLesson:
+            return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
+        case .savePreparation, .saveWish:
+            return resourceVersion > 0 && resourceID != nil && routeResourceID != nil && expectedVersion == nil
+        case .publishReportDraft, .recordPermitCheck:
+            // AP30 : If-Match vise la version de la formation ; le contrôle créé n'a pas encore d'identifiant.
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && (expectedVersion ?? 0) > 0
+        case .createOffering, .createCurriculum, .createCatalogPolicy:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && expectedVersion == nil
+        case .createTraining, .createAssignment:
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
+        case .updateMember:
+            return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
+        case .createProfilePolicy: return resourceVersion == 0 && resourceID == nil && routeResourceID == nil && ifMatchVersion > 0
+        case .updateProfile: return resourceVersion > 0 && resourceID != nil && routeResourceID != nil && expectedVersion == nil
+        case .publishProfilePolicy, .saveOnboarding, .completeOnboarding: return resourceVersion > 0 && resourceID != nil && routeResourceID == nil && expectedVersion == nil
+        case .createInvitation: return resourceVersion == 0 && resourceID == nil
+        case .resendInvitation, .revokeInvitation: return resourceVersion > 0 && resourceID != nil
+        default: return resourceVersion > 0 && resourceID == nil
         }
     }
 
     func matches(_ receipt: SchoolOperationReceipt) -> Bool {
-        guard hasValidTarget else { return false }
-        let expectedID = kind.isInvitation ? resourceID : scope.schoolID
+        // A generic verifier must not settle a CREATE while its durable withdrawal is pending.
+        // SchoolObservationClient reconciles the original CREATE and the distinct REMOVE receipt.
+        guard hasValidTarget, observationUndoOperationID == nil else { return false }
+        let expectedID = kind.isConfiguration ? scope.schoolID : resourceID
         return receipt.operationId == id && receipt.commandType == kind.operationType
             && receipt.resourceType == kind.resourceType && receipt.resourceVersion > resourceVersion
             && (expectedID == nil || receipt.resourceId == expectedID)
@@ -115,8 +271,16 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
     func save(_ command: PendingSchoolCommand) throws {
         try validate(command)
         var commands = try read()
-        if let existing = commands.first(where: { $0.scope.belongsToWorkspace(command.scope) || $0.id == command.id }) {
-            guard existing == command else { throw SchoolConfigurationFailure.pendingCommand }
+        if let index = commands.firstIndex(where: { $0.scope.belongsToWorkspace(command.scope) || $0.id == command.id }) {
+            let existing = commands[index]
+            if existing != command {
+                // One atomic encrypted replacement: a late CREATE acknowledgement cannot erase this intent.
+                guard existing.observationUndoOperationID == nil, command.observationUndoOperationID != nil,
+                      command.withoutObservationUndo == existing else { throw SchoolConfigurationFailure.pendingCommand }
+                commands[index] = command
+                try write(commands)
+                return
+            }
             try synchronize()
             return
         }
@@ -151,7 +315,7 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
             let box = try AES.GCM.SealedBox(combined: encrypted)
             let clear = try AES.GCM.open(box, using: key(create: false), authenticating: authenticatedData)
             let archive = try JSONDecoder().decode(Archive.self, from: clear)
-            guard archive.version == 1, archive.commands.count <= 50,
+            guard (archive.version == 1 || archive.version == 2), archive.commands.count <= 50,
                   Set(archive.commands.map(\.id)).count == archive.commands.count else { throw SchoolConfigurationFailure.storage }
             for (index, command) in archive.commands.enumerated() {
                 try validate(command)
@@ -165,7 +329,9 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
 
     private func write(_ commands: [PendingSchoolCommand]) throws {
         do {
-            let data = try JSONEncoder().encode(Archive(version: 1, commands: commands))
+            // Older binaries must fail closed instead of ignoring a durable withdrawal intent.
+            let version = commands.contains { $0.observationUndoOperationID != nil } ? 2 : 1
+            let data = try JSONEncoder().encode(Archive(version: version, commands: commands))
             guard data.count + 28 <= maximumArchiveBytes else { throw SchoolConfigurationFailure.storage }
             let box = try AES.GCM.seal(data, using: key(create: true), authenticating: authenticatedData)
             guard let encrypted = box.combined else { throw SchoolConfigurationFailure.storage }

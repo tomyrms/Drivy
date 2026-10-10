@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-04",
+  "source": "a2dc49c246a28e5951620fa38fa9934ec4a18b69",
+  "pullRequest": "https://github.com/tomyrms/Drivy/pull/5",
+  "ipa": {
+    "run": "37212556376",
+    "version": "0.7.0",
+    "build": "99",
+    "signed": false,
+    "ipaSHA256": "24edcd031f2877d332d9b257caa829f739a37934eabd58257edaf5c8b07c224c"
+  },
+  "downloadSHA256Verified": true,
+  "nativeBuild": "success",
+  "review": {
+    "independent": "Fitted component and Signaler source reviewed",
+    "diffCheck": "passed",
+    "impeccableLayout": {
+      "result": [],
+      "scope": "Changed UI sources",
+      "limit": "Detector primarily HTML/CSS; no SwiftUI qualification"
+    }
+  },
+  "tests": {
+    "newPureHeadingTests": 5,
+    "execution": "not performed at user request",
+    "newNativeScreenshots": 0
+  },
+  "notQualified": [
+    "Content height and keyboard on device",
+    "iPad fitted popover",
+    "Dynamic Type and VoiceOver on device",
+    "Stationary physical heading and magnetic interference",
+    "Battery"
+  ],
+  "deployment": "none"
+}

@@ -1,0 +1,90 @@
+{
+  "date": "2026-10-04",
+  "batch": "volume-20261004",
+  "script": "infra/deploy/provision-volume-data.sql",
+  "database": "drivy_refonte",
+  "appliedAtLocal": "2026-10-04T23:21+02:00",
+  "backupBefore": {
+    "path": "/root/drivy_refonte-before-volume-20261004-20261004T212104Z-aa8aba17.dump",
+    "bytes": 1643373,
+    "verified": true,
+    "host": "CT113"
+  },
+  "rehearsal": {
+    "database": "drivy_volume_rehearsal",
+    "restoredFrom": "/root/drivy_refonte-before-volume-20261004-20261004T211620Z-dc026fd1.dump",
+    "identicalToProductionBeforeRun": true,
+    "runs": 2,
+    "sameResultAsProduction": true,
+    "droppedAfter": true
+  },
+  "created": {
+    "learners": 80,
+    "instructorsWithoutLogin": 5,
+    "trainings": 102,
+    "offerings": [
+      "A",
+      "BE"
+    ],
+    "lessons": {
+      "total": 1236,
+      "COMPLETED": 744,
+      "PLANNED": 323,
+      "CANCELLED": 114,
+      "NO_SHOW": 55,
+      "requestsWithoutFreeSlot": 220
+    },
+    "reports": {
+      "SHARED": 531,
+      "UPDATED": 110,
+      "PRIVATE": 64,
+      "EMPTY": 39
+    },
+    "reportRevisions": 751,
+    "observationsWithoutPosition": 1912,
+    "permitChecks": 82,
+    "captures": 0,
+    "positions": 0,
+    "loginAccounts": 0,
+    "emails": 0
+  },
+  "totalsAfter": {
+    "learners": 86,
+    "trainings": 108,
+    "lessons": 1298,
+    "reportRevisions": 782,
+    "observations": 2027,
+    "permitChecks": 87,
+    "progressRows": 654
+  },
+  "visibleUnderRowSecurity": {
+    "luc": {
+      "lessons": 1298,
+      "ownLessons": 453,
+      "learners": 86,
+      "plannedNext14Days": 21,
+      "maxPlannedPerDayAfterToday": 2
+    },
+    "moniteur": {
+      "lessons": 1058,
+      "learners": 66,
+      "hiddenLearners": 20
+    },
+    "eleve": {
+      "lessons": 174,
+      "foreignLessons": 0,
+      "currentSharedReports": 93,
+      "draftsReadable": 0,
+      "privateObservationsReadable": 0,
+      "progressRows": 27
+    }
+  },
+  "preExistingRowsChanged": "none except the empty fields of the trial learner profile (asserted in the transaction)",
+  "apiReadyAfter": 200,
+  "servicesActive": true,
+  "notQualified": [
+    "rendu iOS et web avec ce volume",
+    "temps de réponse de l'API",
+    "aucun parcours joué dans l'app"
+  ]
+}

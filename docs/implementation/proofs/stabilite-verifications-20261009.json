@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-09",
+  "branch": "codex/stabilite-parcours-20261009",
+  "mergedSource": "b710303c40b8f4462e8a4b39817544ecb53bde65",
+  "mergeCommit": "6443d023ae6700df0dae627d0cffe30153b78a95",
+  "productCommit": "f8f5c63772aee0ee172b2eb3b5e5055e2bd0aa87",
+  "checks": {
+    "run": 37940876067,
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/37940876067",
+    "conclusion": "success",
+    "api": {
+      "passed": 248,
+      "files": 21,
+      "database": "Real PostgreSQL in CI"
+    },
+    "web": {
+      "passed": 125,
+      "files": 12
+    },
+    "typecheck": "passed",
+    "builds": "passed",
+    "canonicalDocumentationIntegrity": "passed"
+  },
+  "ipa": {
+    "run": 37940876258,
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/37940876258",
+    "conclusion": "success",
+    "version": "0.7.0",
+    "build": 128,
+    "signed": false,
+    "downloaded": true,
+    "sha256Verified": true,
+    "verifiedFiles": [
+      "Drivy.ipa",
+      "build-info.json",
+      "Package.resolved"
+    ],
+    "sha256": "16f2412e12767ef807094298acb5e983fcf0b1f974eabd8aa92374c45b5cb9b1"
+  },
+  "deployment": "NOT_EXECUTED",
+  "deploymentOrder": [
+    "Verified database backup",
+    "Migration 023 and matching API",
+    "New app installation"
+  ],
+  "physicalGPSBatteryVoiceOver": "NOT_EXECUTED",
+  "nativeModel": {
+    "commit": "bc0bfa7d7f92a3c2042a847b2966ad8bbadca08a",
+    "run": 37939864868,
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/37939864868",
+    "conclusion": "success",
+    "mode": "unit_only",
+    "swiftTests": 413,
+    "swiftSuites": 34,
+    "presentationTests": 3,
+    "failed": 0,
+    "skipped": 0,
+    "distinctTotal": 416,
+    "totalWithParameterVariants": 443,
+    "device": "iPhone 17 Pro",
+    "os": "26.4.1",
+    "summary": "stabilite-native-unit-summary-20261009.json"
+  },
+  "nativeInterfaceBaseline": {
+    "commit": "602610457b703914b5154300dbfbcf8fb6d246da",
+    "run": 37933024011,
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/37933024011",
+    "workflowConclusion": "failure",
+    "interfaceTestsConclusion": "success",
+    "interfaceTestsPerDevice": 12,
+    "presentationTestsPerDevice": 3,
+    "failedInterfaceTests": 0,
+    "devices": [
+      "iPhone 17 Pro",
+      "iPad Air 11-inch (M4)"
+    ],
+    "note": "The workflow failed in 3 Swift preparation tests whose fixture was subsequently repaired and qualified in nativeModel. This does not qualify later landscape changes; their targeted result is recorded separately."
+  },
+  "nativeLayoutRegression": {
+    "commit": "f8f5c63772aee0ee172b2eb3b5e5055e2bd0aa87",
+    "run": 37940876364,
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/37940876364",
+    "conclusion": "success",
+    "suite": "LayoutContinuityTests",
+    "devices": [
+      {
+        "name": "iPhone 17 Pro",
+        "passed": 1,
+        "failed": 0,
+        "durationSeconds": 96.736
+      },
+      {
+        "name": "iPad Air 11-inch (M4)",
+        "passed": 1,
+        "failed": 0,
+        "durationSeconds": 141.198
+      }
+    ],
+    "os": "26.4.1",
+    "scope": "Targeted rotation, visible focused field above iPhone landscape keyboard, further text input, keyboard dismissal and save action availability, draft retained after portrait return. No save submitted.",
+    "fullInterfaceSuiteRepeatedAfterLayoutChange": false,
+    "proof": "stabilite-native-interactions-20261009.json"
+  }
+}

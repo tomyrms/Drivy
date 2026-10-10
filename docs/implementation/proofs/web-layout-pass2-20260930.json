@@ -1,0 +1,959 @@
+{
+  "date": "2026-09-30",
+  "scope": "Deuxième passe de composition web uniquement",
+  "baseCommit": "3a42162a7d76db8f2bddcdc0621f6f67ab3dc2b3",
+  "tests": {
+    "passed": 104,
+    "failed": 0,
+    "files": 9
+  },
+  "typecheck": "PASSED",
+  "productionBuild": "PASSED",
+  "buildNote": "JavaScript 508,42 kB / 141,81 kB gzip ; avertissement Vite >500 kB conservé. CSS 58,74 kB / 10,86 kB gzip.",
+  "browser": {
+    "surface": "Codex in-app browser",
+    "matrix": [
+      {
+        "page": "signin",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Se connecter à Drivy",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "account",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Vos écoles",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "invitation",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Rejoindre une école",
+        "height": 1088,
+        "overflows": [],
+        "scroll": 1185,
+        "width": 1200
+      },
+      {
+        "page": "agenda",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Agenda",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "learners",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Élèves",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "team",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Équipe et accès",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "availability",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Disponibilités",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "trips",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Trajets",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "invitations",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Invitations élèves",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "formations",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Formations et tarifs",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "curricula",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Compétences enseignées",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "procedures",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Déroulement et annulation",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "offerings",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Formations proposées",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "products",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Tarifs",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "terms",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Conditions commerciales",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "config",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "École",
+        "height": 745,
+        "overflows": [],
+        "scroll": 1185,
+        "width": 1200
+      },
+      {
+        "page": "profile",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Informations demandées aux élèves",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "overview",
+        "size": "desktop",
+        "alerts": [],
+        "heading": "Préparation de l’école",
+        "height": 720,
+        "overflows": [],
+        "scroll": 1200,
+        "width": 1200
+      },
+      {
+        "page": "signin",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Se connecter à Drivy",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "account",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Vos écoles",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "invitation",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Rejoindre une école",
+        "height": 1418,
+        "overflows": [],
+        "scroll": 375,
+        "width": 390
+      },
+      {
+        "page": "agenda",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Agenda",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "learners",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Élèves",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "team",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Équipe et accès",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "availability",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Disponibilités",
+        "height": 830,
+        "overflows": [],
+        "scroll": 375,
+        "width": 390
+      },
+      {
+        "page": "trips",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Trajets",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "invitations",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Invitations élèves",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "formations",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Formations et tarifs",
+        "height": 920,
+        "overflows": [],
+        "scroll": 375,
+        "width": 390
+      },
+      {
+        "page": "curricula",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Compétences enseignées",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "procedures",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Déroulement et annulation",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "offerings",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Formations proposées",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "products",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Tarifs",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "terms",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Conditions commerciales",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "config",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "École",
+        "height": 852,
+        "overflows": [],
+        "scroll": 375,
+        "width": 390
+      },
+      {
+        "page": "profile",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Informations demandées aux élèves",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "overview",
+        "size": "mobile",
+        "alerts": [],
+        "heading": "Préparation de l’école",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "signin",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Se connecter à Drivy",
+        "height": 720,
+        "overflows": [],
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "account",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Vos écoles",
+        "height": 720,
+        "overflows": [],
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "invitation",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Rejoindre une école",
+        "height": 1541,
+        "overflows": [],
+        "scroll": 305,
+        "width": 320
+      },
+      {
+        "page": "agenda",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Agenda",
+        "height": 829,
+        "overflows": [],
+        "scroll": 305,
+        "width": 320
+      },
+      {
+        "page": "learners",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Élèves",
+        "height": 2007,
+        "overflows": [],
+        "scroll": 305,
+        "width": 320
+      },
+      {
+        "page": "team",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Équipe et accès",
+        "height": 747,
+        "overflows": [],
+        "scroll": 305,
+        "width": 320
+      },
+      {
+        "page": "availability",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Disponibilités",
+        "height": 904,
+        "overflows": [],
+        "scroll": 305,
+        "width": 320
+      },
+      {
+        "page": "trips",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Trajets",
+        "height": 720,
+        "overflows": [],
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "invitations",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Invitations élèves",
+        "height": 720,
+        "overflows": [],
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "formations",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Formations et tarifs",
+        "height": 1036,
+        "overflows": [],
+        "scroll": 305,
+        "width": 320
+      },
+      {
+        "page": "curricula",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Compétences enseignées",
+        "height": 720,
+        "overflows": [],
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "procedures",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Déroulement et annulation",
+        "height": 720,
+        "overflows": [],
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "offerings",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Formations proposées",
+        "height": 720,
+        "overflows": [],
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "products",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Tarifs",
+        "height": 720,
+        "overflows": [],
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "terms",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Conditions commerciales",
+        "height": 720,
+        "overflows": [],
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "config",
+        "size": "compact",
+        "alerts": [],
+        "heading": "École",
+        "height": 1011,
+        "overflows": [],
+        "scroll": 305,
+        "width": 320
+      },
+      {
+        "page": "profile",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Informations demandées aux élèves",
+        "height": 720,
+        "overflows": [],
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "overview",
+        "size": "compact",
+        "alerts": [],
+        "heading": "Préparation de l’école",
+        "height": 720,
+        "overflows": [],
+        "scroll": 320,
+        "width": 320
+      },
+      {
+        "page": "products",
+        "size": "readonly-mobile",
+        "alerts": [],
+        "heading": "Tarifs",
+        "height": 726,
+        "overflows": [],
+        "scroll": 375,
+        "width": 390
+      },
+      {
+        "page": "agenda",
+        "size": "error-mobile",
+        "alerts": [
+          "Lecture impossibleLa demande n’a pas pu être confirmée. Réessayez ou contactez votre école si le problème persiste.Réessayer"
+        ],
+        "heading": "Agenda",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "learners",
+        "size": "empty-mobile",
+        "alerts": [],
+        "heading": "Élèves",
+        "height": 720,
+        "overflows": [],
+        "scroll": 390,
+        "width": 390
+      },
+      {
+        "page": "config",
+        "size": "draft-mobile",
+        "alerts": [],
+        "heading": "Préparer l’école",
+        "height": 1446,
+        "overflows": [],
+        "scroll": 375,
+        "width": 390
+      }
+    ],
+    "inspection": "18 destinations inspectées visuellement à1200×720 et390×720 ; 18 destinations avec textes longs à320×720 contrôlées pour débordement, dont agenda/invitation/trajets/configuration inspectés visuellement ; détails/formulaires à834×720 en sombre et1200px avec libellés longs.",
+    "additionalChecks": [
+      "1200px, tarif avec longs libellés : liste340px et détail520px, prix et conditions lisibles ; formulaire et erreur prix abc aria-invalid=true.",
+      "834px sombre : profil, liste288px et détail440px ; règles de noms fixes en texte, photo facultative, formulaire consultable.",
+      "390px : dossier long, filtres année2026 et octobre vide puis septembre avec bilan, progression et bilan ouverts ; retour focus sur même élève.",
+      "390px : retours équipe et invitation vers la ligne précédemment sélectionnée.",
+      "Agenda : semaine suivante puis Aujourd’hui, focus sur semaine courante après disparition du bouton.",
+      "Menu : ouverture Entrée, fermeture Échap, focus rendu au bouton Menu.",
+      "Confirmation coordonnées : Tab et Shift+Tab bouclent ; Échap restitue focus à Relire les modifications ; aucune confirmation envoyée.",
+      "Disponibilités ouvertes : grille de jours sur4colonnes, cibles69×53px à834 et48px de large à320 ; aucune action hors cadre.",
+      "États lecture seule, erreur503, liste vide et école DRAFT inspectés sur mobile.",
+      "Corrections après revue : identité invitation mobile, filtres élèves sur une ligne à390, faits coordonnées mobiles en deux colonnes, trajets regroupés en deux colonnes sans coupure de durée."
+    ],
+    "limits": [
+      "Réponses synthétiques : aucune écriture durable ou session réelle qualifiée par ces captures.",
+      "Pas de Safari physique, VoiceOver/NVDA, zoom200%, RTL ou clavier logiciel qualifiés.",
+      "L’URL de fixture est réécrite : ses rechargements HMR ne qualifient pas une reprise authentifiée.",
+      "Les contrôles GPS/batterie et le client natif ne font pas partie de cette passe."
+    ]
+  },
+  "sourceBlobs": [
+    {
+      "path": "apps/web/client/App.tsx",
+      "gitBlob": "b6c5ccf9d9e4c2db54e9e7ddbf94c612c0961e3a"
+    },
+    {
+      "path": "apps/web/client/console/Console.tsx",
+      "gitBlob": "3f1f7a7b432fe33c1a6a784088c9cbfc8509327b"
+    },
+    {
+      "path": "apps/web/client/console/agenda.tsx",
+      "gitBlob": "2f6c3abf94cd635f17c6854d0a5fac2d73803a75"
+    },
+    {
+      "path": "apps/web/client/console/availability.tsx",
+      "gitBlob": "02cebc623b2a9eb5851bd9b59cb56946356a4d76"
+    },
+    {
+      "path": "apps/web/client/console/catalog.tsx",
+      "gitBlob": "ddcb581ed5ad43134328a4c7448af54f7bb655fa"
+    },
+    {
+      "path": "apps/web/client/console/commerce.tsx",
+      "gitBlob": "23577a5a66aa54059505540a1dff169a1509119a"
+    },
+    {
+      "path": "apps/web/client/console/configuration.tsx",
+      "gitBlob": "23f39e1cb01717e5536b851a23278bd0e3a6ca84"
+    },
+    {
+      "path": "apps/web/client/console/directory.tsx",
+      "gitBlob": "3ae4c8a99a97f4197e30a96ab15c085f6ba27d55"
+    },
+    {
+      "path": "apps/web/client/console/formations.tsx",
+      "gitBlob": "73929dd0cb364817e0e775d2d0e10e18d1ef6a98"
+    },
+    {
+      "path": "apps/web/client/console/learners.tsx",
+      "gitBlob": "f4ed259753bc434c7f5236fd4ae1e718c19e87f0"
+    },
+    {
+      "path": "apps/web/client/console/navigation.ts",
+      "gitBlob": "c59c581718996df70f1149d73383e71ce6bfae2f"
+    },
+    {
+      "path": "apps/web/client/console/overview.tsx",
+      "gitBlob": "426c9226fb36c1aa9bc2ee7ef85d528b515c41c7"
+    },
+    {
+      "path": "apps/web/client/console/people.tsx",
+      "gitBlob": "00b3cefb0c13c3828fa14b6fd8f7d4ba785f1b51"
+    },
+    {
+      "path": "apps/web/client/console/profile-fields.tsx",
+      "gitBlob": "52eb9eaaf15034650cb00a058d169315723a4c00"
+    },
+    {
+      "path": "apps/web/client/console/trips.tsx",
+      "gitBlob": "d55e5e3e31436112ae01804d70b81946c6413a28"
+    },
+    {
+      "path": "apps/web/client/styles.css",
+      "gitBlob": "76a3bcae646ff797533b138348f892740a99a9db"
+    },
+    {
+      "path": "apps/web/test/visual.tsx",
+      "gitBlob": "35820a8fc71191f746e188d8e97a4d2a0d9c7c4b"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/account-compact.jpg",
+      "sha256": "3d0c51028d4f028a18a7355342a41609f9068fd17452efcf4d15b70ba6c5e564"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/account-desktop.jpg",
+      "sha256": "6cdc9d80adfbecc50cee83a3ddfceba0bc32471bf42550cd09d7b6083bb6ed02"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/account-mobile.jpg",
+      "sha256": "46f39543cf9f536d241b8f9aee39a6b9bc1e17e4aab63147cf75d703567ec102"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/agenda-compact.jpg",
+      "sha256": "586906d66d94f49a5b1df89c102bcaa353e998b29b1ffe15a9041dd1a4d5a43d"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/agenda-desktop.jpg",
+      "sha256": "87cfa03045aeb7ce4aeac8803c826e0ae304bf0ebde04b3e4550c7a03f411472"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/agenda-error-mobile.jpg",
+      "sha256": "144ad05f500c19118fbf42d62cae1d557e6a5a67f2d844cd9185703691e510a2"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/agenda-mobile.jpg",
+      "sha256": "6454574f85e17411da8b06c82532136c517d02f722567f0c7e94146f33439961"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/availability-compact.jpg",
+      "sha256": "878f885d34875cccb853ce7e6caf7a6fab39f79ee188bb652db6ab66d94df9f4"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/availability-desktop.jpg",
+      "sha256": "fa45b4c48976b53547660b6efe6e312e95822b87adf2ea53400ed007cea206cd"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/availability-form-tablet-dark.jpg",
+      "sha256": "d0d7b1a45342292e5459581bf6c5f776d8490648fbf21420c40b256f2e1a705e"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/availability-mobile.jpg",
+      "sha256": "b29075f8055b6377292f251fe137faf635afc2dc4129e4a8aa378464f0f3184e"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/config-compact.jpg",
+      "sha256": "6bcadfb7dea1713fd6dc09da6c98738ecca8391eaf6ab1bb1b0fb85119f1aed3"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/config-desktop.jpg",
+      "sha256": "a69b8fa1822ff043fe512c7d71f6286c28016990f51892589b0b785b293b4380"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/config-dialog-tablet-dark.jpg",
+      "sha256": "9e554b771854c720836f68dfb296eebe6f45fa14f62baced02fbf0b75c5f64e6"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/config-draft-mobile.jpg",
+      "sha256": "3e809fe9a4ea1bd76f819c16deb2a42920154cac111ac9c0c1632af6510368aa"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/config-mobile.jpg",
+      "sha256": "386979c4584262527bece16b421965a2a746e91d6ee30d9175299f69c1eb391f"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/curricula-compact.jpg",
+      "sha256": "b60392cc4dc133317ddd69c18772f5667884a6b4ee82dcba36bfbcdc12701e79"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/curricula-desktop.jpg",
+      "sha256": "796edb34b5915275f7b36178e438f9643f58b2f6eff6ffdacbe4963cf5952bbd"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/curricula-mobile.jpg",
+      "sha256": "a3c783a7985a37c91592865471fe291e2b26202eff3a5e8aa6db4570f2ac84ec"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/dossier-bilan-mobile.jpg",
+      "sha256": "70f60d337bb0bae548395e94525a33b6bad69f7f1245312d16694bf89ec53e4d"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/formations-compact.jpg",
+      "sha256": "0ff1c0c9344349aaf278b83c936b69b0ea2193ab59fda00029cc952e981ad0b2"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/formations-desktop.jpg",
+      "sha256": "14146d640839807b05ca806150ee37c57f5d83c55f2c757fc9ed2cbfadf423c3"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/formations-mobile.jpg",
+      "sha256": "80d6d102a2ac61b3c06616fa45096731dfd1be969381a271d09371c9bf6c8dad"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/invitation-compact.jpg",
+      "sha256": "da447333765f31807a439bbeb50ebc83da7356b866e8eae7a2a373eccfacee34"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/invitation-desktop.jpg",
+      "sha256": "23b050607a0b5494c516acf6e81efa44fcf841a82b52f7daa85025f389483968"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/invitation-mobile.jpg",
+      "sha256": "5a7ed71e25f2ae7edef92055483305aaddcd929ad94ff46ed4f78582f6c57a6c"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/invitations-compact.jpg",
+      "sha256": "b456bf828f4c154cf1a32044b25ee82b0db03029fd2ce88209ead4cfc2cb5776"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/invitations-desktop.jpg",
+      "sha256": "35d26a63f38e3a995d9bedd810e6c1e76f475c4c596d3f9ecb77e0e859ce1714"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/invitations-mobile.jpg",
+      "sha256": "4a8033760c4377c2901a2a2d0f681913f646e1f69b6dae7c7da383ba15aa4171"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/learners-compact.jpg",
+      "sha256": "9fcc53f418c16b3817c446b424e543b96dc8c1d9d89ff35d9afb6ec5a9b30099"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/learners-desktop.jpg",
+      "sha256": "5542871418246ea0ddd0aba36a39ec451f65ce32e1d122ddb589ca1c10c29f31"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/learners-empty-mobile.jpg",
+      "sha256": "c74df1b5738c126d76f23118ba13f9bf41c9abfe5828ebb5442cb63ec7af83e7"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/learners-mobile.jpg",
+      "sha256": "cb00176d29a029addc571a49a1b3ee2334e3c981d91f1d57b5b97625777d260e"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/offerings-compact.jpg",
+      "sha256": "8d376e336a34b22f29c52a500d9ecb2b30e716310273bef1ae73a80b152b18ff"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/offerings-desktop.jpg",
+      "sha256": "d45df6a411855395b2078b57ca8914a47278966bd0b03192a543a7f052a45eb4"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/offerings-mobile.jpg",
+      "sha256": "48bfd107f7dc1d5177eebd54b9e5bd9b9890635e34d0ebe850daf7d5229e3600"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/overview-compact.jpg",
+      "sha256": "c8055cebe85b5324c894566a0b0ec3effa5b02517b9409a101d918b322159855"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/overview-desktop.jpg",
+      "sha256": "206b81b514cc08be777e4684e0ca913901b5c086ad8d8bf518e1afc4bbe879f7"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/overview-mobile.jpg",
+      "sha256": "feff1e7b363aa96bc6a4d56afca81ad958fa3b14f797d4f37a68857688aea05c"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/procedures-compact.jpg",
+      "sha256": "d4ab238f5742ba584bdf891803ec5a7f9ec6a10e7af11814ce72d6e9dcf6f89a"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/procedures-desktop.jpg",
+      "sha256": "0a22347b235d1536b5ec27ca74fce79328bff88b5914d514d63c6b4a3ae2ab79"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/procedures-mobile.jpg",
+      "sha256": "8199bee0bea42bdedebfec182dcde4076327ff5b0961fa2530e97266ec1b8e4e"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/product-detail-desktop-stress.jpg",
+      "sha256": "44ed375170b906087be906f6697d739c144b63625d6cb73f20391c0efa6b1d4c"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/product-form-desktop.jpg",
+      "sha256": "fbe5b8f273cb774161e08bfe69bbbf5dd805f315c8ae2fc29951703189cab322"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/products-compact.jpg",
+      "sha256": "361fbc4c3b36e6fc3738fea8d0c4e104a28863fe29df218af8f3d3a2bd7ce430"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/products-desktop.jpg",
+      "sha256": "12795e23c04b00a2b7527bb8ff3cb09e404f598be7ecfab2d8da50efb6b8a6ed"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/products-mobile.jpg",
+      "sha256": "674a8d0f52cd93ada4448c2f232a6867af3605a240936dec63d9f1e24d98e4e9"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/products-readonly-mobile.jpg",
+      "sha256": "fdd2beadfa1230e6dfa50f45091d7f0327a5e56387e57514149c106b2a999b75"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/profile-compact.jpg",
+      "sha256": "8e0782c3d2677f5b6399806dcd5c8ced04292a24357f46c9271c434cd1dd10a0"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/profile-desktop.jpg",
+      "sha256": "53a7af7ea5e1f15fbfaca9efc684b968932d6d5eeca6d3d2f74ef891019052e9"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/profile-detail-tablet-dark.jpg",
+      "sha256": "f0a2b612bc99547560e88ddc9d724bc245ae82c3d7a60915de5fc655ab5f1c21"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/profile-form-tablet-dark.jpg",
+      "sha256": "a9c4e333accdd5cb1df563d62b1be783c4e22b0549bcc02b498fb7d8c79fec4a"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/profile-mobile.jpg",
+      "sha256": "3ec2e36b2bc2234da91a4483549aa16e3f6bfa489bc0ae704448f97cbcd0c1eb"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/signin-compact.jpg",
+      "sha256": "066d678172c8a8f9f8fb643e2a6c1156b937453e68fcdfc774fc34f2d2b0ea09"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/signin-desktop.jpg",
+      "sha256": "882ebc734d5da709993ae8a1ed81a1742058e3920b2a245d25c0eebd212f402e"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/signin-mobile.jpg",
+      "sha256": "497d260e57b23e3191cc4cc2bbe4349a002588d2d7a29108d507cd8002d3d1e7"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/team-compact.jpg",
+      "sha256": "d7aa7617f94109495cbfb19d5c1ce127c4d59b2c9ee63b6534c101cf6cbb799c"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/team-desktop.jpg",
+      "sha256": "64fd826ede902dd0db2b68e5f4472bfec4e1e451bada39d59c3f50eb0ab49baa"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/team-mobile.jpg",
+      "sha256": "ae1b809a51798a45265bb7898b31659efdc225a4ff1ea30547b3bb8f4fbd2223"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/terms-compact.jpg",
+      "sha256": "b920d88b841e610b815019feabf16049d4f008ce962f0fa2184a93353be81bf3"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/terms-desktop.jpg",
+      "sha256": "523434c153859d3b65005a5a073f06973c478316e7b3427de16a948f967ba85d"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/terms-mobile.jpg",
+      "sha256": "217d52d2494560d05ee894aa5cf49180a3e804cd91a9e5fa5f27fc7e399e128f"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/trips-compact.jpg",
+      "sha256": "d6532066369e2b63518ec9c954379dd5feba2192a3ee4004a71b792f70daa97b"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/trips-desktop.jpg",
+      "sha256": "bd8f16d6f95f105f20b871299db20c57ed6feabc9a7d8fd055bc52e09f093585"
+    },
+    {
+      "path": "artifacts/retours-20260930/web-layout-pass2/trips-mobile.jpg",
+      "sha256": "cfde7e374fdcacc809b442f3cf1057e99a10fb86cff003d0ac43e51ce31deb7c"
+    }
+  ],
+  "commit": "e30e4ea196f9af44391cd24208e049fb0f82b0ba",
+  "ci": {
+    "url": "https://github.com/tomyrms/Drivy/actions/runs/36737761024",
+    "conclusion": "success",
+    "apiTestsPassed": 224,
+    "webTestsPassed": 104
+  },
+  "deploymentProof": "docs/implementation/proofs/deployment-web-layout-pass2-20260930.json"
+}

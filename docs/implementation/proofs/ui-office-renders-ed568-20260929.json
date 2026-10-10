@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "reviewDate": "2026-09-29",
+  "sourceCommit": "ed56802bed9002ab2f54db3d1f66c605b110960c",
+  "runId": "36580005091",
+  "runConclusion": "success",
+  "artifactDirectory": "artifacts/review-20260929/office-visual/36580005091",
+  "count": 14,
+  "inspectedCount": 14,
+  "devices": [
+    "iPhone",
+    "iPad"
+  ],
+  "appearances": [
+    "light"
+  ],
+  "data": "Synthetic fixtures, no real persons or positions",
+  "originalFilesUnmodified": true,
+  "files": [
+    {
+      "file": "iPad-invitation-create-light-synthetic.png",
+      "sha256": "096d15e90499151ace9bd99fdde4d5b8f6ef4c0eaaf8ac053bf243ac7629a67f",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPad-invitations-light-synthetic.png",
+      "sha256": "f1a90f67ed744932e87ff1eff23f0c9ad1f9d6bd9d57e3fc995012fdf9f008fd",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPad-lesson-finish-light-synthetic.png",
+      "sha256": "c5d8ad2fb64693b2d1a250dd82e3f2cef501bfdaca1d293945639cd2093e6ad6",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPad-lesson-light-synthetic.png",
+      "sha256": "da511ac9e81c553ce7768a8ae9b058e28acd9bb3ad661365eb4a7d0b5b9732bd",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPad-lesson-planned-light-synthetic.png",
+      "sha256": "96b7cbdccf661c6b8b3b752f1c04026764affe938c10cb7245193cf62c216ec4",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPad-lesson-tariff-light-synthetic.png",
+      "sha256": "2a925a8532d2ecbbbb9bf41a22149507836863463aab59579576015959304024",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "finding-contrast"
+    },
+    {
+      "file": "iPad-planning-light-synthetic.png",
+      "sha256": "714fc04b355ff42d3c3460591b1dce40a34439b7d177e33358a17946d6fa1878",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "finding-contrast"
+    },
+    {
+      "file": "iPhone-invitation-create-light-synthetic.png",
+      "sha256": "783c3320536bc859735f646736e877b3ea379887eb298817087a0b3a1fa36d2d",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-invitations-light-synthetic.png",
+      "sha256": "dbd574223424a0608b52a17d18578cb71fbe792341dd5a9125a69008e2674dc5",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-lesson-finish-light-synthetic.png",
+      "sha256": "d9f660cbaa666b526e1f1544957030c197236f504b13f607334a85564996aabc",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-lesson-light-synthetic.png",
+      "sha256": "14a6e90b53702e1f57a72dd62d669a3ac10ff2d9f02fdaca901680470a62941e",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-lesson-planned-light-synthetic.png",
+      "sha256": "0f991468c7c01ff79dbfea44d52390dc63104bc386ea355d9667530c9baa3024",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-lesson-tariff-light-synthetic.png",
+      "sha256": "3d2f72c572903b4fb9c9f51878ec6ca1d556aefc8715304270b2c1eb5ef82219",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "finding-contrast"
+    },
+    {
+      "file": "iPhone-planning-light-synthetic.png",
+      "sha256": "e72e1a69cf4f78a5d804e9de011588c08c16ef16eb0c0ac35516efe5dd14175b",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "finding-contrast"
+    }
+  ],
+  "findings": [
+    {
+      "id": "OFFICE-CONTRAST-01",
+      "severity": "medium",
+      "screens": [
+        "lesson-tariff",
+        "planning"
+      ],
+      "measuredFile": "iPhone-lesson-tariff-light-synthetic.png",
+      "measuredText": "CHF 95.00",
+      "pixelRegion": {
+        "x": 845,
+        "height": 50,
+        "width": 275,
+        "y": 505
+      },
+      "mostCommonTextRGB": "#8A8A8E",
+      "textCorePixelCount": 2005,
+      "backgroundRGB": "#FFFFFF",
+      "contrastRatio": 3.4388767891778884,
+      "referenceThreshold": 4.5,
+      "correction": "Use DrivyTheme.muted explicitly for all nine LabeledContent values in SchoolLessonCompletionSheet and SchoolPlanningView",
+      "postCorrectionVisualStatus": "awaiting-targeted-render"
+    }
+  ],
+  "limits": [
+    "Initial viewport only; fields below the fold and open menus are not all shown",
+    "Light appearance and normal text size only",
+    "lesson-finish is initial presented sheet; completion behavior is tested separately",
+    "No physical GPS, battery, keyboard or VoiceOver verification",
+    "The synthetic map has two arbitrary fragments at fictitious coordinates; it proves no real-world route"
+  ]
+}

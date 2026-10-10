@@ -34,10 +34,11 @@ if any(values):
     if len(values[2]) > 200 or any(c.isspace() or ord(c) < 32 for c in values[2]) or '$(' in values[2]:
         raise SystemExit('Identifiant de client OIDC invalide.')
 PY
-xcodebuild build \
+xcodebuild archive \
   -project apps/ios/Drivy.xcodeproj -scheme Drivy -configuration Release \
   -sdk iphoneos -destination 'generic/platform=iOS' \
   -derivedDataPath "$staging_dir/DeviceBuild" \
+  -archivePath "$staging_dir/Drivy.xcarchive" \
   CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER:-1}" \
   DRIVY_API_BASE_URL="${DRIVY_API_BASE_URL:-}" \
   DRIVY_OIDC_ISSUER="${DRIVY_OIDC_ISSUER:-}" \
@@ -45,7 +46,7 @@ xcodebuild build \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' \
   2>&1 | tee "$artifact_dir/device-build.log"
 mkdir -p "$staging_dir/Payload"
-ditto "$staging_dir/DeviceBuild/Build/Products/Release-iphoneos/Drivy.app" "$staging_dir/Payload/Drivy.app"
+ditto "$staging_dir/Drivy.xcarchive/Products/Applications/Drivy.app" "$staging_dir/Payload/Drivy.app"
 python3 - "$staging_dir" "$artifact_dir" <<'PY'
 import datetime, hashlib, json, os, pathlib, plistlib, re, shutil, subprocess, sys, zipfile
 
@@ -161,7 +162,7 @@ info = {
     "build": plist["CFBundleVersion"], "version": plist["CFBundleShortVersionString"],
     "bundleIdentifier": plist["CFBundleIdentifier"], "executable": executable_name,
     "builtAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    "configuration": "Release", "signed": False,
+    "configuration": "Release", "signed": False, "archiveCreated": (stage / "Drivy.xcarchive/Info.plist").is_file(),
     "signatureVerification": {"status": "PASSED", "method": "codesign --display après suppression ; plateforme via lipo et vtool",
                               "checkedBundles": len(bundles), "checkedBinaries": len(binaries)},
     "minimumOS": plist["MinimumOSVersion"], "platforms": plist["CFBundleSupportedPlatforms"],
@@ -169,7 +170,7 @@ info = {
     "ipaSHA256": ipa_hash, "binaries": binary_info,
     "packageResolvedSHA256": hashlib.sha256((stage / "Package.resolved").read_bytes()).hexdigest(),
     "distribution": "Signature locale avec iLoader",
-    "scope": "G0 : séances locales ; G1A : accès scolaire ; G1B : configuration et activation de l'école si services configurés",
+    "scope": "Leçons scolaires, trajets facultatifs, observations, bilans et invitations par code ; qualification physique distincte",
     "schoolConnectionConfigured": all(plist.get(name, '') for name in ('DrivyAPIBaseURL', 'DrivyOIDCIssuer', 'DrivyOIDCClientID')),
     "physicalQualification": "NOT_EXECUTED"
 }

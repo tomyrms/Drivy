@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:invitation-delivery:1",
+  "$comment": "Extension du 28 septembre 2026 au schéma canonique Invitation (OpenAPI 3.11.0, inchangé) : delivery, code (réponse de création ou de renvoi seulement) et maskedEmail nul pour une invitation par code.",
+  "$defs": {
+    "Invitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "schoolId", "version", "maskedEmail", "roles", "status", "expiresAt", "delivery"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "schoolId": {"type": "string", "format": "uuid"},
+        "version": {"type": "integer", "minimum": 1},
+        "maskedEmail": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+        "roles": {"type": "array", "items": {"enum": ["ADMIN", "INSTRUCTOR", "LEARNER"]}, "minItems": 1, "maxItems": 3, "uniqueItems": true},
+        "status": {"enum": ["PENDING", "ACCEPTED", "REVOKED", "EXPIRED"]},
+        "expiresAt": {"type": "string", "format": "date-time"},
+        "delivery": {"enum": ["EMAIL", "CODE"]},
+        "trainings": {"type": "array", "maxItems": 16, "items": {
+          "type": "object", "additionalProperties": false, "required": ["offeringId", "instructorMembershipId"],
+          "properties": {"offeringId": {"type": "string", "format": "uuid"}, "instructorMembershipId": {"type": "string", "format": "uuid"}}
+        }},
+        "code": {"type": "string", "pattern": "^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$"}
+      },
+      "allOf": [
+        {"if": {"properties": {"delivery": {"const": "CODE"}}, "required": ["delivery"]}, "then": {"properties": {"maskedEmail": {"type": "null"}}}},
+        {"if": {"properties": {"delivery": {"const": "EMAIL"}}, "required": ["delivery"]}, "then": {"properties": {"maskedEmail": {"type": "string"}}, "not": {"required": ["code"]}}}
+      ]
+    },
+    "Envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "requestId": {"type": "string"},
+        "serverTime": {"type": "string", "format": "date-time"},
+        "data": {"$ref": "#/$defs/Invitation"}
+      }
+    },
+    "PageEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "requestId": {"type": "string"},
+        "serverTime": {"type": "string", "format": "date-time"},
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["items", "nextCursor"],
+          "properties": {
+            "items": {"type": "array", "items": {"$ref": "#/$defs/Invitation"}, "maxItems": 100},
+            "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+          }
+        }
+      }
+    }
+  }
+}

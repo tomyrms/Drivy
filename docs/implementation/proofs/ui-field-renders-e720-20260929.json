@@ -1,0 +1,213 @@
+{
+  "date": "2026-09-29",
+  "sourceCommit": "e720c4579d8e12c6d0aedb7d0ada6f2f529f30a0",
+  "runId": 36584370257,
+  "artifactId": 11041862887,
+  "artifactName": "Drivy-native-results-e720c4579d8e12c6d0aedb7d0ada6f2f529f30a0",
+  "runConclusion": "failure",
+  "failureStage": "PNG orientation postprocessing: raw IHDR dimensions ignored EXIF orientation",
+  "nativeVisualTest": {
+    "name": "VisualOrientationTests/testRequestedScreensAtRealOrientations",
+    "result": "Passed",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "durationSeconds": 444.461
+  },
+  "simulator": {
+    "name": "iPad Pro 13-inch (M5)",
+    "osVersion": "26.4.1",
+    "osBuild": "23E254a",
+    "architecture": "arm64"
+  },
+  "filesPresent": 16,
+  "uniqueImagesVisuallyInspected": 16,
+  "originalAttachmentBytesPreserved": true,
+  "montageOrRetouchPerformed": false,
+  "syntheticFixturesOnly": true,
+  "appearance": "light",
+  "orientations": [
+    "portrait",
+    "landscape"
+  ],
+  "dynamicType": "ordinary fixture size; no AX3 qualification",
+  "physicalGPSOrVoiceOverQualification": false,
+  "files": [
+    {
+      "name": "iPad-capture-preparation-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-capture-preparation-light-landscape-synthetic.png",
+      "sha256": "d471806d59453a776280e7b7be7c075364a1d06ecdefce89fd7566fb4af9ae95",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-capture-preparation-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-capture-preparation-light-portrait-synthetic.png",
+      "sha256": "abda4853d18b22d3bef914b2d968de9ccb9f741fd1388e6ab782f33271acf470",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-gps-choice-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-gps-choice-light-landscape-synthetic.png",
+      "sha256": "e496b325efc23cec84bdbcae8e3b382a4baf0e07baff52cb60f2b5f371746e1a",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-gps-choice-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-gps-choice-light-portrait-synthetic.png",
+      "sha256": "4001fcfcad1d2a2ac448de88462c1a9b8dbd3d64b00f2b3350f047d2f57242e5",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-live-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-live-light-landscape-synthetic.png",
+      "sha256": "b30043ea8e2fcb6e3931dcabaa2e9abf447b1e37febf787b9579c7ae26abe7e5",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-live-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-live-light-portrait-synthetic.png",
+      "sha256": "458735c9521b18859b339fa2ac49edd88f6093e5a62273fcf7efad53bc4404d5",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-live-signal-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-live-signal-light-landscape-synthetic.png",
+      "sha256": "9593ebb85eb72bbb8f3e7b5f90d99b4f253df2ce3dce55d2075addf368da44bc",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-live-signal-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-live-signal-light-portrait-synthetic.png",
+      "sha256": "9ca8881d514f76a7d8e96669c7df28523bd39e3e434b252a236bbc11837bc5b9",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-live-waiting-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-live-waiting-light-landscape-synthetic.png",
+      "sha256": "9485b77713d14b125c5d00bcc3a22b5b30919da5db3936c35c10db1af5ed3047",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-live-waiting-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-live-waiting-light-portrait-synthetic.png",
+      "sha256": "b71555029c6e2ca5ce87ce4b0cdf1868ea29caf372ef15897fedc81a1503a94a",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-observations-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-observations-light-landscape-synthetic.png",
+      "sha256": "15afa4aa3e33825110fd5acd93f47dc2e38f747ff15fc6ff36702c12683b061e",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-observations-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-observations-light-portrait-synthetic.png",
+      "sha256": "12655164b6ae361d93f700b0fba4f6da1203b12e08652646911be1161f9b8de3",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-replay-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-replay-light-landscape-synthetic.png",
+      "sha256": "c2f2f74118599d94c338865af77c148400d797a80dd69d5962a73b0d58a899eb",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-replay-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-replay-light-portrait-synthetic.png",
+      "sha256": "03bdd779325488be23419e6e6323d399e5c92759367714ed8d1f332b2a7ca923",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-signal-status-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-signal-status-light-landscape-synthetic.png",
+      "sha256": "fd7235995c4ba892ea035e31c298d89e698584d81085c7c6d6b634097dc069e2",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "openedIndividuallyWithViewImage": true
+    },
+    {
+      "name": "iPad-signal-status-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/field-visual-e720/originals-named/iPad-signal-status-light-portrait-synthetic.png",
+      "sha256": "cda0716c4b729011777409d13c92abe8c8c1508d34ab65d62e5c87d0235d66e4",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "openedIndividuallyWithViewImage": true
+    }
+  ]
+}

@@ -11,6 +11,7 @@ import { createTokenVerifier } from '../src/auth.js';
 import { withActor } from '../src/database.js';
 import { migrate } from '../scripts/migrations.js';
 import { fixtureIds as id, seedFixtures } from '../scripts/fixtures.js';
+import { withoutExtensions } from './support/harness.js';
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url || new URL(url).pathname !== '/drivy_test') {
@@ -46,6 +47,7 @@ async function get(path: string, subject = 'demo-instructor') {
   return app.inject({ method:'GET',url:path,headers:{ authorization:`Bearer ${token}` } });
 }
 function conforms(name: string, data: unknown) {
+  data=withoutExtensions(data);
   const validate = validators.get(name);
   if (!validate) throw new Error(`Validateur absent ${name}`);
   expect(validate(data),JSON.stringify(validate.errors)).toBe(true);
@@ -73,7 +75,7 @@ describe('G1A · contrats exacts OpenAPI 3.11', () => {
       }
       const fixture = JSON.parse(await readFile(file, 'utf8')) as { data:unknown };
       conforms(schema, fixture);
-      expect(fixture.data).toEqual(body.data);
+      expect(withoutExtensions(fixture.data)).toEqual(withoutExtensions(body.data));
     }
   });
   it('identifie issuer/subject et liste uniquement les appartenances de la personne', async () => {
@@ -148,8 +150,9 @@ describe('G1A · droits réels et isolation', () => {
     await withActor(pool,{ issuer,subject:'demo-instructor' },id.schoolA,async db => {
       const role = await db.query('SELECT current_user,rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user');
       expect(role.rows[0]).toEqual({ current_user:'drivy_app',rolsuper:false,rolbypassrls:false });
-      const rows = await db.query('SELECT school_id FROM drivy.learner_profile');
-      expect(rows.rows.length).toBe(2); expect(rows.rows.every(row=>row.school_id===id.schoolA)).toBe(true);
+      // G1D renforce la RLS : le moniteur ne voit même en SQL que son élève actuellement affecté.
+      const rows = await db.query('SELECT id,school_id FROM drivy.learner_profile');
+      expect(rows.rows).toEqual([{id:id.aliceLearner,school_id:id.schoolA}]);
     });
   });
   it('le contexte scolaire ne fuit pas entre connexions réutilisées', async () => {

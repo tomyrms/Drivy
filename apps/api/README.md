@@ -1,6 +1,6 @@
-# API Drivy · accès, configuration et invitations
+# API Drivy · accès, configuration, invitations et profils
 
-Serveur TypeScript/Fastify, PostgreSQL et authentification OIDC. G1A ouvre un dossier et une formation selon les droits relus en base. G1B permet à un ADMIN de configurer une école provisionnée, d’adopter explicitement sa notice/politique de données, puis de l’activer. G1C ajoute les invitations et leur acceptation explicite, sans créer de formation. Les routes canoniques suivent OpenAPI **3.11.0** ; les extensions `data-policy` et `invitations/preview` possèdent leurs schémas séparés dans `contracts/`. La création de formations, les leçons et leur synchronisation restent à réaliser.
+Serveur TypeScript/Fastify, PostgreSQL et authentification OIDC. Le périmètre implémenté couvre école et droits, profils et formations, invitations par code, catalogue et disponibilités, leçons, permis, bilans, observations, captures et replay. Les routes canoniques suivent OpenAPI **3.11.0** ; les extensions sont décrites dans `docs/implementation/`. Voir les [corrections du 29 septembre](../../docs/implementation/corrections-api-2026-09-29.md) et le [contrat trajets/invitations multi-permis](../../docs/implementation/api-trajets-codes.md). Paiements saisis, documents et cours collectifs ne sont pas implémentés.
 
 | Route GET | Réponse `data` | Portée |
 |---|---|---|
@@ -11,9 +11,13 @@ Serveur TypeScript/Fastify, PostgreSQL et authentification OIDC. G1A ouvre un do
 | `/v1/schools/:schoolId/trainings` | `TrainingPage` | ADMIN : données administratives ; INSTRUCTOR : formations affectées ; LEARNER : soi |
 | `/v1/schools/:schoolId/trainings/:trainingId` | `Training` | Même portée que la liste |
 
-Réponse : `{ "data": ..., "requestId": "...", "serverTime": "..." }`. Pages : `{ "items": [...], "nextCursor": null }`. Erreurs `application/problem+json`. Toutes les réponses sont `Cache-Control: no-store`. Les lectures unitaires versionnées portent un ETag fort. L’accès administratif livré ne donne accès à aucun texte pédagogique, capture ou document.
+Réponse : `{ "data": ..., "requestId": "...", "serverTime": "..." }`. Pages : `{ "items": [...], "nextCursor": null }`. Erreurs `application/problem+json`. Toutes les réponses sont `Cache-Control: no-store`. Les lectures unitaires versionnées portent un ETag fort. ADMIN lit tous les trajets de son école ; les notes pédagogiques privées conservent leurs propres droits.
 
 Les écoles du sélecteur viennent de `me.memberships` ; aucune route supplémentaire de découverte d’école n’est créée. Les listes sont triées par `(created_at, id)` et limitées à 50 objets par défaut, 100 maximum. Le curseur chiffré lie personne, école, epoch d’accès, filtres et taille de page ; il expire après une heure. Les dates purement civiles restent `YYYY-MM-DD`.
+
+Le [contrat de séance après essai terrain](contracts/lesson-field-flow.json) ajoute `Training.startNowBlockerCode` aux lectures de formation. Le départ utilise le filtre élèves `instructorMembershipId` et les formations sans blocage ; un rôle ADMIN ne remplace pas une affectation personnelle. `start-now` crée directement une leçon commencée ; `POST /lessons/:lessonId/start` démarre un rendez-vous existant, avec version et idempotence. Les deux enregistrent `actualStart` à l’instant serveur. Le statut reste `PLANNED` jusqu’au résultat final : sans `actualStart`, même un créneau dépassé reste en attente. La migration 023 ne reprend que les anciens départs prouvés. Voir [la décision et les tests de stabilité](../../docs/implementation/stabilite-api-20261009.md).
+
+Le bilan peut rester vide : les trois textes, les appréciations et leur contexte sont facultatifs ; PUT remplace les valeurs omises par des valeurs vides. La migration 019 permet aussi une publication explicite vide. `CompleteLesson` conserve le départ durable lorsqu’il existe et valide la fin déclarée par le client ; seule la compatibilité rétrospective AP49 sans départ enregistré utilise son début déclaré. Le constat réalise une seule écriture atomique, même pendant le transfert GPS. L’avertissement de permis suit la date du début réel. Le choix GPS général `lessonId:null` est déjà réutilisable ; les refus personnels et les changements de notice restent contrôlés. Le libellé affiché « Anticipation » conserve les identifiants et versions du référentiel.
 
 ## Configuration ADMIN G1B
 
@@ -32,23 +36,36 @@ Les chemins suivants sont relatifs à `/v1/schools/:schoolId`. Le rôle ADMIN ac
 
 Chaque commande exige `operationId` UUID, `Idempotency-Key` identique et `If-Match` fort de la ressource concernée. L’activation contrôle en plus `expectedConfigurationVersion` et `reviewAcknowledged:true`. L’adoption de la politique incrémente aussi les versions scolaires : recharger School/readiness avant activation. Le résultat métier, sa preuve durable et l’audit sont atomiques ; aucune réponse réussie ne précède le commit.
 
-L’activation exige identité/contact/fuseau de l’école, ADMIN actif et textes adoptés. Cocher DATA ou REVIEW ne suffit pas. CAN_USE_WORKSPACE exige ensuite School ACTIVE ; planification, capture scolaire et publication de cours restent non prêtes dans G1B. Un résultat HTTP incertain conserve sa clé et son contenu ; un 404/403 de recherche d’opération ne prouve jamais l’absence d’un ancien commit. Le [contrat G1B détaillé](../../docs/implementation/g1b-school-setup.md) précise champs, versions, limites, erreurs et reprise.
+L’activation exige identité/contact/fuseau de l’école, ADMIN actif et textes adoptés. Cocher DATA ou REVIEW ne suffit pas. CAN_USE_WORKSPACE exige School ACTIVE ; CAN_PLAN_LESSON relit les prérequis effectivement présents. La capture dépend aussi de l’appareil et du choix d’enregistrement ; les cours collectifs restent indisponibles. Un résultat HTTP incertain conserve sa clé et son contenu ; un 404/403 de recherche d’opération ne prouve jamais l’absence d’un ancien commit. Le [contrat G1B détaillé](../../docs/implementation/g1b-school-setup.md) précise champs, versions, limites, erreurs et reprise.
 
 ## Invitations G1C
 
 Une école ACTIVE peut inviter : ADMIN choisit les rôles, INSTRUCTOR propose seulement LEARNER et gère ses propres invitations. AP10 liste avec `limit`/`cursor` ; AP11 crée ; AP12 renvoie avec rotation du secret ; AP13 révoque. Les écritures utilisent Idempotency-Key ; renvoi/révocation exigent aussi If-Match. Une réponse réussie signifie invitation enregistrée, sans promesse de réception du mail.
 
-Le destinataire ouvre `/app/invitation#token=…`, se connecte et consulte le preview authentifié avant confirmation AP04. Seule une claim `email_verified: true` accompagnant l'adresse dans le JWT validé est admise ; aucun email du corps ne prouve une identité. L'acceptation sérialise l'identité OIDC et crée/réutilise personne, lien, adhésion et profil élève minimal dans le commit contenant preuve et audit. Aucune formation ni affectation n'est créée. Un émetteur INSTRUCTOR n'obtient donc pas automatiquement accès au dossier accepté.
+Le parcours courant élève utilise un code à usage unique, sans SMTP ni adresse vérifiée exigée pour l’appairage. L’élève reste authentifié par OIDC. L’acceptation crée ou réutilise personne, adhésion, dossier, formations choisies et affectations en une transaction. Un code n’est consommé que si tous les rattachements réussissent. Le lien e-mail historique conserve son contrôle d’adresse vérifiée et reste indisponible sans transport configuré.
 
-L'invitation stocke SHA-256 du secret ; l'outbox stocke temporairement un payload AES-256-GCM. Le worker SMTP distinct revérifie droits, état et expiration, puis efface le payload après acceptation SMTP ou annulation. SENT ne signifie pas DELIVERED. Le risque résiduel de doublon après crash SMTP et la reprise sont décrits dans [G1C](../../docs/implementation/g1c-invitations.md). L'événement InvitationAccepted est audité et son état est visible dans AP10 ; le centre de notifications F11 reste une tranche distincte.
+Le code stocke une empreinte HMAC-SHA256 à clé serveur et ne figure en clair que dans la réponse qui le génère. Les liens e-mail historiques stockent SHA-256 du jeton ; leur outbox est chiffrée AES-256-GCM. Le worker SMTP distinct revérifie les droits avant envoi et purge ensuite le secret ; aucun relais n’est requis ni ajouté pour le code. L’acceptation est auditée et visible dans AP10 ; le centre de notifications reste distinct.
+
+## Profils scolaires G1D1
+
+AP169–171 permettent à l'ADMIN de préparer puis publier une politique de collecte liée à l'UUID réel d'une notice adoptée. AP170 exige la version de School, AP171 celle de la politique ; l'auteur, la publication, les versions scolaires, le réglage historique et l'audit partagent un commit. Les non-ADMIN ne lisent que la politique publiée applicable à leur accueil, jamais les brouillons ou publications futures.
+
+AP175/176 exposent le profil administratif, et AP16 partage sa version pour les coordonnées et le nom public. ADMIN et élève sur soi peuvent saisir les champs autorisés ; un moniteur actuellement affecté peut modifier uniquement les coordonnées. Naissance, adresse et photo sont omises de sa projection. Prénom et nom restent absents tant qu'ils n'ont pas été saisis ; aucune extraction du nom public n'est faite.
+
+AP172–174 enregistrent l'accueil propre selon le rôle, sans consentement global ni qualification d'appareil. AP177 laisse l'entrée possible avec l'identité minimale et garde les actions de planification/cours explicitement non prêtes tant que leurs modules ne sont pas livrés. Voir [le contrat et les preuves G1D1](../../docs/implementation/g1d-profils.md).
+
+## Santé, permis et issues de leçon (25 septembre 2026)
+
+- `GET /health/live` et `GET /health/ready` : sondes internes hors contrat, sans donnée ; 404 si la requête porte un en-tête de proxy (`Forwarded`, `X-Forwarded-*`). Voir [exploitation-sante.md](../../docs/implementation/exploitation-sante.md).
+- AP29/AP30 `…/trainings/:trainingId/permit-checks` (migrations 010 et 017) : contrôle physique attesté par ADMIN ou moniteur affecté ; `permitWarning` des leçons est calculé. Voir [g2-permis.md](../../docs/implementation/g2-permis.md).
+- AP44 `no-show`, AP88 `outcome-approvals`, AP50 `correct-outcome`, AP57 `report-publication/withdraw` (migration 011). Voir [g2-issues-lecon.md](../../docs/implementation/g2-issues-lecon.md).
+- Tests PostgreSQL du planning et du bilan : `test/lessons.integration.test.ts`, `test/lesson-reports.integration.test.ts`, `test/lesson-outcomes.integration.test.ts`, avec la mise en place commune `test/support/harness.ts`. Voir [tests-planning-bilan.md](../../docs/implementation/tests-planning-bilan.md).
 
 ## Hébergement effectif
 
 L’API G1A et Keycloak 26.7.4 sont accessibles en HTTPS sur l’hébergement choisi : base API `https://drivy.shulker.ch/refonte`, issuer exact `https://drivy.shulker.ch/identity/realms/drivy`. La refonte utilise Node 24.21.0 et des bases PostgreSQL 16.14 neuves, UTF8, avec vérification TLS du certificat PostgreSQL. L’ancienne API reste distincte. L’accès administrateur Keycloak n’est pas publié.
 
-Le compte initial `luc` appartient comme ADMIN à « Luc auto école », sans élève ni formation. L’école reste DRAFT tant que son ADMIN n’a pas adopté de politique et confirmé son activation ; le provisionnement et la migration 002 ne fabriquent aucune approbation. L’adresse de contact `luc@example.com` est une adresse d’essai explicitement autorisée ; aucun email n’a été envoyé.
-
-G1B est implémenté et validé côté serveur. La version effectivement déployée, les preuves HTTPS/OIDC et les recettes des clients sont consignées dans [STATUS.md](../../docs/implementation/STATUS.md). Voir [le déploiement](../../docs/implementation/deploiement-refonte.md) et [le contrôle OIDC HTTPS exécuté](../../docs/implementation/controle-oidc-deploye.md). Les tests locaux de G1B ne constituent pas une preuve de son parcours natif ou de son déploiement.
+Le provisionnement initialise une école DRAFT, sans approbation fabriquée. L’état effectivement déployé, les données d’exemple autorisées, les preuves HTTPS/OIDC et les recettes des clients sont consignés dans [STATUS.md](../../docs/implementation/STATUS.md). Voir [le déploiement](../../docs/implementation/deploiement-refonte.md) et [le contrôle OIDC HTTPS exécuté](../../docs/implementation/controle-oidc-deploye.md). Les tests API ne constituent pas une preuve d’installation sur appareil.
 
 ## Démarrer
 
@@ -69,7 +86,8 @@ Les variables sont fournies au processus ; ce package ne charge ni ne crée impl
 | `OIDC_ISSUER` | Issuer exact accepté et issuer des liens d’identité des fixtures |
 | `OIDC_AUDIENCE` | Audience dédiée à l’API, pas l’identifiant du client web |
 | `OIDC_JWKS_URL` | Endpoint JWKS fixe du fournisseur approuvé |
-| `CURSOR_SECRET` | Secret aléatoire d’au moins 32 caractères, propre à l’environnement |
+| `CURSOR_SECRET` | Secret aléatoire d’au moins 32 caractères, propre à l’environnement ; sert aussi à dériver (HKDF) la clé d’empreinte des codes d’invitation |
+| `INVITATION_CODE_SECRET` | Facultatif, au moins 32 caractères : clé propre aux codes d’invitation, prioritaire sur la dérivation depuis `CURSOR_SECRET`. Le changer invalide les codes en attente |
 | `NODE_ENV` | `development`, `test` ou `production` |
 | `HOST`, `PORT` | Par défaut `127.0.0.1`, `3001` |
 | `ALLOW_FIXTURES` | `true` exigé par le script seed ; interdit avec `NODE_ENV=production` |
@@ -85,9 +103,9 @@ L’authentification accepte uniquement un Bearer signé RS256/ES256, avec issue
 
 ## Migrations et fixtures
 
-`migrate` utilise un verrou PostgreSQL, une transaction par fichier SQL et une empreinte SHA-256. Un fichier déjà appliqué ne peut pas changer silencieusement. Les migrations 001/002 sont conservées. 003 ajoute les invitations et l'outbox ; les quinze tables métier gardent ENABLE/FORCE RLS. Aucune migration ne crée une invitation ni n'adopte une politique pour l'utilisateur.
+`migrate` utilise un verrou PostgreSQL, une transaction par fichier SQL et une empreinte SHA-256. Un fichier déjà appliqué ne peut pas changer silencieusement. Les migrations 001–003 sont conservées. 004 ajoute politiques de champs, progressions et colonnes de profil ; les dix-sept tables métier gardent ENABLE/FORCE RLS. Aucune migration ne crée une invitation ni n'adopte une politique pour l'utilisateur.
 
-Avant 003, un administrateur prépare les rôles avec [prepare-invitation-mailer.sql](scripts/prepare-invitation-mailer.sql), puis génère le mot de passe du login worker côté serveur et configure son accès PostgreSQL TLS/HBA propre. Ce script ne s'exécute jamais automatiquement. Le propriétaire de migration n'a pas besoin de CREATEROLE si le rôle NOLOGIN est précréé. Le worker démarre séparément avec `npm run mail:worker --workspace @drivy/api` après build (`mail:worker:dev` en développement). L'absence de configuration SMTP ferme la création et le renvoi avec 503 ; aucune requête HTTP ne lance un transport implicite.
+Avant 003, un administrateur prépare les rôles avec [prepare-invitation-mailer.sql](scripts/prepare-invitation-mailer.sql), puis génère le mot de passe du login worker côté serveur et configure son accès PostgreSQL TLS/HBA propre. Ce script ne s'exécute jamais automatiquement. Le propriétaire de migration n'a pas besoin de CREATEROLE si le rôle NOLOGIN est précréé. Le worker démarre séparément avec `npm run mail:worker --workspace @drivy/api` après build (`mail:worker:dev` en développement). L'absence de configuration SMTP ferme la création et le renvoi par e-mail avec un refus définitif 409 `INVITATION_DELIVERY_UNAVAILABLE` (l'invitation par code n'en dépend pas) ; aucune requête HTTP ne lance un transport implicite.
 
 Le rôle `drivy_app` est sans login ni privilège de contournement RLS. En hébergement, le propriétaire de migration distinct n’est ni SUPERUSER, BYPASSRLS, CREATEDB ni CREATEROLE ; le rôle applicatif est précréé, avec ADMIN OPTION accordée à ce propriétaire pour la migration 001. Le runtime reçoit seulement le droit de prendre `drivy_app` ; l’API exécute `SET LOCAL ROLE drivy_app` dans chaque transaction. Les lectures utilisent un instant cohérent. Les commandes verrouillent accès global, école et appartenance puis relisent les droits avant le commit. Les droits d’écriture G1B sont bornés par table/colonne et RLS ; les preuves, audits et révisions restent immuables pour le runtime.
 
@@ -103,9 +121,9 @@ npm test --workspace @drivy/api
 npm run build --workspace @drivy/api
 ```
 
-`npm test` **échoue** si `TEST_DATABASE_URL` ne désigne pas `drivy_test`. La suite G1B remet à zéro le schéma et le registre de migrations de cette seule base, applique 001 sous un propriétaire non privilégié, insère des fixtures préexistantes, puis applique 002/003 et contrôle le backfill sous FORCE RLS. Les tables de fixtures sont ensuite vidées avant chaque cas. Cette base est exclusivement réservée aux tests, sans exécution concurrente d’une autre suite ou d’un service. G1C exige Mailpit réel, avec échec si le service attendu n'est pas disponible. `test:unit` exécute uniquement les tests JWT/configuration/curseurs, sans preuve d’intégration SQL.
+`npm test` **échoue** si `TEST_DATABASE_URL` ne désigne pas `drivy_test`. La suite G1B remet à zéro le schéma et le registre de migrations de cette seule base, applique 001 sous un propriétaire non privilégié, insère des fixtures préexistantes, puis applique 002–004 et contrôle le backfill sous FORCE RLS. Les tables de fixtures sont ensuite vidées avant chaque cas. Cette base est exclusivement réservée aux tests, sans exécution concurrente d’une autre suite ou d’un service. G1C exige Mailpit réel, avec échec si le service attendu n'est pas disponible. `test:unit` exécute les tests d’authentification/configuration, de curseurs, de codes d’invitation et d’ancrage de capture, sans preuve d’intégration SQL.
 
-Le 24 septembre 2026, **89 tests** ont réussi sur PostgreSQL **16.14 et 17.11** : 34 G1A, 23 G1B et 32 G1C. Typecheck et build ont également réussi. Les tests d’intégration signent des JWT avec des clés éphémères locales et exécutent les requêtes sous `drivy_app`. Les réponses canoniques sont validées contre l’OpenAPI original ; `data-policy` et `invitations/preview` sont validés contre leurs schémas séparés, sans les présenter comme des routes canoniques.
+Le 24 septembre 2026, **113 tests** ont réussi sur PostgreSQL **17.11** : 34 G1A, 23 G1B, 32 G1C et 24 G1D1. Typecheck et build ont également réussi. Le socle antérieur G1A–G1C avait également réussi ses 89 tests sur PostgreSQL 16.14 ; cela ne qualifie pas par déduction 004 sur cette version. Les tests d’intégration signent des JWT avec des clés éphémères locales et exécutent les requêtes sous `drivy_app`. Les réponses canoniques sont validées contre l’OpenAPI original ; `data-policy` et `invitations/preview` sont validés contre leurs schémas séparés, sans les présenter comme des routes canoniques.
 
 Les preuves couvrent accès croisé, multi-rôles, affectations, révocation, pagination, FK et unicité d’offre ; elles ajoutent initialisation sans accord, adoption versionnée, activation non circulaire, commandes concurrentes/rejouées, configuration périmée, révocation pendant attente d’un verrou et rollback intégral provoqué par un échec réel d’audit. G1C ajoute e-mail vérifié, acceptation concurrente, rotation/révocation de liens, SQL worker séparé et SMTP Mailpit réel avec purge du secret. AP72 est vérifié pour auteur/école sans contenu personnel. Les résultats G1C exacts sont consignés dans [sa qualification](../../docs/implementation/g1c-invitations.md#qualification). Ils ne prouvent ni une livraison SMTP externe, ni un parcours natif, ni une collecte GPS.
 
@@ -118,7 +136,7 @@ Les preuves couvrent accès croisé, multi-rôles, affectations, révocation, pa
 | `school` | Identité et contexte scolaire propre | `/schools/:id` |
 | `membership` | Droits et révocation distincts de l’identité | Rôles/grants embarqués ; unicité personne/école ; epoch |
 | `learner_profile` | Coordonnées et archive propres à l’école | Listes et détail du dossier |
-| `offering_version` | Cible stable de la formation | Version d’offre, catégorie, clé logique ; administration différée |
+| `offering_version` | Cible stable de la formation | Version d’offre, catégorie et clé logique ; nouvelles versions créées depuis le catalogue |
 | `training` | Plusieurs formations et leur cycle propre | FK composites ; une ACTIVE/PAUSED par dossier/clé d’offre |
 | `instructor_assignment` | Autorisation temporelle par formation | Membre INSTRUCTOR, même école, bornes temporelles |
 | `school_setup` | Progression de configuration G1B | Un état par école ; les étapes ne valent pas approbation |
@@ -128,7 +146,9 @@ Les preuves couvrent accès croisé, multi-rôles, affectations, révocation, pa
 | `audit_event` | Trace des effets G1B | Même commit que l’effet et sa preuve ; aucun texte ni coordonnées |
 | `invitation` | Invitation et acceptation explicite | Secret haché, e-mail vérifié, versions, expiration et auteur |
 | `invitation_mail` | Livraison SMTP séparée du commit métier | Payload chiffré et effacé, claim exclusif avec lease, retries bornés |
+| `profile_field_policy` | Politique de collecte AP169–171 | Notice adoptée référencée, date d'effet, publication explicite, contenu immuable |
+| `onboarding_progress` | Accueil propre AP172–174 | Une progression par appartenance et kind ; facultatifs passables, aucun accord implicite |
 
-L’école et l’identité hébergées proviennent du provisionnement contrôlé ; les dossiers/formations des tests sont synthétiques. G1C permet l'entrée d'un premier élève par invitation acceptée, avec un profil à compléter. L’adoption d’un texte conserve la décision de l’ADMIN, sans certifier sa conformité juridique ni exécuter automatiquement la conservation décrite. Administration des formations, centre de notifications, suppression et procédures de rétention restent à livrer. Le registre technique de migrations n’est pas un concept métier supplémentaire.
+L’école et l’identité hébergées proviennent du provisionnement contrôlé ; les dossiers/formations des tests sont synthétiques. G1C permet l'entrée d'un premier élève par invitation acceptée, avec un profil à compléter. L’adoption d’un texte conserve la décision de l’ADMIN, sans certifier sa conformité juridique ni exécuter automatiquement la conservation décrite. L’administration des formations et des affectations est implémentée ; le centre de notifications, la suppression et les procédures de rétention restent à livrer. Le registre technique de migrations n’est pas un concept métier supplémentaire.
 
 La RLS forme la barrière entre écoles ; les requêtes applicatives imposent en plus les affectations et l’accès à soi. Les autorisations ne viennent jamais des sélecteurs d’écran. Les requêtes, filtres de recherche, headers d’authentification, JWT et données de réponse ne sont pas journalisés ; seules des références de requête non sensibles accompagnent les erreurs génériques.

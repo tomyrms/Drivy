@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drivy — animation de démarrage, variantes A B C</title>
+<style>
+  :root { --page: #f2f3f5; --ink: #18212b; --muted: #536174; --line: #d5dae2; --stage: #ffffff; --mark: #245BD6; }
+  :root[data-theme="dark"] { --page: #1b1f26; --ink: #f2f5fa; --muted: #b0bccc; --line: #39424f; --stage: #000000; --mark: #ffffff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.4 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 16px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  .bar h1 { font-size: 16px; margin: 0 auto 0 0; font-weight: 600; }
+  button { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; min-height: 40px; cursor: pointer; }
+  button[aria-pressed="true"] { border-color: var(--ink); }
+  button:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  figure { margin: 0; }
+  /* La scène reproduit l’écran de production : symbole seul, centré, fond uni. */
+  .stage { background: var(--stage); border-radius: 18px; aspect-ratio: 9 / 16; display: grid; place-items: center; overflow: hidden; }
+  @media (max-width: 720px) { .stage { aspect-ratio: 1 / 1; } }
+  .stage svg { width: 46%; height: auto; overflow: visible; }
+  .stage path { fill: var(--mark); }
+  figcaption { padding: 10px 2px 0; }
+  figcaption b { display: block; font-weight: 600; }
+  figcaption span { color: var(--muted); font-size: 13px; }
+  .clock { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4.5em; text-align: right; }
+</style>
+</head>
+<body>
+<main>
+  <div class="bar">
+    <h1>Démarrage de leçon — trois variantes</h1>
+    <span class="clock" id="clock">0,0 s</span>
+    <button id="replay">Rejouer</button>
+    <button id="loop" aria-pressed="true">Boucle</button>
+    <button id="slow" aria-pressed="false">Ralenti ×0,5</button>
+    <button id="reduced" aria-pressed="false">Mouvement réduit</button>
+    <button id="theme" aria-pressed="false">Thème sombre</button>
+  </div>
+  <div class="grid">
+    <figure><div class="stage"><svg id="A" viewBox="0 0 256 256" aria-label="Variante A"></svg></div>
+      <figcaption><b>A — Les deux pièces se rejoignent</b><span>La tige descend, l’anneau glisse vers elle.</span></figcaption></figure>
+    <figure><div class="stage"><svg id="B" viewBox="0 0 256 256" aria-label="Variante B"></svg></div>
+      <figcaption><b>B — La tige se redresse</b><span>Elle pivote sur son pied, l’anneau l’accompagne.</span></figcaption></figure>
+    <figure><div class="stage"><svg id="C" viewBox="0 0 256 256" aria-label="Variante C"></svg></div>
+      <figcaption><b>C — L’anneau passe derrière la tige</b><span>Courbe courte, occlusion, puis il ressort à gauche.</span></figcaption></figure>
+  </div>
+</main>
+<script>
+// Tracés des assets de marque (DrivyBrandTrace / DrivyBrandMarker), clair et sombre. `gap` : espace entre les pièces.
+const MARKS = {
+  light: { gap: 5,
+    stem: "M170 48C170 36.95 178.95 28 190 28C201.05 28 210 36.95 210 48V208C210 219.05 201.05 228 190 228C180.45 228 172.46 221.3 170.47 212.35C185.56 198.29 195 178.25 195 156C195 133.52 185.37 113.29 170 99.21Z",
+    ring: "M46 156 A72 72 0 1 0 190 156 A72 72 0 1 0 46 156 Z M78 156 A40 40 0 1 1 158 156 A40 40 0 1 1 78 156 Z" },
+  dark: { gap: 5.75,
+    stem: "M170.75 48C170.75 37.37 179.37 28.75 190 28.75C200.63 28.75 209.25 37.37 209.25 48V208C209.25 218.63 200.63 227.25 190 227.25C180.65 227.25 172.86 220.59 171.11 211.75C185.83 197.72 195 177.93 195 156C195 133.89 185.68 113.95 170.75 99.91Z",
+    ring: "M46.75 156 A71.25 71.25 0 1 0 189.25 156 A71.25 71.25 0 1 0 46.75 156 Z M77.25 156 A40.75 40.75 0 1 1 158.75 156 A40.75 40.75 0 1 1 77.25 156 Z" }
+};
+const DURATION = 3, PIVOT = [190, 208];
+
+function bezier(x1, y1, x2, y2) {
+  return u => {
+    if (u <= 0) return 0; if (u >= 1) return 1;
+    let t = u;
+    for (let i = 0; i < 12; i++) {
+      const x = 3*(1-t)*(1-t)*t*x1 + 3*(1-t)*t*t*x2 + t*t*t;
+      const dx = 3*(1-t)*(1-t)*x1 + 6*(1-t)*t*(x2-x1) + 3*t*t*(1-x2);
+      if (Math.abs(dx) < 1e-6) break;
+      t = Math.min(1, Math.max(0, t - (x-u)/dx));
+    }
+    return 3*(1-t)*(1-t)*t*y1 + 3*(1-t)*t*t*y2 + t*t*t;
+  };
+}
+const settle = bezier(0.5, 0, 0.1, 1), travel = bezier(0.45, 0, 0.2, 1);
+const seg = (t, a, b) => Math.min(1, Math.max(0, (t-a)/(b-a)));
+const smooth = u => u*u*(3-2*u);
+const spring = (t, response, z = 0.62) => {
+  if (t <= 0) return 0;
+  const w = 2*Math.PI/response, wd = w*Math.sqrt(1 - z*z);
+  return 1 - Math.exp(-z*w*t)*(Math.cos(wd*t) + z*w/wd*Math.sin(wd*t));
+};
+const cubic = (p, t) => [0, 1].map(i => (1-t)**3*p[0][i] + 3*(1-t)**2*t*p[1][i] + 3*(1-t)*t*t*p[2][i] + t**3*p[3][i]);
+const ARC = [[-40, 30], [30, 34], [40, -30], [0, 0]];
+
+// Chaque chorégraphie rend la pose à l’instant t : décalage de l’anneau, de la tige, angle de la tige, occlusion.
+const POSES = {
+  // Retenue, rendue plus vive : ressorts à léger dépassement, la tige répond à l’arrivée de l’anneau.
+  A: t => ({ ring: [(-40 - 6*smooth(seg(t, .16, .32))) * (1 - spring(t - .34, .52)), 0],
+             stem: [t > .62 ? 2*Math.exp(-9*(t - .62))*Math.sin(17*(t - .62)) : 0, -34*(1 - spring(t - .12, .5))], angle: 0, behind: false }),
+  B: t => ({ ring: [-12*(1 - settle(seg(t, .55, 2.1))), 0], stem: [0, 0], angle: 13*(1 - settle(seg(t, .3, 1.9))), behind: false }),
+  C: t => ({ ring: cubic(ARC, travel(seg(t, .3, 2.1))), stem: [0, 0], angle: 0, behind: true })
+};
+
+const NS = "http://www.w3.org/2000/svg";
+const el = (name, attrs, parent) => { const n = document.createElementNS(NS, name); for (const k in attrs) n.setAttribute(k, attrs[k]); parent.appendChild(n); return n; };
+const views = {};
+function build() {
+  const mark = MARKS[document.documentElement.dataset.theme === "dark" ? "dark" : "light"];
+  for (const id of ["A", "B", "C"]) {
+    const svg = document.getElementById(id); svg.textContent = "";
+    const defs = el("defs", {}, svg);
+    // Occlusion : la tige, élargie de l’espace de la marque, retire l’anneau qui passe derrière elle.
+    const mask = el("mask", { id: "m" + id, maskUnits: "userSpaceOnUse", x: -64, y: -64, width: 384, height: 384 }, defs);
+    el("rect", { x: -64, y: -64, width: 384, height: 384, style: "fill:#fff" }, mask);
+    el("path", { d: mark.stem, style: `fill:#000;stroke:#000;stroke-width:${2*(mark.gap - 0.4)};stroke-linejoin:round` }, mask);
+    const holder = el("g", {}, svg);
+    const ring = el("path", { d: mark.ring, "fill-rule": "evenodd" }, holder);
+    const stem = el("path", { d: mark.stem }, svg);
+    views[id] = { svg, holder, ring, stem };
+  }
+}
+function draw(t) {
+  for (const id in views) {
+    const v = views[id];
+    if (state.reduced) {
+      v.svg.style.opacity = smooth(seg(t, .1, .7)); v.ring.removeAttribute("transform"); v.stem.removeAttribute("transform"); v.holder.removeAttribute("mask");
+      continue;
+    }
+    v.svg.style.opacity = 1;
+    const p = POSES[id](t);
+    v.ring.setAttribute("transform", `translate(${p.ring[0]} ${p.ring[1]})`);
+    v.stem.setAttribute("transform", `translate(${p.stem[0]} ${p.stem[1]}) rotate(${p.angle} ${PIVOT[0]} ${PIVOT[1]})`);
+    if (p.behind && t < 2.1) v.holder.setAttribute("mask", `url(#m${id})`); else v.holder.removeAttribute("mask");
+  }
+  document.getElementById("clock").textContent = t.toFixed(1).replace(".", ",") + " s";
+}
+
+const state = { start: performance.now(), loop: true, slow: false, reduced: matchMedia("(prefers-reduced-motion: reduce)").matches };
+function frame(now) {
+  let t = (now - state.start) / 1000 * (state.slow ? 0.5 : 1);
+  if (t > DURATION + 0.6 && state.loop) { state.start = now; t = 0; }
+  draw(Math.min(t, DURATION));
+  requestAnimationFrame(frame);
+}
+const toggle = (id, key, after) => document.getElementById(id).addEventListener("click", e => {
+  state[key] = !state[key]; e.currentTarget.setAttribute("aria-pressed", state[key]); state.start = performance.now(); after && after();
+});
+document.getElementById("replay").addEventListener("click", () => { state.start = performance.now(); });
+toggle("loop", "loop"); toggle("slow", "slow"); toggle("reduced", "reduced");
+document.getElementById("reduced").setAttribute("aria-pressed", state.reduced);
+document.getElementById("theme").addEventListener("click", e => {
+  const dark = document.documentElement.dataset.theme !== "dark";
+  document.documentElement.dataset.theme = dark ? "dark" : "light"; e.currentTarget.setAttribute("aria-pressed", dark);
+  build(); state.start = performance.now();
+});
+build(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

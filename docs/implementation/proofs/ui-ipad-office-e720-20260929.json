@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-09-29",
+  "sourceCommit": "e720c4579d8e12c6d0aedb7d0ada6f2f529f30a0",
+  "runId": 36584383615,
+  "runURL": "https://github.com/tomyrms/Drivy/actions/runs/36584383615",
+  "jobConclusion": "failure",
+  "failureStage": "Export geometry validation ignored PNG eXIf orientation; original XCTest capture passed.",
+  "captureTest": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  "device": "iPad Pro 13-inch (M5)",
+  "appearance": "light",
+  "syntheticData": true,
+  "originalPNGBytesPreserved": true,
+  "fileRotationApplied": false,
+  "fileReencodingApplied": false,
+  "reviewedFileCount": 18,
+  "files": [
+    {
+      "name": "iPad-invitation-code-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/EE172D33-3E7D-471A-A479-DBA1FDED50FA.png",
+      "sha256": "6461034c8c4cbab1a9869261b8c9807e7e5bfb10e39226aa48b71beacf20d968",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "requestedOrientation": "landscape",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-invitation-code-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/575C2243-EC5E-410B-BB12-28EC9815FF39.png",
+      "sha256": "575322e90690baeac1872ec93033152ea738651da8b3a658200bf2180e3a98aa",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "requestedOrientation": "portrait",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-invitation-create-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/FCC0FCE6-B228-438E-80F1-EFC306F4FC66.png",
+      "sha256": "cdb0157f0e3892ab59bb3b5ff1e57b8b5628e48f5bc311346ea0538a69400dc8",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "requestedOrientation": "landscape",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-invitation-create-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/7665990C-EC85-4C33-827C-C9E8E6451226.png",
+      "sha256": "0e7175158f79b60180b6b1c65734ddd9bb4575b2e4f5dae5170eae3e7e7c9762",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "requestedOrientation": "portrait",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-invitation-detail-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/A9A2DCE3-826A-4940-8351-5756B10C5F2E.png",
+      "sha256": "4ac325c56ae68a7ab2007285c7d92b129893a6fb3baea73b6fed315bbafa814f",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "requestedOrientation": "landscape",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": [
+        "INVITATION_SELECTED_CONTRAST"
+      ]
+    },
+    {
+      "name": "iPad-invitation-detail-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/0D58943F-9216-4007-8955-C8C7E9B51D50.png",
+      "sha256": "6a58680a4860830dbf3b0a1b2af63a0a17615af78fccda9e969c8f9a89929e06",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "requestedOrientation": "portrait",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": [
+        "INVITATION_SELECTED_CONTRAST"
+      ]
+    },
+    {
+      "name": "iPad-invitations-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/36750E7F-644A-4B02-9DD7-44840D75C12C.png",
+      "sha256": "5595327ba79009827c64aaf2192b9fdd1cc59ea74e05c2cfa12b199312f1387b",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "requestedOrientation": "landscape",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-invitations-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/51CE5DEE-4AA0-45E2-86D5-4D1E4C8E54D4.png",
+      "sha256": "96ee90415ad80e9244938ebc35564f7c9485d095bce6574d352ffbb4cbedd67c",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "requestedOrientation": "portrait",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-lesson-finish-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/A7F55D2A-7D0B-4B8F-9A12-753179406D95.png",
+      "sha256": "6454aab56cdb54e0e9cefdc771cc71e62d229f68e6a7d5168d5e8f255b73edf5",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "requestedOrientation": "landscape",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-lesson-finish-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/BCB9E692-9614-4439-92EE-0E8C27605EA1.png",
+      "sha256": "be8aa0ec5e148c03f25f9c2296d312d97eadaeae1119fb59a62e5ac28dfa2735",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "requestedOrientation": "portrait",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-lesson-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/82E144ED-84AF-4E5F-BA4C-90745A37518D.png",
+      "sha256": "892c0b8f481aeaf5c391a4266a8830feb43ce22f7dc63c66d98ddc3f5cb64a96",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "requestedOrientation": "landscape",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-lesson-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/6E1863F2-04A0-44CD-B764-FC8E13C28B37.png",
+      "sha256": "d37e41605f505128915fff2f77f6bd323358ae9f96b1e31458b78d3a0375eb49",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "requestedOrientation": "portrait",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-lesson-planned-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/0E7667FA-245A-414D-998F-647094EFBFD8.png",
+      "sha256": "eb2cd50bfec2db328304a0b4b3f6dada9681e7c9de5783b16d21e4b5297864a5",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "requestedOrientation": "landscape",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-lesson-planned-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/600F4223-DB8D-43EE-9E1C-84E711A87E19.png",
+      "sha256": "e659da496cc573e261052959c12f0c0b688d51a3c6eabd1d79e7a307815f7893",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "requestedOrientation": "portrait",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-lesson-tariff-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/9CB2B0D0-A4B4-4959-9084-98D2B29028B7.png",
+      "sha256": "5494ddff809ac76dcdc408d5aaa036ce84bb389ef2c68788af4b4c3721fb441b",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "requestedOrientation": "landscape",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-lesson-tariff-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/5E1C748B-5A4E-4F62-95EE-85B66EBE822D.png",
+      "sha256": "a39d3c51b79f8496e883e7485285e8b3a4c651ebc3c9d88b0ea413a4120ece57",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "requestedOrientation": "portrait",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-planning-light-landscape-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/D9DA76AD-3E36-4891-98F8-7E1F9911EC96.png",
+      "sha256": "0a18dfbb2395ff1b8fccb2f1402fb06b60be11a4a1263da154768d78bf5f51c6",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2752,
+      "displayHeightPixels": 2064,
+      "exifOrientation": 8,
+      "requestedOrientation": "landscape",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    },
+    {
+      "name": "iPad-planning-light-portrait-synthetic",
+      "file": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/0024F277-8F9A-432C-9756-B7F99ABE6652.png",
+      "sha256": "50989c0db0f61f98552634e15241c5ca5cf3812645a4815a380a7ee57924f6b9",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "requestedOrientation": "portrait",
+      "visuallyInspected": true,
+      "blockingLayoutFinding": false,
+      "findings": []
+    }
+  ],
+  "findings": [
+    {
+      "id": "INVITATION_SELECTED_CONTRAST",
+      "severity": "medium",
+      "source": "apps/ios/Drivy/SchoolInvitationsUI/SchoolInvitationsView.swift",
+      "observedForeground": "#18212B",
+      "observedBackground": "#245BD6",
+      "measuredContrast": 2.7434,
+      "evidenceFile": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/0D58943F-9216-4007-8955-C8C7E9B51D50.png",
+      "storedPixelRegion": [
+        170,
+        280,
+        620,
+        380
+      ],
+      "correction": "Use existing selected-entity pattern: DrivyTheme.accentSoft row background and DrivyEntityRow isSelected.",
+      "correctedRenderVerified": false
+    }
+  ],
+  "limitations": [
+    "Static synthetic fixtures only; no physical GPS, battery or VoiceOver claim.",
+    "Planning lower scroll content and keyboard are not exercised.",
+    "Air 11, narrow windows and accessibility font sizes belong to separate capture runs.",
+    "lesson-finish captures the actual modal before completion; post-completion modal is covered by the distinct e720 FieldFlow attachment."
+  ],
+  "verifiedCorrections": [
+    {
+      "id": "TARIFF_SECONDARY_CONTRAST",
+      "evidenceFile": "artifacts/review-20260929/ipad-oriented/36584383615/test-reports/Visual-iPad-light/attachments/5E1C748B-5A4E-4F62-95EE-85B66EBE822D.png",
+      "storedPixelRegion": [
+        1580,
+        260,
+        1780,
+        320
+      ],
+      "observedForeground": "#536174",
+      "observedBackground": "#FFFFFF",
+      "measuredContrast": 6.3066,
+      "priorMeasuredContrast": 3.44,
+      "scope": "Prix convenu value on the original portrait PNG; shared token fix also applies to Amount due and Planning values."
+    }
+  ],
+  "dynamicType": "default",
+  "dynamicTypeEvidence": {
+    "runId": 36584383615,
+    "step": "Capturer les écrans pour la revue visuelle",
+    "logTimestamp": "2026-09-29T14:48:33.4836550Z",
+    "environment": {
+      "DRIVY_VISUAL_LARGE_TEXT": "0"
+    }
+  }
+}

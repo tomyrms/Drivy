@@ -1,0 +1,262 @@
+{
+  "author": "dossiers_reports",
+  "date": "2026-10-04",
+  "scope": "Six catégories, cinq variantes SVG originales par catégorie",
+  "contract": {
+    "viewBox": "0 0 64 64",
+    "drawingBounds": [
+      8,
+      8,
+      56,
+      56
+    ],
+    "stroke": "#245BD6",
+    "strokeWidth": 3.2,
+    "linecap": "round",
+    "linejoin": "round",
+    "background": "transparent",
+    "externalDecorativeBadge": false
+  },
+  "method": "Dessins vectoriels originaux, écrits via Python UTF-8. Aucun SVG SF Symbols recopié et aucune génération raster ; exports PNG réservés à la comparaison visuelle.",
+  "skills": {
+    "impeccable": "reference/craft-floor.md : dessin vectoriel géométrique, cohérence des pictogrammes, aucune décoration ajoutée.",
+    "betterUI": "Optical over geometric alignment ; Match icon stroke to text weight ; One SVG, recolored per state. La couleur fournie suit le contrat, le rendu natif pourra appliquer le tint de l’état."
+  },
+  "verification": {
+    "render": "Sharp/librsvg",
+    "reviewSheet": "candidates-dossiers_reports.png",
+    "sizesActuallyInspected": [
+      64,
+      40,
+      24
+    ],
+    "rootReview": "Les six formes ont été inspectées par root ; right-priority-03 choisi explicitement par root.",
+    "bounds": "Rasterisation à 640 px et bornes alpha de chaque variante ; 30/30 dans [8,8,56,56]. Voir validation-dossiers_reports.json.",
+    "nativeApp": "Non vérifiée ici ; intégration SwiftUI et captures Apple par root."
+  },
+  "choices": [
+    {
+      "slug": "vehicle",
+      "category": "Maîtrise du véhicule",
+      "selected": 4,
+      "reason": "Le volant à trois branches et son repère supérieur désignent la commande du véhicule. Sa silhouette demeure lisible à 40 px ; la voiture évoque davantage l’objet et le levier limite le sens à la boîte manuelle.",
+      "alternatives": [
+        "01 : moyeu plus dense et croisements internes plus nombreux.",
+        "02 : voiture claire mais centrée sur l’objet, moins sur sa maîtrise.",
+        "03 : sélection des rapports trop spécifique à la boîte manuelle.",
+        "04 : retenue, volant simple et repère de conduite.",
+        "05 : commande en U moins universelle."
+      ],
+      "candidate": "candidates/vehicle-04.svg",
+      "asset": "selected/vehicle.svg",
+      "variants": [
+        {
+          "file": "vehicle-01.svg",
+          "name": "Volant à trois branches"
+        },
+        {
+          "file": "vehicle-02.svg",
+          "name": "Voiture de face"
+        },
+        {
+          "file": "vehicle-03.svg",
+          "name": "Levier de vitesses"
+        },
+        {
+          "file": "vehicle-04.svg",
+          "name": "Volant et repère de conduite"
+        },
+        {
+          "file": "vehicle-05.svg",
+          "name": "Commande en U"
+        }
+      ]
+    },
+    {
+      "slug": "observation",
+      "category": "Contrôles et regard",
+      "selected": 1,
+      "reason": "Un œil et une pupille suffisent à représenter le regard. La forme ouverte est la plus lisible à 40 et 24 px et reste distincte des catégories de signalisation.",
+      "alternatives": [
+        "01 : retenue, regard direct et universel.",
+        "02 : rétroviseur plus spécifique et trop détaillé à petite taille.",
+        "03 : flèche ajoutant une direction qui ne couvre pas tous les contrôles.",
+        "04 : coins de cadrage évoquant un scanner et ajoutant du bruit.",
+        "05 : lunettes/jumelles plus ambiguës dans ce contexte."
+      ],
+      "candidate": "candidates/observation-01.svg",
+      "asset": "selected/observation.svg",
+      "variants": [
+        {
+          "file": "observation-01.svg",
+          "name": "Regard"
+        },
+        {
+          "file": "observation-02.svg",
+          "name": "Rétroviseur"
+        },
+        {
+          "file": "observation-03.svg",
+          "name": "Contrôle latéral"
+        },
+        {
+          "file": "observation-04.svg",
+          "name": "Balayage visuel"
+        },
+        {
+          "file": "observation-05.svg",
+          "name": "Vision périphérique"
+        }
+      ]
+    },
+    {
+      "slug": "right-priority",
+      "category": "Priorité à droite",
+      "selected": 3,
+      "decisionBy": "root après inspection de la planche",
+      "reason": "L’arrivée depuis la droite est visible dans le schéma de voie. Ce choix demandé par l’intégrateur distingue cette catégorie de Céder le passage et évite deux silhouettes triangulaires proches.",
+      "alternatives": [
+        "01 : deux flèches se concurrencent au centre.",
+        "02 : triangle lisible, mais trop proche visuellement de Céder le passage.",
+        "03 : retenue par root, arrivée par la droite explicite.",
+        "04 : deux véhicules trop petits et denses à 40 px.",
+        "05 : arrivée latérale claire, courbes plus denses que la variante 03."
+      ],
+      "candidate": "candidates/right-priority-03.svg",
+      "asset": "selected/right-priority.svg",
+      "variants": [
+        {
+          "file": "right-priority-01.svg",
+          "name": "Arrivée par la droite"
+        },
+        {
+          "file": "right-priority-02.svg",
+          "name": "Carrefour sans priorité"
+        },
+        {
+          "file": "right-priority-03.svg",
+          "name": "Voie et priorité à droite"
+        },
+        {
+          "file": "right-priority-04.svg",
+          "name": "Deux véhicules au carrefour"
+        },
+        {
+          "file": "right-priority-05.svg",
+          "name": "Trajectoire et arrivée latérale"
+        }
+      ]
+    },
+    {
+      "slug": "signage",
+      "category": "Signalisation",
+      "selected": 5,
+      "reason": "La plaque directionnelle sur poteau constitue une silhouette routière immédiatement identifiable. Un seul panneau avec flèche réduit les détails ; le poteau ne traverse pas la plaque.",
+      "alternatives": [
+        "01 : deux panneaux conservent un bon sens mais davantage de traits.",
+        "02 : priorité routière trop spécifique.",
+        "03 : feux de circulation trop spécifiques pour une catégorie générale.",
+        "04 : avertissement plus ambigu et proche des autres triangles.",
+        "05 : retenue, panneau unique net et direction lisible."
+      ],
+      "candidate": "candidates/signage-05.svg",
+      "asset": "selected/signage.svg",
+      "variants": [
+        {
+          "file": "signage-01.svg",
+          "name": "Poteau à deux directions"
+        },
+        {
+          "file": "signage-02.svg",
+          "name": "Panneau de priorité"
+        },
+        {
+          "file": "signage-03.svg",
+          "name": "Feux de circulation"
+        },
+        {
+          "file": "signage-04.svg",
+          "name": "Panneau d’avertissement"
+        },
+        {
+          "file": "signage-05.svg",
+          "name": "Direction sur poteau"
+        }
+      ]
+    },
+    {
+      "slug": "give-way",
+      "category": "Céder le passage",
+      "selected": 1,
+      "reason": "Le triangle inversé donne le signe distinctif sans poteau, doublage ni marquage supplémentaire. Ses angles arrondis et son seul contour s’accordent à la famille.",
+      "alternatives": [
+        "01 : retenue, silhouette simple et distincte.",
+        "02 : poteau ajoutant une longueur inutile pour reconnaître le signe.",
+        "03 : double contour plus lourd à petite taille.",
+        "04 : marquage au sol dépendant davantage du contexte.",
+        "05 : ligne de chaussée supplémentaire sans gain de reconnaissance."
+      ],
+      "candidate": "candidates/give-way-01.svg",
+      "asset": "selected/give-way.svg",
+      "variants": [
+        {
+          "file": "give-way-01.svg",
+          "name": "Triangle céder le passage"
+        },
+        {
+          "file": "give-way-02.svg",
+          "name": "Panneau sur poteau"
+        },
+        {
+          "file": "give-way-03.svg",
+          "name": "Contour doublé"
+        },
+        {
+          "file": "give-way-04.svg",
+          "name": "Marquage au sol"
+        },
+        {
+          "file": "give-way-05.svg",
+          "name": "Signal et ligne d’arrêt"
+        }
+      ]
+    },
+    {
+      "slug": "intersections",
+      "category": "Intersections et giratoires",
+      "selected": 1,
+      "reason": "Trois flèches de circulation autour d’un îlot rendent le giratoire explicite. L’îlot distingue l’icône d’un simple renouvellement ; la marge optique est vérifiée jusqu’aux pointes des flèches.",
+      "alternatives": [
+        "01 : retenue, trois flèches et îlot central.",
+        "02 : voies d’accès claires mais sans sens de circulation.",
+        "03 : entrée et flèches concentrent trop de détails en bas.",
+        "04 : sans îlot, peut évoquer une actualisation.",
+        "05 : quatre flèches plus proches d’une boucle générique."
+      ],
+      "candidate": "candidates/intersections-01.svg",
+      "asset": "selected/intersections.svg",
+      "variants": [
+        {
+          "file": "intersections-01.svg",
+          "name": "Giratoire à trois flèches"
+        },
+        {
+          "file": "intersections-02.svg",
+          "name": "Îlot et voies d’accès"
+        },
+        {
+          "file": "intersections-03.svg",
+          "name": "Giratoire avec entrée"
+        },
+        {
+          "file": "intersections-04.svg",
+          "name": "Flèches circulaires ouvertes"
+        },
+        {
+          "file": "intersections-05.svg",
+          "name": "Anneau à deux voies"
+        }
+      ]
+    }
+  ]
+}

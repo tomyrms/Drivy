@@ -2,7 +2,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
 export type Principal = { subject: string; displayName: string; email?: string; emailVerified: boolean };
 export type Tokens = { accessToken: string; refreshToken?: string; expiresAt: number; principal: Principal };
-export type LoginTransaction = { state: string; nonce: string; verifier: string; expiresAt: number };
+export type LoginTransaction = { state: string; nonce: string; verifier: string; expiresAt: number; returnTo?: string };
 export type InvitationState = {
   token: string; operationId: string; confirmation?: { id: string; invitationId: string; digest: string };
   accepting?: boolean; submitted?: boolean; uncertain?: boolean; accepted?: boolean;
@@ -19,15 +19,21 @@ export function matchesSecret(actual: unknown, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a,b);
 }
 
+/** Lifetime of a signed-in session: sliding idle time and absolute maximum, both bounded by the identity provider's own refresh. */
+export type SessionLimits = { idleMs: number; maxMs: number };
+export const defaultSessionLimits: SessionLimits = { idleMs: 30 * 60_000, maxMs: 2 * 60 * 60_000 };
+
 /** One process; no token/dossier on disk. Restart deliberately expires all browser sessions. */
 export class SessionStore {
   private readonly sessions = new Map<string, Session>();
-  constructor(private readonly clock: () => number = Date.now, private readonly capacity = 10_000) {}
+  constructor(private readonly clock: () => number = Date.now, private readonly capacity = 10_000,
+    private readonly limits: SessionLimits = defaultSessionLimits) {}
 
+  get size(): number { return this.sessions.size; }
   private expired(session: Session): boolean {
     const now = this.clock();
-    const idle = session.tokens ? 30 * 60_000 : 10 * 60_000;
-    return now - session.lastSeen >= idle || now - session.createdAt >= 2 * 60 * 60_000;
+    const idle = session.tokens ? this.limits.idleMs : 10 * 60_000;
+    return now - session.lastSeen >= idle || now - session.createdAt >= this.limits.maxMs;
   }
   get(id: string | undefined): Session | undefined {
     if (!id || !/^[A-Za-z0-9_-]{43}$/.test(id)) return;

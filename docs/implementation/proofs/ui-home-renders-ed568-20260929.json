@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "reviewDate": "2026-09-29",
+  "sourceCommit": "ed56802bed9002ab2f54db3d1f66c605b110960c",
+  "runId": "36580009494",
+  "runConclusion": "success",
+  "artifactDirectory": "artifacts/review-20260929/office-visual/36580009494",
+  "count": 16,
+  "inspectedCount": 16,
+  "devices": [
+    "iPhone",
+    "iPad"
+  ],
+  "appearances": [
+    "light"
+  ],
+  "screens": [
+    "home-tabs",
+    "agenda",
+    "learners",
+    "learner",
+    "dossier",
+    "progression",
+    "trips",
+    "invitation-code"
+  ],
+  "data": "Synthetic school fixtures and fake invitation code; no real persons or positions",
+  "originalFilesUnmodified": true,
+  "files": [
+    {
+      "file": "iPad-agenda-light-synthetic.png",
+      "sha256": "858c471d41e204076aed4fb594b20e29e1ffa28c0d1c44e76357a46d908e1c52",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPad-dossier-light-synthetic.png",
+      "sha256": "debf45afd0faf51c0544f3f98a61acd10701266b496a0a39a76562b744ef0b50",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPad-home-tabs-light-synthetic.png",
+      "sha256": "dbc9325a0a73d4c3024da64b4c55fd071062ca89cb21102641fe9c8eec34bed2",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPad-invitation-code-light-synthetic.png",
+      "sha256": "5d807f56307865b81d3740521c1ca2a2d32b1537a294cec35421cde46882bc9e",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPad-learner-light-synthetic.png",
+      "sha256": "9034b52b6659b5bd4a57851fd54248568818d762fe8db6f60517c69eee500ad2",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPad-learners-light-synthetic.png",
+      "sha256": "087a0f359baa5f4a480637ef676a2f31f67767d25af727300ee63e80373498cf",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPad-progression-light-synthetic.png",
+      "sha256": "2258c6d45509bc0e3744cc0ed76a9288eff94cb2b0d576e28e28e909cf99225e",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPad-trips-light-synthetic.png",
+      "sha256": "3919df473b20fb93f98f03bfefd91525c6b389e041c3ac8e929dd181bf1787a1",
+      "width": 2064,
+      "height": 2752,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-agenda-light-synthetic.png",
+      "sha256": "aa87f04e24177329275b0197de6db77d7c6d6f6aa321db5714ea78b6b40dc474",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-dossier-light-synthetic.png",
+      "sha256": "76731250b6ee81de1e5ea4c326a484f04388e03b6b80ca029235ae0140e8b560",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-home-tabs-light-synthetic.png",
+      "sha256": "f3d491929cc24739ee02accaa8f7870ed0d3153a71a6eef87b40e31e61e666e9",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-invitation-code-light-synthetic.png",
+      "sha256": "2cc6d1055860892a58470975ab50003f2f9f89e143ae7dcaf092891b9e40153f",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-learner-light-synthetic.png",
+      "sha256": "7270b2a56fac6fa75d0a68efa08648f52df8223a1fc61da9fd2766a977f600de",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-learners-light-synthetic.png",
+      "sha256": "9ecc15a3ab4c9449d5c48fdaa4514bd7d48121051422a7a07f9cd32578effb23",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-progression-light-synthetic.png",
+      "sha256": "ce1ead128cc7ef6b223a07a80dd99193f05611db1f236784f64cd24e0ef4867f",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    },
+    {
+      "file": "iPhone-trips-light-synthetic.png",
+      "sha256": "15fe790cedd2008a6f52a0c14de0705c8c08c775038ec9ad1c313f775a311bb3",
+      "width": 1206,
+      "height": 2622,
+      "visuallyInspected": true,
+      "status": "readable-no-blocking-layout-finding"
+    }
+  ],
+  "findings": [],
+  "limits": [
+    "Initial viewport only; no open menus or sheet interactions exercised by this capture",
+    "Light appearance and normal text size only",
+    "No physical GPS, battery, keyboard or VoiceOver verification",
+    "Home map is an ordinary map viewport without a live location fix",
+    "The invitation result is rendered as an isolated component, not the entire creation and dismissal flow"
+  ]
+}
