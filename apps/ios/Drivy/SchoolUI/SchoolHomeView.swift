@@ -24,6 +24,8 @@ struct SchoolHomeView: View {
     /// Le permis que l’élève filtre dans ses onglets Leçons et Progression ; `nil` les montre tous.
     @State private var chosenPermit: UUID?
     @State private var captureLesson: CaptureLessonRoute?
+    /// Élève du trajet en cours, lu à part quand il n’est pas dans la page d’élèves affichée.
+    @State private var captureLearner: (id: UUID, name: String)?
 
     var body: some View {
         Group {
@@ -128,13 +130,19 @@ struct SchoolHomeView: View {
                 }
             }
             .toolbar { staffToolbar }
+            .task(id: captureController?.learnerID) {
+                guard let id = captureController?.learnerID, captureLearner?.id != id,
+                      let name = await workspace.learnerName(id) else { return }
+                captureLearner = (id, name)
+            }
         }
     }
 
     private var captureLearnerName: String {
         let learnerID = captureController?.learnerID
         if let learner = workspace.learner, learner.id == learnerID { return learner.displayName }
-        return workspace.learners.first(where: { $0.id == learnerID })?.displayName ?? "Leçon en cours"
+        if let listed = workspace.learners.first(where: { $0.id == learnerID }) { return listed.displayName }
+        return captureLearner?.id == learnerID ? captureLearner?.name ?? "Leçon en cours" : "Leçon en cours"
     }
 
     private var planningAction: ((SchoolLearner) -> Void)? {

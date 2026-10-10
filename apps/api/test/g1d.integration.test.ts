@@ -146,6 +146,7 @@ describe('G1D1 · politique versionnée et profil minimal',()=>{
     const learner=await call('GET',learnerPath,undefined,undefined,'demo-instructor');conforms('LearnerEnvelope',learner.json());
     expect(learner.json().data).toMatchObject({version:4,displayName:'Élodie Modèle'});
     expect((await call('GET',`${school}/learners?q=${encodeURIComponent('Modèle')}`)).json().data.items.map((item:{id:string})=>item.id)).toEqual([id.aliceLearner]);
+    expect((await call('GET',`${school}/learners?q=MODELE`)).json().data.items.map((item:{id:string})=>item.id)).toEqual([id.aliceLearner]);
     expect((await pool.query('SELECT changed_fields FROM drivy.audit_event WHERE operation_id=$1',[named.operationId])).rows[0].changed_fields).toEqual(['lastName','displayName']);
     // L’identité de connexion reste celle de la personne ; le rejeu ne recompose rien une seconde fois.
     expect((await pool.query('SELECT display_name FROM drivy.person WHERE id=$1',[id.alice])).rows[0].display_name).toBe('Alice Exemple');

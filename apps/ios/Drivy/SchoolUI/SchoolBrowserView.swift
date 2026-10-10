@@ -116,6 +116,7 @@ struct SchoolBrowserView: View {
                 }
                 .disabled(workspace.isLoadingMoreLearners || workspace.isSearching)
                 .accessibilityIdentifier("more-learners")
+                .onAppear { Task { await workspace.loadMoreLearners() } }
                 .listRowSeparator(.hidden)
                 .drivyFormRows()
             }

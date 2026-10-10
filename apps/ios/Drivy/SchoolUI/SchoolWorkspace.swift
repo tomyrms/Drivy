@@ -233,6 +233,13 @@ final class SchoolWorkspace {
         }
     }
 
+    /// Nom d’un élève hors de la page affichée (trajet en cours) ; une lecture refusée ou en panne ne dit rien.
+    func learnerName(_ id: UUID) async -> String? {
+        guard let schoolID = membership?.schoolId else { return nil }
+        let learner = try? await api.learner(schoolID: schoolID, id: id)
+        return learner?.schoolId == schoolID && learner?.id == id ? learner?.displayName : nil
+    }
+
     func selectLearner(_ id: UUID?) {
         guard selectedLearnerID != id else { return }
         clearLearner()

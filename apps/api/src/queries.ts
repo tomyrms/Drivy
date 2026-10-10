@@ -52,13 +52,16 @@ export async function getTraining(db: PoolClient, schoolId: string, actor: Actor
   if (!result.rows[0]) throw notFound();
   return result.rows[0];
 }
+/** Recherche sans casse ni accents (« helene » trouve « Hélène »), sans dépendre de l’extension unaccent. */
+const foldedName = (expression: string) =>
+  `translate(lower(${expression}),'àâäáãåçéèêëíìîïñóòôöõúùûüýÿ','aaaaaaceeeeiiiinooooouuuuyy')`;
 export async function listLearners(db: PoolClient, schoolId: string, actor: Actor, member: Membership,
   filters: LearnerFilters, limit: number, position: Position | undefined): Promise<PageRow[]> {
   const values: unknown[] = params(schoolId, actor, member);
   const bind = (value: unknown) => { values.push(value); return `$${values.length}`; };
   const conditions = ['l.school_id=$1', visibleLearner];
   if (filters.status !== 'ALL') conditions.push(`l.archived_at IS ${filters.status === 'ACTIVE' ? '' : 'NOT '}NULL`);
-  if (filters.q) conditions.push(`strpos(lower(l.display_name), lower(${bind(filters.q)})) > 0`);
+  if (filters.q) conditions.push(`strpos(${foldedName('l.display_name')}, ${foldedName(bind(filters.q))}) > 0`);
   if (filters.requiresAction !== undefined) conditions.push(`(l.profile_readiness='ACTION_REQUIRED')=${bind(filters.requiresAction)}`);
   const trainingConditions = ['ft.school_id=$1', 'ft.learner_id=l.id', visibleTraining('ft')];
   if (filters.trainingStatus) trainingConditions.push(`ft.status=${bind(filters.trainingStatus)}`);

@@ -42,6 +42,8 @@ export function AvailabilitySection() {
   const [absenceOpen, setAbsenceOpen] = useState(false);
   const [ruleSubmitted, setRuleSubmitted] = useState(false);
   const [absenceSubmitted, setAbsenceSubmitted] = useState(false);
+  // Un retrait ferme des créneaux à la planification : le second appui, sur la même ligne, le confirme.
+  const [removing, setRemoving] = useState<string | null>(null);
   const canWrite = school.status === 'ACTIVE' && loaded.status === 'ready' && !runner.pending && !runner.busy && instructors.some(item => item.id === instructor);
 
   const rules = (loaded.data?.rules ?? []).filter(rule => rule.instructorMembershipId === instructor)
@@ -99,7 +101,7 @@ export function AvailabilitySection() {
                   <h3 className="row-title">{dayRange(rule.weekdays)} <span className="schedule-period">{rule.localStart}–{rule.localEnd}</span></h3>
                   <p className="row-meta">Dès le {formatCivilDate(rule.validFrom)}{rule.validUntil ? ` jusqu’au ${formatCivilDate(rule.validUntil)}` : ''}</p>
                 </div>
-                <button type="button" className="button quiet" disabled={!canWrite} aria-label={`Retirer l’horaire ${dayRange(rule.weekdays)}, ${rule.localStart}–${rule.localEnd}`} onClick={() => void removeRule(rule)}>Retirer</button>
+                <button type="button" className="button quiet" disabled={!canWrite} aria-label={`Retirer l’horaire ${dayRange(rule.weekdays)}, ${rule.localStart}–${rule.localEnd}`} onClick={() => { if (removing === rule.id) { setRemoving(null); void removeRule(rule); } else setRemoving(rule.id); }} onBlur={() => setRemoving(null)}>{removing === rule.id ? 'Confirmer le retrait' : 'Retirer'}</button>
               </li>)}</ul>}
             <details className="disclosure schedule-add" open={ruleOpen} onToggle={event => setRuleOpen(event.currentTarget.open)}><summary>Ajouter un horaire</summary>
             <form className="form-grid" onSubmit={event => { event.preventDefault(); void addRule(); }}>
@@ -126,7 +128,7 @@ export function AvailabilitySection() {
                   <h3 className="row-title schedule-period"><time dateTime={item.startsAt}>{formatDateTime(item.startsAt, school.timeZone)}</time><span aria-hidden="true"> → </span><span className="visually-hidden"> au </span><time dateTime={item.endsAt}>{formatDateTime(item.endsAt, school.timeZone)}</time></h3>
                   {item.reason && <p className="row-meta">{item.reason}</p>}
                 </div>
-                <button type="button" className="button quiet" disabled={!canWrite} aria-label={`Retirer l’absence du ${formatDateTime(item.startsAt, school.timeZone)}`} onClick={() => void removeAbsence(item)}>Retirer</button>
+                <button type="button" className="button quiet" disabled={!canWrite} aria-label={`Retirer l’absence du ${formatDateTime(item.startsAt, school.timeZone)}`} onClick={() => { if (removing === item.id) { setRemoving(null); void removeAbsence(item); } else setRemoving(item.id); }} onBlur={() => setRemoving(null)}>{removing === item.id ? 'Confirmer le retrait' : 'Retirer'}</button>
               </li>)}</ul>}
             <details className="disclosure schedule-add" open={absenceOpen} onToggle={event => setAbsenceOpen(event.currentTarget.open)}><summary>Ajouter une absence</summary>
             <form className="form-grid" onSubmit={event => { event.preventDefault(); void addAbsence(); }}>

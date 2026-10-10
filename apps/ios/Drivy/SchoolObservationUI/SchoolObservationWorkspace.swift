@@ -72,7 +72,10 @@ struct SchoolObservationEditor: Identifiable {
     }
     var pendingBelongsHere: Bool { pending?.kind.isObservation == true && pending?.routeResourceID == lessonID }
     var pendingText: String {
-        guard let pending, pendingBelongsHere else { return "Une demande d’un autre écran est conservée pour cette école. Retrouve cet écran pour vérifier son résultat." }
+        guard let pending, pendingBelongsHere else {
+            guard let pending else { return "" }
+            return "\(pending.waitingMessage(absent: false)) Ouvre la fiche de la leçon pour la vérifier."
+        }
         if pending.observationUndoOperationID != nil { return "Annulation du signalement en attente. La création sera vérifiée avant son retrait." }
         if pending.kind == .removeObservation,
            let body = try? JSONDecoder().decode(SchoolRemoveObservationBody.self, from: pending.body) { return "Retrait demandé\n\nMotif : \(body.reason)" }
