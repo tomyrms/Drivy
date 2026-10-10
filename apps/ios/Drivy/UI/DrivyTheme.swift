@@ -92,6 +92,8 @@ enum DrivyLayout {
 /// Pressed scale of every button, tile and selection card: one feedback for the app.
 enum DrivyPress {
     static let scale: CGFloat = 0.96
+    /// Under Reduce Motion, a style whose only feedback is the scale dims instead.
+    static let reducedMotionOpacity: Double = 0.6
 }
 
 /// Size of a full-width button. `field` is the in-car variant (« Signaler »):

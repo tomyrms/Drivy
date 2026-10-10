@@ -283,6 +283,8 @@ private struct SchoolJoinTextLinkStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            // Sans mouvement, l’appui reste visible par une atténuation.
+            .opacity(configuration.isPressed && reduceMotion ? DrivyPress.reducedMotionOpacity : 1)
             .scaleEffect(configuration.isPressed && !reduceMotion ? DrivyPress.scale : 1, anchor: .leading)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }

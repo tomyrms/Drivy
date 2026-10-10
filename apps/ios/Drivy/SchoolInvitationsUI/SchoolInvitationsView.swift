@@ -588,6 +588,7 @@ private struct InvitationRevocationView: View {
             }
         }
         .tint(DrivyTheme.accent)
-        .interactiveDismissDisabled(model.isBusy)
+        // Un motif déjà saisi ne se perd pas sur un glissement involontaire ; « Annuler » reste la sortie.
+        .interactiveDismissDisabled(model.isBusy || !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 }

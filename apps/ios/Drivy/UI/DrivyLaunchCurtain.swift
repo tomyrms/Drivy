@@ -14,6 +14,8 @@ import UIKit
     var step: String?
     @ObservationIgnored private var window: UIWindow?
     @ObservationIgnored private var generation = 0
+    /// Garde-fou du rideau montré ; arrêté dès que le rideau s’efface.
+    @ObservationIgnored private var watchdog: Task<Void, Never>?
 
     var isShown: Bool { window != nil }
 
@@ -37,8 +39,10 @@ import UIKit
         self.window = window
         UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) { window.alpha = 1 }
         // Garde-fou : un rideau oublié bloquerait toute l’app. Aucun départ ne dure aussi longtemps.
-        Task { [weak self] in
-            try? await Task.sleep(for: .seconds(40))
+        watchdog?.cancel()
+        watchdog = Task { [weak self] in
+            // Arrêté par `hide()` : il ne reste pas en attente quarante secondes après chaque départ.
+            do { try await Task.sleep(for: .seconds(40)) } catch { return }
             guard let self, token == self.generation else { return }
             await self.hide()
         }
@@ -54,11 +58,15 @@ import UIKit
             if remaining > 0 { try? await Task.sleep(for: .seconds(remaining)) }
             if let ready {
                 let deadline = Date().addingTimeInterval(atMost)
-                while token == generation, !ready(), Date() < deadline { try? await Task.sleep(for: .milliseconds(100)) }
+                while token == generation, !ready(), Date() < deadline {
+                    // Une tâche annulée ne dort plus : sans cette sortie, l’attente tournerait à vide sur le fil principal.
+                    do { try await Task.sleep(for: .milliseconds(100)) } catch { break }
+                }
             }
         }
         guard token == generation, self.window === window else { return }
         generation += 1
+        watchdog?.cancel(); watchdog = nil
         self.window = nil; self.start = nil; step = nil
         UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
             window.alpha = 0

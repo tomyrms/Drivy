@@ -44,6 +44,14 @@ final class IdentitySession: AccessTokenSource {
             _ = try await accessToken()
         } catch {
             guard generation == expected else { return }
+            // Fournisseur d’identité injoignable (hors réseau, panne) : la session enregistrée reste autorisée,
+            // ce n’est pas une session expirée. L’app s’ouvre ; chaque lecture retentera le rafraîchissement
+            // et dira « connexion impossible » avec « Réessayer », au lieu d’imposer une reconnexion complète.
+            if error as? IdentityFailure == .unavailable, state?.isAuthorized == true {
+                isAuthenticated = true
+                errorMessage = nil
+                return
+            }
             isAuthenticated = false
             if !(error is CancellationError) { errorMessage = message(for: error) }
         }

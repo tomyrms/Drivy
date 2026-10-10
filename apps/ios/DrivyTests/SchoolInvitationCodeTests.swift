@@ -269,6 +269,28 @@ struct SchoolInvitationCodeTests {
         #expect(await transport.recorded().filter { $0.url?.path == "/v1/me" }.isEmpty)
     }
 
+    @Test func aJoinTheSchoolRefusesAsInvalidIsDefinitiveAndLeavesNothingPending() async throws {
+        let transport = CodeJoinTransport()
+        await transport.setAcceptProblem(400, code: "INVALID_REQUEST")
+        let store = CodeJoinStoreStub()
+        let model = SchoolCodeJoinWorkspace(client: CodeJoinFixture.client(transport), store: store)
+        await model.load()
+        model.code = "K7Q4-MX2P"
+        await model.inspect()
+        await model.accept()
+        // 400 INVALID_REQUEST : refus définitif, la demande n'est ni gardée ni rejouée.
+        #expect(!model.isPending && !model.isConfirmed && store.record == nil && model.preview == nil)
+        #expect(model.errorMessage == SchoolJoinClient.invalidRequestMessage)
+        #expect(await transport.recorded().filter { $0.url?.path == "/v1/invitations/code/accept" }.count == 1)
+        // Une panne (503) reste une incertitude : la demande est conservée pour être vérifiée.
+        await transport.setAcceptProblem(503, code: "SERVICE_UNAVAILABLE")
+        model.code = "K7Q4-MX2P"
+        await model.inspect()
+        await model.accept()
+        #expect(model.isPending && store.record != nil)
+        #expect(model.errorMessage == SchoolJoinFailure.unavailable.codeMessage)
+    }
+
     @Test func aPendingCodeCannotBeResentIfItsEncryptedRecordCannotBeRead() async throws {
         let transport = CodeJoinTransport()
         await transport.setAcceptFailure(true)

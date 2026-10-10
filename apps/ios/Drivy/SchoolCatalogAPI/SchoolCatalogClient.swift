@@ -74,7 +74,7 @@ import Foundation
         if status == 401 { return code == "REAUTH_REQUIRED" ? .reauthentication : .unauthorized }
         if status == 403 { return .forbidden }
         if status == 404 { return .notFound }
-        if status == 429 || status >= 500 { return .unavailable }
+        if status == 408 || status == 429 || status >= 500 { return .unavailable }
         return .invalidResponse
     }
     private struct Problem: Decodable { let code: String }

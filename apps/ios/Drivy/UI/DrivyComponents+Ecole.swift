@@ -150,6 +150,8 @@ struct DrivyContactRow: View {
     let title: String
     let value: String
     var symbol: String? = nil
+    /// Same scaled column as DrivyNavigationRow: values and actions stay aligned at every text size.
+    @ScaledMetric(relativeTo: .title3) private var symbolWidth: CGFloat = 28
 
     var body: some View {
         HStack(alignment: .center, spacing: DrivySpacing.m) {
@@ -157,7 +159,7 @@ struct DrivyContactRow: View {
                 Image(systemName: symbol)
                     .font(.title3)
                     .foregroundStyle(DrivyTheme.muted)
-                    .frame(width: 28)
+                    .frame(width: symbolWidth)
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
@@ -182,15 +184,19 @@ struct DrivyDestructiveRow: View {
     let title: String
     let symbol: String
     let action: () -> Void
+    /// Same scaled column as DrivyNavigationRow.
+    @ScaledMetric(relativeTo: .title3) private var symbolWidth: CGFloat = 28
 
     var body: some View {
         Button(role: .destructive, action: action) {
             HStack(spacing: DrivySpacing.m) {
                 Image(systemName: symbol)
                     .font(.title3)
-                    .frame(width: 28)
+                    .frame(width: symbolWidth)
                     .accessibilityHidden(true)
                 Text(title).font(.headline)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
             .foregroundStyle(DrivyTheme.danger)

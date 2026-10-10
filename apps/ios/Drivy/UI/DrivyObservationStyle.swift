@@ -23,12 +23,14 @@ extension ObservationStatus {
     }
 }
 
-/// Large tactile tile for the reporting bubble: immediate spring feedback,
-/// removed under Reduce Motion. Selection itself is announced by haptics.
+/// Large tactile tile for the reporting bubble: immediate spring feedback.
+/// Under Reduce Motion the scale is replaced by a dimming, so the press is still
+/// seen. Selection itself is announced by haptics.
 struct DrivyTileButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .opacity(configuration.isPressed && reduceMotion ? DrivyPress.reducedMotionOpacity : 1)
             .scaleEffect(configuration.isPressed && !reduceMotion ? DrivyPress.scale : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }

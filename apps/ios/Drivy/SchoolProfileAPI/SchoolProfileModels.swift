@@ -243,4 +243,9 @@ enum SchoolProfileFailure: Error, LocalizedError, Equatable {
     var permitsFreshCorrection: Bool {
         switch self { case .conflict, .rejected, .notInitialized: true; default: false }
     }
+    /// Réponse au 400 INVALID_REQUEST : la saisie est refusée à l’entrée de la requête, avant toute écriture.
+    static let invalidRequestMessage = "Vérifie les champs saisis avant de confirmer."
+    /// Refus qui prouve que la demande n’a rien écrit, même renvoyée : un renvoi d’une demande déjà enregistrée
+    /// reçoit sa réponse conservée, jamais ce refus. Elle ne reste donc pas en file.
+    var provesNotCommitted: Bool { self == .rejected(Self.invalidRequestMessage) }
 }

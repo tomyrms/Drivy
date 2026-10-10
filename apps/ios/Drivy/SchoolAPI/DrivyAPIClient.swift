@@ -57,6 +57,8 @@ actor SchoolURLSessionTransport: SchoolHTTPTransport {
             throw SchoolAPIError.tooLarge
         }
         var data = Data()
+        // Taille annoncée et déjà bornée : une seule allocation au lieu de doublements successifs.
+        if http.expectedContentLength > 0 { data.reserveCapacity(Int(http.expectedContentLength)) }
         for try await byte in bytes {
             guard data.count < Self.maximumResponseBytes else { throw SchoolAPIError.tooLarge }
             data.append(byte)
@@ -203,7 +205,7 @@ final class DrivyAPIClient: SchoolAPI {
         case 400:
             let problem = try? JSONDecoder().decode(ProblemCode.self, from: response.data)
             throw problem?.code == "INVALID_CURSOR" ? SchoolAPIError.invalidCursor : .invalidResponse
-        case 429, 500...599: throw SchoolAPIError.unavailable
+        case 408, 429, 500...599: throw SchoolAPIError.unavailable
         default: throw SchoolAPIError.invalidResponse
         }
         guard response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else {

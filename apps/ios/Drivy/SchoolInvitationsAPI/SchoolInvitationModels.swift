@@ -169,7 +169,9 @@ enum SchoolInvitationFailure: Error, LocalizedError, Equatable {
     }
     /// A refusal that proves the command never took effect, even for a resent operation: the
     /// school answers a replay of a committed operation with its stored result, before this check.
-    var provesNotCommitted: Bool { self == .deliveryUnavailable }
+    /// `rejected` (400 INVALID_REQUEST, 428) est rendu avant toute écriture, à l’entrée de la requête : la même
+    /// demande échouerait à chaque renvoi, elle ne doit donc pas rester en file.
+    var provesNotCommitted: Bool { self == .deliveryUnavailable || self == .rejected }
     var errorDescription: String? {
         switch self {
         case .unauthorized: "Ta session a expiré. Connecte-toi à nouveau."

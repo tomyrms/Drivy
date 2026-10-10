@@ -118,6 +118,21 @@ struct SchoolProfileWorkspaceTests {
         #expect(api.commands == [command, command] && box.saves == [command, command, command])
         #expect(box.value == nil)
     }
+    @Test func resentRequestRefusedAsInvalidLeavesTheQueueAndKeepsTheDraft() async throws {
+        let api = ProfileAPIStub(); api.sendFailure = .unavailable
+        let box = ConfigurationOutboxStub(); let model = ProfileFixture.workspace(api: api, box: box)
+        await model.load(); model.draft.contactPhone = "0123456"
+        #expect(await model.saveProfileAfterConfirmation() == false)
+        let command = try #require(box.value)
+        // 400 INVALID_REQUEST : refus définitif rendu avant toute écriture, même pour un renvoi.
+        api.sendFailure = .rejected(SchoolProfileFailure.invalidRequestMessage); await model.retryPending()
+        #expect(api.commands == [command, command])
+        #expect(box.value == nil && model.pending == nil && !model.pendingRequiresReview)
+        #expect(model.errorMessage == SchoolProfileFailure.invalidRequestMessage && model.draft.contactPhone == "0123456")
+        // Un autre refus d'une demande renvoyée ne prouve rien : elle reste à vérifier.
+        #expect(!SchoolProfileFailure.rejected(SchoolProfileClient.fieldForbiddenMessage).provesNotCommitted)
+        #expect(!SchoolProfileFailure.conflict.provesNotCommitted)
+    }
     @Test func freshConflictAllowsCorrectionButRetryConflictKeepsUncertainty() async throws {
         let api = ProfileAPIStub(); let box = ConfigurationOutboxStub(); let model = ProfileFixture.workspace(api: api, box: box)
         await model.load(); model.draft.contactPhone = "0123456"; api.sendFailure = .conflict

@@ -69,13 +69,15 @@ struct DrivyGuidedStepHeader: View {
 struct DrivyGuidedFact: View {
     let symbol: String
     let text: String
+    /// The symbol column grows with the text, so a large glyph never runs into the sentence.
+    @ScaledMetric(relativeTo: .body) private var symbolWidth: CGFloat = 24
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
             Image(systemName: symbol)
                 .font(.body)
                 .foregroundStyle(DrivyTheme.muted)
-                .frame(width: 24)
+                .frame(width: symbolWidth)
                 .accessibilityHidden(true)
             Text(text)
                 .font(.body)

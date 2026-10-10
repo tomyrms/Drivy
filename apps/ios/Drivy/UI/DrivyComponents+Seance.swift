@@ -458,19 +458,31 @@ struct DrivyMapPlaceholder: View {
 struct DrivyDangerButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let shape = RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
+        return configuration.label
             .font(.body.weight(.semibold))
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, minHeight: 52)
             .padding(.horizontal, DrivySpacing.m)
             .foregroundStyle(isEnabled ? DrivyTheme.danger : DrivyTheme.disabledText)
-            .background(
-                isEnabled ? DrivyTheme.dangerSurface : DrivyTheme.disabledSurface,
-                in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+            // Pressed state by tone, like the primary and secondary styles: the scale alone
+            // disappears under Reduce Motion and would leave no feedback at all. This tint
+            // sits between the label and the surface below.
+            .background {
+                if isEnabled && configuration.isPressed { shape.fill(DrivyTheme.danger.opacity(0.14)) }
+            }
+            .background(isEnabled ? DrivyTheme.dangerSurface : DrivyTheme.disabledSurface, in: shape)
+            // Increase Contrast: same reinforcement as the secondary style, the soft fill alone
+            // barely separates from a white page.
+            .overlay {
+                if contrast == .increased {
+                    shape.strokeBorder(isEnabled ? DrivyTheme.danger : DrivyTheme.controlBorder, lineWidth: 1)
+                }
+            }
+            .contentShape(shape)
             .scaleEffect(configuration.isPressed && !reduceMotion ? DrivyPress.scale : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }

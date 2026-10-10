@@ -578,7 +578,7 @@ private struct SchoolTrainingContent: View {
                             .disabled(feed.isLoadingHistory)
                         }
                     }
-                    if feed.isLoadingHistory { ProgressView("Chargement de l’historique…") }
+                    if feed.isLoadingHistory { DrivyLoadingState(title: "Chargement de l’historique…") }
                     if let error = shown.compactMap(\.errorMessage).first {
                         SchoolErrorNotice(message: error, retry: { Task { await feed.loadHistory() } })
                     }

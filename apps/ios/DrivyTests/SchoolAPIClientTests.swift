@@ -86,7 +86,9 @@ struct SchoolAPIClientTests {
         let cases: [(Int, String, SchoolAPIError)] = [
             (401, "UNAUTHORIZED", .unauthorized), (403, "FORBIDDEN", .forbidden),
             (403, "IDENTITY_NOT_LINKED", .identityNotLinked), (404, "NOT_FOUND", .notFound),
-            (400, "INVALID_CURSOR", .invalidCursor), (503, "SERVICE_UNAVAILABLE", .unavailable)
+            (400, "INVALID_CURSOR", .invalidCursor), (503, "SERVICE_UNAVAILABLE", .unavailable),
+            // Panne du fournisseur d'identité (503) ou délai (408) : à réessayer, jamais une session expirée.
+            (408, "REQUEST_TIMEOUT", .unavailable), (400, "INVALID_REQUEST", .invalidResponse)
         ]
         for (status, code, expected) in cases {
             let token = TestAccessToken()

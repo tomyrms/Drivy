@@ -149,7 +149,7 @@ final class SchoolProfileClient: SchoolProfileAPI {
             case 404 where path.first == "operations": throw SchoolProfileFailure.operationUnknown
             case 404: throw SchoolProfileFailure.notFound
             case 412 where problem?.code == "VERSION_CONFLICT": throw SchoolProfileFailure.conflict
-            case 400 where problem?.code == "INVALID_REQUEST": throw SchoolProfileFailure.rejected("Vérifie les champs saisis avant de confirmer.")
+            case 400 where problem?.code == "INVALID_REQUEST": throw SchoolProfileFailure.rejected(SchoolProfileFailure.invalidRequestMessage)
             case 428 where problem?.code == "PRECONDITION_REQUIRED": throw SchoolProfileFailure.conflict
             case 409:
                 if problem?.code == "IDEMPOTENCY_MISMATCH" { throw SchoolProfileFailure.pendingCommand }
@@ -168,7 +168,7 @@ final class SchoolProfileClient: SchoolProfileAPI {
                 throw SchoolProfileFailure.pendingCommand
             case 422 where problem?.code == "PROFILE_POLICY_RULE_INVALID": throw SchoolProfileFailure.rejected("Vérifie les finalités et les étapes de chaque champ.")
             case 422 where problem?.code == "INVALID_BIRTH_DATE": throw SchoolProfileFailure.rejected("La naissance doit être une date réelle, non future.")
-            case 429, 500...599: throw SchoolProfileFailure.unavailable
+            case 408, 429, 500...599: throw SchoolProfileFailure.unavailable
             default: throw SchoolProfileFailure.invalidResponse
             }
         }

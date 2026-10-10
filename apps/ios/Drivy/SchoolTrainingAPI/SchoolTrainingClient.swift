@@ -80,6 +80,9 @@ import Foundation
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolAPIError.unauthorized }
         catch let error where error.isRequestCancellation { throw CancellationError() }
+        catch let error as SchoolAPIError { throw error }
+        // Fournisseur d’identité injoignable : une panne à réessayer, dite comme les autres lectures de l’école.
+        catch { throw SchoolAPIError.unavailable }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolAPIError.unauthorized }
         try Task.checkCancellation()
         var request = URLRequest(url: target)
@@ -99,7 +102,7 @@ import Foundation
         case 401: throw SchoolAPIError.unauthorized
         case 403: throw SchoolAPIError.forbidden
         case 404: throw SchoolAPIError.notFound
-        case 429, 500...599: throw SchoolAPIError.unavailable
+        case 408, 429, 500...599: throw SchoolAPIError.unavailable
         default: throw SchoolAPIError.invalidResponse
         }
         guard response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else {

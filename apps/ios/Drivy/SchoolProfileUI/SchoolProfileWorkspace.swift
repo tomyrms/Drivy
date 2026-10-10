@@ -333,7 +333,8 @@ final class SchoolProfileWorkspace: Identifiable {
             return true
         } catch {
             if let failure = error as? SchoolProfileFailure, failure.permitsFreshCorrection {
-                if firstAttempt {
+                // Une demande renvoyée reste à vérifier, sauf si le refus prouve qu’elle n’a rien écrit (400 INVALID_REQUEST).
+                if firstAttempt || failure.provesNotCommitted {
                     do { try outbox.remove(command) }
                     catch { guard request == generation else { return false }; isBusy = false; storageAccessible = false; fail(error); return false }
                     guard request == generation else { return false }; pending = nil; needsReload = true

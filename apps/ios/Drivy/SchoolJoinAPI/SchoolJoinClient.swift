@@ -252,6 +252,7 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
               SchoolLesson.date(envelope.serverTime) != nil else { throw SchoolJoinFailure.invalidResponse }
         return envelope.data
     }
+    static let invalidRequestMessage = "L’école a refusé cette demande : rien n’a été enregistré."
     private static func failure(_ status: Int, code: String?) -> SchoolJoinFailure {
         if status == 401 { return .authentication }
         switch code {
@@ -265,9 +266,12 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
         case "INVITATION_CODE_INVALID": return .invalidCode
         case "INVITATION_CODE_ATTEMPTS": return .codeAttempts
         case "IDENTITY_NOT_LINKED": return .notLinked
+        // Refus définitif de l’école (400 INVALID_REQUEST) : rien n’est enregistré et un nouvel envoi échouerait
+        // de la même façon. La demande fraîche est donc retirée au lieu de rester « à vérifier ».
+        case "INVALID_REQUEST" where status == 400: return .rejected(invalidRequestMessage)
         default: break
         }
         if status == 403 || status == 404 || code == "IDEMPOTENCY_MISMATCH" { return .unknown }
-        return status == 429 || status >= 500 ? .unavailable : .invalidResponse
+        return status == 408 || status == 429 || status >= 500 ? .unavailable : .invalidResponse
     }
 }

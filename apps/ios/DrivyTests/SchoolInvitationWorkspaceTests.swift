@@ -158,6 +158,23 @@ struct SchoolInvitationWorkspaceTests {
         #expect(outbox.value == uncertain && model.pendingRequiresReview)
     }
 
+    @Test func aResentRequestTheSchoolRefusesAsInvalidLeavesTheQueue() async throws {
+        let api = InvitationAPIStub()
+        api.sendFailure = .unavailable
+        let outbox = ConfigurationOutboxStub()
+        let model = InvitationFixture.workspace(api: api, outbox: outbox)
+        await model.load()
+        #expect(await model.inviteAfterConfirmation(email: "eleve@example.invalid", roles: [.learner]) == false)
+        let uncertain = try #require(outbox.value)
+        // 400 INVALID_REQUEST : refus définitif rendu avant toute écriture, même pour un renvoi.
+        api.sendFailure = .rejected
+        await model.retryPending()
+        #expect(api.commands == [uncertain, uncertain])
+        #expect(outbox.value == nil && model.pending == nil && !model.pendingRequiresReview)
+        #expect(model.errorMessage == SchoolInvitationFailure.rejected.localizedDescription)
+        #expect(SchoolInvitationFailure.rejected.provesNotCommitted)
+    }
+
     @Test func resendAndRevocationPreserveReviewedTargetVersionAndReason() async throws {
         let api = InvitationAPIStub()
         let original = InvitationFixture.invitation(status: .expired)
