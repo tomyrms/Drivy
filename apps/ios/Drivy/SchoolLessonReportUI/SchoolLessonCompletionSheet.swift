@@ -4,6 +4,9 @@ import SwiftUI
 struct SchoolLessonCompletionSheet: View {
     @Bindable var model: SchoolLessonReportWorkspace
     let finish: (String) async -> Bool
+    /// Ce que la fiche dit d’une fin qui n’a pas abouti (trajet non enregistré, objectif vide) : lu ici aussi,
+    /// sans quoi « Terminer la leçon » resterait sans réponse derrière cette feuille.
+    var finishError: String? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var reason = ""
@@ -56,7 +59,7 @@ struct SchoolLessonCompletionSheet: View {
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 DrivyStickyActionBar {
-                    if let message = model.errorMessage {
+                    if let message = model.errorMessage ?? finishError {
                         DrivyActionNote(text: message, isError: true)
                     } else if model.completionNeedsReason && !validReason && !isSubmitting {
                         // Une action indisponible dit pourquoi, au-dessus d’elle.

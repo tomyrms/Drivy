@@ -5,6 +5,7 @@ struct SchoolAgendaView: View {
     @Bindable var workspace: SchoolWorkspace
     var captureController: SchoolCaptureSessionController? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedDate = Date()
     @State private var lessons: [SchoolLesson] = []
     @State private var isLoading = false
@@ -104,6 +105,11 @@ struct SchoolAgendaView: View {
         .onChange(of: identityScope) { _, _ in
             planningModel?.invalidate(); planningModel = nil; selectedLesson = nil
         }
+        // Retour au premier plan : la semaine se relit sans s’effacer, comme Aujourd’hui. Une feuille ouverte
+        // relira déjà l’agenda à sa fermeture.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active && selectedLesson == nil && planningModel == nil { Task { await loadWeek(keepingCurrent: true) } }
+        }
     }
 
     /// La semaine : mois, jours et filtre serrés ensemble, pour se distinguer nettement de la liste du jour.
@@ -134,7 +140,7 @@ struct SchoolAgendaView: View {
 
     @ViewBuilder private var dayContent: some View {
         if workspace.membership == nil {
-            ContentUnavailableView("Choisis ton école", systemImage: "building.2", description: Text("Ton agenda s’affiche une fois l’école choisie."))
+            ContentUnavailableView("Choisis ton école", systemImage: "building.2")
         } else {
             if let error {
                 SchoolErrorNotice(message: error, retry: { Task { await loadWeek(keepingCurrent: true) } })
@@ -273,7 +279,8 @@ struct SchoolAgendaView: View {
                     .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                 }
                 .buttonStyle(AgendaDayButtonStyle())
-                .accessibilityLabel(formattedDay(day, template: "EEEE d MMMM"))
+                // « Aujourd’hui » ne se lit pas qu’à la couleur du chiffre.
+                .accessibilityLabel(today ? "Aujourd’hui, \(formattedDay(day, template: "EEEE d MMMM"))" : formattedDay(day, template: "EEEE d MMMM"))
                 .accessibilityValue(count == 0 ? "" : count == 1 ? "1 leçon" : "\(count) leçons")
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
             }
@@ -341,6 +348,11 @@ struct SchoolAgendaView: View {
             switch error as? SchoolAgendaFailure {
             case .authentication, .forbidden:
                 lessons = []; dayIndex = [:]; loadedScope = nil; selectedLesson = nil
+                self.error = (error as? LocalizedError)?.errorDescription ?? "L’agenda n’a pas pu être chargé."
+                // « Réessayer » seul ne sortirait jamais d’une session expirée ou d’un accès retiré : le compte est
+                // relu. Refusé, il ouvre la reconnexion ; modifié, il recharge l’école ; inchangé, rien ne bouge.
+                await workspace.refreshAccount(minimumInterval: 0)
+                return
             default: break
             }
             self.error = (error as? LocalizedError)?.errorDescription ?? "L’agenda n’a pas pu être chargé."

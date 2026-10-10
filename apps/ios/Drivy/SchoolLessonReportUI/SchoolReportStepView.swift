@@ -134,7 +134,9 @@ private struct SchoolReportStepMessages: View {
         if model.errorMessage != nil || model.confirmation != nil {
             Section {
                 if let error = model.errorMessage {
-                    SchoolErrorNotice(message: error, retry: model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
+                    // Accès retiré : aucune relecture n’aboutira, « Réessayer » n’est pas proposé (comme sur la fiche).
+                    SchoolErrorNotice(message: error,
+                        retry: model.isBusy || model.isLoading || model.isInvalidated ? nil : { Task { await model.load() } })
                 }
                 if let message = model.confirmation { DrivyInlineMessage(text: message) }
             }

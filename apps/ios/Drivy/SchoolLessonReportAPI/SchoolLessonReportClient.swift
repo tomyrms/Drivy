@@ -237,12 +237,13 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }
         // Tout autre refus 4xx motivé par l’école est définitif : son explication (en français) est affichée.
-        // Un identifiant d’opération déjà utilisé reste une incertitude à vérifier.
-        if (400...499).contains(status), status != 429, let code, code != "IDEMPOTENCY_MISMATCH" {
+        // Un identifiant d’opération déjà utilisé reste une incertitude à vérifier ; un délai dépassé (408) ne dit
+        // rien du résultat : la demande reste conservée, comme pour une panne.
+        if (400...499).contains(status), status != 408, status != 429, let code, code != "IDEMPOTENCY_MISMATCH" {
             let text = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return .rejected(text.isEmpty || text.count > 300 ? "L’école a refusé cette demande. Vérifie les informations puis réessaie." : text)
         }
         if code == "IDEMPOTENCY_MISMATCH" { return .uncertain }
-        return status >= 500 || status == 429 ? .unavailable : .invalidResponse
+        return status >= 500 || status == 429 || status == 408 ? .unavailable : .invalidResponse
     }
 }

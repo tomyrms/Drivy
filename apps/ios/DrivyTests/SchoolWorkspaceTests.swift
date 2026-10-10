@@ -380,6 +380,28 @@ struct SchoolWorkspaceTests {
         #expect(workspace.school?.id == membership.schoolId && !workspace.isLoadingSchool)
     }
 
+    @Test func retryingTheCurrentSchoolNeverLeavesTheOpenDossierLoadingForever() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let membership = try #require(workspace.membership)
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        let held = WorkspaceResponse<SchoolLearner>()
+        api.learnerHandler = { _, _ in try await held.value() }
+        let reading = Task { await workspace.loadSelectedLearner() }
+        await held.waitUntilRequested()
+        #expect(workspace.isLoadingLearner && workspace.learner == nil)
+        // Nouvel essai de l’école pendant la lecture du dossier : la réponse en vol sera écartée, le dossier est relu.
+        api.learnerHandler = nil
+        await workspace.selectSchool(membership)
+        #expect(workspace.selectedLearnerID == WorkspaceFixture.learnerID)
+        #expect(workspace.learner?.id == WorkspaceFixture.learnerID && !workspace.isLoadingLearner && !workspace.isLoadingTrainings)
+        #expect(workspace.trainings.count == 1 && workspace.learnerError == nil)
+        held.succeed(WorkspaceFixture.learner(name: "Réponse tardive"))
+        await reading.value
+        #expect(workspace.learner?.displayName == "Élève de test" && !workspace.isLoadingLearner)
+    }
+
     @Test func aBriefNetworkFailureDoesNotPostponeTheNextAccountCheck() async throws {
         let api = WorkspaceAPIStub()
         let workspace = SchoolWorkspace(api: api)

@@ -578,7 +578,9 @@ import Observation
     }
     @discardableResult func saveDraft() async -> Bool {
         await settled()
-        guard let draft, canMutate, isAuthor, validTexts, observationsValid else { return false }
+        // Relu après l’attente : un second appui, parti pendant le premier envoi, ne renvoie pas le bilan que
+        // l’école vient de confirmer sur une version déjà dépassée.
+        guard let draft, canMutate, !awaitsRereadAfterWrite, isAuthor, validTexts, observationsValid else { return false }
         let operation = UUID()
         return await prepare(SchoolSaveReport(operationId: operation, workedOn: workedOn, observationText: observationText, nextStep: nextStep, observations: observations), id: operation, kind: .saveReportDraft, version: draft.version, resourceID: draft.id)
     }

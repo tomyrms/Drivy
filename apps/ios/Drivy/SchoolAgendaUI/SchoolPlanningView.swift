@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SchoolPlanningView: View {
     @Bindable var model: SchoolPlanningWorkspace
@@ -14,6 +15,7 @@ struct SchoolPlanningView: View {
     private var title: String { cancelling ? "Annuler la leçon" : model.originalLesson == nil ? "Planifier une leçon" : "Déplacer la leçon" }
     var body: some View {
         NavigationStack {
+            ScrollViewReader { scroll in
             Form {
                 SchoolPlanningFeedback(model: model)
                 if let cancellationPreparationError {
@@ -73,6 +75,14 @@ struct SchoolPlanningView: View {
                 }
                 Button("Conserver", role: .cancel) { }
             } message: { Text("Ce rendez-vous sera retiré du planning.") }
+            // Le bouton est en bas, le refus de l’école s’affiche en tête : il est ramené à l’écran et annoncé,
+            // sans quoi « Planifier » ou « Annuler la leçon » semblait rester sans effet.
+            .onChange(of: model.errorMessage) { _, message in
+                guard let message else { return }
+                scroll.scrollTo(SchoolPlanningFeedback.errorAnchor, anchor: .top)
+                UIAccessibility.post(notification: .announcement, argument: message)
+            }
+            }
         }
         .interactiveDismissDisabled(model.isBusy || isPreparingCancellation)
         .tint(DrivyTheme.accent)
@@ -162,7 +172,9 @@ struct SchoolPlanningView: View {
             if model.assignedInstructors.isEmpty && !model.isLoading {
                 formNote("Aucun moniteur affecté ne couvre ce créneau.")
             }
-            DatePicker("Date", selection: $model.startsAt, in: Date()..., displayedComponents: .date)
+            // Rendez-vous resté en attente après son horaire : la borne ne masque pas sa date réelle. Sans cela le
+            // sélecteur affichait aujourd’hui pendant que le formulaire refusait encore l’horaire passé.
+            DatePicker("Date", selection: $model.startsAt, in: min(model.startsAt, Date())..., displayedComponents: .date)
             DatePicker("Heure", selection: $model.startsAt, displayedComponents: .hourAndMinute)
             if model.originalLesson == nil || model.changesCommercialTerms {
                 Picker("Durée", selection: Binding(get: { model.duration }, set: { model.selectDuration($0) })) {
@@ -430,6 +442,8 @@ struct SchoolMeetingPointField: View {
 }
 
 struct SchoolPlanningFeedback: View {
+    /// Repère de la notice d’erreur, pour la ramener à l’écran depuis le bas du formulaire.
+    static let errorAnchor = "planning-error"
     @Bindable var model: SchoolPlanningWorkspace
     var body: some View {
         if model.school == nil && (model.isLoading || model.errorMessage == nil) { Section { DrivySkeletonRows(count: 4).drivySkeleton("Ouverture du planning…") }
@@ -439,6 +453,7 @@ struct SchoolPlanningFeedback: View {
             Section {
                 SchoolErrorNotice(message: error, retry: model.accessRevoked ? nil : { Task { await model.load() } })
                     .disabled(model.isBusy || model.isLoading)
+                    .id(Self.errorAnchor)
             }
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)

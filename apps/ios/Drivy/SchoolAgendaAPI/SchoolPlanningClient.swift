@@ -177,7 +177,11 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         }
         let _: MutationAcknowledgement = try await request(command.scope.schoolID, path, command: command)
         // AP72 confirms both the operation and its target; a bare HTTP success is insufficient.
-        _ = try await receipt(for: command)
+        // Once the write answered 200/201, a missing or unreadable proof is an uncertainty to verify,
+        // never a fresh refusal: the command stays queued instead of being dropped as « rien n’a été enregistré ».
+        do { _ = try await receipt(for: command) }
+        catch let failure as SchoolPlanningFailure where failure == .unauthorized || failure == .forbidden { throw failure }
+        catch { throw SchoolPlanningFailure.unavailable }
     }
     /// « Démarrer une leçon » (extension start-now) : le serveur fixe le début à maintenant, la durée, la prestation
     /// courante et le moniteur appelant, puis renvoie la leçon. La leçon renvoyée tient lieu de preuve ;
@@ -289,11 +293,11 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }
         // Tout autre refus 4xx motivé par l’école est définitif : son explication (en français) est affichée.
-        // Un identifiant d’opération déjà utilisé reste à vérifier.
-        if (400...499).contains(status), status != 429, let code, code != "IDEMPOTENCY_MISMATCH" {
+        // Un identifiant d’opération déjà utilisé reste à vérifier ; un délai dépassé (408) ne dit rien du résultat.
+        if (400...499).contains(status), status != 408, status != 429, let code, code != "IDEMPOTENCY_MISMATCH" {
             let text = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return .rejected(text.isEmpty || text.count > 300 ? "L’école a refusé cette demande. Vérifie les informations puis réessaie." : text)
         }
-        return status >= 500 || status == 429 ? .unavailable : .invalidResponse
+        return status >= 500 || status == 429 || status == 408 ? .unavailable : .invalidResponse
     }
 }

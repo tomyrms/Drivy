@@ -64,6 +64,11 @@ struct SchoolLessonHistoryView: View {
         .onChange(of: captureController?.finalizedSyncState) { _, state in
             if state == .synced || state == .partial { Task { await refresh() } }
         }
+        // Session expirée ou accès retiré : la liste n’offre plus de « Réessayer ». Le compte est relu pour ouvrir
+        // la reconnexion ou recharger l’école, au lieu de laisser la page sans issue.
+        .onChange(of: model?.accessRevoked) { _, revoked in
+            if revoked == true { Task { await workspace.refreshAccount(minimumInterval: 0) } }
+        }
         .sheet(item: $selectedLesson, onDismiss: { Task { await refresh() } }) { lesson in
             NavigationStack {
                 SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace, lessonID: lesson.id,

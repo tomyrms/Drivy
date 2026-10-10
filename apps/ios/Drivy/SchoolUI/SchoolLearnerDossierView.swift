@@ -265,8 +265,13 @@ struct SchoolLearnerDossierView: View {
                     : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
                 layout {
                     if agendaClient != nil {
+                        // La leçon créée depuis le dossier apparaît dans sa liste : comme après « Planifier », les
+                        // leçons se relisent à la fermeture de la chaîne, pas seulement les formations.
                         SchoolStartNowButton(workspace: workspace, agendaClient: agendaClient, captureController: captureController,
-                            learnerID: learner.id, onFinished: { Task { await workspace.loadTrainings() } }) {
+                            learnerID: learner.id, onFinished: {
+                                Task { await workspace.loadTrainings() }
+                                NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil)
+                            }) {
                             Label("Démarrer", systemImage: "location.fill")
                         }
                         .buttonStyle(DrivyPrimaryButtonStyle())

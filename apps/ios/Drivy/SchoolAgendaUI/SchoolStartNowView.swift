@@ -382,7 +382,7 @@ struct SchoolStartNowView: View {
             }
         }
         .padding(.horizontal, DrivySpacing.m)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content))
+        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
     }
 
     private func fieldRow<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -496,6 +496,9 @@ struct SchoolStartNowButton<Content: View>: View {
     }
 
     private func open() {
+        // Une seule chaîne à la fois : un second appui avant l’apparition de la feuille remplacerait son modèle,
+        // et la leçon créée par le premier n’enchaînerait plus sur son trajet.
+        guard startNow == nil, lastStartNow == nil, preparation == nil, planning == nil, opened == nil else { return }
         guard let agendaClient, let person = workspace.person, let membership = workspace.membership, instructs else { return }
         let model = SchoolStartNowWorkspace(scope: agendaClient.scope(person: person, membership: membership),
             client: agendaClient.planningClient, learnerID: learnerID)

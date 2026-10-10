@@ -153,12 +153,20 @@ final class SchoolWorkspace {
 
     func selectSchool(_ selected: SchoolMembership) async {
         guard person?.memberships.contains(selected) == true else { return }
+        var resumesLearner = false
         if membership == selected {
             // Même école, mêmes droits (nouvel essai, retour d'une adhésion) : la portée reste en place pour que les
             // écrans ouverts ne se ferment pas. Les réponses en vol de l'ancienne lecture sont écartées par le nouveau scope.
             schoolScope = UUID()
             schoolError = nil
             isLoadingSchool = false
+            // Une lecture du dossier écartée ici ne rend jamais la main : ses indicateurs repartent de zéro et le
+            // dossier est relu une fois l'école confirmée, au lieu de rester sur un chargement sans fin.
+            resumesLearner = selectedLearnerID != nil
+                && (isLoadingLearner || isLoadingTrainings || isLoadingMoreTrainings || (learner == nil && learnerError == nil))
+            isLoadingLearner = false; isLoadingTrainings = false; isLoadingMoreTrainings = false
+            // Même règle pour la liste : une recherche ou une page écartée ne laisse pas son attente affichée.
+            isSearching = false; isLoadingMoreLearners = false
         } else {
             clearSchool()
             membership = selected
@@ -172,6 +180,9 @@ final class SchoolWorkspace {
             school = result
             isLoadingSchool = false
             if result.status == "ACTIVE" { await searchLearners("") }
+            if resumesLearner, scope == schoolScope, selectedLearnerID != nil, !isLoadingLearner {
+                await loadSelectedLearner()
+            }
         } catch {
             guard scope == schoolScope else { return }
             isLoadingSchool = false

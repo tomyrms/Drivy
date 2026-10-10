@@ -244,9 +244,16 @@ struct SchoolHomeView: View {
         }
     }
 
-    /// Le bouton d’école n’apparaît que si le compte en a plusieurs.
+    /// Un trajet GPS tourne (ou attend encore la confirmation de l’école) : changer d’école fermerait sa portée.
+    private var tripInProgress: Bool {
+        guard let captureController else { return false }
+        return captureController.captureID != nil && captureController.state != .saved
+    }
+
+    /// Le bouton d’école n’apparaît que si le compte en a plusieurs. Pendant un trajet, il se retire comme la ligne
+    /// « Changer d’école » du compte : choisir une autre école arrêterait le trajet sans rien demander.
     private var chooseSchoolAction: (() -> Void)? {
-        (workspace.person?.memberships.count ?? 0) > 1 ? { choosesSchool = true } : nil
+        (workspace.person?.memberships.count ?? 0) > 1 && !tripInProgress ? { choosesSchool = true } : nil
     }
 
     /// Moniteur et administration : l’école seulement, le compte vit dans l’onglet Profil.

@@ -203,6 +203,19 @@ import Testing
         #expect(model.reportSaveConfirmed && !model.pendingAwaitsReview)
     }
 
+    @Test func aSecondTapNeverResendsTheReportTheSchoolJustConfirmed() async {
+        let server = LessonFinishServer(), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox: outbox)
+        await model.load()
+        model.nextStep = "Une seule fois"
+        #expect(await model.saveDraft())
+        // La fiche se ferme sur cette confirmation ; un appui resté en attente ne repart pas sur la version dépassée.
+        #expect(!(await model.saveDraft()))
+        #expect(model.reportSaveConfirmed && model.pending == nil && outbox.value == nil)
+        #expect(Set(outbox.saves.map(\.id)).count == 1 && outbox.removals.count == 1)
+        #expect(await server.requests().filter { $0.httpMethod == "PUT" }.count == 1)
+    }
+
     private func workspace(_ server: LessonFinishServer, outbox: ConfigurationOutboxStub, roles: [String] = ["INSTRUCTOR"]) -> SchoolLessonReportWorkspace {
         let membership = SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: HubFixture.schoolID,
             schoolName: "École de test", roles: roles, grants: ["permit_review"], accessEpoch: 1)

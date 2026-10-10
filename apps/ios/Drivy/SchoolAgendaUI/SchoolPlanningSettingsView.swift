@@ -138,9 +138,17 @@ import Foundation
             try outbox.remove(command); pending = nil; successMessage = "Préférences enregistrées."
             isBusy = false; await load(keepingEdits: false)
         } catch {
-            if fresh || command.id == absentPendingID, let failure = error as? SchoolPlanningFailure, failure.definitiveRejection {
+            // Refus motivé, ou service qui ne connaît pas cette écriture (404) : l’école a répondu, rien n’est
+            // enregistré. La demande quitte la file au lieu de bloquer toutes les autres écritures de l’école.
+            if fresh || command.id == absentPendingID, let failure = error as? SchoolPlanningFailure,
+               failure.definitiveRejection || failure == .notFound {
                 do { try outbox.remove(command); pending = nil; absentPendingID = nil }
                 catch { storageAvailable = false }
+                if failure == .notFound, pending == nil {
+                    isBusy = false
+                    errorMessage = "L’école n’a pas pu enregistrer ces préférences. Rien n’a été modifié."
+                    return
+                }
             }
             isBusy = false; errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription
         }
@@ -232,7 +240,10 @@ struct SchoolPlanningSettingsView: View {
             Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
             Button("Continuer la modification", role: .cancel) { }
         } message: {
-            Text("Une demande déjà envoyée reste conservée sur cet appareil jusqu’à confirmation.")
+            // Dit seulement quand une demande attend vraiment : sans elle, la question se suffit.
+            if model.pending != nil {
+                Text("Une demande déjà envoyée reste conservée sur cet appareil jusqu’à confirmation.")
+            }
         }
         .task { await model.load() }
     }

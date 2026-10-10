@@ -14,6 +14,9 @@ struct SchoolTodayView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.scenePhase) private var scenePhase
     @State private var lessons: [SchoolLesson] = []
+    /// Leçons du moniteur commencées un jour précédent et jamais terminées : aucune fin n’est automatique, et
+    /// sans ce rappel elles ne se retrouvaient que dans l’historique du profil.
+    @State private var unfinished: [SchoolLesson] = []
     @State private var loadedKey: String?
     @State private var isLoading = false
     @State private var requestID = UUID()
@@ -210,6 +213,26 @@ struct SchoolTodayView: View {
             }
             if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
             dayList(now: now, excluding: Set([featured?.id, active == nil ? nil : next?.id].compactMap { $0 }))
+            unfinishedList(now: now)
+        }
+    }
+
+    /// Les leçons restées à terminer depuis un autre jour, sous la journée : la ligne dit le jour, son mot
+    /// « À terminer » dit quoi faire, et la fiche s’ouvre pour la finir.
+    @ViewBuilder private func unfinishedList(now: Date) -> some View {
+        if !unfinished.isEmpty {
+            VStack(spacing: 0) {
+                Divider().overlay(DrivyTheme.border)
+                ForEach(unfinished) { lesson in
+                    Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
+                        DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
+                            details: [day(lesson)], state: lesson.drivyState(now: now), showsChevron: false)
+                    }
+                    .buttonStyle(DrivyRowButtonStyle())
+                    .accessibilityHint("Ouvre la leçon à terminer")
+                    .accessibilityIdentifier("today-unfinished-\(lesson.id.uuidString)")
+                }
+            }
         }
     }
 
@@ -279,6 +302,10 @@ struct SchoolTodayView: View {
     private func endTime(_ lesson: SchoolLesson) -> String {
         lesson.endsAt.map { SchoolDateFormat.time($0, zone: lesson.timeZone) } ?? "—"
     }
+    /// « Jeudi 8 octobre », dans le fuseau de la leçon.
+    private func day(_ lesson: SchoolLesson) -> String {
+        lesson.startsAt.map { SchoolDateFormat.template("EEEEdMMMM", $0, zone: lesson.timeZone).capitalizedFirst } ?? ""
+    }
 
     /// « Démarrer une leçon » : élève, leçon créée maintenant par le serveur, puis départ du trajet (voir SchoolStartNowButton).
     @ViewBuilder private func startNowButton(prominent: Bool) -> some View {
@@ -301,16 +328,17 @@ struct SchoolTodayView: View {
         // Ce bouton porte plusieurs feuilles successives. Un refresh le remplaçant ne doit pas fermer la chaîne.
         guard !presentsStartNow else { return }
         guard let agendaClient, let membership = workspace.membership else {
-            lessons = []; loadedKey = nil; error = "L’agenda n’est pas disponible. Actualise ton école."
+            lessons = []; unfinished = []; loadedKey = nil; error = "L’agenda n’est pas disponible. Actualise ton école."
             return
         }
         let key = dayKey(Date()), request = UUID()
         requestID = request
-        if loadedKey != key { lessons = [] }
+        if loadedKey != key { lessons = []; unfinished = [] }
         isLoading = true; error = nil
         defer { if requestID == request { isLoading = false } }
+        // Même fuseau que la clé du jour (`dayKey`) : la journée lue est celle qui est affichée.
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: workspace.school?.timeZone ?? "") ?? .current
+        calendar.timeZone = TimeZone(identifier: workspace.school?.timeZone ?? "Europe/Zurich") ?? .current
         let dayStart = calendar.startOfDay(for: Date())
         let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart.addingTimeInterval(86_400)
         do {
@@ -327,11 +355,23 @@ struct SchoolTodayView: View {
             var unique: [UUID: SchoolLesson] = [:]
             for lesson in all { unique[lesson.id] = lesson }
             lessons = Array(unique.values); loadedKey = key
+            // Lecture discrète : la page la plus récente des leçons passées du moniteur suffit à retrouver celles
+            // restées sans fin. Une panne garde le rappel déjà affiché et ne dit rien : la journée reste lisible.
+            guard let instructor = instructorFilter else { unfinished = []; return }
+            guard let earlier = try? await agendaClient.lessonHistory(schoolID: membership.schoolId, before: dayStart,
+                instructorMembershipID: instructor, cursor: nil) else { return }
+            guard key == dayKey(Date()), requestID == request, !Task.isCancelled else { return }
+            unfinished = SchoolTodayPresentation.unfinishedLessons(earlier.items, before: dayStart)
         } catch {
             guard key == dayKey(Date()), requestID == request, !Task.isCancelled, !(error is CancellationError) else { return }
             switch error as? SchoolAgendaFailure {
             case .authentication, .forbidden:
-                lessons = []; loadedKey = nil; opened = nil
+                lessons = []; unfinished = []; loadedKey = nil; opened = nil
+                self.error = (error as? LocalizedError)?.errorDescription ?? "Les leçons du jour n’ont pas pu être chargées."
+                // « Réessayer » seul ne sortirait jamais d’une session expirée ou d’un accès retiré : le compte est
+                // relu. Refusé, il ouvre la reconnexion ; modifié, il recharge l’école ; inchangé, rien ne bouge.
+                await workspace.refreshAccount(minimumInterval: 0)
+                return
             default: break
             }
             self.error = (error as? LocalizedError)?.errorDescription ?? "Les leçons du jour n’ont pas pu être chargées."
@@ -344,6 +384,14 @@ enum SchoolTodayPresentation {
     static func upcomingLessons(_ lessons: [SchoolLesson], now: Date, excluding: Set<UUID> = []) -> [SchoolLesson] {
         lessons.filter { lesson in
             lesson.status == "PLANNED" && !excluding.contains(lesson.id)
+        }.sorted { $0.plannedStart < $1.plannedStart }
+    }
+
+    /// Leçons commencées avant aujourd’hui et restées sans résultat, la plus ancienne d’abord. Seul un départ
+    /// confirmé par l’école compte : un rendez-vous passé jamais commencé n’est pas « à terminer ».
+    static func unfinishedLessons(_ lessons: [SchoolLesson], before dayStart: Date) -> [SchoolLesson] {
+        lessons.filter { lesson in
+            lesson.status == "PLANNED" && lesson.hasStarted && (lesson.startsAt.map { $0 < dayStart } ?? false)
         }.sorted { $0.plannedStart < $1.plannedStart }
     }
 

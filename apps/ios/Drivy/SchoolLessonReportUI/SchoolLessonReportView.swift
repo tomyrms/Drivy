@@ -156,6 +156,8 @@ private struct SchoolLessonReportContent: View {
     @State private var opensReportWhenReady = false
     @Binding var isFinishing: Bool
     @State private var finishError: String?
+    /// Départs et fins de leçon que l’école vient de confirmer depuis cette fiche : un retour haptique chacun.
+    @State private var confirmedSteps = 0
     @State private var completionOpened = false
     @State private var startOpened = false
     @State private var confirmsCompletion = false
@@ -204,6 +206,8 @@ private struct SchoolLessonReportContent: View {
             }
         }
         .tint(DrivyTheme.accent)
+        // Seulement après la confirmation durable de l’école, jamais à l’appui.
+        .sensoryFeedback(.success, trigger: confirmedSteps)
         .alert("Terminer la leçon ?", isPresented: $confirmsCompletion) {
             Button("Terminer") { beginCompletion() }
                 .accessibilityIdentifier("lesson-confirm-completion")
@@ -219,7 +223,7 @@ private struct SchoolLessonReportContent: View {
         }
         .sheet(item: $lessonSheet) { sheet in
             switch sheet {
-            case .permit: SchoolLessonCompletionSheet(model: model, finish: finishLesson)
+            case .permit: SchoolLessonCompletionSheet(model: model, finish: finishLesson, finishError: finishError)
             }
         }
         .modifier(SchoolReportPresentations(router: router, model: model, context: reportContext))
@@ -491,7 +495,15 @@ private struct SchoolLessonReportContent: View {
         let times = model.completionTimes()
         let completed = await model.complete(start: times.start, end: times.end, reason: reason, localCaptureStopped: true)
         // La leçon est terminée : la rédaction du bilan s’ouvre d’elle-même dès que la fiche revient à l’écran.
-        if completed { opensReportWhenReady = true }
+        if completed {
+            opensReportWhenReady = true; confirmedSteps += 1
+        } else if model.errorMessage == nil, model.pending == nil, !model.isInvalidated {
+            // Le constat n’est pas parti et le modèle n’en dit rien (objectif laissé vide, horloge de l’appareil en
+            // retard sur celle de l’école) : le geste ne reste jamais sans réponse.
+            finishError = model.preparationChanged && !model.preparationValid
+                ? "Complète ou retire les objectifs vides avant de terminer la leçon."
+                : "La leçon n’a pas pu être terminée. Actualise-la, puis réessaie."
+        }
         return completed
     }
 
@@ -613,6 +625,7 @@ private struct SchoolLessonReportContent: View {
 
     private func startLesson() async {
         guard await model.start() else { return }
+        confirmedSteps += 1
         if mayStartCapture(now: Date()) { await openCapturePreparation() }
     }
 
