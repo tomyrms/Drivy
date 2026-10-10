@@ -224,7 +224,7 @@ private struct SchoolLessonReportContent: View {
         }
         .modifier(SchoolReportPresentations(router: router, model: model, context: reportContext))
         .modifier(SchoolReportLocalDraftKeeper(model: model))
-        .sheet(item: $capturePreparation, onDismiss: { captureSheetClosed() }) { preparation in
+        .fullScreenCover(item: $capturePreparation, onDismiss: { captureSheetClosed() }) { preparation in
             SchoolCapturePreparationView(model: preparation, schoolWorkspace: schoolWorkspace)
         }
         .sheet(item: $planningRoute, onDismiss: { Task { await model.load() } }) { route in planningSheet(route) }

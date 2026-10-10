@@ -114,6 +114,14 @@ struct SchoolCapturePreparationView: View {
         .presentationSizing(.form)
         .tint(DrivyTheme.accent)
         .interactiveDismissDisabled(model.isBusy)
+        // Départ en cours : la marque couvre la préparation, barre de titre comprise.
+        .overlay {
+            if let step = model.quickStep {
+                SchoolTripLaunchScreen(step: step, learnerName: model.learner?.displayName)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: model.quickStep != nil)
     }
 
     /// Même rappel compact que la fiche de leçon : la feuille s’ouvre depuis une leçon dont l’élève est déjà connu,
@@ -146,17 +154,9 @@ struct SchoolCapturePreparationView: View {
 
     /// Un seul état visible : le départ en cours, ou ce qui l’empêche et comment le lever.
     @ViewBuilder private var quickStart: some View {
-        if let step = model.quickStep {
-            DrivyPanel {
-                HStack(spacing: DrivySpacing.m) {
-                    ProgressView().controlSize(.large).accessibilityHidden(true)
-                    Text(step).font(.title3.weight(.semibold))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
-            }
-            .accessibilityIdentifier("capture-quick-start-progress")
+        if model.quickStep != nil {
+            // Le départ en cours occupe tout l’écran (SchoolTripLaunchScreen, posé sur la pile).
+            EmptyView()
         } else if case .failed(let message) = model.quickBlock {
             // Même présentation d’erreur que partout : notice danger et « Réessayer », sans panneau autour.
             SchoolErrorNotice(message: message, retry: model.isLoading || model.isBusy ? nil : { Task { await start() } })

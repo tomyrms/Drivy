@@ -469,7 +469,7 @@ struct SchoolStartNowButton<Content: View>: View {
             .sheet(item: $startNow, onDismiss: { closed() }) { model in
                 SchoolStartNowView(model: model)
             }
-            .sheet(item: $preparation, onDismiss: {
+            .fullScreenCover(item: $preparation, onDismiss: {
                 if let lesson = preparingLesson, SchoolLessonCaptureStatus(controller: captureController, lessonID: lesson.id) != .collecting {
                     opened = lesson
                 } else { finished() }
