@@ -10,6 +10,8 @@ struct SchoolCapturePreparationView: View {
     @State private var resendRoute: SchoolCaptureQueuedMutation?
     @State private var confirmsResend = false
     @State private var startReview: SchoolCaptureStartReview?
+    /// Début de la séquence de marque du départ en cours ; `nil` quand rien ne la montre.
+    @State private var launchStart: Date?
 
     private struct ChoiceRoute: Identifiable {
         let id = UUID()
@@ -107,7 +109,15 @@ struct SchoolCapturePreparationView: View {
             }
             .sheet(item: $resendRoute) { queued in resendSheet(queued) }
             .sheet(item: $startReview) { review in SchoolCaptureStartReviewView(model: model, review: review) }
-            .onChange(of: model.captureStarted) { _, started in if started { dismiss() } }
+            .onChange(of: model.captureStarted) { _, started in
+                guard started else { return }
+                // Départ confirmé par l’école : la séquence se termine proprement avant d’ouvrir le trajet.
+                let remaining = launchStart.map { DrivyLaunchTimeline.duration - Date().timeIntervalSince($0) } ?? 0
+                Task {
+                    if remaining > 0 { try? await Task.sleep(for: .seconds(remaining)) }
+                    dismiss()
+                }
+            }
         }
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .presentationDragIndicator(.visible)
@@ -116,12 +126,12 @@ struct SchoolCapturePreparationView: View {
         .interactiveDismissDisabled(model.isBusy)
         // Départ en cours : la marque couvre la préparation, barre de titre comprise.
         .overlay {
-            if let step = model.quickStep {
-                SchoolTripLaunchScreen(step: step, learnerName: model.learner?.displayName)
+            if let launchStart {
+                SchoolTripLaunchScreen(start: launchStart, step: model.quickStep)
                     .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: model.quickStep != nil)
+        .animation(.easeOut(duration: 0.2), value: launchStart != nil)
     }
 
     /// Même rappel compact que la fiche de leçon : la feuille s’ouvre depuis une leçon dont l’élève est déjà connu,
@@ -146,7 +156,11 @@ struct SchoolCapturePreparationView: View {
             if reload { await model.load() }
             return
         }
-        _ = await model.begin(reload: reload)
+        // Les vérifications partent aussitôt ; la séquence de marque se joue en parallèle, une fois par départ.
+        if launchStart == nil { launchStart = Date() }
+        let started = await model.begin(reload: reload)
+        // Un accord à demander, une autorisation ou une erreur : la marque s’efface tout de suite.
+        if !started { launchStart = nil }
     }
 
     /// Une lecture de la leçon ou une vérification auprès de l’école est en cours.
@@ -154,7 +168,7 @@ struct SchoolCapturePreparationView: View {
 
     /// Un seul état visible : le départ en cours, ou ce qui l’empêche et comment le lever.
     @ViewBuilder private var quickStart: some View {
-        if model.quickStep != nil {
+        if model.quickStep != nil || launchStart != nil {
             // Le départ en cours occupe tout l’écran (SchoolTripLaunchScreen, posé sur la pile).
             EmptyView()
         } else if case .failed(let message) = model.quickBlock {
