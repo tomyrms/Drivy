@@ -7,6 +7,8 @@ struct SchoolCaptureLiveMap: View {
     let observations: [SchoolLiveMapObservation]
     let resetCameraID: UUID
     let isRecording: Bool
+    /// Départ sans position enregistrée : la position de l’appareil selon Plans, affichée et jamais enregistrée.
+    var showsDevicePosition = false
     @Binding var followMode: DrivyMapFollowMode
     @State private var camera: MapCameraPosition = .automatic
     @State private var mapHeading = 0.0
@@ -60,6 +62,7 @@ struct SchoolCaptureLiveMap: View {
                     }.annotationTitles(.hidden)
                 }
             }
+            if showsDevicePosition && last == nil { UserAnnotation() }
             if let last {
                 Annotation("Dernière position enregistrée", coordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude)) {
                     SchoolMapPositionMarker(course: displayedHeading, mapHeading: mapHeading)
@@ -76,7 +79,8 @@ struct SchoolCaptureLiveMap: View {
             isVisible = true
             updateRoute(); updateCourse()
             compass.setActive(compassIsActive)
-            if followMode.followsPosition { followPoint() } else if count > 0 { camera = .automatic }
+            if last == nil && showsDevicePosition { camera = .userLocation(fallback: .automatic) }
+            else if followMode.followsPosition { followPoint() } else if count > 0 { camera = .automatic }
         }
         .onDisappear { isVisible = false; compass.stop() }
         .onChange(of: compassIsActive) { _, active in compass.setActive(active) }

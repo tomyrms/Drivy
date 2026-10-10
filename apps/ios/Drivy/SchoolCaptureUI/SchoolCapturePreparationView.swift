@@ -13,6 +13,8 @@ struct SchoolCapturePreparationView: View {
     /// Demande dont l’abandon attend sa confirmation, comme sur les autres écrans de l’école.
     @State private var abandonCandidate: SchoolCaptureQueuedMutation?
     @State private var confirmsAbandon = false
+    /// Accord de l’élève demandé dans cette feuille même, à la place d’une feuille de plus.
+    @State private var choiceModel: SchoolRecordingChoiceWorkspace?
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
 
     private struct ChoiceRoute: Identifiable {
@@ -89,10 +91,13 @@ struct SchoolCapturePreparationView: View {
             // Clé sur la validité de la portée : si les droits ne sont pas encore lisibles à l’ouverture
             // (feuille présentée juste après une autre), le départ se lance dès qu’ils le deviennent,
             // au lieu de laisser un écran vide.
-            .task(id: currentScope == model.scope) { await start() }
+            // Une préparation déjà lue par l’appelant ne se relit pas à l’ouverture.
+            .task(id: currentScope == model.scope) { await start(reload: !model.contextIsCurrent) }
+            .task(id: asksChoice) { await prepareChoice() }
             .onDisappear {
                 model.suspend()
-                if !model.captureStarted { Task { await DrivyLaunchCurtain.shared.hide() } }
+                // Un départ en cours garde le rideau : `start()` le lève lui-même, même sans cette feuille.
+                if !model.captureStarted && !model.isStarting { Task { await DrivyLaunchCurtain.shared.hide() } }
             }
             .onChange(of: model.diagnosticIsAvailable) { _, available in if !available { model.closeDiagnostic() } }
             .onChange(of: currentScope) { _, scope in
@@ -123,12 +128,8 @@ struct SchoolCapturePreparationView: View {
                 Button("Conserver", role: .cancel) { abandonCandidate = nil }
             } message: { Text("Elle est retirée de cet appareil et ne sera pas envoyée à l’école.") }
             .onChange(of: model.captureStarted) { _, started in
-                guard started else { return }
-                // Départ confirmé par l’école : la préparation se referme sous le rideau, qui attend la fin de
-                // sa séquence et la première position avant de découvrir la carte.
-                dismiss()
-                let controller = capture
-                Task { await DrivyLaunchCurtain.shared.hide(afterSequence: true, waitingFor: { (controller?.displayedPointCount ?? 1) > 0 }) }
+                // Départ confirmé par l’école : la préparation se referme sous le rideau (que `start()` lève).
+                if started { dismiss() }
             }
             .onChange(of: model.quickStep) { _, step in
                 DrivyLaunchCurtain.shared.step = step
@@ -157,20 +158,67 @@ struct SchoolCapturePreparationView: View {
     }
 
     private func start(reload: Bool = true) async {
-        guard currentScope == model.scope else { return }
+        let curtain = DrivyLaunchCurtain.shared
+        // Un rideau montré par l’appelant ne reste jamais sur des droits qui ont changé.
+        guard currentScope == model.scope else { await curtain.hide(); return }
         // La lecture initiale a toujours lieu, même s’il reste une demande à vérifier : ce sont
         // ces panneaux qui les montrent. Le départ lui-même refuse d’avancer dans ce cas.
-        let curtain = DrivyLaunchCurtain.shared
+        if reload { await model.load() }
         if !model.pendingAssessments.isEmpty || !model.pendingStarts.isEmpty {
-            if reload { await model.load() }
             await curtain.hide()
+            return
+        }
+        // L’accord de l’élève est connu avant tout rideau : une question à poser s’affiche ici, sans animation
+        // coupée. `begin` pose alors la question (ou le blocage) sans rien démarrer.
+        guard model.readyForOneStepStart else {
+            await curtain.hide()
+            _ = await model.begin(reload: false)
             return
         }
         // Les vérifications partent aussitôt ; le rideau de marque se joue en parallèle, une fois par départ.
         curtain.show()
-        let started = await model.begin(reload: reload)
-        // Un accord à demander, une autorisation ou une erreur : le rideau s’efface tout de suite.
-        if !started { await curtain.hide() }
+        let started = await model.begin(reload: false)
+        guard started else {
+            // Une autorisation ou une erreur : le rideau s’efface tout de suite.
+            await curtain.hide()
+            return
+        }
+        // La carte du trajet remplace la leçon sous le rideau et cette feuille a pu disparaître (sa tâche est
+        // alors annulée) : le rideau se lève dans une tâche à lui, à la première position enregistrée, sept
+        // secondes au plus.
+        let controller = capture
+        Task { await curtain.hide(afterSequence: true, waitingFor: { (controller?.pointCount ?? 1) > 0 }) }
+    }
+
+    /// La question d’accord est à poser (aucun choix, information changée) ou l’élève a refusé.
+    private var asksChoice: Bool { model.quickBlock == .choice || model.quickBlock == .refused }
+
+    private func prepareChoice() async {
+        guard asksChoice, choiceModel == nil else {
+            if !asksChoice { choiceModel?.invalidate(); choiceModel = nil }
+            return
+        }
+        let value = SchoolRecordingChoiceWorkspace(scope: model.scope, lessonID: model.lessonID, client: model.client,
+            reader: model.reader, agenda: model.agenda,
+            onRefusalConfirmed: { learnerID, lessonID in model.learnerRefused(learnerID, lessonID: lessonID) }, store: model.store)
+        choiceModel = value
+        await value.load()
+    }
+
+    /// Choix valable pour l’information actuelle de l’école ; `nil` : la question est à poser.
+    private func recordedAnswer(_ choice: SchoolRecordingChoiceWorkspace) -> SchoolRecordingChoice.Status? {
+        guard let value = choice.choice, let notice = choice.notice, value.noticeVersionId == notice.noticeVersionId,
+              value.status != .unknown else { return nil }
+        return value.status
+    }
+
+    /// Une réponse explicite, enregistrée aussitôt : avec GPS, le départ suit sous le rideau ; sans, la leçon
+    /// continue et la feuille se ferme.
+    private func record(_ status: SchoolRecordingChoice.Status, with choice: SchoolRecordingChoiceWorkspace) async {
+        if status != recordedAnswer(choice) {
+            guard await choice.choose(status) else { return }
+        }
+        if status == .allowed { await start(reload: true) } else { dismiss() }
     }
 
     /// Une lecture de la leçon ou une vérification auprès de l’école est en cours.
@@ -189,22 +237,17 @@ struct SchoolCapturePreparationView: View {
             DrivyPanel {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     switch block {
-                    case .choice:
-                        panelTitle("Accord de l’élève pour le GPS", symbol: "person.crop.circle.badge.questionmark")
-                        Button {
-                            model.closeDiagnostic()
-                            choiceRoute = ChoiceRoute(lessonID: model.lessonID, store: model.store)
-                        } label: { Label("Demander l’accord", systemImage: "hand.raised") }
-                            .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(!model.mayOpenChoice)
-                            .accessibilityIdentifier("preparation-open-choice")
-                    case .refused:
-                        // Un refus est un choix normal : ton neutre, pas de phrase de rappel sous le titre.
-                        panelTitle("L’élève a refusé l’enregistrement du trajet", symbol: "location.slash")
-                        Button("Modifier l’accord") {
-                            model.closeDiagnostic()
-                            choiceRoute = ChoiceRoute(lessonID: model.lessonID, store: model.store)
+                    case .choice, .refused:
+                        // La question se pose ici, à la place du départ : deux réponses de même poids, puis le trajet
+                        // part sous le rideau (avec GPS) ou la leçon continue (sans). Un refus reste un choix normal.
+                        if let choiceModel {
+                            SchoolRecordingChoiceInline(model: choiceModel, answer: recordedAnswer(choiceModel),
+                                isEnabled: !model.isBusy && !model.isLoading) { status in
+                                Task { await record(status, with: choiceModel) }
+                            }
+                        } else {
+                            DrivySkeletonRow(lines: 2).drivySkeleton("Lecture de l’accord GPS…")
                         }
-                        .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.mayOpenChoice)
                     case .permission(let denied):
                         panelTitle("Autorise la localisation", symbol: "location.slash")
                         if denied {

@@ -166,6 +166,8 @@ private struct SchoolLessonReportContent: View {
     @State private var confirmsNoShow = false
     @State private var showsLive = false
     @State private var capturePreparation: SchoolCapturePreparationWorkspace?
+    /// L’accord GPS de l’élève se lit avant tout rideau : l’attente se lit dans le bouton « Démarrer le trajet ».
+    @State private var isOpeningTrip = false
     @State private var planningRoute: PlanningRoute?
 
     private enum LessonSheet: String, Identifiable {
@@ -601,7 +603,13 @@ private struct SchoolLessonReportContent: View {
                     .accessibilityIdentifier("lesson-live-capture")
                 completeButton(primary: false)
             case .start:
-                Button { Task { await openCapturePreparation() } } label: { Label("Démarrer le trajet", systemImage: "location.fill") }
+                Button { Task { await openCapturePreparation() } } label: {
+                    if isOpeningTrip {
+                        DrivyBusyLabel(title: "Démarrer le trajet", busyTitle: "Vérification de l’accord GPS…", isBusy: true)
+                    } else {
+                        Label("Démarrer le trajet", systemImage: "location.fill")
+                    }
+                }
                     .buttonStyle(DrivyPrimaryButtonStyle())
                     .disabled(!model.acceptsInput)
                     .accessibilityIdentifier("lesson-prepare-gps")
@@ -659,12 +667,19 @@ private struct SchoolLessonReportContent: View {
         return SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: model.isAuthor, school: schoolWorkspace.school,
             capture: captureStatus, controllerCanPrepare: capture.canPrepareCapture, now: now)
     }
+    /// La préparation se lit d’abord (leçon, accord de l’élève) : le rideau ne se lève que pour un départ qui peut
+    /// partir sans question. Sinon la feuille s’ouvre sur la question d’accord, sans rideau qui se couperait.
     private func openCapturePreparation() async {
-        guard capturePreparation == nil, let capture, mayStartCapture(now: Date()),
-              await model.savePreparationBeforeDeparture(), capturePreparation == nil,
+        guard capturePreparation == nil, !isOpeningTrip, let capture, mayStartCapture(now: Date()) else { return }
+        isOpeningTrip = true
+        defer { isOpeningTrip = false }
+        guard await model.savePreparationBeforeDeparture(), capturePreparation == nil,
               mayStartCapture(now: Date()) else { return }
-        DrivyLaunchCurtain.shared.show()
-        capturePreparation = agenda.capturePreparation(scope: model.scope, lessonID: model.lessonID, controller: capture)
+        let preparation = agenda.capturePreparation(scope: model.scope, lessonID: model.lessonID, controller: capture)
+        await preparation.load()
+        guard capturePreparation == nil else { preparation.invalidate(); return }
+        if preparation.readyForOneStepStart { DrivyLaunchCurtain.shared.show() }
+        capturePreparation = preparation
     }
 
     /// Annuler pendant un trajet l’arrête d’abord, comme depuis l’écran du trajet : aucune position après l’annulation.

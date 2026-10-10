@@ -219,13 +219,19 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    /// No position yet: an honest wait instead of a country overview.
+    /// Trajet qui démarre sans position enregistrée encore : la carte montre déjà où se trouve l’appareil (le
+    /// point de l’app Plans, jamais enregistré), comme « Aujourd’hui ». Le tracé commence à la première position
+    /// enregistrée. Hors départ, sans aucune position : une attente honnête plutôt qu’une vue du pays.
+    private var showsDevicePosition: Bool {
+        controller.displayedPointCount == 0 && (shownState == .recording || shownState == .preparing)
+    }
+
     @ViewBuilder private var routeMap: some View {
-        if controller.displayedPointCount > 0 {
+        if controller.displayedPointCount > 0 || showsDevicePosition {
             SchoolCaptureLiveMap(segments: controller.segments,
                 observations: controller.liveObservations?.mapObservations ?? [],
                 resetCameraID: resetCameraID, isRecording: shownState == .recording,
-                followMode: $followMode)
+                showsDevicePosition: showsDevicePosition, followMode: $followMode)
         } else {
             DrivyMapPlaceholder(title: placeholderTitle, message: placeholderMessage, symbol: "location",
                 isSearching: shownState == .preparing || shownState == .recording)
@@ -278,9 +284,13 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
+    /// La carte est affichée (positions enregistrées, ou position de l’appareil au départ) : le message du signal
+    /// passe dans le panneau, sinon il est déjà dans l’attente qui remplace la carte.
+    private var mapIsShown: Bool { controller.displayedPointCount > 0 || showsDevicePosition }
+
     private var hasSessionInformation: Bool {
         controller.errorMessage != nil || cancellationError != nil
-            || (controller.displayedPointCount > 0 && controller.locationMessage != nil)
+            || (mapIsShown && controller.locationMessage != nil)
             || (controller.transferMessage != nil && controller.finalizedSyncState == nil)
     }
 
@@ -290,7 +300,7 @@ struct SchoolCaptureLiveView: View {
             if let error = controller.errorMessage {
                 DrivyInlineMessage(text: error, tone: .warning)
             }
-            if controller.displayedPointCount > 0, let message = controller.locationMessage {
+            if mapIsShown, let message = controller.locationMessage {
                 DrivyInlineMessage(text: message, tone: .warning)
             }
             if let message = controller.transferMessage, controller.finalizedSyncState == nil {

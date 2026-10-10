@@ -50,7 +50,7 @@ enum SchoolLearnerSearch {
         }
     }
 
-    private static func words(of text: String) -> [Substring] {
+    static func words(of text: String) -> [Substring] {
         text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "fr_CH"))
             .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
     }

@@ -382,9 +382,15 @@ private enum AgendaLayout {
 
 extension SchoolAgendaClient {
     /// Préparation du trajet d’une leçon : l’agenda et « Aujourd’hui » partagent exactement ce chemin.
-    func capturePreparation(scope: SchoolCommandScope, lessonID: UUID, controller: SchoolCaptureSessionController?) -> SchoolCapturePreparationWorkspace {
+    /// `source` : récepteur déjà réveillé par le démarrage immédiat, repris tel quel au lieu d’en créer un autre.
+    func capturePreparation(scope: SchoolCommandScope, lessonID: UUID, controller: SchoolCaptureSessionController?,
+                            source warmSource: (any SchoolCaptureLocationProviding)? = nil) -> SchoolCapturePreparationWorkspace {
         guard let controller else {
             return SchoolCapturePreparationWorkspace(scope: scope, lessonID: lessonID, client: captureClient, reader: reader, agenda: self)
+        }
+        let makeSource: @MainActor () -> any SchoolCaptureLocationProviding = {
+            if let warmSource { return warmSource }
+            return SchoolCaptureLocationSource()
         }
         let handler: SchoolCaptureStartHandler = { transfer, source, session, lease, authorization, receivedAt in
             try await controller.adoptAndStart(transfer: transfer, source: source, session: session,
@@ -394,6 +400,6 @@ extension SchoolAgendaClient {
             client: captureClient, reader: reader, agenda: self,
             journalProvider: { try await controller.journal() }, onCaptureAuthorized: handler,
             onRefusalConfirmed: { learnerID, lessonID in controller.learnerRefused(learnerID: learnerID, lessonID: lessonID) },
-            canUseDiagnostic: { controller.canPrepareCapture })
+            canUseDiagnostic: { controller.canPrepareCapture }, makeLocationSource: makeSource)
     }
 }
