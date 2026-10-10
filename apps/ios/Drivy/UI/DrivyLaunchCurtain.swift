@@ -12,6 +12,8 @@ import UIKit
     private(set) var start: Date?
     /// Étape en cours, annoncée seulement aux technologies d’assistance.
     var step: String?
+    /// Sortie en cours : le symbole s’efface le premier, le fond le suit et découvre l’écran prêt.
+    private(set) var isLeaving = false
     @ObservationIgnored private var window: UIWindow?
     @ObservationIgnored private var generation = 0
     /// Garde-fou du rideau montré ; arrêté dès que le rideau s’efface.
@@ -26,6 +28,7 @@ import UIKit
         generation += 1
         let token = generation
         start = Date()
+        isLeaving = false
         // Le clavier d’un champ encore actif resterait au-dessus du rideau.
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         let host = UIHostingController(rootView: DrivyLaunchCurtainView(curtain: self))
@@ -67,11 +70,16 @@ import UIKit
         guard token == generation, self.window === window else { return }
         generation += 1
         watchdog?.cancel(); watchdog = nil
-        self.window = nil; self.start = nil; step = nil
-        UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+        // Le contenu reste dessiné pendant le fondu : le vider ici couperait net le symbole et le fond.
+        self.window = nil; step = nil
+        isLeaving = true
+        let reduceMotion = UIAccessibility.isReduceMotionEnabled
+        UIView.animate(withDuration: reduceMotion ? 0.3 : 0.45, delay: reduceMotion ? 0 : 0.1, options: [.curveEaseInOut, .beginFromCurrentState]) {
             window.alpha = 0
         } completion: { _ in
             window.isHidden = true
+            // Un nouveau départ lancé pendant le fondu garde sa séquence.
+            if self.window == nil { self.start = nil; self.isLeaving = false }
         }
     }
 }
@@ -81,7 +89,7 @@ private struct DrivyLaunchCurtainView: View {
 
     var body: some View {
         if let start = curtain.start {
-            SchoolTripLaunchScreen(start: start, step: curtain.step)
+            SchoolTripLaunchScreen(start: start, step: curtain.step, isLeaving: curtain.isLeaving)
         } else {
             Color.clear
         }

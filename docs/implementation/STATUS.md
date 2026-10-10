@@ -12,6 +12,8 @@ Audit technique et UI/UX de toute l’application en cinq lots (API, web, trois 
 
 **Exécuté** sur `071af98` : 436/436 tests Swift, IPA Release compilée, vérifications serveur et web réussies ; 148/148 tests web et 58/58 tests unitaires API en local.
 
+- **Rideau de départ (retour du porteur)** : le contenu du rideau était vidé à l’instant où son fondu commençait, d’où une coupure nette ; il reste dessiné jusqu’à la fin, le symbole se retire avant le fond, et il entre en fondu. Le fond suit le thème (`canvas`) au lieu d’un noir ou d’un blanc pur. Compilé, jamais vu tourner.
+
 **Reste à qualifier** : aucun écran iOS de cette passe n’a été vu tourner ; aucun parcours réel rejoué sur l’école hébergée ; aucun appareil physique.
 
 ## 10 octobre 2026 — demandes bloquées, recherche d’élève et API à jour
