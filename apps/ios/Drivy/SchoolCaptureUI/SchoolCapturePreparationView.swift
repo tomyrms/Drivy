@@ -10,8 +10,7 @@ struct SchoolCapturePreparationView: View {
     @State private var resendRoute: SchoolCaptureQueuedMutation?
     @State private var confirmsResend = false
     @State private var startReview: SchoolCaptureStartReview?
-    /// Début de la séquence de marque du départ en cours ; `nil` quand rien ne la montre.
-    @State private var launchStart: Date?
+    @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
 
     private struct ChoiceRoute: Identifiable {
         let id = UUID()
@@ -88,7 +87,10 @@ struct SchoolCapturePreparationView: View {
             // (feuille présentée juste après une autre), le départ se lance dès qu’ils le deviennent,
             // au lieu de laisser un écran vide.
             .task(id: currentScope == model.scope) { await start() }
-            .onDisappear { model.suspend() }
+            .onDisappear {
+                model.suspend()
+                if !model.captureStarted { Task { await DrivyLaunchCurtain.shared.hide() } }
+            }
             .onChange(of: model.diagnosticIsAvailable) { _, available in if !available { model.closeDiagnostic() } }
             .onChange(of: currentScope) { _, scope in
                 // Une lecture du compte en cours vide un instant la portée : ce n’est pas un changement
@@ -111,27 +113,19 @@ struct SchoolCapturePreparationView: View {
             .sheet(item: $startReview) { review in SchoolCaptureStartReviewView(model: model, review: review) }
             .onChange(of: model.captureStarted) { _, started in
                 guard started else { return }
-                // Départ confirmé par l’école : la séquence se termine proprement avant d’ouvrir le trajet.
-                let remaining = launchStart.map { DrivyLaunchTimeline.duration - Date().timeIntervalSince($0) } ?? 0
-                Task {
-                    if remaining > 0 { try? await Task.sleep(for: .seconds(remaining)) }
-                    dismiss()
-                }
+                // Départ confirmé par l’école : la préparation se referme sous le rideau, qui attend la fin de
+                // sa séquence et la première position avant de découvrir la carte.
+                dismiss()
+                let controller = capture
+                Task { await DrivyLaunchCurtain.shared.hide(afterSequence: true, waitingFor: { (controller?.displayedPointCount ?? 1) > 0 }) }
             }
+            .onChange(of: model.quickStep) { _, step in DrivyLaunchCurtain.shared.step = step }
         }
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationSizing(.form)
         .tint(DrivyTheme.accent)
         .interactiveDismissDisabled(model.isBusy)
-        // Départ en cours : la marque couvre la préparation, barre de titre comprise.
-        .overlay {
-            if let launchStart {
-                SchoolTripLaunchScreen(start: launchStart, step: model.quickStep)
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeOut(duration: 0.2), value: launchStart != nil)
     }
 
     /// Même rappel compact que la fiche de leçon : la feuille s’ouvre depuis une leçon dont l’élève est déjà connu,
@@ -152,15 +146,17 @@ struct SchoolCapturePreparationView: View {
         guard currentScope == model.scope else { return }
         // La lecture initiale a toujours lieu, même s’il reste une demande à vérifier : ce sont
         // ces panneaux qui les montrent. Le départ lui-même refuse d’avancer dans ce cas.
+        let curtain = DrivyLaunchCurtain.shared
         if !model.pendingAssessments.isEmpty || !model.pendingStarts.isEmpty {
             if reload { await model.load() }
+            await curtain.hide()
             return
         }
-        // Les vérifications partent aussitôt ; la séquence de marque se joue en parallèle, une fois par départ.
-        if launchStart == nil { launchStart = Date() }
+        // Les vérifications partent aussitôt ; le rideau de marque se joue en parallèle, une fois par départ.
+        curtain.show()
         let started = await model.begin(reload: reload)
-        // Un accord à demander, une autorisation ou une erreur : la marque s’efface tout de suite.
-        if !started { launchStart = nil }
+        // Un accord à demander, une autorisation ou une erreur : le rideau s’efface tout de suite.
+        if !started { await curtain.hide() }
     }
 
     /// Une lecture de la leçon ou une vérification auprès de l’école est en cours.
@@ -168,8 +164,8 @@ struct SchoolCapturePreparationView: View {
 
     /// Un seul état visible : le départ en cours, ou ce qui l’empêche et comment le lever.
     @ViewBuilder private var quickStart: some View {
-        if model.quickStep != nil || launchStart != nil {
-            // Le départ en cours occupe tout l’écran (SchoolTripLaunchScreen, posé sur la pile).
+        if model.quickStep != nil {
+            // Le départ en cours se lit sur le rideau de marque (DrivyLaunchCurtain), au-dessus de cet écran.
             EmptyView()
         } else if case .failed(let message) = model.quickBlock {
             // Même présentation d’erreur que partout : notice danger et « Réessayer », sans panneau autour.

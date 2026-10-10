@@ -410,8 +410,10 @@ struct SchoolStartNowView: View {
         } else {
             Button {
                 Task {
+                    DrivyLaunchCurtain.shared.show()
                     _ = await model.start()
-                    if model.started != nil { dismiss() }
+                    // Un refus ou un conflit se lit dans cette feuille : le rideau s’efface aussitôt.
+                    if model.started != nil { dismiss() } else { await DrivyLaunchCurtain.shared.hide() }
                 }
             } label: {
                 DrivyBusyLabel(title: "Démarrer maintenant", busyTitle: "Démarrage…", isBusy: model.isBusy)
@@ -476,6 +478,7 @@ struct SchoolStartNowButton<Content: View>: View {
                 preparingLesson = nil
             }) { model in
                 SchoolCapturePreparationView(model: model, schoolWorkspace: workspace)
+                    .environment(captureController)
             }
             .sheet(item: $planning, onDismiss: { finished() }) { model in
                 SchoolPlanningView(model: model)
@@ -515,7 +518,11 @@ struct SchoolStartNowButton<Content: View>: View {
                 preparingLesson = lesson
                 preparation = agendaClient.capturePreparation(scope: agendaClient.scope(person: person, membership: membership),
                     lessonID: lesson.id, controller: captureController)
-            } else { opened = lesson }
+            } else {
+                // Sans GPS : la leçon s’ouvre, découverte à la fin de la séquence.
+                opened = lesson
+                Task { await DrivyLaunchCurtain.shared.hide(afterSequence: true) }
+            }
         } else if model.planInstead {
             guard let agendaClient, let person = workspace.person, let membership = workspace.membership else { return finished() }
             let planned = SchoolPlanningWorkspace(scope: agendaClient.scope(person: person, membership: membership),

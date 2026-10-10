@@ -650,6 +650,7 @@ private struct SchoolLessonReportContent: View {
         guard capturePreparation == nil, let capture, mayStartCapture(now: Date()),
               await model.savePreparationBeforeDeparture(), capturePreparation == nil,
               mayStartCapture(now: Date()) else { return }
+        DrivyLaunchCurtain.shared.show()
         capturePreparation = agenda.capturePreparation(scope: model.scope, lessonID: model.lessonID, controller: capture)
     }
 

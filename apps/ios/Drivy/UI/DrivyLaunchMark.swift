@@ -34,17 +34,21 @@ struct DrivyLaunchPose: Equatable {
 /// Les mouvements sont des fonctions du temps : même pose à même instant sur chaque appareil, rien à synchroniser.
 enum DrivyLaunchTimeline {
     /// Durée de la séquence, pose finale comprise.
-    static let duration = 3.0
-    /// Instant où les deux pièces sont en place.
+    static let duration = 2.0
+    /// Instant où les pièces des variantes B et C sont en place.
     static let settled = 2.1
 
     static func pose(_ choreography: DrivyLaunchChoreography, at time: Double) -> DrivyLaunchPose {
         switch choreography {
         case .join:
-            // Courte anticipation de l’anneau (4 unités), puis rapprochement ; la tige part un peu avant lui.
-            let start = -34 - 4 * smooth(progress(time, 0.08, 0.42))
-            return DrivyLaunchPose(ring: CGSize(width: start * (1 - settle(progress(time, 0.42, settled))), height: 0),
-                stem: CGSize(width: 0, height: -30 * (1 - settle(progress(time, 0.3, 1.9)))))
+            // La tige tombe en place sur un ressort ; l’anneau recule d’un rien (anticipation), part à son tour et
+            // dépasse légèrement sa place avant de s’y poser. À son arrivée, la tige répond d’un petit écart.
+            // Réglé pour que les pièces ne se touchent jamais (écart minimal : 2 unités sur 256).
+            let anticipation = 6 * smooth(progress(time, 0.16, 0.32))
+            let reaction = time - 0.62
+            let nudge = reaction > 0 ? 2 * exp(-9 * reaction) * sin(17 * reaction) : 0
+            return DrivyLaunchPose(ring: CGSize(width: (-40 - anticipation) * (1 - spring(time - 0.34, response: 0.52)), height: 0),
+                stem: CGSize(width: nudge, height: -34 * (1 - spring(time - 0.12, response: 0.5))))
         case .upright:
             return DrivyLaunchPose(ring: CGSize(width: -12 * (1 - settle(progress(time, 0.55, settled))), height: 0),
                 stemAngle: 13 * (1 - settle(progress(time, 0.3, 1.9))))
@@ -59,6 +63,12 @@ enum DrivyLaunchTimeline {
     /// Départ doux, longue décélération : les pièces ralentissent en arrivant, sans rebond.
     static func settle(_ value: Double) -> Double { bezier(value, 0.5, 0, 0.1, 1) }
     static func travel(_ value: Double) -> Double { bezier(value, 0.45, 0, 0.2, 1) }
+    /// Ressort sous-amorti (amortissement 0,62) : environ 8 % de dépassement, puis il se pose.
+    static func spring(_ time: Double, response: Double, damping: Double = 0.62) -> Double {
+        guard time > 0 else { return 0 }
+        let frequency = 2 * Double.pi / response, damped = frequency * (1 - damping * damping).squareRoot()
+        return 1 - exp(-damping * frequency * time) * (cos(damped * time) + damping * frequency / damped * sin(damped * time))
+    }
 
     /// Trajectoire de l’anneau de la variante C : part en bas à gauche, passe derrière la tige, revient par le haut.
     private static func arc(_ t: Double) -> CGPoint {
