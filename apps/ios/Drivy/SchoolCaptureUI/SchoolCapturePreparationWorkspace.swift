@@ -443,6 +443,8 @@ struct SchoolCaptureStartReview: Identifiable {
         quickBlock = nil; startMessage = nil
         defer { quickStep = nil }
         quickStep = "Vérification de la leçon…"
+        // Le récepteur GPS se réveille pendant les vérifications : la première position du trajet arrive plus vite.
+        warmLocation()
         if !contextIsCurrent || notice == nil { await load() }
         guard !invalidated else { return false }
         guard contextIsCurrent, isInstructor, lesson?.status == "PLANNED" else {
@@ -484,6 +486,8 @@ struct SchoolCaptureStartReview: Identifiable {
             }
         }
 
+        // Autorisation tout juste accordée : le réveil n’avait pas pu commencer.
+        warmLocation()
         let assessmentIsValid = assessment.map { value in
             value.status == .qualified && (SchoolLesson.date(value.expiresAt).map { $0.timeIntervalSinceNow > 30 } ?? false)
         } ?? false
@@ -524,8 +528,14 @@ struct SchoolCaptureStartReview: Identifiable {
     private func quickFailure(_ message: String) -> Bool {
         // Une exécution annulée (feuille fermée) ne laisse pas d’échec périmé à la réouverture.
         if Task.isCancelled { return false }
+        source?.coolDown()
         quickBlock = .failed(message)
         return false
+    }
+
+    private func warmLocation() {
+        guard !invalidated, !sourceTransferred, diagnosticIsAvailable else { return }
+        diagnosticSource().warmUp()
     }
 
     private func refreshSnapshot() {

@@ -53,3 +53,11 @@ Le mode de fond n'est activé qu'après départ explicite au premier plan et vé
 Relecture statique ciblée et manifeste plist contrôlé le 24 septembre 2026. Compilation Apple et recette physique de cette source **NOT_EXECUTED** à la rédaction de cette note ; elles seront distinguées du résultat déjà acquis pour l'IPA précédent. Pas de campagne générale lancée.
 
 Le raccord à une composition applicative stable, le traitement visible des interruptions, les revocations/retours Réglages, les interruptions réseau et la qualification iPhone/iPad sous verrouillage restent nécessaires avant de déclarer la collecte scolaire utilisable. La présence du code, la réussite d'un build ou le fonctionnement de G0 ne qualifient pas le profil scolaire.
+
+## Réveil du récepteur avant le départ (10 octobre 2026)
+
+Retour du porteur : après le rideau de départ, la carte attendait encore sa première position. Cause : le récepteur GPS n’était allumé qu’à l’ouverture du segment, après les vérifications réseau, et les positions antérieures à cette ouverture sont refusées (règle inchangée). Quand le diagnostic de l’appareil était encore valable, aucune mesure ne l’avait même réveillé.
+
+Décision : `SchoolCaptureLocationSource.warmUp()` ouvre un flux de localisation dès le geste de départ, si l’autorisation est déjà accordée et l’app au premier plan. Ses positions ne sont ni lues, ni conservées, ni envoyées ; le trajet ne reçoit toujours que des mesures postérieures à l’ouverture de son segment. Le flux s’arrête à la première position admise, à l’arrêt, à un échec du départ, au changement de portée, au retrait de l’autorisation, au passage en arrière-plan sans trajet, et au plus tard après trente secondes.
+
+Le rideau attend cette première position sept secondes au plus après la confirmation de l’école, et porte une barre de progression sans texte. Gain réel non mesuré : aucun essai sur appareil.

@@ -130,7 +130,10 @@ struct SchoolCapturePreparationView: View {
                 let controller = capture
                 Task { await DrivyLaunchCurtain.shared.hide(afterSequence: true, waitingFor: { (controller?.displayedPointCount ?? 1) > 0 }) }
             }
-            .onChange(of: model.quickStep) { _, step in DrivyLaunchCurtain.shared.step = step }
+            .onChange(of: model.quickStep) { _, step in
+                DrivyLaunchCurtain.shared.step = step
+                if step != nil { DrivyLaunchCurtain.shared.advanceStep() }
+            }
         }
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .presentationDragIndicator(.visible)

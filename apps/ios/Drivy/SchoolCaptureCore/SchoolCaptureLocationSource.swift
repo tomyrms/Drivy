@@ -10,6 +10,10 @@ protocol SchoolCaptureLocationProviding: AnyObject {
     var isRunning: Bool { get }
     func requestPermission()
     func requestDiagnosticSample() throws
+    /// Réveille le récepteur GPS pendant les vérifications du départ, sans rien lire ni conserver.
+    func warmUp()
+    /// Arrête ce réveil quand le départ n’aura pas lieu.
+    func coolDown()
     func diagnosticSnapshot() throws -> SchoolCaptureDeviceSnapshot
     func diagnosticBody(operationID: UUID, networkAvailable: Bool) throws -> SchoolDeviceAssessmentBody
     func updateScope(_ scope: SchoolCommandScope?)
@@ -18,6 +22,11 @@ protocol SchoolCaptureLocationProviding: AnyObject {
                         policy: SchoolCaptureLocationPolicy) throws -> SchoolCaptureLocationSegment
     func start(segment: SchoolCaptureLocationSegment, handle: SchoolCaptureSegmentHandle) throws
     @discardableResult func stop() -> SchoolCaptureLocationStop?
+}
+
+extension SchoolCaptureLocationProviding {
+    func warmUp() {}
+    func coolDown() {}
 }
 
 // Les managers sont construits sur la boucle principale et y livrent leur delegate.
@@ -29,6 +38,9 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
     }
     private let permissionManager = CLLocationManager()
     private var manager: CLLocationManager?
+    /// Récepteur tenu éveillé entre le geste de départ et la première position du trajet.
+    private var warmManager: CLLocationManager?
+    private var warmTask: Task<Void, Never>?
     private var currentScope: SchoolCommandScope?
     private var preparedSegmentID: UUID?
     private var segment: SchoolCaptureLocationSegment?
@@ -65,6 +77,34 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
 
     func requestPermission() {
         if permission == .notDetermined { permissionManager.requestWhenInUseAuthorization() }
+    }
+
+    // Un récepteur GPS endormi met plusieurs secondes à donner sa première position. Ce flux le tient éveillé
+    // pendant les vérifications du départ : ses positions ne sont ni lues, ni conservées, ni envoyées, et seules
+    // les mesures postérieures à l’ouverture du segment entrent dans le trajet. Il s’arrête à la première
+    // position du trajet, à l’arrêt, au changement de portée, au passage en arrière-plan ou après trente secondes.
+    func warmUp() {
+        guard warmManager == nil, !isRunning, CLLocationManager.locationServicesEnabled(), permission.permitsLocation,
+              UIApplication.shared.applicationState == .active else { return }
+        let warm = CLLocationManager()
+        warm.delegate = self
+        warm.desiredAccuracy = kCLLocationAccuracyBest
+        warm.activityType = .automotiveNavigation
+        warm.startUpdatingLocation()
+        warmManager = warm
+        warmTask?.cancel()
+        warmTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(30)) } catch { return }
+            guard let self, !self.isRunning else { return }
+            self.coolDown()
+        }
+    }
+
+    func coolDown() {
+        warmTask?.cancel(); warmTask = nil
+        warmManager?.stopUpdatingLocation()
+        warmManager?.delegate = nil
+        warmManager = nil
     }
 
     // Diagnostic ponctuel explicite, mémoire seulement. Il ne crée ni point scolaire
@@ -120,6 +160,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
             diagnosticRequested = false
             lastDiagnostic = nil
             permissionManager.stopUpdatingLocation()
+            coolDown()
             if isRunning { interrupt(.scopeChanged) }
         }
     }
@@ -214,6 +255,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         }
         diagnosticRequested = false
         permissionManager.stopUpdatingLocation()
+        coolDown()
         deadlineTask?.cancel(); deadlineTask = nil
         gapTask?.cancel(); gapTask = nil
         gapGeneration = UUID()
@@ -238,7 +280,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
             if !Self.permission(manager.authorizationStatus).permitsLocation { interrupt(.permissionLost) }
             else if segment.policy.requiresPreciseLocation && manager.accuracyAuthorization != .fullAccuracy { interrupt(.precisionReduced) }
         }
-        if !permission.permitsLocation { lastDiagnostic = nil; diagnosticRequested = false }
+        if !permission.permitsLocation { lastDiagnostic = nil; diagnosticRequested = false; coolDown() }
         // Un changement d’autorisation (y compris le rappel initial du système ou le retour au premier
         // plan) ne termine pas une mesure ponctuelle en cours : seule sa réponse ou son échec le fait.
         // Sinon le départ en un geste croyait la mesure finie et envoyait un diagnostic sans mesure.
@@ -247,6 +289,8 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        // Flux de réveil : rien n’est lu.
+        if manager === warmManager { return }
         let wall = Date(), now = ContinuousClock.now
         if manager === permissionManager {
             guard diagnosticRequested, !isRunning else { return }
@@ -295,6 +339,8 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
             recordDiagnostic(location, wall: wall, now: now)
         }
         guard !admitted.isEmpty else { return }
+        // Le trajet reçoit ses positions : le réveil n’a plus d’utilité.
+        coolDown()
         if let lastMeasurementInstant { armGap(segment, lastMeasurement: lastMeasurementInstant) }
         onEvent?(.signalChanged(.receiving))
         onEvent?(.measurements(handle: handle, values: admitted))
@@ -413,6 +459,8 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         if isRunning { interrupt(.clockChanged) }
     }
     @objc private func enteredBackground() {
+        // Jamais de GPS en arrière-plan sans trajet en cours.
+        if segment == nil { coolDown() }
         if let segment, !segment.policy.allowsBackground { interrupt(.systemPaused) }
     }
     @objc private func becameActive() {
