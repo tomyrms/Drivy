@@ -166,6 +166,7 @@ private struct SchoolLessonReportContent: View {
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var lessonSheet: LessonSheet?
     @State private var router = SchoolReportRouter()
     /// Origine de la rédaction en cours ; `nil` : la fiche se lit. Seul `openReport` lui donne une valeur.
@@ -797,14 +798,19 @@ private struct SchoolLessonReportContent: View {
         Section {
             if model.isOwnLearner {
                 TextField("Ce que j’aimerais travailler", text: $model.wishText, axis: .vertical).lineLimit(2...6).disabled(!model.acceptsInput)
-                Button { Task { await model.saveWish() } } label: {
-                    DrivyBusyLabel(title: "Enregistrer le souhait", isBusy: isSending(.saveWish))
+                // Comme pour les objectifs : le bouton n’apparaît qu’après une modification, il reste pendant l’envoi.
+                if model.wishChanged || isSending(.saveWish) {
+                    Button { Task { await model.saveWish() } } label: {
+                        DrivyBusyLabel(title: "Enregistrer le souhait", isBusy: isSending(.saveWish))
+                    }
+                    .disabled(!model.acceptsInput || model.wishText.unicodeScalars.count > 500)
+                    .transition(.opacity)
                 }
-                .disabled(!model.acceptsInput || model.wishText.unicodeScalars.count > 500 || model.wishText == wish.text)
             } else {
                 Text(wish.text)
             }
         } header: { Text(model.isOwnLearner ? "Mon souhait" : "Souhait de l’élève").drivyFormSectionHeader() }
             .drivyFormRows()
+            .animation(DrivyMotion.reveal(reduceMotion), value: model.wishChanged)
     }
 }

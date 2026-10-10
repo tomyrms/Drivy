@@ -334,6 +334,8 @@ struct SchoolCaptureReplayView: View {
                         player(timeline, showsList: true)
                         replayLoadingOrError
                     }
+                    // Le détail et le rail se remplacent en fondu ; la hauteur du dock suit sans saut.
+                    .animation(DrivyMotion.reveal(reduceMotion), value: selectedID)
                 }
                 .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.s)
             }
@@ -746,7 +748,7 @@ private struct SchoolReplayMap: View {
         .onChange(of: camera.positionedByUser) { _, byUser in if byUser { followsPosition = false } }
         .onChange(of: followsPosition) { _, follows in if follows { follow() } }
         .onChange(of: current?.offset) { _, _ in if followsPosition && !camera.positionedByUser { follow() } }
-        .onChange(of: resetCameraID) { _, _ in followsPosition = false; fitRoute() }
+        .onChange(of: resetCameraID) { _, _ in followsPosition = false; fitRoute(animated: true) }
         .accessibilityLabel("Carte du trajet reconstruit par l’école")
         .accessibilityValue(timeline.mapGaps.isEmpty ? "" : "Portions sans mesure indiquées en pointillé")
     }
@@ -767,7 +769,8 @@ private struct SchoolReplayMap: View {
         }
     }
 
-    private func fitRoute() {
+    /// Tout le trajet à l’écran ; « voir tout » y glisse, l’ouverture s’y pose sans mouvement.
+    private func fitRoute(animated: Bool = false) {
         let mapPoints = timeline.samples.map { MKMapPoint($0.coordinate) }
         guard let minX = mapPoints.map(\.x).min(), let maxX = mapPoints.map(\.x).max(),
               let minY = mapPoints.map(\.y).min(), let maxY = mapPoints.map(\.y).max() else { return }
@@ -775,6 +778,8 @@ private struct SchoolReplayMap: View {
         let minimumSpan = MKMapPointsPerMeterAtLatitude(center.coordinate.latitude) * 160
         let width = max(maxX - minX, minimumSpan) * 1.2
         let height = max(maxY - minY, minimumSpan) * 1.2
-        camera = .rect(MKMapRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height))
+        withAnimation(animated && !reduceMotion ? .smooth(duration: 0.6) : nil) {
+            camera = .rect(MKMapRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height))
+        }
     }
 }

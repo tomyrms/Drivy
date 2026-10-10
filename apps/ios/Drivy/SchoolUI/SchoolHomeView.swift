@@ -67,7 +67,9 @@ struct SchoolHomeView: View {
                 .environment(captureController)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { _ in SchoolTodayMemory.forget() }
+        .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { _ in
+            SchoolTodayMemory.forget(); SchoolAgendaMemory.forget()
+        }
         .onChange(of: workspace.membership?.membershipId) { _, _ in resetScope() }
         .onChange(of: workspace.membership?.accessEpoch) { _, _ in resetScope() }
         // Seul le départ d’un trajet ramène sur « Aujourd’hui ». L’identifiant du trajet reste le même pendant

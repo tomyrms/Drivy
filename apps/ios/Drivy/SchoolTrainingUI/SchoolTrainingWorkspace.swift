@@ -119,6 +119,8 @@ import Observation
         historyRequested = true
         guard !isLoading, !invalidated, !accessRevoked else { return }
         if let historyTask { await historyTask.value; return }
+        // Historique déjà complet : rien à lire, aucun « Chargement de l’historique… » qui s’allume pour rien.
+        guard nextCursor != nil else { return }
         let request = generation
         isLoadingHistory = true
         // Le choix d'un autre mois ou la fermeture du sélecteur ne doit pas interrompre l'historique partagé.

@@ -27,7 +27,7 @@ struct SchoolPlanningView: View {
                     if cancelling { cancellationFields }
                     else {
                         bookingFields
-                        if typeSize.isAccessibilitySize && model.slotIsAvailable {
+                        if typeSize.isAccessibilitySize && model.showsSlotDetails {
                             Section {
                                 VStack(alignment: .leading, spacing: DrivySpacing.xs) { bookingActionContent }
                             }
@@ -40,7 +40,7 @@ struct SchoolPlanningView: View {
             .scrollDismissesKeyboard(.interactively)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !typeSize.isAccessibilitySize && !cancelling && model.slotIsAvailable { bookingActionBar }
+                if !typeSize.isAccessibilitySize && !cancelling && model.showsSlotDetails { bookingActionBar }
             }
             .environment(\.timeZone, TimeZone(identifier: model.timeZone) ?? .current)
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
@@ -125,7 +125,7 @@ struct SchoolPlanningView: View {
         if model.trainingID != nil {
             scheduleFields
             if model.originalLesson != nil { keptTermsFields }
-            if model.slotIsAvailable {
+            if model.showsSlotDetails {
                 reviewFields
                 documentLinks
             }
@@ -241,8 +241,11 @@ struct SchoolPlanningView: View {
             DrivyFormMessage(text: message, tone: .danger)
         } else if model.checkedSlotRequest == model.slotRequest, model.slotRequest != nil {
             if model.isCheckingSlot {
-                ProgressView("Vérification du créneau…")
-                    .accessibilityIdentifier("planning-slot-checking")
+                // Après un créneau libre, l’attente se lit dans le bouton : aucune ligne ne s’insère.
+                if !model.showsSlotDetails {
+                    ProgressView("Vérification du créneau…")
+                        .accessibilityIdentifier("planning-slot-checking")
+                }
             } else if let error = model.slotError {
                 SchoolErrorNotice(message: error, retry: { Task { await model.validateSlot() } })
                     .accessibilityIdentifier("planning-slot-error")
@@ -260,7 +263,7 @@ struct SchoolPlanningView: View {
     /// Le prix convenu est celui de la barre d’action. Ici, seulement la prestation : une ligne quand il n’y a
     /// rien à choisir, un sélecteur quand plusieurs tarifs correspondent. Le motif d’un tarif manquant est dans la barre.
     @ViewBuilder private var tariffRow: some View {
-        if model.slotIsAvailable && (model.originalLesson == nil || model.changesCommercialTerms) {
+        if model.showsSlotDetails && (model.originalLesson == nil || model.changesCommercialTerms) {
             if let product = model.automaticTariff {
                 LabeledContent("Tarif") {
                     Text(model.quantity > 1 ? SchoolPlanningFormat.tariff(product, quantity: model.quantity) : product.label)
@@ -352,7 +355,7 @@ struct SchoolPlanningView: View {
             Task { if await model.saveBooking() { dismiss() } }
         } label: {
             HStack(spacing: DrivySpacing.xs) {
-                if model.isBusy { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
+                if model.isBusy || model.isCheckingSlot { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
                 Text(model.originalLesson == nil ? "Planifier" : "Confirmer le déplacement")
             }
         }
@@ -445,6 +448,8 @@ struct SchoolPlanningFeedback: View {
     /// Repère de la notice d’erreur, pour la ramener à l’écran depuis le bas du formulaire.
     static let errorAnchor = "planning-error"
     @Bindable var model: SchoolPlanningWorkspace
+    /// Une demande renvoyée avec succès ferme la feuille, comme un premier envoi.
+    @Environment(\.dismiss) private var dismiss
     var body: some View {
         if model.school == nil && (model.isLoading || model.errorMessage == nil) { Section { DrivySkeletonRows(count: 4).drivySkeleton("Ouverture du planning…") }
             .drivyFormRows() }
@@ -458,7 +463,8 @@ struct SchoolPlanningFeedback: View {
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
         }
-        if let success = model.successMessage {
+        // Une écriture confirmée ferme la feuille : son bandeau ne s’insère pas pendant la descente.
+        if let success = model.successMessage, !model.writeConfirmed {
             Section { DrivyFormMessage(text: success, tone: .success) }
                 .drivyFormRows()
         }
@@ -468,7 +474,7 @@ struct SchoolPlanningFeedback: View {
                     notes: !model.canRetry && command.scope != model.scope ? ["Tes accès ont changé. La demande initiale reste conservée."] : [],
                     reference: command.id,
                     verify: model.pendingAbsent ? nil : { Task { await model.verify() } }, canVerify: !(model.isBusy || model.isLoading),
-                    retry: model.canRetry ? { Task { _ = await model.retry() } } : nil,
+                    retry: model.canRetry ? { Task { if await model.retry() { dismiss() } } } : nil,
                     abandon: model.pendingAbsent ? { Task { await model.abandonPending() } } : nil,
                     canAbandon: !(model.isBusy || model.isLoading))
             }
