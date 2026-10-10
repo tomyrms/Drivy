@@ -24,6 +24,32 @@ Les droits d’administration n’étaient pas en cause.
 - **iOS, audit** : « Déplacer » et « Annuler » suivent les droits de l’école (administration ou moniteur de la leçon) ; « Permis vu » n’exige plus le grant retiré par la migration 017 ; annuler depuis la fiche arrête d’abord le trajet GPS en cours ; plus de « Réessayer » ni d’« Actualiser » sans effet après un accès retiré ; leçon introuvable distinguée d’une panne ; message exact pour une leçon déjà commencée ; moniteur présélectionné quand un seul est affecté.
 - **Web** : même sortie pour une demande introuvable (renvoi, abandon confirmé, relecture), refus 4xx définitif au premier envoi (sauf 408, 429 et conflit d’idempotence), « Arrêter le suivi » quand le reçu est illisible ou refusé, « Réessayer » sur les lectures du dossier, recherche d’élève dans l’agenda, recherche et filtre d’état des invitations.
 
+## Seconde passe (même jour)
+
+- **File des trajets GPS** : même cul-de-sac que la file des demandes, en plus dur (aucun retrait possible, blocage de tout l’appareil). Un diagnostic, un accord GPS ou un départ dont le reçu est inconnu de l’école peut maintenant être abandonné ; les faits de collecte (lots, arrêt, finalisation) ne s’abandonnent jamais. Un départ resté en file pour une autre leçon se vérifie depuis n’importe quelle préparation. L’accord GPS en attente reçoit « Vérifier auprès de l’école ».
+- **Messages GPS** : formation ou élève inactif, trajet clôturé, appareil déjà lié à un autre compte disent leur cause ; ce dernier ne ferme plus la préparation.
+- **Déconnexion pendant un trajet** : confirmation avant d’arrêter le trajet ; « Changer d’école » masqué tant qu’il tourne.
+- **Agenda** : session expirée et panne réseau annoncées comme telles.
+- **Élèves** : recherche API sans accents ni casse ; page suivante chargée en arrivant en bas de liste ; nom de l’élève affiché pendant un trajet au-delà de la première page.
+- **Feuille d’observation** : la demande en attente est nommée, avec le renvoi vers la fiche de la leçon.
+- **Web** : retirer une disponibilité ou une absence demande un second appui.
+- **API redéployée** : release `771a13177c3e747e60b09071c7a2ad2da757a0ea`, sauvegarde vérifiée `…-20261010T004154Z-b9f89e8ea6a5.dump`.
+
+Exécuté sur `771a131` : **420/420 tests Swift** ([run 38009266576](https://github.com/tomyrms/Drivy/actions/runs/38009266576)), IPA compilée ([run 38009257533](https://github.com/tomyrms/Drivy/actions/runs/38009257533)), vérifications serveur et web ([run 38009260066](https://github.com/tomyrms/Drivy/actions/runs/38009260066)).
+
+### Constats GPS laissés au porteur
+
+Ils touchent l’intégrité des trajets ou des règles de sécurité : aucun n’a été modifié sans décision.
+
+- **Changement de droits pendant un trajet** : toute affectation ou tout changement de rôle incrémente l’époque d’accès, ce qui révoque le trajet en cours ; ses lots restent liés à l’ancienne portée et ne remontent plus, et tout nouveau départ est ensuite refusé (« dépend de tes anciens accès »). À décider : accepter les lots d’un trajet sous l’ancienne époque, et ne plus révoquer un trajet pour une nouvelle affectation.
+- **Trajet clos par l’école avant l’arrêt local** : le premier lot postérieur à la coupure échoue à chaque essai, la finalisation n’est jamais tentée, le bandeau de synchronisation reste. À décider : écarter ce lot et finaliser en trajet partiel.
+- **Deux comptes moniteur sur le même iPhone** : l’identifiant d’installation est lié à la première personne ; le second compte ne peut pas enregistrer. Le message est maintenant exact ; la correction (un identifiant par personne) reste à faire.
+- **Départ refusé par l’école** : la demande reste en file jusqu’à « Vérifier », puis « Abandonner ». Deux gestes au lieu d’un retrait immédiat.
+- **Rejoindre par code ou par lien** : une demande incertaine dont le code a expiré ne peut pas être quittée, et chaque vérification compte comme un essai raté. Le code actuel refuse volontairement de conclure sans rejeu du serveur ; à trancher.
+- **Choix GPS de l’élève** : l’accueil lui dit qu’il peut refuser ou modifier son choix, aucun écran ne le permet. L’API l’accepte déjà.
+- **Élève au dossier archivé** : accueil « Dossier pas encore ouvert » pour toujours, alors que son historique reste lisible côté école.
+- **« Mon profil » sans politique de champs publiée** : message d’administration et « Réessayer » sans issue pour l’élève.
+
 ## Exécuté
 
 - `5c719d2` : **419/419 tests Swift** (`unit_only`, [run 38006931024](https://github.com/tomyrms/Drivy/actions/runs/38006931024)), IPA Release compilée ([run 38006921179](https://github.com/tomyrms/Drivy/actions/runs/38006921179)), contrats, droits, PostgreSQL et web ([run 38006921148](https://github.com/tomyrms/Drivy/actions/runs/38006921148)).
