@@ -125,15 +125,29 @@ struct SchoolCaptureLiveView: View {
         screen
         .sensoryFeedback(.success, trigger: observationNotice?.id) { _, newValue in newValue != nil }
         // Pause et reprise se sentent quand l’état durable change ; un arrêt en échec avertit.
-        .sensoryFeedback(trigger: shownState) { old, new in
-            (old == .recording && new == .paused) || (old == .paused && new == .recording) ? .impact(weight: .light) : nil
-        }
-        .sensoryFeedback(trigger: controller.state) { _, state in state == .failed ? .warning : nil }
+        .sensoryFeedback(trigger: shownState, Self.pauseFeedback)
+        .sensoryFeedback(trigger: controller.state, Self.failureFeedback)
         .alert("Terminer la leçon ?", isPresented: $confirmsFinish) {
             Button("Terminer") { finishLesson() }
                 .accessibilityIdentifier("capture-confirm-finish")
             Button("Continuer", role: .cancel) { }
         }
+    }
+
+    /// Pause et reprise se sentent quand l’état passe de la route à la pause, ou l’inverse ; terminer depuis la
+    /// pause ne joue rien.
+    nonisolated private static func pauseFeedback(_ old: SchoolCaptureSessionController.State,
+                                                  _ new: SchoolCaptureSessionController.State) -> SensoryFeedback? {
+        switch (old, new) {
+        case (.recording, .paused), (.paused, .recording): .impact(weight: .light)
+        default: nil
+        }
+    }
+
+    /// Un arrêt en échec avertit.
+    nonisolated private static func failureFeedback(_ old: SchoolCaptureSessionController.State,
+                                                    _ new: SchoolCaptureSessionController.State) -> SensoryFeedback? {
+        new == .failed ? .warning : nil
     }
 
     private var screenWithLifecycle: some View {
