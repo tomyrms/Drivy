@@ -60,7 +60,13 @@ struct SchoolCaptureLiveView: View {
     /// récupérée, celui que l’on quitte, jusqu’au résultat durable. La carte, le panneau et les commandes restent en place.
     private var shownState: SchoolCaptureSessionController.State { controller.presentedState }
 
+    // Le corps est découpé en paliers typés : une seule chaîne de modificateurs dépassait le temps de
+    // vérification de types du compilateur.
     var body: some View {
+        presentations
+    }
+
+    private var screen: some View {
         Group {
             if controller.state == .idle {
                 ContentUnavailableView {
@@ -113,6 +119,10 @@ struct SchoolCaptureLiveView: View {
         .tint(DrivyTheme.accent)
         .toolbar(.hidden, for: .navigationBar)
         .interactiveDismissDisabled(isFinishing)
+    }
+
+    private var screenWithFeedback: some View {
+        screen
         .sensoryFeedback(.success, trigger: observationNotice?.id) { _, newValue in newValue != nil }
         // Pause et reprise se sentent quand l’état durable change ; un arrêt en échec avertit.
         .sensoryFeedback(.impact(weight: .light), trigger: shownState == .paused)
@@ -122,6 +132,10 @@ struct SchoolCaptureLiveView: View {
                 .accessibilityIdentifier("capture-confirm-finish")
             Button("Continuer", role: .cancel) { }
         }
+    }
+
+    private var screenWithLifecycle: some View {
+        screenWithFeedback
         .task(id: controller.captureID) {
             if let observationClient { controller.prepareLiveObservations(client: observationClient) }
             await controller.liveObservations?.loadCompetencies()
@@ -144,6 +158,10 @@ struct SchoolCaptureLiveView: View {
             followMode = .free
         }
         .onDisappear { observationMoment = nil; observationNotice = nil }
+    }
+
+    private var presentations: some View {
+        screenWithLifecycle
         .sheet(item: $cancellationModel) { model in
             SchoolPlanningView(model: model, cancelling: true, beforeCancellation: {
                 await controller.stopAndSynchronize()
