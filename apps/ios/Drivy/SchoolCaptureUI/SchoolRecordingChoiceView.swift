@@ -184,6 +184,15 @@ struct SchoolRecordingChoiceView: View {
                         Task { if await model.resend(queued, acknowledged: true) { dismiss() } }
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(!model.mayResume(queued))
+                    if model.unknownRequestIDs.contains(queued.id) {
+                        DrivyInlineMessage(text: "L’école n’a pas reçu ce choix : rien n’a été enregistré.", tone: .warning)
+                        Button("Abandonner la demande", role: .destructive) { Task { await model.abandon(queued) } }
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.danger)
+                            .frame(minHeight: 44).disabled(!model.mayResume(queued))
+                    } else {
+                        Button("Vérifier auprès de l’école") { Task { await model.verify(queued) } }
+                            .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.mayResume(queued))
+                    }
                 }
             }
         }

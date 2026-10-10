@@ -174,11 +174,16 @@ final class SchoolAgendaClient {
         var request = URLRequest(url: target)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let token = try await tokenSource.accessToken()
+        let token: String
+        do { token = try await tokenSource.accessToken() }
+        catch IdentityFailure.reauthentication { throw SchoolAgendaFailure.authentication }
+        catch { throw error.unlessCancelled(SchoolAgendaFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolAgendaFailure.authentication }
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
-        let response = try await transport.send(request)
+        let response: SchoolHTTPResponse
+        do { response = try await transport.send(request) }
+        catch { throw error.unlessCancelled(SchoolAgendaFailure.unavailable) }
         try Task.checkCancellation()
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolAgendaFailure.invalidResponse }
         if response.status == 401 { throw SchoolAgendaFailure.authentication }

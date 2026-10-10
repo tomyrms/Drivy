@@ -87,6 +87,26 @@ struct SchoolCaptureStartReview: Identifiable {
 
     var pendingAssessments: [SchoolCaptureQueuedMutation] { pending.filter { $0.mutation.kind == .assessDevice } }
     var pendingStarts: [SchoolCaptureQueuedMutation] { pending.filter { $0.mutation.kind == .startCapture } }
+    /// Demandes que l’école a déclaré ne pas connaître : elles peuvent être abandonnées.
+    private(set) var unknownRequestIDs: Set<UUID> = []
+    func mayAbandon(_ queued: SchoolCaptureQueuedMutation) -> Bool {
+        unknownRequestIDs.contains(queued.id) && !invalidated && !isLoading && !isBusy && store != nil
+            && queued.mutation.scope == scope && pending.contains { $0.id == queued.id }
+    }
+    /// Retire une demande que l’école n’a jamais reçue : rien n’a été enregistré, un nouveau départ redevient possible.
+    func abandon(_ queued: SchoolCaptureQueuedMutation) async {
+        guard mayAbandon(queued), let store else { return }
+        let request = generation
+        isBusy = true; errorMessage = nil
+        do {
+            try await store.discardUnknown(id: queued.id, scope: scope)
+            guard isCurrent(request) else { return }
+            unknownRequestIDs.remove(queued.id)
+            try await reloadQueue(request)
+            guard isCurrent(request) else { return }
+            isBusy = false
+        } catch { await failedMutation(error, request: request) }
+    }
     var collectionIsIntegrated: Bool { onCaptureAuthorized != nil && onRefusalConfirmed != nil }
     var diagnosticIsAvailable: Bool { canUseDiagnostic() }
     var hasOldScope: Bool { pending.contains { $0.mutation.scope != scope } }
@@ -268,6 +288,9 @@ struct SchoolCaptureStartReview: Identifiable {
             else { receipt = nil }
             guard isCurrent(request) else { return }
             await send(queued.mutation, request: request, receipt: receipt)
+        } catch SchoolCaptureFailure.operationUnknown {
+            guard isCurrent(request) else { return }
+            isBusy = false; unknownRequestIDs.insert(queued.id)
         } catch { await failedMutation(error, request: request) }
     }
 
@@ -278,7 +301,7 @@ struct SchoolCaptureStartReview: Identifiable {
     }
     func mayVerifyPendingStart(_ queued: SchoolCaptureQueuedMutation) -> Bool {
         !invalidated && contextIsCurrent && isInstructor && !isLoading && !isBusy && storageError == nil
-            && queued.mutation.scope == scope && queued.mutation.targetID == lessonID
+            && queued.mutation.scope == scope
             && queued.mutation.kind == .startCapture && pendingStarts.contains { $0.id == queued.id }
     }
 
@@ -515,7 +538,7 @@ struct SchoolCaptureStartReview: Identifiable {
             guard queued.mutation.matches(receipt) else { throw SchoolCaptureFailure.invalidResponse }
             let current = try await client.capture(schoolID: scope.schoolID, captureID: receipt.resourceId, scope: scope)
             guard isCurrent(request) else { return }
-            guard current.lessonId == lessonID else { throw SchoolCaptureFailure.invalidResponse }
+            guard current.lessonId == queued.mutation.targetID else { throw SchoolCaptureFailure.invalidResponse }
             if current.captureState != .authorized {
                 let durable = try await store.markAttempted(id: queued.id, scope: scope)
                 guard durable == queued.mutation, isCurrent(request) else { throw SchoolCaptureStorageFailure.invalidContext }
@@ -532,6 +555,8 @@ struct SchoolCaptureStartReview: Identifiable {
             } else {
                 startMessage = "L’école a confirmé la demande. Aucun GPS n’a démarré ici ; le départ exige toujours une nouvelle relecture et une confirmation."
             }
+        } catch SchoolCaptureFailure.operationUnknown {
+            if isCurrent(request) { unknownRequestIDs.insert(queued.id) }
         } catch { if isCurrent(request) { fail(error) } }
     }
 

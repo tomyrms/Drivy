@@ -56,6 +56,8 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
         }
     }
     var hasOldScope: Bool { pending.contains { $0.mutation.scope != scope } }
+    /// Demandes que l’école a déclaré ne pas connaître : elles peuvent être abandonnées.
+    private(set) var unknownRequestIDs: Set<UUID> = []
     var mayChoose: Bool {
         !invalidated && !accessRevoked && !isLoading && !isBusy && !needsReload
             && store != nil && storageError == nil && source != nil && notice != nil
@@ -169,6 +171,25 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             let receipt = try await client.receipt(for: queued.mutation)
             guard request == generation, !invalidated else { return }
             _ = await transmit(queued.mutation, request: request, provenReceipt: receipt)
+        } catch SchoolCaptureFailure.operationUnknown {
+            guard request == generation, !invalidated else { return }
+            isBusy = false; unknownRequestIDs.insert(queued.id)
+        } catch {
+            guard request == generation, !invalidated else { return }
+            isBusy = false; fail(error)
+        }
+    }
+    /// Retire un accord que l’école n’a jamais reçu : le choix peut être saisi à nouveau.
+    func abandon(_ queued: SchoolCaptureQueuedMutation) async {
+        guard mayResume(queued), unknownRequestIDs.contains(queued.id), let store else { return }
+        let request = generation; isBusy = true; errorMessage = nil; confirmation = nil
+        do {
+            try await store.discardUnknown(id: queued.id, scope: scope)
+            guard request == generation, !invalidated else { return }
+            unknownRequestIDs.remove(queued.id)
+            try await reloadQueue(request: request)
+            guard request == generation, !invalidated else { return }
+            isBusy = false
         } catch {
             guard request == generation, !invalidated else { return }
             isBusy = false; fail(error)

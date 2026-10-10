@@ -356,6 +356,7 @@ struct SchoolCapturePreparationView: View {
                         Button("Reprendre cet envoi") { confirmsResend = false; resendRoute = queued }
                             .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
                             .frame(minHeight: 44).disabled(!model.mayResume(queued))
+                        abandonButton(queued)
                         DisclosureGroup("Référence de la demande") { Text(queued.id.uuidString).font(.caption.monospaced()).textSelection(.enabled) }
                     }
                 }
@@ -397,11 +398,23 @@ struct SchoolCapturePreparationView: View {
                                 .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
                                 .frame(minHeight: 44)
                         }
+                        abandonButton(queued)
                         Text("Aucune collecte ne reprend automatiquement.").font(.footnote).foregroundStyle(DrivyTheme.muted)
                         DisclosureGroup("Référence") { Text(queued.id.uuidString).font(.caption.monospaced()).textSelection(.enabled) }
                     }
                 }
             }
+        }
+    }
+
+    /// Offert seulement après la réponse de l’école : elle n’a jamais reçu cette demande.
+    @ViewBuilder private func abandonButton(_ queued: SchoolCaptureQueuedMutation) -> some View {
+        if model.unknownRequestIDs.contains(queued.id) {
+            DrivyInlineMessage(text: "L’école n’a pas reçu cette demande : rien n’a été enregistré.", tone: .warning)
+            Button("Abandonner la demande", role: .destructive) { Task { await model.abandon(queued) } }
+                .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.danger)
+                .frame(minHeight: 44).disabled(!model.mayAbandon(queued))
+                .accessibilityIdentifier("capture-request-abandon")
         }
     }
 

@@ -173,6 +173,19 @@ actor SQLCipherSchoolCaptureStore {
         }
     }
 
+    /// Retire de la file une commande saisie (diagnostic, accord, départ) dont l’école a déclaré ne rien connaître.
+    /// Les faits de collecte (lots, arrêt, finalisation) ne s’abandonnent jamais.
+    func discardUnknown(id: UUID, scope: SchoolCommandScope) throws {
+        try write {
+            var queued = try mutation(id, scope: scope)
+            guard [.assessDevice, .recordChoice, .startCapture].contains(queued.mutation.kind),
+                  queued.state == .queued || queued.state == .attempted else { throw SchoolCaptureStorageFailure.invalidReceipt }
+            queued.state = .refused
+            queued.resultBody = try JSONEncoder().encode(["code": "OPERATION_UNKNOWN"])
+            try save(queued)
+        }
+    }
+
     func acceptAuthorization(operationID: UUID, authorization: SchoolCaptureAuthorization, lease: SchoolCaptureLease,
                              scope: SchoolCommandScope, deviceID requestedDevice: UUID) throws -> SchoolCaptureStoredSession {
         let remote = authorization.capture

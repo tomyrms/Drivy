@@ -249,7 +249,8 @@ struct SchoolRootView: View {
             openProfile: followUp(.profile, when: ownProfileLearner != nil),
             openInvitations: followUp(.invitations, when: canManageInvitations),
             openJoinSchool: followUp(.join, when: configuration != nil && identity.isAuthenticated),
-            signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeStaffOnboarding))
+            signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeStaffOnboarding),
+            tripInProgress: captureController.captureID != nil && captureController.state != .saved)
     }
 
     private var canResumeStaffOnboarding: Bool {

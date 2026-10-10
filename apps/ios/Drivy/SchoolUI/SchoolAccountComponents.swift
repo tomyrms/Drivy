@@ -9,6 +9,8 @@ struct SchoolAccountActions {
     let openJoinSchool: (() -> Void)?
     let signOut: () -> Void
     var resumeOnboarding: (() -> Void)? = nil
+    /// Un trajet GPS est en cours : quitter le compte ou l’école l’arrêterait, ces gestes demandent alors un accord.
+    var tripInProgress = false
 
     /// Les lignes du compte, dans l’ordre de la feuille. `afterChangingSchool` ferme la feuille qui les porte, s’il y en a une.
     @MainActor @ViewBuilder
@@ -30,7 +32,7 @@ struct SchoolAccountActions {
             DrivyNavigationRow(title: "Gérer l’école", detail: "Sur le web", action: { openURL(manageURL) })
                 .accessibilityIdentifier("open-school-management")
         }
-        if let workspace, (workspace.person?.memberships.count ?? 0) > 1 {
+        if let workspace, (workspace.person?.memberships.count ?? 0) > 1, !tripInProgress {
             DrivyNavigationRow(title: "Changer d’école", detail: workspace.membership?.schoolName, action: {
                 workspace.leaveSchool()
                 afterChangingSchool()
@@ -42,7 +44,7 @@ struct SchoolAccountActions {
                 .accessibilityIdentifier("open-join-school")
         }
         SchoolAppLockRow()
-        SchoolSignOutRow(action: signOut)
+        SchoolSignOutRow(action: signOut, confirms: tripInProgress)
             .accessibilityIdentifier("school-sign-out")
     }
 }
@@ -51,9 +53,13 @@ struct SchoolAccountActions {
 /// sans symbole puisque les lignes voisines n’en portent plus.
 private struct SchoolSignOutRow: View {
     let action: () -> Void
+    var confirms = false
+    @State private var asksConfirmation = false
 
     var body: some View {
-        Button(role: .destructive, action: action) {
+        Button(role: .destructive) {
+            if confirms { asksConfirmation = true } else { action() }
+        } label: {
             Text("Se déconnecter")
                 .font(.headline)
                 .foregroundStyle(DrivyTheme.danger)
@@ -61,6 +67,10 @@ private struct SchoolSignOutRow: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(DrivyRowButtonStyle())
+        .confirmationDialog("Un trajet est en cours", isPresented: $asksConfirmation, titleVisibility: .visible) {
+            Button("Arrêter le trajet et se déconnecter", role: .destructive, action: action)
+            Button("Continuer le trajet", role: .cancel) { }
+        }
     }
 }
 

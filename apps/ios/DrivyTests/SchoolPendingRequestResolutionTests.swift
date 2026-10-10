@@ -71,6 +71,28 @@ import Testing
         #expect(names("zz").isEmpty)
     }
 
+    @Test func aTripStartTheSchoolNeverReceivedCanLeaveTheCaptureQueue() async throws {
+        let scope = ConfigurationFixture.scope(), device = UUID(), lesson = UUID()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("capture-discard-\(UUID()).sqlite")
+        let store = try SQLCipherSchoolCaptureStore(url: url, key: Data(repeating: 0x3D, count: 32), protectFiles: false, installationID: device)
+        func start(_ operation: UUID) throws -> SchoolCapturePendingMutation {
+            try SchoolCapturePendingMutation.make(id: operation, scope: scope, kind: .startCapture, targetID: lesson, expectedVersion: 1,
+                body: SchoolStartCaptureBody(operationId: operation, deviceId: device, choiceId: UUID(), choiceVersion: 1,
+                    noticeVersionId: UUID(), explicitStartConfirmed: true, deviceAssessmentId: UUID()))
+        }
+        let first = UUID(), second = UUID()
+        try await store.stage(try start(first))
+        _ = try await store.markAttempted(id: first, scope: scope)
+        // Tant que la demande reste en file, aucun autre départ n’est accepté sur l’appareil.
+        await #expect(throws: SchoolCaptureStorageFailure.alreadyActive) { try await store.stage(try start(second)) }
+        try await store.discardUnknown(id: first, scope: scope)
+        #expect(try await store.pending(scope: scope, deviceID: device).isEmpty)
+        try await store.stage(try start(second))
+        #expect(try await store.pending(scope: scope, deviceID: device).map(\.id) == [second])
+        // Une demande déjà retirée ne se retire pas deux fois.
+        await #expect(throws: SchoolCaptureStorageFailure.invalidReceipt) { try await store.discardUnknown(id: first, scope: scope) }
+    }
+
     private func learner(_ name: String) -> SchoolLearner {
         SchoolLearner(id: UUID(), schoolId: HubFixture.schoolID, personId: UUID(), version: 1, displayName: name,
             contactEmail: nil, contactPhone: nil, archivedAt: nil, profileReadiness: nil, profilePhotoDocumentId: nil)

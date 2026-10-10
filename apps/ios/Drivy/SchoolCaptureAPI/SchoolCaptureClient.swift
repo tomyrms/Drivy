@@ -4,9 +4,12 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
     case unauthorized, forbidden, notFound, choiceNotSet, unavailable, invalidResponse, expired, changed
     case rejected(String)
     case finalizationRefused(String)
+    /// Vérification d’une demande : l’école répond qu’elle n’a aucune trace de cette opération.
+    case operationUnknown
 
     var errorDescription: String? {
         switch self {
+        case .operationUnknown: "L’école n’a pas reçu cette demande."
         case .unauthorized: "Reconnecte-toi pour retrouver cette séance."
         case .forbidden: "L’accès à cette capture n’est plus autorisé."
         case .notFound: "Cette capture n’est pas disponible avec tes droits actuels."
@@ -64,7 +67,10 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
 
     func receipt(for command: SchoolCapturePendingMutation) async throws -> SchoolOperationReceipt {
         guard command.isValid, command.scope.apiBaseURL == baseURL.absoluteString else { throw SchoolCaptureFailure.invalidResponse }
-        let value: SchoolOperationReceipt = try await read(schoolPath(command.scope.schoolID, ["operations", command.id.uuidString]), verifying: command.scope)
+        let value: SchoolOperationReceipt
+        // Un reçu absent ne dit rien des droits : l’opération n’existe simplement pas pour l’école.
+        do { value = try await read(schoolPath(command.scope.schoolID, ["operations", command.id.uuidString]), verifying: command.scope) }
+        catch SchoolCaptureFailure.notFound { throw SchoolCaptureFailure.operationUnknown }
         guard command.matches(value) else { throw SchoolCaptureFailure.invalidResponse }
         return value
     }
@@ -354,7 +360,11 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         "CAPTURE_MANIFEST_MISMATCH": "Les lots et le manifeste ne correspondent pas. Les données locales restent conservées.",
         "CHUNK_HASH_MISMATCH": "Le contenu du lot ne correspond pas à son empreinte. Le transfert est interrompu.",
         "CHUNK_CUTOFF_REJECTED": "Ce lot dépasse la fin de collecte autorisée et ne peut pas être envoyé.",
-        "LESSON_CLOSED": "Cette leçon est clôturée. Aucun nouveau trajet ne peut démarrer."
+        "LESSON_CLOSED": "Cette leçon est clôturée. Aucun nouveau trajet ne peut démarrer.",
+        "TRAINING_NOT_ACTIVE": "La formation de cet élève n’est plus en cours. Aucun trajet ne peut démarrer.",
+        "LEARNER_NOT_ACTIVE": "Le compte de cet élève n’est plus actif dans cette école.",
+        "CAPTURE_FINALIZED": "Ce trajet est déjà clôturé.",
+        "DEVICE_OWNERSHIP_CONFLICT": "Cet appareil est déjà lié à un autre compte pour le GPS. La leçon reste disponible sans GPS."
     ]
 }
 
