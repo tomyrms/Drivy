@@ -1,5 +1,19 @@
 # État de la réalisation
 
+## 10 octobre 2026 — audit global et corrections
+
+Audit technique et UI/UX de toute l’application en cinq lots (API, web, trois lots iOS) suivis d’une revue croisée. [Corrections, limites et constats laissés au porteur](audit-global-20261010.md).
+
+- **Règle commune** : 503 et 408 se réessaient et ne déconnectent jamais, 400 `INVALID_REQUEST` est un refus définitif, un reçu introuvable après une écriture confirmée reste une incertitude.
+- **API** : panne d’identité en 503, valeur inacceptable en 400, pool protégé contre une connexion coupée, ouvertures modifiables pendant une leçon en cours.
+- **Web** : sortie d’une session expirée, refus affichés dans leur dialogue, session gardée pendant une panne d’identité, fuseau de l’école.
+- **iOS** : signalement refusé qui ne bloque plus la file, écriture confirmée jamais annoncée perdue, session conservée hors réseau, bouton d’école masqué pendant un trajet, leçons « À terminer » sous Aujourd’hui.
+- **Déployé** : release `071af98` sur le homelab après sauvegarde vérifiée de la base ; aucune migration nouvelle.
+
+**Exécuté** sur `071af98` : 436/436 tests Swift, IPA Release compilée, vérifications serveur et web réussies ; 148/148 tests web et 58/58 tests unitaires API en local.
+
+**Reste à qualifier** : aucun écran iOS de cette passe n’a été vu tourner ; aucun parcours réel rejoué sur l’école hébergée ; aucun appareil physique.
+
 ## 10 octobre 2026 — demandes bloquées, recherche d’élève et API à jour
 
 Incident du porteur : impossible de commencer une leçon (« Demande à vérifier », puis message de droits) ni d’en lancer une sans rendez-vous. Cause unique : l’app à départ explicite parlait à une API sans la route de départ ; le 404 restait en file sans issue et bloquait toute l’école sur l’appareil. [Cause, corrections et limites](deblocage-demandes-20261010.md).
