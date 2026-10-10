@@ -1,7 +1,7 @@
-import { useEffect, useId, useRef } from 'react';
+import { useContext, useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Loading, Notice, Symbol } from '../ui';
-import { useConsole, type Loaded, type Outcome } from './context';
+import { ConsoleContext, useConsole, type Loaded, type Outcome } from './context';
 import { workspaces } from './navigation';
 
 /** Section title. Receives focus when the section opens, so screen readers announce the new page. */
@@ -35,12 +35,19 @@ export function OutcomeNotice({ outcome, onDismiss, actions, beforeLogin }: { ou
   );
 }
 
+/** The way out of a failed read: sign in again when the session ended (retrying could not succeed), retry otherwise. */
+export function ReadRetry({ loaded }: { loaded: Pick<Loaded<unknown>, 'needsLogin' | 'reload'> }) {
+  const shell = useContext(ConsoleContext);
+  return loaded.needsLogin && shell
+    ? <button type="button" className="button retry" onClick={() => shell.login()}><Symbol kind="lock" bare />Se reconnecter</button>
+    : <button type="button" className="button retry" onClick={loaded.reload}><Symbol kind="refresh" bare />Réessayer</button>;
+}
+
 /** Loading, error and stale states of one read; `children` renders once data exists. */
 export function LoadState<T>({ loaded, label, children }: { loaded: Loaded<T>; label: string; children: (data: T) => ReactNode }) {
   return <>
     {loaded.status === 'loading' && <Loading label={label} />}
-    {loaded.status === 'error' && <Notice tone="error" title="Lecture impossible"
-      actions={<button type="button" className="button retry" onClick={loaded.reload}><Symbol kind="refresh" bare />Réessayer</button>}>
+    {loaded.status === 'error' && <Notice tone="error" title="Lecture impossible" actions={<ReadRetry loaded={loaded} />}>
       <p>{loaded.error}{loaded.data !== undefined ? ' Les informations affichées peuvent être anciennes.' : ''}</p>
     </Notice>}
     {loaded.data !== undefined && children(loaded.data)}

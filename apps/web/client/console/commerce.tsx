@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { civilDateIn } from '../agenda-model';
 import { centsToInput, createCommand, filled, formatCents, isCivilDate, parseCents } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { productSchema, productTypes, readAll, termsSchema, type CommercialTerms, type ServiceProduct } from '../school-api';
@@ -12,7 +13,6 @@ type ProductType = typeof productTypes[number];
 const typeLabels: Record<ProductType, string> = {
   INDIVIDUAL_LESSON: 'Leçon individuelle', COLLECTIVE_COURSE: 'Cours collectif', EXAM_SUPPORT: 'Accompagnement à l’examen', EXTERNAL_SERVICE: 'Prestation externe',
 };
-const today = () => new Date().toLocaleDateString('sv-SE');
 const period = (from: string, until: string | null) => until ? `${formatCivilDate(from)} → ${formatCivilDate(until)}` : `Dès le ${formatCivilDate(from)}`;
 function periodProblem(from: string, until: string): string | null {
   if (!isCivilDate(from)) return 'Choisissez la date de début.';
@@ -34,6 +34,8 @@ type TermsDraft = { label: string; termsText: string; validFrom: string; validUn
 
 export function TermsSection() {
   const { schoolId, school, canConfigureCatalog } = useConsole();
+  // La date d’aujourd’hui est celle de l’école, pas celle de l’ordinateur de la personne.
+  const today = () => civilDateIn(school.timeZone);
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setDraft(null); setSelected(null); });
   const loaded = useLoad(() => readAll(schoolId, 'commercial-terms', termsSchema), [schoolId, revision]);
@@ -66,7 +68,8 @@ export function TermsSection() {
       label: draft.label.trim(), termsText: draft.termsText.trim(), validFrom: draft.validFrom, validUntil: draft.validUntil || null,
       approved: draft.approved, approvalReason: draft.approvalReason.trim() } });
     const result = await runner.run(command, draft.approved ? 'Les conditions commerciales approuvées sont créées.' : 'Le brouillon de conditions commerciales est enregistré.');
-    setReviewing(false);
+    // A refusal stays in the dialog, next to the action it concerns; the draft is kept either way.
+    if (result.status !== 'rejected') setReviewing(false);
     if (result.status === 'confirmed') { setDraft(null); setSelected(null); }
   }
 
@@ -75,7 +78,7 @@ export function TermsSection() {
       <SectionHeading context="Formations et tarifs" title="Conditions commerciales"
         actions={canConfigureCatalog ? <button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelles conditions</button> : undefined} />
       {!canConfigureCatalog && <GrantNotice />}
-      <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
+      {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des conditions commerciales…">{() => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
         list={items.length === 0 ? <EmptyState symbol="receipt" title="Aucune condition commerciale" message="Rédigez et approuvez des conditions avant d’activer une prestation." />
@@ -124,6 +127,7 @@ export function TermsSection() {
         title={draft.approved ? 'Approuver ces conditions' : 'Enregistrer ce brouillon'} confirmLabel={draft.approved ? 'Créer les conditions approuvées' : 'Enregistrer le brouillon'}
         acknowledgement={draft.approved ? 'J’ai relu ce texte et je confirme son approbation.' : 'Je confirme l’enregistrement de ce brouillon.'}
         acknowledged={acknowledged} onAcknowledge={setAcknowledged}>
+        <OutcomeNotice outcome={runner.outcome} />
         <p className="dialog-lead">{draft.label.trim()}</p>
         <p className="policy-copy review-copy">{draft.termsText.trim()}</p>
         <Facts items={[['Validité', period(draft.validFrom, draft.validUntil || null)], ['Motif', draft.approvalReason.trim()]]} />
@@ -140,7 +144,8 @@ type ProductDraft = {
 };
 
 export function ProductsSection() {
-  const { schoolId, canConfigureCatalog, navigate, routeQuery } = useConsole();
+  const { schoolId, school, canConfigureCatalog, navigate, routeQuery } = useConsole();
+  const today = () => civilDateIn(school.timeZone);
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setDraft(null); setSelected(null); });
   const loaded = useLoad(async () => {
@@ -195,7 +200,8 @@ export function ProductsSection() {
       durationMinutes: draft.duration.trim() ? Number(draft.duration) : null, unitLabel: draft.unitLabel.trim(), unitPriceCents: parseCents(draft.price)!,
       validFrom: draft.validFrom, validUntil: draft.validUntil || null, termsVersionId: draft.termsVersionId, enabled: draft.enabled } });
     const result = await runner.run(command, draft.enabled ? 'La prestation est créée et activée.' : 'La prestation est créée, désactivée.');
-    setReviewing(false);
+    // A refusal stays in the dialog, next to the action it concerns; the draft is kept either way.
+    if (result.status !== 'rejected') setReviewing(false);
     if (result.status === 'confirmed') { setDraft(null); setSelected(null); }
   }
   const state = (item: ServiceProduct) => item.enabled ? <span className="status-text">Active</span> : <StatusBadge tone="neutral" symbol="dot">Désactivée</StatusBadge>;
@@ -205,7 +211,7 @@ export function ProductsSection() {
       <SectionHeading context="Formations et tarifs" title="Tarifs"
         actions={canConfigureCatalog ? <button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelle prestation</button> : undefined} />
       {!canConfigureCatalog && <GrantNotice />}
-      <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
+      {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des prestations…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
         list={<><div className="list-toolbar"><CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} /></div>{rows.length === 0 ? <EmptyState symbol="tag" title="Aucune prestation" message={value.terms.some(item => item.approved)
@@ -274,6 +280,7 @@ export function ProductsSection() {
         title="Relire la prestation" confirmLabel={draft.enabled ? 'Créer et activer la prestation' : 'Créer la prestation désactivée'}
         acknowledgement={draft.enabled ? 'J’ai relu le prix et les conditions, et je confirme l’activation.' : 'Je confirme la création de cette version désactivée.'}
         acknowledged={acknowledged} onAcknowledge={setAcknowledged}>
+        <OutcomeNotice outcome={runner.outcome} />
         <p className="dialog-lead">{draft.label.trim()}</p>
         <Facts items={[
           ['Type', typeLabels[draft.type]],

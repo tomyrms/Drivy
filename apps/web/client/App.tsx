@@ -37,11 +37,15 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
     window.history.replaceState(null, '', next === 'invitation' ? '/app/invitation' : '/app/');
   }
 
-  async function refresh(current: number) {
-    setMe(null);
+  /**
+   * Read the session, the person and the pending invitation again. A reading the person asked for (Actualiser,
+   * Réessayer, after an action) keeps the page on screen, so it does not flash the sign-in view; a restoration from
+   * the browser history (`keepView` false) is not an authorization check, so it shows nothing until the server answers.
+   */
+  async function refresh(current: number, keepView = true) {
     setPreview(null);
     setReviewed(false);
-    setSession(null);
+    if (!keepView) { setMe(null); setSession(null); setLoaded(false); }
     let next = await request('session', sessionSchema);
     if (current !== generation.current) return;
     if (acceptedSession.current !== next.csrfToken) setAccepted(null);
@@ -63,13 +67,14 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
     }
     setSession(next);
     if (invitationLink.error) throw new RequestFailure('INVITATION_INVALID');
-    if (!next.authenticated) return;
+    if (!next.authenticated) { setMe(null); return; }
     try {
       const result = await request('me', meSchema);
       if (current !== generation.current) return;
       setMe(result.data);
     } catch (cause) {
       if (!(cause instanceof RequestFailure) || cause.code !== 'IDENTITY_NOT_LINKED') throw cause;
+      setMe(null);
     }
     if (current !== generation.current) return;
     if (next.invitationPending && pageRef.current === 'invitation') {
@@ -107,7 +112,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
     void perform('Ouverture de votre espace…', refresh);
     const onPageShow = (event: PageTransitionEvent) => {
       // A browser history restoration is not a fresh authorization check.
-      if (event.persisted) void perform('Vérification de vos accès…', refresh);
+      if (event.persisted) void perform('Vérification de vos accès…', current => refresh(current, false));
     };
     const onHashChange = () => {
       const incoming = readInvitationLink();
@@ -118,7 +123,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
       inFlight.current = false;
       invitationLink.token = incoming.token;
       invitationLink.error = incoming.error;
-      setSession(null); setMe(null); setPreview(null); setAccepted(null);
+      setSession(null); setMe(null); setPreview(null); setAccepted(null); setLoaded(false);
       setReviewed(false); setUncertain(false); setLinkMustReopen(false);
       navigate('invitation');
       void perform('Préparation de votre invitation…', refresh);
@@ -332,7 +337,6 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
             <Symbol kind="check" />
             <div className="notice-body">
               <strong>Vous avez rejoint {accepted.schoolName}</strong>
-              <p>Votre école a confirmé votre rattachement.</p>
             </div>
           </div>}
 
@@ -340,7 +344,6 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
             <div className="row-text">
               <StatusBadge tone="accent" symbol="mail">Invitation en attente</StatusBadge>
               <h2 id="pending-title" className="row-title">Une école vous invite</h2>
-              <p className="row-meta">Relisez les informations de l’école avant d’accepter.</p>
             </div>
             <a className="button primary" href="/app/invitation">Voir l’invitation</a>
           </section>}
@@ -372,7 +375,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
           </section>
         </>}
       </main>
-      <footer className="site-footer"><span>Drivy</span><p>Vos accès sont propres à chaque école.</p></footer>
+      <footer className="site-footer"><span>Drivy</span></footer>
     </div>
   );
 }

@@ -14,7 +14,7 @@ import { CheckField, ConfirmDialog, EmptyState, Loading, Notice, SelectField, St
 import { readError, useCommandRunner, useConsole, useLoad, useRouteSelection } from './context';
 import { DirectoryRow } from './directory';
 import { permitSummary, TrainingFollowUp } from './dossier';
-import { DetailPanel, LoadState, OutcomeNotice, Placeholder, SectionHeading, SplitView } from './layout';
+import { DetailPanel, LoadState, OutcomeNotice, Placeholder, ReadRetry, SectionHeading, SplitView } from './layout';
 
 const statusLabels: Record<Training['status'], string> = { ACTIVE: 'En cours', PAUSED: 'En pause', COMPLETED: 'Terminée', CANCELLED: 'Annulée' };
 const emptyPermit = (): PermitDraft => ({ physicalSeen: false, validUntil: '', decision: 'APPROVED', reason: '' });
@@ -164,7 +164,7 @@ export function LearnersSection() {
             : canArchive ? <button type="button" className="button quiet danger" disabled={!canEdit} onClick={() => ask({ kind: 'archive' })}>Archiver le dossier…</button> : undefined}>
           <div className="detail-links"><button type="button" className="button quiet" onClick={() => navigate('trajets', { learner: current.id, from: 'eleves', week: routeQuery?.week, instructor: routeQuery?.instructor })}><Symbol kind="route" bare />Voir les trajets</button></div>
           {dossier.status === 'error' && <Notice tone="error" title="Dossier incomplet" live={false}
-            actions={<button type="button" className="button retry" onClick={dossier.reload}><Symbol kind="refresh" bare />Réessayer</button>}><p>{dossier.error ?? readError(null)}</p></Notice>}
+            actions={<ReadRetry loaded={dossier} />}><p>{dossier.error ?? readError(null)}</p></Notice>}
           {trainingsOf(current.id).length === 0 && <p className="caption">Aucune formation.</p>}
           {dossier.status === 'loading' && trainingsOf(current.id).length > 0 && <Loading label="Chargement des moniteurs et permis…" />}
           <ul className="row-list training-list">{trainingsOf(current.id).map(training => {
@@ -219,7 +219,7 @@ export function LearnersSection() {
       <ConfirmDialog open={dialog !== null} busy={runner.busy} onCancel={() => setDialog(null)} onConfirm={() => void confirm()}
         title={dialog?.kind === 'transition' ? dialog.transition.label : dialog?.kind === 'end' ? 'Retirer le moniteur' : dialog?.kind === 'permit' ? 'Consigner le permis' : dialog?.kind === 'restore' ? 'Restaurer le dossier' : 'Archiver le dossier'}
         confirmLabel={dialog?.kind === 'transition' ? dialog.transition.label : dialog?.kind === 'end' ? 'Retirer' : dialog?.kind === 'permit' ? 'Consigner' : dialog?.kind === 'restore' ? 'Restaurer' : 'Archiver'}
-        disabledReason={!canWrite ? 'Actualisez le dossier avant de confirmer.' : permitError ?? transitionError ?? archiveError}
+        disabledReason={runner.busy ? null : !canWrite ? 'Actualisez le dossier avant de confirmer.' : permitError ?? transitionError ?? archiveError}
         {...(dialog?.kind === 'archive' || (dialog?.kind === 'transition' && dialog.transition.danger)
           ? { acknowledgement: dialog.kind === 'archive' ? 'Je confirme l’archivage de ce dossier.' : 'Je confirme l’annulation de cette formation.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
         <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />

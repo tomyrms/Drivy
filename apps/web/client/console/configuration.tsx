@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createCommand, filled, isEmail, characters } from '../command-core';
-import { useCommandSnapshot } from '../command-store';
+import { useCommandSnapshot, type SubmitResult } from '../command-store';
 import { dataPolicySchema, readSchool, readinessSchema, setupSchema } from '../school-api';
 import { ConfirmDialog, Facts, Notice, StatusBadge, Symbol, TextArea, TextField, formatDateTime } from '../ui';
 import { useCommandRunner, useConsole, useDraft, useLoad } from './context';
@@ -52,22 +52,24 @@ export function ConfigurationSection() {
 
   function open(kind: Review) { runner.clearOutcome(); setAcknowledged(false); setReview(kind); }
   async function confirm() {
+    let result: SubmitResult | undefined;
     if (review === 'identity' && idValue && identityValid) {
       const command = createCommand({ schoolId, kind: 'updateSchool', path: '', ifMatch: school.version, resourceVersion: school.version,
         body: { name: idValue.name, timeZone: school.timeZone, contactEmail: idValue.contactEmail.trim(), contactPhone: idValue.contactPhone.trim() ? idValue.contactPhone.trim() : null, impactConfirmed: true } });
-      const result = await runner.run(command, 'Les coordonnées de l’école sont enregistrées.');
+      result = await runner.run(command, 'Les coordonnées de l’école sont enregistrées.');
       if (result.status === 'confirmed') setEditingIdentity(false);
     } else if (review === 'policy' && textValue && textsValid && policy) {
       const command = createCommand({ schoolId, kind: 'saveDataPolicy', path: 'data-policy', ifMatch: policy.version, resourceVersion: policy.version,
         body: { noticeText: textValue.noticeText, retentionText: textValue.retentionText, contactEmail: textValue.contactEmail.trim(), reviewAcknowledged: true } });
-      const result = await runner.run(command, 'Les textes sont adoptés. La version précédente reste conservée.');
+      result = await runner.run(command, 'Les textes sont adoptés. La version précédente reste conservée.');
       if (result.status === 'confirmed') setEditingPolicy(false);
     } else if (review === 'activation' && canActivate && readiness) {
       const command = createCommand({ schoolId, kind: 'activate', path: 'activate', ifMatch: school.version, resourceVersion: school.version,
         body: { expectedConfigurationVersion: readiness.configurationVersion, reviewAcknowledged: true } });
-      await runner.run(command, 'Votre école est activée.');
+      result = await runner.run(command, 'Votre école est activée.');
     }
-    setReview(null);
+    // A refusal stays in the dialog, next to the action it concerns, with the typed texts.
+    if (result?.status !== 'rejected') setReview(null);
   }
   async function saveProgress() {
     const setup = loaded.data?.setup;
@@ -84,8 +86,8 @@ export function ConfigurationSection() {
     <div className="section-stack">
       <SectionHeading context="Réglages" title={school.status === 'DRAFT' ? 'Préparer l’école' : 'École'}
         actions={school.status !== 'ACTIVE' ? <StatusBadge tone={status.tone} symbol="clock">{status.label}</StatusBadge> : undefined} />
-      <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome}
-        actions={runner.outcome?.code === 'VERSION_CONFLICT' ? <button type="button" className="button secondary" onClick={loaded.reload}>Recharger les informations</button> : undefined} />
+      {review === null && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome}
+        actions={runner.outcome?.code === 'VERSION_CONFLICT' ? <button type="button" className="button secondary" onClick={loaded.reload}>Recharger les informations</button> : undefined} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
 
       <LoadState loaded={loaded} label="Vérification de l’école…">{data => <div className="config-sections">
@@ -173,7 +175,6 @@ export function ConfigurationSection() {
           {school.status === 'DRAFT' && !canActivate && <p className="caption">
             {runner.pending ? runner.blockedReason : identity.edited || texts.edited ? 'Confirmez ou abandonnez d’abord les modifications en cours.'
               : 'L’activation devient possible quand les éléments ci-dessus sont complétés.'}</p>}
-          {school.status === 'DRAFT' && <p className="caption">L’activation ouvre l’espace de l’école. Les formations et les cours se préparent ensuite.</p>}
           </div>
         </section>
       </div>}</LoadState>
@@ -182,6 +183,8 @@ export function ConfigurationSection() {
         title={review === 'identity' ? 'Vos coordonnées' : review === 'policy' ? 'Relire les textes' : 'Activer l’école'}
         confirmLabel={review === 'identity' ? 'Confirmer les coordonnées' : review === 'policy' ? 'J’adopte ces textes' : 'Activer mon école'}
         {...(review === 'policy' ? { acknowledgement: 'J’ai relu les deux textes et je les adopte exactement pour mon école.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
+        <OutcomeNotice outcome={runner.outcome}
+          actions={runner.outcome?.code === 'VERSION_CONFLICT' ? <button type="button" className="button secondary" onClick={() => { setReview(null); loaded.reload(); }}>Recharger les informations</button> : undefined} />
         {review === 'identity' && idValue && <>
           <p className="dialog-lead">{idValue.name}</p>
           <Facts items={[['E-mail', idValue.contactEmail.trim()], ['Téléphone', idValue.contactPhone.trim() || 'Non renseigné']]} />

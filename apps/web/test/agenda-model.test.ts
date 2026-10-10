@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { addDays, civilDateIn, dayOf, formatTimeRange, formatWeek, groupByDay, lessonPhase, lessonsOfLearners, weekStart, weekWindow } from '../client/agenda-model.js';
+import { addDays, civilDateIn, dayOf, formatTimeRange, formatWeek, groupByDay, lessonPhase, lessonsOfLearners, startOfDay, weekStart, weekWindow } from '../client/agenda-model.js';
 
 describe('Agenda : heure prévue distincte du démarrage enregistré', () => {
   const lesson = { status: 'PLANNED', plannedStart: '2026-10-09T12:00:00Z', plannedEnd: '2026-10-09T13:00:00Z', actualStart: null };
@@ -54,6 +54,15 @@ describe('Agenda : semaine dans le fuseau de l’école', () => {
     expect((Date.parse(change.to) - Date.parse(change.from)) / 3_600_000).toBe(169);
     expect(weekWindow('2026-02-30', 'Europe/Zurich')).toBeNull();
     expect(weekWindow('2026-09-28', 'Nulle/Part')).toBeNull();
+  });
+
+  test('minuit sauté par un changement d’heure : le jour commence à la première heure qui existe', () => {
+    // Téhéran a avancé ses horloges de 00:00 à 01:00 le lundi 22 mars 2021 : sans repli, la semaine devenait illisible.
+    expect(startOfDay('2021-03-22', 'Asia/Tehran')).toBe('2021-03-21T20:30:00.000Z');
+    expect(weekWindow('2021-03-22', 'Asia/Tehran')).toEqual({ from: '2021-03-21T20:30:00.000Z', to: '2021-03-28T19:30:00.000Z' });
+    expect(weekWindow('2021-03-15', 'Asia/Tehran')).toEqual({ from: '2021-03-14T20:30:00.000Z', to: '2021-03-21T20:30:00.000Z' });
+    expect(startOfDay('2026-10-19', 'Europe/Zurich')).toBe('2026-10-18T22:00:00.000Z');
+    expect(startOfDay('2026-10-19', 'Nulle/Part')).toBeNull();
   });
 
   test('un jour se lit à l’heure de l’école, pas en UTC', () => {

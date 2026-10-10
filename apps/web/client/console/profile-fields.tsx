@@ -3,7 +3,7 @@ import {
   createCommand, fieldPurposes, instantToSchoolTime, profileFields, profilePolicyProblem, profileRuleProblem, schoolTimeToInstant,
   type ProfileField, type ProfilePurpose, type ProfileRequirement, type ProfileRule, type ProfileStage,
 } from '../command-core';
-import { useCommandSnapshot } from '../command-store';
+import { useCommandSnapshot, type SubmitResult } from '../command-store';
 import { dataPolicySchema, profilePolicySchema, readAll, readSchool, type ProfilePolicy } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Loading, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime } from '../ui';
 import { readError, useCommandRunner, useConsole, useLoad, useRouteSelection } from './context';
@@ -88,23 +88,25 @@ export function ProfileFieldsSection() {
     setDraft(value => value ? { ...value, rules: { ...value.rules, [field]: { ...value.rules[field], ...change } } } : value);
 
   async function confirm() {
+    let result: SubmitResult | undefined;
     if (dialog === 'create' && draft && !draftProblem && instant && notice?.noticeVersionId) {
       const command = createCommand({ schoolId, kind: 'createProfilePolicy', path: 'profile-field-policies', ifMatch: school.version, resourceVersion: 0,
         body: { effectiveFrom: instant, fields: selectedRules.map(rule => ({ ...rule, explanation: rule.explanation.trim() })), noticeVersionId: notice.noticeVersionId, impactAcknowledged: true } });
-      const result = await runner.run(command, 'Le brouillon est enregistré. Relisez-le puis publiez-le pour l’appliquer.');
+      result = await runner.run(command, 'Le brouillon est enregistré. Relisez-le puis publiez-le pour l’appliquer.');
       if (result.status === 'confirmed') setDraft(null);
     } else if (dialog === 'publish' && current?.status === 'DRAFT') {
-      await runner.run(createCommand({ schoolId, kind: 'publishProfilePolicy', path: `profile-field-policies/${current.id}/publish`, ifMatch: current.version,
+      result = await runner.run(createCommand({ schoolId, kind: 'publishProfilePolicy', path: `profile-field-policies/${current.id}/publish`, ifMatch: current.version,
         resourceId: current.id, resourceVersion: current.version, body: {} }), 'Les règles sont publiées. Elles s’appliqueront aux profils concernés à la date prévue.');
     }
-    setDialog(null);
+    // A refusal stays in the dialog, next to the action it concerns, with the typed draft.
+    if (result?.status !== 'rejected') setDialog(null);
   }
 
   return (
     <div className="section-stack">
       <SectionHeading context="Réglages" title="Informations demandées aux élèves"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite || !noticeAdopted} onClick={() => edit(applicable)}><Symbol kind="plus" bare />Préparer une nouvelle version</button>} />
-      <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
+      {!dialog && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des champs du profil…">{() => <>
         {!noticeAdopted && <Notice tone="info" title="Notice de données à adopter" live={false} actions={<button type="button" className="button secondary" onClick={() => navigate('configuration')}>Ouvrir les réglages de l’école</button>}>
@@ -169,7 +171,6 @@ export function ProfileFieldsSection() {
                 <button type="button" className={current.status === 'DRAFT' ? 'button secondary' : 'button primary'} disabled={!canWrite || !noticeAdopted} onClick={() => edit(current)}><Symbol kind="edit" bare />Nouvelle version à partir de celle-ci</button>
               </>}>
               <RulesTable rules={current.fields} />
-              {current.status === 'DRAFT' && <p className="caption">Un brouillon ne s’applique à personne tant qu’il n’est pas publié.</p>}
             </DetailPanel>
             : <Placeholder>Choisissez une version pour consulter ses règles.</Placeholder>} />
       </>}</LoadState>
@@ -179,6 +180,7 @@ export function ProfileFieldsSection() {
         acknowledgement={dialog === 'create' ? 'J’ai relu l’utilité des champs et leur effet sur les profils.' : 'J’ai relu ces règles et la notice liée.'}
         acknowledged={acknowledged} onAcknowledge={setAcknowledged}
         disabledReason={dialog === 'publish' && linkedNotice.status !== 'ready' ? 'La notice liée doit être relue avant la publication.' : null}>
+        <OutcomeNotice outcome={runner.outcome} />
         {dialog === 'create' && draft && <>
           <Facts items={[['Prise d’effet', instant ? formatDateTime(instant, school.timeZone) : '—'], ['Notice liée', notice ? `Version ${notice.version}` : '—']]} />
           <RulesTable rules={selectedRules} />

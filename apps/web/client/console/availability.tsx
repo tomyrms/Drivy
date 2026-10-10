@@ -31,7 +31,9 @@ export function AvailabilitySection() {
   const [localChosen, setLocalChosen] = useState<string>('');
   const chosen = routeQuery ? routeQuery.instructor ?? '' : localChosen;
   const setChosen = (id: string) => { setLocalChosen(id); setRouteQuery?.({ ...routeQuery, instructor: id || undefined }); };
-  const instructor = chosen || (instructors.some(item => item.id === membership.membershipId) ? membership.membershipId : instructors[0]?.id ?? '');
+  // A link to someone who is no longer an active instructor falls back to a listed one: the selector never shows a person other than the one displayed.
+  const instructor = instructors.some(item => item.id === chosen) ? chosen
+    : instructors.some(item => item.id === membership.membershipId) ? membership.membershipId : instructors[0]?.id ?? '';
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [start, setStart] = useState('08:00');
   const [end, setEnd] = useState('18:00');

@@ -37,6 +37,7 @@ export function ManagementConsole() {
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationButton = useRef<HTMLButtonElement>(null);
   const csrf = useRef('');
@@ -81,20 +82,38 @@ export function ManagementConsole() {
 
   useEffect(() => { void load(route.schoolId); }, [route.schoolId]);
   useEffect(() => {
-    const onPopState = () => setRoute(parseConsoleRoute(window.location.pathname, window.location.search));
-    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) void load(parseConsoleRoute(window.location.pathname, window.location.search).schoolId); };
+    const onPopState = () => { setRoute(parseConsoleRoute(window.location.pathname, window.location.search)); setNavigationOpen(false); };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      // Back from the identity provider: the page is restored as it was left, mid sign-in. Start again from the server's answer.
+      working.current = false; setBusy(false); setLoginError(null);
+      void load(parseConsoleRoute(window.location.pathname, window.location.search).schoolId);
+    };
     window.addEventListener('popstate', onPopState);
     window.addEventListener('pageshow', onPageShow);
     return () => { generation.current++; accessReader.current.invalidate(); window.removeEventListener('popstate', onPopState); window.removeEventListener('pageshow', onPageShow); };
   }, []);
+  // A new section opens at its top, not at the scroll position of the one that was left (selections and filters keep theirs).
+  const shownSection = useRef<string | null>(null);
+  useEffect(() => {
+    const key = state.status === 'ready' ? `${route.schoolId}/${route.section}` : null;
+    if (key !== null && shownSection.current !== null && shownSection.current !== key) window.scrollTo({ top: 0, behavior: 'instant' });
+    if (key !== null) shownSection.current = key;
+  }, [route.schoolId, route.section, state.status]);
   useEffect(() => {
     const school = state.status === 'ready' ? state.school.name : null;
     document.title = `${sectionTitles[route.section]}${school ? ` · ${school}` : ''} · Gestion Drivy`;
   }, [route.section, state]);
 
+  // Guards live in refs: `context.login` is memoised and must never read a stale `busy`.
+  const working = useRef(false);
+  const readyRef = useRef(false);
+  readyRef.current = state.status === 'ready';
+
   async function login(options?: { reauthenticate?: boolean }) {
-    if (busy) return;
-    setBusy(true);
+    if (working.current) return;
+    working.current = true;
+    setBusy(true); setLoginError(null);
     try {
       const next = await request('session', sessionSchema);
       const returnTo = window.location.pathname.replace(/\/$/, '');
@@ -107,17 +126,22 @@ export function ManagementConsole() {
         throw new RequestFailure('INVALID_RESPONSE');
       }
       window.location.assign(target.href);
-    } catch (error) { setState({ status: 'error', message: readError(error) }); setBusy(false); }
+    } catch (error) {
+      working.current = false; setBusy(false);
+      // A console that is open keeps its sections and unsent forms: the failure is shown above them.
+      if (readyRef.current) setLoginError(readError(error)); else setState({ status: 'error', message: readError(error) });
+    }
   }
 
   async function logout() {
-    if (busy || !session) return;
+    if (working.current || !session) return;
+    working.current = true;
     setBusy(true); setLogoutError(null);
     try {
       await endSession();
       commandStore.clear();
       window.location.assign('/app/');
-    } catch (error) { setLogoutError(readError(error)); setBusy(false); }
+    } catch (error) { working.current = false; setLogoutError(readError(error)); setBusy(false); }
   }
 
   const context = useMemo<ConsoleContextValue | null>(() => {
@@ -189,6 +213,7 @@ export function ManagementConsole() {
 
         <main id="main" className="console-main" aria-busy={state.status === 'loading'}>
           {logoutError && <Notice tone="error" title="Déconnexion non confirmée"><p>{logoutError}</p></Notice>}
+          {loginError && <Notice tone="error" title="Connexion impossible"><p>{loginError}</p></Notice>}
           {state.status === 'loading' && <Loading label="Ouverture de la gestion de l’école…" />}
           {state.status === 'error' && <Notice tone="error" title="La gestion ne peut pas s’ouvrir"
             actions={<button type="button" className="button retry" onClick={() => void load(route.schoolId)}><Symbol kind="refresh" bare />Réessayer</button>}>
@@ -278,7 +303,7 @@ function SignIn({ onLogin, busy, pending }: { onLogin: () => void; busy: boolean
     <section className="panel sign-in" aria-labelledby="console-signin">
       <Symbol kind="lock" tile />
       <h1 id="console-signin">Connectez-vous pour gérer votre école</h1>
-      <p className="secondary-text">La gestion est réservée aux membres de l’administration. Vos accès sont vérifiés par l’école à chaque opération.</p>
+      <p className="secondary-text">La gestion est réservée à l’administration de l’école.</p>
       {pending && <p className="caption">Une demande reste à vérifier : après connexion, ouvrez la même école pour consulter son résultat.</p>}
       <button type="button" className="button primary" onClick={onLogin} disabled={busy}>Se connecter</button>
     </section>

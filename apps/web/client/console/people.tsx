@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { commandMessage, createCommand, filled, isEmail, matchesSearch } from '../command-core';
 import { useCommandSnapshot, type SubmitResult } from '../command-store';
 import { roleLabel, type Role } from '../protocol';
@@ -132,7 +132,7 @@ export function TeamSection() {
       {current && <ConfirmDialog open={dialog !== null} busy={runner.busy} onCancel={() => setDialog(null)} onConfirm={() => void confirm()}
         title={dialog === 'deactivate' ? 'Retirer l’accès' : 'Modifier les accès'}
         confirmLabel={dialog === 'deactivate' ? 'Retirer l’accès' : 'Confirmer le changement d’accès'}
-        disabledReason={!canWrite ? 'Actualisez les accès avant de confirmer.' : dialog === 'deactivate' ? deactivateProblem : problem}
+        disabledReason={runner.busy ? null : !canWrite ? 'Actualisez les accès avant de confirmer.' : dialog === 'deactivate' ? deactivateProblem : problem}
         {...(dialog === 'deactivate' ? { acknowledgement: 'Je comprends que cette personne ne pourra plus accéder à l’école.', acknowledged, onAcknowledge: setAcknowledged }
           : loseAdmin ? { acknowledgement: 'Je comprends que je ne pourrai plus administrer cette école.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
         <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
@@ -184,14 +184,21 @@ async function copyText(value: string): Promise<boolean> {
 
 function CopyButton({ value, label }: { value: string; label: string }) {
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const timer = useRef<number | undefined>(undefined);
+  // The confirmation fades after a moment; a new copy restarts it and leaving the page cancels it.
+  useEffect(() => () => window.clearTimeout(timer.current), []);
   async function copy() {
     setState(await copyText(value) ? 'copied' : 'failed');
-    window.setTimeout(() => setState('idle'), 2500);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setState('idle'), 2500);
   }
-  return <button type="button" className="button secondary" onClick={() => void copy()}>
-    {state !== 'idle' && <Symbol kind={state === 'copied' ? 'check' : 'alert'} bare />}
-    {state === 'copied' ? 'Copié' : state === 'failed' ? 'Copie impossible' : label}
-  </button>;
+  return <>
+    <button type="button" className="button secondary" onClick={() => void copy()}>
+      {state !== 'idle' && <Symbol kind={state === 'copied' ? 'check' : 'alert'} bare />}
+      {state === 'copied' ? 'Copié' : state === 'failed' ? 'Copie impossible' : label}
+    </button>
+    <span className="visually-hidden" role="status">{state === 'copied' ? 'Copié' : state === 'failed' ? 'Copie impossible' : ''}</span>
+  </>;
 }
 
 export function InvitationsSection() {
@@ -257,10 +264,11 @@ export function InvitationsSection() {
 
   async function confirm(action: Dialog = dialog) {
     if (!canWrite) return;
+    let result: SubmitResult | undefined;
     if (action === 'create' && creating === 'code' && !trainingProblem) {
       const command = createCommand({ schoolId, kind: 'createInvitation', path: 'invitations', resourceVersion: 0,
         body: { delivery: 'CODE', roles: ['LEARNER'], trainings: offeringIds.map(offeringId => ({ offeringId, instructorMembershipId: instructorId })) } });
-      const result = await runner.run(command, 'Code créé.');
+      result = await runner.run(command, 'Code créé.');
       if (result.status === 'confirmed') {
         const created = result.via === 'response' ? showIssued(result.body) : null;
         if (created) setSelected(created);
@@ -270,22 +278,23 @@ export function InvitationsSection() {
     } else if (action === 'create' && creating === 'email' && !emailProblem && !rolesProblem) {
       const command = createCommand({ schoolId, kind: 'createInvitation', path: 'invitations', resourceVersion: 0,
         body: { email: email.trim(), roles: [...invitedRoles].sort() } });
-      const result = await runner.run(command, 'L’invitation est créée. Le message part vers l’adresse indiquée ; le lien est valable 7 jours.');
+      result = await runner.run(command, 'L’invitation est créée. Le message part vers l’adresse indiquée ; le lien est valable 7 jours.');
       if (result.status === 'confirmed') { setCreating(null); setEmail(''); setInvitedRoles(['LEARNER']); }
     } else if (action === 'resend' && current && actionable) {
       const code = current.delivery === 'CODE';
-      const result = await runner.run(createCommand({ schoolId, kind: 'resendInvitation', path: `invitations/${current.id}/resend`, ifMatch: current.version,
+      result = await runner.run(createCommand({ schoolId, kind: 'resendInvitation', path: `invitations/${current.id}/resend`, ifMatch: current.version,
         resourceId: current.id, resourceVersion: current.version, body: {} }),
         code ? 'Un nouveau code est créé ; l’ancien n’est plus utilisable.' : 'Un nouveau lien est envoyé ; l’ancien n’est plus utilisable.');
       if (result.status === 'confirmed' && code) {
         if (result.via === 'response') showIssued(result.body, current.id); else { setIssuedCode(null); setCodeMissing(true); }
       }
     } else if (action === 'revoke' && current && actionable && filled(revokeReason, 1000)) {
-      const result = await runner.run(createCommand({ schoolId, kind: 'revokeInvitation', path: `invitations/${current.id}/revoke`, ifMatch: current.version,
+      result = await runner.run(createCommand({ schoolId, kind: 'revokeInvitation', path: `invitations/${current.id}/revoke`, ifMatch: current.version,
         resourceId: current.id, resourceVersion: current.version, body: { reason: revokeReason.trim() } }), 'L’invitation est révoquée : elle ne permet plus de rejoindre l’école.');
       if (result.status === 'confirmed') { setRevokeReason(''); setIssuedCode(null); setCodeMissing(false); }
     }
-    setDialog(null);
+    // A refusal stays in the dialog, next to the action it concerns, with the typed reason.
+    if (result?.status !== 'rejected') setDialog(null);
   }
 
   return (
@@ -298,7 +307,7 @@ export function InvitationsSection() {
       {!active && <Notice tone="info" title="Invitations disponibles après l’activation" live={false}
         actions={<button type="button" className="button secondary" onClick={() => navigate('configuration')}>Ouvrir la configuration</button>}>
         <p>L’école doit être active, avec ses textes d’information adoptés, avant d’inviter des personnes.</p></Notice>}
-      <OutcomeNotice outcome={issuedCode && runner.outcome?.tone === 'success' ? null : runner.outcome} onDismiss={runner.clearOutcome} />
+      {!dialog && <OutcomeNotice outcome={issuedCode && runner.outcome?.tone === 'success' ? null : runner.outcome} onDismiss={runner.clearOutcome} />}
       {codeMissing && <Notice tone="warning" title="Code non affiché"><p>La réponse de l’école ne permet pas d’afficher le code. « Nouveau code » en crée un autre.</p></Notice>}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des invitations…">{() => <SplitView mobileDetail={!!selected || !!creating} onBack={() => { setSelected(null); setCreating(null); }} backLabel="Toutes les invitations"
@@ -379,6 +388,7 @@ export function InvitationsSection() {
         confirmLabel={dialog === 'create' ? (creating === 'code' ? 'Créer le code' : 'Envoyer l’invitation') : dialog === 'resend' ? (current?.delivery === 'CODE' ? 'Créer un nouveau code' : 'Envoyer un nouveau lien') : 'Révoquer l’invitation'}
         disabledReason={dialog === 'revoke' && !filled(revokeReason, 1000) ? 'Indiquez le motif de la révocation.' : null}
         {...(dialog === 'create' ? { acknowledgement: creating === 'code' ? 'J’ai vérifié l’offre et le moniteur choisis.' : 'J’ai vérifié l’adresse et les rôles proposés.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
+        <OutcomeNotice outcome={runner.outcome} />
         {dialog === 'create' && creating === 'code' && <>
           <p className="dialog-lead">Code élève · {offerings.filter(item => offeringIds.includes(item.id)).map(item => offeringLabel(item, offerings)).join(', ')}</p>
           <Facts items={[['Moniteur', chosenInstructor?.displayName ?? '—'], ['École', school.name], ['Validité du code', '7 jours, à usage unique']]} />

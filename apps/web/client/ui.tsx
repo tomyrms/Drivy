@@ -190,6 +190,17 @@ export function ConfirmDialog({ open, title, confirmLabel, onConfirm, onCancel, 
     // Disabling every action can otherwise move focus to the document while the write is pending.
     if (open && busy && dialog.current?.open) titleHeading.current?.focus({ preventScroll: true });
   }, [open, busy]);
+  useEffect(() => {
+    const element = dialog.current;
+    // A confirmed write can remove the form that opened the dialog together with the dialog itself:
+    // focus then goes back to the opener if it survives, otherwise to the page title instead of the void.
+    return () => {
+      if (!element?.open) return;
+      element.close();
+      if (opener.current instanceof HTMLElement && opener.current.isConnected) opener.current.focus();
+      else document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true });
+    };
+  }, []);
   const blocked = busy || (acknowledgement !== undefined && !acknowledged) || !!disabledReason;
   return (
     <dialog ref={dialog} className="confirm-dialog" aria-labelledby={titleId}

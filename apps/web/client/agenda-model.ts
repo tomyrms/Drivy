@@ -35,11 +35,23 @@ export function civilDateIn(timeZone: string, instant: number = Date.now()): str
   return new Intl.DateTimeFormat('sv-SE', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(instant));
 }
 
+/**
+ * First instant of a civil day. Where a daylight-saving change skips midnight (some zones jump from 00:00 to 01:00),
+ * the day starts at the first hour that exists; null if the date or zone is invalid.
+ */
+export function startOfDay(civil: string, timeZone: string): string | null {
+  for (const hour of ['00', '01', '02', '03']) {
+    const instant = schoolTimeToInstant(`${civil}T${hour}:00`, timeZone);
+    if (instant) return instant;
+  }
+  return null;
+}
+
 /** Instants bounding the week that starts on `monday` (inclusive) and the next one (exclusive); null if the date or zone is invalid. */
 export function weekWindow(monday: string, timeZone: string): { from: string; to: string } | null {
   if (!isCivilDate(monday)) return null;
-  const from = schoolTimeToInstant(`${monday}T00:00`, timeZone);
-  const to = schoolTimeToInstant(`${addDays(monday, 7)}T00:00`, timeZone);
+  const from = startOfDay(monday, timeZone);
+  const to = startOfDay(addDays(monday, 7), timeZone);
   return from && to ? { from, to } : null;
 }
 

@@ -8,7 +8,7 @@ import type { School } from '../school-api';
 import type { NavigationQuery } from './route';
 import type { SectionKey } from './sections';
 import { resumableDraft } from './draft-model';
-import { readStateFor, type ScopedReadState } from './load-model';
+import { failedReadState, readStateFor, type ScopedReadState } from './load-model';
 export { sectionKeys, type SectionKey } from './sections';
 
 export interface ConsoleContextValue {
@@ -77,7 +77,7 @@ export function readError(error: unknown): string {
   return errorMessage(error);
 }
 
-export type Loaded<T> = { status: 'loading' | 'ready' | 'error'; data: T | undefined; error: string | null; reload: () => void };
+export type Loaded<T> = { status: 'loading' | 'ready' | 'error'; data: T | undefined; error: string | null; needsLogin?: boolean; reload: () => void };
 
 /** Keep the same resource during refresh; hide the previous resource immediately when scope changes. */
 export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[], scope = String(deps[0] ?? '')): Loaded<T> {
@@ -88,9 +88,8 @@ export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[], s
     const current = ++generation.current;
     setState(previous => ({ scope, status: 'loading', data: readStateFor(previous, scope).data, error: null }));
     run().then(data => { if (current === generation.current) setState({ scope, status: 'ready', data, error: null }); },
-      error => { if (current === generation.current) setState(previous => ({ status: 'error',
-        scope, data: error instanceof RequestFailure && [401, 403, 404].includes(error.status ?? 0) ? undefined : readStateFor(previous, scope).data,
-        error: readError(error) })); });
+      error => { if (current === generation.current) setState(previous => failedReadState(previous, scope,
+        error instanceof RequestFailure ? error : {}, readError(error))); });
   }, [run, scope]);
   useEffect(() => { reload(); return () => { generation.current++; }; }, [reload]);
   return { ...readStateFor(state, scope), reload };

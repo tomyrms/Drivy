@@ -38,6 +38,18 @@ export function AgendaSection() {
     const lessons = await readAll(schoolId, 'lessons', lessonSchema, { from: bounds.from, to: bounds.to, ...(instructor ? { instructorMembershipId: instructor } : {}) });
     return { lessons: lessons.items, truncated: lessons.truncated };
   }, [schoolId, revision, bounds?.from, bounds?.to, instructor], `${schoolId}/${monday}/${instructor}`);
+  // The agenda is left open all day: coming back to the tab re-reads a week that is more than a minute old.
+  const lastRead = useRef(Date.now());
+  useEffect(() => { if (loaded.status === 'ready') lastRead.current = Date.now(); }, [loaded.status, loaded.data]);
+  const reloadLessons = loaded.reload, reloadDirectory = directory.reload;
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastRead.current < 60_000) return;
+      lastRead.current = Date.now(); reloadLessons(); reloadDirectory();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [reloadLessons, reloadDirectory]);
   const data = loaded.data;
   const instructors = useMemo(() => activeInstructors(directory.data?.members ?? []), [directory.data]);
   const days = useMemo(() => groupByDay(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], search), school.timeZone),

@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { permitState, type PermitState } from '../command-core';
 import { reportHistory } from '../dossier-model';
 import { lessonSchema, progressSchema, readAll, readSchool, reportSchema, type Lesson, type Permit, type Progress, type Report, type Training } from '../school-api';
-import { EmptyState, Loading, Notice, SelectField, Symbol, formatCivilDate, formatDateTime, type Tone } from '../ui';
+import { EmptyState, Loading, Notice, SelectField, formatCivilDate, formatDateTime, type Tone } from '../ui';
 import { readError, useLoad } from './context';
+import { ReadRetry } from './layout';
 
 const levelLabels = { DISCOVERING: 'En découverte', GUIDED: 'Avec accompagnement', INDEPENDENT: 'En autonomie' } as const;
 const levelCount = { DISCOVERING: 1, GUIDED: 2, INDEPENDENT: 3 } as const;
@@ -45,13 +46,14 @@ function ReportBody({ report, competencies }: { report: Report; competencies: Re
 function LessonReport({ schoolId, lesson, competencies }: { schoolId: string; lesson: Lesson; competencies: ReadonlyMap<string, string> }) {
   const [open, setOpen] = useState(false);
   const loaded = useLoad(async () => open ? (await readAll(schoolId, `lessons/${lesson.id}/reports`, reportSchema)).items : null, [schoolId, lesson.id, open], `${schoolId}/${lesson.id}`);
-  const latest = loaded.data?.at(-1);
+  // La dernière révision publiée : la plus haute séquence, quel que soit l’ordre de lecture.
+  const latest = loaded.data?.reduce<Report | undefined>((best, item) => !best || item.sequence > best.sequence ? item : best, undefined);
   return (
     <li className="report-row">
       <details className="disclosure report-disclosure" onToggle={event => setOpen(event.currentTarget.open)}>
       <summary><time dateTime={lesson.plannedStart}>{formatDateTime(lesson.plannedStart, lesson.timeZone)}</time></summary>
       {open && loaded.status === 'loading' && !loaded.data && <Loading label="Lecture du bilan…" />}
-      {open && loaded.status === 'error' && <Notice tone="error" title="Bilan indisponible" live={false} actions={<button type="button" className="button retry" onClick={loaded.reload}><Symbol kind="refresh" bare />Réessayer</button>}><p>{loaded.error}</p></Notice>}
+      {open && loaded.status === 'error' && <Notice tone="error" title="Bilan indisponible" live={false} actions={<ReadRetry loaded={loaded} />}><p>{loaded.error}</p></Notice>}
       {open && loaded.data && (latest ? <ReportBody report={latest} competencies={competencies} /> : <p className="caption">Aucun bilan publié.</p>)}
       </details>
     </li>
@@ -83,7 +85,7 @@ export function TrainingFollowUp({ schoolId, training, competencies, timeZone }:
     <details className="disclosure" onToggle={event => setOpen(event.currentTarget.open)}>
       <summary>Progression et bilans</summary>
       {open && loaded.status === 'loading' && !data && <Loading label="Lecture de la progression…" />}
-      {open && loaded.status === 'error' && <Notice tone="error" title="Lecture impossible" live={false} actions={<button type="button" className="button retry" onClick={loaded.reload}><Symbol kind="refresh" bare />Réessayer</button>}><p>{loaded.error ?? readError(null)}</p></Notice>}
+      {open && loaded.status === 'error' && <Notice tone="error" title="Lecture impossible" live={false} actions={<ReadRetry loaded={loaded} />}><p>{loaded.error ?? readError(null)}</p></Notice>}
       {data && <div className="follow-up">
         <h4 className="section-title">Compétences</h4>
         {progression.length > 0 ? <ul className="competency-progress">{progression.map(item => <li key={item.id} className="competency-row">

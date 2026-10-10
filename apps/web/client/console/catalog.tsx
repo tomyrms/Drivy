@@ -81,7 +81,8 @@ export function CurriculaSection() {
       categoryCode: draft.categoryCode.trim(), approved: draft.approved, approvalReason: draft.approvalReason.trim(),
       competencies: draft.competencies.map(item => ({ key: item.key.trim(), label: item.label.trim(), description: item.description.trim(), sortOrder: Number(item.sortOrder) })) } });
     const result = await runner.run(command, draft.approved ? 'Le référentiel approuvé est créé.' : 'Le brouillon de référentiel est enregistré.');
-    setReviewing(false);
+    // A refusal stays in the dialog, next to the action it concerns; the draft is kept either way.
+    if (result.status !== 'rejected') setReviewing(false);
     if (result.status === 'confirmed') { setDraft(null); setSelected(null); }
   }
 
@@ -89,7 +90,7 @@ export function CurriculaSection() {
     <div className="section-stack">
       <SectionHeading context="Formations et tarifs" title="Compétences enseignées"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouveau référentiel</button>} />
-      <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
+      {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des référentiels…">{data => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
         list={items.length === 0 ? <EmptyState symbol="book" title="Aucun référentiel" message="Préparez un premier référentiel pour une catégorie, puis approuvez-le pour ouvrir une offre." />
@@ -153,6 +154,7 @@ export function CurriculaSection() {
         title={draft.approved ? 'Approuver ce référentiel' : 'Enregistrer ce brouillon'} confirmLabel={draft.approved ? 'Créer le référentiel approuvé' : 'Enregistrer le brouillon'}
         acknowledgement={draft.approved ? 'J’ai relu les compétences et je confirme leur approbation.' : 'Je confirme l’enregistrement de ce brouillon.'}
         acknowledged={acknowledged} onAcknowledge={setAcknowledged}>
+        <OutcomeNotice outcome={runner.outcome} />
         <p className="dialog-lead">Catégorie {draft.categoryCode.trim()} · révision {nextRevision} prévue</p>
         <ol className="competency-list compact">{draft.competencies.map(item => <li key={item.uid}><strong>{item.label.trim()}</strong> <span className="row-meta">({item.key.trim()})</span></li>)}</ol>
         <Facts items={[['Motif', draft.approvalReason.trim()], ['École', school.name]]} />
@@ -204,7 +206,8 @@ export function ProceduresSection() {
       categoryCode: draft.categoryCode.trim(), procedureText: draft.procedureText.trim(), cancellationPolicyText: draft.cancellationPolicyText.trim(),
       sourceUrls: sourceList(draft.sources), approved: draft.approved, approvalReason: draft.approvalReason.trim() } });
     const result = await runner.run(command, draft.approved ? 'La procédure approuvée est créée.' : 'Le brouillon de procédure est enregistré.');
-    setReviewing(false);
+    // A refusal stays in the dialog, next to the action it concerns; the draft is kept either way.
+    if (result.status !== 'rejected') setReviewing(false);
     if (result.status === 'confirmed') { setDraft(null); setSelected(null); }
   }
 
@@ -212,7 +215,7 @@ export function ProceduresSection() {
     <div className="section-stack">
       <SectionHeading context="Formations et tarifs" title="Déroulement et annulation"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelle procédure</button>} />
-      <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
+      {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des procédures…">{() => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
         list={items.length === 0 ? <EmptyState symbol="file" title="Aucune procédure" message="Rédigez la procédure d’une catégorie, puis approuvez-la pour ouvrir une offre." />
@@ -260,6 +263,7 @@ export function ProceduresSection() {
         title={draft.approved ? 'Approuver cette procédure' : 'Enregistrer ce brouillon'} confirmLabel={draft.approved ? 'Créer la procédure approuvée' : 'Enregistrer le brouillon'}
         acknowledgement={draft.approved ? 'J’ai relu ces textes et je confirme leur approbation.' : 'Je confirme l’enregistrement de ce brouillon.'}
         acknowledged={acknowledged} onAcknowledge={setAcknowledged}>
+        <OutcomeNotice outcome={runner.outcome} />
         <p className="dialog-lead">Catégorie {draft.categoryCode.trim()}</p>
         <h3>Déroulement de la formation</h3><p className="policy-copy review-copy">{draft.procedureText.trim()}</p>
         <h3>Conditions d’annulation</h3><p className="policy-copy review-copy">{draft.cancellationPolicyText.trim()}</p>
@@ -334,7 +338,8 @@ export function OfferingsSection() {
       // Les tarifs vivent dans les prestations : l'offre garde le prix par défaut de sa version d'origine.
       defaultPriceCents: draft.basedOn?.defaultPriceCents ?? 0 } });
     const result = await runner.run(command, draft.enabled ? 'La version de l’offre est créée et activée.' : 'La version de l’offre est créée, désactivée.');
-    setReviewing(false);
+    // A refusal stays in the dialog, next to the action it concerns; the draft is kept either way.
+    if (result.status !== 'rejected') setReviewing(false);
     if (result.status === 'confirmed') { setDraft(null); setSelected(null); }
   }
   const offerState = (item: Offering) => item.enabled ? <span className="status-text">Activée</span> : <StatusBadge tone="neutral" symbol="dot">Désactivée</StatusBadge>;
@@ -343,7 +348,7 @@ export function OfferingsSection() {
     <div className="section-stack">
       <SectionHeading context="Formations et tarifs" title="Formations proposées"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelle offre</button>} />
-      <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
+      {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des offres…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
         list={<>
@@ -415,6 +420,7 @@ export function OfferingsSection() {
         title="Relire l’offre" confirmLabel={draft.enabled ? 'Créer et activer l’offre' : 'Créer l’offre désactivée'}
         acknowledgement={draft.enabled ? 'J’ai relu cette offre et je confirme son activation.' : 'Je confirme la création de cette version désactivée.'}
         acknowledged={acknowledged} onAcknowledge={setAcknowledged}>
+        <OutcomeNotice outcome={runner.outcome} />
         <p className="dialog-lead">{draft.offeringKey.trim()} · catégorie {draft.categoryCode.trim()}</p>
         <Facts items={[
           ['Référentiel', `Révision ${curriculum(draft.curriculumVersionId)?.revision ?? '?'} · ${curriculum(draft.curriculumVersionId)?.approved ? 'approuvée' : 'brouillon'}`],
