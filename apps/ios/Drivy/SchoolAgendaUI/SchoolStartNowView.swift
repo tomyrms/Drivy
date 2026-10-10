@@ -544,24 +544,9 @@ struct SchoolStartNowView: View {
             .environment(launch.controller)
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let issue = launch.tripIssue {
-                    HStack(alignment: .top, spacing: DrivySpacing.xs) {
-                        DrivyInlineMessage(text: issue, tone: .warning)
-                        Button {
-                            withAnimation(DrivyMotion.reveal(reduceMotion)) { launch.dismissTripIssue() }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(DrivyTheme.muted)
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Masquer ce message")
+                    SchoolTripIssueBanner(text: issue) {
+                        withAnimation(DrivyMotion.reveal(reduceMotion)) { launch.dismissTripIssue() }
                     }
-                    .padding(.horizontal, DrivySpacing.m)
-                    .padding(.vertical, DrivySpacing.xs)
-                    .background(DrivyTheme.canvas)
-                    .accessibilityIdentifier("start-now-trip-issue")
                     .transition(.opacity)
                 }
             }

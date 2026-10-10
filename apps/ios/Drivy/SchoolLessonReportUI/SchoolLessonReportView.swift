@@ -19,6 +19,8 @@ struct SchoolLessonReportView: View {
     var completionConfirmed = false
     /// Élève : le souhait se modifie sur la prochaine leçon seulement ; `nil` quand l’appelant ne le sait pas.
     var isNextPlanned: Bool? = nil
+    /// « Commencer la leçon » direct depuis Aujourd’hui qui n’a pas abouti : sa raison, au-dessus de la fiche.
+    var startIssue: String? = nil
     var outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()
     @State private var model: SchoolLessonReportWorkspace?
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
@@ -26,6 +28,8 @@ struct SchoolLessonReportView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var confirmsDiscard = false
     @State private var isCompletingLesson = false
+    @State private var startIssueDismissed = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var hasUnsavedChanges: Bool { model?.hasLocalEdits ?? false }
 
@@ -56,6 +60,14 @@ struct SchoolLessonReportView: View {
                 }
             } else {
                 ContentUnavailableView("Choisis ton école", systemImage: "building.2")
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let startIssue, !startIssueDismissed {
+                SchoolTripIssueBanner(text: startIssue) {
+                    withAnimation(DrivyMotion.reveal(reduceMotion)) { startIssueDismissed = true }
+                }
+                .transition(.opacity)
             }
         }
         // La fiche reste « Leçon » : le bilan se rédige dans des étapes qui portent leur propre titre.

@@ -291,55 +291,28 @@ import UIKit
             return
         }
         phase = .startingTrip
-        // Le récepteur réveillé depuis le récapitulatif passe tel quel à la préparation : pas de second démarrage.
-        let prep = agenda.capturePreparation(scope: form.scope, lessonID: lesson.id, controller: controller, source: source)
-        preparation = prep
-        prep.onQuickStep = { step in
-            curtain.step = step
-            if step != nil { curtain.advanceStep() }
-        }
-        await waitUntilActive()
-        let started = await prep.begin(reload: true)
-        prep.onQuickStep = nil
+        let result = await SchoolTripDeparture.run(lessonID: lesson.id, scope: form.scope, agenda: agenda,
+            controller: controller, source: source, prepared: { preparation = $0 }, started: {
+                // Trajet confirmé : la feuille se retire sous le rideau pendant l’attente de la première position.
+                phase = .waitingForPosition
+                closesSheet = true
+            })
         guard !invalidated else { return }
-        if started {
-            phase = .waitingForPosition
-            closesSheet = true
-            // La carte du trajet est déjà à l’écran, sous le rideau. Il se lève à la première position
-            // enregistrée, sept secondes au plus ; au-delà, la carte montre sa recherche, discrètement.
-            await curtain.hide(afterSequence: true, waitingFor: { controller.pointCount > 0 }, atMost: 7)
+        switch result {
+        case .started:
             phase = .done
             complete()
-        } else {
+        case .failed(let reason):
             // La leçon existe : elle s’ouvre dans la feuille, avec la raison. Aucune position n’est inventée.
-            tripIssue = Self.issue(of: prep)
-            // Plus de départ depuis cette préparation : le récepteur reçu réveillé s’arrête avec elle.
-            prep.invalidate()
+            tripIssue = reason
             showLesson(lesson)
             await curtain.hide(afterSequence: true)
-        }
-    }
-
-    private static func issue(of prep: SchoolCapturePreparationWorkspace) -> String {
-        switch prep.quickBlock {
-        case .failed(let message): message
-        case .choice: "L’accord GPS de l’élève est à confirmer. La leçon continue sans GPS."
-        case .refused: "L’élève a refusé l’enregistrement du trajet."
-        case .permission: "Autorise la localisation pour enregistrer le trajet."
-        case nil: prep.errorMessage ?? "Le trajet n’a pas démarré. La leçon continue sans GPS."
         }
     }
 
     private func showLesson(_ lesson: SchoolLesson) {
         phase = .done
         withAnimation(Self.stepMotion) { step = .lesson(lesson) }
-    }
-
-    /// Le trajet ne démarre qu’au premier plan : un départ lancé puis interrompu par un appel attend le retour.
-    private func waitUntilActive() async {
-        for _ in 0..<3000 where UIApplication.shared.applicationState != .active {
-            do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
-        }
     }
 
     private var tripAvailable: Bool {

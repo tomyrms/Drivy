@@ -39,8 +39,8 @@ struct DrivySearchField: View {
     }
 }
 
-/// Choix d’un élève dans la feuille qui démarre une leçon : recherche en tête, liste à hauteur stable, un toucher
-/// choisit. Rien n’est poussé ni redimensionné : la feuille passe ensuite au récapitulatif, sur place.
+/// Choix d’un élève : recherche en tête, liste à hauteur stable, un toucher choisit. Dans la feuille de démarrage,
+/// rien n’est poussé ni redimensionné ; dans le planning, la même liste se pousse (`SchoolLearnerSearchList`).
 struct SchoolLearnerPicker: View {
     let learners: [SchoolLearner]
     let selectedID: UUID?
@@ -74,7 +74,7 @@ struct SchoolLearnerPicker: View {
                 .listRowBackground(isSelected ? DrivyTheme.accentSoft : DrivyTheme.canvas)
                 .listRowSeparatorTint(DrivyTheme.border)
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
-                .accessibilityIdentifier("start-now-learner-\(learner.id.uuidString)")
+                .accessibilityIdentifier("learner-row-\(learner.id.uuidString)")
             }
         }
         .listStyle(.plain)
@@ -88,7 +88,7 @@ struct SchoolLearnerPicker: View {
                 .padding(.horizontal, DrivySpacing.m)
                 .padding(.vertical, DrivySpacing.s)
                 .background(DrivyTheme.canvas)
-                .accessibilityIdentifier("start-now-learner-search")
+                .accessibilityIdentifier("learner-search-field")
         }
         .onChange(of: learners) { _, values in index = SchoolLearnerIndex(learners: values) }
         .accessibilityIdentifier("learner-search-list")
