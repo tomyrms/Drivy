@@ -52,19 +52,24 @@ import UIKit
     }
 
     /// Efface le rideau. `afterSequence` laisse la séquence se terminer, puis attend `ready` (la première
-    /// position sur la carte, par exemple) sans dépasser `atMost` secondes.
-    func hide(afterSequence: Bool = false, waitingFor ready: (@MainActor () -> Bool)? = nil, atMost: Double = 5) async {
+    /// position sur la carte, par exemple) sans dépasser `atMost` secondes après l’appel.
+    func hide(afterSequence: Bool = false, waitingFor ready: (@MainActor () -> Bool)? = nil, atMost: Double = 7) async {
         guard let window, let start else { return }
         let token = generation
         if afterSequence {
+            // Sept secondes au plus après la demande : au-delà, l’écran dit lui-même qu’il attend une position.
+            let deadline = Date().addingTimeInterval(atMost)
             let remaining = DrivyLaunchTimeline.duration - Date().timeIntervalSince(start)
             if remaining > 0 { try? await Task.sleep(for: .seconds(remaining)) }
             if let ready {
-                let deadline = Date().addingTimeInterval(atMost)
+                var waited = false
                 while token == generation, !ready(), Date() < deadline {
+                    waited = true
                     // Une tâche annulée ne dort plus : sans cette sortie, l’attente tournerait à vide sur le fil principal.
                     do { try await Task.sleep(for: .milliseconds(100)) } catch { break }
                 }
+                // La carte vient de recevoir sa première position : un instant pour qu’elle se dessine sous le rideau.
+                if waited, token == generation, ready() { try? await Task.sleep(for: .milliseconds(400)) }
             }
         }
         guard token == generation, self.window === window else { return }

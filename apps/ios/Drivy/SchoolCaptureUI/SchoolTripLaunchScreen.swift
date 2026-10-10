@@ -17,7 +17,7 @@ struct SchoolTripLaunchScreen: View {
         ZStack {
             // Fond de l’app (`canvas`), pas un noir ou un blanc pur : le rideau se confond avec l’écran qu’il découvre.
             DrivyTheme.canvas.ignoresSafeArea()
-            DrivyLaunchMark(choreography: .join, start: start, waits: true)
+            DrivyLaunchMarkLayer(start: start, waits: true)
                 .frame(width: sizeClass == .regular ? 220 : 168, height: sizeClass == .regular ? 220 : 168)
                 .scaleEffect(reduceMotion ? 1 : (isLeaving ? 1.1 : (entered ? 1 : 0.92)))
                 .opacity(isLeaving || !entered ? 0 : 1)
