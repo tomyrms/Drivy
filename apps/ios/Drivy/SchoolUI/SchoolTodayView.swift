@@ -92,7 +92,11 @@ struct SchoolTodayView: View {
         .onChange(of: scopeKey) { _, _ in
             opened = nil; presentsStartNow = false
         }
-        .sheet(item: $opened, onDismiss: { Task { await load() } }) { item in
+        .sheet(item: $opened, onDismiss: {
+            // Une demande abandonnée ou vérifiée depuis la fiche ne reste pas affichée par l'enregistreur du trajet.
+            captureController?.liveObservations?.refreshPending()
+            Task { await load() }
+        }) { item in
             if let agendaClient {
                 NavigationStack {
                     SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace, lessonID: item.lesson.id,

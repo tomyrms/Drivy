@@ -106,7 +106,7 @@ export function CurriculaSection() {
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle révision · catégorie ${draft.basedOn.categoryCode}` : 'Nouveau référentiel'}
             meta={draft.basedOn ? `À partir de la révision ${draft.basedOn.revision}` : undefined}
             actions={<>
-              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
+              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { runner.clearOutcome(); setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
               <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
             </>}>
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
@@ -231,7 +231,7 @@ export function ProceduresSection() {
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · catégorie ${draft.basedOn.categoryCode}` : 'Nouvelle procédure'}
             meta={draft.basedOn ? `À partir de la version ${draft.basedOn.version}, qui reste inchangée.` : undefined}
             actions={<>
-              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
+              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { runner.clearOutcome(); setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
               <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
             </>}>
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
@@ -368,7 +368,7 @@ export function OfferingsSection() {
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · ${draft.basedOn.offeringKey}` : 'Nouvelle offre'}
             meta={draft.basedOn ? `À partir de la version ${draft.basedOn.version}, qui reste inchangée.` : undefined}
             actions={<>
-              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
+              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { runner.clearOutcome(); setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
               <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
             </>}>
             <form className="form-grid" onSubmit={event => event.preventDefault()}>

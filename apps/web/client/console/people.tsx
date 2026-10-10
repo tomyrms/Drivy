@@ -120,7 +120,7 @@ export function TeamSection() {
               {changed && draftRoles.length === 0 && <p className="field-error"><Symbol kind="alert" bare />Gardez au moins un rôle.</p>}
               {loseAdmin && <Notice tone="warning" title="Vous retirez votre propre rôle Administration" live={false}><p>Vous ne pourrez plus administrer cette école après la confirmation.</p></Notice>}
               {changed && <div className="form-actions">
-                <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (!problem) { setAcknowledged(false); setDialog('access'); } }}>Relire le changement</button>
+                <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (!problem) { runner.clearOutcome(); setAcknowledged(false); setDialog('access'); } }}>Relire le changement</button>
                 <button type="button" className="button quiet" disabled={runner.busy} onClick={() => { setDraftRoles([...current.roles]); setDraftGrants([...current.grants]); setReason(''); setShowErrors(false); }}>Annuler les modifications</button>
               </div>}
             </form>
@@ -350,10 +350,10 @@ export function InvitationsSection() {
           </DetailPanel>
           : creating === 'email' ? <DetailPanel focusKey="create-email" title="Inviter par e-mail"
             actions={<>
-              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (!emailProblem && !rolesProblem) { setAcknowledged(false); setDialog('create'); } }}>Relire l’invitation</button>
+              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (!emailProblem && !rolesProblem) { runner.clearOutcome(); setAcknowledged(false); setDialog('create'); } }}>Relire l’invitation</button>
               <button type="button" className="button quiet" onClick={() => setCreating(null)} disabled={runner.busy}>Annuler</button>
             </>}>
-            <form className="form-grid" onSubmit={event => { event.preventDefault(); setShowErrors(true); if (!emailProblem && !rolesProblem && canWrite) { setAcknowledged(false); setDialog('create'); } }}>
+            <form className="form-grid" onSubmit={event => { event.preventDefault(); setShowErrors(true); if (!emailProblem && !rolesProblem && canWrite) { runner.clearOutcome(); setAcknowledged(false); setDialog('create'); } }}>
               <TextField label="Adresse e-mail" type="email" value={email} onChange={setEmail} disabled={!canWrite} maxLength={254} error={showErrors ? emailProblem : null} />
               <fieldset className="fieldset">
                 <legend>Rôles proposés</legend>

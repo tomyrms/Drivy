@@ -2,6 +2,25 @@ import * as oidc from 'openid-client';
 import type { WebConfig } from './config.js';
 import type { LoginTransaction, Tokens } from './session.js';
 
+/** The identity provider could not be reached: the session is not at fault and must survive the outage. */
+export class IdentityUnavailable extends Error { constructor() { super('IDENTITY_UNAVAILABLE'); } }
+
+/**
+ * True only for a transport failure or a 5xx of the identity provider (network error, timeout, server error).
+ * A refusal of the refresh token (`invalid_grant` and any other 4xx) is a real end of session and stays false.
+ */
+export function identityUnreachable(error: unknown): boolean {
+  for (let current: unknown = error, depth = 0; current !== null && typeof current === 'object' && depth < 5; depth += 1) {
+    const item = current as { name?: unknown; message?: unknown; code?: unknown; status?: unknown; cause?: unknown };
+    if (item.name === 'AbortError' || item.name === 'TimeoutError' || item.code === 'OAUTH_TIMEOUT') return true;
+    if (current instanceof TypeError && item.message === 'fetch failed') return true;
+    if (typeof item.code === 'string' && /^(E[A-Z_]+|UND_ERR_[A-Z_]+)$/.test(item.code)) return true;
+    if (typeof item.status === 'number' && item.status >= 500 && item.status <= 599) return true;
+    current = item.cause;
+  }
+  return false;
+}
+
 export interface IdentityProvider {
   /** `reauthenticate` forces the identity provider to ask for the credentials again (step-up, or right after a sign-out). */
   begin(options?: { reauthenticate?: boolean }): Promise<{ transaction: LoginTransaction; url: string }>;
@@ -55,7 +74,8 @@ export async function createIdentityProvider(config: WebConfig): Promise<Identit
     },
     async refresh(tokens) {
       if (!tokens.refreshToken) throw new Error('Session expirée.');
-      return tokensFrom(await oidc.refreshTokenGrant(client,tokens.refreshToken),tokens);
+      try { return tokensFrom(await oidc.refreshTokenGrant(client,tokens.refreshToken),tokens); }
+      catch (error) { throw identityUnreachable(error) ? new IdentityUnavailable() : error; }
     },
     async revoke(tokens) { if (tokens.refreshToken) await oidc.tokenRevocation(client,tokens.refreshToken,{ token_type_hint: 'refresh_token' }); }
   };

@@ -7,7 +7,7 @@ import { buildWebApp } from '../server/app.js';
 import { readConfig } from '../server/config.js';
 import { RateLimiter } from '../server/rate-limit.js';
 import { SessionStore, type Tokens } from '../server/session.js';
-import type { IdentityProvider } from '../server/oidc.js';
+import { IdentityUnavailable, identityUnreachable, type IdentityProvider } from '../server/oidc.js';
 import type { ApiGateway } from '../server/upstream.js';
 import type { WebConfig } from '../server/config.js';
 
@@ -108,6 +108,26 @@ describe('Session BFF et frontière navigateur',()=>{
     vi.mocked(h.identity.refresh).mockImplementation(async()=>{await new Promise(resolve=>setTimeout(resolve,30));return {...h.tokens,expiresAt:Date.now()+600_000};});
     const responses=await Promise.all([h.get('/app/bff/me'),h.get('/app/bff/me')]);
     expect(responses.map(r=>r.statusCode)).toEqual([200,200]);expect(h.identity.refresh).toHaveBeenCalledTimes(1);expect(api).toHaveBeenCalledTimes(2);
+  });
+  test('garde la session pendant une panne du fournisseur d’identité, la ferme sur un refus',async()=>{
+    const api=vi.fn(async()=>({status:200,body:{data:{memberships:[]}}})); const h=await harness(api);
+    await h.start();await h.login();h.advance(280_000);
+    vi.mocked(h.identity.refresh).mockRejectedValueOnce(new IdentityUnavailable());
+    expect((await h.get('/app/bff/me')).statusCode).toBe(503);
+    vi.mocked(h.identity.refresh).mockResolvedValueOnce({...h.tokens,expiresAt:Date.now()+600_000});
+    expect((await h.get('/app/bff/me')).statusCode).toBe(200);
+    h.advance(600_000);
+    vi.mocked(h.identity.refresh).mockRejectedValueOnce(Object.assign(new Error('refused'),{error:'invalid_grant',status:400}));
+    expect((await h.get('/app/bff/me')).statusCode).toBe(401);expect((await h.get('/app/bff/me')).statusCode).toBe(401);
+  });
+  test('ne prend pour une panne d’identité qu’un échec de transport ou un 5xx',()=>{
+    expect(identityUnreachable(new TypeError('fetch failed'))).toBe(true);
+    expect(identityUnreachable(Object.assign(new Error('x'),{code:'OAUTH_TIMEOUT'}))).toBe(true);
+    expect(identityUnreachable(new Error('wrapped',{cause:Object.assign(new Error('x'),{code:'ECONNREFUSED'})}))).toBe(true);
+    expect(identityUnreachable(new Error('wrapped',{cause:{status:502}}))).toBe(true);
+    expect(identityUnreachable(Object.assign(new Error('refused'),{error:'invalid_grant',status:400}))).toBe(false);
+    expect(identityUnreachable(new Error('Session expirée.'))).toBe(false);
+    expect(identityUnreachable(undefined)).toBe(false);
   });
   test('ne réfléchit pas un détail amont sensible dans une erreur',async()=>{
     const secret=token(); const h=await harness(async()=>({status:403,body:{code:'FORBIDDEN',title:secret,internal:secret}}));

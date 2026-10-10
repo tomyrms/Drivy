@@ -47,7 +47,8 @@ struct SchoolHomeView: View {
         .sheet(item: $dossierPlanningModel, onDismiss: { NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil) }) { model in
             SchoolPlanningView(model: model)
         }
-        .sheet(item: $captureLesson) { route in
+        // Une demande abandonnée ou vérifiée depuis la fiche ne reste pas affichée par l'enregistreur du trajet.
+        .sheet(item: $captureLesson, onDismiss: { captureController?.liveObservations?.refreshPending() }) { route in
             if let agendaClient {
                 NavigationStack {
                     SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace,

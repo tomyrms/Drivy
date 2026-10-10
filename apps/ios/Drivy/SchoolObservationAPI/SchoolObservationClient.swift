@@ -274,6 +274,7 @@ import Foundation
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }
         if code == "IDEMPOTENCY_MISMATCH" || code == "OBSERVATION_REMOVED" || status == 202 { return .uncertain }
-        return status >= 500 || status == 429 ? .unavailable : .invalidResponse
+        // Un délai dépassé (408) ne dit rien du résultat : la demande reste conservée, comme pour une panne.
+        return status >= 500 || status == 429 || status == 408 ? .unavailable : .invalidResponse
     }
 }

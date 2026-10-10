@@ -180,6 +180,7 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         // Once the write answered 200/201, a missing or unreadable proof is an uncertainty to verify,
         // never a fresh refusal: the command stays queued instead of being dropped as « rien n’a été enregistré ».
         do { _ = try await receipt(for: command) }
+        catch is CancellationError { throw CancellationError() }
         catch let failure as SchoolPlanningFailure where failure == .unauthorized || failure == .forbidden { throw failure }
         catch { throw SchoolPlanningFailure.unavailable }
     }

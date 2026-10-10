@@ -124,7 +124,7 @@ export function ProfileFieldsSection() {
           detail={draft ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title="Nouvelle version des champs"
               meta={draft.basedOn ? `Préremplie à partir de la version ${draft.basedOn.version}, qui reste inchangée.` : 'Le prénom et le nom sont toujours demandés.'}
               actions={<>
-                <button type="button" className="button primary" disabled={!canWrite || !noticeAdopted} onClick={() => { setShowErrors(true); if (!draftProblem) { setAcknowledged(false); setDialog('create'); } }}>Créer le brouillon…</button>
+                <button type="button" className="button primary" disabled={!canWrite || !noticeAdopted} onClick={() => { setShowErrors(true); if (!draftProblem) { runner.clearOutcome(); setAcknowledged(false); setDialog('create'); } }}>Créer le brouillon…</button>
                 <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
               </>}>
               <form className="form-grid" onSubmit={event => event.preventDefault()}>

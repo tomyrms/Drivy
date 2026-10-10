@@ -78,7 +78,9 @@ final class AppLock {
         // Code de l’appareil retiré depuis l’activation : iOS n’a plus rien à demander et le verrou ne
         // s’ouvrirait jamais. Sans code, l’appareil lui-même n’est pas protégé ; l’app s’ouvre.
         var unavailable: NSError?
+        // Seule cette cause ouvre le verrou : domaine et code de LocalAuthentication, jamais une autre erreur.
         if !context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &unavailable),
+           unavailable?.domain == LAError.errorDomain,
            unavailable?.code == LAError.Code.passcodeNotSet.rawValue {
             isLocked = false
             return

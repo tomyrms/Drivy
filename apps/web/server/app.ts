@@ -4,7 +4,7 @@ import cookie from '@fastify/cookie';
 import staticFiles from '@fastify/static';
 import { z, ZodError } from 'zod';
 import type { WebConfig } from './config.js';
-import type { IdentityProvider } from './oidc.js';
+import { IdentityUnavailable, type IdentityProvider } from './oidc.js';
 import { RateLimiter } from './rate-limit.js';
 import { SessionStore, matchesSecret, type Session } from './session.js';
 import { createGateway, createSchoolGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
@@ -110,7 +110,11 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
         const tokens = await session.refresh;
         if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
         session.tokens = tokens;
-      } catch { store.destroy(session); throw new WebError(401,'SESSION_EXPIRED'); }
+      } catch (error) {
+        // An identity provider outage is not an expired session: keep it and let the page retry.
+        if (error instanceof IdentityUnavailable && store.isCurrent(session)) throw new WebError(503,'SERVICE_UNAVAILABLE');
+        store.destroy(session); throw new WebError(401,'SESSION_EXPIRED');
+      }
       finally { delete session.refresh; }
     }
     store.touch(session);

@@ -337,7 +337,8 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
             if response.status == 403 { throw SchoolCaptureFailure.forbidden }
             if response.status == 404 { throw code == "RECORDING_CHOICE_NOT_SET" ? SchoolCaptureFailure.choiceNotSet : .notFound }
             if response.status == 409 || response.status == 412 { throw SchoolCaptureFailure.changed }
-            throw response.status >= 500 || response.status == 429 ? SchoolCaptureFailure.unavailable : .invalidResponse
+            // Un délai dépassé (408) ne dit rien du résultat : même traitement qu'une panne, la demande reste en file.
+            throw response.status >= 500 || response.status == 429 || response.status == 408 ? SchoolCaptureFailure.unavailable : .invalidResponse
         }
         guard type == "application/json", let envelope = try? JSONDecoder().decode(Envelope<Value>.self, from: response.data),
               !envelope.requestId.isEmpty, envelope.requestId.count <= 150, SchoolLesson.date(envelope.serverTime) != nil else { throw SchoolCaptureFailure.invalidResponse }
