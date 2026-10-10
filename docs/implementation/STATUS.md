@@ -1,5 +1,17 @@
 # État de la réalisation
 
+## 10 octobre 2026 — demandes bloquées, recherche d’élève et API à jour
+
+Incident du porteur : impossible de commencer une leçon (« Demande à vérifier », puis message de droits) ni d’en lancer une sans rendez-vous. Cause unique : l’app à départ explicite parlait à une API sans la route de départ ; le 404 restait en file sans issue et bloquait toute l’école sur l’appareil. [Cause, corrections et limites](deblocage-demandes-20261010.md).
+
+- **Déployé** : API `040c8ed` sur le homelab, migration 023, après sauvegarde vérifiée de la base.
+- **iOS** : refus 404 définitif, demande inconnue de l’école renvoyable ou abandonnable sur chaque écran, panneau qui nomme la demande, choix de l’élève avec recherche, droits de déplacement et d’annulation alignés sur l’école, GPS arrêté avant annulation.
+- **Web** : même sortie pour une demande introuvable, relances manquantes, recherches agenda et invitations.
+
+**Exécuté** sur `5c719d2` : 419/419 tests Swift, IPA Release compilée, vérifications serveur et web réussies ; 138/138 tests web en local.
+
+**Non vérifié** : aucun écran iOS de cette passe vu tourner ; aucune leçon réelle démarrée sur l’école après déploiement ; pas d’essai web avec l’identité réelle.
+
 ## 9 octobre 2026 — stabilité des parcours, démarrage réel des leçons et nettoyage
 
 À la demande du porteur, revue de l’existant sans ajout de fonctionnalités ni refonte visuelle. Décisions et périmètre : [stabilite-parcours-20261009.md](stabilite-parcours-20261009.md), [serveur](stabilite-api-20261009.md), [iOS](stabilite-ios-parcours-20261009.md), [web](stabilite-web-20261009.md).
