@@ -708,7 +708,7 @@ struct SchoolCaptureLiveView: View {
     @ViewBuilder private func finalizationResult(_ state: SchoolCaptureSession.SyncState) -> some View {
         switch state {
         case .synced:
-            resultLabel("Trajet synchronisé", symbol: "checkmark.circle.fill", tone: .success,
+            resultLabel("Trajet synchronisé", symbol: "checkmark.circle.fill", tone: .accent,
                 message: nil)
         case .partial:
             resultLabel("Trajet partiel", symbol: "exclamationmark.circle.fill", tone: .warning,

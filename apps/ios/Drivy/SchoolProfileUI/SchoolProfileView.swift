@@ -235,7 +235,7 @@ struct SchoolProfileView: View {
             Label(completed ? "Accueil terminé" : "Accueil à terminer",
                 systemImage: completed ? "checkmark.circle.fill" : "figure.wave")
                 .font(.headline)
-                .foregroundStyle(completed ? DrivyTheme.success : DrivyTheme.text)
+                .foregroundStyle(completed ? DrivyTheme.accent : DrivyTheme.text)
                 .fixedSize(horizontal: false, vertical: true)
             if !completed {
                 Button("Reprendre l’accueil") { showsGuidedWelcome = true }

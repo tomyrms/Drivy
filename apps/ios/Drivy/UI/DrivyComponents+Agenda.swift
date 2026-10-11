@@ -63,8 +63,15 @@ struct DrivyRowNote: Equatable {
     let text: String
     var tone: DrivyTone = .neutral
 
-    /// The accent stays reserved for actions: an accent note reads in the main ink.
-    var color: Color { tone == .accent ? DrivyTheme.text : tone.foreground }
+    /// The accent stays reserved for actions, orange and green for the observation scale: a note that
+    /// stands out (waiting, to finish) reads in the main ink, its weight sets it apart from the detail.
+    var color: Color {
+        switch tone.quiet {
+        case .danger: DrivyTheme.danger
+        case .neutral where tone == .neutral: DrivyTheme.muted
+        default: DrivyTheme.text
+        }
+    }
 }
 
 /// A row note on a line of its own, for screens that stack it instead of using a row.

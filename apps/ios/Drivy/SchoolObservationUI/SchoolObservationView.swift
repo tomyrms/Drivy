@@ -233,7 +233,7 @@ struct SchoolObservationView: View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
                 Label("Demande à vérifier", systemImage: "clock.arrow.circlepath").font(.headline)
-                    .foregroundStyle(DrivyTheme.warning)
+                    .foregroundStyle(DrivyTheme.muted)
                 Text(model.pendingBelongsHere ? "La demande est conservée sur cet appareil. Vérifie son résultat avant une autre modification." : model.pendingText)
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -307,7 +307,7 @@ struct SchoolObservationComposer: View {
                 if model.pendingAwaitsReview {
                     Section {
                         Label("La demande est conservée. Ferme cette saisie pour vérifier son résultat dans les observations.", systemImage: "clock.arrow.circlepath")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                         .drivyFormRows()
@@ -417,7 +417,7 @@ struct SchoolObservationRemoval: View {
                 if model.pendingAwaitsReview {
                     Section {
                         Label("La demande est conservée. Retrouve-la dans les observations pour vérifier le résultat.", systemImage: "clock.arrow.circlepath")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                         .drivyFormRows()
@@ -470,7 +470,7 @@ private struct SchoolObservationPendingView: View {
                     Text("Référence : \(command.id.uuidString)").font(.caption.monospaced()).textSelection(.enabled)
                     if command.scope != model.scope {
                         Label("Tes droits ont changé depuis cette demande. Elle reste conservée et ne peut pas être renvoyée avec ces nouveaux accès.", systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     } else {
                         Button("Vérifier auprès de l’école") { Task { await model.verifyPending(); if model.pending == nil { dismiss() } } }
                             .disabled(!model.canRetry)
@@ -481,7 +481,7 @@ private struct SchoolObservationPendingView: View {
                         if model.pendingAbsent {
                             // Offert seulement après la réponse de l’école : elle n’a jamais reçu cette demande.
                             Label("L’école n’a pas reçu cette demande : rien n’a été enregistré.", systemImage: "exclamationmark.circle")
-                                .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                                 .fixedSize(horizontal: false, vertical: true)
                             Button("Abandonner la demande", role: .destructive) { confirmsAbandon = true }
                                 .disabled(!model.canRetry)

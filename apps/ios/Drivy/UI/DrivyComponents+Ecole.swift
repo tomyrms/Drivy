@@ -104,13 +104,25 @@ struct DrivyEntityRow: View {
         HStack(alignment: .center, spacing: DrivySpacing.s) {
             if !typeSize.isAccessibilitySize { leadingView }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(DrivyTheme.text)
+                // The status sits on the line of the name, after a middle dot: never a line of its own.
+                if let badge, !typeSize.isAccessibilitySize {
+                    HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
+                        Text(title)
+                            .font(.headline)
+                            .foregroundStyle(DrivyTheme.text)
+                            .lineLimit(1)
+                        Text("·").font(.subheadline).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
+                        badge
+                    }
+                } else {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(DrivyTheme.text)
+                    if let badge { badge }
+                }
                 if let meta, !meta.isEmpty {
                     Text(meta).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 }
-                if let badge { badge.padding(.top, DrivySpacing.xxs) }
             }
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -264,9 +276,13 @@ struct DrivyFormMessage: View {
     }
 
     var body: some View {
-        Label(text, systemImage: symbol)
+        let ink = tone.quiet
+        return Label {
+            Text(text).foregroundStyle(ink == .neutral ? DrivyTheme.text : ink.foreground)
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(ink.foreground)
+        }
             .font(.subheadline)
-            .foregroundStyle(tone.foreground)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .combine)
     }
@@ -374,7 +390,7 @@ struct DrivyPendingRequest<Details: View>: View {
             // L’abandon n’est offert qu’après la réponse de l’école : le titre dit alors l’état connu.
             Label(abandon == nil ? "Demande à vérifier" : "Demande non enregistrée", systemImage: "clock.arrow.circlepath")
                 .font(.headline)
-                .foregroundStyle(DrivyTheme.warning)
+                .foregroundStyle(DrivyTheme.text)
                 .accessibilityAddTraits(.isHeader)
             Text(message)
                 .font(.subheadline)

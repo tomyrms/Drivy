@@ -218,7 +218,7 @@ struct SchoolPlanningView: View {
                     }
                     ForEach(model.closures) { closure in
                         Text("Indisponible : \(SchoolPlanningFormat.interval(closure.startsAt, closure.endsAt, zone: model.timeZone))")
-                            .font(.caption).foregroundStyle(DrivyTheme.warning)
+                            .font(.caption).foregroundStyle(DrivyTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 } label: {
