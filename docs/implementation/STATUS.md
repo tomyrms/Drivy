@@ -1,12 +1,20 @@
 # État de la réalisation
 
+## 11 octobre 2026 — parcours de l’élève : Profil, prochaine leçon, Progression
+
+Trois onglets pour l’élève (Leçons, Progression, Profil), prochaine leçon en tête, historique lu en entier, Progression refaite sur retours du porteur (un permis à la fois, « 4 sur 9 en autonomie », détail déplié sur place), ralentissements corrigés (dates et formateurs mis en cache). [Détail, relecture QA et points ouverts](parcours-eleve-profil-20261011.md).
+
+**Exécuté** : IPA d’essai compilée sur chaque lot ; campagne complète sur `4e1b594` (452 tests métier, 12 parcours UI iPhone, 12 iPad). Tests métier relancés sur la dernière version (`941ea06`) : 453 passent ; les parcours UI n’y ont pas été rejoués. Fluidité confirmée par le porteur sur son iPhone.
+
+**Reste à qualifier** : dernière version de la Progression, zoom de la carte, VoiceOver et grandes tailles de texte sur appareil. **Au porteur** : identifiants d’appareil du moniteur envoyés à l’élève (API et déploiement), objectifs visibles avant la leçon.
+
 ## 11 octobre 2026 — parcours de l’élève et agenda
 
 Fiche de leçon chargée en parallèle (élève et moniteur), souhait et replay plus calmes ; planning qui se ferme dès la confirmation, formulaire stable pendant la vérification du créneau, semaines de l’agenda réaffichées sans squelette. [Détail et questions ouvertes](parcours-eleve-agenda-20261011.md).
 
 **Exécuté** : compilation de l’IPA d’essai. **Non exécuté** : tests Swift, à la demande du porteur.
 
-Accord GPS de l’élève lui-même (`SELF`) : question sous « Mon souhait » dans la fiche de sa prochaine leçon, envoyée aussitôt. Sans leçon planifiée, pas d’endroit pour le modifier. Non vu tourner.
+Accord GPS de l’élève lui-même (`SELF`) : question sous « Mon souhait » dans la fiche de sa prochaine leçon, envoyée aussitôt. Depuis la passe suivante, le choix général se modifie aussi depuis Profil. Non vu tourner.
 
 ## 11 octobre 2026 — parcours terrain fluides, deuxième passe
 
