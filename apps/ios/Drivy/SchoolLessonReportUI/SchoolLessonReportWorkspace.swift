@@ -323,11 +323,14 @@ import Observation
         do { pending = try outbox.pending(for: scope); storageAccessible = true }
         catch { storageAccessible = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         do {
+            // Le compte et la leçon se lisent ensemble ; rien n’est montré avant que les droits du compte soient relus.
+            let lessonRead = Task { @MainActor in try await self.client.agenda.lesson(schoolID: self.scope.schoolID, id: self.lessonID) }
+            defer { lessonRead.cancel() }
             let person = try await client.reader.me()
             guard person.personId == scope.personID, let current = person.memberships.first(where: { $0.membershipId == scope.membershipID }),
                   current.schoolId == scope.schoolID, current.accessEpoch == scope.accessEpoch, current.roles.sorted() == membership.roles.sorted(),
                   current.grants.sorted() == membership.grants.sorted() else { throw SchoolReportFailure.forbidden }
-            let lesson = try await client.agenda.lesson(schoolID: scope.schoolID, id: lessonID)
+            let lesson = try await lessonRead.value
             let learner = try await client.reader.learner(schoolID: scope.schoolID, id: lesson.learnerId)
             let isOwn = current.roles.contains("LEARNER") && learner.personId == scope.personID
             let author = current.roles.contains("INSTRUCTOR") && lesson.instructorMembershipId == current.membershipId
@@ -395,9 +398,13 @@ import Observation
                 let trainingRead = try await trainingTask.value
                 guard let training = trainingRead.value else { return (trainingRead, (nil, trainingRead.message)) }
                 let curriculumRead = try await self.readSupplement(request: request, unavailable: curriculumUnavailable) {
+                    let curriculaRead = Task { @MainActor in
+                        try await self.collect { try await self.client.catalog.curricula(schoolID: schoolID, cursor: $0) }
+                    }
+                    defer { curriculaRead.cancel() }
                     let offerings = try await self.collect { try await self.client.catalog.offerings(schoolID: schoolID, cursor: $0) }
                     guard let offering = offerings.first(where: { $0.id == training.offeringId }) else { throw SchoolReportFailure.notFound }
-                    let curricula = try await self.collect { try await self.client.catalog.curricula(schoolID: schoolID, cursor: $0) }
+                    let curricula = try await curriculaRead.value
                     guard let curriculum = curricula.first(where: { $0.id == offering.curriculumVersionId }) else { throw SchoolReportFailure.notFound }
                     return curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }
                 }

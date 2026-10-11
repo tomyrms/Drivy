@@ -167,7 +167,7 @@ import Testing
             sequence: anchor.pointSequence, scope: fixture.scope)
         try await fixture.store.flushForObservation(captureID: anchor.captureID, segmentID: anchor.segmentID,
             sequence: anchor.pointSequence, scope: fixture.scope)
-        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId)
+        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: try #require(fixture.capture.deviceId))
         let chunks = queue.filter { $0.mutation.kind == .uploadChunk }
         #expect(chunks.count == 1)
         let queued = try #require(chunks.first)
@@ -216,7 +216,7 @@ import Testing
         #expect(anchor.pointSequence == 1)
         try await fixture.store.flushForObservation(captureID: anchor.captureID, segmentID: anchor.segmentID,
             sequence: anchor.pointSequence, scope: fixture.scope)
-        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId)
+        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: try #require(fixture.capture.deviceId))
         let chunkData = try #require(queue.first(where: { $0.mutation.kind == .uploadChunk })?.mutation.body)
         let chunk = try JSONDecoder().decode(SchoolCaptureChunkBody.self, from: chunkData)
         #expect(chunk.points.map(\.sequence) == [0, 1])
@@ -259,7 +259,7 @@ import Testing
         #expect(await fixture.controller.stopAndSynchronize())
         await fixture.waitUntilSettled()
         #expect(fixture.controller.synchronizationNeedsRetry && fixture.controller.finalizedSyncState == nil)
-        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId)
+        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: try #require(fixture.capture.deviceId))
         let pending = try #require(queue.first { $0.mutation.kind == .finalizeCapture })
         await fixture.controller.retrySynchronization()
         #expect(fixture.controller.finalizedSyncState == .synced && !fixture.controller.synchronizationNeedsRetry)
@@ -319,7 +319,7 @@ import Testing
         await fixture.controller.resumePendingSynchronizations(client: client, scope: fixture.scope)
         #expect(await fixture.server.requests().count == before)
         #expect(fixture.controller.pendingSynchronizationError == nil)
-        let pending = try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId)
+        let pending = try await fixture.store.pending(scope: fixture.scope, deviceID: try #require(fixture.capture.deviceId))
         #expect(pending.contains { $0.mutation.kind == .finalizeCapture })
     }
 
