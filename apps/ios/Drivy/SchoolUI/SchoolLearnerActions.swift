@@ -34,15 +34,6 @@ struct SchoolLearnerContactLink: Identifiable, Equatable {
         }
     }
 
-    /// Le mot écrit sous l’icône d’une tuile ; VoiceOver lit toujours `title`.
-    var shortTitle: String {
-        switch kind {
-        case .call: "Appeler"
-        case .message: "Message"
-        case .mail: "E-mail"
-        }
-    }
-
     static func links(for contact: SchoolLearnerContact) -> [SchoolLearnerContactLink] {
         var links: [SchoolLearnerContactLink] = []
         if let phone = contact.phone {
@@ -61,8 +52,7 @@ struct SchoolLearnerContactLink: Identifiable, Equatable {
 }
 
 /// Les gestes fréquents envers un élève, sans afficher ses coordonnées en toutes lettres.
-/// Pastilles de 44 pt côte à côte, ou tuiles libellées de même largeur dans la carte du dossier (`labelled`) ;
-/// aux tailles d’accessibilité, des lignes libellées empilées.
+/// Pastilles de 44 pt côte à côte ; aux tailles d’accessibilité, des lignes libellées empilées.
 /// Sans coordonnée exploitable ni profil à ouvrir, la vue ne prend aucune place.
 struct SchoolLearnerActions: View {
     let learner: SchoolLearner
@@ -71,8 +61,6 @@ struct SchoolLearnerActions: View {
     var contact: SchoolLearnerContact? = nil
     /// Préfixe des identifiants de test : « préfixe-phone », « préfixe-message », « préfixe-email ».
     var identifierPrefix: String? = nil
-    /// Dans la carte de l’élève : chaque geste est une tuile, l’icône au-dessus de son mot.
-    var labelled = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -87,7 +75,7 @@ struct SchoolLearnerActions: View {
             let stacked = typeSize.isAccessibilitySize
             let layout = stacked
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
-                : AnyLayout(HStackLayout(spacing: labelled ? DrivySpacing.xs : DrivySpacing.s))
+                : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
             layout {
                 if let openProfile {
                     profileButton(openProfile)
@@ -127,24 +115,6 @@ struct SchoolLearnerActions: View {
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
                     .contentShape(Rectangle())
-            } else if labelled {
-                VStack(spacing: DrivySpacing.xxs) {
-                    Image(systemName: link.symbol)
-                        .font(.body.weight(.medium))
-                        .accessibilityHidden(true)
-                    Text(link.shortTitle)
-                        .font(.footnote.weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                .frame(maxWidth: .infinity, minHeight: 56)
-                .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-                .overlay {
-                    if contrast == .increased {
-                        RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous).strokeBorder(DrivyTheme.accent, lineWidth: 1)
-                    }
-                }
-                .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
             } else {
                 Image(systemName: link.symbol)
                     .font(.body.weight(.medium))

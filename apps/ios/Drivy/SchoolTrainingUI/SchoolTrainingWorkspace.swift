@@ -328,6 +328,13 @@ enum SchoolPermitName {
         return result
     }
 
+    /// Dans la carte de l’élève : « Cat. B », et l’année de début quand deux formations partagent une catégorie.
+    static func categories(_ trainings: [SchoolTraining]) -> [UUID: String] {
+        names(trainings).mapValues { name in
+            name.hasPrefix("Permis ") ? "Cat. " + String(name.dropFirst("Permis ".count)) : name
+        }
+    }
+
     /// Sous le nom de l’élève : ses permis en une ligne. Seul un état inhabituel est précisé.
     static func summary(_ trainings: [SchoolTraining]) -> String? {
         guard trainings.count > 1 else { return trainings.first.map { "Permis \($0.categoryCode)" } }

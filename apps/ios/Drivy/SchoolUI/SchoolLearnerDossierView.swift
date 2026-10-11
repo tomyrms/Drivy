@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// The dossier says who the learner is and how to reach them, then shows lessons or progression
-/// in place, in the same scroll, behind one segmented control: nothing is pushed.
-/// However many formations the learner follows, one permit filter serves both sections.
-/// Personal details stay folded until someone asks for them.
+/// The dossier opens on one card for the learner (who, which permits, how to reach them, and the personal
+/// details folded inside), then shows lessons or progression in place, in the same scroll, behind one
+/// segmented control: nothing is pushed. However many formations the learner follows, one permit filter
+/// serves both sections.
 struct SchoolLearnerDossierView: View {
     @Bindable var workspace: SchoolWorkspace
     let openProfile: ((SchoolLearner) -> Void)?
@@ -24,6 +24,8 @@ struct SchoolLearnerDossierView: View {
     @State private var permit: UUID?
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
 
     private var scopeKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.joined(separator: ",") ?? ""):\(workspace.membership?.grants.joined(separator: ",") ?? ""):\(workspace.selectedLearnerID?.uuidString ?? "")"
@@ -36,14 +38,6 @@ struct SchoolLearnerDossierView: View {
 
     /// The learner's formations, the current one first: the order of the permit filter.
     private var trainings: [SchoolTraining] { SchoolPermitName.ordered(workspace.trainings) }
-
-    /// With a single formation, its unusual status is a badge under the learner's name.
-    /// With several, the line of permits says it in words, next to the permit concerned.
-    private var unusualSoleTraining: SchoolTraining? {
-        guard workspace.trainings.count == 1, workspace.nextTrainingsCursor == nil,
-              let training = workspace.trainings.first, training.status != "ACTIVE" else { return nil }
-        return training
-    }
 
     var body: some View {
         NavigationStack {
@@ -100,41 +94,118 @@ struct SchoolLearnerDossierView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { actions }
     }
 
-    // MARK: - Identity
+    // MARK: - Learner card
 
-    /// Visible at once: who, which permits, what is unusual, and the frequent gestures.
-    /// Everything shown here comes with the dossier itself, so nothing moves when the profile arrives.
+    /// One card for the person. Folded: who, which permits and their state, and a menu to reach them.
+    /// Unfolded: the personal details, in the same surface. Everything shown folded comes with the dossier
+    /// itself, so nothing moves when the profile arrives.
     private func header(_ learner: SchoolLearner) -> some View {
-        // Une seule carte pour la personne, comme une fiche de contact : qui elle est, comment la joindre,
-        // puis ses informations, repliées. Rien de ce qui la concerne n’est dessiné ailleurs.
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                // Historic UI-test identifier: it now designates the full name that heads the dossier.
-                DrivyLearnerIdentity(name: learner.displayName,
-                                     detail: SchoolPermitName.summary(trainings), variant: .page)
-                    .accessibilityIdentifier("learner-profile-first-name")
-                statusBadges(learner)
-                SchoolLearnerActions(learner: learner, contact: contact(of: learner), identifierPrefix: "learner-profile",
-                                     labelled: true)
+        let links = SchoolLearnerContactLink.links(for: contact(of: learner))
+        let unfolds = canUnfold(learner)
+        return VStack(alignment: .leading, spacing: 0) {
+            // Rien à déplier : la carte reste lisible, l’appui ne fait rien (un bouton désactivé griserait le nom).
+            Button { if unfolds { toggleInformation() } } label: {
+                identity(learner, reservesMenu: !links.isEmpty, unfolds: unfolds)
             }
-            .padding(.vertical, DrivySpacing.m)
-            information(learner)
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel([learner.displayName, permitLine, learner.archivedAt == nil ? nil : "Archivé"]
+                .compactMap { $0 }.joined(separator: ", "))
+            .accessibilityValue(unfolds ? (showsInformation ? "Informations personnelles dépliées" : "Informations personnelles repliées") : "")
+            .accessibilityHint(unfolds ? "Affiche ou masque les informations personnelles" : "")
+            // Historic UI-test identifier: it designates the full name that heads the dossier.
+            .accessibilityIdentifier("learner-profile-first-name")
+            // The menu sits over the header, outside the button: opening it never unfolds the card.
+            .overlay(alignment: .topTrailing) {
+                if !links.isEmpty { contactMenu(links, learner: learner).padding(.top, DrivySpacing.m) }
+            }
+            attention(learner)
+            if showsInformation && unfolds {
+                VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                    Divider().overlay(DrivyTheme.border)
+                    details(learner)
+                }
+                .padding(.bottom, DrivySpacing.m)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity.combined(with: .offset(y: -DrivySpacing.xs)))
+                .accessibilityIdentifier("learner-profile-details")
+            }
         }
         .drivyGroupedBlock(verticalPadding: 0)
+        // The details appear inside the card as it grows, never over what follows.
+        .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.groupedBlock, style: .continuous))
     }
 
-    @ViewBuilder private func statusBadges(_ learner: SchoolLearner) -> some View {
-        if learner.archivedAt != nil || unusualSoleTraining != nil {
-            let layout = typeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
-                : AnyLayout(HStackLayout(spacing: DrivySpacing.xs))
-            layout {
+    private func identity(_ learner: SchoolLearner, reservesMenu: Bool, unfolds: Bool) -> some View {
+        let stacked = typeSize.isAccessibilitySize
+        return HStack(alignment: .center, spacing: DrivySpacing.s) {
+            // At the largest text sizes the name takes the whole width.
+            if !stacked { DrivyAvatar(name: learner.displayName, size: DrivyAvatar.pageSize) }
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(learner.displayName)
+                    .font(.drivyTitle)
+                    .foregroundStyle(DrivyTheme.text)
+                    .lineLimit(stacked ? nil : 2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let permitLine {
+                    Text(permitLine)
+                        .font(.subheadline)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if learner.archivedAt != nil { DrivyStatusBadge(title: "Archivé", symbol: "archivebox") }
-                if let training = unusualSoleTraining {
-                    DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // The trailing column: room for the menu laid over it, then the chevron of the card.
+            VStack(spacing: 0) {
+                if reservesMenu { Color.clear.frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget) }
+                if unfolds {
+                    Image(systemName: reduceMotion && showsInformation ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.muted)
+                        .rotationEffect(.degrees(!reduceMotion && showsInformation ? 180 : 0))
+                        .frame(width: DrivyLayout.tapTarget, height: reservesMenu ? 16 : DrivyLayout.tapTarget)
                 }
             }
         }
+        .padding(.vertical, DrivySpacing.m)
+        .contentShape(Rectangle())
+    }
+
+    /// Every permit with its state, the current one first: « Cat. B (En cours) · Cat. A (En pause) ».
+    /// One line of text that wraps, so several permits never turn into a row of badges.
+    private var permitLine: String? {
+        let names = SchoolPermitName.categories(trainings)
+        let parts = trainings.map { "\(names[$0.id] ?? "Cat. \($0.categoryCode)") (\(SchoolPresentation.trainingStatus($0.status)))" }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// The same three gestures as before, behind one button: call, message, e-mail. Only those a
+    /// recorded contact makes possible are listed.
+    private func contactMenu(_ links: [SchoolLearnerContactLink], learner: SchoolLearner) -> some View {
+        Menu {
+            ForEach(links) { link in
+                Button { openURL(link.url) } label: { Label(link.title, systemImage: link.symbol) }
+                    .accessibilityValue(link.value)
+                    .accessibilityIdentifier("learner-profile-\(link.kind.rawValue)")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(DrivyTheme.text)
+                .frame(width: 32, height: 32)
+                .background(DrivyTheme.surfaceMuted, in: Circle())
+                .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Contacter \(learner.displayName)")
+        .accessibilityIdentifier("learner-profile-actions")
+    }
+
+    private func toggleInformation() {
+        withAnimation(DrivyMotion.unfold(reduceMotion)) { showsInformation.toggle() }
     }
 
     /// Once read, the administrative profile is the reference for contacts; before, the dossier's own copy.
@@ -147,13 +218,22 @@ struct SchoolLearnerDossierView: View {
 
     // MARK: - Personal details
 
-    /// A request to check and an error are unusual: they stay visible. The details themselves wait folded.
-    @ViewBuilder private func information(_ learner: SchoolLearner) -> some View {
-        if makeLearnerProfile == nil {
-            recordedContacts(learner)
-        } else {
+    /// There is something to unfold: a profile read or being read, or recorded contacts in an isolated shell.
+    private func canUnfold(_ learner: SchoolLearner) -> Bool {
+        guard makeLearnerProfile != nil else {
+            return learner.contactEmail != nil || learner.contactPhone != nil || openProfile != nil
+        }
+        let model = currentProfile
+        return model?.profile != nil || model?.isLoading == true || (model == nil && !profileCreationFailed)
+    }
+
+    /// A request to check and an error are unusual: they stay visible, folded or not.
+    @ViewBuilder private func attention(_ learner: SchoolLearner) -> some View {
+        if makeLearnerProfile != nil {
             let model = currentProfile
-            if let model, model.pending != nil { verifyButton(model) }
+            if let model, model.pending != nil {
+                verifyButton(model).padding(.bottom, DrivySpacing.xs)
+            }
             if let error = model?.errorMessage {
                 SchoolErrorNotice(message: error, retry: { Task { await loadProfile() } })
                     .padding(.bottom, DrivySpacing.m)
@@ -162,39 +242,30 @@ struct SchoolLearnerDossierView: View {
                     retry: { Task { await loadProfile() } })
                     .padding(.bottom, DrivySpacing.m)
             }
-            if model?.profile != nil || model?.isLoading == true || (model == nil && !profileCreationFailed) {
-                Divider().overlay(DrivyTheme.border)
-                informationDisclosure(model, learner: learner)
-            }
         }
     }
 
-    private func informationDisclosure(_ model: SchoolProfileWorkspace?, learner: SchoolLearner) -> some View {
-        DisclosureGroup(isExpanded: $showsInformation) {
-            VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                if let model, model.profile != nil {
-                    SchoolLearnerProfileSummary(model: model, displayedName: learner.displayName)
-                    if model.pending == nil { editButton(model) }
-                } else {
-                    DrivySkeletonRows(count: 2, lines: 1).drivySkeleton("Chargement des informations…")
+    @ViewBuilder private func details(_ learner: SchoolLearner) -> some View {
+        Text("Informations personnelles")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(DrivyTheme.muted)
+            .accessibilityAddTraits(.isHeader)
+        if makeLearnerProfile == nil {
+            // Isolated shells without a profile client still show only recorded contacts.
+            VStack(alignment: .leading, spacing: 0) {
+                if let email = learner.contactEmail { DrivyContactRow(title: "E-mail", value: email) }
+                if let phone = learner.contactPhone { DrivyContactRow(title: "Téléphone", value: phone) }
+                if let openProfile {
+                    Button("Modifier les informations") { openProfile(learner) }
+                        .buttonStyle(.drivyText)
                 }
             }
-            .padding(.top, DrivySpacing.xxs)
-            .padding(.bottom, DrivySpacing.s)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            informationLabel
+        } else if let model = currentProfile, model.profile != nil {
+            SchoolLearnerProfileSummary(model: model, displayedName: learner.displayName)
+            if model.pending == nil { editButton(model) }
+        } else {
+            DrivySkeletonRows(count: 2, lines: 1).drivySkeleton("Chargement des informations…")
         }
-        .disclosureGroupStyle(.drivy)
-        .accessibilityIdentifier("learner-profile-details")
-    }
-
-    private var informationLabel: some View {
-        // Une destination sur place : corps de texte et encre du texte, comme « Mes informations » chez l’élève.
-        Text("Informations personnelles")
-            .foregroundStyle(DrivyTheme.text)
-            .multilineTextAlignment(.leading)
-            .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
     }
 
     /// Never dimmed during a silent reread: the form keeps its own fields locked until the answer.
@@ -210,27 +281,6 @@ struct SchoolLearnerDossierView: View {
         }
         .buttonStyle(.drivyText)
         .accessibilityIdentifier("learner-edit-profile")
-    }
-
-    /// Isolated shells without a profile client still show only recorded contacts.
-    @ViewBuilder private func recordedContacts(_ learner: SchoolLearner) -> some View {
-        if learner.contactEmail != nil || learner.contactPhone != nil || openProfile != nil {
-            Divider().overlay(DrivyTheme.border)
-            DisclosureGroup(isExpanded: $showsInformation) {
-                VStack(alignment: .leading, spacing: 0) {
-                    if let email = learner.contactEmail { DrivyContactRow(title: "E-mail", value: email) }
-                    if let phone = learner.contactPhone { DrivyContactRow(title: "Téléphone", value: phone) }
-                    if let openProfile {
-                        Button("Modifier les informations") { openProfile(learner) }
-                            .buttonStyle(.drivyText)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } label: {
-                informationLabel
-            }
-            .disclosureGroupStyle(.drivy)
-        }
     }
 
     // MARK: - Lessons and progression

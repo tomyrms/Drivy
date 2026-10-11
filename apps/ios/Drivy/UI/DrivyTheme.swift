@@ -198,6 +198,9 @@ enum DrivyMotion {
     static func reveal(_ reduceMotion: Bool) -> Animation { reduceMotion ? .easeInOut(duration: 0.2) : .smooth(duration: 0.3) }
     /// Ouverture et fermeture d’un panneau posé sur l’écran (palette de signalement) : vif, sans rebond. Sous
     /// Réduire les animations, la transition du panneau devient un fondu, jamais une apparition sèche.
+    /// Une carte qui se déplie sur place (carte de l’élève) : ressort souple, un rebond à peine perceptible.
+    /// Sous Réduire les animations, un fondu bref.
+    static func unfold(_ reduceMotion: Bool) -> Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.45, bounce: 0.22) }
     static func present(_ reduceMotion: Bool) -> Animation { reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.24, extraBounce: 0) }
 }
 
