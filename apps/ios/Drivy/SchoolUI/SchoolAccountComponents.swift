@@ -29,7 +29,8 @@ struct SchoolAccountActions {
                 .accessibilityIdentifier("open-my-profile")
         }
         if let resumeOnboarding {
-            DrivyNavigationRow(title: "Reprendre l’accueil", action: resumeOnboarding)
+            // Ce qui attend le compte se lit sur sa ligne, en bleu : le point de l’onglet y mène.
+            DrivyNavigationRow(title: "Reprendre l’accueil", badge: DrivyStatusBadge(title: "À terminer", tone: .accent), action: resumeOnboarding)
                 .accessibilityIdentifier("resume-school-onboarding")
         }
         if let openInvitations {

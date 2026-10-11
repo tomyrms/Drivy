@@ -94,7 +94,8 @@ struct SchoolHomeView: View {
 
     /// Le point d’un onglet : la pastille du système, vide, à la couleur d’accent. Rien quand tout est résolu.
     private func actionDot(_ tab: SchoolHomeTab) -> Text? {
-        requiredActions.needsAttention(tab) ? Text(" ") : nil
+        // An empty badge is the system's small dot; any text would make it a pill.
+        requiredActions.needsAttention(tab) ? Text("") : nil
     }
 
     /// Ce que cette vue sait déjà sans rien lire de plus : les profils incomplets de la page d’élèves affichée

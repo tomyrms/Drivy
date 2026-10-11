@@ -67,9 +67,19 @@ final class SchoolRequiredActionStore {
         actions.first { $0.kind == kind && $0.entityID == entityID }
     }
 
-    /// The tab indicator is the system badge, empty and in the Drivy accent: a dot, never a red count.
+    /// The tab indicator is the system badge, empty and in the Drivy accent: a small dot, never a red count.
+    /// SwiftUI has no colour for a tab badge; the tab bar reads it from its item appearance.
     private static func styleTabIndicators() {
-        UITabBarItem.appearance().badgeColor = UIColor(DrivyTheme.accent)
+        let accent = UIColor(DrivyTheme.accent)
+        UITabBarItem.appearance().badgeColor = accent
+        let item = UITabBarItemAppearance()
+        for state in [item.normal, item.selected, item.focused, item.disabled] { state.badgeBackgroundColor = accent }
+        let bar = UITabBar.appearance()
+        for appearance in [bar.standardAppearance, bar.scrollEdgeAppearance ?? bar.standardAppearance] {
+            appearance.stackedLayoutAppearance = item
+            appearance.inlineLayoutAppearance = item
+            appearance.compactInlineLayoutAppearance = item
+        }
     }
 }
 

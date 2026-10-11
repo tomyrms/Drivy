@@ -78,8 +78,10 @@ struct SchoolLearnerProfileTab: View {
         .id(accountKey)
         .task(id: scopeKey) { await prepare() }
         // L’accord donné (ou relu) ici éteint aussitôt le point de l’onglet.
-        .onChange(of: consentAttention) { _, attention in
-            if consent != nil { requiredActions?.replace(.giveRecordingConsent, with: SchoolRequiredActionRules.recordingConsent(attention: attention)) }
+        // Once this tab has read the consent, it is the reference: the dot of the tab says what its row says.
+        .onChange(of: "\(consent?.isLoading ?? true):\(consentAttention ?? "")", initial: true) { _, _ in
+            guard let consent, !consent.isLoading else { return }
+            requiredActions?.replace(.giveRecordingConsent, with: SchoolRequiredActionRules.recordingConsent(attention: consentAttention))
         }
         .onChange(of: accountKey) { _, _ in
             path = []; showsInformation = false; information?.invalidate(); information = nil
