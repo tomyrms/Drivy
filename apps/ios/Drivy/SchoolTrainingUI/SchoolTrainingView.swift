@@ -361,8 +361,11 @@ private struct SchoolTrainingContent: View {
                     .refreshable { await feed.reload() }
             }
         }
-        .background(DrivyTheme.surface)
+        .background(groupsProgress ? DrivyTheme.canvas : DrivyTheme.surface)
     }
+
+    /// La Progression de l’élève se lit en cartes sur le fond de page, comme son Profil.
+    private var groupsProgress: Bool { ownLessons && !isEmbedded && fixedSection == .progress }
 
     /// Le flux unique : sélecteur, rangée de filtres, puis la section choisie. Le dossier le pose tel quel sous l’identité.
     private var page: some View {
@@ -843,7 +846,7 @@ private struct SchoolTrainingContent: View {
             ForEach([progressModel].compactMap { $0 }.filter { $0.training != nil || $0.isLoading }, id: \.trainingID) { model in
                 VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     if namesPermit && mixesPermits { permitTitle(model, name: permitName(model, in: names)) }
-                    SchoolTrainingProgressSection(model: model, schoolTimeZone: zone) { opened = OpenedLesson(id: $0) }
+                    SchoolTrainingProgressSection(model: model, schoolTimeZone: zone, grouped: groupsProgress) { opened = OpenedLesson(id: $0) }
                     // Changer de permis : la progression de l’autre remplace celle-ci, replis refermés.
                     .id(model.trainingID)
                 }

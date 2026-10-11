@@ -91,6 +91,23 @@ struct SchoolProgressRulesTests {
         #expect(fromLesson.revisionID == corrected && fromLesson.date == "2026-01-10T08:00:00Z")
     }
 
+    @Test func radarPlotsEachCompetencyOfTheCurriculumAtItsPublishedLevel() {
+        let ids = (0..<4).map { _ in UUID() }
+        let curriculum = [(id: ids[0], label: "Priorités"), (id: ids[1], label: "Stationnement"),
+                          (id: ids[2], label: "Autoroute"), (id: ids[3], label: "Vitesse")]
+        let items = [item("Autoroute", "INDEPENDENT", id: ids[2]), item("Priorités", "DISCOVERING", id: ids[0]),
+                     item("Stationnement", "GUIDED", id: ids[1])]
+        let axes = SchoolProgressRules.radarAxes(curriculum: curriculum, items: items, unobserved: 1)
+        // L’ordre du référentiel, le niveau tel quel, zéro pour la compétence pas encore vue.
+        #expect(axes.map(\.label) == ["Priorités", "Stationnement", "Autoroute", "Vitesse"])
+        #expect(axes.map(\.rank) == [1, 2, 3, 0])
+        // Référentiel pas encore lu, ou qui ne couvre pas la progression : pas de toile plutôt qu’une toile fausse.
+        #expect(SchoolProgressRules.radarAxes(curriculum: [], items: items, unobserved: 1).isEmpty)
+        #expect(SchoolProgressRules.radarAxes(curriculum: Array(curriculum.prefix(3)), items: items, unobserved: 1).isEmpty)
+        // Deux branches ne font pas une toile.
+        #expect(SchoolProgressRules.radarAxes(curriculum: Array(curriculum.prefix(2)), items: Array(items.suffix(2)), unobserved: 0).isEmpty)
+    }
+
     @Test func nothingIsEvaluatedWithoutAPublishedReportOrAnEvaluation() throws {
         let lessons = [try lesson(UUID(), start: "2026-09-25T08:00:00Z")]
         #expect(SchoolProgressRules.lastEvaluated(lessons: lessons, hasMore: false, items: []) == nil)
