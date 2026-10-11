@@ -91,7 +91,7 @@ struct SchoolCodeJoinView: View {
                     if let value = values.first, value.utf8.count <= 64 { model.code = SchoolInvitationCode.formatted(value) }
                 }
                 .accessibilityLabel("Coller le code")
-                .frame(minHeight: 44)
+                .frame(minHeight: DrivyLayout.tapTarget)
                 .disabled(model.isBusy)
             }
             if let useLink {

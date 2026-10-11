@@ -218,7 +218,6 @@ struct DrivyDesignSystemGallery: View {
                 DrivyLoadingState(title: "Chargement de l’agenda…")
                 SchoolErrorNotice(message: "L’agenda n’a pas pu être chargé. Vérifie la connexion puis réessaie.") {}
                 SchoolErrorNotice(message: "Erreur sans reprise possible.")
-                InlineErrorView(message: "L’observation n’a pas encore été enregistrée.") {}
             }
         }
     }
@@ -400,10 +399,14 @@ struct DrivyDesignSystemGallery: View {
     private static let swatches: [GallerySwatch] = [
         GallerySwatch(name: "canvas", role: "Fond des formulaires", color: DrivyTheme.canvas),
         GallerySwatch(name: "surface", role: "Page de lecture", color: DrivyTheme.surface),
-        GallerySwatch(name: "surfaceMuted", role: "Remplissage discret", color: DrivyTheme.surfaceMuted),
+        GallerySwatch(name: "surfaceCard", role: "Carte, panneau", color: DrivyTheme.surfaceCard),
+        GallerySwatch(name: "surfaceRaised", role: "Bloc posé, carte GPS", color: DrivyTheme.surfaceRaised),
+        GallerySwatch(name: "surfaceMuted", role: "Remplissage interactif", color: DrivyTheme.surfaceMuted),
         GallerySwatch(name: "text", role: "Texte principal", color: DrivyTheme.text),
         GallerySwatch(name: "muted", role: "Texte secondaire", color: DrivyTheme.muted),
-        GallerySwatch(name: "accent", role: "Action, lien", color: DrivyTheme.accent),
+        GallerySwatch(name: "textTertiary", role: "Glyphe décoratif", color: DrivyTheme.textTertiary),
+        GallerySwatch(name: "accent", role: "Lien, symbole", color: DrivyTheme.accent),
+        GallerySwatch(name: "accentFill", role: "Aplat d’action", color: DrivyTheme.accentFill),
         GallerySwatch(name: "accentPressed", role: "Action appuyée", color: DrivyTheme.accentPressed),
         GallerySwatch(name: "onAccent", role: "Texte sur accent", color: DrivyTheme.onAccent),
         GallerySwatch(name: "accentSoft", role: "Sélection", color: DrivyTheme.accentSoft),

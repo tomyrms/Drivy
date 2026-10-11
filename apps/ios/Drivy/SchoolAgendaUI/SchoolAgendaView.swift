@@ -145,7 +145,7 @@ struct SchoolAgendaView: View {
         if isAdmin && isInstructor {
             Toggle("Toute l’école", isOn: $wholeSchool)
                 .font(.subheadline.weight(.semibold))
-                .frame(minHeight: 44)
+                .frame(minHeight: DrivyLayout.tapTarget)
                 .accessibilityIdentifier("agenda-whole-school")
         }
     }
@@ -201,20 +201,18 @@ struct SchoolAgendaView: View {
     private var weekControls: some View {
         HStack(spacing: DrivySpacing.xxs) {
             if !calendar.isDateInToday(selectedDate) {
-                Button { select(Date()) } label: {
-                    Text("Aujourd’hui")
-                        .font(.subheadline.weight(.semibold))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
+                Button("Aujourd’hui") { select(Date()) }
+                    .buttonStyle(.drivyText)
+                    .frame(minWidth: DrivyLayout.tapTarget)
             }
             Button { moveWeek(-1) } label: {
-                Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
+                Image(systemName: "chevron.left").font(.body.weight(.semibold))
+                    .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget).contentShape(Rectangle())
             }
             .accessibilityLabel("Semaine précédente")
             Button { moveWeek(1) } label: {
-                Image(systemName: "chevron.right").font(.body.weight(.semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
+                Image(systemName: "chevron.right").font(.body.weight(.semibold))
+                    .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget).contentShape(Rectangle())
             }
             .accessibilityLabel("Semaine suivante")
         }
@@ -235,11 +233,9 @@ struct SchoolAgendaView: View {
         }
     }
     private var planButton: some View {
-        Button { planningModel = newPlanningModel() } label: {
-            Label("Planifier une leçon", systemImage: "plus").font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
-                .fixedSize(horizontal: false, vertical: true).frame(minHeight: 44).contentShape(Rectangle())
-        }
-        .accessibilityIdentifier("agenda-plan-lesson")
+        Button { planningModel = newPlanningModel() } label: { Label("Planifier une leçon", systemImage: "plus") }
+            .buttonStyle(.drivyText)
+            .accessibilityIdentifier("agenda-plan-lesson")
     }
     @ViewBuilder private var dayPicker: some View {
         if typeSize.isAccessibilitySize { compactDayPicker }
@@ -289,8 +285,8 @@ struct SchoolAgendaView: View {
                             }
                         }
                     }
-                    .frame(minWidth: 44, maxWidth: .infinity, minHeight: 80)
-                    .background(selected ? DrivyTheme.accent : .clear, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                    .frame(minWidth: DrivyLayout.tapTarget, maxWidth: .infinity, minHeight: 80)
+                    .background(selected ? DrivyTheme.accentFill : .clear, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                     .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                 }
                 .buttonStyle(AgendaDayButtonStyle())
@@ -302,6 +298,8 @@ struct SchoolAgendaView: View {
         }
         .padding(DrivySpacing.xxs)
         .modifier(DrivyGroupedSurface(cornerRadius: DrivyRadius.content + DrivySpacing.xxs))
+        // La bande de la semaine est un sélecteur : un léger retour de sélection, comme les roues du système.
+        .sensoryFeedback(.selection, trigger: selectedDate)
     }
 
     /// Same row anatomy as the training dossier and the report lists: the time column already

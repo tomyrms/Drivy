@@ -101,6 +101,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             try await reloadQueue(request: request)
         } catch {
             guard request == generation, !invalidated else { return }
+            if Task.isCancelled { isLoading = false; return }
             storageError = "Le journal protégé n’est pas accessible. Tu peux lire le choix, mais pas en enregistrer un nouveau."
         }
         guard request == generation, !invalidated else { return }
@@ -111,7 +112,11 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             isLoading = false; needsReload = false
         } catch {
             guard request == generation, !invalidated else { return }
-            isLoading = false; fail(error)
+            isLoading = false
+            // Lecture interrompue (l’écran a quitté la page avant la réponse) : ni panne ni réponse. Rien n’est
+            // affiché comme une erreur, et `needsReload` reste vrai pour que la lecture reprenne au retour.
+            if Task.isCancelled || error is CancellationError { return }
+            fail(error, reading: true)
         }
     }
 
@@ -295,13 +300,31 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
         lhs.noticeVersionId == rhs.noticeVersionId && lhs.noticeText == rhs.noticeText
             && lhs.retentionText == rhs.retentionText && lhs.contactEmail == rhs.contactEmail && lhs.approvedAt == rhs.approvedAt
     }
-    private func fail(_ error: any Error) {
+    /// `reading` : la panne vient de la lecture du choix, pas d’un envoi. Le message nomme alors l’accord GPS.
+    private func fail(_ error: any Error, reading: Bool = false) {
         var revoked = error as? SchoolCaptureFailure == .unauthorized || error as? SchoolCaptureFailure == .forbidden
             || error as? SchoolAPIError == .unauthorized || error as? SchoolAPIError == .forbidden || error as? SchoolAPIError == .identityNotLinked
         if let agendaError = error as? SchoolAgendaFailure {
             switch agendaError { case .authentication, .forbidden: revoked = true; default: break }
         }
         if revoked { invalidate(); accessRevoked = true }
-        errorMessage = (error as? LocalizedError)?.errorDescription ?? "Le choix n’a pas pu être vérifié. Les demandes déjà sauvegardées restent conservées."
+        if reading, !revoked {
+            errorMessage = Self.readingFailure(unreachable: error as? SchoolCaptureFailure == .unavailable
+                || error as? SchoolAPIError == .unavailable || Self.agendaUnreachable(error))
+        } else {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? "L’accord GPS n’a pas pu être enregistré. Réessaie."
+        }
+    }
+
+    /// Ce que dit une lecture de l’accord GPS qui n’aboutit pas : l’objet d’abord, la cause quand elle est connue.
+    static func readingFailure(unreachable: Bool) -> String {
+        unreachable ? "L’accord GPS n’a pas pu être lu : l’école est injoignable pour le moment."
+            : "L’accord GPS n’a pas pu être lu."
+    }
+
+    private static func agendaUnreachable(_ error: any Error) -> Bool {
+        guard let failure = error as? SchoolAgendaFailure else { return false }
+        if case .unavailable = failure { return true }
+        return false
     }
 }

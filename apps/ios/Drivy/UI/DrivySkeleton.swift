@@ -160,7 +160,7 @@ struct DrivySkeletonRow: View {
             EmptyView()
         case .avatar:
             DrivySkeletonFill(shape: Circle())
-                .frame(width: 44, height: 44)
+                .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
         case .time:
             timeColumn
         }

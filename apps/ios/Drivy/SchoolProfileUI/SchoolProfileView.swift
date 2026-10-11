@@ -103,7 +103,7 @@ struct SchoolProfileView: View {
                     }
                 }
                 .accessibilityElement(children: .combine)
-                .listRowBackground(Color.clear)
+                .drivyClearRow()
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: DrivySpacing.xs, leading: 0, bottom: DrivySpacing.xs, trailing: 0))
             }
@@ -191,7 +191,7 @@ struct SchoolProfileView: View {
                 Text(country.name).tag(country.code)
             }
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: DrivyLayout.tapTarget)
         .accessibilityIdentifier("profile-country")
     }
     @ViewBuilder private func fieldExplanation(_ field: SchoolProfileField) -> some View {
@@ -239,7 +239,7 @@ struct SchoolProfileView: View {
                 .fixedSize(horizontal: false, vertical: true)
             if !completed {
                 Button("Reprendre l’accueil") { showsGuidedWelcome = true }
-                    .frame(minHeight: 44)
+                    .frame(minHeight: DrivyLayout.tapTarget)
                     .disabled(model.isBusy || model.hasEdits)
                     .accessibilityIdentifier("onboarding-resume")
                 if model.hasEdits {
@@ -341,7 +341,7 @@ struct SchoolProfileConflictNotice: View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
             SchoolErrorNotice(message: model.errorMessage ?? "Ces informations ont changé dans l’école.")
             Button("Recharger les informations") { confirmsReload = true }
-                .frame(minHeight: 44)
+                .frame(minHeight: DrivyLayout.tapTarget)
                 .disabled(model.isLoading || model.isBusy)
                 .accessibilityIdentifier("profile-reload-conflict")
         }

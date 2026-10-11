@@ -44,10 +44,41 @@ import Testing
             Self.lesson(1, status: "COMPLETED", start: "2026-05-01T08:00:00Z", instructor: Self.colleague, name: "Sam Rey"),
             Self.lesson(2, status: "COMPLETED", start: "2026-09-01T08:00:00Z", instructor: Self.instructor, name: "Alex Martin"),
         ]
-        #expect(SchoolTrainingOverview.instructorNames(assignments: [current, ended], lessons: lessons, now: now) == "Alex Martin")
+        #expect(SchoolTrainingOverview.assignedInstructors(assignments: [current, ended], lessons: lessons, now: now) == ["Alex Martin"])
         // Un moniteur affecté sans leçon lue n’est pas nommé : rien n’est deviné.
-        #expect(SchoolTrainingOverview.instructorNames(assignments: [current], lessons: [lessons[0]], now: now) == nil)
-        #expect(SchoolTrainingOverview.instructorNames(assignments: [ended], lessons: lessons, now: now) == nil)
+        #expect(SchoolTrainingOverview.assignedInstructors(assignments: [current], lessons: [lessons[0]], now: now).isEmpty)
+        #expect(SchoolTrainingOverview.assignedInstructors(assignments: [ended], lessons: lessons, now: now).isEmpty)
+        // Deux moniteurs affectés : deux noms distincts, dans l’ordre alphabétique, jamais une chaîne concaténée.
+        let both = [current, Self.assignment(Self.colleague, from: "2025-01-01T00:00:00Z", until: nil)]
+        #expect(SchoolTrainingOverview.assignedInstructors(assignments: both, lessons: lessons, now: now) == ["Alex Martin", "Sam Rey"])
+    }
+
+    @Test func permitSummaryGroupsLessonsAndTimeOnOneLine() throws {
+        func overview(_ lessons: Int, _ minutes: Int) -> SchoolTrainingOverview {
+            SchoolTrainingOverview(completedLessons: lessons, lessonMinutes: minutes, lastCompleted: nil, independent: nil, competencies: nil)
+        }
+        #expect(overview(0, 0).summary == "Aucune leçon terminée")
+        #expect(overview(1, 45).summary == "1 leçon terminée · 45 min")
+        #expect(overview(12, 870).summary == "12 leçons terminées · 14 h 30")
+        // Aucun horaire réel connu : le temps ne s’invente pas.
+        #expect(overview(3, 0).summary == "3 leçons terminées")
+        #expect(overview(3, 0).autonomySummary == nil)
+        let progress = try Self.progress(levels: ["INDEPENDENT", "GUIDED"], unobserved: 3)
+        #expect(SchoolTrainingOverview.make(lessons: [], progress: progress).autonomySummary == "1 sur 5 compétences en autonomie")
+    }
+
+    @Test func profileOnlyFlagsAGpsConsentThatAwaitsAnAnswer() {
+        func label(notice: Bool = true, revoked: Bool = false, pending: Bool = false, answered: Bool = false) -> String? {
+            SchoolRecordingChoiceAttention.label(notice: notice, revoked: revoked, pending: pending, answered: answered)
+        }
+        #expect(label() == "À donner")
+        #expect(label(answered: true) == nil)
+        #expect(label(pending: true, answered: true) == "À vérifier")
+        // Pas encore lu, lecture en panne ou accès retiré : le Profil ne dit rien, Paramètres porte le détail.
+        #expect(label(notice: false) == nil)
+        #expect(label(revoked: true) == nil)
+        #expect(SchoolRecordingChoiceWorkspace.readingFailure(unreachable: true).hasPrefix("L’accord GPS n’a pas pu être lu"))
+        #expect(SchoolRecordingChoiceWorkspace.readingFailure(unreachable: false) == "L’accord GPS n’a pas pu être lu.")
     }
 
     @Test func nextLessonMomentIsSaidToTheDay() {

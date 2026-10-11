@@ -174,9 +174,7 @@ struct DrivyLessonRow: View {
                     summary
                         .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
                     if showsChevron {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(DrivyTheme.muted)
+                        DrivyRowChevron()
                             .padding(.top, DrivySpacing.xxs)
                             .accessibilityHidden(true)
                     }

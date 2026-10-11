@@ -23,7 +23,7 @@ struct DrivySearchField: View {
                 Button { text = "" } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(DrivyTheme.muted)
-                        .frame(width: 44, height: 44)
+                        .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -33,7 +33,7 @@ struct DrivySearchField: View {
         }
         .font(.body)
         .padding(.leading, DrivySpacing.s)
-        .frame(minHeight: 44)
+        .frame(minHeight: DrivyLayout.tapTarget)
         .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
         .animation(DrivyMotion.feedback(reduceMotion), value: text.isEmpty)
     }

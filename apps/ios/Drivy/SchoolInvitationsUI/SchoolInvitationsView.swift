@@ -58,7 +58,7 @@ struct SchoolInvitationsView: View {
                             DrivyBusyLabel(title: "Afficher la suite", busyTitle: "Chargement…", isBusy: model.isLoadingMore)
                                 .font(.subheadline.weight(.semibold))
                         }
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget)
                         .disabled(model.isLoadingMore || model.isLoading || model.isBusy)
                         .accessibilityIdentifier("invitations-more")
                     }

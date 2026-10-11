@@ -217,7 +217,7 @@ struct SchoolOnboardingView: View {
                     Button { showsNotice = true } label: {
                         Label("Comment l’école utilise tes données", systemImage: "doc.text")
                             .font(.subheadline.weight(.semibold))
-                            .frame(minHeight: 44)
+                            .frame(minHeight: DrivyLayout.tapTarget)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -608,7 +608,7 @@ struct SchoolOnboardingView: View {
             .navigationTitle("Tes données")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Fermer") { showsNotice = false } }
+                ToolbarItem(placement: .cancellationAction) { Button("Fermer") { showsNotice = false } }
             }
         }
         .tint(DrivyTheme.accent)

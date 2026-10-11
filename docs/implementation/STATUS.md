@@ -1,5 +1,25 @@
 # État de la réalisation
 
+## 11 octobre 2026 — direction artistique commune (Profil, Élèves, Agenda)
+
+Audit croisé des onglets et de leurs feuilles, puis règles communes : une ligne prend le rythme de sa famille de page (liste groupée ou page de lecture), une seule action en texte, un badge pour ce qui attend une réponse, « Fermer » toujours au même endroit, vides et attentes par les composants partagés. Le Profil du moniteur prend la structure des Paramètres de l’élève, et les deux Profils posent l’en-tête sur le fond. Aujourd’hui n’est pas refait. [Audit, règles et décisions](direction-artistique-20261011.md). Branche `claude/da-harmonisation-20261011`, sur la PR #12.
+
+**Exécuté** : IPA d’essai compilée sur chaque lot ; captures iPhone clair et sombre avant et après, relues ; contraste du thème vérifié (clair inchangé). **Non exécuté** : tests Swift et parcours UI. **Reste à qualifier** : VoiceOver, grand texte et iPad sur appareil.
+
+## 11 octobre 2026 — Profil de l’élève restructuré
+
+Identité et « Mes informations », permis en liste compacte (une ligne et une synthèse par permis, détail au toucher avec accès à Leçons et Progression sur ce permis), « Paramètres » dans la barre (compte, enregistrement GPS, Face ID, déconnexion). Le message « Le choix n’a pas pu être vérifié » venait d’une lecture de l’accord GPS annulée et prise pour une panne : corrigé à la source. La Progression de l’élève suit : mêmes cartes que le Profil, et une toile des compétences (niveaux publiés, sans score). [Détail et arbitrages](profil-eleve-20261011.md).
+
+**Exécuté** : IPA d’essai compilée sur `e78b00c`. **Reste à qualifier** : rendu réel (clair, sombre, iPad, grand texte, VoiceOver), jamais vu tourner ; tests Swift non lancés à la demande du porteur.
+
+## 11 octobre 2026 — thème sombre « Soft Charcoal »
+
+Le thème sombre de l’app native est refait en anthracite neutre : un bloc est plus clair que la page qui le porte, le bouton principal est un cobalt plein au libellé blanc, une feuille monte d’un niveau. Le thème clair ne change pas. Détail, références et mesures : [dark-soft-charcoal-20261011.md](dark-soft-charcoal-20261011.md). Branche `claude/dark-soft-charcoal-20261011`, partie de la PR #10.
+
+**Exécuté** : IPA compilée sur `73bd0ec` ; 455 tests métier passent ; 141 couples de contraste sombres au-dessus de leur seuil (calcul sur les valeurs déclarées) ; 28 écrans iPhone capturés en clair et en sombre avant et après. En clair, 23 écrans sont identiques au pixel près ; les 5 autres diffèrent par l’heure, un chronomètre, une animation ou la galerie enrichie.
+
+**Reste à qualifier** : carte sombre réelle, Liquid Glass, ombres et bascule clair/sombre sur appareil ; Contraste accru, Réduire la transparence, grand texte, iPad et paysage, jamais rendus ; parcours UI non rejoués. **Au porteur** : valider à l’œil le bleu du bouton principal (`#3D70E2` au lieu de `#4D80EB`, pour le contraste du libellé) et l’aspect des interrupteurs. Le thème sombre du web n’est pas touché.
+
 ## 11 octobre 2026 — audit des parcours moniteur et élève
 
 Une leçon ne se commence plus que le jour de son rendez-vous (l’agenda proposait de commencer celle de la semaine suivante) ; un rendez-vous manqué propose « Élève absent » et ne reste plus en tête d’Aujourd’hui ; accord GPS synchronisé entre la fiche et Profil ; filtres de l’élève alignés sur sa carte ; VoiceOver et Réduire les animations dans Progression ; lectures réseau de la fiche réduites ; l’app accepte un trajet sans identifiants d’appareil du moniteur. [Détail, points ouverts et limites](audit-parcours-20261011.md).

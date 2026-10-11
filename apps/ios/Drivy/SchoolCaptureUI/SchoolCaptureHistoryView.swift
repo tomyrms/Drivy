@@ -18,7 +18,7 @@ struct SchoolCaptureUploadsSection: View {
                 SchoolErrorNotice(message: error,
                     retry: model.accessRevoked || model.isBusy ? nil : { Task { await model.load() } })
                     .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
+                    .drivyClearRow()
             }
         } header: {
             Text("À envoyer").drivyFormSectionHeader()
@@ -57,7 +57,7 @@ private struct SchoolCaptureUploadRow: View {
                     DrivyBusyLabel(title: "Envoyer", busyTitle: "Envoi…", isBusy: model.busyCaptureID == capture.id)
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, DrivySpacing.s)
-                        .frame(minHeight: 44)
+                        .frame(minHeight: DrivyLayout.tapTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
@@ -69,7 +69,7 @@ private struct SchoolCaptureUploadRow: View {
             if model.incomplete.contains(capture.id) && model.pendingFinalization[capture.id] == nil {
                 Button("Garder en partiel…") { confirmsPartial = true }
                     .font(.subheadline.weight(.semibold))
-                    .frame(minHeight: 44)
+                    .frame(minHeight: DrivyLayout.tapTarget)
                     .buttonStyle(.borderless)
                     .disabled(model.isBusy)
                     .confirmationDialog("Garder un trajet partiel ?", isPresented: $confirmsPartial, titleVisibility: .visible) {

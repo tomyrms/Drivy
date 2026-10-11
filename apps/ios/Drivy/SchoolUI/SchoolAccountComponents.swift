@@ -15,6 +15,14 @@ struct SchoolAccountActions {
     /// Les lignes du compte, dans l’ordre de la feuille. `afterChangingSchool` ferme la feuille qui les porte, s’il y en a une.
     @MainActor @ViewBuilder
     func rows(workspace: SchoolWorkspace?, openURL: OpenURLAction, afterChangingSchool: @escaping () -> Void = {}) -> some View {
+        accountRows(workspace: workspace, openURL: openURL, afterChangingSchool: afterChangingSchool)
+        lockRow()
+        signOutRow()
+    }
+
+    /// Le compte et l’école, sans le verrou ni la déconnexion : les Paramètres de l’élève les rangent par sujet.
+    @MainActor @ViewBuilder
+    func accountRows(workspace: SchoolWorkspace?, openURL: OpenURLAction, afterChangingSchool: @escaping () -> Void = {}) -> some View {
         // Aucun symbole de tête : chaque ligne se lit par son titre, une icône par ligne ne dit rien de plus.
         if let openProfile {
             DrivyNavigationRow(title: "Mes informations", action: openProfile)
@@ -43,34 +51,51 @@ struct SchoolAccountActions {
             DrivyNavigationRow(title: "Rejoindre une école", action: openJoinSchool)
                 .accessibilityIdentifier("open-join-school")
         }
-        SchoolAppLockRow()
+    }
+
+    /// « Ouvrir avec Face ID » ; rien sans verrou biométrique sur l’appareil.
+    @MainActor func lockRow() -> some View { SchoolAppLockRow() }
+
+    @MainActor func signOutRow() -> some View {
         SchoolSignOutRow(action: signOut, confirms: tripInProgress)
             .accessibilityIdentifier("school-sign-out")
     }
 }
 
-/// « Se déconnecter » : même ligne que `DrivyDestructiveRow` (danger, 52 pt, retour d’appui de ligne),
-/// sans symbole puisque les lignes voisines n’en portent plus.
+/// « Se déconnecter » : la dernière ligne du compte, en danger, au rythme des lignes voisines (titre de ligne et
+/// 52 pt sur une page, corps de texte et cellule native dans une liste groupée).
 private struct SchoolSignOutRow: View {
     let action: () -> Void
     var confirms = false
     @State private var asksConfirmation = false
+    @Environment(\.drivyRowContext) private var context
 
     var body: some View {
-        Button(role: .destructive) {
-            if confirms { asksConfirmation = true } else { action() }
-        } label: {
-            Text("Se déconnecter")
-                .font(.headline)
-                .foregroundStyle(DrivyTheme.danger)
-                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-                .contentShape(Rectangle())
+        Group {
+            if context == .grouped {
+                Button(role: .destructive, action: tap) { label }
+            } else {
+                Button(role: .destructive, action: tap) { label }
+                    .buttonStyle(DrivyRowButtonStyle())
+            }
         }
-        .buttonStyle(DrivyRowButtonStyle())
         .confirmationDialog("Un trajet est en cours", isPresented: $asksConfirmation, titleVisibility: .visible) {
             Button("Arrêter le trajet et se déconnecter", role: .destructive, action: action)
             Button("Continuer le trajet", role: .cancel) { }
         }
+    }
+
+    private func tap() {
+        if confirms { asksConfirmation = true } else { action() }
+    }
+
+    private var label: some View {
+        Text("Se déconnecter")
+            .font(context == .grouped ? .body : .headline)
+            .foregroundStyle(DrivyTheme.danger)
+            .padding(.vertical, context == .grouped ? DrivySpacing.xs : 0)
+            .frame(maxWidth: .infinity, minHeight: context == .grouped ? DrivyLayout.tapTarget : 52, alignment: .leading)
+            .contentShape(Rectangle())
     }
 }
 
@@ -80,12 +105,15 @@ struct SchoolAccountHeading: View {
     let isAuthenticated: Bool
     /// Remplace la ligne des rôles (l’élève lit ses permis : « Permis B »).
     var detail: String? = nil
+    /// Faux pour l’élève : son rôle ne lui apprend rien, seule l’école est dite (et `detail`, s’il y en a un).
+    var showsRoles = true
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: DrivySpacing.m) {
+        // Même anatomie que l’en-tête du dossier d’un élève (DrivyLearnerIdentity, variante page).
+        HStack(spacing: DrivySpacing.s) {
             if !typeSize.isAccessibilitySize {
-                DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: 52)
+                DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: DrivyAvatar.pageSize)
             }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(workspace?.person?.displayName ?? (isAuthenticated ? "Compte connecté" : "Aucun compte connecté"))
@@ -97,9 +125,11 @@ struct SchoolAccountHeading: View {
                     Text(membership.schoolName)
                         .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(detail ?? SchoolPresentation.roles(membership.roles))
-                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if let line = detail ?? (showsRoles ? SchoolPresentation.roles(membership.roles) : nil) {
+                        Text(line)
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
@@ -112,17 +142,18 @@ struct SchoolAccountHeading: View {
 /// la biométrie, le symbole le redisait. Sans verrou biométrique sur l’appareil, la ligne n’existe pas.
 private struct SchoolAppLockRow: View {
     @Environment(AppLock.self) private var appLock: AppLock?
+    @Environment(\.drivyRowContext) private var context
 
     var body: some View {
         if let appLock, let biometry = appLock.biometryName {
             Toggle(isOn: Binding(get: { appLock.isEnabled }, set: { appLock.setEnabled($0) })) {
                 Text("Ouvrir avec \(biometry)")
-                    .font(.headline)
+                    .font(context == .grouped ? .body : .headline)
                     .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, DrivySpacing.s)
-            .frame(minHeight: 52)
+            .padding(.vertical, context == .grouped ? DrivySpacing.xs : DrivySpacing.s)
+            .frame(minHeight: context == .grouped ? DrivyLayout.tapTarget : 52)
             .accessibilityIdentifier("app-lock-toggle")
         }
     }

@@ -68,7 +68,7 @@ struct SchoolMapPositionMarker: View {
         }
         .foregroundStyle(DrivyTheme.route)
         .frame(width: 34, height: 34)
-        .background(DrivyTheme.surface, in: Circle())
+        .background(DrivyTheme.surfaceRaised, in: Circle())
         .overlay(Circle().strokeBorder(DrivyTheme.routeHalo, lineWidth: 2))
         .shadow(color: DrivyTheme.shadow.opacity(0.2), radius: 3, y: 1)
         .accessibilityLabel(course == nil ? "Position enregistrée" : "Position et direction du déplacement")

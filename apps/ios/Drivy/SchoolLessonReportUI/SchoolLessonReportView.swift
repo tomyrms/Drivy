@@ -609,7 +609,7 @@ private struct SchoolLessonReportContent: View {
         Section {
             SchoolLessonHeaderView(model: model, learnerName: learnerName, finishError: finishError)
         }
-        .listRowBackground(Color.clear)
+        .drivyClearRow()
         .listRowSeparator(.hidden)
     }
 
@@ -816,7 +816,7 @@ private struct SchoolLessonReportContent: View {
                 HStack {
                     TextField("Objectif \(number)", text: $goal.label, axis: .vertical)
                     Button(role: .destructive) { model.goals.removeAll { $0.id == goal.id } } label: {
-                        Image(systemName: "minus.circle").frame(minWidth: 44, minHeight: 44)
+                        Image(systemName: "minus.circle").frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
                     }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Retirer l’objectif \(number)")

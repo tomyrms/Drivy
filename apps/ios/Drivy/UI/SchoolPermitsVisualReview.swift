@@ -29,7 +29,7 @@ extension SchoolVisualData {
     /// Le nombre de permis de l’élève pour un écran de contrôle : un seul, sauf les écrans « multi » et « two ».
     nonisolated static func permitCount(for screen: String) -> Int {
         switch screen {
-        case "dossier-multi", "lessons-multi", "progression-multi": 3
+        case "dossier-multi", "lessons-multi", "progression-multi", "learner-profile-multi": 3
         case "lessons-two": 2
         default: 1
         }

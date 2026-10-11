@@ -370,7 +370,7 @@ private struct SchoolLessonSummaryObservationRow: View {
                 Text("Pour moi").font(.caption).foregroundStyle(DrivyTheme.muted)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
     }
 
     @ViewBuilder private var summary: some View {
@@ -426,7 +426,7 @@ private struct SchoolLessonSummaryGoals: View {
                 .font(.drivySection)
                 .foregroundStyle(DrivyTheme.text)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(minHeight: 44, alignment: .leading)
+                .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
         }
         .accessibilityIdentifier("lesson-goals")
@@ -442,15 +442,8 @@ private struct SchoolLessonSummaryMoreButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .multilineTextAlignment(.leading)
-                .frame(minHeight: 44, alignment: .leading)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(DrivyTheme.accent)
-        .accessibilityIdentifier(identifier)
+        Button(title, action: action)
+            .buttonStyle(.drivyText)
+            .accessibilityIdentifier(identifier)
     }
 }
