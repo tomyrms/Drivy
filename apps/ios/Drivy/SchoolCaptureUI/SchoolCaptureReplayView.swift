@@ -18,12 +18,17 @@ struct SchoolCaptureReplayView: View {
     @State private var resetCameraID = UUID()
     @State private var followsPosition = true
     @State private var showsList = false
+    /// Des pastilles sont cachées au-delà de ce bord du rail : lui seul s’estompe.
+    @State private var railHidesLeading = false
+    @State private var railHidesTrailing = false
 
     private var contentKey: String {
         "\(model.contentRevision):\(model.isComplete)"
     }
     /// Largeur maximale du libellé d’une pastille du rail : au-delà, il est tronqué.
     private static let chipTitleMaxWidth: CGFloat = 240
+    /// Largeur du fondu aux bords du rail des observations.
+    private static let railFadeWidth: CGFloat = 44
 
     var body: some View {
         Group {
@@ -291,15 +296,23 @@ struct SchoolCaptureReplayView: View {
                 // Le rail va jusqu’aux bords du dock : les pastilles défilent sans être coupées net
                 // au retrait, et la première reste alignée sur le contenu.
                 .contentMargins(.horizontal, DrivySpacing.m, for: .scrollContent)
-                // Les pastilles s’estompent sur la largeur de la marge au lieu de se couper net au bord du dock.
-                // Au repos, la première est entière : le fondu ne couvre que la marge.
+                // Un bord ne s’estompe que s’il cache des pastilles : au repos la première est nette, en fin de course
+                // la dernière aussi. Le fondu est large et progressif, il ne se lit pas comme une coupe.
                 .mask {
                     HStack(spacing: 0) {
-                        LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
-                            .frame(width: DrivySpacing.m)
+                        railFade(from: .leading, isActive: railHidesLeading)
                         Color.black
-                        LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
-                            .frame(width: DrivySpacing.m)
+                        railFade(from: .trailing, isActive: railHidesTrailing)
+                    }
+                }
+                .onScrollGeometryChange(for: [Bool].self) { geometry in
+                    let start = geometry.contentOffset.x + geometry.contentInsets.leading
+                    let end = geometry.contentSize.width + geometry.contentInsets.trailing
+                        - geometry.contentOffset.x - geometry.containerSize.width
+                    return [start > 2, end > 2]
+                } action: { _, hidden in
+                    withAnimation(DrivyMotion.feedback(reduceMotion)) {
+                        railHidesLeading = hidden[0]; railHidesTrailing = hidden[1]
                     }
                 }
                 .padding(.horizontal, -DrivySpacing.m)
@@ -309,6 +322,16 @@ struct SchoolCaptureReplayView: View {
                 }
             }
         }
+    }
+
+    /// Bord du rail : transparent au bord, plein vers l’intérieur, en courbe douce. Inactif, il est plein.
+    private func railFade(from edge: HorizontalEdge, isActive: Bool) -> some View {
+        let stops: [Gradient.Stop] = [.init(color: .clear, location: 0), .init(color: .black.opacity(0.18), location: 0.25),
+                                      .init(color: .black.opacity(0.6), location: 0.6), .init(color: .black, location: 1)]
+        return LinearGradient(stops: stops, startPoint: edge == .leading ? .leading : .trailing,
+                              endPoint: edge == .leading ? .trailing : .leading)
+            .overlay(Color.black.opacity(isActive ? 0 : 1))
+            .frame(width: Self.railFadeWidth)
     }
 
     private func chip(_ item: SchoolReplayTimeline.Item, isSelected: Bool, action: @escaping () -> Void) -> some View {
