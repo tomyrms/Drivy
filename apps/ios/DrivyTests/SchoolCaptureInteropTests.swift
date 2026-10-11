@@ -53,7 +53,8 @@ struct SchoolCaptureInteropTests {
                                                       page(Array(points.suffix(2)), continuation: true, next: nil)])
         let client = SchoolCaptureClient(baseURL: URL(string: "https://example.invalid")!, tokenSource: HubToken(), transport: transport)
         let track = try await client.replayTrack(schoolID: schoolID, captureID: captureID)
-        #expect(track.segments.map { $0.map(\.sequence) } == [[0], [2, 3]])
+        // The imprecise fix 1 is never drawn; it no longer cuts the line between its two neighbours.
+        #expect(track.segments.map { $0.map(\.sequence) } == [[0, 2, 3]])
         #expect(track.pointsByAnchor["\(segmentID.uuidString.lowercased()):1"] == nil)
         #expect(track.pointsByAnchor["\(segmentID.uuidString.lowercased()):2"] == points[2])
     }

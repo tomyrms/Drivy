@@ -1,205 +1,6 @@
 import MapKit
 import SwiftUI
 
-private extension ObservationStatus {
-    /// Wire value of a school observation status (ATTENTION, TO_REWORK, POSITIVE).
-    init?(schoolValue: String) {
-        switch schoolValue {
-        case "ATTENTION": self = .attention
-        case "TO_REWORK": self = .toWorkOn
-        case "POSITIVE": self = .positive
-        default: return nil
-        }
-    }
-}
-
-/// Timeline of a private school replay, built once per loaded page set. Offsets are
-/// seconds since the authorization; each fragment stays a separate polyline and the
-/// time between fragments is a gap, never an interpolated route.
-struct SchoolReplayTimeline {
-    typealias Fragment = SchoolMapRouteFragment
-
-    struct Sample {
-        let offset: TimeInterval
-        let coordinate: CLLocationCoordinate2D
-        let fragmentIndex: Int
-        let heading: Double?
-    }
-
-    struct Item: Identifiable {
-        let id: UUID
-        let offset: TimeInterval?
-        let coordinate: CLLocationCoordinate2D?
-        let status: ObservationStatus?
-        let isMarker: Bool
-        let text: String
-
-        var title: String { isMarker ? "Moment à revoir" : text }
-        var statusLabel: String { status?.label ?? "Repère" }
-        var symbol: String { status?.symbol ?? "bookmark.fill" }
-        var tone: DrivyTone { status?.tone ?? .neutral }
-    }
-
-    let start: Date
-    let duration: TimeInterval
-    let fragments: [Fragment]
-    let samples: [Sample]
-    let gaps: [ClosedRange<TimeInterval>]
-    /// Dashed map connections require a silence in the original measurements.
-    /// Display-filter gaps remain gaps in playback, without inventing GPS loss.
-    let mapGaps: [SchoolMapRouteGap]
-    /// Observations with an instant, chronological; then those without an instant.
-    let items: [Item]
-
-    init(fragments source: [SchoolCaptureReplayFragment], observations: [SchoolPrivateGeoObservation],
-         startsAt: Date?, endsAt: Date?, maxPointAge: TimeInterval = 15) {
-        let observationDates = observations.compactMap(\.observedDate)
-        let orderedFragments = source.sorted {
-            $0.segmentIndex == $1.segmentIndex
-                ? ($0.points.map(\.sequence).min() ?? 0) < ($1.points.map(\.sequence).min() ?? 0)
-                : $0.segmentIndex < $1.segmentIndex
-        }
-        // Page/chunk boundaries must not reset the selection policy. The original
-        // sequence and elapsed-time gaps still split the resulting measured route.
-        var orderedSource: [SchoolCaptureReplayFragment] = []
-        for fragment in orderedFragments {
-            if orderedSource.last?.segmentID == fragment.segmentID {
-                orderedSource[orderedSource.count - 1].points.append(contentsOf: fragment.points)
-            } else {
-                orderedSource.append(fragment)
-            }
-        }
-        let firstPointDate = orderedSource.first?.points.min(by: { $0.sequence < $1.sequence })
-            .flatMap { SchoolLesson.date($0.capturedAt) }
-        let origin = startsAt ?? firstPointDate ?? observationDates.min() ?? Date()
-        var samples: [Sample] = []
-        var built: [Fragment] = []
-        var coordinateByKey: [String: CLLocationCoordinate2D] = [:]
-        var lastSourceOffset: TimeInterval = 0
-        var filteredTails: [ClosedRange<TimeInterval>] = []
-        var mapGaps: [SchoolMapRouteGap] = []
-        var previousSource: SchoolCapturePoint?
-        var previousDisplayed: SchoolCapturePoint?
-        for fragment in orderedSource {
-            // One date parse per fragment; the other points follow their monotonic elapsed time.
-            guard let first = fragment.points.min(by: { $0.sequence < $1.sequence }),
-                  let base = SchoolLesson.date(first.capturedAt) else {
-                previousSource = nil; previousDisplayed = nil
-                continue
-            }
-            let baseOffset = base.timeIntervalSince(origin)
-            let lastOffset = baseOffset + Double((fragment.points.map(\.elapsedMs).max() ?? first.elapsedMs) - first.elapsedMs) / 1000
-            lastSourceOffset = max(lastSourceOffset, lastOffset)
-            var coordinates: [CLLocationCoordinate2D] = []
-            var course = SchoolMapCourse()
-            var part = 0
-            coordinates.reserveCapacity(fragment.points.count)
-            let selected = SchoolCaptureDisplayRoute.select(fragment.points, maximumGap: maxPointAge)
-            mapGaps.append(contentsOf: SchoolMapRouteGap.withinSegment(fragment.points, displayed: selected,
-                idPrefix: fragment.id, maximumGap: maxPointAge))
-            if let previousSource, let previousDisplayed, let nextDisplayed = selected.first?.point,
-               let gap = SchoolMapRouteGap.betweenSegments(id: "before:\(fragment.id)",
-                    previousSource: previousSource, nextSource: first,
-                    previousDisplayed: previousDisplayed, nextDisplayed: nextDisplayed, maximumGap: maxPointAge) {
-                mapGaps.append(gap)
-            }
-            previousSource = fragment.points.max(by: { $0.sequence < $1.sequence })
-            previousDisplayed = selected.last?.point
-            for sample in selected {
-                let point = sample.point
-                let coordinate = CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
-                let offset = baseOffset + Double(point.elapsedMs - first.elapsedMs) / 1000
-                if sample.startsFragment && !coordinates.isEmpty {
-                    built.append(Fragment(id: "\(fragment.id):\(part)", coordinates: coordinates))
-                    coordinates = []; part += 1
-                }
-                if sample.startsFragment { course = SchoolMapCourse() }
-                coordinates.append(coordinate)
-                samples.append(Sample(offset: offset, coordinate: coordinate, fragmentIndex: built.count,
-                    heading: course.receive(coordinate, at: offset, accuracy: point.accuracyMeters)))
-                coordinateByKey["\(fragment.segmentID.uuidString):\(point.sequence)"] = coordinate
-            }
-            if !coordinates.isEmpty { built.append(Fragment(id: "\(fragment.id):\(part)", coordinates: coordinates)) }
-            if let last = selected.last?.point {
-                let lastRetainedOffset = baseOffset + Double(last.elapsedMs - first.elapsedMs) / 1000
-                if lastOffset > lastRetainedOffset { filteredTails.append(lastRetainedOffset...lastOffset) }
-            }
-        }
-        samples.sort { $0.offset < $1.offset }
-        let observationOffsets = observationDates.map { $0.timeIntervalSince(origin) }
-        let end = max(endsAt.map { $0.timeIntervalSince(origin) } ?? 0, lastSourceOffset, observationOffsets.max() ?? 0)
-        let total = max(1, end)
-
-        var gaps: [ClosedRange<TimeInterval>] = filteredTails
-        func clamp(_ value: TimeInterval) -> TimeInterval { min(total, max(0, value)) }
-        if let first = samples.first, let last = samples.last {
-            if clamp(first.offset) > 0 { gaps.append(0...clamp(first.offset)) }
-            for (previous, next) in zip(samples, samples.dropFirst()) {
-                let lower = clamp(previous.offset), upper = clamp(next.offset)
-                if upper > lower && (previous.fragmentIndex != next.fragmentIndex || upper - lower > maxPointAge) {
-                    gaps.append(lower...upper)
-                }
-            }
-            if total - clamp(last.offset) > maxPointAge { gaps.append(clamp(last.offset)...total) }
-        } else {
-            gaps = [0...total]
-        }
-
-        let items = observations.map { observation -> Item in
-            var coordinate: CLLocationCoordinate2D?
-            if let segment = observation.segmentId, let sequence = observation.pointSequence {
-                coordinate = coordinateByKey["\(segment.uuidString):\(sequence)"]
-            }
-            return Item(id: observation.id, offset: observation.observedDate.map { $0.timeIntervalSince(origin) },
-                        coordinate: coordinate, status: observation.eventStatus.flatMap { ObservationStatus(schoolValue: $0) },
-                        isMarker: observation.isMarker, text: observation.text)
-        }
-        start = origin
-        duration = total
-        fragments = built
-        self.samples = samples
-        self.gaps = gaps
-        self.mapGaps = mapGaps
-        self.items = items.enumerated().sorted { left, right in
-            switch (left.element.offset, right.element.offset) {
-            case let (l?, r?): return l == r ? left.offset < right.offset : l < r
-            case (.some, .none): return true
-            case (.none, .some): return false
-            case (.none, .none): return left.offset < right.offset
-            }
-        }.map(\.element)
-    }
-
-    var timedItems: [Item] { items.filter { $0.offset != nil } }
-
-    /// Measured position at an instant: the last sample at most `maxPointAge` old (binary search).
-    func sample(at offset: TimeInterval, maxPointAge: TimeInterval = 15) -> Sample? {
-        var low = 0, high = samples.count
-        while low < high {
-            let middle = (low + high) / 2
-            if samples[middle].offset <= offset { low = middle + 1 } else { high = middle }
-        }
-        guard low > 0 else { return nil }
-        let candidate = samples[low - 1]
-        if offset == candidate.offset { return candidate }
-        if gaps.contains(where: { offset > $0.lowerBound && offset <= $0.upperBound }) { return nil }
-        // A known interruption is empty, even when the previous point is recent.
-        if low < samples.count, offset > candidate.offset,
-           samples[low].fragmentIndex != candidate.fragmentIndex || samples[low].offset - candidate.offset > maxPointAge {
-            return nil
-        }
-        return offset - candidate.offset <= maxPointAge ? candidate : nil
-    }
-}
-
-enum SchoolReplayFormatting {
-    /// The replay uses the lesson's civil time, never the device's current time zone.
-    static func startLabel(_ date: Date?, lessonTimeZone: String?) -> String? {
-        guard let date, let lessonTimeZone, let zone = TimeZone(identifier: lessonTimeZone) else { return nil }
-        return SchoolDateCache.shared.string(from: date, zone: zone, format: "d MMM 'à' HH:mm")
-    }
-}
-
 /// Private replay of a school capture for the assigned instructor (E24): same anatomy
 /// as the personal replay. Only what the school reconstructed is drawn; gaps stay gaps.
 struct SchoolCaptureReplayView: View {
@@ -212,9 +13,7 @@ struct SchoolCaptureReplayView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @State private var timeline: SchoolReplayTimeline?
-    @State private var offset: TimeInterval = 0
-    @State private var isPlaying = false
-    @State private var speed = 1
+    @State private var player = SchoolReplayPlayer()
     @State private var selectedID: UUID?
     @State private var resetCameraID = UUID()
     @State private var followsPosition = true
@@ -247,19 +46,21 @@ struct SchoolCaptureReplayView: View {
         .tint(DrivyTheme.accent)
         .task { await model.load() }
         .onChange(of: contentKey, initial: true) { _, _ in rebuildTimeline() }
-        .task(id: isPlaying) { await play() }
-        .onChange(of: scenePhase) { _, phase in if phase != .active { isPlaying = false } }
-        .onDisappear { isPlaying = false }
+        .onChange(of: reduceMotion, initial: true) { _, value in player.reduceMotion = value }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { player.pause() } }
+        .onAppear { player.onCross = { id in selectedID = id } }
+        .onDisappear { player.pause() }
         .sheet(isPresented: $showsList) {
             if let timeline { listSheet(timeline) }
         }
     }
 
     private func rebuildTimeline() {
-        isPlaying = false
-        timeline = SchoolReplayTimeline(fragments: model.fragments, observations: model.observations,
-                                        startsAt: model.startsAt, endsAt: model.endsAt)
-        if let timeline { offset = min(offset, timeline.duration) }
+        // Une page de plus ne coupe pas la lecture : la tête garde son instant sur la nouvelle chronologie.
+        let built = SchoolReplayTimeline(fragments: model.fragments, observations: model.observations,
+                                         startsAt: model.startsAt, endsAt: model.endsAt, matched: model.matchedRoute)
+        timeline = built
+        player.load(built)
         if !model.observations.contains(where: { $0.id == selectedID }) { selectedID = nil }
     }
 
@@ -330,7 +131,7 @@ struct SchoolCaptureReplayView: View {
                         }
                         // Le détail et le rail se remplacent en fondu ; la tête de lecture n’en est pas ralentie.
                         .animation(DrivyMotion.reveal(reduceMotion), value: selectedID)
-                        player(timeline, showsList: true)
+                        playerPanel(timeline, showsList: true)
                         replayLoadingOrError
                     }
                 }
@@ -350,7 +151,7 @@ struct SchoolCaptureReplayView: View {
                 }
                 DrivyMapDock(floating: false) {
                     selectedDetail(timeline)
-                    player(timeline, showsList: false)
+                    playerPanel(timeline, showsList: false)
                     replayLoadingOrError
                 }
                 .padding(DrivySpacing.m)
@@ -376,7 +177,7 @@ struct SchoolCaptureReplayView: View {
                 }
                 DrivyMapDock(floating: false) {
                     selectedDetail(timeline)
-                    player(timeline, showsList: false)
+                    playerPanel(timeline, showsList: false)
                     replayLoadingOrError
                 }
                 observationList(timeline, closesSheet: false)
@@ -404,14 +205,14 @@ struct SchoolCaptureReplayView: View {
                     : timeline.items.isEmpty ? "L’école n’a reconstruit aucune position pour ce trajet."
                     : "Les observations gardent leur heure. Retrouve-les sur la chronologie.")
         } else {
-            SchoolReplayMap(timeline: timeline, current: timeline.sample(at: offset), selectedID: $selectedID,
+            SchoolReplayMap(timeline: timeline, player: player, selectedID: selectedID,
                 resetCameraID: resetCameraID, followsPosition: $followsPosition, onSelect: select)
         }
     }
 
     private func controls(_ timeline: SchoolReplayTimeline, axis: Axis) -> some View {
         DrivyMapControls(followsPosition: $followsPosition, followLabel: "Suivre le replay dans le sens du trajet",
-            canFollow: timeline.sample(at: offset) != nil, axis: axis) {
+            canFollow: !timeline.samples.isEmpty, axis: axis) {
             followsPosition = false
             resetCameraID = UUID()
         }
@@ -535,49 +336,11 @@ struct SchoolCaptureReplayView: View {
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    private func player(_ timeline: SchoolReplayTimeline, showsList: Bool) -> some View {
-        let timed = timeline.timedItems
-        let current = min(max(0, offset), timeline.duration)
-        let inGap = !timeline.samples.isEmpty && timeline.sample(at: current) == nil
+    private func playerPanel(_ timeline: SchoolReplayTimeline, showsList: Bool) -> some View {
         var openList: (() -> Void)? = nil
-        if showsList { openList = { isPlaying = false; self.showsList = true } }
-        return VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            DrivyReplayScrubber(
-                offset: $offset,
-                duration: timeline.duration,
-                marks: timed.compactMap { item in
-                    item.offset.map { DrivyTimelineMark(id: item.id, offset: $0, symbol: item.symbol, tone: item.tone, label: item.title) }
-                },
-                gaps: timeline.gaps,
-                selectedMarkID: selectedID,
-                valueDescription: "\(DrivyReplayScrubber.clock(current)) sur \(DrivyReplayScrubber.clock(timeline.duration))\(inGap ? ", position indisponible" : "")",
-                onScrubStart: { isPlaying = false; selectedID = nil },
-                onSelectMark: { id in
-                    if let item = timeline.items.first(where: { $0.id == id }) { select(item) }
-                }
-            )
-            .accessibilityIdentifier("school-replay-timeline")
-            if inGap {
-                Label("Position indisponible à cet instant.", systemImage: "location.slash")
-                    .font(.caption)
-                    .foregroundStyle(DrivyTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            DrivyReplayTransport(
-                isPlaying: isPlaying,
-                speed: speed,
-                canGoBack: adjacent(in: timed, forward: false) != nil,
-                canGoForward: adjacent(in: timed, forward: true) != nil,
-                togglePlay: {
-                    if offset >= timeline.duration { offset = 0; selectedID = nil }
-                    isPlaying.toggle()
-                },
-                cycleSpeed: { speed = speed == 1 ? 2 : speed == 2 ? 4 : 1 },
-                previous: { if let item = adjacent(in: timed, forward: false) { select(item) } },
-                next: { if let item = adjacent(in: timed, forward: true) { select(item) } },
-                openList: openList
-            )
-        }
+        if showsList { openList = { player.pause(); self.showsList = true } }
+        return SchoolReplayPlayerPanel(player: player, timeline: timeline, selectedID: $selectedID,
+                                       openList: openList, select: select)
     }
 
     // MARK: List
@@ -644,7 +407,60 @@ struct SchoolCaptureReplayView: View {
 
     private func select(_ item: SchoolReplayTimeline.Item) {
         selectedID = item.id
-        if let value = item.offset, let timeline { offset = min(timeline.duration, max(0, value)) }
+        if let value = item.offset { player.seek(to: value) }
+    }
+}
+
+/// Scrubber and transport. Only this view follows the playhead: the rest of the screen
+/// is not re-evaluated while the replay plays.
+private struct SchoolReplayPlayerPanel: View {
+    let player: SchoolReplayPlayer
+    let timeline: SchoolReplayTimeline
+    @Binding var selectedID: UUID?
+    let openList: (() -> Void)?
+    let select: (SchoolReplayTimeline.Item) -> Void
+
+    var body: some View {
+        let timed = timeline.timedItems
+        let current = min(max(0, player.offset), timeline.duration)
+        let inGap = !timeline.samples.isEmpty && timeline.sample(at: current) == nil
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            DrivyReplayScrubber(
+                offset: Binding(get: { player.offset }, set: { player.seek(to: $0) }),
+                duration: timeline.duration,
+                marks: timed.compactMap { item in
+                    item.offset.map { DrivyTimelineMark(id: item.id, offset: $0, symbol: item.symbol, tone: item.tone, label: item.title) }
+                },
+                gaps: timeline.gaps,
+                selectedMarkID: selectedID,
+                valueDescription: "\(DrivyReplayScrubber.clock(current)) sur \(DrivyReplayScrubber.clock(timeline.duration))\(inGap ? ", position indisponible" : "")",
+                onScrubStart: { player.pause(); selectedID = nil },
+                onSelectMark: { id in
+                    if let item = timeline.items.first(where: { $0.id == id }) { select(item) }
+                }
+            )
+            .accessibilityIdentifier("school-replay-timeline")
+            if inGap {
+                Label("Position indisponible à cet instant.", systemImage: "location.slash")
+                    .font(.caption)
+                    .foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            DrivyReplayTransport(
+                isPlaying: player.isPlaying,
+                speed: player.speed,
+                canGoBack: adjacent(in: timed, forward: false) != nil,
+                canGoForward: adjacent(in: timed, forward: true) != nil,
+                togglePlay: {
+                    if player.offset >= timeline.duration { player.seek(to: 0); selectedID = nil }
+                    player.toggle()
+                },
+                cycleSpeed: { player.cycleSpeed() },
+                previous: { if let item = adjacent(in: timed, forward: false) { select(item) } },
+                next: { if let item = adjacent(in: timed, forward: true) { select(item) } },
+                openList: openList
+            )
+        }
     }
 
     private func adjacent(in timed: [SchoolReplayTimeline.Item], forward: Bool) -> SchoolReplayTimeline.Item? {
@@ -653,130 +469,56 @@ struct SchoolCaptureReplayView: View {
             return timed.indices.contains(target) ? timed[target] : nil
         }
         return forward
-            ? timed.first { ($0.offset ?? 0) >= offset }
-            : timed.last { ($0.offset ?? 0) < offset }
-    }
-
-    @MainActor private func play() async {
-        guard isPlaying else { return }
-        var previous = ContinuousClock.now
-        while isPlaying && !Task.isCancelled {
-            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
-            guard isPlaying, !Task.isCancelled, let timeline else { return }
-            let now = ContinuousClock.now
-            let elapsed = previous.duration(to: now).components
-            previous = now
-            let before = min(offset, timeline.duration)
-            let after = min(timeline.duration, before + (Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18) * Double(speed))
-            offset = after
-            if let crossed = timeline.timedItems.last(where: { ($0.offset ?? -1) > before && ($0.offset ?? -1) <= after }) {
-                selectedID = crossed.id
-            }
-            if after >= timeline.duration { isPlaying = false }
-        }
+            ? timed.first { ($0.offset ?? 0) >= player.offset }
+            : timed.last { ($0.offset ?? 0) < player.offset }
     }
 }
 
-/// Map of the school replay: separate polylines per fragment, anchored observations,
-/// the measured position at the playhead. Manual exploration suspends the follow mode.
+/// Map of the school replay: one polyline per fragment, anchored observations, and the
+/// playhead moving along the drawn line. Manual exploration suspends the follow mode.
 private struct SchoolReplayMap: View {
     let timeline: SchoolReplayTimeline
-    let current: SchoolReplayTimeline.Sample?
-    @Binding var selectedID: UUID?
+    let player: SchoolReplayPlayer
+    let selectedID: UUID?
     let resetCameraID: UUID
     @Binding var followsPosition: Bool
     let onSelect: (SchoolReplayTimeline.Item) -> Void
-    @State private var camera: MapCameraPosition = .automatic
-    @State private var mapHeading = 0.0
-    @State private var followDistance = 650.0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Map(position: $camera) {
-            ForEach(timeline.mapGaps) { gap in
-                MapPolyline(gap.line).stroke(DrivyTheme.controlBorder,
-                    style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [5, 5]))
-            }
-            ForEach(timeline.fragments) { fragment in
-                if fragment.line.pointCount > 1 {
-                    MapPolyline(fragment.line).stroke(DrivyTheme.routeHalo,
-                        style: StrokeStyle(lineWidth: 11, lineCap: .round, lineJoin: .round))
-                    MapPolyline(fragment.line).stroke(DrivyTheme.route,
-                        style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
-                } else if let coordinate = fragment.firstCoordinate {
-                    Annotation("Position enregistrée", coordinate: coordinate) {
-                        Circle().fill(DrivyTheme.route).frame(width: 8, height: 8)
-                    }.annotationTitles(.hidden)
-                }
-            }
-            if let first = timeline.samples.first {
-                Annotation("Début du tracé enregistré", coordinate: first.coordinate) {
-                    SchoolMapEndpointMarker(kind: .start)
-                }.annotationTitles(.hidden)
-            }
-            if timeline.samples.count > 1, let last = timeline.samples.last {
-                Annotation("Fin du tracé enregistré", coordinate: last.coordinate) {
-                    SchoolMapEndpointMarker(kind: .end)
-                }.annotationTitles(.hidden)
-            }
-            ForEach(timeline.items.filter { $0.coordinate != nil }) { item in
-                if let coordinate = item.coordinate {
-                    Annotation(item.title, coordinate: coordinate) {
-                        Button { onSelect(item) } label: { marker(item) }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("\(item.title), \(item.statusLabel)")
-                            .accessibilityAddTraits(selectedID == item.id ? [.isSelected] : [])
-                    }.annotationTitles(.hidden)
-                }
-            }
-            if let current {
-                Annotation("Position enregistrée", coordinate: current.coordinate) {
-                    SchoolMapPositionMarker(course: current.heading, mapHeading: mapHeading)
-                }.annotationTitles(.hidden)
-            }
-        }
-        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
-        .mapControls { }
-        .onAppear { if followsPosition, current != nil { follow() } else { fitRoute() } }
-        .onMapCameraChange(frequency: .continuous) { context in
-            mapHeading = context.camera.heading
-            if camera.positionedByUser { followDistance = min(2500, max(180, context.camera.distance)) }
-        }
-        .onChange(of: camera.positionedByUser) { _, byUser in if byUser { followsPosition = false } }
-        .onChange(of: followsPosition) { _, follows in if follows { follow() } }
-        .onChange(of: current?.offset) { _, _ in if followsPosition && !camera.positionedByUser { follow() } }
-        .onChange(of: resetCameraID) { _, _ in followsPosition = false; fitRoute(animated: true) }
+        DrivyRouteMapView(lines: timeline.mapLines, pins: pins, motion: player,
+            isFollowing: followsPosition, cameraRequest: resetCameraID,
+            onUserMovedMap: { followsPosition = false },
+            onSelectPin: { id in
+                if let item = timeline.items.first(where: { $0.id.uuidString == id }) { onSelect(item) }
+            })
+        .ignoresSafeArea()
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Carte du trajet reconstruit par l’école")
         .accessibilityValue(timeline.mapGaps.isEmpty ? "" : "Portions sans mesure indiquées en pointillé")
     }
 
-    private func marker(_ item: SchoolReplayTimeline.Item) -> some View {
-        let selected = selectedID == item.id
-        return SchoolMapObservationMarker(symbol: item.symbol, color: item.tone.foreground, isSelected: selected)
-            .animation(DrivyMotion.context(reduceMotion), value: selected)
-            .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
-            .contentShape(Circle())
-    }
-
-    private func follow() {
-        guard let current else { return }
-        withAnimation(reduceMotion ? nil : .linear(duration: 0.25)) {
-            camera = .camera(MapCamera(centerCoordinate: current.coordinate, distance: followDistance,
-                heading: current.heading ?? mapHeading, pitch: 0))
+    private var pins: [DrivyRouteMapPin] {
+        var result: [DrivyRouteMapPin] = []
+        if let path = timeline.paths.first, let latitude = path.latitudes.first, let longitude = path.longitudes.first {
+            result.append(DrivyRouteMapPin(id: "start", coordinate: .init(latitude: latitude, longitude: longitude),
+                signature: "start", label: SchoolMapEndpointMarker.Kind.start.label, side: 22, priority: 200,
+                content: AnyView(SchoolMapEndpointMarker(kind: .start))))
         }
-    }
-
-    /// Tout le trajet à l’écran ; « voir tout » y glisse, l’ouverture s’y pose sans mouvement.
-    private func fitRoute(animated: Bool = false) {
-        let mapPoints = timeline.samples.map { MKMapPoint($0.coordinate) }
-        guard let minX = mapPoints.map(\.x).min(), let maxX = mapPoints.map(\.x).max(),
-              let minY = mapPoints.map(\.y).min(), let maxY = mapPoints.map(\.y).max() else { return }
-        let center = MKMapPoint(x: (minX + maxX) / 2, y: (minY + maxY) / 2)
-        let minimumSpan = MKMapPointsPerMeterAtLatitude(center.coordinate.latitude) * 160
-        let width = max(maxX - minX, minimumSpan) * 1.2
-        let height = max(maxY - minY, minimumSpan) * 1.2
-        withAnimation(animated && !reduceMotion ? .smooth(duration: 0.6) : nil) {
-            camera = .rect(MKMapRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height))
+        if timeline.samples.count > 1, let path = timeline.paths.last,
+           let latitude = path.latitudes.last, let longitude = path.longitudes.last {
+            result.append(DrivyRouteMapPin(id: "end", coordinate: .init(latitude: latitude, longitude: longitude),
+                signature: "end", label: SchoolMapEndpointMarker.Kind.end.label, side: 22, priority: 210,
+                content: AnyView(SchoolMapEndpointMarker(kind: .end))))
         }
+        for item in timeline.items {
+            guard let coordinate = item.coordinate else { continue }
+            let selected = selectedID == item.id
+            result.append(DrivyRouteMapPin(id: item.id.uuidString, coordinate: coordinate,
+                signature: "\(item.symbol):\(item.statusLabel):\(selected)",
+                label: "\(item.title), \(item.statusLabel)", isSelected: selected, isSelectable: true,
+                side: DrivyLayout.tapTarget, priority: selected ? 450 : 400,
+                content: AnyView(SchoolMapObservationMarker(symbol: item.symbol, color: item.tone.foreground, isSelected: selected))))
+        }
+        return result
     }
 }

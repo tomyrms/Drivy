@@ -77,17 +77,19 @@ struct SchoolMapCourseTests {
         #expect(selected.map(\.startsFragment) == [true, false])
     }
 
-    @Test func isolatedJumpIsNeverUsedForPositionHeadingOrRouteContinuity() {
+    /// Since 11 October 2026 a single rejected fix no longer cuts the line: the route joins the two
+    /// measured fixes on either side, two seconds apart. The impossible fix itself is still never drawn.
+    @Test func isolatedJumpIsNeverDrawnAndDoesNotCutTheRoute() {
         let source = [measured(0, second: 0, east: 0), measured(1, second: 1, east: 10),
                       measured(2, second: 2, east: 1_000), measured(3, second: 3, east: 30),
                       measured(4, second: 4, east: 40)]
         let selected = SchoolCaptureDisplayRoute.select(source)
         #expect(selected.map(\.point.sequence) == [0, 1, 3, 4])
-        #expect(selected.map(\.startsFragment) == [true, false, true, false])
+        #expect(selected.map(\.startsFragment) == [true, false, false, false])
         let timeline = replay(source)
-        #expect(timeline.fragments.map { $0.line.pointCount } == [2, 2])
-        #expect(timeline.sample(at: 2) == nil)
-        #expect(timeline.sample(at: 3)?.heading == nil)
+        #expect(timeline.fragments.map { $0.line.pointCount } == [4])
+        #expect(timeline.samples.allSatisfy { $0.coordinate.longitude < 100.0 / 111_320 })
+        #expect(timeline.sample(at: 2)?.coordinate.longitude == source[1].longitude)
     }
 
     @Test func prolongedStationaryDriftDoesNotWalkTheDisplayedPosition() {

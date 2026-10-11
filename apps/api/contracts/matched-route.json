@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:matched-route:1",
+  "$comment": "Extension du 11 octobre 2026 : GET /v1/schools/{schoolId}/captures/{captureId}/matched-route. Couche recalée sur la route d'un trajet privé, calculée par l'école à la première lecture. OpenAPI canonique 3.11.0 conservé : GET …/replay n'est pas modifié et ne dépend jamais de cette route. Mêmes droits que le replay privé (moniteur affecté, administration, élève une fois le trajet partagé) ; sans accès au trajet, 404. Aucun paramètre de requête.",
+  "$defs": {
+    "MatchedRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["captureId", "status", "provider", "algorithmVersion", "reconstructionVersion", "spans", "generatedAt"],
+      "properties": {
+        "captureId": {"type": "string", "format": "uuid"},
+        "status": {
+          "enum": ["READY", "PENDING", "UNAVAILABLE"],
+          "description": "READY : calcul terminé, spans peut être vide (aucune route sûre). PENDING : calcul en cours, relire dans quelques secondes. UNAVAILABLE : rien à proposer (recalage non configuré, trajet non finalisé, échec en attente d'un nouvel essai). Dans les trois cas le trajet mesuré du replay reste complet et suffisant."
+        },
+        "provider": {"enum": ["mapbox", "osrm", null], "description": "Moteur qui a produit le résultat ; null hors READY."},
+        "algorithmVersion": {"type": "integer", "minimum": 1},
+        "reconstructionVersion": {"type": "integer", "minimum": 1, "description": "Version des mesures dont ce résultat dérive ; il est détruit dès qu'elle change."},
+        "spans": {"type": "array", "maxItems": 2000, "items": {"$ref": "#/$defs/Span"}},
+        "generatedAt": {"type": "string", "format": "date-time"}
+      }
+    },
+    "Span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["segmentId", "firstSequence", "lastSequence", "confidence", "geometry", "anchors"],
+      "$comment": "Entre les mesures firstSequence et lastSequence d'un même segment, le véhicule a très probablement suivi geometry. Un tronçon ne traverse jamais une lacune, ne contient aucun point que le moteur n'a pas placé, et n'existe pas sous le seuil de confiance : hors tronçon, le client trace les mesures. Deux tronçons voisins peuvent partager leur mesure de raccord.",
+      "properties": {
+        "segmentId": {"type": "string", "format": "uuid"},
+        "firstSequence": {"type": "integer", "minimum": 0},
+        "lastSequence": {"type": "integer", "minimum": 0},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "geometry": {"type": "string", "minLength": 1, "maxLength": 400000, "description": "Polyligne encodée, précision 6 (latitude, longitude)."},
+        "anchors": {
+          "type": "array", "minItems": 2, "maxItems": 20000,
+          "description": "[séquence d'une mesure, mètres le long de geometry]. Séquences croissantes, distances non décroissantes : elles donnent l'horaire le long de la route, à partir des instants des mesures.",
+          "items": {"type": "array", "minItems": 2, "maxItems": 2, "prefixItems": [{"type": "integer", "minimum": 0}, {"type": "number", "minimum": 0}]}
+        }
+      }
+    }
+  }
+}

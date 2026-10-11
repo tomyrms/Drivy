@@ -4,26 +4,28 @@ import Observation
 
 struct SchoolCaptureMapSegment: Identifiable {
     let id: UUID
-    private(set) var measurements: [SchoolCaptureMeasurement]
-    private(set) var displaySamples: [SchoolCaptureDisplayRoute.Sample]
+    private(set) var measurements: [SchoolCaptureMeasurement] = []
+    /// The presentation queue preserves the storage order, before any display filter.
+    private(set) var points: [SchoolCapturePoint] = []
+    /// Changes each time the displayed samples do: the map redraws only then.
+    private(set) var displayRevision = 0
+    private var selector = SchoolCaptureDisplayRoute.Selector()
+
+    var displaySamples: [SchoolCaptureDisplayRoute.Sample] { selector.samples }
 
     init(id: UUID, measurements: [SchoolCaptureMeasurement]) {
         self.id = id
-        self.measurements = measurements
-        displaySamples = []
-        displaySamples = SchoolCaptureDisplayRoute.select(points)
+        appendDurable(measurements)
     }
 
-    mutating func appendDurable(_ measurements: [SchoolCaptureMeasurement]) {
-        self.measurements.append(contentsOf: measurements)
-        displaySamples = SchoolCaptureDisplayRoute.select(points)
-    }
-
-    /// The presentation queue preserves the storage order, before any display filter.
-    var points: [SchoolCapturePoint] {
-        measurements.enumerated().map { sequence, measurement in
-            SchoolCapturePoint(sequence: sequence, elapsedMs: measurement.elapsedMs, capturedAt: measurement.capturedAt,
+    /// Constant work per measurement: the filter keeps its state, nothing is replayed from the start.
+    mutating func appendDurable(_ added: [SchoolCaptureMeasurement]) {
+        for measurement in added {
+            let point = SchoolCapturePoint(sequence: points.count, elapsedMs: measurement.elapsedMs, capturedAt: measurement.capturedAt,
                 latitude: measurement.latitude, longitude: measurement.longitude, accuracyMeters: measurement.accuracyMeters)
+            measurements.append(measurement)
+            points.append(point)
+            if selector.append(point) != .none { displayRevision += 1 }
         }
     }
 }
@@ -46,6 +48,9 @@ final class SchoolCaptureSessionController {
     private(set) var captureID: UUID?
     private(set) var lessonID: UUID?
     private(set) var segments: [SchoolCaptureMapSegment] = []
+    /// Une position au moins est affichée. Les écrans lisent ceci plutôt que les segments : ils ne sont pas
+    /// réévalués à chaque position reçue.
+    private(set) var hasDisplayedPosition = false
     private(set) var errorMessage: String?
     private(set) var locationMessage: String?
     private(set) var transferMessage: String?
@@ -247,7 +252,7 @@ final class SchoolCaptureSessionController {
         liveObservations?.stop(); liveObservations = nil
         context?.source.onEvent = nil
         context = nil; generation = UUID()
-        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []
+        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []; hasDisplayedPosition = false
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false
         finalizedSyncState = nil
         beginning = nil; endedAt = nil
@@ -292,7 +297,7 @@ final class SchoolCaptureSessionController {
         context = nil
         generation = UUID()
         old?.transfer.invalidate()
-        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []
+        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []; hasDisplayedPosition = false
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false; beginning = nil; endedAt = nil
         finalizedSyncState = nil
         if let old, let boundary {
@@ -338,7 +343,7 @@ final class SchoolCaptureSessionController {
         context = active
         completedLessonID = nil
         captureID = session.id; lessonID = session.serverCapture.lessonId
-        segments = []; beginning = nil; endedAt = nil; transition = nil; state = .preparing
+        segments = []; hasDisplayedPosition = false; beginning = nil; endedAt = nil; transition = nil; state = .preparing
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false
         finalizedSyncState = nil
         source.updateScope(transfer.scope)
@@ -375,7 +380,7 @@ final class SchoolCaptureSessionController {
     private func discardUnstartedContext(_ active: Context) {
         active.source.onEvent = nil
         context = nil; generation = UUID()
-        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []
+        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []; hasDisplayedPosition = false
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false
         synchronizationNeedsRetry = false; finalizedSyncState = nil
         beginning = nil; endedAt = nil
@@ -661,6 +666,7 @@ final class SchoolCaptureSessionController {
                         _ = try await saved.value
                         guard generation == request, let index = segments.firstIndex(where: { $0.id == handle.segmentID }) else { return }
                         segments[index].appendDurable(values)
+                        if !hasDisplayedPosition, !segments[index].displaySamples.isEmpty { hasDisplayedPosition = true }
                     } catch { failCollector(active, request: request, error: error) }
                 }
             } catch { failCollector(active, request: request, error: error) }
@@ -776,6 +782,7 @@ extension SchoolCaptureSessionController {
             .init(capturedAt: "2026-09-29T10:00:10.000Z", elapsedMs: 10_000, latitude: 46.522, longitude: 6.632, accuracyMeters: 6)
         ]
         controller.segments = [.init(id: UUID(uuidString: "00000000-0000-0000-0000-000000009092")!, measurements: points)]
+        controller.hasDisplayedPosition = controller.displayedPointCount > 0
         return controller
     }
 }

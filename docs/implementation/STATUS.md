@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 11 octobre 2026 — GPS fluide, tracés fidèles et recalage routier
+
+Une seule carte pour la leçon et le replay, animée image par image : le marqueur glisse vers chaque position enregistrée, la caméra suit sans à-coups, le curseur du replay avance en continu et répond aussitôt à la chronologie. Le filtre d’affichage ne dessine plus la dérive à l’arrêt ni les sauts, sans couper le trait à chaque feu rouge. Le serveur sait recaler un trajet sur la route (Mapbox ou OSRM auto-hébergé), à la première lecture, en couche distincte des mesures. [Causes, architecture, décisions et limites](gps-fluide-recalage-20261011.md).
+
+**Exécuté** : IPA d’essai compilée ; tests Swift (482 tests passent après fusion de master) ; 311 tests API sur PostgreSQL ; client vérifié contre l’API Mapbox réelle avec une ligne synthétique. **Non exécuté** : parcours UI. **Reste à qualifier** : tout sur iPhone — fluidité, position du marqueur sous les panneaux, seuils du filtre sur route, VoiceOver. Aucune mesure de performance n’a été faite.
+
+**Au porteur** : le recalage n’est ni déployé ni activé. Les conditions de Mapbox demandent d’afficher ses résultats sur une carte Mapbox et interdisent de les stocker ; les positions partiraient chez un tiers, ce qui touche la notice. Un OSRM sur le homelab évite les deux. Migration 024 à appliquer au prochain déploiement de l’API, après sauvegarde.
+
 ## 11 octobre 2026 — direction artistique commune (Profil, Élèves, Agenda)
 
 Audit croisé des onglets et de leurs feuilles, puis règles communes : une ligne prend le rythme de sa famille de page (liste groupée ou page de lecture), une seule action en texte, un badge pour ce qui attend une réponse, « Fermer » toujours au même endroit, vides et attentes par les composants partagés. Le Profil du moniteur prend la structure des Paramètres de l’élève, et les deux Profils posent l’en-tête sur le fond. Aujourd’hui n’est pas refait. [Audit, règles et décisions](direction-artistique-20261011.md). Branche `claude/da-harmonisation-20261011`, sur la PR #12.
