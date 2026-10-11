@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 11 octobre 2026 — audit des parcours moniteur et élève
+
+Une leçon ne se commence plus que le jour de son rendez-vous (l’agenda proposait de commencer celle de la semaine suivante) ; un rendez-vous manqué propose « Élève absent » et ne reste plus en tête d’Aujourd’hui ; accord GPS synchronisé entre la fiche et Profil ; filtres de l’élève alignés sur sa carte ; VoiceOver et Réduire les animations dans Progression ; lectures réseau de la fiche réduites ; l’app accepte un trajet sans identifiants d’appareil du moniteur. [Détail, points ouverts et limites](audit-parcours-20261011.md).
+
+**Exécuté** : IPA d’essai sur chaque lot, sans avertissement ; 455 tests métier ; parcours UI iPhone et iPad (un échec de dérive corrigé, voir le détail). **Reste à qualifier** : tout sur iPhone, VoiceOver compris. **Au porteur** : contrôle de l’horaire de départ dans l’API, départ très en avance, retrait des identifiants d’appareil côté API.
+
 ## 11 octobre 2026 — parcours de l’élève : Profil, prochaine leçon, Progression
 
 Trois onglets pour l’élève (Leçons, Progression, Profil), prochaine leçon en tête, historique lu en entier, Progression refaite sur retours du porteur (un permis à la fois, « 4 sur 9 en autonomie », détail déplié sur place), ralentissements corrigés (dates et formateurs mis en cache). [Détail, relecture QA et points ouverts](parcours-eleve-profil-20261011.md).
