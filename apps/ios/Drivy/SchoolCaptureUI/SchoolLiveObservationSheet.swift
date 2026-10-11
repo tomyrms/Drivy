@@ -302,14 +302,11 @@ private struct SchoolAppraisalLabel: View {
         .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
     }
 
-    /// Le pictogramme dans une pastille teintée de son état : l’icône, son fond et le libellé restent trois
-    /// niveaux distincts, en clair comme en sombre.
     private var symbol: some View {
         DrivyObservationGlyphImage(glyph: status.glyph)
             .foregroundStyle(status.tone.signal)
-            .frame(width: 20, height: 20)
-            .frame(width: 36, height: 36)
-            .background(status.tone.background, in: Circle())
+            .frame(width: 22, height: 22)
+            .frame(width: 24, height: 24)
             .accessibilityHidden(true)
     }
 }

@@ -16,7 +16,7 @@ La même correspondance appréciation → couleur était en outre réécrite à 
 - Le sombre garde exactement ses valeurs (#7CCFA0, #E5BE7A, #FF9DA3).
 - `DrivyTone.signal` : la teinte d’un état dessiné ; `foreground` reste l’encre des mots. Neutre et accent ne changent pas.
 - Une seule correspondance : `SchoolObservationStatus.tone` / `ObservationStatus.tone`. Les copies locales sont supprimées.
-- Dans « Signaler », le pictogramme d’appréciation est posé dans une pastille teintée de son état (fond / icône / libellé distincts) ; une appréciation pressée prend sa propre teinte au lieu du bleu de sélection.
+- Dans « Signaler », le pictogramme d’appréciation reste nu, sans pastille (refusée par le porteur le 12 octobre) ; une appréciation pressée prend sa propre teinte au lieu du bleu de sélection.
 - Les valeurs claires existantes ne bougent pas : texte d’état, messages, erreurs gardent leurs encres.
 
 Un jaune vrai ne peut pas atteindre 3:1 sur blanc : « Attention » est un ambre chaud, celui d’un panneau de danger, et non plus un brun.
@@ -25,7 +25,7 @@ Un jaune vrai ne peut pas atteindre 3:1 sur blanc : « Attention » est un ambre
 
 | Endroit | Avant | Après |
 |---|---|---|
-| Signaler (feuille et palette sur la carte) | glyphe à l’encre, sans fond | glyphe signal dans une pastille teintée |
+| Signaler (feuille et palette sur la carte) | glyphe à l’encre, sans fond | glyphe signal, sans fond |
 | Marqueur de carte (direct, replay, aperçu) | anneau et badge à l’encre | signal |
 | Rail du replay (pastilles, élément en cours) et frise (épingles, traits) | encre | signal |
 | Fil des observations du bilan, résumé d’agenda, formulaire d’observation | encre | signal |
