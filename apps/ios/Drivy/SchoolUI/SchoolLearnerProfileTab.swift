@@ -123,6 +123,7 @@ struct SchoolLearnerProfileTab: View {
                             .foregroundStyle(DrivyTheme.text)
                             .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
                     }
+                    .disclosureGroupStyle(.drivy)
                     .accessibilityIdentifier("profile-my-information")
                 } else if let openProfile = account?.openProfile {
                     DrivyNavigationRow(title: "Mes informations", action: openProfile)

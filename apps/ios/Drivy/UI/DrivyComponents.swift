@@ -656,3 +656,42 @@ private struct DrivyPageContent: ViewModifier {
             .frame(maxWidth: .infinity)
     }
 }
+
+/// Content that unfolds in place (« Informations personnelles », « Mes informations »): the label, then a chevron
+/// pointing down that turns as it opens, the same glyph as a competency row of Progression. A forward chevron
+/// means « opens elsewhere »; this one never looks like it. Under Reduce Motion the symbol swaps instead of turning
+/// and the content fades in.
+struct DrivyDisclosureStyle: DisclosureGroupStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(DrivyMotion.reveal(reduceMotion)) { configuration.isExpanded.toggle() }
+            } label: {
+                HStack(alignment: .center, spacing: DrivySpacing.s) {
+                    configuration.label
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: reduceMotion && configuration.isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.muted)
+                        .rotationEffect(.degrees(!reduceMotion && configuration.isExpanded ? 180 : 0))
+                        .accessibilityHidden(true)
+                }
+                .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(configuration.isExpanded ? "Déplié" : "Replié")
+            if configuration.isExpanded {
+                configuration.content
+                    .transition(.opacity)
+            }
+        }
+    }
+}
+
+extension DisclosureGroupStyle where Self == DrivyDisclosureStyle {
+    /// `.disclosureGroupStyle(.drivy)`: see DrivyDisclosureStyle.
+    static var drivy: DrivyDisclosureStyle { DrivyDisclosureStyle() }
+}

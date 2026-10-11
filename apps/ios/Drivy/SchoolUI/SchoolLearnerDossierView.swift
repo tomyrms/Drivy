@@ -172,6 +172,7 @@ struct SchoolLearnerDossierView: View {
         } label: {
             informationLabel
         }
+        .disclosureGroupStyle(.drivy)
         .accessibilityIdentifier("learner-profile-details")
     }
 
@@ -214,6 +215,7 @@ struct SchoolLearnerDossierView: View {
             } label: {
                 informationLabel
             }
+            .disclosureGroupStyle(.drivy)
         }
     }
 
