@@ -291,6 +291,17 @@ struct SchoolCaptureReplayView: View {
                 // Le rail va jusqu’aux bords du dock : les pastilles défilent sans être coupées net
                 // au retrait, et la première reste alignée sur le contenu.
                 .contentMargins(.horizontal, DrivySpacing.m, for: .scrollContent)
+                // Les pastilles s’estompent sur la largeur de la marge au lieu de se couper net au bord du dock.
+                // Au repos, la première est entière : le fondu ne couvre que la marge.
+                .mask {
+                    HStack(spacing: 0) {
+                        LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: DrivySpacing.m)
+                        Color.black
+                        LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: DrivySpacing.m)
+                    }
+                }
                 .padding(.horizontal, -DrivySpacing.m)
                 .onChange(of: selectedID) { _, id in
                     guard let id else { return }
