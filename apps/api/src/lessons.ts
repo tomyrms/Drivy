@@ -54,6 +54,8 @@ export function lessonCommandGuards(schoolId:string,target:{trainingId:string;in
  authorize:async db=>{const row='trainingId'in target?{training_id:target.trainingId,instructor_membership_id:target.instructorMembershipId}:await getLesson(db,schoolId,target.lessonId);await access(db,row.training_id,row.instructor_membership_id);},
  replay:async(db,_actor,previous)=>{await getLesson(db,schoolId,previous.id);return previous;}
 };}
+/** Jour civil « AAAA-MM-JJ » d'un instant dans un fuseau : comparable comme texte. */
+function localDay(instant:Date,timeZone:string){return new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(instant);}
 function validateInterval(body:{plannedStart:string;plannedEnd:string;timeZone:string},school:SchoolRow){
  let valid=false;try{new Intl.DateTimeFormat('fr',{timeZone:body.timeZone});valid=body.timeZone===school.timeZone;}catch{ /* Invalid zone is never coerced. */ }
  const minutes=(Date.parse(body.plannedEnd)-Date.parse(body.plannedStart))/60_000;
@@ -309,7 +311,11 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
    const training=(await db.query<{status:string;archived_at:Date|null}>(`SELECT t.status,l.archived_at FROM drivy.training t JOIN drivy.learner_profile l ON l.school_id=t.school_id AND l.id=t.learner_id
     WHERE t.school_id=$1 AND t.id=$2`,[school.id,old.training_id])).rows[0];
    if(training?.status!=='ACTIVE'||training.archived_at)throw new ApiError(409,'TRAINING_NOT_ACTIVE','La formation doit être active dans un dossier non archivé.');
-   const row=await startLesson(db,old,body.operationId,new Date());
+   // Jamais avant le jour du rendez-vous, dans le fuseau de la leçon. Un départ tardif reste accepté : une commande
+   // mise en file hors ligne peut arriver après le créneau.
+   const now=new Date();
+   if(localDay(now,old.time_zone)<localDay(old.planned_start,old.time_zone))throw new ApiError(409,'LESSON_NOT_TODAY','Cette leçon ne peut commencer que le jour de son rendez-vous.');
+   const row=await startLesson(db,old,body.operationId,now);
    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonStarted',changedFields:['actualStart']};
   },['INSTRUCTOR'],{...lessonCommandGuards(schoolId,{lessonId}),authorize,replay:async(db,_actor,previous)=>{await authorize(db);return previous;}});
   reply.header('ETag',`"${data.version}"`);return envelope(data,r);

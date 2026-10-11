@@ -53,7 +53,8 @@ import XCTest
         let progression = app.segmentedControls.buttons["Progression"]
         XCTAssertTrue(progression.waitForExistence(timeout: 10), app.debugDescription)
         progression.tap()
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Avec accompagnement"))
+        // « Où j’en suis » dit les autres niveaux en une ligne (« 1 avec accompagnement »).
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", "avec accompagnement"))
             .firstMatch.waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(dossier.exists, app.debugDescription)
     }

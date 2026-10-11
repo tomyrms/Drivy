@@ -43,4 +43,11 @@ export interface ChoiceRow {id:string;school_id:string;version:number;learner_id
 export interface AssessmentRow {id:string;school_id:string;version:number;device_id:string;membership_id:string;person_id:string;platform:string;device_class:string;model_code:string;os_version:string;app_build:string;qualification_profile_version:string;status:'QUALIFIED'|'UNSUPPORTED'|'NEEDS_CHECK';assessed_at:Date;expires_at:Date;blockers:unknown[]}
 export const captureProjection=(r:CaptureRow)=>({id:r.id,schoolId:r.school_id,version:r.version,lessonId:r.lesson_id,learnerId:r.learner_id,instructorMembershipId:r.instructor_membership_id,deviceId:r.device_id,choiceId:r.choice_id,authorizedAt:r.authorized_at.toISOString(),expiresAt:r.expires_at.toISOString(),stoppedAt:r.stopped_at?.toISOString()??null,cutoffAt:r.cutoff_at?.toISOString()??null,uploadDeadline:r.upload_deadline.toISOString(),captureState:r.capture_state==='AUTHORIZED'&&r.expires_at.getTime()<=Date.now()?'EXPIRED' as const:r.capture_state,syncState:r.sync_state,publicationState:r.publication_state,deviceAssessmentId:r.device_assessment_id});
 export const choiceProjection=(r:ChoiceRow)=>({id:r.id,schoolId:r.school_id,version:r.version,learnerId:r.learner_id,lessonId:r.lesson_id,status:r.status,noticeVersionId:r.notice_version_id,recordedBy:r.recorded_by,recordedAt:r.recorded_at.toISOString(),source:r.source});
+/** Lecture d'un trajet : l'appareil du moniteur et son évaluation ne servent qu'au personnel de l'école ; l'élève ne les reçoit pas. */
+export function captureProjectionFor(r:CaptureRow,member:{roles:string[]}|undefined){
+ const value=captureProjection(r);
+ if(member&&(member.roles.includes('INSTRUCTOR')||member.roles.includes('ADMIN')))return value;
+ const {deviceId,deviceAssessmentId,...learnerValue}=value;void deviceId;void deviceAssessmentId;
+ return learnerValue;
+}
 export const assessmentProjection=(r:AssessmentRow)=>({id:r.id,schoolId:r.school_id,version:r.version,deviceId:r.device_id,membershipId:r.membership_id,platform:r.platform,deviceClass:r.device_class,modelCode:r.model_code,osVersion:r.os_version,appBuild:r.app_build,qualificationProfileVersion:r.qualification_profile_version,status:r.status,assessedAt:r.assessed_at.toISOString(),expiresAt:r.expires_at.toISOString(),blockers:r.blockers});

@@ -20,6 +20,12 @@ Le thème sombre de l’app native est refait en anthracite neutre : un bloc est
 
 **Reste à qualifier** : carte sombre réelle, Liquid Glass, ombres et bascule clair/sombre sur appareil ; Contraste accru, Réduire la transparence, grand texte, iPad et paysage, jamais rendus ; parcours UI non rejoués. **Au porteur** : valider à l’œil le bleu du bouton principal (`#3D70E2` au lieu de `#4D80EB`, pour le contraste du libellé) et l’aspect des interrupteurs. Le thème sombre du web n’est pas touché.
 
+## 11 octobre 2026 — audit des parcours moniteur et élève
+
+Une leçon ne se commence plus que le jour de son rendez-vous (l’agenda proposait de commencer celle de la semaine suivante) ; un rendez-vous manqué propose « Élève absent » et ne reste plus en tête d’Aujourd’hui ; accord GPS synchronisé entre la fiche et Profil ; filtres de l’élève alignés sur sa carte ; VoiceOver et Réduire les animations dans Progression ; lectures réseau de la fiche réduites ; l’app accepte un trajet sans identifiants d’appareil du moniteur. [Détail, points ouverts et limites](audit-parcours-20261011.md).
+
+**Exécuté** : IPA d’essai sur chaque lot, sans avertissement ; 455 tests métier ; parcours UI iPhone et iPad (un échec de dérive corrigé, voir le détail). **Reste à qualifier** : tout sur iPhone, VoiceOver compris. **API (validé par le porteur)** : départ refusé avant le jour du rendez-vous (`LESSON_NOT_TODAY`), identifiants d’appareil du moniteur retirés des trajets lus par l’élève ; 275 tests API et 148 tests web passent. **Non déployé** : l’app de l’élève doit être installée avant l’API.
+
 ## 11 octobre 2026 — parcours de l’élève : Profil, prochaine leçon, Progression
 
 Trois onglets pour l’élève (Leçons, Progression, Profil), prochaine leçon en tête, historique lu en entier, Progression refaite sur retours du porteur (un permis à la fois, « 4 sur 9 en autonomie », détail déplié sur place), ralentissements corrigés (dates et formateurs mis en cache). [Détail, relecture QA et points ouverts](parcours-eleve-profil-20261011.md).
