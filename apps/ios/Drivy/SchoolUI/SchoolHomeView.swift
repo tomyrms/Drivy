@@ -248,7 +248,9 @@ struct SchoolHomeView: View {
                 .drivySkeleton("Chargement de ton dossier…")
                 .drivyPageContent()
         } else if workspace.school?.status != "ACTIVE" {
-            ContentUnavailableView("L’école se prépare", systemImage: "building.2")
+            // Même lecture que chez le moniteur : une école archivée ne « se prépare » pas.
+            let archived = workspace.school?.status == "ARCHIVED"
+            ContentUnavailableView(archived ? "École archivée" : "L’école se prépare", systemImage: archived ? "archivebox" : "building.2")
                 .frame(maxHeight: .infinity)
         } else if ownLearner == nil {
             ContentUnavailableView("Dossier pas encore ouvert", systemImage: "person.crop.circle.badge.questionmark",

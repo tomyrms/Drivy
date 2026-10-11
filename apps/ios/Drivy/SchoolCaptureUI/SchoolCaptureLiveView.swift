@@ -369,6 +369,13 @@ struct SchoolCaptureLiveView: View {
                     .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                     .accessibilityIdentifier("school-capture-retry-saving")
                 }
+                // La sauvegarde a échoué : la leçon se termine quand même depuis sa fiche, qui reprend l’arrêt durable
+                // et dit son erreur. Sans ce bouton, il ne restait que « … » puis « Voir la leçon ».
+                if let openLesson, let lessonID = controller.lessonID {
+                    Button("Terminer la leçon") { openLesson(lessonID, true) }
+                        .buttonStyle(DrivySecondaryButtonStyle(size: .field))
+                        .accessibilityIdentifier("school-capture-failed-finish")
+                }
             case .idle:
                 EmptyView()
             }

@@ -136,7 +136,8 @@ struct SchoolAgendaView: View {
     private var dayGroup: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             dayHeading
-            dayContent
+            // L’état d’une leçon suit l’heure (« En attente » une fois l’horaire passé) sans attendre un autre rendu.
+            TimelineView(.everyMinute) { _ in dayContent }
         }
     }
 

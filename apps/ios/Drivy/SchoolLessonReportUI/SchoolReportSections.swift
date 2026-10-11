@@ -314,6 +314,9 @@ private struct SchoolReportObservationRow: View {
             content
                 .contentShape(Rectangle())
                 .onTapGesture { router.selectedObservation = router.selectedObservation == observation.id ? nil : observation.id }
+                // Ligne touchable : VoiceOver l’annonce comme bouton, et dit celle qui est montrée sur la carte.
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(router.selectedObservation == observation.id ? [.isButton, .isSelected] : .isButton)
                 .accessibilityAction(named: "Montrer sur la carte") { router.selectedObservation = observation.id }
         } else {
             content

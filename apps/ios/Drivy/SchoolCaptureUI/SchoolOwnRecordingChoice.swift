@@ -43,6 +43,12 @@ struct SchoolOwnRecordingChoice: View {
             model = value
             await value.load()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .drivyRecordingChoiceDidChange)) { notification in
+            // Réponse confirmée ailleurs (fiche de la prochaine leçon ↔ Profil) : ce choix-ci se relit.
+            guard let model, notification.object as? UUID != model.id, sending == nil,
+                  !model.isBusy, !model.isLoading else { return }
+            Task { await model.load() }
+        }
         .onChange(of: scenePhase) { _, phase in
             // De retour dans l’app : le moniteur a pu enregistrer un choix entre-temps.
             guard phase == .active, sending == nil, let model, !model.isBusy, !model.isLoading else { return }
@@ -59,8 +65,14 @@ struct SchoolOwnRecordingChoice: View {
         guard sending == nil, status != model.validAnswer else { return }
         sending = status
         Task {
-            _ = await model.choose(status)
+            let saved = await model.choose(status)
             sending = nil
+            if saved { NotificationCenter.default.post(name: .drivyRecordingChoiceDidChange, object: model.id) }
         }
     }
+}
+
+extension Notification.Name {
+    /// L’élève a changé son accord GPS : les autres lignes d’accord affichées se relisent.
+    static let drivyRecordingChoiceDidChange = Notification.Name("drivy.recordingChoiceDidChange")
 }
