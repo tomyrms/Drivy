@@ -68,9 +68,9 @@ struct SchoolProfileTabView: View {
                 NavigationLink {
                     SchoolLessonHistoryView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
                 } label: {
+                    // La cellule native assure déjà ses 44 pt : une hauteur de plus la rendait plus haute que ses voisines.
                     Text("Leçons")
                         .foregroundStyle(DrivyTheme.text)
-                        .frame(minHeight: DrivyLayout.tapTarget)
                 }
                 .accessibilityIdentifier("profile-open-lessons")
                 if let person = workspace.person, let membership = workspace.membership,

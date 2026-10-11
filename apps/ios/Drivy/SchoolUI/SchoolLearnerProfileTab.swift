@@ -124,6 +124,7 @@ struct SchoolLearnerProfileTab: View {
                             .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
                     }
                     .disclosureGroupStyle(.drivy)
+                    .listRowInsets(rowInsets)
                     .accessibilityIdentifier("profile-my-information")
                 } else if let openProfile = account?.openProfile {
                     DrivyNavigationRow(title: "Mes informations", action: openProfile)
@@ -169,6 +170,7 @@ struct SchoolLearnerProfileTab: View {
             }
         }
         .padding(.top, DrivySpacing.xxs)
+        .padding(.bottom, DrivySpacing.s)
         .frame(maxWidth: .infinity, alignment: .leading)
         .task { await loadInformation(learner) }
     }
