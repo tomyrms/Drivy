@@ -18,7 +18,7 @@ struct SchoolBrowserView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             searchableMaster
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
             .navigationTitle("Élèves")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -72,30 +72,30 @@ struct SchoolBrowserView: View {
                 DrivySkeletonRows(count: 5, leading: .avatar)
                     .drivySkeleton(workspace.isSearching ? "Recherche des élèves…" : "Chargement des élèves…")
                     .listRowSeparator(.hidden)
-                    .drivyFormRows()
+                    .drivyPlainRows()
             }
             if let error = workspace.schoolError {
                 SchoolErrorNotice(message: error, retry: {
                     if let membership = workspace.membership { Task { await workspace.selectSchool(membership) } }
                 })
                 .listRowSeparator(.hidden)
-                .drivyFormRows()
+                .drivyPlainRows()
             } else if let error = workspace.learnersError {
                 SchoolErrorNotice(message: error, retry: { Task { await workspace.searchLearners(workspace.searchText) } })
                     .listRowSeparator(.hidden)
-                    .drivyFormRows()
+                    .drivyPlainRows()
             }
             if let school = workspace.school, school.status != "ACTIVE" {
                 DrivyEmptyState(title: school.status == "ARCHIVED" ? "École archivée" : "L’école se prépare",
                     message: school.status == "ARCHIVED" ? "" : "Termine sa préparation sur le web.",
                     symbol: school.status == "ARCHIVED" ? "archivebox" : "building.2")
                     .listRowSeparator(.hidden)
-                    .drivyFormRows()
+                    .drivyPlainRows()
             } else if !workspace.isSearching && !workspace.isLoadingSchool && workspace.school != nil && workspace.learners.isEmpty && workspace.learnersError == nil {
                 emptyLearners
                     .buttonStyle(.borderless)
                     .listRowSeparator(.hidden)
-                    .drivyFormRows()
+                    .drivyPlainRows()
             }
             ForEach(workspace.learners) { learner in
                 NavigationLink(value: learner.id) {
@@ -105,7 +105,7 @@ struct SchoolBrowserView: View {
                 .listRowInsets(EdgeInsets(top: DrivySpacing.xxs, leading: DrivySpacing.m, bottom: DrivySpacing.xxs, trailing: DrivySpacing.m))
                 .listRowSeparatorTint(DrivyTheme.border)
                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-                .drivyFormRows(isSelected: workspace.selectedLearnerID == learner.id)
+                .drivyPlainRows(isSelected: workspace.selectedLearnerID == learner.id)
             }
             if workspace.nextLearnersCursor != nil {
                 Button { Task { await workspace.loadMoreLearners() } } label: {
@@ -118,7 +118,7 @@ struct SchoolBrowserView: View {
                 .accessibilityIdentifier("more-learners")
                 .onAppear { Task { await workspace.loadMoreLearners() } }
                 .listRowSeparator(.hidden)
-                .drivyFormRows()
+                .drivyPlainRows()
             }
         }
         .listStyle(.plain)
@@ -155,7 +155,7 @@ struct SchoolChooserSheet: View {
                 .navigationTitle("Changer d’école")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .confirmationAction) { Button("Fermer", action: close) }
+                    ToolbarItem(placement: .cancellationAction) { Button("Fermer", action: close) }
                 }
         }
         .tint(DrivyTheme.accent)

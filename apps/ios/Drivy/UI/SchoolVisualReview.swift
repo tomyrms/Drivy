@@ -5,7 +5,7 @@ import SwiftUI
 /// No production credentials, persistent school store or network transport is created.
 struct SchoolVisualReview: View {
     /// Shell screens routed here directly by DrivyApp, with the real tab bar.
-    static let shellScreens: Set<String> = ["home-tabs", "home-to-finish", "agenda", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "live", "live-waiting", "dossier-multi"]
+    static let shellScreens: Set<String> = ["home-tabs", "home-to-finish", "agenda", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "live", "live-waiting", "dossier-multi"]
 
     let screen: String
     @State private var context: SchoolVisualContext?
@@ -59,6 +59,8 @@ struct SchoolVisualReview: View {
                     SchoolVisualShell(context: context, tab: .lessons)
                 case "learner-progress":
                     SchoolVisualShell(context: context, tab: .progress)
+                case "learner-profile", "learner-profile-multi":
+                    SchoolVisualShell(context: context, tab: .profile)
                 case "school-choice":
                     SchoolChooserSheet(workspace: context.workspace, close: {})
                 case "no-school":
@@ -98,7 +100,7 @@ struct SchoolVisualReview: View {
             guard !SchoolAccountVisualReview.screenNames.contains(screen) else { return }
             guard context == nil else { return }
             do {
-                context = try await SchoolVisualData.prepare(learnerRole: screen == "learner-home" || screen == "learner-progress",
+                context = try await SchoolVisualData.prepare(learnerRole: ["learner-home", "learner-progress", "learner-profile", "learner-profile-multi"].contains(screen),
                     populatedObservations: screen == "lesson-observations",
                     permitCount: SchoolVisualData.permitCount(for: screen))
             }

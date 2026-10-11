@@ -55,18 +55,20 @@ extension View {
     /// stays legible over water, parks or satellite imagery. Reduce Transparency
     /// makes the system glass opaque.
     func drivyLegibleMapControl<S: Shape>(in shape: S) -> some View {
-        glassEffect(.regular.tint(DrivyTheme.surface.opacity(0.78)).interactive(), in: shape)
+        glassEffect(.regular.tint(DrivyTheme.surfaceRaised.opacity(0.78)).interactive(), in: shape)
     }
 }
 
 private struct DrivyMapPanelModifier: ViewModifier {
     let floating: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
-            .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+            .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
             .overlay {
-                if !floating {
+                // On a dark map the shadow alone does not draw the edge: the hairline stays.
+                if !floating || colorScheme == .dark {
                     RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous)
                         .strokeBorder(DrivyTheme.border, lineWidth: 0.5)
                 }
@@ -655,7 +657,7 @@ struct DrivyReplayScrubber: View {
                     .frame(width: 28, height: 28)
                     .background(DrivyTheme.surfaceMuted, in: Circle())
                     .overlay(Circle().strokeBorder(DrivyTheme.controlBorder, lineWidth: 1.5))
-                    .frame(width: 44, height: pinArea)
+                    .frame(width: DrivyLayout.tapTarget, height: pinArea)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -671,10 +673,10 @@ struct DrivyReplayScrubber: View {
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(selected ? DrivyTheme.onAccent : mark.tone.foreground)
                 .frame(width: selected ? 28 : 22, height: selected ? 28 : 22)
-                .background(selected ? DrivyTheme.accent : mark.tone.background, in: Circle())
-                .overlay(Circle().strokeBorder(selected ? DrivyTheme.accent : mark.tone.foreground, lineWidth: 1.5))
+                .background(selected ? DrivyTheme.accentFill : mark.tone.background, in: Circle())
+                .overlay(Circle().strokeBorder(selected ? DrivyTheme.accentFill : mark.tone.foreground, lineWidth: 1.5))
                 .dynamicTypeSize(...DynamicTypeSize.xLarge)
-                .frame(width: 44, height: pinArea)
+                .frame(width: DrivyLayout.tapTarget, height: pinArea)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -683,7 +685,7 @@ struct DrivyReplayScrubber: View {
 
     private var thumb: some View {
         Circle()
-            .fill(DrivyTheme.surface)
+            .fill(DrivyTheme.surfaceRaised)
             .frame(width: 22, height: 22)
             .overlay(Circle().strokeBorder(DrivyTheme.accent, lineWidth: 4))
             .drivyShadow(radius: 3, y: 1)
@@ -770,7 +772,7 @@ struct DrivyReplayTransport: View {
                     .font(DrivyMapGlyph.primaryControl)
                     .foregroundStyle(DrivyTheme.onAccent)
                     .frame(width: 60, height: 60)
-                    .background(DrivyTheme.accent, in: Circle())
+                    .background(DrivyTheme.accentFill, in: Circle())
                     .contentShape(Circle())
             }
             .accessibilityLabel(isPlaying ? "Mettre le replay en pause" : "Lire le replay")

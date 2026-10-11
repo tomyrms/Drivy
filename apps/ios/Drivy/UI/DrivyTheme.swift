@@ -1,38 +1,77 @@
 import SwiftUI
 import UIKit
 
-/// Semantic colors from the approved Cartographie native direction.
-/// Values mirror `annexes/tokens-proposition.json` (tokens 3.8); never recompute a palette per screen.
+/// Semantic colors of the native client. Light values are the approved Cartographie native
+/// direction (tokens 3.8) and never change here. Dark values are « Soft Charcoal »: a neutral
+/// anthracite where a block is lighter than the page it sits on, never an inverted light theme.
+/// Never recompute a palette per screen; decisions are in docs/implementation/dark-soft-charcoal-20261011.md.
 enum DrivyTheme {
-    static let canvas = adaptive(0xF7F8FA, 0x10151C)
-    static let surface = adaptive(0xFFFFFF, 0x19222E)
-    static let surfaceMuted = adaptive(0xEEF2F7, 0x222E3E)
-    static let text = adaptive(0x18212B, 0xF2F5FA)
-    static let muted = adaptive(0x536174, 0xB0BCCC)
-    static let accent = adaptive(0x245BD6, 0x91B5FF)
-    static let accentPressed = adaptive(0x1947AD, 0xB4CCFF)
-    static let onAccent = adaptive(0xFFFFFF, 0x10264D)
-    static let accentSoft = adaptive(0xEAF0FE, 0x233859)
-    static let success = adaptive(0x17633D, 0x98DBB4)
-    static let successSurface = adaptive(0xE9F5EE, 0x18372A)
-    static let warning = adaptive(0x7A4D00, 0xF2CB83)
-    static let warningSurface = adaptive(0xFFF3D6, 0x382D19)
-    static let danger = adaptive(0xB02B37, 0xFFADB4)
-    static let dangerSurface = adaptive(0xFDECEF, 0x40252D)
-    static let border = adaptive(0xD9E0E9, 0x34445A)
-    static let controlBorder = adaptive(0x78869A, 0x71849D)
-    /// Decorative continuation only; stations and labels carry the information.
-    static let rail = adaptive(0xC3CDD9, 0x3A4757)
-    static let disabledText = adaptive(0x5D6A7C, 0xB0BCCC)
-    static let disabledSurface = adaptive(0xE8EDF3, 0x222E3E)
-    static let route = adaptive(0x245BD6, 0x91B5FF)
-    static let routeHalo = adaptive(0xFFFFFF, 0x10151C)
-    /// Shadow tint: a deep blue-grey, never pure black, so shadows stay soft on every surface.
-    static let shadow = adaptive(0x18212B, 0x05080C)
+    // Pages: the darkest level. A sheet or popover is one step lighter (system elevated level).
+    /// Background of grouped forms and lists.
+    static let canvas = adaptive(0xF7F8FA, 0x17191C, elevated: 0x1D1F23)
+    /// Background of reading pages.
+    static let surface = adaptive(0xFFFFFF, 0x17191C, elevated: 0x1D1F23)
 
-    private static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
+    // Blocks: one step above the page.
+    /// Fill of DrivyCard, DrivyPanel, selection cards and grouped rows.
+    static let surfaceCard = adaptive(0xF7F8FA, 0x272A2E, elevated: 0x2A2D31)
+    /// Block laid over a page or over the map: map panel, banner, marker, thumb.
+    static let surfaceRaised = adaptive(0xFFFFFF, 0x272A2E, elevated: 0x2A2D31)
+    /// Interactive or neutral fill: secondary button, neutral pill, avatar, pressed row.
+    static let surfaceMuted = adaptive(0xEEF2F7, 0x34383D, elevated: 0x373B40)
+
+    static let text = adaptive(0x18212B, 0xF4F5F6)
+    static let muted = adaptive(0x536174, 0xA1A5AD, darkHighContrast: 0xC2C6CD)
+    /// Decorative glyphs only (chevrons): never the sole carrier of an information.
+    static let textTertiary = adaptive(0x536174, 0x8E939C, darkHighContrast: 0xA1A5AD)
+    /// Chevron of a row inside a native grouped list: the system's own, so a Drivy row and a NavigationLink
+    /// sitting in the same section show the same glyph in both appearances.
+    static let listChevron = Color(uiColor: .tertiaryLabel)
+
+    /// Accent as ink: links, symbols, selection outline, system tint.
+    static let accent = adaptive(0x245BD6, 0x86ABF8, darkHighContrast: 0xA8C3FB)
+    /// Accent as a filled control carrying `onAccent` (primary button, selected day).
+    static let accentFill = adaptive(0x245BD6, 0x3D70E2)
+    static let accentPressed = adaptive(0x1947AD, 0x325FC4)
+    static let onAccent = adaptive(0xFFFFFF, 0xFFFFFF)
+    static let accentSoft = adaptive(0xEAF0FE, 0x2F3B54)
+
+    static let success = adaptive(0x17633D, 0x7CCFA0)
+    static let successSurface = adaptive(0xE9F5EE, 0x2B423B)
+    static let warning = adaptive(0x7A4D00, 0xE5BE7A)
+    static let warningSurface = adaptive(0xFFF3D6, 0x453E30)
+    static let danger = adaptive(0xB02B37, 0xFF9DA3)
+    static let dangerSurface = adaptive(0xFDECEF, 0x473338)
+
+    static let border = adaptive(0xD9E0E9, 0x3A3E44, darkHighContrast: 0x5C616A)
+    static let controlBorder = adaptive(0x78869A, 0x82878F, darkHighContrast: 0xA1A5AD)
+    /// Decorative continuation only; stations and labels carry the information.
+    static let rail = adaptive(0xC3CDD9, 0x454A51)
+    static let disabledText = adaptive(0x5D6A7C, 0x7A7F87)
+    static let disabledSurface = adaptive(0xE8EDF3, 0x303338)
+
+    /// Measured trace on the map: the reference blue of the dark theme, on a page-colored halo.
+    static let route = adaptive(0x245BD6, 0x4D80EB)
+    static let routeHalo = adaptive(0xFFFFFF, 0x17191C)
+    /// Shadow tint: a deep blue-grey in light, black in dark where only a strong shadow reads.
+    static let shadow = adaptive(0x18212B, 0x000000)
+    /// Veil behind a palette opened over the map. Light keeps the shadow tint at 16 %.
+    static let scrim = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(white: 0, alpha: 0.45)
+            : UIColor(red: 0x18 / 255, green: 0x21 / 255, blue: 0x2B / 255, alpha: 0.16)
+    })
+
+    /// The light value never depends on elevation or contrast: only the dark appearance has variants.
+    private static func adaptive(_ light: UInt32, _ dark: UInt32, elevated: UInt32? = nil,
+                                 darkHighContrast: UInt32? = nil) -> Color {
         Color(uiColor: UIColor { traits in
-            let value = traits.userInterfaceStyle == .dark ? dark : light
+            var value = light
+            if traits.userInterfaceStyle == .dark {
+                value = dark
+                if let elevated, traits.userInterfaceLevel == .elevated { value = elevated }
+                if let darkHighContrast, traits.accessibilityContrast == .high { value = darkHighContrast }
+            }
             return UIColor(
                 red: CGFloat((value >> 16) & 0xff) / 255,
                 green: CGFloat((value >> 8) & 0xff) / 255,
@@ -75,6 +114,8 @@ enum DrivyRadius {
 /// Column widths and thresholds shared by several screens. A width repeated in
 /// two screens is declared here once; map screens keep theirs in DrivyMapLayout.
 enum DrivyLayout {
+    /// Smallest hit target of any control (HIG); primary and critical actions use DrivyButtonSize instead.
+    static let tapTarget: CGFloat = 44
     /// Reading page column (`drivyPageContent` default).
     static let readingColumn: CGFloat = 720
     /// Native Form or List column on iPad, and the bottom action bar under it.
@@ -107,17 +148,35 @@ enum DrivyButtonSize {
 
 /// Elevation of a surface laid over another (map panel, floating thumb): two soft
 /// layers, one tight for the contact edge and one wide for the lift. Colors come from
-/// `DrivyTheme.shadow`; outside the map a hairline replaces the shadow.
+/// `DrivyTheme.shadow`; outside the map a hairline replaces the shadow. On a dark map a
+/// soft shadow disappears, so the dark appearance uses stronger layers.
 enum DrivyElevation {
     static let contactOpacity = 0.10
     static let liftOpacity = 0.12
+    static let darkContactOpacity = 0.45
+    static let darkLiftOpacity = 0.38
 }
 
 extension View {
     /// Soft two-layer shadow from the theme tint. `isOn` false keeps the layout identical without shadow.
     func drivyShadow(_ isOn: Bool = true, radius: CGFloat = 18, y: CGFloat = 4) -> some View {
-        shadow(color: DrivyTheme.shadow.opacity(isOn ? DrivyElevation.contactOpacity : 0), radius: 1, y: 0.5)
-            .shadow(color: DrivyTheme.shadow.opacity(isOn ? DrivyElevation.liftOpacity : 0), radius: radius, y: y)
+        modifier(DrivyShadowModifier(isOn: isOn, radius: radius, y: y))
+    }
+}
+
+private struct DrivyShadowModifier: ViewModifier {
+    let isOn: Bool
+    let radius: CGFloat
+    let y: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        let dark = colorScheme == .dark
+        let contact = dark ? DrivyElevation.darkContactOpacity : DrivyElevation.contactOpacity
+        let lift = dark ? DrivyElevation.darkLiftOpacity : DrivyElevation.liftOpacity
+        return content
+            .shadow(color: DrivyTheme.shadow.opacity(isOn ? contact : 0), radius: 1, y: 0.5)
+            .shadow(color: DrivyTheme.shadow.opacity(isOn ? lift : 0), radius: radius, y: y)
     }
 }
 
@@ -156,7 +215,7 @@ struct DrivyPrimaryButtonStyle: ButtonStyle {
             .foregroundStyle(isEnabled ? DrivyTheme.onAccent : DrivyTheme.disabledText)
             .background(
                 isEnabled
-                    ? (configuration.isPressed ? DrivyTheme.accentPressed : DrivyTheme.accent)
+                    ? (configuration.isPressed ? DrivyTheme.accentPressed : DrivyTheme.accentFill)
                     : DrivyTheme.disabledSurface,
                 in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
             )
@@ -229,27 +288,27 @@ struct StorageCaption: View {
     }
 }
 
-struct InlineErrorView: View {
-    let message: String
-    var retry: (() -> Void)? = nil
+/// Action written as text next to what it concerns (« Planifier une leçon », « Modifier les informations »,
+/// « Effacer la recherche »): accent ink, subheadline semibold, a 44 pt target across its whole frame. It is the
+/// one look of a secondary action outside the bottom bar; pressed, it dims briefly like a system text button.
+struct DrivyTextActionStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            Label("Enregistrement à vérifier", systemImage: "exclamationmark.triangle.fill")
-                .font(.headline)
-            Text(message)
-                .font(.subheadline)
-                .fixedSize(horizontal: false, vertical: true)
-            if let retry { DrivyRetryButton(action: retry) }
-        }
-        .foregroundStyle(DrivyTheme.danger)
-        .padding(DrivySpacing.m)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DrivyTheme.dangerSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
-                .strokeBorder(DrivyTheme.danger.opacity(0.35), lineWidth: 0.5)
-        }
-        .accessibilityElement(children: .contain)
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .multilineTextAlignment(.leading)
+            .foregroundStyle(isEnabled ? DrivyTheme.accent : DrivyTheme.disabledText)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: DrivyLayout.tapTarget)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? DrivyPress.reducedMotionOpacity : 1)
+            .animation(DrivyMotion.feedback(reduceMotion), value: configuration.isPressed)
     }
+}
+
+extension ButtonStyle where Self == DrivyTextActionStyle {
+    /// `.buttonStyle(.drivyText)`: see DrivyTextActionStyle.
+    static var drivyText: DrivyTextActionStyle { DrivyTextActionStyle() }
 }

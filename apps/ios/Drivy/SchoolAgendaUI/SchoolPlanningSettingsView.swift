@@ -173,7 +173,7 @@ struct SchoolPlanningSettingsView: View {
                         if model.conflictingDefaults != nil {
                             DrivyFormMessage(text: error, tone: .danger)
                             Button("Utiliser les préférences actualisées") { model.useUpdatedDefaults() }
-                                .frame(minHeight: 44)
+                                .frame(minHeight: DrivyLayout.tapTarget)
                                 .disabled(model.isBusy || model.isLoading || model.pending != nil)
                         } else {
                             SchoolErrorNotice(message: error, retry: { Task { await model.load() } })
@@ -253,7 +253,7 @@ struct SchoolPlanningSettingsView: View {
             Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
                 .fixedSize(horizontal: false, vertical: true)
             content().labelsHidden().pickerStyle(.menu)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
                 .contentShape(Rectangle())
                 .fixedSize(horizontal: false, vertical: true)
         }

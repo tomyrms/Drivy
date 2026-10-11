@@ -44,7 +44,7 @@ struct SchoolTrainingView: View {
             SchoolTrainingScreen(client: client, workspace: workspace, learner: learner, trainingID: trainingID)
                 .navigationTitle("Formation")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
         }
         .tint(DrivyTheme.accent)
         .presentationSizing(.page)
@@ -361,8 +361,11 @@ private struct SchoolTrainingContent: View {
                     .refreshable { await feed.reload() }
             }
         }
-        .background(DrivyTheme.surface)
+        .background(groupsProgress ? DrivyTheme.canvas : DrivyTheme.surface)
     }
+
+    /// La Progression de l’élève se lit en cartes sur le fond de page, comme son Profil.
+    private var groupsProgress: Bool { ownLessons && !isEmbedded && fixedSection == .progress }
 
     /// Le flux unique : sélecteur, rangée de filtres, puis la section choisie. Le dossier le pose tel quel sous l’identité.
     private var page: some View {
@@ -502,7 +505,7 @@ private struct SchoolTrainingContent: View {
             }
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(DrivyTheme.accent)
-            .frame(minHeight: 44)
+            .frame(minHeight: DrivyLayout.tapTarget)
             .contentShape(Rectangle())
         }
         .accessibilityLabel("Permis")
@@ -681,7 +684,7 @@ private struct SchoolTrainingContent: View {
             }
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(DrivyTheme.accent)
-            .frame(minHeight: 44)
+            .frame(minHeight: DrivyLayout.tapTarget)
             .contentShape(Rectangle())
         }
         .accessibilityLabel("Filtrer et trier les leçons")
@@ -713,7 +716,7 @@ private struct SchoolTrainingContent: View {
                     }
                     if period.isActive {
                         Button("Toutes les périodes") { selectedMonth = 0; selectedYear = 0 }
-                            .frame(minHeight: 44)
+                            .frame(minHeight: DrivyLayout.tapTarget)
                     }
                 }
                 .drivyPageContent(maxWidth: DrivyLayout.formColumn)
@@ -734,7 +737,7 @@ private struct SchoolTrainingContent: View {
             Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
                 .fixedSize(horizontal: false, vertical: true)
             content().labelsHidden().pickerStyle(.menu)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
                 .contentShape(Rectangle())
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -843,7 +846,7 @@ private struct SchoolTrainingContent: View {
             ForEach([progressModel].compactMap { $0 }.filter { $0.training != nil || $0.isLoading }, id: \.trainingID) { model in
                 VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     if namesPermit && mixesPermits { permitTitle(model, name: permitName(model, in: names)) }
-                    SchoolTrainingProgressSection(model: model, schoolTimeZone: zone) { opened = OpenedLesson(id: $0) }
+                    SchoolTrainingProgressSection(model: model, schoolTimeZone: zone, grouped: groupsProgress) { opened = OpenedLesson(id: $0) }
                     // Changer de permis : la progression de l’autre remplace celle-ci, replis refermés.
                     .id(model.trainingID)
                 }

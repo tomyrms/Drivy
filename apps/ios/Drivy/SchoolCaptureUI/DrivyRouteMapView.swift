@@ -601,7 +601,7 @@ final class DrivyPositionAnnotationView: MKAnnotationView {
     }
 
     private func applyColors() {
-        backgroundColor = UIColor(DrivyTheme.surface)
+        backgroundColor = UIColor(DrivyTheme.surfaceRaised)
         layer.borderColor = UIColor(DrivyTheme.routeHalo).resolvedColor(with: traitCollection).cgColor
         layer.shadowColor = UIColor(DrivyTheme.shadow).resolvedColor(with: traitCollection).cgColor
     }

@@ -24,7 +24,7 @@ struct SchoolPlanningDocumentView: View {
             .background(DrivyTheme.canvas)
             .navigationTitle(document.title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
         }
         .tint(DrivyTheme.accent)
     }

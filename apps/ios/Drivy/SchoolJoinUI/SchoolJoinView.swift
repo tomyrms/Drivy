@@ -71,7 +71,7 @@ struct SchoolJoinView: View {
                 if let value = values.first, value.utf8.count <= 2_048 { model.link = value }
             }
             .accessibilityLabel("Coller le lien")
-            .frame(minHeight: 44)
+            .frame(minHeight: DrivyLayout.tapTarget)
             .disabled(model.isBusy || !model.isReady)
         }
     }
@@ -268,7 +268,7 @@ struct SchoolJoinTextLink: View {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .multilineTextAlignment(.leading)
-                .frame(minHeight: 44)
+                .frame(minHeight: DrivyLayout.tapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(SchoolJoinTextLinkStyle())
@@ -330,7 +330,7 @@ private struct SchoolJoinFieldChrome: ViewModifier {
         content
             .padding(.horizontal, DrivySpacing.m)
             .frame(minHeight: minHeight)
-            .background(hasError ? DrivyTheme.dangerSurface : DrivyTheme.canvas, in: shape)
+            .background(hasError ? DrivyTheme.dangerSurface : DrivyTheme.surfaceCard, in: shape)
             .overlay {
                 shape.strokeBorder(hasError ? DrivyTheme.danger : (isFocused ? DrivyTheme.accent : DrivyTheme.controlBorder),
                                    lineWidth: hasError || isFocused ? 2 : 1)

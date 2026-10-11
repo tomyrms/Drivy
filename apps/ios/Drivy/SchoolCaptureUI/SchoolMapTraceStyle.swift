@@ -62,7 +62,7 @@ struct SchoolMapEndpointMarker: View {
 
     var body: some View {
         Circle()
-            .fill(kind == .start ? DrivyTheme.surface : DrivyTheme.text)
+            .fill(kind == .start ? DrivyTheme.surfaceRaised : DrivyTheme.text)
             .frame(width: 14, height: 14)
             .overlay(Circle().strokeBorder(DrivyTheme.text, lineWidth: 3))
             .padding(2)
@@ -83,7 +83,7 @@ struct SchoolMapObservationMarker: View {
             .font(isSelected ? .body.weight(.bold) : DrivyMapGlyph.compactObservation)
             .foregroundStyle(color)
             .frame(width: isSelected ? 40 : 28, height: isSelected ? 40 : 28)
-            .background(DrivyTheme.surface, in: Circle())
+            .background(DrivyTheme.surfaceRaised, in: Circle())
             .overlay(Circle().strokeBorder(isSelected ? DrivyTheme.accent : color,
                 style: StrokeStyle(lineWidth: 3, dash: isPending ? [3, 2] : [])))
             .padding(2)

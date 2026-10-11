@@ -46,7 +46,7 @@ struct SchoolRecordingChoiceInline: View {
                 if !model.accessRevoked {
                     Button { Task { await model.load() } } label: { Label("Réessayer", systemImage: "arrow.clockwise") }
                         .font(.subheadline.weight(.semibold))
-                        .frame(minHeight: 44)
+                        .frame(minHeight: DrivyLayout.tapTarget)
                         // Dans une ligne de formulaire, seul ce bouton répond au toucher, pas toute la ligne.
                         .buttonStyle(.borderless)
                         .disabled(model.isLoading)
@@ -107,7 +107,7 @@ struct SchoolRecordingChoiceInline: View {
                 }
                 .font(.subheadline)
                 .foregroundStyle(DrivyTheme.accent)
-                .frame(minHeight: 44)
+                .frame(minHeight: DrivyLayout.tapTarget)
                 .buttonStyle(.borderless)
                 .accessibilityIdentifier("gps-answer-notice")
             }
@@ -125,8 +125,8 @@ struct SchoolRecordingChoiceInline: View {
                 Image(systemName: symbol)
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(enabled ? DrivyTheme.accent : DrivyTheme.disabledText)
-                    .frame(width: 44, height: 44)
-                    .background(chosen ? DrivyTheme.surface : DrivyTheme.accentSoft, in: Circle())
+                    .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+                    .background(chosen ? DrivyTheme.surfaceRaised : DrivyTheme.accentSoft, in: Circle())
                     .accessibilityHidden(true)
                 HStack(spacing: DrivySpacing.xs) {
                     Text(title)
@@ -166,12 +166,12 @@ struct SchoolRecordingChoiceInline: View {
             if model.isBusy {
                 // L’école n’a pas encore répondu : rien n’est montré comme acquis, l’attente se lit à la place du geste.
                 ProgressView()
-                    .frame(minWidth: 44, minHeight: 44)
+                    .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
                     .accessibilityLabel("Enregistrement de l’accord GPS")
             } else {
                 Button(action, action: perform)
                     .font(.subheadline.weight(.semibold))
-                    .frame(minHeight: 44)
+                    .frame(minHeight: DrivyLayout.tapTarget)
                     .buttonStyle(.borderless)
                     .disabled(!isEnabled)
                     .accessibilityLabel(action == "Modifier" ? "Modifier l’accord GPS" : "Vérifier l’accord GPS")

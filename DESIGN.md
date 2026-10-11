@@ -175,11 +175,14 @@ Toujours consommer une couleur par son rôle (`DrivyTheme.*` en Swift, `var(--*)
 
 | Rôle | Usage |
 |---|---|
-| `canvas` | Fond des formulaires/listes groupés ; fond intérieur de `DrivyCard`/`DrivyPanel` sur page blanche. |
+| `canvas` | Fond des formulaires et listes groupés. |
 | `surface` | Fond des pages de lecture ; cartes web. |
-| `surface-muted` | Remplissage neutre : bouton secondaire, pastille neutre, avatar, ligne pressée. |
-| `text` / `muted` | Encre principale / métadonnées, aides, chevrons, icônes de ligne. |
-| `accent` / `accent-pressed` / `on-accent` | Action primaire, liens, sélection ; état pressé ; texte sur accent. |
+| `surface-card` | Fond de `DrivyCard`, `DrivyPanel`, carte de sélection, champ de code. |
+| `surface-raised` | Bloc posé sur une page ou sur la carte : panneau, bannière, marqueur, rangée de formulaire, champ guidé. |
+| `surface-muted` | Remplissage neutre ou interactif : bouton secondaire, pastille neutre, avatar, ligne pressée. |
+| `text` / `muted` / `text-tertiary` | Encre principale / métadonnées, aides, icônes de ligne / chevrons décoratifs. |
+| `accent` | Liens, symboles, contour de sélection, teinte système. |
+| `accent-fill` / `accent-pressed` / `on-accent` | Aplat de l’action primaire ; état pressé ; texte sur l’aplat. |
 | `accent-soft` | Fond de sélection et de pastille d’accent, bouton secondaire pressé. |
 | `success`, `warning`, `danger` + `*-surface` | Texte et fond d’un état ; toujours avec symbole et libellé. |
 | `border` / `control-border` | Séparateur décoratif doux / contour d’un contrôle interactif (champ, marque de sélection vide). |
@@ -190,27 +193,35 @@ Les couleurs de fond de carte du prototype (`mapCanvas`, `mapPark`, `mapWater`) 
 
 ## Themes
 
-Le sombre est composé (ardoise + bleu éclairci), pas une inversion. Valeurs sombres exactes :
+Le sombre est **Soft Charcoal** : un anthracite neutre où un bloc est plus clair que la page qui le porte. Ce n’est pas une inversion du clair, dont les valeurs ne changent pas. Décisions, références et mesures : [dark-soft-charcoal-20261011.md](docs/implementation/dark-soft-charcoal-20261011.md).
 
-| Token | Clair | Sombre |
-|---|---|---|
-| canvas | #F7F8FA | #10151C |
-| surface | #FFFFFF | #19222E |
-| surface-muted | #EEF2F7 | #222E3E |
-| text | #18212B | #F2F5FA |
-| muted | #536174 | #B0BCCC |
-| accent | #245BD6 | #91B5FF |
-| accent-pressed | #1947AD | #B4CCFF |
-| on-accent | #FFFFFF | #10264D |
-| accent-soft | #EAF0FE | #233859 |
-| success / success-surface | #17633D / #E9F5EE | #98DBB4 / #18372A |
-| warning / warning-surface | #7A4D00 / #FFF3D6 | #F2CB83 / #382D19 |
-| danger / danger-surface | #B02B37 / #FDECEF | #FFADB4 / #40252D |
-| border / control-border | #D9E0E9 / #78869A | #34445A / #71849D |
-| disabled-text / disabled-surface | #5D6A7C / #E8EDF3 | #B0BCCC / #222E3E |
-| route / route-halo | #245BD6 / #FFFFFF | #91B5FF / #10151C |
+| Token | Clair | Sombre | Sombre dans une feuille |
+|---|---|---|---|
+| canvas | #F7F8FA | #17191C | #1D1F23 |
+| surface | #FFFFFF | #17191C | #1D1F23 |
+| surface-card | #F7F8FA | #272A2E | #2A2D31 |
+| surface-raised | #FFFFFF | #272A2E | #2A2D31 |
+| surface-muted | #EEF2F7 | #34383D | #373B40 |
+| text | #18212B | #F4F5F6 | |
+| muted | #536174 | #A1A5AD | |
+| text-tertiary | #536174 | #8E939C | |
+| accent | #245BD6 | #86ABF8 | |
+| accent-fill | #245BD6 | #3D70E2 | |
+| accent-pressed | #1947AD | #325FC4 | |
+| on-accent | #FFFFFF | #FFFFFF | |
+| accent-soft | #EAF0FE | #2F3B54 | |
+| success / success-surface | #17633D / #E9F5EE | #7CCFA0 / #2B423B | |
+| warning / warning-surface | #7A4D00 / #FFF3D6 | #E5BE7A / #453E30 | |
+| danger / danger-surface | #B02B37 / #FDECEF | #FF9DA3 / #473338 | |
+| border / control-border | #D9E0E9 / #78869A | #3A3E44 / #82878F | |
+| rail | #C3CDD9 | #454A51 | |
+| disabled-text / disabled-surface | #5D6A7C / #E8EDF3 | #7A7F87 / #303338 | |
+| route / route-halo | #245BD6 / #FFFFFF | #4D80EB / #17191C | |
 
-Web : mêmes valeurs sous `@media (prefers-color-scheme: dark)`, `theme-color` par apparence ; `prefers-contrast: more` renforce `border` et `control-border`.
+- En sombre, le bleu a trois rôles : `accent` pour l’encre (liens, symboles, teinte système), `accent-fill` pour un aplat qui porte `on-accent`, `route` pour le tracé (le bleu de référence `#4D80EB`).
+- Une feuille ou un popover prend le niveau système « elevated » : la page et ses blocs montent d’un cran sans code dans la vue.
+- Contraste accru, en sombre : `muted` `#C2C6CD`, `text-tertiary` `#A1A5AD`, `accent` `#A8C3FB`, `border` `#5C616A`, `control-border` `#A1A5AD`.
+- Le web garde ses propres tokens (section Web) ; les valeurs natives ne s’y recopient pas.
 
 ## Typography
 
@@ -234,10 +245,14 @@ Police système uniquement, aucune police embarquée. Les tailles de la frontmat
 
 **Deux types de page, jamais mélangés :**
 
-- **Page de lecture** (`ScrollView`) : fond `DrivyTheme.surface`, contenu dans `.drivyPageContent()` (marge horizontale `l`, largeur de lecture 720 pt centrée sur iPad). Les blocs groupés y sont des `DrivyPanel`/`DrivyCard` sur `canvas`.
-- **Formulaire ou liste groupés natifs** (`Form`/`List`) : `.scrollContentBackground(.hidden)` + `.background(DrivyTheme.canvas)` ; sections natives, pas de cartes maison.
+- **Page de lecture** (`ScrollView`) : fond `DrivyTheme.surface`, contenu dans `.drivyPageContent()` (marge horizontale `l`, largeur de lecture 720 pt centrée sur iPad). Les blocs groupés y sont des `DrivyPanel`/`DrivyCard`, remplis par `surfaceCard`.
+- **Formulaire ou liste groupés natifs** (`Form`/`List`) : `.scrollContentBackground(.hidden)` + `.background(DrivyTheme.canvas)` ; sections natives, pas de cartes maison. `drivyFormRows()` pose `drivyRowContext = .grouped` : les lignes partagées y prennent le rythme des Réglages (corps, 44 pt, surbrillance et chevron système), comme un `NavigationLink` voisin. Un en-tête de compte se pose sur le fond (`drivyClearRow()`), pas dans une cellule.
 
-**Titres de navigation :** titre large uniquement sur les écrans de premier niveau (onglets Séance, Agenda, Élèves/Mon dossier, École) ; tout écran poussé ou feuille est en titre inline.
+**Titres de navigation :** titre large uniquement sur les écrans de premier niveau (onglets Agenda, Élèves, Profil) ; Aujourd’hui, posé sur la carte, est en titre inline ; tout écran poussé ou feuille est en titre inline.
+
+**Feuilles :** « Fermer » (ou « Annuler » s’il y a une saisie à abandonner) toujours en `.cancellationAction` ; la droite est réservée à la confirmation.
+
+**Cible tactile :** `DrivyLayout.tapTarget` (44), jamais le littéral.
 
 **Rythme :** `s` (12) dans un groupe, `l` (24) entre sujets, padding de bloc `m` (16). Marge de page : 24 en compact, 32 en régulier (`DrivySpacing.page`). Aucune valeur magique hors échelle.
 
@@ -249,7 +264,9 @@ Police système uniquement, aucune police embarquée. Les tailles de la frontmat
 
 ## Elevation & Depth
 
-- Surfaces de lecture, formulaires, montants et coordonnées : **opaques**. Hiérarchie par surface (`surface` / `canvas`) et filet `border` de 0,5 pt, pas par ombre.
+- Surfaces de lecture, formulaires, montants et coordonnées : **opaques**. Hiérarchie par surface (page, puis `surfaceCard`/`surfaceRaised`, puis `surfaceMuted`) et filet `border` de 0,5 pt, pas par ombre. En sombre, chaque marche éclaircit d’environ 1,2:1.
+- Un fond de page s’écrit `.background(DrivyTheme.surface)` ou `canvas` ; un bloc posé dessus (forme arrondie, rangée, marqueur) prend `surfaceCard` ou `surfaceRaised`, jamais la couleur de page.
+- Sur la carte, un panneau flottant garde son ombre (`drivyShadow`, plus dense en sombre) et reçoit en sombre un filet `border`.
 - **Liquid Glass** uniquement pour les commandes qui flottent sur une carte (suivre, voir tout le trajet, pastilles d’origine), via `.drivyMapControl(in:)`, regroupées dans un `GlassEffectContainer`. Jamais de thème vitre global, jamais de vitre sur un formulaire ou un texte long.
 - Le chrome système (barres, onglets, feuilles) garde le matériau natif de la plateforme.
 - Web : une seule ombre très légère sur `.card` en clair, aucune en sombre.
@@ -273,7 +290,8 @@ Réutiliser avant de créer. Un motif partagé manquant se crée dans un nouveau
 | `DrivyStatusBadge(title:symbol:tone:)` | Tout statut (En cours, Partagé, Privé…). Pas un bouton. | — (à créer au besoin avec les mêmes rôles) |
 | `DrivyStatusDot` | État vivant court (« GPS actif »). | — |
 | `DrivySectionHeader(title:actionTitle:action:)` | Titre de section, action texte facultative (44 pt). | `.section-heading` |
-| `DrivyNavigationRow` | Ligne qui ouvre un détail (chevron, ≥ 64 pt). | `.school-list li` |
+| `DrivyNavigationRow` | Ligne qui ouvre un détail : ≥ 64 pt et titre de ligne sur une page de lecture, 44 pt et corps dans une liste groupée. Chevron `DrivyRowChevron`. | `.school-list li` |
+| `.buttonStyle(.drivyText)` | L’unique action en texte (accent, sous-titre semi-gras, 44 pt). | `.button.quiet` |
 | `DrivyRowGroup(title:)` | Lignes séparées par des filets, sans carte par ligne. | liste à filets `border-top` |
 | `DrivyRowButtonStyle` | Retour d’appui d’une ligne. | `:active` |
 | `DrivyTimeColumn` | Heure de début/fin alignée. | `tabular-nums` |

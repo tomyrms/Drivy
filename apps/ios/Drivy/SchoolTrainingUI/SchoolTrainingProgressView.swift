@@ -1,13 +1,17 @@
 import SwiftUI
 
-/// La progression d’une formation : où l’élève en est, en une phrase, la prochaine étape du dernier bilan, ce qu’il
-/// reste à travailler, puis, repliés, ce qui est acquis et ce qui n’a pas encore été vu. Une ligne dit une compétence
-/// et son niveau ; la toucher déplie son détail sur place (niveau en mots, date, situation), d’où part la leçon.
-/// Ni score, ni pourcentage, ni barre, ni tendance : le serveur ne garde que le dernier niveau publié.
+/// La progression d’une formation : où l’élève en est, en une phrase et une toile (une branche par compétence), la
+/// prochaine étape du dernier bilan, ce qu’il reste à travailler, puis, repliés, ce qui est acquis et ce qui n’a pas
+/// encore été vu. Une ligne dit une compétence et son niveau ; la toucher déplie son détail sur place (niveau en
+/// mots, date, situation), d’où part la leçon.
+/// Ni score, ni pourcentage, ni tendance : le serveur ne garde que le dernier niveau publié, la toile le trace tel quel.
 struct SchoolTrainingProgressSection: View {
     let model: SchoolTrainingWorkspace
     /// Une évaluation est datée sans sa leçon : elle se lit dans le fuseau de l’école.
     let schoolTimeZone: String
+    /// Vrai sur la page de l’élève : chaque bloc est une carte posée sur le fond de page, comme dans son Profil.
+    /// Faux dans le dossier du moniteur, où la progression se lit à plat sous les leçons.
+    var grouped = false
     let open: (UUID) -> Void
     /// La compétence dont le détail est déplié ; une seule à la fois.
     @State private var expanded: UUID?
@@ -15,6 +19,7 @@ struct SchoolTrainingProgressSection: View {
     @State private var showsIndependent: Bool?
     @State private var showsUnseen = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// Ce que la page montre : clé du fondu entre le squelette, la progression, le vide et la panne.
     private enum Stage: Equatable { case loading, failed, empty, content }
@@ -37,8 +42,10 @@ struct SchoolTrainingProgressSection: View {
             } else if let error = model.progressError {
                 notice(error)
             } else {
-                DrivySkeletonRows(count: 5)
-                    .drivySkeleton("Chargement de la progression…")
+                block {
+                    DrivySkeletonRows(count: 5)
+                        .drivySkeleton("Chargement de la progression…")
+                }
             }
         }
         // Le squelette cède la place à la progression (ou à sa panne) par un fondu ; la panne d’une relecture s’ajoute
@@ -64,22 +71,65 @@ struct SchoolTrainingProgressSection: View {
     @ViewBuilder private func content(_ value: SchoolReportProgress) -> some View {
         let toWorkOn = SchoolProgressRules.toWorkOn(value.items)
         let independent = SchoolProgressRules.independent(value.items, order: order)
-        standing(value)
+        overview(value)
         lastLesson
         if !toWorkOn.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                SchoolProgressGroupTitle(title: "À travailler")
-                rows(toWorkOn, showsMeter: true)
-            }
+            block("À travailler") { rows(toWorkOn, showsMeter: true) }
         }
         if !independent.isEmpty {
             // Replié quand il reste à travailler : la page tient alors sur un écran.
-            fold("En autonomie", count: independent.count,
-                 isExpanded: Binding(get: { showsIndependent ?? toWorkOn.isEmpty }, set: { showsIndependent = $0 })) {
-                rows(independent, showsMeter: false)
+            block {
+                fold("En autonomie", count: independent.count,
+                     isExpanded: Binding(get: { showsIndependent ?? toWorkOn.isEmpty }, set: { showsIndependent = $0 })) {
+                    rows(independent, showsMeter: false)
+                }
             }
         }
         unseen(count: value.unobservedCompetencyIds.count)
+    }
+
+    /// Un bloc de la page : une carte sous son titre sur la page de l’élève, sinon le contenu à plat sous son titre.
+    @ViewBuilder private func block<Content: View>(_ title: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+        if grouped {
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                if let title {
+                    SchoolProgressGroupTitle(title: title).padding(.horizontal, DrivySpacing.m)
+                }
+                VStack(alignment: .leading, spacing: 0) { content() }
+                    .padding(.horizontal, DrivySpacing.m)
+                    .padding(.vertical, DrivySpacing.xs)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                if let title { SchoolProgressGroupTitle(title: title) }
+                content()
+            }
+        }
+    }
+
+    /// La vue d’ensemble : le décompte en mots, puis la toile quand le référentiel est lu et tient en branches lisibles.
+    private func overview(_ value: SchoolReportProgress) -> some View {
+        let axes = SchoolProgressRules.radarAxes(curriculum: model.competencies.sorted { $0.sortOrder < $1.sortOrder }
+            .map { (id: $0.id, label: $0.displayLabel) }, items: value.items, unobserved: value.unobservedCompetencyIds.count)
+        return block {
+            VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                standing(value)
+                // Aux très grandes tailles de texte, les libellés ne tiennent plus autour de la toile : les listes suffisent.
+                if !axes.isEmpty && !typeSize.isAccessibilitySize {
+                    SchoolProgressRadar(axes: axes)
+                        .frame(maxWidth: 420)
+                        .frame(maxWidth: .infinity)
+                    Text("Du centre au bord : pas encore vue, en découverte, avec accompagnement, en autonomie.")
+                        .font(.caption)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.vertical, grouped ? DrivySpacing.xs : 0)
+        }
     }
 
     // MARK: - Où j’en suis
@@ -114,6 +164,23 @@ struct SchoolTrainingProgressSection: View {
         if let last = model.lastEvaluated {
             let nextStep = last.nextStep.trimmingCharacters(in: .whitespacesAndNewlines)
             let day = SchoolTrainingFormatting.day(last.date, zone: last.timeZone ?? schoolTimeZone)
+            if grouped {
+                block(nextStep.isEmpty ? nil : "Prochaine étape") {
+                    if !nextStep.isEmpty {
+                        Text(nextStep)
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(DrivyTheme.text)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.vertical, DrivySpacing.s)
+                        Divider().overlay(DrivyTheme.border)
+                    }
+                    Button { open(last.lessonID) } label: { SchoolLastLessonLine(day: day) }
+                        .buttonStyle(DrivyRowButtonStyle())
+                        .accessibilityHint("Ouvre la leçon")
+                        .accessibilityIdentifier("progress-last-lesson")
+                }
+            } else {
             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                 if !nextStep.isEmpty {
                     VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
@@ -132,6 +199,7 @@ struct SchoolTrainingProgressSection: View {
                     .buttonStyle(DrivyRowButtonStyle())
                     .accessibilityHint("Ouvre la leçon")
                     .accessibilityIdentifier("progress-last-lesson")
+            }
             }
         }
     }
@@ -170,8 +238,7 @@ struct SchoolTrainingProgressSection: View {
                     .foregroundStyle(DrivyTheme.text)
             }
             Button("Voir la leçon") { open(item.sourceLessonId) }
-                .font(.subheadline.weight(.semibold))
-                .frame(minHeight: 44)
+                .buttonStyle(.drivyText)
                 .accessibilityIdentifier("progress-open-lesson")
         }
         .multilineTextAlignment(.leading)
@@ -183,10 +250,12 @@ struct SchoolTrainingProgressSection: View {
     @ViewBuilder private func unseen(count: Int) -> some View {
         let competencies = model.unobservedCompetencies
         if !competencies.isEmpty {
-            fold("Pas encore vues", count: max(count, competencies.count), isExpanded: $showsUnseen) {
-                DrivyRowGroup {
-                    ForEach(competencies) { competency in
-                        SchoolProgressRow(label: competency.displayLabel, level: "", showsMeter: false, isExpanded: nil)
+            block {
+                fold("Pas encore vues", count: max(count, competencies.count), isExpanded: $showsUnseen) {
+                    DrivyRowGroup {
+                        ForEach(competencies) { competency in
+                            SchoolProgressRow(label: competency.displayLabel, level: "", showsMeter: false, isExpanded: nil)
+                        }
                     }
                 }
             }
@@ -203,7 +272,7 @@ struct SchoolTrainingProgressSection: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(DrivyTheme.accent)
                 .multilineTextAlignment(.leading)
-                .frame(minHeight: 44, alignment: .leading)
+                .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
         }
     }
 }
@@ -259,7 +328,7 @@ private struct SchoolProgressRow: View {
             }
         }
         .padding(.vertical, DrivySpacing.s)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
@@ -281,12 +350,9 @@ private struct SchoolLastLessonLine: View {
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(DrivyTheme.muted)
-                .accessibilityHidden(true)
+            DrivyRowChevron()
         }
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }

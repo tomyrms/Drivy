@@ -74,6 +74,27 @@ enum SchoolProgressRules {
         return "\(items.filter { $0.level == "INDEPENDENT" }.count) sur \(total) en autonomie"
     }
 
+    /// Les branches de la toile, dans l’ordre du référentiel : chaque compétence et son dernier niveau publié, zéro
+    /// pour une compétence pas encore vue. Vide (pas de toile) tant que le référentiel lu ne couvre pas toutes les
+    /// compétences de la progression, ou s’il compte trop peu ou trop de branches pour se lire.
+    static func radarAxes(curriculum: [(id: UUID, label: String)], items: [SchoolReportProgressItem],
+                          unobserved: Int) -> [SchoolProgressRadarAxis] {
+        let levels = Dictionary(items.map { ($0.id, $0.level) }, uniquingKeysWith: { first, _ in first })
+        let known = Set(curriculum.map { $0.id })
+        guard curriculum.count == items.count + max(0, unobserved), items.allSatisfy({ known.contains($0.id) }),
+              (3...12).contains(curriculum.count) else { return [] }
+        return curriculum.map { competency in
+            let rank: Int
+            switch levels[competency.id] ?? "" {
+            case "DISCOVERING": rank = 1
+            case "GUIDED": rank = 2
+            case "INDEPENDENT": rank = 3
+            default: rank = 0
+            }
+            return SchoolProgressRadarAxis(id: competency.id, label: competency.label, rank: rank)
+        }
+    }
+
     /// « 4 en autonomie · 3 avec accompagnement · 2 en découverte · 5 pas encore vues ». Un groupe vide n’est pas nommé.
     static func countLine(items: [SchoolReportProgressItem], unobserved: Int) -> String? {
         func count(_ level: String) -> Int { items.filter { $0.level == level }.count }

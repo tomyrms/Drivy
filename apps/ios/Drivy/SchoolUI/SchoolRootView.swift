@@ -132,7 +132,7 @@ struct SchoolRootView: View {
                     Button("Réessayer la synchronisation") {
                         Task { await captureController.retryPendingSynchronizations() }
                     }
-                    .frame(minHeight: 44)
+                    .frame(minHeight: DrivyLayout.tapTarget)
                 }
                 .drivyPageContent()
                 .background(DrivyTheme.surface)
@@ -652,7 +652,7 @@ struct SchoolAccountView: View {
             .navigationTitle("Compte")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Fermer") { dismiss() }
                 }
             }

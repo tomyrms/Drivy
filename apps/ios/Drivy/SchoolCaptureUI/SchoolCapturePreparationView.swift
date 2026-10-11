@@ -420,7 +420,7 @@ struct SchoolCapturePreparationView: View {
                             .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.mayResume(queued))
                         Button("Reprendre cet envoi") { confirmsResend = false; resendRoute = queued }
                             .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
-                            .frame(minHeight: 44).disabled(!model.mayResume(queued))
+                            .frame(minHeight: DrivyLayout.tapTarget).disabled(!model.mayResume(queued))
                         abandonButton(queued)
                         DisclosureGroup("Référence de la demande") { Text(queued.id.uuidString).font(.caption.monospaced()).textSelection(.enabled) }
                     }
@@ -461,7 +461,7 @@ struct SchoolCapturePreparationView: View {
                         if model.mayReviewPendingStart(queued) {
                             Button("Relire ce départ") { Task { startReview = await model.reviewStart(resuming: queued) } }
                                 .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
-                                .frame(minHeight: 44)
+                                .frame(minHeight: DrivyLayout.tapTarget)
                         }
                         abandonButton(queued)
                         Text("Aucune collecte ne reprend automatiquement.").font(.footnote).foregroundStyle(DrivyTheme.muted)
@@ -479,7 +479,7 @@ struct SchoolCapturePreparationView: View {
             Button("Abandonner la demande", role: .destructive) { abandonCandidate = queued; confirmsAbandon = true }
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(model.mayAbandon(queued) ? DrivyTheme.danger : DrivyTheme.disabledText)
-                .frame(minHeight: 44).disabled(!model.mayAbandon(queued))
+                .frame(minHeight: DrivyLayout.tapTarget).disabled(!model.mayAbandon(queued))
                 .accessibilityIdentifier("capture-request-abandon")
         }
     }

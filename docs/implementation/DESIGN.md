@@ -224,25 +224,25 @@ Règles de ton :
 
 ## Themes
 
-Le sombre est composé (ardoise et bleu éclairci) par `DrivyTheme.adaptive(clair, sombre)` ; aucune vue ne teste `colorScheme` pour choisir une couleur.
+Le sombre est **Soft Charcoal** (anthracite neutre, blocs plus clairs que la page), composé par `DrivyTheme.adaptive(clair, sombre, elevated:, darkHighContrast:)`. Aucune vue ne teste `colorScheme` pour choisir une couleur ; seuls `drivyShadow` et le panneau de carte le lisent, pour l’ombre et le filet. Valeurs et rôles : [`DESIGN.md`](../../DESIGN.md#themes) ; décisions et mesures : [dark-soft-charcoal-20261011.md](dark-soft-charcoal-20261011.md).
 
 | Token Swift | Clair | Sombre |
 |---|---|---|
-| canvas | #F7F8FA | #10151C |
-| surface | #FFFFFF | #19222E |
-| surfaceMuted | #EEF2F7 | #222E3E |
-| text | #18212B | #F2F5FA |
-| muted | #536174 | #B0BCCC |
-| accent | #245BD6 | #91B5FF |
-| accentPressed | #1947AD | #B4CCFF |
-| onAccent | #FFFFFF | #10264D |
-| accentSoft | #EAF0FE | #233859 |
-| success / successSurface | #17633D / #E9F5EE | #98DBB4 / #18372A |
-| warning / warningSurface | #7A4D00 / #FFF3D6 | #F2CB83 / #382D19 |
-| danger / dangerSurface | #B02B37 / #FDECEF | #FFADB4 / #40252D |
-| border / controlBorder | #D9E0E9 / #78869A | #34445A / #71849D |
-| disabledText / disabledSurface | #5D6A7C / #E8EDF3 | #B0BCCC / #222E3E |
-| route / routeHalo | #245BD6 / #FFFFFF | #91B5FF / #10151C |
+| canvas / surface | #F7F8FA / #FFFFFF | #17191C (feuille #1D1F23) |
+| surfaceCard / surfaceRaised | #F7F8FA / #FFFFFF | #272A2E (feuille #2A2D31) |
+| surfaceMuted | #EEF2F7 | #34383D (feuille #373B40) |
+| text / muted / textTertiary | #18212B / #536174 / #536174 | #F4F5F6 / #A1A5AD / #8E939C |
+| accent / accentFill | #245BD6 | #86ABF8 / #3D70E2 |
+| accentPressed / onAccent | #1947AD / #FFFFFF | #325FC4 / #FFFFFF |
+| accentSoft | #EAF0FE | #2F3B54 |
+| success / successSurface | #17633D / #E9F5EE | #7CCFA0 / #2B423B |
+| warning / warningSurface | #7A4D00 / #FFF3D6 | #E5BE7A / #453E30 |
+| danger / dangerSurface | #B02B37 / #FDECEF | #FF9DA3 / #473338 |
+| border / controlBorder / rail | #D9E0E9 / #78869A / #C3CDD9 | #3A3E44 / #82878F / #454A51 |
+| disabledText / disabledSurface | #5D6A7C / #E8EDF3 | #7A7F87 / #303338 |
+| route / routeHalo | #245BD6 / #FFFFFF | #4D80EB / #17191C |
+
+`python3 scripts/ios/theme-contrast.py` échoue si une valeur claire change ou si un couple sombre passe sous son seuil.
 
 En Contraste accru (`colorSchemeContrast == .increased`), surfaces groupées, cartes de sélection, boutons secondaires et champs guidés passent de `border` à `controlBorder` en 1 pt. Tout nouveau conteneur à filet suit la même bascule.
 

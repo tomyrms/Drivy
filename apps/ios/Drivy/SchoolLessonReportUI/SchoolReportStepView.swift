@@ -140,7 +140,7 @@ private struct SchoolReportStepMessages: View {
                 }
                 if let message = model.confirmation { DrivyInlineMessage(text: message) }
             }
-            .listRowBackground(Color.clear)
+            .drivyClearRow()
             .listRowSeparator(.hidden)
         }
     }

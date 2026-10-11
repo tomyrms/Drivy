@@ -34,7 +34,7 @@ struct SchoolLessonCompletionSheet: View {
                             Text("Enregistrer le permis vu et terminer la leçon")
                                 .font(.body.weight(.semibold))
                                 .multilineTextAlignment(.leading)
-                                .frame(minHeight: 44)
+                                .frame(minHeight: DrivyLayout.tapTarget)
                         }
                         .disabled(!model.canMutate || isSubmitting)
                         .accessibilityIdentifier("lesson-permit-seen")

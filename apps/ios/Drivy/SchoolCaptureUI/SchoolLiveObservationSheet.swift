@@ -130,7 +130,7 @@ struct SchoolLiveObservationPalette: View {
                 recorded()
             } label: {
                 SchoolMarkerEmblem(size: 28)
-                    .frame(width: 44, height: 44)
+                    .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
                     .contentShape(Circle())
             }
             .buttonStyle(DrivyTileButtonStyle())
@@ -153,7 +153,7 @@ struct SchoolLiveObservationPalette: View {
             Image(systemName: symbol)
                 .font(DrivyMapGlyph.control)
                 .foregroundStyle(DrivyTheme.muted)
-                .frame(width: 44, height: 44)
+                .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
                 .contentShape(Circle())
         }
         .buttonStyle(DrivyTileButtonStyle())
