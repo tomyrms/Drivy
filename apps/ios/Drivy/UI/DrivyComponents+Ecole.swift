@@ -117,7 +117,7 @@ struct DrivyEntityRow: View {
             if showsChevron {
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.muted)
+                    .foregroundStyle(DrivyTheme.textTertiary)
                     .accessibilityHidden(true)
             }
         }
@@ -136,7 +136,7 @@ struct DrivyEntityRow: View {
                 .font(.body)
                 .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.muted)
                 .frame(width: 44, height: 44)
-                .background(isSelected ? DrivyTheme.surface : DrivyTheme.surfaceMuted, in: Circle())
+                .background(isSelected ? DrivyTheme.surfaceRaised : DrivyTheme.surfaceMuted, in: Circle())
                 .accessibilityHidden(true)
         case .none:
             EmptyView()
@@ -217,7 +217,7 @@ extension View {
     /// the system grey of dark mode on the canvas. Apply it to a Section or a row;
     /// a special fill (selection, danger, clear header) is set on its own row instead.
     func drivyFormRows(isSelected: Bool = false) -> some View {
-        listRowBackground(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surface)
+        listRowBackground(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surfaceRaised)
     }
 
     /// Header of a native Form or List section: subheadline semibold, muted, in

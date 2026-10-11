@@ -97,7 +97,7 @@ struct SchoolCaptureLiveView: View {
                         // Pause et reprise : seuls les éléments qui en dépendent changent, par une transition courte.
                         .animation(DrivyMotion.context(reduceMotion), value: shownState == .paused)
                         if usesInlineObservation, let moment = observationMoment {
-                            DrivyTheme.shadow.opacity(0.16)
+                            DrivyTheme.scrim
                                 .ignoresSafeArea(edges: .top)
                                 .onTapGesture { closeObservation() }
                                 .accessibilityHidden(true)
@@ -105,7 +105,7 @@ struct SchoolCaptureLiveView: View {
                                 anchor: moment.anchor, onRecorded: { showObservationNotice(moment.recorder) }, onClose: closeObservation)
                                 .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
                                 .frame(height: min(DrivyMapLayout.reportPaletteHeight, max(0, geometry.size.height - DrivySpacing.xl)))
-                                .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+                                .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                                 .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                                 .drivyShadow(radius: 18, y: 8)
                                 .padding(DrivySpacing.m)
@@ -469,7 +469,7 @@ struct SchoolCaptureLiveView: View {
                         VStack(alignment: .leading, spacing: DrivySpacing.s) { observationFeedback(recorder) }
                             .padding(DrivySpacing.s)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                            .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                             .drivyShadow(radius: 12, y: 4)
                             .transition(.opacity)
                     }

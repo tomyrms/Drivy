@@ -176,7 +176,7 @@ struct DrivyLessonRow: View {
                     if showsChevron {
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(DrivyTheme.muted)
+                            .foregroundStyle(DrivyTheme.textTertiary)
                             .padding(.top, DrivySpacing.xxs)
                             .accessibilityHidden(true)
                     }

@@ -466,7 +466,7 @@ struct SchoolStartNowView: View {
             }
         }
         .padding(.horizontal, DrivySpacing.m)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+        .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
         .disabled(launch.isBusy || form.pending != nil)
     }
 
@@ -498,7 +498,7 @@ struct SchoolStartNowView: View {
             }
         }
         .padding(DrivySpacing.m)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+        .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
         .animation(DrivyMotion.reveal(reduceMotion), value: gps.device)
     }
 

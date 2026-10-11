@@ -126,7 +126,7 @@ struct SchoolRecordingChoiceInline: View {
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(enabled ? DrivyTheme.accent : DrivyTheme.disabledText)
                     .frame(width: 44, height: 44)
-                    .background(chosen ? DrivyTheme.surface : DrivyTheme.accentSoft, in: Circle())
+                    .background(chosen ? DrivyTheme.surfaceRaised : DrivyTheme.accentSoft, in: Circle())
                     .accessibilityHidden(true)
                 HStack(spacing: DrivySpacing.xs) {
                     Text(title)

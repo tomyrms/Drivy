@@ -114,7 +114,7 @@ struct DrivyGuidedTextField: View {
                 .foregroundStyle(isEnabled ? DrivyTheme.text : DrivyTheme.disabledText)
                 .padding(.horizontal, DrivySpacing.s)
                 .frame(minHeight: 48)
-                .background(isEnabled ? DrivyTheme.surface : DrivyTheme.disabledSurface, in: shape)
+                .background(isEnabled ? DrivyTheme.surfaceRaised : DrivyTheme.disabledSurface, in: shape)
                 .overlay {
                     shape.strokeBorder(error == nil ? DrivyTheme.controlBorder : DrivyTheme.danger,
                                        lineWidth: error == nil && contrast != .increased ? 1 : 1.5)

@@ -1,38 +1,74 @@
 import SwiftUI
 import UIKit
 
-/// Semantic colors from the approved Cartographie native direction.
-/// Values mirror `annexes/tokens-proposition.json` (tokens 3.8); never recompute a palette per screen.
+/// Semantic colors of the native client. Light values are the approved Cartographie native
+/// direction (tokens 3.8) and never change here. Dark values are « Soft Charcoal »: a neutral
+/// anthracite where a block is lighter than the page it sits on, never an inverted light theme.
+/// Never recompute a palette per screen; decisions are in docs/implementation/dark-soft-charcoal-20261011.md.
 enum DrivyTheme {
-    static let canvas = adaptive(0xF7F8FA, 0x10151C)
-    static let surface = adaptive(0xFFFFFF, 0x19222E)
-    static let surfaceMuted = adaptive(0xEEF2F7, 0x222E3E)
-    static let text = adaptive(0x18212B, 0xF2F5FA)
-    static let muted = adaptive(0x536174, 0xB0BCCC)
-    static let accent = adaptive(0x245BD6, 0x91B5FF)
-    static let accentPressed = adaptive(0x1947AD, 0xB4CCFF)
-    static let onAccent = adaptive(0xFFFFFF, 0x10264D)
-    static let accentSoft = adaptive(0xEAF0FE, 0x233859)
-    static let success = adaptive(0x17633D, 0x98DBB4)
-    static let successSurface = adaptive(0xE9F5EE, 0x18372A)
-    static let warning = adaptive(0x7A4D00, 0xF2CB83)
-    static let warningSurface = adaptive(0xFFF3D6, 0x382D19)
-    static let danger = adaptive(0xB02B37, 0xFFADB4)
-    static let dangerSurface = adaptive(0xFDECEF, 0x40252D)
-    static let border = adaptive(0xD9E0E9, 0x34445A)
-    static let controlBorder = adaptive(0x78869A, 0x71849D)
-    /// Decorative continuation only; stations and labels carry the information.
-    static let rail = adaptive(0xC3CDD9, 0x3A4757)
-    static let disabledText = adaptive(0x5D6A7C, 0xB0BCCC)
-    static let disabledSurface = adaptive(0xE8EDF3, 0x222E3E)
-    static let route = adaptive(0x245BD6, 0x91B5FF)
-    static let routeHalo = adaptive(0xFFFFFF, 0x10151C)
-    /// Shadow tint: a deep blue-grey, never pure black, so shadows stay soft on every surface.
-    static let shadow = adaptive(0x18212B, 0x05080C)
+    // Pages: the darkest level. A sheet or popover is one step lighter (system elevated level).
+    /// Background of grouped forms and lists.
+    static let canvas = adaptive(0xF7F8FA, 0x17191C, elevated: 0x1D1F23)
+    /// Background of reading pages.
+    static let surface = adaptive(0xFFFFFF, 0x17191C, elevated: 0x1D1F23)
 
-    private static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
+    // Blocks: one step above the page.
+    /// Fill of DrivyCard, DrivyPanel, selection cards and grouped rows.
+    static let surfaceCard = adaptive(0xF7F8FA, 0x272A2E, elevated: 0x2A2D31)
+    /// Block laid over a page or over the map: map panel, banner, marker, thumb.
+    static let surfaceRaised = adaptive(0xFFFFFF, 0x272A2E, elevated: 0x2A2D31)
+    /// Interactive or neutral fill: secondary button, neutral pill, avatar, pressed row.
+    static let surfaceMuted = adaptive(0xEEF2F7, 0x34383D, elevated: 0x373B40)
+
+    static let text = adaptive(0x18212B, 0xF4F5F6)
+    static let muted = adaptive(0x536174, 0xA1A5AD, darkHighContrast: 0xC2C6CD)
+    /// Decorative glyphs only (chevrons): never the sole carrier of an information.
+    static let textTertiary = adaptive(0x536174, 0x8E939C, darkHighContrast: 0xA1A5AD)
+
+    /// Accent as ink: links, symbols, selection outline, system tint.
+    static let accent = adaptive(0x245BD6, 0x86ABF8, darkHighContrast: 0xA8C3FB)
+    /// Accent as a filled control carrying `onAccent` (primary button, selected day).
+    static let accentFill = adaptive(0x245BD6, 0x3D70E2)
+    static let accentPressed = adaptive(0x1947AD, 0x325FC4)
+    static let onAccent = adaptive(0xFFFFFF, 0xFFFFFF)
+    static let accentSoft = adaptive(0xEAF0FE, 0x2F3B54)
+
+    static let success = adaptive(0x17633D, 0x7CCFA0)
+    static let successSurface = adaptive(0xE9F5EE, 0x2B423B)
+    static let warning = adaptive(0x7A4D00, 0xE5BE7A)
+    static let warningSurface = adaptive(0xFFF3D6, 0x453E30)
+    static let danger = adaptive(0xB02B37, 0xFF9DA3)
+    static let dangerSurface = adaptive(0xFDECEF, 0x473338)
+
+    static let border = adaptive(0xD9E0E9, 0x3A3E44, darkHighContrast: 0x5C616A)
+    static let controlBorder = adaptive(0x78869A, 0x82878F, darkHighContrast: 0xA1A5AD)
+    /// Decorative continuation only; stations and labels carry the information.
+    static let rail = adaptive(0xC3CDD9, 0x454A51)
+    static let disabledText = adaptive(0x5D6A7C, 0x7A7F87)
+    static let disabledSurface = adaptive(0xE8EDF3, 0x303338)
+
+    /// Measured trace on the map: the reference blue of the dark theme, on a page-colored halo.
+    static let route = adaptive(0x245BD6, 0x4D80EB)
+    static let routeHalo = adaptive(0xFFFFFF, 0x17191C)
+    /// Shadow tint: a deep blue-grey in light, black in dark where only a strong shadow reads.
+    static let shadow = adaptive(0x18212B, 0x000000)
+    /// Veil behind a palette opened over the map. Light keeps the shadow tint at 16 %.
+    static let scrim = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(white: 0, alpha: 0.45)
+            : UIColor(red: 0x18 / 255, green: 0x21 / 255, blue: 0x2B / 255, alpha: 0.16)
+    })
+
+    /// The light value never depends on elevation or contrast: only the dark appearance has variants.
+    private static func adaptive(_ light: UInt32, _ dark: UInt32, elevated: UInt32? = nil,
+                                 darkHighContrast: UInt32? = nil) -> Color {
         Color(uiColor: UIColor { traits in
-            let value = traits.userInterfaceStyle == .dark ? dark : light
+            var value = light
+            if traits.userInterfaceStyle == .dark {
+                value = dark
+                if let elevated, traits.userInterfaceLevel == .elevated { value = elevated }
+                if let darkHighContrast, traits.accessibilityContrast == .high { value = darkHighContrast }
+            }
             return UIColor(
                 red: CGFloat((value >> 16) & 0xff) / 255,
                 green: CGFloat((value >> 8) & 0xff) / 255,
@@ -107,17 +143,35 @@ enum DrivyButtonSize {
 
 /// Elevation of a surface laid over another (map panel, floating thumb): two soft
 /// layers, one tight for the contact edge and one wide for the lift. Colors come from
-/// `DrivyTheme.shadow`; outside the map a hairline replaces the shadow.
+/// `DrivyTheme.shadow`; outside the map a hairline replaces the shadow. On a dark map a
+/// soft shadow disappears, so the dark appearance uses stronger layers.
 enum DrivyElevation {
     static let contactOpacity = 0.10
     static let liftOpacity = 0.12
+    static let darkContactOpacity = 0.45
+    static let darkLiftOpacity = 0.38
 }
 
 extension View {
     /// Soft two-layer shadow from the theme tint. `isOn` false keeps the layout identical without shadow.
     func drivyShadow(_ isOn: Bool = true, radius: CGFloat = 18, y: CGFloat = 4) -> some View {
-        shadow(color: DrivyTheme.shadow.opacity(isOn ? DrivyElevation.contactOpacity : 0), radius: 1, y: 0.5)
-            .shadow(color: DrivyTheme.shadow.opacity(isOn ? DrivyElevation.liftOpacity : 0), radius: radius, y: y)
+        modifier(DrivyShadowModifier(isOn: isOn, radius: radius, y: y))
+    }
+}
+
+private struct DrivyShadowModifier: ViewModifier {
+    let isOn: Bool
+    let radius: CGFloat
+    let y: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        let dark = colorScheme == .dark
+        let contact = dark ? DrivyElevation.darkContactOpacity : DrivyElevation.contactOpacity
+        let lift = dark ? DrivyElevation.darkLiftOpacity : DrivyElevation.liftOpacity
+        return content
+            .shadow(color: DrivyTheme.shadow.opacity(isOn ? contact : 0), radius: 1, y: 0.5)
+            .shadow(color: DrivyTheme.shadow.opacity(isOn ? lift : 0), radius: radius, y: y)
     }
 }
 
@@ -156,7 +210,7 @@ struct DrivyPrimaryButtonStyle: ButtonStyle {
             .foregroundStyle(isEnabled ? DrivyTheme.onAccent : DrivyTheme.disabledText)
             .background(
                 isEnabled
-                    ? (configuration.isPressed ? DrivyTheme.accentPressed : DrivyTheme.accent)
+                    ? (configuration.isPressed ? DrivyTheme.accentPressed : DrivyTheme.accentFill)
                     : DrivyTheme.disabledSurface,
                 in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
             )

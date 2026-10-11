@@ -284,7 +284,7 @@ struct SchoolAgendaView: View {
                         }
                     }
                     .frame(minWidth: 44, maxWidth: .infinity, minHeight: 80)
-                    .background(selected ? DrivyTheme.accent : .clear, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                    .background(selected ? DrivyTheme.accentFill : .clear, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                     .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                 }
                 .buttonStyle(AgendaDayButtonStyle())

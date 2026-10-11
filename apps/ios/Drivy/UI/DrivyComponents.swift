@@ -135,7 +135,7 @@ struct DrivyAvatar: View {
             .padding(DrivySpacing.xxs)
             .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.text)
             .frame(width: size, height: size)
-            .background(isSelected ? DrivyTheme.surface : DrivyTheme.surfaceMuted, in: Circle())
+            .background(isSelected ? DrivyTheme.surfaceRaised : DrivyTheme.surfaceMuted, in: Circle())
             .accessibilityHidden(true)
     }
 
@@ -199,7 +199,7 @@ struct DrivyNavigationRow: View {
                 if !stacked, let badge { badge }
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.muted)
+                    .foregroundStyle(DrivyTheme.textTertiary)
                     .accessibilityHidden(true)
             }
             .padding(.vertical, DrivySpacing.m)
@@ -371,7 +371,7 @@ struct DrivyGroupedSurface: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         let increased = contrast == .increased
         return content
-            .background(DrivyTheme.canvas, in: shape)
+            .background(DrivyTheme.surfaceCard, in: shape)
             .overlay {
                 shape.strokeBorder(increased ? DrivyTheme.controlBorder : DrivyTheme.border,
                                    lineWidth: increased ? 1 : 0.5)
@@ -510,7 +510,7 @@ struct DrivySelectionCardStyle: ButtonStyle {
         return configuration.label
             .padding(DrivySpacing.m)
             .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
-            .background(isSelected ? DrivyTheme.accentSoft : DrivyTheme.canvas, in: shape)
+            .background(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surfaceCard, in: shape)
             .overlay {
                 shape.strokeBorder(isSelected ? DrivyTheme.accent : idleBorder,
                                    lineWidth: isSelected ? 1.5 : (contrast == .increased ? 1 : 0.5))

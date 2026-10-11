@@ -40,7 +40,7 @@ struct SchoolObservationUndoBanner: View {
         .padding(.leading, DrivySpacing.m)
         .padding(.trailing, DrivySpacing.xxs)
         .padding(.vertical, DrivySpacing.xxs)
-        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+        .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
         .drivyShadow(radius: 12, y: 4)
         // Le moniteur ne regarde pas l’écran : un refus de l’école se signale aussi au toucher.
         .sensoryFeedback(.error, trigger: recorder.undoState) { _, state in state == .refused }

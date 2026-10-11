@@ -330,7 +330,7 @@ private struct SchoolJoinFieldChrome: ViewModifier {
         content
             .padding(.horizontal, DrivySpacing.m)
             .frame(minHeight: minHeight)
-            .background(hasError ? DrivyTheme.dangerSurface : DrivyTheme.canvas, in: shape)
+            .background(hasError ? DrivyTheme.dangerSurface : DrivyTheme.surfaceCard, in: shape)
             .overlay {
                 shape.strokeBorder(hasError ? DrivyTheme.danger : (isFocused ? DrivyTheme.accent : DrivyTheme.controlBorder),
                                    lineWidth: hasError || isFocused ? 2 : 1)
