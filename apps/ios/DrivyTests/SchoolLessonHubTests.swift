@@ -74,6 +74,22 @@ struct SchoolLessonHubTests {
         #expect(!may(start, lesson: HubFixture.lesson(status: "COMPLETED")))
     }
 
+    /// 12:00–12:50 UTC, soit 14:00–14:50 à Zurich : commencer le jour même, jusqu’à 30 minutes après la fin.
+    @Test func aLessonBeginsOnlyOnItsDayAndAMissedOneIsNoLongerNext() {
+        let lesson = HubFixture.lesson(permitWarning: false)
+        #expect(SchoolLessonHubRules.mayBegin(lesson, now: HubFixture.date("2026-09-28T06:00:00Z")))
+        #expect(SchoolLessonHubRules.mayBegin(lesson, now: HubFixture.date("2026-09-28T13:19:59Z")))
+        #expect(!SchoolLessonHubRules.mayBegin(lesson, now: HubFixture.date("2026-09-28T13:20:00Z")))
+        // La veille, ou une semaine avant : jamais.
+        #expect(!SchoolLessonHubRules.mayBegin(lesson, now: HubFixture.date("2026-09-27T21:59:00Z")))
+        #expect(!SchoolLessonHubRules.mayBegin(lesson, now: HubFixture.date("2026-09-21T12:00:00Z")))
+        #expect(!SchoolLessonHubRules.mayBegin(HubFixture.lesson(actualStart: "2026-09-28T12:00:00Z"), now: HubFixture.date("2026-09-28T12:00:00Z")))
+        #expect(!SchoolLessonHubRules.mayBegin(HubFixture.lesson(status: "CANCELLED"), now: HubFixture.date("2026-09-28T12:00:00Z")))
+        #expect(!SchoolLessonHubRules.isMissed(lesson, now: HubFixture.date("2026-09-28T13:19:59Z")))
+        #expect(SchoolLessonHubRules.isMissed(lesson, now: HubFixture.date("2026-09-28T13:20:00Z")))
+        #expect(!SchoolLessonHubRules.isMissed(HubFixture.lesson(actualStart: "2026-09-28T12:00:00Z"), now: HubFixture.date("2026-09-28T18:00:00Z")))
+    }
+
     @Test func movingAndCancellingStayWithStaffOnPlannedLessons() {
         let lesson = HubFixture.lesson(), before = HubFixture.date("2026-09-28T11:00:00Z"), after = HubFixture.date("2026-09-28T12:30:00Z")
         let own = lesson.instructorMembershipId, colleague = UUID()

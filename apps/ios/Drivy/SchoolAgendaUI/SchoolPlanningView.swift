@@ -511,8 +511,7 @@ enum SchoolPlanningFormat {
         return quantity > 1 ? "\(product.label) · \(quantity) × \(price)" : "\(product.label) · \(price)"
     }
     static func instant(_ date: Date, zone: String) -> String {
-        let format = DateFormatter(); format.locale = Locale(identifier: "fr_CH"); format.timeZone = TimeZone(identifier: zone)
-        format.dateFormat = "EEE d MMM · HH:mm"; return format.string(from: date)
+        SchoolDateCache.shared.string(from: date, zone: TimeZone(identifier: zone) ?? .current, format: "EEE d MMM · HH:mm")
     }
     static func interval(_ start: String, _ end: String, zone: String) -> String {
         guard let start = SchoolLesson.date(start), let end = SchoolLesson.date(end) else { return "Horaire indisponible" }

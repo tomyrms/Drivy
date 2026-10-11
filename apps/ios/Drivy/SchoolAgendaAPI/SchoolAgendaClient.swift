@@ -236,6 +236,14 @@ final class SchoolDateCache: @unchecked Sendable {
         return formatter(key: "f|\(format)|\(zone.identifier)", zone: zone) { $0.dateFormat = format }.string(from: date)
     }
 
+    /// Texte dans le fuseau donné, selon les styles de date et d’heure du système.
+    func string(from date: Date, zone: TimeZone, date dateStyle: DateFormatter.Style, time timeStyle: DateFormatter.Style) -> String {
+        lock.lock(); defer { lock.unlock() }
+        return formatter(key: "s|\(dateStyle.rawValue)|\(timeStyle.rawValue)|\(zone.identifier)", zone: zone) {
+            $0.dateStyle = dateStyle; $0.timeStyle = timeStyle
+        }.string(from: date)
+    }
+
     /// Calendrier grégorien du fuseau donné.
     func calendar(zone: TimeZone) -> Calendar {
         lock.lock(); defer { lock.unlock() }

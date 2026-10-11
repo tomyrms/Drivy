@@ -108,7 +108,7 @@ struct SchoolTodayView: View {
                 NavigationStack {
                     SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace, lessonID: item.lesson.id,
                         learnerName: name(item.lesson), opensCompletion: item.completing, opensStart: item.starting,
-                        startIssue: item.issue)
+                        knownLesson: item.lesson, startIssue: item.issue)
                 }
                 .tint(DrivyTheme.accent)
                 .environment(captureController)
@@ -194,12 +194,14 @@ struct SchoolTodayView: View {
     /// Panneau de la journée : la leçon qui compte maintenant et son action dominante, puis le reste du jour.
     @ViewBuilder private func card(now: Date, floating: Bool) -> some View {
         let active = planned.first { $0.hasStarted }
-        let next = planned.first { !$0.hasStarted }
+        // Un rendez-vous manqué ne reste pas en tête toute la journée : il se lit « En attente » dans la liste.
+        let next = planned.first { !$0.hasStarted && !SchoolLessonHubRules.isMissed($0, now: now) }
         let featured = active ?? next
         DrivyMapDock(floating: floating) {
             if let lesson = featured {
                 lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote)
-                if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId {
+                if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId
+                    && (lesson.hasStarted || SchoolLessonHubRules.mayBegin(lesson, now: now)) {
                     Button { Task { await commence(lesson) } } label: {
                         DrivyBusyLabel(title: lesson.hasStarted ? "Continuer la leçon" : "Commencer la leçon",
                             busyTitle: "Commencer la leçon", isBusy: checkingStart || startingPlanned)
@@ -343,7 +345,8 @@ struct SchoolTodayView: View {
         guard !checkingStart, !startingPlanned, opened == nil else { return }
         guard !lesson.hasStarted, mayStartDirectly(lesson), let agendaClient, let captureController,
               let person = workspace.person, let membership = workspace.membership else {
-            opened = OpenedLesson(lesson: lesson, completing: false, starting: !lesson.hasStarted)
+            opened = OpenedLesson(lesson: lesson, completing: false,
+                starting: SchoolLessonHubRules.mayBegin(lesson, now: Date()))
             return
         }
         let scope = agendaClient.scope(person: person, membership: membership), startKey = scopeKey

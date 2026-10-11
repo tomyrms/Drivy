@@ -22,10 +22,12 @@ struct SchoolLessonPeriod: Equatable {
         if year != 0 { values.append(String(year)) }
         return values.joined(separator: " ")
     }
-    static func monthName(_ month: Int) -> String {
+    static func monthName(_ month: Int) -> String { monthNames[month - 1] }
+    /// Lu à chaque rendu du sélecteur de période : les douze noms une fois pour toutes.
+    private static let monthNames: [String] = {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH")
-        return formatter.standaloneMonthSymbols[month - 1].capitalizedFirst
-    }
+        return formatter.standaloneMonthSymbols.map(\.capitalizedFirst)
+    }()
 }
 
 /// La formation ouverte depuis les écrans de revue visuelle. Le dossier produit
@@ -549,7 +551,15 @@ private struct SchoolTrainingContent: View {
         let names = mixesPermits ? permitNames : [:]
         let featured = featuredLesson(in: feed.lessons)
         // La prochaine leçon de l’élève est en tête, dans sa carte : la liste ne la redit pas.
-        let visible = feed.lessons.filter { activeFilter.includes($0) && period.includes($0) && $0.id != featured?.id }
+        let now = Date()
+        let visible = feed.lessons.filter { lesson in
+            // Chez l’élève, « À venir » et « Passées » suivent la même règle que sa carte et ses groupes : une leçon dont
+            // le créneau n’est pas fini vient encore, même si son heure de début est passée.
+            let kept = ownLessons && activeFilter != .all
+                ? (activeFilter == .upcoming) == SchoolLearnerLessonMoment.isComing(lesson, now: now)
+                : activeFilter.includes(lesson, now: now)
+            return kept && period.includes(lesson) && lesson.id != featured?.id
+        }
         // Le permis d’une leçon n’est nommé que lorsque la liste en mêle plusieurs.
         return VStack(alignment: .leading, spacing: DrivySpacing.m) {
             if feed.isLoadingFirstPage {

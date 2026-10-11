@@ -115,6 +115,10 @@ struct SchoolLearnerProfileTab: View {
         let training = model.training ?? trainings.first { $0.id == model.trainingID }
         Section {
             if Self.isComplete(model) {
+                // Une relecture en panne garde les chiffres déjà lus, mais le dit : rien ne passe pour à jour.
+                if let error = model.errorMessage {
+                    SchoolErrorNotice(message: error, retry: { Task { await model.load(keepingCurrent: true) } })
+                }
                 overviewRows(SchoolTrainingOverview.make(lessons: model.lessons, progress: model.progress), model: model, training: training)
             } else if let error = model.errorMessage {
                 SchoolErrorNotice(message: error, retry: { Task { await model.load(keepingCurrent: true) } })

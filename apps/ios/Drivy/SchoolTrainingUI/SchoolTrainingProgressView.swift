@@ -230,6 +230,7 @@ private struct SchoolProgressRow: View {
     /// `nil` : la ligne n’a aucun détail à déplier (compétence pas encore vue).
     let isExpanded: Bool?
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var levelWords: String { level.isEmpty ? "Pas encore vue" : SchoolTrainingFormatting.level(level) }
 
@@ -248,10 +249,11 @@ private struct SchoolProgressRow: View {
                 if showsMeter && !level.isEmpty { DrivyCompetencyMeter(level: level) }
                 if let isExpanded {
                     // Vers le bas : la ligne se déplie ici, elle ne mène pas ailleurs.
-                    Image(systemName: "chevron.down")
+                    // Réduire les animations : le symbole change en fondu au lieu de tourner.
+                    Image(systemName: reduceMotion && isExpanded ? "chevron.up" : "chevron.down")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(DrivyTheme.muted)
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        .rotationEffect(.degrees(!reduceMotion && isExpanded ? 180 : 0))
                         .accessibilityHidden(true)
                 }
             }
@@ -261,7 +263,8 @@ private struct SchoolProgressRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue(levelWords)
+        // L’état déplié se dit aussi quand les indications de VoiceOver sont coupées.
+        .accessibilityValue(isExpanded == true ? "\(levelWords), détail affiché" : levelWords)
     }
 }
 

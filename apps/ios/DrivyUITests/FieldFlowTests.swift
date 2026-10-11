@@ -69,7 +69,7 @@ import XCTest
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), app.debugDescription)
         let save = app.buttons["lesson-save-report"]
         XCTAssertFalse(save.exists)
-        let keepLesson = app.buttons["Continuer"]
+        let keepLesson = app.buttons["Poursuivre la leçon"]
         XCTAssertTrue(keepLesson.waitForExistence(timeout: 5), app.debugDescription)
         keepLesson.tap()
         XCTAssertTrue(confirm.waitForNonExistence(timeout: 5))

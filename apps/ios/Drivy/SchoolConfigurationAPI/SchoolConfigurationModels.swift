@@ -58,26 +58,6 @@ struct SchoolIdentityCommand: Codable, Sendable, Equatable {
     let impactConfirmed: Bool
 }
 
-struct SchoolSetupCommand: Codable, Sendable, Equatable {
-    let operationId: UUID
-    let currentStep: String
-    let completedSteps: [String]
-}
-
-struct SchoolActivationCommand: Codable, Sendable, Equatable {
-    let operationId: UUID
-    let expectedConfigurationVersion: Int
-    let reviewAcknowledged: Bool
-}
-
-struct SchoolDataPolicyCommand: Codable, Sendable, Equatable {
-    let operationId: UUID
-    let noticeText: String
-    let retentionText: String
-    let contactEmail: String
-    let reviewAcknowledged: Bool
-}
-
 struct SchoolOperationReceipt: Codable, Sendable, Equatable {
     let operationId: UUID
     let commandType: String

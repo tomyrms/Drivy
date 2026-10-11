@@ -346,7 +346,8 @@ import Observation
             let discreetCaptures = !completed && readsContent && lesson.captureSummary?.hasCapture == true
             // Lectures indépendantes, lancées ensemble : chacune garde sa règle d’absence et son message, et rien n’est
             // publié avant la fin de toutes (une seule mise à jour de l’écran).
-            let wishTask = supplement(request, when: author || isOwn || (lesson.status == "PLANNED" && current.roles.contains("INSTRUCTOR")),
+            // Le souhait ne se montre qu’avant une leçon : une fiche passée ne le lit plus.
+            let wishTask = supplement(request, when: lesson.status == "PLANNED" && (author || isOwn || current.roles.contains("INSTRUCTOR")),
                 unavailable: "Le souhait de l’élève n’a pas pu être chargé.", absentWhenRefused: asColleague) {
                 try await self.client.wish(schoolID: schoolID, trainingID: trainingID)
             }
@@ -580,6 +581,8 @@ import Observation
             id: operation, kind: .completeLesson, version: lesson.version, resourceID: lessonID)
     }
     func markNoShow(reason: String) async -> Bool {
+        // Une relecture en cours (retour au premier plan, trajet synchronisé) ne fait pas tomber la confirmation.
+        await settled()
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let lesson, canMutate, mayMarkNoShow(), !trimmed.isEmpty, reason.unicodeScalars.count <= 1_000 else { return false }
         let operation = UUID()

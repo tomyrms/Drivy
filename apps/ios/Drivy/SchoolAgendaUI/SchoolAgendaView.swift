@@ -28,13 +28,18 @@ struct SchoolAgendaView: View {
     private var instructorFilter: UUID? { isInstructor && !(isAdmin && wholeSchool) ? workspace.membership?.membershipId : nil }
     private var showsInstructor: Bool { instructorFilter == nil && isAdmin }
 
+    /// Lu des dizaines de fois par rendu (bande de la semaine, jour choisi) : un calendrier par fuseau, gardé.
     private var calendar: Calendar {
+        let zone = workspace.school?.timeZone ?? "Europe/Zurich"
+        if let known = Self.calendars[zone] { return known }
         var result = Calendar(identifier: .gregorian)
         result.locale = Locale(identifier: "fr_CH")
         result.firstWeekday = 2
-        result.timeZone = TimeZone(identifier: workspace.school?.timeZone ?? "Europe/Zurich") ?? .current
+        result.timeZone = TimeZone(identifier: zone) ?? .current
+        Self.calendars[zone] = result
         return result
     }
+    @MainActor private static var calendars: [String: Calendar] = [:]
     private var weekStart: Date { calendar.dateInterval(of: .weekOfYear, for: selectedDate)?.start ?? calendar.startOfDay(for: selectedDate) }
     private var weekDays: [Date] { (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: weekStart) } }
     private var dailyLessons: [SchoolLesson] {
@@ -102,7 +107,7 @@ struct SchoolAgendaView: View {
         // (leçon terminée, déplacée ou annulée).
         .sheet(item: $selectedLesson, onDismiss: { Task { await loadWeek(keepingCurrent: true) } }) { lesson in
             NavigationStack {
-                SchoolLessonReportView(client: client.reportClient, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: learnerName(lesson))
+                SchoolLessonReportView(client: client.reportClient, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: learnerName(lesson), knownLesson: lesson)
             }
             .tint(DrivyTheme.accent)
             .environment(captureController)
@@ -131,7 +136,8 @@ struct SchoolAgendaView: View {
     private var dayGroup: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             dayHeading
-            dayContent
+            // L’état d’une leçon suit l’heure (« En attente » une fois l’horaire passé) sans attendre un autre rendu.
+            TimelineView(.everyMinute) { _ in dayContent }
         }
     }
 

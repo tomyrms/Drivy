@@ -251,11 +251,15 @@ struct SchoolOnboardingView: View {
                     if ownTrainings.isEmpty {
                         DrivyEntityRow(title: "\(schoolName) va ouvrir ta formation", leading: .symbol("car"))
                     } else {
+                        // Mêmes noms que Leçons et Profil (deux permis B se distinguent par leur année) ; un état
+                        // inhabituel s’écrit en mots dans la ligne, sans pastille.
+                        let names = SchoolPermitName.names(ownTrainings)
                         ForEach(ownTrainings) { training in
-                            DrivyEntityRow(title: "Permis \(training.categoryCode)",
-                                meta: training.startedOn.map { "Depuis le \(SchoolPresentation.civilDate($0))" },
-                                leading: .symbol("car"),
-                                badge: training.status == "ACTIVE" ? nil : DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status), tone: .neutral))
+                            let meta: [String] = [training.status == "ACTIVE" ? nil : SchoolPresentation.trainingStatus(training.status),
+                                        training.startedOn.map { "Depuis le \(SchoolPresentation.civilDate($0))" }].compactMap { $0 }
+                            DrivyEntityRow(title: names[training.id] ?? "Permis \(training.categoryCode)",
+                                meta: meta.isEmpty ? nil : meta.joined(separator: " · "),
+                                leading: .symbol("car"))
                         }
                     }
                     if let email = model.school?.contactEmail, !email.isEmpty {
@@ -282,7 +286,7 @@ struct SchoolOnboardingView: View {
                 stepTitle("GPS pendant les leçons")
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     SchoolOnboardingPoint(symbol: "location", text: "L’appareil du moniteur enregistre le trajet, avec ton accord.")
-                    SchoolOnboardingPoint(symbol: "hand.raised", text: "Tu peux refuser ou modifier ton choix. La leçon reste possible sans trajet.")
+                    SchoolOnboardingPoint(symbol: "hand.raised", text: "Tu donnes ou modifies ton choix dans Profil. La leçon reste possible sans trajet.")
                 }
             }
         }

@@ -422,7 +422,7 @@ import Testing
                 "jti": "\(capture.id.uuidString.lowercased()):\(purpose)", "iat": Int(time.timeIntervalSince1970),
                 "exp": Int(SchoolLesson.date(expiry)!.timeIntervalSince1970), "scope": purpose,
                 "schoolId": scope.schoolID.uuidString, "captureId": capture.id.uuidString, "lessonId": capture.lessonId.uuidString,
-                "deviceId": device.uuidString, "deviceAssessmentId": capture.deviceAssessmentId.uuidString,
+                "deviceId": device.uuidString, "deviceAssessmentId": capture.deviceAssessmentId!.uuidString,
                 "authorizedAt": capture.authorizedAt, "expiresAt": capture.expiresAt, "uploadDeadline": capture.uploadDeadline]
             let encoded = "\(base64(header)).\(base64(try JSONSerialization.data(withJSONObject: claims)))"
             return "\(encoded).\(base64(try key.signature(for: Data(encoded.utf8))))"
@@ -433,7 +433,7 @@ import Testing
         let keys = SchoolCapturePublicKeys(keys: [.init(kty: "OKP", crv: "Ed25519", x: base64(key.publicKey.rawRepresentation), kid: "test", alg: "EdDSA", use: "sig")])
         let received = ContinuousClock.now
         let lease = try SchoolCaptureAuthorizationVerifier.verify(authorization, keys: keys, expectedIssuer: URL(string: scope.apiBaseURL)!,
-            scope: scope, lessonID: capture.lessonId, deviceID: device, assessmentID: capture.deviceAssessmentId, requestStartedAt: received)
+            scope: scope, lessonID: capture.lessonId, deviceID: device, assessmentID: capture.deviceAssessmentId!, requestStartedAt: received)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("capture-lifecycle-\(UUID()).sqlite")
         let store = try SQLCipherSchoolCaptureStore(url: url, key: Data(repeating: 0x3D, count: 32), protectFiles: false, installationID: device)
         let server = CaptureLifecycleServer(scope: scope, capture: capture, authorization: authorization, keys: keys)
@@ -444,7 +444,7 @@ import Testing
         if startImmediately {
             let command = try SchoolCapturePendingMutation.make(id: operation, scope: scope, kind: .startCapture,
                 targetID: capture.lessonId, expectedVersion: 1, body: SchoolStartCaptureBody(operationId: operation, deviceId: device,
-                    choiceId: capture.choiceId, choiceVersion: 1, noticeVersionId: UUID(), explicitStartConfirmed: true, deviceAssessmentId: capture.deviceAssessmentId))
+                    choiceId: capture.choiceId, choiceVersion: 1, noticeVersionId: UUID(), explicitStartConfirmed: true, deviceAssessmentId: capture.deviceAssessmentId!))
             try await store.stage(command)
             _ = try await store.markAttempted(id: operation, scope: scope)
             let session = try await store.acceptAuthorization(operationID: operation, authorization: authorization, lease: lease, scope: scope, deviceID: device)
@@ -626,9 +626,9 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
                 learnerId: capture.learnerId, lessonId: capture.lessonId, status: .allowed, noticeVersionId: noticeID,
                 recordedBy: scope.membershipID, recordedAt: capture.authorizedAt, source: .verbal))
         }
-        if leaf == "assessments" || leaf == capture.deviceAssessmentId.uuidString.lowercased() {
-            return try ok(SchoolDeviceAssessment(id: capture.deviceAssessmentId, schoolId: scope.schoolID, version: 1,
-                deviceId: capture.deviceId, membershipId: scope.membershipID, platform: "IOS", deviceClass: "PHONE",
+        if leaf == "assessments" || leaf == capture.deviceAssessmentId!.uuidString.lowercased() {
+            return try ok(SchoolDeviceAssessment(id: capture.deviceAssessmentId!, schoolId: scope.schoolID, version: 1,
+                deviceId: capture.deviceId!, membershipId: scope.membershipID, platform: "IOS", deviceClass: "PHONE",
                 modelCode: "test-phone", osVersion: "26.0", appBuild: "1", qualificationProfileVersion: "test",
                 status: .qualified, assessedAt: capture.authorizedAt, expiresAt: capture.expiresAt, blockers: []))
         }

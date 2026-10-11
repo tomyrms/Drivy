@@ -12,9 +12,7 @@ final class SchoolWorkspace {
     private(set) var learners: [SchoolLearner] = []
     private(set) var learner: SchoolLearner?
     private(set) var trainings: [SchoolTraining] = []
-    private(set) var training: SchoolTraining?
     private(set) var selectedLearnerID: UUID?
-    private(set) var selectedTrainingID: UUID?
     private(set) var searchText = ""
     private(set) var nextLearnersCursor: String?
     private(set) var nextTrainingsCursor: String?
@@ -26,7 +24,6 @@ final class SchoolWorkspace {
     private(set) var isLoadingLearner = false
     private(set) var isLoadingTrainings = false
     private(set) var isLoadingMoreTrainings = false
-    private(set) var isLoadingTraining = false
     private(set) var requiresAuthentication = false
     /// Signed in, but the identity belongs to no school yet: joining with a code is the way in.
     private(set) var identityNotLinked = false
@@ -39,7 +36,6 @@ final class SchoolWorkspace {
     private(set) var learnersError: String?
     private(set) var learnerError: String?
     private(set) var trainingsError: String?
-    private(set) var trainingError: String?
 
     @ObservationIgnored private let api: any SchoolAPI
     @ObservationIgnored private var accountRequest = UUID()
@@ -48,7 +44,6 @@ final class SchoolWorkspace {
     @ObservationIgnored private var searchRequest = UUID()
     @ObservationIgnored private var learnerRequest = UUID()
     @ObservationIgnored private var trainingsRequest = UUID()
-    @ObservationIgnored private var trainingRequest = UUID()
     @ObservationIgnored private var debounceTask: Task<Void, Never>?
     @ObservationIgnored private var learnerCursors: Set<String> = []
     @ObservationIgnored private var trainingCursors: Set<String> = []
@@ -354,36 +349,6 @@ final class SchoolWorkspace {
         }
     }
 
-    func selectTraining(_ id: UUID?) {
-        trainingRequest = UUID()
-        training = nil
-        trainingError = nil
-        isLoadingTraining = false
-        selectedTrainingID = id
-    }
-
-    func loadSelectedTraining() async {
-        guard let schoolID = membership?.schoolId, let learnerID = selectedLearnerID,
-              let id = selectedTrainingID else { return }
-        let scope = schoolScope
-        trainingRequest = UUID()
-        let request = trainingRequest
-        isLoadingTraining = true
-        if training?.id != id { training = nil }
-        trainingError = nil
-        do {
-            let result = try await api.training(schoolID: schoolID, id: id)
-            guard scope == schoolScope, request == trainingRequest, id == selectedTrainingID else { return }
-            guard result.id == id, result.schoolId == schoolID, result.learnerId == learnerID else { throw SchoolAPIError.invalidResponse }
-            training = result
-            isLoadingTraining = false
-        } catch {
-            guard scope == schoolScope, request == trainingRequest else { return }
-            isLoadingTraining = false
-            if !invalidateAccess(for: error) { trainingError = message(for: error) }
-        }
-    }
-
     private var normalizedQuery: String { searchText.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private func beginSearch(_ text: String, preservingSelection: Bool = false) {
@@ -442,7 +407,6 @@ final class SchoolWorkspace {
         trainingsError = nil
         isLoadingTrainings = false
         isLoadingMoreTrainings = false
-        selectTraining(nil)
     }
 
     @discardableResult

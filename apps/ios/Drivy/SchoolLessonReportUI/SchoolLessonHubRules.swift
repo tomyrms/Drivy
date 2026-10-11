@@ -116,6 +116,20 @@ enum SchoolLessonHubRules {
         return now >= start.addingTimeInterval(-1_800) && now < end.addingTimeInterval(1_800)
     }
 
+    /// Commencer une leçon planifiée : le jour même de son rendez-vous (dans son fuseau), et au plus tard 30 minutes
+    /// après sa fin. Jamais des jours à l’avance par mégarde, jamais seule parce que l’heure est passée.
+    static func mayBegin(_ lesson: SchoolLesson, now: Date) -> Bool {
+        guard lesson.status == "PLANNED", !lesson.hasStarted, let start = lesson.startsAt, let end = lesson.endsAt,
+              let zone = TimeZone(identifier: lesson.timeZone) else { return false }
+        let calendar = SchoolDateCache.shared.calendar(zone: zone)
+        return calendar.isDate(start, inSameDayAs: now) && now < end.addingTimeInterval(1_800)
+    }
+    /// Rendez-vous passé depuis plus de 30 minutes sans départ : il n’est plus la leçon à commencer.
+    static func isMissed(_ lesson: SchoolLesson, now: Date) -> Bool {
+        guard lesson.status == "PLANNED", !lesson.hasStarted, let end = lesson.endsAt else { return false }
+        return now >= end.addingTimeInterval(1_800)
+    }
+
     static func mayStartCapture(lesson: SchoolLesson, isAuthor: Bool, school: SchoolDetails?,
                                 capture: SchoolLessonCaptureStatus, controllerCanPrepare: Bool, now: Date) -> Bool {
         guard isAuthor, lesson.status == "PLANNED", let school, school.id == lesson.schoolId,
