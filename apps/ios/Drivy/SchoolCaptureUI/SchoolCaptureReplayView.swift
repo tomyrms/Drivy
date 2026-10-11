@@ -326,16 +326,18 @@ struct SchoolCaptureReplayView: View {
                     DrivyMapDock {
                         // Sur iPhone, l’observation choisie remplace le rail : le dock ne grandit
                         // pas et la carte garde sa place. Fermer le détail rend le rail.
-                        if selectedID != nil, timeline.items.contains(where: { $0.id == selectedID }) {
-                            selectedDetail(timeline)
-                        } else {
-                            rail(timeline)
+                        Group {
+                            if selectedID != nil, timeline.items.contains(where: { $0.id == selectedID }) {
+                                selectedDetail(timeline)
+                            } else {
+                                rail(timeline)
+                            }
                         }
+                        // Le détail et le rail se remplacent en fondu ; la tête de lecture n’en est pas ralentie.
+                        .animation(DrivyMotion.reveal(reduceMotion), value: selectedID)
                         player(timeline, showsList: true)
                         replayLoadingOrError
                     }
-                    // Le détail et le rail se remplacent en fondu ; la hauteur du dock suit sans saut.
-                    .animation(DrivyMotion.reveal(reduceMotion), value: selectedID)
                 }
                 .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.s)
             }

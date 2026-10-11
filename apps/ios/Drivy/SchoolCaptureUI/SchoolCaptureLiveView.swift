@@ -23,6 +23,8 @@ struct SchoolCaptureLiveView: View {
     @State private var isFinishing = false
     @State private var confirmsFinish = false
     @State private var cancellationModel: SchoolPlanningWorkspace?
+    /// L’annulation présentée, gardée pour lire son résultat à la fermeture de la feuille.
+    @State private var presentedCancellation: SchoolPlanningWorkspace?
     @State private var cancellationError: String?
     @State private var isOpeningCancellation = false
     /// Passage (pause, reprise) qui dure assez pour être nommé sur sa commande ; un passage bref ne montre rien.
@@ -178,15 +180,10 @@ struct SchoolCaptureLiveView: View {
 
     private var presentations: some View {
         screenWithLifecycle
-        .sheet(item: $cancellationModel) { model in
+        .sheet(item: $cancellationModel, onDismiss: { cancellationClosed() }) { model in
             SchoolPlanningView(model: model, cancelling: true, beforeCancellation: {
                 await controller.stopAndSynchronize()
             })
-            .onChange(of: model.confirmedCancellationLessonID) { _, id in
-                guard let id, id == model.originalLesson?.id, id == controller.lessonID else { return }
-                controller.closeSaved()
-                openLesson?(id, false)
-            }
         }
     }
 
@@ -654,6 +651,15 @@ struct SchoolCaptureLiveView: View {
         .accessibilityIdentifier("capture-more")
     }
 
+    /// Feuille d’annulation refermée : leçon annulée par l’école, le trajet se ferme et la leçon s’ouvre.
+    private func cancellationClosed() {
+        guard let model = presentedCancellation else { return }
+        presentedCancellation = nil
+        guard let id = model.confirmedCancellationLessonID, id == model.originalLesson?.id, id == controller.lessonID else { return }
+        controller.closeSaved()
+        openLesson?(id, false)
+    }
+
     private func openCancellation() {
         guard !isFinishing, !isOpeningCancellation, let client = observationClient?.agenda.planningClient else { return }
         isOpeningCancellation = true; cancellationError = nil
@@ -664,6 +670,7 @@ struct SchoolCaptureLiveView: View {
                 // Un geste engagé pendant la lecture (fin de leçon, signalement) garde la main :
                 // l’annulation ne s’ouvre pas par-dessus.
                 guard !isFinishing, !confirmsFinish, observationMoment == nil else { return }
+                presentedCancellation = model
                 cancellationModel = model
             }
             catch { cancellationError = (error as? LocalizedError)?.errorDescription ?? "Impossible d’ouvrir l’annulation. Vérifie la connexion et réessaie." }

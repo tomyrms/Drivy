@@ -41,7 +41,12 @@ struct SchoolAgendaView: View {
         guard loadedScope == scopeKey else { return [] }
         return dayIndex[calendar.startOfDay(for: selectedDate)] ?? []
     }
-    private var scopeKey: String { "\(identityScope):\(workspace.membership?.schoolId.uuidString ?? ""):\(weekStart.timeIntervalSince1970):\(instructorFilter?.uuidString ?? "all")" }
+    private var scopeKey: String { weekKey(for: selectedDate) }
+    /// Clé d’une semaine : compte, droits, école, début de semaine et filtre.
+    private func weekKey(for date: Date) -> String {
+        let start = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? calendar.startOfDay(for: date)
+        return "\(identityScope):\(workspace.membership?.schoolId.uuidString ?? ""):\(start.timeIntervalSince1970):\(instructorFilter?.uuidString ?? "all")"
+    }
     private var dateTitle: String {
         if calendar.isDateInToday(selectedDate) { return "Aujourd’hui" }
         return SchoolDateFormat.template("EEEEdMMMM", selectedDate, zone: calendar.timeZone.identifier).capitalizedFirst
@@ -320,7 +325,12 @@ struct SchoolAgendaView: View {
     private func moveWeek(_ offset: Int) { if let date = calendar.date(byAdding: .weekOfYear, value: offset, to: selectedDate) { select(date) } }
     /// Changer de jour ou de semaine : la liste passe en fondu, sans remplacement sec.
     private func select(_ date: Date) {
-        withAnimation(DrivyMotion.reveal(reduceMotion)) { selectedDate = date }
+        let key = weekKey(for: date)
+        withAnimation(DrivyMotion.reveal(reduceMotion)) {
+            selectedDate = date
+            // Autre semaine déjà lue : elle arrive dans le même fondu, sans passer par un squelette.
+            if loadedScope != key, let remembered = SchoolAgendaMemory.week(for: key) { show(remembered, scope: key) }
+        }
     }
     private func newPlanningModel() -> SchoolPlanningWorkspace? {
         guard let person = workspace.person, let membership = workspace.membership, mayPlan else { return nil }

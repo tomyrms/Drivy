@@ -361,6 +361,7 @@ struct SchoolPlanningView: View {
         }
         .buttonStyle(DrivyPrimaryButtonStyle())
         .disabled(!model.validBooking)
+        .accessibilityValue(model.isCheckingSlot ? "Vérification du créneau" : "")
         .accessibilityIdentifier("planning-confirm")
     }
 

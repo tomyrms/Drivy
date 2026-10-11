@@ -389,10 +389,24 @@ import Observation
                 guard value.trainingId == trainingID else { throw SchoolReportFailure.invalidResponse }
                 return value
             }
+            // Formation puis référentiel : une chaîne à elle, pour ne pas attendre l’aperçu du trajet.
+            let curriculumTask = Task { @MainActor () throws -> (training: (value: SchoolTraining?, message: String?),
+                                                                curriculum: (value: [SchoolCatalogCompetency]?, message: String?)) in
+                let trainingRead = try await trainingTask.value
+                guard let training = trainingRead.value else { return (trainingRead, (nil, trainingRead.message)) }
+                let curriculumRead = try await self.readSupplement(request: request, unavailable: curriculumUnavailable) {
+                    let offerings = try await self.collect { try await self.client.catalog.offerings(schoolID: schoolID, cursor: $0) }
+                    guard let offering = offerings.first(where: { $0.id == training.offeringId }) else { throw SchoolReportFailure.notFound }
+                    let curricula = try await self.collect { try await self.client.catalog.curricula(schoolID: schoolID, cursor: $0) }
+                    guard let curriculum = curricula.first(where: { $0.id == offering.curriculumVersionId }) else { throw SchoolReportFailure.notFound }
+                    return curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }
+                }
+                return (trainingRead, curriculumRead)
+            }
             defer {
                 wishTask.cancel(); revisionsTask.cancel(); preparationTask.cancel(); draftsTask.cancel()
                 observationsTask.cancel(); accountTask.cancel(); capturesTask.cancel(); sharingTask.cancel()
-                trainingTask.cancel(); progressTask.cancel()
+                trainingTask.cancel(); progressTask.cancel(); curriculumTask.cancel()
             }
             // Les lectures qui en attendent une autre partent dès qu’elle répond : l’aperçu du trajet, le référentiel.
             var capturesRead = try await capturesTask.value
@@ -406,17 +420,7 @@ import Observation
                 }
                 if discreetCaptures { trackRead.message = nil }
             }
-            let trainingRead = try await trainingTask.value
-            var curriculumRead: (value: [SchoolCatalogCompetency]?, message: String?) = (nil, trainingRead.message)
-            if let training = trainingRead.value {
-                curriculumRead = try await readSupplement(request: request, unavailable: curriculumUnavailable) {
-                    let offerings = try await self.collect { try await self.client.catalog.offerings(schoolID: schoolID, cursor: $0) }
-                    guard let offering = offerings.first(where: { $0.id == training.offeringId }) else { throw SchoolReportFailure.notFound }
-                    let curricula = try await self.collect { try await self.client.catalog.curricula(schoolID: schoolID, cursor: $0) }
-                    guard let curriculum = curricula.first(where: { $0.id == offering.curriculumVersionId }) else { throw SchoolReportFailure.notFound }
-                    return curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }
-                }
-            }
+            let (trainingRead, curriculumRead) = try await curriculumTask.value
             let wishRead = try await wishTask.value
             let revisionsRead = try await revisionsTask.value
             let preparationRead = try await preparationTask.value

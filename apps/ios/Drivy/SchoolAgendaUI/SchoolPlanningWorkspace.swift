@@ -110,7 +110,7 @@ struct SchoolPlanningInstructor: Identifiable {
             meetingPoint = lesson.meetingPoint; bufferMinutes = lesson.bufferMinutesSnapshot
         }
     }
-    var canMutate: Bool { !invalidated && !accessRevoked && !isBusy && !isLoading && !needsReload && storageAvailable && pending == nil && school?.status == "ACTIVE" }
+    var canMutate: Bool { !invalidated && !accessRevoked && !isBusy && !isLoading && !needsReload && !writeConfirmed && storageAvailable && pending == nil && school?.status == "ACTIVE" }
     var selectedTraining: SchoolTraining? { trainings.first { $0.id == trainingID } }
     var selectedOffering: SchoolOffering? { offerings.first { $0.id == selectedTraining?.offeringId } }
     var selectedProduct: SchoolServiceProduct? { products.first { $0.id == productID } }

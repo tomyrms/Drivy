@@ -195,6 +195,8 @@ private struct SchoolLessonReportContent: View {
     /// L’accord GPS de l’élève se lit avant tout rideau : l’attente se lit dans le bouton « Démarrer le trajet ».
     @State private var isOpeningTrip = false
     @State private var planningRoute: PlanningRoute?
+    /// Planning présenté, gardé pour lire une annulation confirmée à la fermeture de sa feuille.
+    @State private var presentedPlanning: SchoolPlanningWorkspace?
 
     private enum LessonSheet: String, Identifiable {
         case permit
@@ -261,7 +263,7 @@ private struct SchoolLessonReportContent: View {
         .fullScreenCover(item: $capturePreparation, onDismiss: { captureSheetClosed() }) { preparation in
             SchoolCapturePreparationView(model: preparation, schoolWorkspace: schoolWorkspace)
         }
-        .sheet(item: $planningRoute, onDismiss: { Task { await model.load() } }) { route in planningSheet(route) }
+        .sheet(item: $planningRoute, onDismiss: { planningClosed() }) { route in planningSheet(route) }
         .navigationDestination(isPresented: $showsLive) {
             if let capture {
                 SchoolCaptureLiveView(controller: capture, learnerName: learnerName, openLesson: { _, completing in
@@ -726,13 +728,21 @@ private struct SchoolLessonReportContent: View {
             beforeCancellation = { @MainActor in await controller?.stopAndSynchronize() ?? true }
         }
         return SchoolPlanningView(model: route.model, cancelling: route.cancelling, beforeCancellation: beforeCancellation)
-            .onChange(of: route.model.confirmedCancellationLessonID) { _, id in
-                if let id, id == model.lessonID, capture?.lessonID == id { capture?.closeSaved() }
-            }
+    }
+
+    /// La feuille du planning se ferme sur son résultat : une annulation confirmée ferme le trajet de la leçon, puis
+    /// la fiche se relit.
+    private func planningClosed() {
+        if let id = presentedPlanning?.confirmedCancellationLessonID, id == model.lessonID, capture?.lessonID == id {
+            capture?.closeSaved()
+        }
+        presentedPlanning = nil
+        Task { await model.load() }
     }
 
     private func openPlanning(_ lesson: SchoolLesson, cancelling: Bool) {
         let planning = SchoolPlanningWorkspace(scope: model.scope, client: agenda.planningClient, lesson: lesson)
+        presentedPlanning = planning
         planningRoute = PlanningRoute(model: planning, cancelling: cancelling)
     }
 
