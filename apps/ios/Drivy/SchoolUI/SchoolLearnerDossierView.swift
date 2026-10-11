@@ -92,7 +92,9 @@ struct SchoolLearnerDossierView: View {
             }
             .drivyPageContent()
         }
-        .background(DrivyTheme.surface)
+        // Sur le fond des listes groupées, comme Profil et l’historique des leçons : l’identité est posée
+        // sur le fond, le reste se lit en blocs.
+        .background(DrivyTheme.canvas)
         .refreshable { await reload(); await reloadLessons() }
         .accessibilityIdentifier("learner-dossier")
         .safeAreaInset(edge: .bottom, spacing: 0) { actions }
@@ -168,18 +170,20 @@ struct SchoolLearnerDossierView: View {
                 }
             }
             .padding(.top, DrivySpacing.xxs)
+            .padding(.bottom, DrivySpacing.s)
             .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
             informationLabel
         }
         .disclosureGroupStyle(.drivy)
+        .drivyGroupedBlock(verticalPadding: 0)
         .accessibilityIdentifier("learner-profile-details")
     }
 
     private var informationLabel: some View {
+        // Une destination sur place : corps de texte et encre du texte, comme « Mes informations » chez l’élève.
         Text("Informations personnelles")
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(DrivyTheme.accent)
+            .foregroundStyle(DrivyTheme.text)
             .multilineTextAlignment(.leading)
             .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
     }
@@ -216,6 +220,7 @@ struct SchoolLearnerDossierView: View {
                 informationLabel
             }
             .disclosureGroupStyle(.drivy)
+            .drivyGroupedBlock(verticalPadding: 0)
         }
     }
 

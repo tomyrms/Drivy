@@ -637,6 +637,15 @@ struct DrivyLoadingState: View {
 }
 
 extension View {
+    /// A block of rows laid on the canvas outside a native List (dossier, learner's Progression): the same white
+    /// cell, inset and rounding as a grouped section, so both families of pages read as one application.
+    func drivyGroupedBlock(verticalPadding: CGFloat = DrivySpacing.xs) -> some View {
+        padding(.horizontal, DrivySpacing.m)
+            .padding(.vertical, verticalPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+    }
+
     /// Content column of every reading page: page margins (wider on regular
     /// width), readable width, centered on iPad.
     func drivyPageContent(maxWidth: CGFloat = DrivyLayout.readingColumn) -> some View {
