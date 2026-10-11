@@ -140,12 +140,9 @@ import Observation
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) {
             return "Hier"
         }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_CH")
-        formatter.timeZone = calendar.timeZone
         let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
-        formatter.setLocalizedDateFormatFromTemplate(sameYear ? "EEEEdMMMM" : "EEEEdMMMMyyyy")
-        return formatter.string(from: date).capitalizedFirst
+        return SchoolDateCache.shared.string(from: date, zone: calendar.timeZone,
+            template: sameYear ? "EEEEdMMMM" : "EEEEdMMMMyyyy").capitalizedFirst
     }
 
     static func time(_ trip: SchoolCaptureTrip) -> String {

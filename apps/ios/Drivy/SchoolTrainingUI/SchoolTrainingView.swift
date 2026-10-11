@@ -8,13 +8,13 @@ struct SchoolLessonPeriod: Equatable {
     var year = 0
     var isActive: Bool { month != 0 || year != 0 }
     func includes(_ lesson: SchoolLesson) -> Bool {
-        guard let parts = Self.parts(lesson) else { return !isActive }
+        guard isActive else { return true }
+        guard let parts = Self.parts(lesson) else { return false }
         return (month == 0 || parts.month == month) && (year == 0 || parts.year == year)
     }
     static func parts(_ lesson: SchoolLesson) -> DateComponents? {
         guard let date = lesson.startsAt, let zone = TimeZone(identifier: lesson.timeZone) else { return nil }
-        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
-        return calendar.dateComponents([.year, .month], from: date)
+        return SchoolDateCache.shared.calendar(zone: zone).dateComponents([.year, .month], from: date)
     }
     var title: String {
         var values: [String] = []
@@ -908,17 +908,14 @@ enum SchoolTrainingFormatting {
     /// pour que la date tienne sur une ligne à côté d’un badge.
     static func rowDay(_ value: String, zone: String) -> String {
         guard let date = SchoolLesson.date(value), let timeZone = TimeZone(identifier: zone) else { return "Date indisponible" }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
+        let calendar = SchoolDateCache.shared.calendar(zone: timeZone)
         let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: Date())
         return format(value, zone: zone, template: sameYear ? "EEE d MMMM" : "d MMMM yyyy").capitalizedFirst
     }
     /// Clé de regroupement par mois, dans le fuseau de la leçon.
     static func monthKey(_ value: String, zone: String) -> String {
         guard let date = SchoolLesson.date(value), let timeZone = TimeZone(identifier: zone) else { return "unknown" }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
-        let parts = calendar.dateComponents([.year, .month], from: date)
+        let parts = SchoolDateCache.shared.calendar(zone: timeZone).dateComponents([.year, .month], from: date)
         return "\(parts.year ?? 0)-\(parts.month ?? 0)"
     }
     /// « Septembre 2026 ».
@@ -927,7 +924,6 @@ enum SchoolTrainingFormatting {
     }
     private static func format(_ value: String, zone: String, template: String) -> String {
         guard let date = SchoolLesson.date(value), let timeZone = TimeZone(identifier: zone) else { return "Date indisponible" }
-        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = timeZone
-        formatter.setLocalizedDateFormatFromTemplate(template); return formatter.string(from: date)
+        return SchoolDateCache.shared.string(from: date, zone: timeZone, template: template)
     }
 }

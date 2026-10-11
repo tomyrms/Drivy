@@ -226,16 +226,10 @@ enum SchoolLessonHubRules {
     }
 
     private static func time(_ date: Date, zone: String) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = TimeZone(identifier: zone) ?? .current
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        return SchoolDateCache.shared.string(from: date, zone: TimeZone(identifier: zone) ?? .current, format: "HH:mm")
     }
     private static func format(_ date: Date, zone: String, template: String) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_CH"); formatter.timeZone = TimeZone(identifier: zone) ?? .current
-        formatter.setLocalizedDateFormatFromTemplate(template)
-        return formatter.string(from: date)
+        return SchoolDateCache.shared.string(from: date, zone: TimeZone(identifier: zone) ?? .current, template: template)
     }
 }
 
