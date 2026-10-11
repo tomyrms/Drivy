@@ -70,6 +70,11 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             && relatedPending.isEmpty && !hasOldScope
     }
     var verbalAgreementIsProtected: Bool { source == .verbal && choice?.source == .own && choice?.status == .refused }
+    /// Choix enregistré qui vaut pour l’information actuelle de l’école ; `nil` : la question est à poser.
+    var validAnswer: SchoolRecordingChoice.Status? {
+        guard let choice, let notice, choice.noticeVersionId == notice.noticeVersionId, choice.status != .unknown else { return nil }
+        return choice.status
+    }
     var currentChoiceLabel: String {
         guard let choice else { return "Choix non renseigné" }
         switch choice.status {

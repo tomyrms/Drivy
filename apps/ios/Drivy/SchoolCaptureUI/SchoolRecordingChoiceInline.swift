@@ -3,7 +3,8 @@ import UIKit
 
 /// Accord GPS de l’élève posé dans le parcours, sans feuille de plus : la question et ses deux réponses de même
 /// poids tant que rien ne vaut pour l’information actuelle de l’école, sinon la réponse et « Modifier ».
-/// L’hôte décide de ce qu’un toucher fait (au démarrage immédiat, la réponse attend « Démarrer maintenant »).
+/// L’hôte décide de ce qu’un toucher fait (au démarrage immédiat, la réponse attend « Démarrer maintenant » ; dans
+/// la fiche de l’élève, elle part aussitôt). Posée à l’élève lui-même (source `SELF`), la question le tutoie.
 struct SchoolRecordingChoiceInline: View {
     @Bindable var model: SchoolRecordingChoiceWorkspace
     /// Réponse montrée : celle donnée ici et pas encore enregistrée, sinon le choix enregistré.
@@ -17,6 +18,9 @@ struct SchoolRecordingChoiceInline: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Presentation: Equatable { case loading, unavailable, needsReview, question, answered }
+
+    /// L’élève répond lui-même, depuis son compte.
+    private var asksLearner: Bool { model.source == .own }
 
     private var presentation: Presentation {
         if model.notice == nil { return model.isLoading || model.errorMessage == nil ? .loading : .unavailable }
@@ -43,6 +47,8 @@ struct SchoolRecordingChoiceInline: View {
                     Button { Task { await model.load() } } label: { Label("Réessayer", systemImage: "arrow.clockwise") }
                         .font(.subheadline.weight(.semibold))
                         .frame(minHeight: 44)
+                        // Dans une ligne de formulaire, seul ce bouton répond au toucher, pas toute la ligne.
+                        .buttonStyle(.borderless)
                         .disabled(model.isLoading)
                 }
             case .needsReview:
@@ -56,6 +62,10 @@ struct SchoolRecordingChoiceInline: View {
                     symbol: answer == .allowed ? "location.fill" : "location.slash", action: "Modifier") {
                     withAnimation(DrivyMotion.reveal(reduceMotion)) { editing = true }
                 }
+                // Une réponse envoyée aussitôt qui n’a pas abouti : la réponse enregistrée revient, avec la raison.
+                if !model.isBusy, let error = model.storageError ?? model.errorMessage {
+                    DrivyInlineMessage(text: error, tone: .warning)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -68,7 +78,7 @@ struct SchoolRecordingChoiceInline: View {
 
     private var question: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            Text("L’élève accepte-t-il le GPS ?")
+            Text(asksLearner ? "Acceptes-tu le GPS ?" : "L’élève accepte-t-il le GPS ?")
                 .font(.headline)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
@@ -98,6 +108,7 @@ struct SchoolRecordingChoiceInline: View {
                 .font(.subheadline)
                 .foregroundStyle(DrivyTheme.accent)
                 .frame(minHeight: 44)
+                .buttonStyle(.borderless)
                 .accessibilityIdentifier("gps-answer-notice")
             }
         }
@@ -129,7 +140,9 @@ struct SchoolRecordingChoiceInline: View {
         }
         .buttonStyle(DrivySelectionCardStyle(isSelected: chosen))
         .disabled(!enabled)
-        .accessibilityHint(status == .allowed ? "Le trajet de l’élève sera enregistré" : "La leçon se déroule sans GPS")
+        .accessibilityHint(status == .allowed
+            ? (asksLearner ? "Ton trajet sera enregistré pendant les leçons" : "Le trajet de l’élève sera enregistré")
+            : "La leçon se déroule sans GPS")
         .accessibilityIdentifier(status == .allowed ? "gps-answer-allowed" : "gps-answer-refused")
     }
 
@@ -150,11 +163,19 @@ struct SchoolRecordingChoiceInline: View {
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("gps-answer")
             Spacer(minLength: DrivySpacing.xs)
-            Button(action, action: perform)
-                .font(.subheadline.weight(.semibold))
-                .frame(minHeight: 44)
-                .disabled(!isEnabled)
-                .accessibilityLabel(action == "Modifier" ? "Modifier l’accord GPS" : "Vérifier l’accord GPS")
+            if model.isBusy {
+                // L’école n’a pas encore répondu : rien n’est montré comme acquis, l’attente se lit à la place du geste.
+                ProgressView()
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityLabel("Enregistrement de l’accord GPS")
+            } else {
+                Button(action, action: perform)
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight: 44)
+                    .buttonStyle(.borderless)
+                    .disabled(!isEnabled)
+                    .accessibilityLabel(action == "Modifier" ? "Modifier l’accord GPS" : "Vérifier l’accord GPS")
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
     }

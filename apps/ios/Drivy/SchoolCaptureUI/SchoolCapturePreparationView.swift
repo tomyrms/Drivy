@@ -207,9 +207,7 @@ struct SchoolCapturePreparationView: View {
 
     /// Choix valable pour l’information actuelle de l’école ; `nil` : la question est à poser.
     private func recordedAnswer(_ choice: SchoolRecordingChoiceWorkspace) -> SchoolRecordingChoice.Status? {
-        guard let value = choice.choice, let notice = choice.notice, value.noticeVersionId == notice.noticeVersionId,
-              value.status != .unknown else { return nil }
-        return value.status
+        choice.validAnswer
     }
 
     /// Une réponse explicite, enregistrée aussitôt : avec GPS, le départ suit sous le rideau ; sans, la leçon

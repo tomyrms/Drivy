@@ -18,8 +18,19 @@ Suite des [parcours terrain fluides](parcours-fluides-20261011.md), à la demand
 
 ## Non traité (à décider ou mesurer)
 
-- **Accord GPS de l’élève lui-même** : rien ne permet aujourd’hui à l’élève d’ouvrir son propre choix (source `SELF`), alors que l’accueil promet « Tu peux refuser ou modifier ton choix ». Proposition : la question en ligne sous « Mon souhait », formulée pour l’élève. Décision du porteur attendue.
+- **Accord GPS hors leçon à venir** : sans leçon planifiée, l’élève n’a pas d’endroit où modifier son accord (voir plus bas).
 - Replay qui relit ce que la fiche a déjà lu ; onglet Leçons de l’élève (plusieurs squelettes au premier lancement, lectures en série) ; progression publiée en plusieurs fois ; lectures du planning en parallèle et chargement léger pour l’annulation ; bouton « Planifier » de l’agenda qui peut passer sous le titre selon la longueur de la date.
+
+## Accord GPS de l’élève (décision du porteur, 11 octobre 2026)
+
+L’accueil promet à l’élève « Tu peux refuser ou modifier ton choix », mais rien ne lui permettait de le faire. Le porteur a retenu la proposition : la question se pose sous « Mon souhait », dans la fiche de sa prochaine leçon.
+
+- **Où** : fiche de la prochaine leçon planifiée de l’élève (même règle que le souhait), seulement si l’école est active et enregistre des trajets.
+- **Quoi** : la même question en ligne que chez le moniteur (`SchoolRecordingChoiceInline`), tutoyée : « Acceptes-tu le GPS ? », deux réponses de même poids, « Information et conservation ». Une fois répondu : « Accord GPS · Avec GPS / Sans GPS » et « Modifier ».
+- **Enregistrement** : source `SELF`, rien de nouveau côté serveur. Le choix lu est celui qui vaut pour cette leçon ; la réponse est enregistrée au même niveau (le choix général, sauf choix propre à la leçon). Elle part aussitôt : file chiffrée, puis école. Pendant l’envoi, une attente remplace « Modifier » ; si l’école ne confirme pas, la réponse enregistrée revient avec la raison ; une demande incertaine se vérifie depuis « Accord GPS à vérifier ».
+- **Règles serveur inchangées** : seul l’élève lève son refus `SELF` ; un refus de l’élève reste prioritaire sur un accord verbal.
+- **Partagé** : le choix valable pour l’information actuelle de l’école est une seule règle (`validAnswer`) pour le démarrage immédiat, le départ planifié et l’élève. Une réponse envoyée aussitôt qui échoue affiche désormais sa raison même quand un choix était déjà enregistré (départ planifié compris).
+- **Limite** : sans leçon planifiée, l’élève ne peut pas modifier son accord depuis l’app.
 
 ## Relecture QA (agent dédié)
 

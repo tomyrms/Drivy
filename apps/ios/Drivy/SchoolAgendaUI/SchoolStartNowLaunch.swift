@@ -42,11 +42,7 @@ import UIKit
     }
 
     /// Choix enregistré qui vaut pour l’information actuelle de l’école ; `nil` : la question reste à poser.
-    var recorded: SchoolRecordingChoice.Status? {
-        guard let choice = consent.choice, let notice = consent.notice,
-              choice.noticeVersionId == notice.noticeVersionId, choice.status != .unknown else { return nil }
-        return choice.status
-    }
+    var recorded: SchoolRecordingChoice.Status? { consent.validAnswer }
     /// Ce qui vaudra au départ : la réponse donnée ici, sinon le choix enregistré.
     var answer: SchoolRecordingChoice.Status? { selection ?? recorded }
     /// Aucune demande d’accord en suspens ni droit retiré : sinon aucun trajet ne part d’ici.

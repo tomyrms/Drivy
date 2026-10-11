@@ -384,6 +384,9 @@ private struct SchoolLessonReportContent: View {
     @ViewBuilder private func plannedSections(bar: PlannedBar?) -> some View {
         Group {
             if let wish = model.wish, showsWish(wish) { wishSection(wish) }
+            if asksOwnRecordingChoice {
+                Section { SchoolOwnRecordingChoice(scope: model.scope, lessonID: model.lessonID, agenda: agenda) }
+            }
             if isPlanned, model.isAuthor { goalsEditor() }
             if isPlanned, model.isOwnLearner, let goals = model.preparation?.goals, !goals.isEmpty { goalsReader(goals) }
         }
@@ -474,6 +477,12 @@ private struct SchoolLessonReportContent: View {
         if isCompleted, model.isAuthor || model.isOwnLearner {
             SchoolReportObservationsSection(model: model, router: router, context: reportContext)
         }
+    }
+
+    /// L’élève donne ou modifie son accord GPS là où il prépare sa prochaine leçon, quand l’école enregistre des trajets.
+    private var asksOwnRecordingChoice: Bool {
+        guard isPlanned, model.isOwnLearner, isNextPlanned ?? true, let school = schoolWorkspace.school else { return false }
+        return school.status == "ACTIVE" && school.modules.gpsEnabled
     }
 
     /// Le souhait de l’élève vaut pour la formation : il se lit (moniteur) ou se modifie (élève) avant une leçon,
