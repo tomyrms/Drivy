@@ -90,7 +90,7 @@ struct SchoolLearnerDossierView: View {
                     pages(learner)
                 }
             }
-            .drivyPageContent()
+            .drivyGroupedPageContent()
         }
         // Sur le fond des listes groupées, comme Profil et l’historique des leçons : l’identité est posée
         // sur le fond, le reste se lit en blocs.
@@ -109,9 +109,14 @@ struct SchoolLearnerDossierView: View {
             // Historic UI-test identifier: it now designates the full name that heads the dossier.
             DrivyLearnerIdentity(name: learner.displayName,
                                  detail: SchoolPermitName.summary(trainings), variant: .page)
+                .padding(.horizontal, DrivySpacing.m)
                 .accessibilityIdentifier("learner-profile-first-name")
-            statusBadges(learner)
-            SchoolLearnerActions(learner: learner, contact: contact(of: learner), identifierPrefix: "learner-profile")
+            // Posés sur le fond : alignés sur le texte des blocs, comme l’en-tête des deux Profils.
+            Group {
+                statusBadges(learner)
+                SchoolLearnerActions(learner: learner, contact: contact(of: learner), identifierPrefix: "learner-profile")
+            }
+            .padding(.horizontal, DrivySpacing.m)
             information(learner)
         }
     }
@@ -257,7 +262,7 @@ struct SchoolLearnerDossierView: View {
 
     @ViewBuilder private var actions: some View {
         if let learner = workspace.learner, let openPlanning, learner.archivedAt == nil {
-            DrivyStickyActionBar {
+            DrivyStickyActionBar(grouped: true) {
                 let layout = typeSize.isAccessibilitySize
                     ? AnyLayout(VStackLayout(spacing: DrivySpacing.s))
                     : AnyLayout(HStackLayout(spacing: DrivySpacing.s))

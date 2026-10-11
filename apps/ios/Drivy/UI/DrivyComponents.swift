@@ -643,7 +643,16 @@ extension View {
         padding(.horizontal, DrivySpacing.m)
             .padding(.vertical, verticalPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+            .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.groupedBlock, style: .continuous))
+    }
+
+    /// Content column of a page built from grouped blocks: the side margin of a native grouped list, so its
+    /// blocks line up with the sections of Profile.
+    func drivyGroupedPageContent(maxWidth: CGFloat = DrivyLayout.formColumn) -> some View {
+        padding(.horizontal, DrivySpacing.m)
+            .padding(.vertical, DrivySpacing.m)
+            .frame(maxWidth: maxWidth, alignment: .leading)
+            .frame(maxWidth: .infinity)
     }
 
     /// Content column of every reading page: page margins (wider on regular

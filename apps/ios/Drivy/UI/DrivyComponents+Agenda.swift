@@ -366,15 +366,17 @@ struct DrivyCompetencyMeter: View {
 /// column matches the content above it (a Form by default, pass the page column).
 struct DrivyStickyActionBar<Content: View>: View {
     var maxWidth: CGFloat = DrivyLayout.formColumn
+    /// Under a page of grouped blocks: the canvas and the margin of those blocks, so the bar belongs to the page.
+    var grouped = false
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) { content }
-            .padding(.horizontal, DrivySpacing.l)
+            .padding(.horizontal, grouped ? DrivySpacing.m : DrivySpacing.l)
             .padding(.vertical, DrivySpacing.s)
             .frame(maxWidth: maxWidth)
             .frame(maxWidth: .infinity)
-            .background(DrivyTheme.surface)
+            .background(grouped ? DrivyTheme.canvas : DrivyTheme.surface)
             .overlay(alignment: .top) { Divider().overlay(DrivyTheme.border) }
     }
 }

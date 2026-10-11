@@ -109,6 +109,8 @@ enum DrivyRadius {
     static let field: CGFloat = 12
     static let content: CGFloat = 16
     static let mapPanel: CGFloat = 24
+    /// A block of rows laid on the canvas outside a native List: the rounding of the system's grouped sections.
+    static let groupedBlock: CGFloat = 26
 }
 
 /// Column widths and thresholds shared by several screens. A width repeated in
