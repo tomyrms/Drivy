@@ -308,9 +308,9 @@ private struct SchoolAppraisalLabel: View {
     }
 
     private var symbol: some View {
-        Image(systemName: status.symbol)
-            .font(DrivyMapGlyph.observation)
+        DrivyObservationGlyphImage(glyph: status.glyph)
             .foregroundStyle(tone.foreground)
+            .frame(width: 22, height: 22)
             .frame(width: 24, height: 24)
             .accessibilityHidden(true)
     }

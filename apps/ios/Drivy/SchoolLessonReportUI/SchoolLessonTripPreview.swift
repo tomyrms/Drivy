@@ -8,10 +8,11 @@ struct LessonTrackMap: View {
         let id: UUID
         let latitude: Double
         let longitude: Double
-        let color: Color
+        /// Appréciation : couleur de l’anneau et pastille. Sans appréciation, l’anneau est à l’encre.
+        var status: SchoolObservationStatus?
         /// Observation touchée dans la liste : son épingle grossit, sa couleur ne change pas.
         var isSelected = false
-        var symbol = "bookmark.fill"
+        var glyph = DrivyObservationGlyph.moment
         var label = "Repère"
         var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
     }
@@ -56,7 +57,8 @@ struct LessonTrackMap: View {
             }
             ForEach(pins) { pin in
                 Annotation(pin.label, coordinate: pin.coordinate) {
-                    SchoolMapObservationMarker(symbol: pin.symbol, color: pin.color, isSelected: pin.isSelected)
+                    SchoolMapObservationMarker(glyph: pin.glyph, tone: pin.status?.tone ?? .neutral, badge: pin.status?.glyph,
+                                               isSelected: pin.isSelected)
                         .accessibilityLabel(pin.label)
                         .accessibilityAddTraits(pin.isSelected ? [.isSelected] : [])
                 }

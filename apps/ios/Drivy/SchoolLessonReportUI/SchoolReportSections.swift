@@ -186,8 +186,8 @@ struct SchoolLessonTripMap: View {
         model.lessonObservations.compactMap { observation in
             guard let point = model.anchor(of: observation) else { return nil }
             return LessonTrackMap.Pin(id: observation.id, latitude: point.latitude, longitude: point.longitude,
-                color: SchoolReportObservationsSection.color(observation), isSelected: router.selectedObservation == observation.id,
-                symbol: SchoolLessonHubRules.status(of: observation)?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble"),
+                status: SchoolLessonHubRules.status(of: observation), isSelected: router.selectedObservation == observation.id,
+                glyph: observation.glyph(competencies: model.competencies),
                 label: observation.text)
         }
     }
@@ -256,7 +256,7 @@ struct SchoolReportObservationsSection: View {
                 DrivyThreadItem(position: .at(index, count: model.lessonObservations.count),
                     isCurrent: router.selectedObservation == observation.id,
                     markerColor: Self.color(observation),
-                    markerSymbol: SchoolLessonHubRules.status(of: observation)?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble")) {
+                    markerGlyph: observation.glyph(competencies: model.competencies)) {
                     SchoolReportObservationRow(model: model, router: router, context: context, observation: observation,
                         editable: editable && model.isAuthor && isCompleted)
                 }

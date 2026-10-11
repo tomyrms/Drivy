@@ -377,9 +377,9 @@ struct SchoolObservationComposer: View {
                     Button { status = value } label: {
                         HStack(spacing: DrivySpacing.s) {
                             // Même pastille que les tuiles du signalement : le symbole et le mot portent l’état.
-                            Image(systemName: value.symbol)
-                                .font(.subheadline.weight(.bold))
+                            DrivyObservationGlyphImage(glyph: value.glyph)
                                 .foregroundStyle(value.fieldTone.foreground)
+                                .frame(width: 15, height: 15)
                                 .frame(width: 32, height: 32)
                                 .background(value.fieldTone.background, in: Circle())
                                 .accessibilityHidden(true)

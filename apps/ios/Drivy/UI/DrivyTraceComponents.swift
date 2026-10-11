@@ -14,24 +14,25 @@ struct DrivyMarker: View {
     var isCurrent = false
     var isPast = false
     var color: Color? = nil
-    var symbol: String? = nil
+    var glyph: DrivyObservationGlyph? = nil
 
     var body: some View {
         Circle()
-            .fill(isPast && !isCurrent && symbol == nil ? DrivyTheme.text : DrivyTheme.surface)
+            .fill(isPast && !isCurrent && glyph == nil ? DrivyTheme.text : DrivyTheme.surface)
             .overlay {
                 Circle().strokeBorder(color ?? (isCurrent ? DrivyTheme.accent : isPast ? DrivyTheme.text : DrivyTheme.controlBorder),
                     lineWidth: isCurrent ? 3 : 2)
             }
             .overlay {
-                if let symbol {
-                    Image(systemName: symbol).font(.system(size: 12, weight: .bold))
+                if let glyph {
+                    DrivyObservationGlyphImage(glyph: glyph)
                         .foregroundStyle(color ?? DrivyTheme.text)
+                        .frame(width: 15, height: 15)
                 }
             }
-            .frame(width: symbol != nil ? 28 : isCurrent ? 14 : 10,
-                height: symbol != nil ? 28 : isCurrent ? 14 : 10)
-            .padding(symbol != nil || isCurrent ? 0 : 2)
+            .frame(width: glyph != nil ? 28 : isCurrent ? 14 : 10,
+                height: glyph != nil ? 28 : isCurrent ? 14 : 10)
+            .padding(glyph != nil || isCurrent ? 0 : 2)
             .background(DrivyTheme.surface, in: Circle())
             .accessibilityHidden(true)
     }
@@ -62,13 +63,13 @@ struct DrivyThreadItem<Content: View>: View {
     var isCurrent = false
     var isPast = true
     var markerColor: Color? = nil
-    var markerSymbol: String? = nil
+    var markerGlyph: DrivyObservationGlyph? = nil
     var minimumHeight: CGFloat = 0
     @ViewBuilder let content: Content
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
-            DrivyMarker(isCurrent: isCurrent, isPast: isPast, color: markerColor, symbol: markerSymbol)
+            DrivyMarker(isCurrent: isCurrent, isPast: isPast, color: markerColor, glyph: markerGlyph)
                 .anchorPreference(key: DrivyMarkerAnchorKey.self, value: .bounds) { $0 }
                 .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 2 }
             content
