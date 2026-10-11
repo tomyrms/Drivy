@@ -198,7 +198,7 @@ struct SchoolHomeView: View {
             SchoolLearnerProfileTab(workspace: workspace, learner: ownLearner, trainings: learnerTrainings, account: account,
                 agendaClient: agendaClient, trainingClient: trainingClient, chooseSchool: chooseSchoolAction,
                 openTraining: { training, tab in chosenPermit = training; selectedTab = tab },
-                retryDossier: { retryLearner() })
+                retryDossier: { retryLearner() }, makeLearnerProfile: makeLearnerProfile)
                 .tabItem { Label("Profil", systemImage: "person.crop.circle") }
                 .tag(SchoolHomeTab.profile)
         }

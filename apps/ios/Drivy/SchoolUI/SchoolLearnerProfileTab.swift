@@ -26,6 +26,8 @@ struct SchoolLearnerProfileTab: View {
     var openTraining: ((UUID, SchoolHomeTab) -> Void)? = nil
     /// Relit le dossier quand il n’a pas pu être lu.
     var retryDossier: (() -> Void)? = nil
+    /// Le profil administratif de l’élève, lu seulement quand il déplie « Mes informations ».
+    var makeLearnerProfile: ((SchoolLearner) -> SchoolProfileWorkspace?)? = nil
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
@@ -36,6 +38,8 @@ struct SchoolLearnerProfileTab: View {
     /// L’accord GPS général de l’élève, lu ici et montré dans Paramètres : le Profil n’en dit que ce qui attend
     /// une réponse. Une lecture en panne ne touche pas au reste de la page.
     @State private var consent: SchoolRecordingChoiceWorkspace?
+    @State private var showsInformation = false
+    @State private var information: SchoolProfileWorkspace?
 
     private var accountKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)"
@@ -72,7 +76,13 @@ struct SchoolLearnerProfileTab: View {
         }
         .id(accountKey)
         .task(id: scopeKey) { await prepare() }
-        .onChange(of: accountKey) { _, _ in path = [] }
+        .onChange(of: accountKey) { _, _ in
+            path = []; showsInformation = false; information?.invalidate(); information = nil
+        }
+        // Informations modifiées depuis leur feuille : le dossier est relu, le détail déplié le suit.
+        .onChange(of: workspace.isLoadingLearner) { _, loading in
+            if !loading, showsInformation, let learner { Task { await loadInformation(learner) } }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refresh(olderThan: 30) } }
         }
@@ -98,7 +108,17 @@ struct SchoolLearnerProfileTab: View {
         Section {
             SchoolAccountHeading(workspace: workspace, isAuthenticated: true, detail: schoolNote, showsRoles: false)
                 .padding(.vertical, DrivySpacing.xs)
-            if let openProfile = account?.openProfile {
+            if let learner, makeLearnerProfile != nil {
+                // Comme dans le dossier vu par le moniteur : les informations attendent repliées, sur place.
+                DisclosureGroup(isExpanded: $showsInformation) {
+                    informationDetails(learner)
+                } label: {
+                    Text("Mes informations")
+                        .foregroundStyle(DrivyTheme.text)
+                        .frame(minHeight: 44, alignment: .leading)
+                }
+                .accessibilityIdentifier("profile-my-information")
+            } else if let openProfile = account?.openProfile {
                 SchoolProfileLinkRow(title: "Mes informations", action: openProfile)
                     .accessibilityIdentifier("profile-open-my-information")
             }
@@ -117,6 +137,34 @@ struct SchoolLearnerProfileTab: View {
             }
             .drivyFormRows()
         }
+    }
+
+    /// Coordonnées, date de naissance et adresse en lecture ; « Modifier » ouvre la feuille existante.
+    private func informationDetails(_ learner: SchoolLearner) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            if let information, information.profile != nil {
+                SchoolLearnerProfileSummary(model: information, displayedName: workspace.person?.displayName ?? learner.displayName)
+            } else if let error = information?.errorMessage {
+                SchoolErrorNotice(message: error, retry: { Task { await loadInformation(learner) } })
+            } else {
+                DrivySkeletonRows(count: 2, lines: 1).drivySkeleton("Chargement de tes informations…")
+            }
+            if let openProfile = account?.openProfile {
+                Button("Modifier mes informations", action: openProfile)
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight: 44)
+                    .buttonStyle(.borderless)
+                    .accessibilityIdentifier("profile-open-my-information")
+            }
+        }
+        .padding(.top, DrivySpacing.xxs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .task { await loadInformation(learner) }
+    }
+
+    private func loadInformation(_ learner: SchoolLearner) async {
+        if information == nil { information = makeLearnerProfile?(learner) }
+        await information?.load(preserveDraft: false)
     }
 
     /// Sous le nom de l’école, seulement quand elle n’est pas en activité.
