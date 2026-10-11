@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 11 octobre 2026 — direction artistique commune (Profil, Élèves, Agenda)
+
+Audit croisé des onglets et de leurs feuilles, puis règles communes : une ligne prend le rythme de sa famille de page (liste groupée ou page de lecture), une seule action en texte, un badge pour ce qui attend une réponse, « Fermer » toujours au même endroit, vides et attentes par les composants partagés. Le Profil du moniteur prend la structure des Paramètres de l’élève, et les deux Profils posent l’en-tête sur le fond. Aujourd’hui n’est pas refait. [Audit, règles et décisions](direction-artistique-20261011.md). Branche `claude/da-harmonisation-20261011`, sur la PR #12.
+
+**Exécuté** : voir le document (compilation et captures). **Reste à qualifier** : VoiceOver, grand texte et iPad sur appareil.
+
 ## 11 octobre 2026 — Profil de l’élève restructuré
 
 Identité et « Mes informations », permis en liste compacte (une ligne et une synthèse par permis, détail au toucher avec accès à Leçons et Progression sur ce permis), « Paramètres » dans la barre (compte, enregistrement GPS, Face ID, déconnexion). Le message « Le choix n’a pas pu être vérifié » venait d’une lecture de l’accord GPS annulée et prise pour une panne : corrigé à la source. La Progression de l’élève suit : mêmes cartes que le Profil, et une toile des compétences (niveaux publiés, sans score). [Détail et arbitrages](profil-eleve-20261011.md).
