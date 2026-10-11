@@ -95,7 +95,8 @@ struct SchoolLearnerProfileTab: View {
         }
         if account != nil {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Paramètres") { path.append(.settings) }
+                Button { path.append(.settings) } label: { Image(systemName: "gearshape") }
+                    .accessibilityLabel("Paramètres")
                     .accessibilityIdentifier("profile-open-settings")
             }
         }
