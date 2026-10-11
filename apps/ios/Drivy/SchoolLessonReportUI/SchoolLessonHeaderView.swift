@@ -45,11 +45,21 @@ struct SchoolLessonFacts: View {
     let lesson: SchoolLesson
     var showsPrices = true
 
+    /// L’élève ne termine pas de leçon : dans sa fiche comme dans sa liste, une leçon restée sans résultat se lit
+    /// « En attente », sans encre d’alerte.
+    private var stateNote: DrivyRowNote? {
+        let state = lesson.drivyState
+        if model.isOwnLearner, state == .waiting || state == .toFinish {
+            return DrivyRowNote(text: DrivyLessonState.waiting.title, tone: .neutral)
+        }
+        return state.rowNote
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             // L’inhabituel (à terminer, annulée, absence) se lit en premier, du même mot que dans les listes :
             // du texte dans la hiérarchie, sans pastille. Planifiée, en cours ou terminée : rien, l’écran le dit déjà.
-            if let note = lesson.drivyState.rowNote {
+            if let note = stateNote {
                 DrivyRowNoteText(note: note)
                     .accessibilityIdentifier("lesson-state")
             }

@@ -587,10 +587,7 @@ private struct SchoolTrainingContent: View {
     /// la liste montre les leçons passées ou une période choisie.
     private func featuredLesson(in lessons: [SchoolLesson]) -> SchoolLesson? {
         guard ownLessons, section == .lessons, activeFilter != .past, !period.isActive else { return nil }
-        let now = Date()
-        let coming = lessons.filter { [.planned, .inProgress].contains($0.drivyState(now: now)) }
-        return coming.first { $0.drivyState(now: now) == .inProgress }
-            ?? coming.min { ($0.startsAt ?? .distantFuture) < ($1.startsAt ?? .distantFuture) }
+        return SchoolLearnerLessonMoment.featured(lessons, now: Date())
     }
 
     /// La même lecture que la leçon qui compte d’Aujourd’hui chez le moniteur : quand, horaire, jour, lieu et moniteur.
@@ -624,6 +621,7 @@ private struct SchoolTrainingContent: View {
             .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.m, style: .continuous))
         }
         .buttonStyle(DrivyTileButtonStyle())
+        .disabled(feed.model(for: lesson)?.canOpenPedagogicalContent != true)
         .matchedTransitionSource(id: lesson.id, in: zoom)
         .accessibilityHint("Ouvre la leçon")
         .accessibilityIdentifier("training-next-lesson")
@@ -740,8 +738,9 @@ private struct SchoolTrainingContent: View {
             if ownLessons {
                 // L’élève : ce qui vient, puis le passé par mois. Une leçon restée sans résultat est du passé pour lui,
                 // pas une tâche ; un mois n’a jamais deux titres identiques.
-                let coming = values.filter { [.planned, .inProgress].contains($0.drivyState) }
-                let past = values.filter { ![.planned, .inProgress].contains($0.drivyState) }
+                let now = Date()
+                let coming = values.filter { SchoolLearnerLessonMoment.isComing($0, now: now) }
+                let past = values.filter { !SchoolLearnerLessonMoment.isComing($0, now: now) }
                 let upcoming = coming.isEmpty ? [] : [TrainingLessonMonth(id: "upcoming", title: "À venir",
                     lessons: sortedByDate(coming, newestFirst: false))]
                 return upcoming + monthGroups(past, newestFirst: true, prefix: "past")
@@ -860,11 +859,24 @@ private struct SchoolTrainingContent: View {
 /// Quand a lieu la prochaine leçon de l’élève, en un mot : « Dans 25 min », « Aujourd’hui », « Demain »,
 /// « Dans 3 jours ». Au-delà d’une semaine, la date de la ligne suffit. Calendrier du fuseau de la leçon.
 enum SchoolLearnerLessonMoment {
+    /// Ce qui vient pour l’élève : une leçon qui se déroule, ou une leçon planifiée dont le créneau n’est pas fini.
+    /// Même règle que son souhait (`upcomingLessons`) : à l’heure du rendez-vous, tant que le moniteur n’a pas
+    /// commencé, la leçon du jour reste la prochaine.
+    static func isComing(_ lesson: SchoolLesson, now: Date) -> Bool {
+        guard lesson.status == "PLANNED", let end = lesson.endsAt else { return false }
+        return end > now
+    }
+    /// La leçon en tête : celle qui se déroule, sinon la plus proche de celles qui viennent.
+    static func featured(_ lessons: [SchoolLesson], now: Date) -> SchoolLesson? {
+        let coming = lessons.filter { isComing($0, now: now) }
+        return coming.first { $0.hasStarted }
+            ?? coming.min { ($0.startsAt ?? .distantFuture) < ($1.startsAt ?? .distantFuture) }
+    }
     static func text(for lesson: SchoolLesson, now: Date) -> String? {
         if lesson.hasStarted { return nil }
         guard let start = lesson.startsAt, let zone = TimeZone(identifier: lesson.timeZone) else { return nil }
         let minutes = Int(ceil(start.timeIntervalSince(now) / 60))
-        guard minutes > 0 else { return nil }
+        guard minutes > 0 else { return "Maintenant" }
         if minutes < 60 { return "Dans \(minutes) min" }
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: start)).day ?? 0

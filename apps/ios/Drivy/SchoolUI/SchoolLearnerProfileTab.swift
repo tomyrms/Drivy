@@ -181,7 +181,8 @@ struct SchoolLearnerProfileTab: View {
         await SchoolLessonFeed.together(models) { model in
             if fresh.contains(model.trainingID) { await model.load() } else { await model.refresh(ifOlderThan: 30) }
         }
-        await reading.value
+        // Annulée avec l’écran : une lecture d’un autre compte ou d’une autre école n’écrit rien ici.
+        await withTaskCancellationHandler { await reading.value } onCancel: { reading.cancel() }
     }
 
     private func refresh(olderThan interval: TimeInterval) async {

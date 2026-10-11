@@ -62,6 +62,22 @@ import Testing
         #expect(moment("2026-10-25T08:00:00Z") == nil)
         let started = Self.lesson(1, status: "PLANNED", start: "2026-10-11T07:30:00Z", actual: ("2026-10-11T07:35:00Z", nil))
         #expect(SchoolLearnerLessonMoment.text(for: started, now: now) == nil)
+        #expect(moment("2026-10-11T07:55:00Z") == "Maintenant")
+    }
+
+    @Test func theLessonOfTheHourStaysFirstUntilItsSlotEnds() {
+        let now = HubFixture.date("2026-10-11T08:05:00Z")
+        // Le moniteur n’a pas encore commencé la leçon de 8 h : elle ne cède pas la tête à celle de la semaine suivante.
+        let waiting = Self.lesson(1, status: "PLANNED", start: "2026-10-11T08:00:00Z")
+        let later = Self.lesson(2, status: "PLANNED", start: "2026-10-18T08:00:00Z")
+        let cancelled = Self.lesson(3, status: "CANCELLED", start: "2026-10-11T08:30:00Z")
+        #expect(SchoolLearnerLessonMoment.featured([later, cancelled, waiting], now: now)?.id == waiting.id)
+        // Une leçon qui se déroule passe devant ; un créneau fini sans résultat n’est plus à venir.
+        let running = Self.lesson(4, status: "PLANNED", start: "2026-10-11T07:45:00Z", actual: ("2026-10-11T07:50:00Z", nil))
+        #expect(SchoolLearnerLessonMoment.featured([later, waiting, running], now: now)?.id == running.id)
+        let lapsed = Self.lesson(5, status: "PLANNED", start: "2026-10-10T08:00:00Z")
+        #expect(SchoolLearnerLessonMoment.featured([lapsed, later], now: now)?.id == later.id)
+        #expect(SchoolLearnerLessonMoment.featured([lapsed, cancelled], now: now) == nil)
     }
 
     // MARK: Données de test

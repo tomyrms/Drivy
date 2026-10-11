@@ -26,6 +26,8 @@ import Observation
     @ObservationIgnored private var generation = UUID()
     /// Lecture en cours ; `nil` sinon. Deux écrans qui montrent la même formation ne la relisent pas chacun.
     @ObservationIgnored private var loadingRequest: UUID?
+    /// Les relectures qui attendent la fin de la lecture en cours.
+    @ObservationIgnored private var loadingWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var progressRequest = UUID()
     @ObservationIgnored private var seenCursors = Set<String>()
     @ObservationIgnored private var historyRequested = false
@@ -58,11 +60,21 @@ import Observation
     /// Relecture silencieuse, sauf si une lecture est déjà en cours ou date de moins de `interval` secondes :
     /// les onglets Leçons, Progression et Profil de l’élève partagent ce modèle et ne le relisent pas chacun.
     func refresh(ifOlderThan interval: TimeInterval) async {
-        guard loadingRequest == nil else { return }
-        // Un historique complet demandé mais pas encore lu se relit tout de suite, même après une lecture récente.
+        // Une lecture en cours est attendue, pas ignorée : annulée avec l’onglet qui l’a lancée, elle ne laisse rien
+        // de lu, et l’écran qui vient d’apparaître doit alors la reprendre.
+        while loadingRequest != nil { await withCheckedContinuation { loadingWaiters.append($0) } }
+        guard !invalidated, !Task.isCancelled else { return }
+        // Un historique complet demandé mais pas encore lu se relit tout de suite, même après une lecture récente ;
+        // une erreur affichée aussi.
         let complete = !historyRequested || nextCursor == nil
-        if complete, let loadedAt, Date().timeIntervalSince(loadedAt) < interval { return }
+        if complete, errorMessage == nil, let loadedAt, Date().timeIntervalSince(loadedAt) < interval { return }
         await load(keepingCurrent: true)
+    }
+    private func finishLoading(_ request: UUID) {
+        guard loadingRequest == request else { return }
+        loadingRequest = nil
+        let waiters = loadingWaiters; loadingWaiters = []
+        waiters.forEach { $0.resume() }
     }
     /// L’élève lit toutes ses leçons : la prochaine est toujours la dernière servie (le serveur va de la plus
     /// ancienne à la plus récente), et son profil compte ses leçons sur l’historique entier.
@@ -82,9 +94,10 @@ import Observation
         guard !invalidated else { return }
         generation = UUID(); progressRequest = UUID(); let request = generation
         loadingRequest = request
-        defer { if loadingRequest == request { loadingRequest = nil } }
+        defer { finishLoading(request) }
         cancelHistory()
-        isLoading = !keepingCurrent || training == nil; isLoadingMore = false; errorMessage = nil
+        // Une formation lue sans ses leçons (lecture annulée en route) reste en premier chargement.
+        isLoading = !keepingCurrent || training == nil || !lessonsLoaded; isLoadingMore = false; errorMessage = nil
         if !keepingCurrent { progressError = nil }
         do {
             try await client.checkScope(scope, membership: membership)
@@ -110,7 +123,7 @@ import Observation
             guard page.items.allSatisfy({ $0.learnerId == learnerID }) else { throw SchoolAPIError.invalidResponse }
             var items = page.items
             var read = Set<String>()
-            while let cursor = page.nextCursor, historyRequested || items.count < shown, items.count < 10_000 {
+            while let cursor = page.nextCursor, historyRequested || items.count < shown, items.count < 10_000, read.count < 200 {
                 guard request == generation, !invalidated else { return }
                 guard read.insert(cursor).inserted else { throw SchoolAPIError.invalidResponse }
                 let next = try await client.lessons(schoolID: scope.schoolID, trainingID: trainingID, cursor: cursor)
@@ -124,7 +137,9 @@ import Observation
             loadedAt = Date()
         } catch {
             guard request == generation, !invalidated else { return }
-            if !(error is CancellationError) { fail(error) }
+            // Lecture annulée : rien d’autre n’est lu pour un écran qui n’est plus là.
+            if error is CancellationError { isLoading = false; return }
+            fail(error)
         }
         guard request == generation, !invalidated, !accessRevoked else { return }
         isLoading = false
