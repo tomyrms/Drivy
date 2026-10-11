@@ -85,6 +85,10 @@ export async function moveToPast(pool:Pool,lessonId:string,hoursAgo=2+(pastSlot+
  await pool.query(`UPDATE drivy.reservation SET during=tstzrange(now()-make_interval(hours=>$2),now()-make_interval(hours=>$2)+interval '50 minutes','[)') WHERE lesson_id=$1`,[lessonId,hoursAgo]);
  await pool.query(`UPDATE drivy.lesson SET planned_start=now()-make_interval(hours=>$2),planned_end=now()-make_interval(hours=>$2)+interval '50 minutes' WHERE id=$1`,[lessonId,hoursAgo]);
 }
+/** Rend une leçon « du jour » pour la commencer : seul son horaire bouge, sa réservation lointaine évite tout chevauchement. */
+export async function moveToNow(pool:Pool,lessonId:string){
+ await pool.query("UPDATE drivy.lesson SET planned_start=now(),planned_end=now()+interval '50 minutes' WHERE id=$1",[lessonId]);
+}
 export {id};
 
 let ajv:Ajv2020|undefined;

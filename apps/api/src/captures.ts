@@ -7,7 +7,7 @@ import { ApiError,forbidden,notFound } from './errors.js';
 import { Cursors } from './cursor.js';
 import { checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandActor,type CommandEffect,type CommandGuards,type SchoolRow } from './commands.js';
 import { getLesson,startLesson } from './lessons.js';
-import { assessmentCommand,assessmentProjection,choiceCommand,choiceProjection,chunkCommand,captureProjection,finalizeCommand,startCommand,stopCommand,uuid,type AssessmentInput,type AssessmentRow,type CaptureRow,type ChoiceRow,type ChunkInput,type ChunkRow,type Manifest,type TrackPoint } from './capture-contracts.js';
+import { assessmentCommand,assessmentProjection,choiceCommand,choiceProjection,chunkCommand,captureProjection,captureProjectionFor,finalizeCommand,startCommand,stopCommand,uuid,type AssessmentInput,type AssessmentRow,type CaptureRow,type ChoiceRow,type ChunkInput,type ChunkRow,type Manifest,type TrackPoint } from './capture-contracts.js';
 import { CaptureAuthority,canonicalCaptureJSON,chunkAAD,decryptPoints,encryptPoints,trackContentHash,type CaptureConfig,type QualificationProfile } from './capture-crypto.js';
 import {geoObservationProjection,type GeoObservationRow} from './capture-contracts.js';
 import {anchorObservations} from './capture-observations.js';
@@ -164,7 +164,8 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
   const row=await read(r,db=>getCapture(db,schoolID(r),capture.id)),authority=new CaptureAuthority(config);
   reply.code(201).header('ETag',`"${row.version}"`);return envelope({capture:captureProjection(row),signedCaptureAuthorization:await authority.sign(row,'capture:collect'),signedUploadAuthorization:await authority.sign(row,'capture:upload'),serverTime:new Date().toISOString()},r);
  });
- app.get(`${base}/captures/:captureId`,async(r,reply)=>{empty.parse(r.query);const value=await read(r,async db=>captureProjection(await getCapture(db,schoolID(r),param(r,'captureId'))));reply.header('ETag',`"${value.version}"`);return envelope(value,r);});
+ app.get(`${base}/captures/:captureId`,async(r,reply)=>{empty.parse(r.query);
+  const value=await withActor(options.pool,await options.verifyToken(r.headers.authorization),schoolID(r),async(db,_actor,member)=>captureProjectionFor(await getCapture(db,schoolID(r),param(r,'captureId')),member));reply.header('ETag',`"${value.version}"`);return envelope(value,r);});
  // Extension hors canon : liste des trajets visibles par le compte (administrateur : toute l'école ; moniteur : ses formations ;
  // élève : ses trajets partagés). La RLS décide seule des lignes ; les trajets supprimés sont exclus.
  app.get(`${base}/captures`,async r=>{
@@ -181,7 +182,7 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
     CROSS JOIN LATERAL drivy.capture_trip_names(c.id) n
     WHERE ${where.join(' AND ')} ORDER BY c.authorized_at DESC,c.id DESC LIMIT ${bind(query.limit+1)}`,values)).rows;
    const last=rows.length>query.limit?rows[query.limit-1]:undefined;
-   return {items:rows.slice(0,query.limit).map(row=>({...captureProjection(row),learnerName:row.learner_name,instructorName:row.instructor_name,lessonPlannedStart:row.lesson_planned_start.toISOString(),lessonTimeZone:row.lesson_time_zone})),
+   return {items:rows.slice(0,query.limit).map(row=>({...captureProjectionFor(row,member),learnerName:row.learner_name,instructorName:row.instructor_name,lessonPlannedStart:row.lesson_planned_start.toISOString(),lessonTimeZone:row.lesson_time_zone})),
     nextCursor:last?cursors.encode(scope,{id:last.id,createdAt:last._createdAt}):null};
   });
   return envelope(data,r);

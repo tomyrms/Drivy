@@ -55,6 +55,11 @@ describe('liste des trajets (extension GET /captures)',()=>{
    expect((await h.call('GET',`/lessons/${trip1.lesson}`,undefined,undefined,'demo-alice')).json().data.captureSummary).toMatchObject({hasCapture:true,syncState:'SYNCED'});
    // Le nom du moniteur vient de la fonction dédiée : l'élève ne lit pas la fiche personne de son moniteur.
    expect(alice.json().data.items[0]).toMatchObject({learnerName:'Alice Exemple',instructorName:'Alex Moniteur'});
+   // L'appareil du moniteur et son évaluation ne sont jamais envoyés à l'élève, ni en liste ni en détail.
+   expect(alice.json().data.items[0]).not.toHaveProperty('deviceId');expect(alice.json().data.items[0]).not.toHaveProperty('deviceAssessmentId');
+   const own=(await h.call('GET',`/captures/${trip1.capture.id}`,undefined,undefined,'demo-alice')).json().data;
+   expect(own.id).toBe(trip1.capture.id);expect(own).not.toHaveProperty('deviceId');expect(own).not.toHaveProperty('deviceAssessmentId');
+   expect((await h.call('GET',`/captures/${trip1.capture.id}`)).json().data.deviceId).toBe(trip1.device);
    expect(ids(await list('demo-bob'))).toEqual([]);
    expect((await h.call('GET',`/captures/${trip2.capture.id}`,undefined,undefined,'demo-alice')).statusCode).toBe(404);
    // Trajet masqué par le moniteur : l'élève ne le liste plus ; l'administration le garde.
@@ -134,6 +139,7 @@ describe('fin de leçon indépendante du transfert GPS',()=>{
   const finalized=await h.uploadStopFinalize(trip);expect(finalized.finalized.syncState).toBe('SYNCED');
   const visible=await h.call('GET',`/lessons/${trip.lesson}/captures`,undefined,undefined,'demo-alice');expect(visible.statusCode,visible.body).toBe(200);
   expect(visible.json().data.items.map((c:{id:string})=>c.id)).toEqual([trip.capture.id]);
+  expect(visible.json().data.items[0]).not.toHaveProperty('deviceId');expect(visible.json().data.items[0]).not.toHaveProperty('deviceAssessmentId');
   expect((await pool.query('SELECT count(*)::int AS n FROM drivy.charge_entry WHERE operation_id=$1',[body.operationId])).rows[0].n).toBe(1);
  });
 });

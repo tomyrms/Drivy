@@ -44,6 +44,14 @@ Déjà en place et vérifié, donc non retouché : trois onglets pour l’élèv
 
 Signalés, laissés en place parce qu’ils sont dans les fichiers du design system que la session du thème sombre modifie : `DrivyGuidedStepHeader`, `DrivyGuidedFact` (doublons privés dans l’accueil guidé), `DrivyMapStopButton`, `JourneyMapRegion`, `SchoolProfileWorkspace.loadMorePolicies`.
 
+## Décisions du porteur (11 octobre 2026) et suite côté API
+
+Le porteur a validé les trois points ouverts ci-dessous (« oui corrige »).
+
+- **Départ jamais avant le jour du rendez-vous, aussi au serveur** : `POST /lessons/:id/start` refuse un départ avant le jour civil du rendez-vous dans le fuseau de la leçon (`409 LESSON_NOT_TODAY`). Un départ tardif reste accepté : une commande mise en file hors ligne peut arriver après le créneau. Cela remplace le comportement d’origine, où un départ anticipé était voulu (ancien test « un départ réel anticipé se termine »). La limite de 30 minutes après la fin reste propre à l’app.
+- **Élève en avance** : on ne commence pas la veille ; on déplace la leçon.
+- **Identifiants d’appareil** : `GET /captures`, `GET /captures/:id` et `GET /lessons/:id/captures` ne renvoient plus `deviceId` ni `deviceAssessmentId` à un lecteur qui n’est ni moniteur ni administrateur. Les réponses au moniteur qui enregistre (départ, arrêt, finalisation) et au personnel sont inchangées : l’app déjà installée chez lui continue de les décoder. Écart assumé avec `CaptureSession` du contrat canonique (livraison de conception non modifiée), consigné ici. **Ordre de déploiement** : l’app de l’élève doit être la version qui accepte ces champs absents (cette PR) avant que l’API soit déployée, sinon la liste de ses trajets ne se lit plus.
+
 ## Points ouverts (au porteur)
 
 - **Horaire de départ côté serveur** : `POST /lessons/:id/start` ne contrôle pas l’horaire. Le même contrôle que l’app (jour du rendez-vous) y serait cohérent avec la règle « droits relus au serveur » ; c’est un changement d’API, à décider et déployer.
