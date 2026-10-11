@@ -3,7 +3,8 @@ import SwiftUI
 enum SchoolHomeTab: Hashable { case session, agenda, learners, profile, lessons, progress }
 
 /// Onglets par rôle : le moniteur et l’administration conduisent (Aujourd’hui, Agenda, Élèves) et trouvent
-/// leur compte et leurs trajets dans Profil ; l’élève suit (Leçons, Progression), son compte derrière l’avatar.
+/// leur compte et leurs trajets dans Profil ; l’élève suit (Leçons, Progression) et trouve dans Profil où il en
+/// est, ses trajets, son accord GPS et son compte.
 /// La gestion de l’école vit sur le web.
 struct SchoolHomeView: View {
     @Bindable var workspace: SchoolWorkspace
@@ -26,6 +27,7 @@ struct SchoolHomeView: View {
     @State private var captureLesson: CaptureLessonRoute?
     /// Élève du trajet en cours, lu à part quand il n’est pas dans la page d’élèves affichée.
     @State private var captureLearner: (id: UUID, name: String)?
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -48,7 +50,15 @@ struct SchoolHomeView: View {
             SchoolPlanningView(model: model)
         }
         // Une demande abandonnée ou vérifiée depuis la fiche ne reste pas affichée par l'enregistreur du trajet.
-        .sheet(item: $captureLesson, onDismiss: { captureController?.liveObservations?.refreshPending() }) { route in
+        .sheet(item: $captureLesson, onDismiss: {
+            captureController?.liveObservations?.refreshPending()
+            // Leçon terminée depuis cette fiche : son trajet arrêté ne reste pas à l’écran avec « Terminer la leçon ».
+            // L’envoi du trajet continue de lui-même.
+            if let captureController, let lessonID = captureController.lessonID, captureController.state == .saved,
+               captureController.completedLessonID == lessonID {
+                captureController.closeLessonFlow(lessonID: lessonID)
+            }
+        }) { route in
             if let agendaClient {
                 NavigationStack {
                     SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace,
@@ -59,12 +69,15 @@ struct SchoolHomeView: View {
                 .environment(captureController)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { _ in
+            SchoolTodayMemory.forget(); SchoolAgendaMemory.forget()
+        }
         .onChange(of: workspace.membership?.membershipId) { _, _ in resetScope() }
         .onChange(of: workspace.membership?.accessEpoch) { _, _ in resetScope() }
         // Seul le départ d’un trajet ramène sur « Aujourd’hui ». L’identifiant du trajet reste le même pendant
         // la pause et la reprise ; l’état « en collecte », lui, repasse à vrai à chaque reprise.
         .onChange(of: captureController?.captureID) { previous, current in
-            if current != nil && current != previous { selectedTab = .session }
+            if current != nil && current != previous { selectedTab = .session; SchoolTodayMemory.forget() }
         }
         .onChange(of: selectedTab) { previous, _ in
             // A trip the school has confirmed (complete or partial) is over: leaving the live
@@ -160,7 +173,7 @@ struct SchoolHomeView: View {
     // MARK: Élève
 
     private var learnerSelection: Binding<SchoolHomeTab> {
-        Binding(get: { selectedTab == .progress ? .progress : .lessons }, set: { selectedTab = $0 })
+        Binding(get: { [.lessons, .progress, .profile].contains(selectedTab) ? selectedTab : .lessons }, set: { selectedTab = $0 })
     }
 
     private var ownLearner: SchoolLearner? {
@@ -178,15 +191,26 @@ struct SchoolHomeView: View {
             learnerTab(.lessons, title: "Leçons")
                 .tabItem { Label("Leçons", systemImage: "calendar") }
                 .tag(SchoolHomeTab.lessons)
+            // Ni score ni tendance : des compétences et leur niveau.
             learnerTab(.progress, title: "Progression")
-                .tabItem { Label("Progression", systemImage: "chart.line.uptrend.xyaxis") }
+                .tabItem { Label("Progression", systemImage: "checklist") }
                 .tag(SchoolHomeTab.progress)
+            SchoolLearnerProfileTab(workspace: workspace, learner: ownLearner, trainings: learnerTrainings, account: account,
+                agendaClient: agendaClient, trainingClient: trainingClient, chooseSchool: chooseSchoolAction)
+                .tabItem { Label("Profil", systemImage: "person.crop.circle") }
+                .tag(SchoolHomeTab.profile)
         }
         .task(id: ownLearner?.id) {
             guard let id = ownLearner?.id else { return }
             if workspace.selectedLearnerID != id { workspace.selectLearner(id) }
             if workspace.learner?.id != id { await workspace.loadSelectedLearner() }
             await workspace.loadRemainingTrainings()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Une formation ouverte, mise en pause ou terminée par l’école apparaît au retour dans l’app ; les
+            // formations déjà affichées restent à l’écran jusqu’à la réponse.
+            guard phase == .active, let id = ownLearner?.id, workspace.learner?.id == id, !workspace.isLoadingTrainings else { return }
+            Task { await workspace.loadTrainings(); await workspace.loadRemainingTrainings() }
         }
     }
 
@@ -196,34 +220,45 @@ struct SchoolHomeView: View {
                 let trainings = learnerTrainings
                 if let learner = ownLearner, !trainings.isEmpty, let trainingClient {
                     SchoolTrainingScreen(client: trainingClient, workspace: workspace, learner: learner,
-                        trainingIDs: trainings.map(\.id), permit: $chosenPermit, section: section)
+                        trainingIDs: trainings.map(\.id), permit: $chosenPermit, section: section, ownLessons: true)
                 } else {
                     learnerStatus
                 }
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.large)
-            .toolbar { contextToolbar }
+            // Le compte vit dans l’onglet Profil, comme pour le moniteur : seule l’école reste dans la barre.
+            .toolbar { staffToolbar }
         }
     }
 
-    @ViewBuilder private var learnerStatus: some View {
+    /// Un seul fond pour chaque état : erreur, attente et vide se remplacent sans saut de couleur.
+    private var learnerStatus: some View {
+        learnerStatusContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(DrivyTheme.surface)
+    }
+
+    @ViewBuilder private var learnerStatusContent: some View {
         if let error = workspace.schoolError ?? workspace.learnersError ?? workspace.learnerError ?? workspace.trainingsError {
             SchoolErrorNotice(message: error, retry: { retryLearner() }).drivyPageContent()
-                .frame(maxHeight: .infinity, alignment: .top).background(DrivyTheme.surface)
         } else if workspace.isLoadingSchool || workspace.isSearching || workspace.isLoadingLearner || workspace.isLoadingTrainings
                     || (ownLearner != nil && workspace.learner == nil) {
             DrivySkeletonRows(count: 3)
                 .drivySkeleton("Chargement de ton dossier…")
                 .drivyPageContent()
-                .frame(maxHeight: .infinity, alignment: .top).background(DrivyTheme.surface)
         } else if workspace.school?.status != "ACTIVE" {
-            ContentUnavailableView("L’école se prépare", systemImage: "building.2")
+            // Même lecture que chez le moniteur : une école archivée ne « se prépare » pas.
+            let archived = workspace.school?.status == "ARCHIVED"
+            ContentUnavailableView(archived ? "École archivée" : "L’école se prépare", systemImage: archived ? "archivebox" : "building.2")
+                .frame(maxHeight: .infinity)
         } else if ownLearner == nil {
             ContentUnavailableView("Dossier pas encore ouvert", systemImage: "person.crop.circle.badge.questionmark",
                 description: Text("Ton école l’ouvrira bientôt."))
+                .frame(maxHeight: .infinity)
         } else {
             ContentUnavailableView("Aucune formation", systemImage: "steeringwheel")
+                .frame(maxHeight: .infinity)
         }
     }
 
@@ -264,12 +299,6 @@ struct SchoolHomeView: View {
         }
     }
 
-    @ToolbarContentBuilder private var contextToolbar: some ToolbarContent {
-        if let chooseSchoolAction {
-            DrivySchoolToolbarItem(schoolName: workspace.school?.name ?? workspace.membership?.schoolName, chooseSchool: chooseSchoolAction)
-        }
-        DrivyAccountToolbarItem(openAccount: openAccount)
-    }
 }
 
 private struct CaptureLessonRoute: Identifiable {

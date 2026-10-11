@@ -28,6 +28,13 @@ struct SchoolProgressRulesTests {
         #expect(SchoolProgressRules.countLine(items: [], unobserved: 0) == nil)
     }
 
+    @Test func autonomyIsCountedOverTheWholeCurriculum() {
+        let items = [item("a", "INDEPENDENT"), item("b", "INDEPENDENT"), item("c", "GUIDED"), item("d", "DISCOVERING")]
+        #expect(SchoolProgressRules.autonomyLine(items: items, unobserved: 5) == "2 sur 9 en autonomie")
+        #expect(SchoolProgressRules.autonomyLine(items: [], unobserved: 3) == "0 sur 3 en autonomie")
+        #expect(SchoolProgressRules.autonomyLine(items: [], unobserved: 0) == nil)
+    }
+
     @Test func toWorkOnPutsDiscoveryFirstThenTheOldestObservation() {
         let items = [
             item("Vitesse", "GUIDED", observedAt: "2026-09-01T10:00:00Z"),

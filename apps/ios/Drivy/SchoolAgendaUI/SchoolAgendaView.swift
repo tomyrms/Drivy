@@ -6,6 +6,7 @@ struct SchoolAgendaView: View {
     var captureController: SchoolCaptureSessionController? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedDate = Date()
     @State private var lessons: [SchoolLesson] = []
     @State private var isLoading = false
@@ -27,20 +28,30 @@ struct SchoolAgendaView: View {
     private var instructorFilter: UUID? { isInstructor && !(isAdmin && wholeSchool) ? workspace.membership?.membershipId : nil }
     private var showsInstructor: Bool { instructorFilter == nil && isAdmin }
 
+    /// Lu des dizaines de fois par rendu (bande de la semaine, jour choisi) : un calendrier par fuseau, gardé.
     private var calendar: Calendar {
+        let zone = workspace.school?.timeZone ?? "Europe/Zurich"
+        if let known = Self.calendars[zone] { return known }
         var result = Calendar(identifier: .gregorian)
         result.locale = Locale(identifier: "fr_CH")
         result.firstWeekday = 2
-        result.timeZone = TimeZone(identifier: workspace.school?.timeZone ?? "Europe/Zurich") ?? .current
+        result.timeZone = TimeZone(identifier: zone) ?? .current
+        Self.calendars[zone] = result
         return result
     }
+    @MainActor private static var calendars: [String: Calendar] = [:]
     private var weekStart: Date { calendar.dateInterval(of: .weekOfYear, for: selectedDate)?.start ?? calendar.startOfDay(for: selectedDate) }
     private var weekDays: [Date] { (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: weekStart) } }
     private var dailyLessons: [SchoolLesson] {
         guard loadedScope == scopeKey else { return [] }
         return dayIndex[calendar.startOfDay(for: selectedDate)] ?? []
     }
-    private var scopeKey: String { "\(identityScope):\(workspace.membership?.schoolId.uuidString ?? ""):\(weekStart.timeIntervalSince1970):\(instructorFilter?.uuidString ?? "all")" }
+    private var scopeKey: String { weekKey(for: selectedDate) }
+    /// Clé d’une semaine : compte, droits, école, début de semaine et filtre.
+    private func weekKey(for date: Date) -> String {
+        let start = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? calendar.startOfDay(for: date)
+        return "\(identityScope):\(workspace.membership?.schoolId.uuidString ?? ""):\(start.timeIntervalSince1970):\(instructorFilter?.uuidString ?? "all")"
+    }
     private var dateTitle: String {
         if calendar.isDateInToday(selectedDate) { return "Aujourd’hui" }
         return SchoolDateFormat.template("EEEEdMMMM", selectedDate, zone: calendar.timeZone.identifier).capitalizedFirst
@@ -96,7 +107,7 @@ struct SchoolAgendaView: View {
         // (leçon terminée, déplacée ou annulée).
         .sheet(item: $selectedLesson, onDismiss: { Task { await loadWeek(keepingCurrent: true) } }) { lesson in
             NavigationStack {
-                SchoolLessonReportView(client: client.reportClient, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: learnerName(lesson))
+                SchoolLessonReportView(client: client.reportClient, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: learnerName(lesson), knownLesson: lesson)
             }
             .tint(DrivyTheme.accent)
             .environment(captureController)
@@ -125,7 +136,8 @@ struct SchoolAgendaView: View {
     private var dayGroup: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             dayHeading
-            dayContent
+            // L’état d’une leçon suit l’heure (« En attente » une fois l’horaire passé) sans attendre un autre rendu.
+            TimelineView(.everyMinute) { _ in dayContent }
         }
     }
 
@@ -189,10 +201,13 @@ struct SchoolAgendaView: View {
     private var weekControls: some View {
         HStack(spacing: DrivySpacing.xxs) {
             if !calendar.isDateInToday(selectedDate) {
-                Button("Aujourd’hui") { selectedDate = Date() }
-                    .font(.subheadline.weight(.semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(minWidth: 44, minHeight: 44)
+                Button { select(Date()) } label: {
+                    Text("Aujourd’hui")
+                        .font(.subheadline.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
             }
             Button { moveWeek(-1) } label: {
                 Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 44, height: 44).contentShape(Rectangle())
@@ -259,7 +274,7 @@ struct SchoolAgendaView: View {
                 let selected = calendar.isDate(day, inSameDayAs: selectedDate)
                 let today = calendar.isDateInToday(day)
                 let count = lessonCount(on: day)
-                Button { selectedDate = day } label: {
+                Button { select(day) } label: {
                     VStack(spacing: DrivySpacing.xs) {
                         Text(formattedDay(day, template: "EEEEE").uppercased())
                             .font(.caption.weight(.semibold))
@@ -313,7 +328,16 @@ struct SchoolAgendaView: View {
     private func lessonCount(on day: Date) -> Int {
         loadedScope == scopeKey ? (dayIndex[calendar.startOfDay(for: day)] ?? []).count : 0
     }
-    private func moveWeek(_ offset: Int) { if let date = calendar.date(byAdding: .weekOfYear, value: offset, to: selectedDate) { selectedDate = date } }
+    private func moveWeek(_ offset: Int) { if let date = calendar.date(byAdding: .weekOfYear, value: offset, to: selectedDate) { select(date) } }
+    /// Changer de jour ou de semaine : la liste passe en fondu, sans remplacement sec.
+    private func select(_ date: Date) {
+        let key = weekKey(for: date)
+        withAnimation(DrivyMotion.reveal(reduceMotion)) {
+            selectedDate = date
+            // Autre semaine déjà lue : elle arrive dans le même fondu, sans passer par un squelette.
+            if loadedScope != key, let remembered = SchoolAgendaMemory.week(for: key) { show(remembered, scope: key) }
+        }
+    }
     private func newPlanningModel() -> SchoolPlanningWorkspace? {
         guard let person = workspace.person, let membership = workspace.membership, mayPlan else { return nil }
         let day = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: selectedDate) ?? selectedDate
@@ -323,8 +347,14 @@ struct SchoolAgendaView: View {
     /// `keepingCurrent` : relecture sans effacer la semaine affichée (retour d’une leçon, tirer pour actualiser).
     @MainActor private func loadWeek(keepingCurrent: Bool = false) async {
         let id = UUID(); requestID = id
-        let keeps = keepingCurrent && loadedScope == scopeKey
-        if !keeps { lessons = []; dayIndex = [:]; error = nil; loadedScope = nil }
+        var keeps = keepingCurrent && loadedScope == scopeKey
+        if !keeps {
+            if let remembered = SchoolAgendaMemory.week(for: scopeKey) {
+                // Semaine déjà lue pour ce compte, ce filtre et ces dates : elle s’affiche aussitôt, sans squelette,
+                // et la relecture qui suit la remplace sans rien effacer.
+                show(remembered, scope: scopeKey); error = nil; keeps = true
+            } else { lessons = []; dayIndex = [:]; error = nil; loadedScope = nil }
+        }
         guard let schoolID = workspace.membership?.schoolId, let end = calendar.date(byAdding: .day, value: 7, to: weekStart) else { isLoading = false; return }
         let start = weekStart, scope = scopeKey
         if !keeps { isLoading = true }
@@ -339,14 +369,13 @@ struct SchoolAgendaView: View {
                 if all.count > 10_000 { throw SchoolAgendaFailure.invalidResponse }
             } while cursor != nil
             guard Set(all.map(\.id)).count == all.count else { throw SchoolAgendaFailure.invalidResponse }
-            let calendar = self.calendar
-            lessons = all; loadedScope = scope; error = nil
-            dayIndex = Dictionary(grouping: all.filter { $0.startsAt != nil }) { calendar.startOfDay(for: $0.startsAt!) }
-                .mapValues { $0.sorted { $0.plannedStart < $1.plannedStart } }
+            show(all, scope: scope); error = nil
+            SchoolAgendaMemory.remember(all, for: scope)
         } catch {
             guard !Task.isCancelled, requestID == id, scopeKey == scope else { return }
             switch error as? SchoolAgendaFailure {
             case .authentication, .forbidden:
+                SchoolAgendaMemory.forget()
                 lessons = []; dayIndex = [:]; loadedScope = nil; selectedLesson = nil
                 self.error = (error as? LocalizedError)?.errorDescription ?? "L’agenda n’a pas pu être chargé."
                 // « Réessayer » seul ne sortirait jamais d’une session expirée ou d’un accès retiré : le compte est
@@ -358,6 +387,33 @@ struct SchoolAgendaView: View {
             self.error = (error as? LocalizedError)?.errorDescription ?? "L’agenda n’a pas pu être chargé."
         }
     }
+}
+
+extension SchoolAgendaView {
+    @MainActor fileprivate func show(_ all: [SchoolLesson], scope: String) {
+        let calendar = self.calendar
+        lessons = all; loadedScope = scope
+        dayIndex = Dictionary(grouping: all.filter { $0.startsAt != nil }) { calendar.startOfDay(for: $0.startsAt!) }
+            .mapValues { $0.sorted { $0.plannedStart < $1.plannedStart } }
+    }
+}
+
+/// Semaines de l’agenda déjà lues, en mémoire seulement, par compte, droits, école, semaine et filtre (`scopeKey`) :
+/// aucun autre compte ni filtre ne les retrouve, rien n’est écrit sur l’appareil. Oubliées à chaque leçon modifiée.
+@MainActor enum SchoolAgendaMemory {
+    private static var weeks: [String: [SchoolLesson]] = [:]
+    private static var order: [String] = []
+
+    static func week(for key: String) -> [SchoolLesson]? { weeks[key] }
+
+    static func remember(_ lessons: [SchoolLesson], for key: String) {
+        weeks[key] = lessons
+        order.removeAll { $0 == key }; order.append(key)
+        // Quelques semaines suffisent pour aller et venir ; les plus anciennes sont oubliées.
+        while order.count > 8 { weeks.removeValue(forKey: order.removeFirst()) }
+    }
+
+    static func forget() { weeks = [:]; order = [] }
 }
 
 /// Retour d’appui d’un jour de la semaine : le même que partout, nul sous Réduire les animations.
@@ -382,9 +438,15 @@ private enum AgendaLayout {
 
 extension SchoolAgendaClient {
     /// Préparation du trajet d’une leçon : l’agenda et « Aujourd’hui » partagent exactement ce chemin.
-    func capturePreparation(scope: SchoolCommandScope, lessonID: UUID, controller: SchoolCaptureSessionController?) -> SchoolCapturePreparationWorkspace {
+    /// `source` : récepteur déjà réveillé par le démarrage immédiat, repris tel quel au lieu d’en créer un autre.
+    func capturePreparation(scope: SchoolCommandScope, lessonID: UUID, controller: SchoolCaptureSessionController?,
+                            source warmSource: (any SchoolCaptureLocationProviding)? = nil) -> SchoolCapturePreparationWorkspace {
         guard let controller else {
             return SchoolCapturePreparationWorkspace(scope: scope, lessonID: lessonID, client: captureClient, reader: reader, agenda: self)
+        }
+        let makeSource: @MainActor () -> any SchoolCaptureLocationProviding = {
+            if let warmSource { return warmSource }
+            return SchoolCaptureLocationSource()
         }
         let handler: SchoolCaptureStartHandler = { transfer, source, session, lease, authorization, receivedAt in
             try await controller.adoptAndStart(transfer: transfer, source: source, session: session,
@@ -394,6 +456,6 @@ extension SchoolAgendaClient {
             client: captureClient, reader: reader, agenda: self,
             journalProvider: { try await controller.journal() }, onCaptureAuthorized: handler,
             onRefusalConfirmed: { learnerID, lessonID in controller.learnerRefused(learnerID: learnerID, lessonID: lessonID) },
-            canUseDiagnostic: { controller.canPrepareCapture })
+            canUseDiagnostic: { controller.canPrepareCapture }, makeLocationSource: makeSource)
     }
 }

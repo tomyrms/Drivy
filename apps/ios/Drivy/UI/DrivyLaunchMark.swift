@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Trois chorégraphies du symbole Drivy pour le démarrage d’une leçon. Une seule sera retenue par le porteur.
 enum DrivyLaunchChoreography: String, CaseIterable, Identifiable {
@@ -179,6 +180,136 @@ struct DrivyLaunchMark: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// La variante A jouée par Core Animation, pour le rideau de départ : le serveur de rendu poursuit la séquence
+/// même quand le fil principal est occupé (feuille refermée, carte créée), là où le dessin image par image de
+/// `DrivyLaunchMark` se figeait un instant. Mêmes tracés, mêmes poses : la trajectoire est échantillonnée
+/// depuis `DrivyLaunchTimeline`.
+struct DrivyLaunchMarkLayer: UIViewRepresentable {
+    let start: Date
+    var waits = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeUIView(context: Context) -> DrivyLaunchMarkLayerView { DrivyLaunchMarkLayerView() }
+    func updateUIView(_ view: DrivyLaunchMarkLayerView, context: Context) {
+        view.configure(start: start, waits: waits, reduceMotion: reduceMotion)
+    }
+}
+
+final class DrivyLaunchMarkLayerView: UIView {
+    private let ring = CAShapeLayer()
+    private let stem = CAShapeLayer()
+    private var start: Date?
+    private var waits = false
+    private var reduceMotion = false
+    /// Séquence déjà posée sur les calques : elle ne repart pas à chaque mise en page.
+    private var animatedStart: Date?
+    private var animatedSize = CGSize.zero
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+        ring.fillRule = .evenOdd
+        layer.addSublayer(ring)
+        layer.addSublayer(stem)
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: DrivyLaunchMarkLayerView, _: UITraitCollection) in
+            view.setNeedsLayout()
+        }
+    }
+
+    required init?(coder: NSCoder) { return nil }
+
+    func configure(start: Date, waits: Bool, reduceMotion: Bool) {
+        guard self.start != start || self.waits != waits || self.reduceMotion != reduceMotion else { return }
+        self.start = start
+        self.waits = waits
+        self.reduceMotion = reduceMotion
+        animatedStart = nil
+        setNeedsLayout()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        // Les animations d’un calque retiré de l’écran sont perdues : elles se reposent à son retour.
+        animatedStart = nil
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let size = bounds.size
+        guard size.width > 0, size.height > 0 else { return }
+        let dark = traitCollection.userInterfaceStyle == .dark
+        let geometry = dark ? DrivyMarkGeometry.dark : DrivyMarkGeometry.light
+        let scale = min(size.width, size.height) / 256
+        var fit = CGAffineTransform(translationX: (size.width - 256 * scale) / 2, y: (size.height - 256 * scale) / 2).scaledBy(x: scale, y: scale)
+        let color = dark ? UIColor.white : UIColor(red: 0x24 / 255, green: 0x5B / 255, blue: 0xD6 / 255, alpha: 1)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        ring.frame = bounds
+        ring.path = geometry.ring.cgPath.copy(using: &fit)
+        ring.fillColor = color.cgColor
+        stem.frame = bounds
+        stem.path = geometry.stem.cgPath.copy(using: &fit)
+        stem.fillColor = color.cgColor
+        CATransaction.commit()
+        guard window != nil, let start, animatedStart != start || animatedSize != size else { return }
+        animatedStart = start
+        animatedSize = size
+        animate(from: start, scale: scale)
+    }
+
+    private func animate(from start: Date, scale: CGFloat) {
+        ring.removeAllAnimations()
+        stem.removeAllAnimations()
+        // Début dans le temps du calque : une vue posée en retard reprend la séquence là où elle en est.
+        let begin = layer.convertTime(CACurrentMediaTime(), from: nil) - max(0, Date().timeIntervalSince(start))
+        if reduceMotion {
+            // Mouvement réduit : le logo apparaît en fondu, sans trajectoire.
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0
+            fade.toValue = 1
+            fade.beginTime = begin + 0.1
+            fade.duration = 0.6
+            fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            fade.fillMode = .backwards
+            ring.add(fade, forKey: "appear")
+            stem.add(fade, forKey: "appear")
+            return
+        }
+        // La séquence dure deux secondes ; les ressorts finissent de se poser pendant la troisième.
+        let length = 3.0
+        let frames = 180
+        let poses = (0...frames).map { DrivyLaunchTimeline.pose(.join, at: length * Double($0) / Double(frames)) }
+        func move(_ keyPath: String, _ offsets: [CGFloat]) -> CAKeyframeAnimation {
+            let animation = CAKeyframeAnimation(keyPath: keyPath)
+            let values: [CGFloat] = offsets.map { $0 * scale }
+            animation.values = values
+            animation.beginTime = begin
+            animation.duration = length
+            animation.calculationMode = .linear
+            animation.fillMode = .backwards
+            return animation
+        }
+        ring.add(move("transform.translation.x", poses.map { $0.ring.width }), forKey: "x")
+        ring.add(move("transform.translation.y", poses.map { $0.ring.height }), forKey: "y")
+        stem.add(move("transform.translation.x", poses.map { $0.stem.width }), forKey: "x")
+        stem.add(move("transform.translation.y", poses.map { $0.stem.height }), forKey: "y")
+        if waits {
+            // La préparation dure plus longtemps que la séquence : l’anneau respire très légèrement.
+            let breath = CABasicAnimation(keyPath: "opacity")
+            breath.fromValue = 1
+            breath.toValue = 0.7
+            breath.beginTime = begin + DrivyLaunchTimeline.duration
+            breath.duration = 0.9
+            breath.autoreverses = true
+            breath.repeatCount = .infinity
+            breath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            ring.add(breath, forKey: "breath")
+        }
     }
 }
 

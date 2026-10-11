@@ -23,6 +23,11 @@ struct SchoolOnboardingView: View {
     @State private var confirmsDiscard = false
     @State private var showsNotice = false
     @State private var location = SchoolOnboardingLocationPermission()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Un écran a déjà été montré : le premier (squelette puis écran) apparaît en fondu, les suivants glissent.
+    @State private var hasShownScreen = false
+    /// Le geste en cours revient en arrière : l’écran qui arrive vient du bord de départ au lieu du bord d’arrivée.
+    @State private var cameBack = false
 
     private enum Screen: Hashable { case welcome, information, formation, gps, ready }
 
@@ -94,6 +99,8 @@ struct SchoolOnboardingView: View {
                 statusBlock
                 if let screen {
                     content(screen)
+                        .id(screen)
+                        .transition(stepTransition)
                 } else if model.errorMessage == nil && (model.isLoading || model.school == nil) {
                     VStack(alignment: .leading, spacing: DrivySpacing.l) {
                         DrivySkeletonBlock(width: 220, height: 30)
@@ -106,9 +113,27 @@ struct SchoolOnboardingView: View {
                         symbol: "figure.wave", actionTitle: "Réessayer", action: { Task { await model.load() } })
                 }
             }
+            .animation(DrivyMotion.step(reduceMotion), value: screen)
             .drivyPageContent(maxWidth: DrivyLayout.formColumn)
         }
         .scrollDismissesKeyboard(.interactively)
+        .onChange(of: screen, initial: true) { _, value in
+            hasShownScreen = value != nil
+            cameBack = false
+        }
+        // Un retour que l’école n’a pas confirmé laisse l’écran en place : le sens ne reste pas armé pour la suite.
+        .onChange(of: isWorking) { _, working in
+            if !working { cameBack = false }
+        }
+    }
+
+    /// L’écran qui arrive glisse depuis le bord où l’on avance (ou d’où l’on revient), celui qui part s’efface sur place :
+    /// le sens ne se lit qu’à l’arrivée, la sortie d’une vue gardant la transition de son dernier affichage.
+    /// Au premier affichage et sous Réduire les animations, un simple fondu.
+    private var stepTransition: AnyTransition {
+        if reduceMotion || !hasShownScreen { return .opacity }
+        let edge: Edge = cameBack ? .leading : .trailing
+        return .asymmetric(insertion: .push(from: edge), removal: .opacity)
     }
 
     @ViewBuilder private var statusBlock: some View {
@@ -226,11 +251,15 @@ struct SchoolOnboardingView: View {
                     if ownTrainings.isEmpty {
                         DrivyEntityRow(title: "\(schoolName) va ouvrir ta formation", leading: .symbol("car"))
                     } else {
+                        // Mêmes noms que Leçons et Profil (deux permis B se distinguent par leur année) ; un état
+                        // inhabituel s’écrit en mots dans la ligne, sans pastille.
+                        let names = SchoolPermitName.names(ownTrainings)
                         ForEach(ownTrainings) { training in
-                            DrivyEntityRow(title: "Permis \(training.categoryCode)",
-                                meta: training.startedOn.map { "Depuis le \(SchoolPresentation.civilDate($0))" },
-                                leading: .symbol("car"),
-                                badge: training.status == "ACTIVE" ? nil : DrivyStatusBadge(title: SchoolPresentation.trainingStatus(training.status), tone: .neutral))
+                            let meta: [String] = [training.status == "ACTIVE" ? nil : SchoolPresentation.trainingStatus(training.status),
+                                        training.startedOn.map { "Depuis le \(SchoolPresentation.civilDate($0))" }].compactMap { $0 }
+                            DrivyEntityRow(title: names[training.id] ?? "Permis \(training.categoryCode)",
+                                meta: meta.isEmpty ? nil : meta.joined(separator: " · "),
+                                leading: .symbol("car"))
                         }
                     }
                     if let email = model.school?.contactEmail, !email.isEmpty {
@@ -257,7 +286,7 @@ struct SchoolOnboardingView: View {
                 stepTitle("GPS pendant les leçons")
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     SchoolOnboardingPoint(symbol: "location", text: "L’appareil du moniteur enregistre le trajet, avec ton accord.")
-                    SchoolOnboardingPoint(symbol: "hand.raised", text: "Tu peux refuser ou modifier ton choix. La leçon reste possible sans trajet.")
+                    SchoolOnboardingPoint(symbol: "hand.raised", text: "Tu donnes ou modifies ton choix dans Profil. La leçon reste possible sans trajet.")
                 }
             }
         }
@@ -446,13 +475,14 @@ struct SchoolOnboardingView: View {
         return namesValid && (!model.hasEdits || model.canSaveProfile)
     }
     private func continueFromInformation() {
-        if isCompleted && !model.hasEdits { editsInformation = false; return }
+        // Sortir de la modification des informations revient à l’écran « C’est prêt » : l’écran arrive du bord de départ.
+        if isCompleted && !model.hasEdits { cameBack = true; editsInformation = false; return }
         guard canContinueInformation else { return }
         Task {
             if model.hasEdits {
                 guard await model.saveProfileAfterConfirmation() else { return }
             }
-            if isCompleted { editsInformation = false; return }
+            if isCompleted { cameBack = true; editsInformation = false; return }
             _ = await model.saveOnboarding(step: .formations, skipping: [])
         }
     }
@@ -490,21 +520,22 @@ struct SchoolOnboardingView: View {
             guard editsInformation else { return nil }
             return {
                 if let profile = model.profile { model.draft = SchoolProfileDraft(profile) }
+                cameBack = true
                 editsInformation = false
             }
         }
         switch screen {
         case .welcome: return nil
-        case .information: return { hasStarted = false }
+        case .information: return { cameBack = true; hasStarted = false }
         case .formation:
             guard model.canMutate else { return nil }
-            return { hasStarted = true; save(.identity) }
+            return { cameBack = true; hasStarted = true; save(.identity) }
         case .gps:
             guard model.canMutate else { return nil }
-            return { save(.formations) }
+            return { cameBack = true; save(.formations) }
         case .ready:
             guard model.canMutate else { return nil }
-            return { save(gpsEnabled ? .information : .formations) }
+            return { cameBack = true; save(gpsEnabled ? .information : .formations) }
         }
     }
 

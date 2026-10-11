@@ -75,6 +75,33 @@ import Testing
         model.invalidate()
     }
 
+    @Test func aOneStepStartReviewsTheLessonOnceAndWakesTheReceiverAfterTheChoice() async throws {
+        let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
+        let model = fixture.preparation()
+        // L’accord et la leçon se lisent avant tout rideau : le départ peut partir sans question.
+        await model.load()
+        #expect(model.readyForOneStepStart)
+        #expect(await model.begin(reload: false))
+        #expect(model.captureStarted && fixture.source.isRunning && fixture.source.warmUps > 0)
+        // Une seule relecture du départ : l’école (GET) n’est lue qu’une fois, et les droits jamais deux fois d’affilée.
+        let requests = await fixture.server.requests()
+        let school = fixture.scope.schoolID.uuidString.lowercased()
+        #expect(requests.filter { $0.httpMethod == "GET" && $0.url?.lastPathComponent.lowercased() == school }.count == 1)
+        #expect(requests.filter { $0.httpMethod == "POST" && $0.url?.lastPathComponent == "captures" }.count == 1)
+        #expect(await fixture.controller.stopAndSynchronize())
+        await fixture.waitUntilSettled()
+    }
+
+    @Test func aClosedPreparationIsNeverReadyForAOneStepStart() async throws {
+        let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
+        let model = fixture.preparation()
+        #expect(!model.readyForOneStepStart)
+        await model.load()
+        #expect(model.readyForOneStepStart)
+        model.invalidate()
+        #expect(!model.readyForOneStepStart)
+    }
+
     @Test func slowFirstFixDoesNotBecomeASignalBreak() throws {
         let policy = try SchoolCaptureLocationPolicy()
         #expect(!policy.requiresNewSegment(previousElapsedMs: nil, nextElapsedMs: 90_000))
@@ -140,7 +167,7 @@ import Testing
             sequence: anchor.pointSequence, scope: fixture.scope)
         try await fixture.store.flushForObservation(captureID: anchor.captureID, segmentID: anchor.segmentID,
             sequence: anchor.pointSequence, scope: fixture.scope)
-        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId)
+        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: try #require(fixture.capture.deviceId))
         let chunks = queue.filter { $0.mutation.kind == .uploadChunk }
         #expect(chunks.count == 1)
         let queued = try #require(chunks.first)
@@ -189,7 +216,7 @@ import Testing
         #expect(anchor.pointSequence == 1)
         try await fixture.store.flushForObservation(captureID: anchor.captureID, segmentID: anchor.segmentID,
             sequence: anchor.pointSequence, scope: fixture.scope)
-        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId)
+        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: try #require(fixture.capture.deviceId))
         let chunkData = try #require(queue.first(where: { $0.mutation.kind == .uploadChunk })?.mutation.body)
         let chunk = try JSONDecoder().decode(SchoolCaptureChunkBody.self, from: chunkData)
         #expect(chunk.points.map(\.sequence) == [0, 1])
@@ -232,7 +259,7 @@ import Testing
         #expect(await fixture.controller.stopAndSynchronize())
         await fixture.waitUntilSettled()
         #expect(fixture.controller.synchronizationNeedsRetry && fixture.controller.finalizedSyncState == nil)
-        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId)
+        let queue = try await fixture.store.pending(scope: fixture.scope, deviceID: try #require(fixture.capture.deviceId))
         let pending = try #require(queue.first { $0.mutation.kind == .finalizeCapture })
         await fixture.controller.retrySynchronization()
         #expect(fixture.controller.finalizedSyncState == .synced && !fixture.controller.synchronizationNeedsRetry)
@@ -292,7 +319,7 @@ import Testing
         await fixture.controller.resumePendingSynchronizations(client: client, scope: fixture.scope)
         #expect(await fixture.server.requests().count == before)
         #expect(fixture.controller.pendingSynchronizationError == nil)
-        let pending = try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId)
+        let pending = try await fixture.store.pending(scope: fixture.scope, deviceID: try #require(fixture.capture.deviceId))
         #expect(pending.contains { $0.mutation.kind == .finalizeCapture })
     }
 
@@ -395,7 +422,7 @@ import Testing
                 "jti": "\(capture.id.uuidString.lowercased()):\(purpose)", "iat": Int(time.timeIntervalSince1970),
                 "exp": Int(SchoolLesson.date(expiry)!.timeIntervalSince1970), "scope": purpose,
                 "schoolId": scope.schoolID.uuidString, "captureId": capture.id.uuidString, "lessonId": capture.lessonId.uuidString,
-                "deviceId": device.uuidString, "deviceAssessmentId": capture.deviceAssessmentId.uuidString,
+                "deviceId": device.uuidString, "deviceAssessmentId": capture.deviceAssessmentId!.uuidString,
                 "authorizedAt": capture.authorizedAt, "expiresAt": capture.expiresAt, "uploadDeadline": capture.uploadDeadline]
             let encoded = "\(base64(header)).\(base64(try JSONSerialization.data(withJSONObject: claims)))"
             return "\(encoded).\(base64(try key.signature(for: Data(encoded.utf8))))"
@@ -406,7 +433,7 @@ import Testing
         let keys = SchoolCapturePublicKeys(keys: [.init(kty: "OKP", crv: "Ed25519", x: base64(key.publicKey.rawRepresentation), kid: "test", alg: "EdDSA", use: "sig")])
         let received = ContinuousClock.now
         let lease = try SchoolCaptureAuthorizationVerifier.verify(authorization, keys: keys, expectedIssuer: URL(string: scope.apiBaseURL)!,
-            scope: scope, lessonID: capture.lessonId, deviceID: device, assessmentID: capture.deviceAssessmentId, requestStartedAt: received)
+            scope: scope, lessonID: capture.lessonId, deviceID: device, assessmentID: capture.deviceAssessmentId!, requestStartedAt: received)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("capture-lifecycle-\(UUID()).sqlite")
         let store = try SQLCipherSchoolCaptureStore(url: url, key: Data(repeating: 0x3D, count: 32), protectFiles: false, installationID: device)
         let server = CaptureLifecycleServer(scope: scope, capture: capture, authorization: authorization, keys: keys)
@@ -417,7 +444,7 @@ import Testing
         if startImmediately {
             let command = try SchoolCapturePendingMutation.make(id: operation, scope: scope, kind: .startCapture,
                 targetID: capture.lessonId, expectedVersion: 1, body: SchoolStartCaptureBody(operationId: operation, deviceId: device,
-                    choiceId: capture.choiceId, choiceVersion: 1, noticeVersionId: UUID(), explicitStartConfirmed: true, deviceAssessmentId: capture.deviceAssessmentId))
+                    choiceId: capture.choiceId, choiceVersion: 1, noticeVersionId: UUID(), explicitStartConfirmed: true, deviceAssessmentId: capture.deviceAssessmentId!))
             try await store.stage(command)
             _ = try await store.markAttempted(id: operation, scope: scope)
             let session = try await store.acceptAuthorization(operationID: operation, authorization: authorization, lease: lease, scope: scope, deviceID: device)
@@ -467,6 +494,11 @@ import Testing
     var permission: SchoolCaptureLocationPermission { .foreground }
     private(set) var isRunning = false
     private(set) var startCount = 0
+    private(set) var warmUps = 0
+    private var warming = false
+    var isWarming: Bool { warming }
+    func warmUp() { warmUps += 1; warming = true }
+    func coolDown() { warming = false }
     private var segment: SchoolCaptureLocationSegment?
     private var handle: SchoolCaptureSegmentHandle?
     private var boundary: SchoolCaptureLocationStop?
@@ -594,9 +626,9 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
                 learnerId: capture.learnerId, lessonId: capture.lessonId, status: .allowed, noticeVersionId: noticeID,
                 recordedBy: scope.membershipID, recordedAt: capture.authorizedAt, source: .verbal))
         }
-        if leaf == "assessments" || leaf == capture.deviceAssessmentId.uuidString.lowercased() {
-            return try ok(SchoolDeviceAssessment(id: capture.deviceAssessmentId, schoolId: scope.schoolID, version: 1,
-                deviceId: capture.deviceId, membershipId: scope.membershipID, platform: "IOS", deviceClass: "PHONE",
+        if leaf == "assessments" || leaf == capture.deviceAssessmentId!.uuidString.lowercased() {
+            return try ok(SchoolDeviceAssessment(id: capture.deviceAssessmentId!, schoolId: scope.schoolID, version: 1,
+                deviceId: capture.deviceId!, membershipId: scope.membershipID, platform: "IOS", deviceClass: "PHONE",
                 modelCode: "test-phone", osVersion: "26.0", appBuild: "1", qualificationProfileVersion: "test",
                 status: .qualified, assessedAt: capture.authorizedAt, expiresAt: capture.expiresAt, blockers: []))
         }

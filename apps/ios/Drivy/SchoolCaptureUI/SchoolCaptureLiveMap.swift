@@ -7,6 +7,8 @@ struct SchoolCaptureLiveMap: View {
     let observations: [SchoolLiveMapObservation]
     let resetCameraID: UUID
     let isRecording: Bool
+    /// Départ sans position enregistrée : la position de l’appareil selon Plans, affichée et jamais enregistrée.
+    var showsDevicePosition = false
     @Binding var followMode: DrivyMapFollowMode
     @State private var camera: MapCameraPosition = .automatic
     @State private var mapHeading = 0.0
@@ -60,6 +62,7 @@ struct SchoolCaptureLiveMap: View {
                     }.annotationTitles(.hidden)
                 }
             }
+            if showsDevicePosition && last == nil { UserAnnotation() }
             if let last {
                 Annotation("Dernière position enregistrée", coordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude)) {
                     SchoolMapPositionMarker(course: displayedHeading, mapHeading: mapHeading)
@@ -76,7 +79,8 @@ struct SchoolCaptureLiveMap: View {
             isVisible = true
             updateRoute(); updateCourse()
             compass.setActive(compassIsActive)
-            if followMode.followsPosition { followPoint() } else if count > 0 { camera = .automatic }
+            if last == nil && showsDevicePosition { camera = .userLocation(fallback: .automatic) }
+            else if followMode.followsPosition { followPoint() } else if count > 0 { camera = .automatic }
         }
         .onDisappear { isVisible = false; compass.stop() }
         .onChange(of: compassIsActive) { _, active in compass.setActive(active) }
@@ -89,17 +93,23 @@ struct SchoolCaptureLiveMap: View {
             if camera.positionedByUser { followDistance = min(2500, max(180, context.camera.distance)) }
         }
         .onChange(of: camera.positionedByUser) { _, byUser in if byUser { followMode = .free } }
-        .onChange(of: followMode) { _, mode in if mode.followsPosition { followPoint() } }
+        .onChange(of: followMode) { _, mode in if mode.followsPosition { followPoint(smooth: true) } }
         .onChange(of: contentKey) { _, _ in
             let hadPosition = last != nil
             updateRoute()
             updateCourse()
-            if followMode.followsPosition && !camera.positionedByUser { followPoint() }
-            else if !hadPosition && last != nil && !camera.positionedByUser { camera = .automatic }
+            if followMode.followsPosition && !camera.positionedByUser { followPoint(smooth: !hadPosition) }
+            else if !hadPosition, let last, !camera.positionedByUser {
+                // Premier point : la caméra glisse de la position de l’appareil vers lui, sans saut de zoom.
+                withAnimation(reduceMotion ? nil : .smooth(duration: 0.6)) {
+                    camera = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude),
+                        distance: followDistance, heading: mapHeading, pitch: 0))
+                }
+            }
         }
         .onChange(of: resetCameraID) { _, _ in
-            if followMode.followsPosition { followPoint() }
-            else { camera = .automatic }
+            if followMode.followsPosition { followPoint(smooth: true) }
+            else { withAnimation(reduceMotion ? nil : .smooth(duration: 0.6)) { camera = .automatic } }
         }
         .accessibilityLabel("Carte du trajet enregistré")
         .accessibilityValue((followMode == .heading && compass.degrees == nil
@@ -181,9 +191,10 @@ struct SchoolCaptureLiveMap: View {
         }
     }
 
-    private func followPoint() {
+    /// Suivi fix après fix : glissement linéaire court. Changement de mode ou premier point : mouvement plus ample, adouci.
+    private func followPoint(smooth: Bool = false) {
         guard followMode.followsPosition, let last else { return }
-        withAnimation(reduceMotion ? nil : .linear(duration: 0.35)) {
+        withAnimation(reduceMotion ? nil : (smooth ? .smooth(duration: 0.6) : .linear(duration: 0.35))) {
             camera = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude),
                 distance: followDistance, heading: followMode.cameraHeading(deviceHeading: compass.degrees) ?? mapHeading, pitch: 0))
         }

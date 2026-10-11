@@ -43,13 +43,9 @@ struct SchoolLesson: Codable, Sendable, Equatable, Identifiable {
         default: "À vérifier"
         }
     }
-    static func date(_ value: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: value) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: value)
-    }
+    /// Lue des milliers de fois par rendu d’une longue liste (tris, filtres, états) : chaque instant n’est analysé
+    /// qu’une fois.
+    static func date(_ value: String) -> Date? { SchoolDateCache.shared.date(value) }
     /// Noms fournis avec la leçon, s’ils existent : aucun nom n’est déduit d’une liste partielle.
     var providedLearnerName: String? { Self.name(learnerDisplayName) }
     var providedInstructorName: String? { Self.name(instructorDisplayName) }
@@ -193,5 +189,78 @@ final class SchoolAgendaClient {
         guard response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else { throw SchoolAgendaFailure.invalidResponse }
         do { return try JSONDecoder().decode(Envelope<Value>.self, from: response.data).data }
         catch { throw SchoolAgendaFailure.invalidResponse }
+    }
+}
+
+/// Instants déjà analysés, formateurs et calendriers déjà construits. Créer un formateur coûte bien plus que s’en
+/// servir : une liste de centaines de leçons en demandait des milliers à chaque rendu.
+final class SchoolDateCache: @unchecked Sendable {
+    static let shared = SchoolDateCache()
+
+    private let lock = NSLock()
+    private var dates: [String: Date?] = [:]
+    private var formatters: [String: DateFormatter] = [:]
+    private var calendars: [String: Calendar] = [:]
+    private let fractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private let whole: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    func date(_ value: String) -> Date? {
+        lock.lock(); defer { lock.unlock() }
+        if let index = dates.index(forKey: value) { return dates[index].value }
+        let date = fractional.date(from: value) ?? whole.date(from: value)
+        // Borne de mémoire : au-delà, on repart de zéro plutôt que de garder des instants d’écrans fermés.
+        if dates.count >= 20_000 { dates.removeAll(keepingCapacity: true) }
+        dates[value] = date
+        return date
+    }
+
+    /// Texte en français de Suisse, dans le fuseau donné, selon un modèle localisé (« d MMMM yyyy »).
+    func string(from date: Date, zone: TimeZone, template: String) -> String {
+        lock.lock(); defer { lock.unlock() }
+        return formatter(key: "t|\(template)|\(zone.identifier)", zone: zone) {
+            $0.setLocalizedDateFormatFromTemplate(template)
+        }.string(from: date)
+    }
+
+    /// Texte dans le fuseau donné, selon un format fixe (« HH:mm »).
+    func string(from date: Date, zone: TimeZone, format: String) -> String {
+        lock.lock(); defer { lock.unlock() }
+        return formatter(key: "f|\(format)|\(zone.identifier)", zone: zone) { $0.dateFormat = format }.string(from: date)
+    }
+
+    /// Texte dans le fuseau donné, selon les styles de date et d’heure du système.
+    func string(from date: Date, zone: TimeZone, date dateStyle: DateFormatter.Style, time timeStyle: DateFormatter.Style) -> String {
+        lock.lock(); defer { lock.unlock() }
+        return formatter(key: "s|\(dateStyle.rawValue)|\(timeStyle.rawValue)|\(zone.identifier)", zone: zone) {
+            $0.dateStyle = dateStyle; $0.timeStyle = timeStyle
+        }.string(from: date)
+    }
+
+    /// Calendrier grégorien du fuseau donné.
+    func calendar(zone: TimeZone) -> Calendar {
+        lock.lock(); defer { lock.unlock() }
+        if let known = calendars[zone.identifier] { return known }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        calendars[zone.identifier] = calendar
+        return calendar
+    }
+
+    private func formatter(key: String, zone: TimeZone, configure: (DateFormatter) -> Void) -> DateFormatter {
+        if let known = formatters[key] { return known }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_CH")
+        formatter.timeZone = zone
+        configure(formatter)
+        formatters[key] = formatter
+        return formatter
     }
 }

@@ -11,11 +11,11 @@ struct SchoolCaptureLease: Sendable {
     private let requestStartedAt: ContinuousClock.Instant
     private let remainingAtServerResponse: Duration
 
-    fileprivate init(capture: SchoolCaptureSession, personID: UUID, requestStartedAt: ContinuousClock.Instant, remainingSeconds: TimeInterval) {
+    fileprivate init(capture: SchoolCaptureSession, personID: UUID, deviceID: UUID, requestStartedAt: ContinuousClock.Instant, remainingSeconds: TimeInterval) {
         captureID = capture.id
         schoolID = capture.schoolId
         self.personID = personID
-        deviceID = capture.deviceId
+        self.deviceID = deviceID
         self.requestStartedAt = requestStartedAt
         remainingAtServerResponse = .seconds(remainingSeconds)
     }
@@ -81,7 +81,7 @@ enum SchoolCaptureAuthorizationVerifier {
                         expectedScope: "capture:upload", expiry: uploadDeadline, serverTime: serverTime)
         // exp est entier : les fractions de seconde de la projection ne prolongent pas le JWT.
         let signedDeadline = Date(timeIntervalSince1970: floor(expiresAt.timeIntervalSince1970))
-        let lease = SchoolCaptureLease(capture: capture, personID: scope.personID,
+        let lease = SchoolCaptureLease(capture: capture, personID: scope.personID, deviceID: deviceID,
                                       requestStartedAt: requestStartedAt, remainingSeconds: signedDeadline.timeIntervalSince(serverTime))
         guard lease.permitsCollection() else { throw SchoolCaptureFailure.expired }
         return lease

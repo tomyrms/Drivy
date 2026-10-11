@@ -33,9 +33,14 @@ enum SchoolReportObservationRoute: Identifiable {
     private(set) var isOpeningObservation = false
     @ObservationIgnored private var observations: SchoolObservationWorkspace?
 
+    /// Le replay porte le titre de la fiche : le nom de l’élève pour l’équipe, celui du moniteur pour l’élève, qui
+    /// connaît son propre nom. Sans nom de moniteur fourni par l’école, rien n’est deviné : « Trajet ».
     func openReplay(_ capture: SchoolCaptureSession, model: SchoolLessonReportWorkspace, context: SchoolReportContext) {
+        let title = SchoolLessonHubRules.headerIdentity(learnerName: context.learnerName,
+            instructorName: model.lesson?.providedInstructorName, isOwnLearner: model.isOwnLearner,
+            roles: model.membership.roles)?.name ?? "Trajet"
         replay = SchoolTripReplayRoute(model: SchoolCaptureReplayWorkspace(scope: model.scope, client: context.agenda.captureClient,
-            captureID: capture.id), learnerName: context.learnerName, lessonTimeZone: model.lesson?.timeZone)
+            captureID: capture.id), learnerName: title, lessonTimeZone: model.lesson?.timeZone)
     }
 
     func openList() { observation = .list(UUID()) }
@@ -259,10 +264,14 @@ struct SchoolReportObservationsSection: View {
                 .listRowSeparator(.hidden)
             }
             if editable && model.isAuthor {
-                Button(isCompleted ? "Ajouter une observation" : "Noter une observation") {
+                Button {
                     // Envoi bref en cours : l’appui est ignoré plutôt que le bouton grisé. Une relecture n’empêche rien.
                     guard !model.isBusy else { return }
                     if isCompleted { router.add(model: model, context: context) } else { router.openList() }
+                } label: {
+                    // Les observations se relisent avant la feuille : l’attente se lit dans le bouton touché.
+                    let title = isCompleted ? "Ajouter une observation" : "Noter une observation"
+                    DrivyBusyLabel(title: title, busyTitle: title, isBusy: router.isOpeningObservation)
                 }
                 .accessibilityIdentifier("lesson-private-observations")
             }
@@ -305,6 +314,9 @@ private struct SchoolReportObservationRow: View {
             content
                 .contentShape(Rectangle())
                 .onTapGesture { router.selectedObservation = router.selectedObservation == observation.id ? nil : observation.id }
+                // Ligne touchable : VoiceOver l’annonce comme bouton, et dit celle qui est montrée sur la carte.
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(router.selectedObservation == observation.id ? [.isButton, .isSelected] : .isButton)
                 .accessibilityAction(named: "Montrer sur la carte") { router.selectedObservation = observation.id }
         } else {
             content
@@ -314,12 +326,14 @@ private struct SchoolReportObservationRow: View {
     private var actions: some View {
         Menu {
             Button(observation.isMarker ? "Préciser" : "Modifier") { router.edit(observation, model: model, context: context) }
+                .disabled(router.isOpeningObservation)
             if model.sharing != nil {
                 Button(kept ? "Montrer à l’élève" : "Garder pour moi") {
                     Task { await model.updateSharing(observation: observation.id, observationPrivate: !kept) }
                 }
             }
             Button("Retirer", role: .destructive) { router.remove(observation, model: model, context: context) }
+                .disabled(router.isOpeningObservation)
         } label: {
             HStack(spacing: DrivySpacing.xxs) {
                 if kept { Text("Pour moi").font(.caption).foregroundStyle(DrivyTheme.muted) }

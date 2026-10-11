@@ -7,7 +7,7 @@ import {ApiError,notFound} from './errors.js';
 import {checkIdempotency,checkVersion,requireVersion,schoolCommand} from './commands.js';
 import {getLesson,lessonColumns,type LessonRow} from './lessons.js';
 import {syncSharedReport,withdrawPublication} from './lesson-reports.js';
-import {captureProjection,type CaptureRow} from './capture-contracts.js';
+import {captureProjectionFor,type CaptureRow} from './capture-contracts.js';
 
 /**
  * Extension hors canon : ce que l'élève voit d'une leçon réalisée (décision du porteur du 28 septembre 2026).
@@ -64,10 +64,10 @@ export function registerSharing(app:FastifyInstance,options:{pool:Pool;verifyTok
  // Trajets d'une leçon : le moniteur affecté lit les siens, l'élève ceux qui sont partagés (RLS).
  app.get(`${base}/lessons/:lessonId/captures`,async r=>{
   empty.parse(r.query);const {schoolId,lessonId}=target(r);
-  const data=await withActor(options.pool,await options.verifyToken(r.headers.authorization),schoolId,async db=>{
+  const data=await withActor(options.pool,await options.verifyToken(r.headers.authorization),schoolId,async(db,_actor,member)=>{
    await getLesson(db,schoolId,lessonId);
    const rows=(await db.query<CaptureRow>('SELECT * FROM drivy.capture_session WHERE school_id=$1 AND lesson_id=$2 ORDER BY authorized_at,id',[schoolId,lessonId])).rows;
-   return {items:rows.map(captureProjection)};
+   return {items:rows.map(row=>captureProjectionFor(row,member))};
   });
   return envelope(data,r);
  });

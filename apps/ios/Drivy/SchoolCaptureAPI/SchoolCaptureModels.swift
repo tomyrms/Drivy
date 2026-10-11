@@ -26,7 +26,9 @@ struct SchoolCaptureSession: Codable, Sendable, Equatable, Identifiable {
     let lessonId: UUID
     let learnerId: UUID
     let instructorMembershipId: UUID
-    let deviceId: UUID
+    /// Appareil et évaluation du moniteur : absents quand le lecteur n’en a pas l’usage (l’élève). Le chemin
+    /// d’enregistrement exige leur présence et leur égalité avec ceux de cet appareil.
+    let deviceId: UUID?
     let choiceId: UUID
     let authorizedAt: String
     let expiresAt: String
@@ -36,7 +38,7 @@ struct SchoolCaptureSession: Codable, Sendable, Equatable, Identifiable {
     let captureState: State
     let syncState: SyncState
     let publicationState: PublicationState
-    let deviceAssessmentId: UUID
+    let deviceAssessmentId: UUID?
 
     var hasValidTimeline: Bool {
         guard version > 0, let start = SchoolLesson.date(authorizedAt),

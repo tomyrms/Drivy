@@ -251,7 +251,8 @@ struct SchoolStartNowBody: Encodable, Sendable {
         isBusy = true; errorMessage = nil; conflicted = false
         defer { if request == generation { isBusy = false } }
         do {
-            try outbox.save(command)
+            // Une demande neuve vient d’être enregistrée par `start()` : la réécrire ne ferait que retarder l’envoi.
+            if !fresh { try outbox.save(command) }
             let lesson = try await client.startNow(command)
             try outbox.remove(command)
             guard request == generation else { return lesson }
@@ -274,115 +275,199 @@ struct SchoolStartNowBody: Encodable, Sendable {
     }
 }
 
+/// La feuille « Démarrer une leçon » : élève, récapitulatif (formation, lieu, accord GPS), puis la leçon quand elle
+/// démarre sans trajet. Les étapes se remplacent sur place, sans pousser de page ni changer de hauteur ; le départ
+/// avec GPS passe sous le rideau de marque (`SchoolStartNowLaunch`).
 struct SchoolStartNowView: View {
-    @Bindable var model: SchoolStartNowWorkspace
+    @Bindable var launch: SchoolStartNowLaunch
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
-    /// La recherche d’un élève prend toute la hauteur ; le formulaire, lui, tient dans une demi-feuille.
-    @State private var detent: PresentationDetent = .medium
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var form: SchoolStartNowWorkspace { launch.form }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                    if let pending = model.pending {
-                        // Toute demande restée en file se résout ici, même partie d’un autre écran : sans cela,
-                        // rien ne peut démarrer et rien n’explique pourquoi.
-                        let idle = !model.isBusy && !model.isLoading
-                        DrivyPendingRequest(message: pending.waitingMessage(absent: model.pendingAbsent),
-                            notes: model.errorMessage.map { [$0] } ?? [], reference: pending.id,
-                            verify: model.pendingAbsent ? nil : { Task { if await model.verify() != nil { dismiss() } } }, canVerify: idle,
-                            retry: pending.kind == .startLessonNow && pending.scope == model.scope ? { Task { if await model.retry() != nil { dismiss() } } } : nil,
-                            canRetry: idle,
-                            abandon: model.pendingAbsent ? { Task { await model.abandon() } } : nil, canAbandon: idle)
-                    } else if let error = model.errorMessage {
-                        SchoolErrorNotice(message: error, retry: !model.contextValid || model.learners.isEmpty || model.trainings.isEmpty || !model.storageAvailable
-                            ? { Task { await reloadContext() } } : nil)
-                        .disabled(model.isBusy || model.isLoading)
-                    }
-                    if model.learners.isEmpty && (model.isLoading || (model.defaults == nil && model.errorMessage == nil)) {
-                        DrivySkeletonRows(count: 3).drivySkeleton("Chargement des élèves…")
-                    } else {
-                        // Le choix de l’élève reste actif pendant la lecture de ses formations : seules les lignes qui
-                        // en dépendent (formation, lieu) se verrouillent, dans `fields`.
-                        fields
-                            .disabled(model.isBusy || model.pending != nil)
-                    }
-                    primaryAction
-                }.drivyPageContent(maxWidth: DrivyLayout.compactColumn)
+            ZStack {
+                switch launch.step {
+                case .learner:
+                    learnerStep.transition(stepTransition(from: .leading))
+                case .summary:
+                    summaryStep.transition(stepTransition(from: .trailing))
+                case .lesson(let lesson):
+                    lessonStep(lesson).transition(stepTransition(from: .trailing))
+                }
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollDismissesKeyboard(.interactively)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(DrivyTheme.canvas)
-            .navigationTitle("Démarrer une leçon").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
-            .task { if model.learners.isEmpty { await model.load() } }
         }
-        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large], selection: $detent)
-        .onAppear { if typeSize.isAccessibilitySize { detent = .large } }
+        // Une seule hauteur pour tout le parcours : la liste en a besoin, et la feuille ne se redimensionne
+        // jamais pendant qu’une étape en remplace une autre.
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationSizing(.form)
-        .interactiveDismissDisabled(model.isBusy)
+        .presentationBackground(DrivyTheme.canvas)
         .tint(DrivyTheme.accent)
+        .sensoryFeedback(.start, trigger: launch.launches)
+        .task { await launch.open() }
+        .onChange(of: launch.closesSheet) { _, closes in if closes { dismiss() } }
+        .onDisappear { launch.sheetClosed() }
+    }
+
+    /// Une étape glisse à peine et se fond ; sous Réduire les animations, un fondu seulement.
+    private func stepTransition(from edge: Edge) -> AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        let offset: CGFloat = edge == .leading ? -36 : 36
+        return .offset(x: offset).combined(with: .opacity)
+    }
+
+    @ToolbarContentBuilder private var closeItem: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Fermer") { dismiss() }.disabled(launch.isBusy)
+        }
+    }
+
+    // MARK: - Élève
+
+    private var learnerStep: some View {
+        Group {
+            if form.learners.isEmpty && (form.isLoading || (form.defaults == nil && form.errorMessage == nil)) {
+                ScrollView {
+                    DrivySkeletonRows(count: 6, leading: .avatar, lines: 1)
+                        .drivySkeleton("Chargement des élèves…")
+                        .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
+                }
+                .scrollDisabled(true)
+            } else if form.learners.isEmpty {
+                ScrollView {
+                    if let error = form.errorMessage {
+                        SchoolErrorNotice(message: error, retry: { Task { await launch.reload() } })
+                            .disabled(form.isLoading)
+                            .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
+                    }
+                }
+            } else {
+                SchoolLearnerPicker(learners: form.learners, selectedID: form.learnerID) { id in
+                    withAnimation(DrivyMotion.step(reduceMotion)) { launch.choose(id) }
+                }
+            }
+        }
+        .navigationTitle("Démarrer une leçon").navigationBarTitleDisplayMode(.inline)
+        .toolbar { closeItem }
+        // Réglé par étape : la leçon ouverte sur place garde sa propre protection (bilan modifié).
+        .interactiveDismissDisabled(launch.isBusy)
+    }
+
+    // MARK: - Récapitulatif
+
+    private var summaryStep: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                notices
+                identity
+                if form.learnerID != nil {
+                    fields
+                    if let gps = launch.gps { gpsSection(gps) }
+                }
+            }
+            .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
+            // Formation et lieu arrivent après la lecture : ils se posent sans pousser le reste d’un coup.
+            .animation(DrivyMotion.reveal(reduceMotion), value: form.isLoading)
+            .animation(DrivyMotion.reveal(reduceMotion), value: form.trainings.count)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            DrivyStickyActionBar(maxWidth: DrivyLayout.compactColumn) { primaryAction }
+        }
+        .navigationTitle("Démarrer une leçon").navigationBarTitleDisplayMode(.inline)
+        .toolbar { closeItem }
+        .interactiveDismissDisabled(launch.isBusy)
+    }
+
+    @ViewBuilder private var notices: some View {
+        if let pending = form.pending {
+            // Toute demande restée en file se résout ici, même partie d’un autre écran : sans cela,
+            // rien ne peut démarrer et rien n’explique pourquoi.
+            let idle = !form.isBusy && !form.isLoading
+            DrivyPendingRequest(message: pending.waitingMessage(absent: form.pendingAbsent),
+                notes: form.errorMessage.map { [$0] } ?? [], reference: pending.id,
+                verify: form.pendingAbsent ? nil : { Task {
+                    if let lesson = await form.verify() { launch.resolved(lesson) } else { launch.pendingCleared() }
+                } },
+                canVerify: idle,
+                retry: pending.kind == .startLessonNow && pending.scope == form.scope
+                    ? { Task { if let lesson = await form.retry() { launch.resolved(lesson) } } } : nil,
+                canRetry: idle,
+                abandon: form.pendingAbsent ? { Task { await form.abandon(); launch.pendingCleared() } } : nil, canAbandon: idle)
+        } else if let error = form.errorMessage {
+            SchoolErrorNotice(message: error, retry: !form.contextValid || form.learners.isEmpty || form.trainings.isEmpty || !form.storageAvailable
+                ? { Task { await launch.reload() } } : nil)
+                .disabled(form.isBusy || form.isLoading)
+        }
+    }
+
+    @ViewBuilder private var identity: some View {
+        if let name = form.learnerName {
+            DrivyLearnerIdentity(name: name, detail: trainingDetail, variant: .compact) {
+                if form.presetLearnerID == nil && form.learners.count > 1 {
+                    Button("Changer") {
+                        withAnimation(DrivyMotion.step(reduceMotion)) { launch.changeLearner() }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight: 44)
+                    .disabled(launch.isBusy)
+                    .accessibilityLabel("Changer d’élève")
+                    .accessibilityIdentifier("start-now-learner")
+                }
+            }
+        } else if form.pending == nil && (form.isLoading || (form.learners.isEmpty && form.errorMessage == nil)) {
+            DrivySkeletonRow(leading: .avatar, lines: 2).drivySkeleton("Chargement de l’élève…")
+        }
+    }
+
+    /// Une seule formation : elle se lit sous le nom, sans ligne à elle.
+    private var trainingDetail: String? {
+        guard form.trainings.count == 1, let training = form.trainings.first, training.id == form.trainingID else { return nil }
+        return "Permis \(training.categoryCode)"
+    }
+
+    private var meetingPoint: Binding<String> {
+        Binding(get: { form.meetingPoint }, set: { form.meetingPoint = $0 })
+    }
+
+    private var trainingID: Binding<UUID?> {
+        Binding(get: { form.trainingID }, set: { form.trainingID = $0 })
     }
 
     private var fields: some View {
         VStack(alignment: .leading, spacing: 0) {
-            fieldRow("Élève") {
-                if model.hasPresetLearner, let name = model.learnerName {
-                    Text(name).fixedSize(horizontal: false, vertical: true)
-                } else {
-                    NavigationLink {
-                        SchoolLearnerSearchList(learners: model.learners, selectedID: model.learnerID) { id in
-                            Task { await model.select(id) }
-                        }
-                        .onAppear { detent = .large }
-                    } label: {
-                        HStack(spacing: DrivySpacing.xs) {
-                            Text(model.learnerName ?? "Choisir un élève").fixedSize(horizontal: false, vertical: true)
-                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
-                                .foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
-                        }
-                        .frame(minHeight: 44).contentShape(Rectangle())
-                    }
-                    .accessibilityLabel("Élève")
-                    .accessibilityValue(model.learnerName ?? "Aucun élève choisi")
-                    .accessibilityIdentifier("start-now-learner")
-                }
-            }
-            if model.isLoading && model.trainings.isEmpty && model.learnerID != nil {
-                Divider()
-                DrivySkeletonRow().drivySkeleton("Chargement de la formation…")
-                    .padding(.vertical, DrivySpacing.s)
-            } else if model.trainings.count > 1 {
-                Divider()
+            if form.trainings.count > 1 {
                 fieldRow("Formation") {
-                    Picker("Formation", selection: $model.trainingID) {
+                    Picker("Formation", selection: trainingID) {
                         Text("Choisir une formation").tag(nil as UUID?)
-                        ForEach(model.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
+                        ForEach(form.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
                     }
                     .pickerStyle(.menu).labelsHidden()
                     .frame(minHeight: 44).contentShape(Rectangle())
                 }
                 // Les formations de l’élève se relisent : le choix attend leur réponse.
-                .disabled(model.isLoading)
-            } else if let training = model.trainings.first, training.id == model.trainingID {
+                .disabled(form.isLoading)
                 Divider()
-                fieldRow("Formation") { Text("Permis \(training.categoryCode)") }
             }
-            Divider()
             // Le lieu se remplit avec celui de la dernière leçon de l’élève : on n’écrit pas dessus pendant la lecture.
-            SchoolMeetingPointField(text: $model.meetingPoint)
+            SchoolMeetingPointField(text: meetingPoint)
                 .padding(.vertical, DrivySpacing.s)
                 .frame(minHeight: 44)
-                .disabled(model.isLoading)
-            if model.meetingPointTooLong {
+                .disabled(form.isLoading)
+            if form.meetingPointTooLong {
                 DrivyFormMessage(text: "Raccourcis le lieu à 500 caractères.", tone: .danger)
                     .padding(.bottom, DrivySpacing.s)
             }
         }
         .padding(.horizontal, DrivySpacing.m)
         .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+        .disabled(launch.isBusy || form.pending != nil)
     }
 
     private func fieldRow<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -399,57 +484,92 @@ struct SchoolStartNowView: View {
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
     }
 
+    /// Accord de l’élève, puis l’état de cet appareil seulement s’il empêchera l’enregistrement.
+    private func gpsSection(_ gps: SchoolStartNowGPS) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            SchoolRecordingChoiceInline(model: gps.consent, answer: gps.answer,
+                isEnabled: !launch.isBusy && form.pending == nil) { status in gps.select(status) }
+            if gps.answer == .allowed && gps.consentIsClear {
+                switch gps.device {
+                case .denied: deviceNotice("Localisation désactivée pour Drivy. La leçon démarrera sans GPS.")
+                case .approximate: deviceNotice("Position exacte désactivée pour Drivy. La leçon démarrera sans GPS.")
+                case .ready, .needsPermission: EmptyView()
+                }
+            }
+        }
+        .padding(DrivySpacing.m)
+        .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+        .animation(DrivyMotion.reveal(reduceMotion), value: gps.device)
+    }
+
+    private func deviceNotice(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            DrivyInlineMessage(text: text, tone: .warning)
+            Button("Ouvrir Réglages", systemImage: "gearshape") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            }
+            .font(.subheadline.weight(.semibold))
+            .frame(minHeight: 44)
+        }
+        .accessibilityIdentifier("start-now-gps-device")
+    }
+
     @ViewBuilder private var primaryAction: some View {
-        if model.conflicted {
+        if form.conflicted {
             // Rien n’est forcé : le serveur a refusé, la seule issue est de planifier autrement.
             Button {
-                model.planLater(); dismiss()
+                form.planLater(); dismiss()
             } label: { Text("Planifier à un autre moment") }
                 .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                 .accessibilityIdentifier("start-now-plan-later")
         } else {
-            Button {
-                Task {
-                    DrivyLaunchCurtain.shared.show()
-                    _ = await model.start()
-                    // Un refus ou un conflit se lit dans cette feuille : le rideau s’efface aussitôt.
-                    if model.started != nil { dismiss() } else { await DrivyLaunchCurtain.shared.hide() }
-                }
-            } label: {
-                DrivyBusyLabel(title: "Démarrer maintenant", busyTitle: "Démarrage…", isBusy: model.isBusy)
+            Button { launch.launch() } label: {
+                DrivyBusyLabel(title: "Démarrer maintenant",
+                    busyTitle: launch.phase == .requestingPermission ? "Autorisation de localisation…" : "Démarrage…",
+                    isBusy: launch.isBusy)
             }
             .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
-            .disabled(!model.canStart)
+            // L’accord de l’élève se lit encore : un départ maintenant partirait sans GPS sans l’avoir voulu.
+            .disabled(!form.canStart || launch.phase != .editing || launch.gps?.isReading == true)
             .accessibilityIdentifier("start-now-confirm")
         }
     }
 
-    @MainActor private func reloadContext() async {
-        await model.load()
+    // MARK: - Leçon
+
+    /// Leçon démarrée sans trajet : elle s’ouvre à la place du récapitulatif, dans la même feuille.
+    private func lessonStep(_ lesson: SchoolLesson) -> some View {
+        SchoolLessonReportView(client: launch.agenda.reportClient, schoolWorkspace: launch.workspace, lessonID: lesson.id,
+            learnerName: launch.learnerName(lesson), opensCompletion: false)
+            .environment(launch.controller)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let issue = launch.tripIssue {
+                    SchoolTripIssueBanner(text: issue) {
+                        withAnimation(DrivyMotion.reveal(reduceMotion)) { launch.dismissTripIssue() }
+                    }
+                    .transition(.opacity)
+                }
+            }
     }
 }
 
-/// Le geste complet « lancer une leçon tout de suite », réutilisable depuis Aujourd’hui et depuis la fiche d’un élève :
-/// choix de l’élève (déjà connu depuis sa fiche), création de la leçon par le serveur, puis départ direct du trajet.
-/// Si le trajet ne peut pas partir (GPS de l’école, fenêtre), la leçon s’ouvre ; si le serveur signale un conflit
-/// de planning, le moniteur peut planifier la leçon autrement. Le style du bouton est celui de l’appelant.
+/// Le geste complet « lancer une leçon tout de suite », réutilisable depuis Aujourd’hui et depuis la fiche d’un élève.
+/// La feuille porte tout le parcours (`SchoolStartNowLaunch`) ; seul un conflit de planning ouvre une autre feuille,
+/// la planification, avec l’élève déjà connu. Le style du bouton est celui de l’appelant.
 struct SchoolStartNowButton<Content: View>: View {
     @Bindable var workspace: SchoolWorkspace
     let agendaClient: SchoolAgendaClient?
     let captureController: SchoolCaptureSessionController?
     var learnerID: UUID?
-    /// Appelé quand le geste est terminé (feuille fermée) pour que l’écran d’origine se relise.
+    /// Appelé quand le geste est terminé (feuille fermée, ou trajet à l’écran) pour que l’écran d’origine se relise.
     var onFinished: () -> Void = {}
-    /// La chaîne entière garde son hôte : création, préparation du GPS, puis fiche de leçon ou planification.
+    /// Toute la chaîne garde son hôte : l’écran d’origine ne se relit pas pendant qu’elle est présentée.
     var onPresentationChanged: (Bool) -> Void = { _ in }
     @ViewBuilder let label: Content
 
-    @State private var startNow: SchoolStartNowWorkspace?
-    @State private var lastStartNow: SchoolStartNowWorkspace?
-    @State private var preparation: SchoolCapturePreparationWorkspace?
-    @State private var preparingLesson: SchoolLesson?
+    @State private var launch: SchoolStartNowLaunch?
+    @State private var lastLaunch: SchoolStartNowLaunch?
     @State private var planning: SchoolPlanningWorkspace?
-    @State private var opened: SchoolLesson?
 
     private var scopeKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)"
@@ -463,47 +583,29 @@ struct SchoolStartNowButton<Content: View>: View {
         Button { open() } label: { label }
             .disabled(agendaClient == nil || !instructs)
             .onChange(of: scopeKey) { _, _ in
-                lastStartNow?.invalidate(); lastStartNow = nil; startNow = nil
-                preparation?.invalidate(); preparation = nil; preparingLesson = nil
-                planning?.invalidate(); planning = nil; opened = nil
+                lastLaunch?.invalidate(); lastLaunch = nil; launch = nil
+                planning?.invalidate(); planning = nil
                 onPresentationChanged(false)
             }
-            .sheet(item: $startNow, onDismiss: { closed() }) { model in
-                SchoolStartNowView(model: model)
-            }
-            .fullScreenCover(item: $preparation, onDismiss: {
-                if let lesson = preparingLesson, SchoolLessonCaptureStatus(controller: captureController, lessonID: lesson.id) != .collecting {
-                    opened = lesson
-                } else { finished() }
-                preparingLesson = nil
-            }) { model in
-                SchoolCapturePreparationView(model: model, schoolWorkspace: workspace)
-                    .environment(captureController)
+            .sheet(item: $launch, onDismiss: { closed() }) { model in
+                SchoolStartNowView(launch: model)
             }
             .sheet(item: $planning, onDismiss: { finished() }) { model in
                 SchoolPlanningView(model: model)
             }
-            .sheet(item: $opened, onDismiss: { finished() }) { lesson in
-                if let agendaClient {
-                    NavigationStack {
-                        SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace, lessonID: lesson.id,
-                            learnerName: learnerName(lesson), opensCompletion: false)
-                    }
-                    .tint(DrivyTheme.accent)
-                    .environment(captureController)
-                }
-            }
     }
 
     private func open() {
-        // Une seule chaîne à la fois : un second appui avant l’apparition de la feuille remplacerait son modèle,
-        // et la leçon créée par le premier n’enchaînerait plus sur son trajet.
-        guard startNow == nil, lastStartNow == nil, preparation == nil, planning == nil, opened == nil else { return }
+        // Une seule chaîne à la fois : un second appui avant l’apparition de la feuille ne la remplace pas.
+        guard launch == nil, lastLaunch == nil, planning == nil else { return }
         guard let agendaClient, let person = workspace.person, let membership = workspace.membership, instructs else { return }
-        let model = SchoolStartNowWorkspace(scope: agendaClient.scope(person: person, membership: membership),
+        let form = SchoolStartNowWorkspace(scope: agendaClient.scope(person: person, membership: membership),
             client: agendaClient.planningClient, learnerID: learnerID)
+        let model = SchoolStartNowLaunch(form: form, agenda: agendaClient, workspace: workspace, controller: captureController)
+        let presentationChanged = onPresentationChanged, finishedAction = onFinished
+        model.onFinished = { presentationChanged(false); finishedAction() }
         onPresentationChanged(true)
-        lastStartNow = model; startNow = model
+        lastLaunch = model; launch = model
     }
 
     private func finished() {
@@ -511,44 +613,18 @@ struct SchoolStartNowButton<Content: View>: View {
         onFinished()
     }
 
-    /// Leçon créée : le trajet part aussitôt si possible, sinon la leçon s’ouvre. En cas de conflit,
-    /// la planification est choisie explicitement, avec l’élève déjà connu.
+    /// Feuille fermée. Un conflit de planning ouvre la planification ; un trajet qui démarre termine la chaîne
+    /// lui-même (la carte remplace l’écran d’origine) ; sinon l’écran d’origine se relit maintenant.
     private func closed() {
-        guard let model = lastStartNow else { return }
-        lastStartNow = nil
-        if let lesson = model.started {
-            if mayStart(lesson), let agendaClient, let person = workspace.person, let membership = workspace.membership {
-                preparingLesson = lesson
-                preparation = agendaClient.capturePreparation(scope: agendaClient.scope(person: person, membership: membership),
-                    lessonID: lesson.id, controller: captureController)
-            } else {
-                // Sans GPS : la leçon s’ouvre, découverte à la fin de la séquence.
-                opened = lesson
-                Task { await DrivyLaunchCurtain.shared.hide(afterSequence: true) }
-            }
-        } else if model.planInstead {
-            guard let agendaClient, let person = workspace.person, let membership = workspace.membership else { return finished() }
+        guard let model = lastLaunch else { return }
+        lastLaunch = nil
+        if model.form.planInstead, let agendaClient, let person = workspace.person, let membership = workspace.membership {
             let planned = SchoolPlanningWorkspace(scope: agendaClient.scope(person: person, membership: membership),
                 client: agendaClient.planningClient, date: Date().addingTimeInterval(120))
-            planned.learnerID = model.learnerID
+            planned.learnerID = model.form.learnerID
             planning = planned
-        } else { finished(); return }
-        // Une feuille de suite vient d’être demandée : l’écran d’origine ne se relit qu’à sa fermeture (onDismiss).
-        // Relire aussitôt fait apparaître la leçon créée, l’écran d’origine remplace alors ce bouton par « Démarrer le
-        // trajet », la vue qui porte la feuille disparaît et la feuille de suite n’est jamais affichée.
-    }
-
-    private func mayStart(_ lesson: SchoolLesson) -> Bool {
-        guard instructs, let captureController else { return false }
-        return SchoolLessonHubRules.mayStartCapture(lesson: lesson,
-            isAuthor: lesson.instructorMembershipId == workspace.membership?.membershipId, school: workspace.school,
-            capture: SchoolLessonCaptureStatus(controller: captureController, lessonID: lesson.id),
-            controllerCanPrepare: captureController.canPrepareCapture, now: Date())
-    }
-
-    private func learnerName(_ lesson: SchoolLesson) -> String {
-        lesson.providedLearnerName
-            ?? workspace.learners.first { $0.id == lesson.learnerId }?.displayName
-            ?? (workspace.learner?.id == lesson.learnerId ? workspace.learner?.displayName : nil) ?? "Leçon de conduite"
+        } else if !model.finishesItself {
+            model.complete()
+        }
     }
 }

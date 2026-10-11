@@ -1,5 +1,46 @@
 # État de la réalisation
 
+## 11 octobre 2026 — audit des parcours moniteur et élève
+
+Une leçon ne se commence plus que le jour de son rendez-vous (l’agenda proposait de commencer celle de la semaine suivante) ; un rendez-vous manqué propose « Élève absent » et ne reste plus en tête d’Aujourd’hui ; accord GPS synchronisé entre la fiche et Profil ; filtres de l’élève alignés sur sa carte ; VoiceOver et Réduire les animations dans Progression ; lectures réseau de la fiche réduites ; l’app accepte un trajet sans identifiants d’appareil du moniteur. [Détail, points ouverts et limites](audit-parcours-20261011.md).
+
+**Exécuté** : IPA d’essai sur chaque lot, sans avertissement ; 455 tests métier ; parcours UI iPhone et iPad (un échec de dérive corrigé, voir le détail). **Reste à qualifier** : tout sur iPhone, VoiceOver compris. **API (validé par le porteur)** : départ refusé avant le jour du rendez-vous (`LESSON_NOT_TODAY`), identifiants d’appareil du moniteur retirés des trajets lus par l’élève ; 275 tests API et 148 tests web passent. **Non déployé** : l’app de l’élève doit être installée avant l’API.
+
+## 11 octobre 2026 — parcours de l’élève : Profil, prochaine leçon, Progression
+
+Trois onglets pour l’élève (Leçons, Progression, Profil), prochaine leçon en tête, historique lu en entier, Progression refaite sur retours du porteur (un permis à la fois, « 4 sur 9 en autonomie », détail déplié sur place), ralentissements corrigés (dates et formateurs mis en cache). [Détail, relecture QA et points ouverts](parcours-eleve-profil-20261011.md).
+
+**Exécuté** : IPA d’essai compilée sur chaque lot ; campagne complète sur `4e1b594` (452 tests métier, 12 parcours UI iPhone, 12 iPad). Tests métier relancés sur la dernière version (`941ea06`) : 453 passent ; les parcours UI n’y ont pas été rejoués. Fluidité confirmée par le porteur sur son iPhone.
+
+**Reste à qualifier** : dernière version de la Progression, zoom de la carte, VoiceOver et grandes tailles de texte sur appareil. **Au porteur** : identifiants d’appareil du moniteur envoyés à l’élève (API et déploiement), objectifs visibles avant la leçon.
+
+## 11 octobre 2026 — parcours de l’élève et agenda
+
+Fiche de leçon chargée en parallèle (élève et moniteur), souhait et replay plus calmes ; planning qui se ferme dès la confirmation, formulaire stable pendant la vérification du créneau, semaines de l’agenda réaffichées sans squelette. [Détail et questions ouvertes](parcours-eleve-agenda-20261011.md).
+
+**Exécuté** : compilation de l’IPA d’essai. **Non exécuté** : tests Swift, à la demande du porteur.
+
+Accord GPS de l’élève lui-même (`SELF`) : question sous « Mon souhait » dans la fiche de sa prochaine leçon, envoyée aussitôt. Depuis la passe suivante, le choix général se modifie aussi depuis Profil. Non vu tourner.
+
+## 11 octobre 2026 — parcours terrain fluides, deuxième passe
+
+« Commencer la leçon » part directement sous le rideau quand rien n’est à demander ; la fin de leçon n’a plus qu’une attente et revient proprement à Aujourd’hui ; l’écran du trajet garde son dock stable. [Détail](parcours-fluides-20261011.md).
+
+**Exécuté** : compilation de l’IPA d’essai sur chaque lot. **Non exécuté** : tests Swift, à la demande du porteur. **Reste à qualifier** : tout le parcours sur iPhone.
+
+## 10 octobre 2026 — démarrage instantané en un seul parcours
+
+Le geste « Démarrer une leçon » devient une seule interface : élève, récapitulatif et accord GPS dans une même feuille, puis le trajet sous le rideau ou la leçon ouverte sur place. [Causes, décisions et limites](demarrage-instantane-20261010.md).
+
+- **Accord GPS** demandé dans le récapitulatif, au niveau de l’élève, enregistré au départ avec la leçon ; plus jamais pendant le rideau. Même chose depuis « Démarrer le trajet » d’une leçon planifiée.
+- **GPS** : récepteur réveillé dès que le trajet est voulu et permis, conservé jusqu’au segment ; mesure de diagnostic tirée du réveil ; une seule relecture du départ et lectures en parallèle (environ 18 requêtes de moins).
+- **Rideau** : plus de séquence fixe de 2 s ; levé à la première position (7 s au plus), hors de toute vue ; la carte montre la position de l’appareil tant qu’aucune n’est enregistrée.
+- **Fiabilité** : garde contre le double appui, autorisation de capture toujours enregistrée pour être scellée, attente du premier plan avant le départ.
+
+**Exécuté** : compilation de l’IPA d’essai (workflow « IPA d’essai · iLoader »). **Non exécuté**, à la demande du porteur : tests Swift (nouveaux tests écrits, cible de tests non compilée).
+
+**Reste à qualifier** : parcours vu tourner sur iPhone, délai réel de première position, question d’iOS au premier usage.
+
 ## 10 octobre 2026 — audit global et corrections
 
 Audit technique et UI/UX de toute l’application en cinq lots (API, web, trois lots iOS) suivis d’une revue croisée. [Corrections, limites et constats laissés au porteur](audit-global-20261010.md).
@@ -11,6 +52,8 @@ Audit technique et UI/UX de toute l’application en cinq lots (API, web, trois 
 - **Déployé** : release `071af98` sur le homelab après sauvegarde vérifiée de la base ; aucune migration nouvelle.
 
 **Exécuté** sur `071af98` : 436/436 tests Swift, IPA Release compilée, vérifications serveur et web réussies ; 148/148 tests web et 58/58 tests unitaires API en local.
+
+- **Rideau de départ (retour du porteur)** : le contenu du rideau était vidé à l’instant où son fondu commençait, d’où une coupure nette ; il reste dessiné jusqu’à la fin, le symbole se retire avant le fond, et il entre en fondu. Le fond suit le thème (`canvas`) au lieu d’un noir ou d’un blanc pur. Second retour : le rideau attend la première position sur la carte, sept secondes au plus après la confirmation de l’école, et la séquence est jouée par Core Animation pour ne plus se figer quand le fil principal est occupé. Compilé ; le porteur a vu la première version sur son iPhone, pas la seconde.
 
 **Reste à qualifier** : aucun écran iOS de cette passe n’a été vu tourner ; aucun parcours réel rejoué sur l’école hébergée ; aucun appareil physique.
 

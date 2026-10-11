@@ -119,11 +119,9 @@ import Observation
 
     // MARK: Presentation
 
+    /// Un calendrier par fuseau, gardé : la liste en demande plusieurs par trajet à chaque rendu.
     static func calendar(_ trip: SchoolCaptureTrip) -> Calendar {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.locale = Locale(identifier: "fr_CH")
-        calendar.timeZone = TimeZone(identifier: trip.lessonTimeZone) ?? .current
-        return calendar
+        SchoolDateCache.shared.calendar(zone: TimeZone(identifier: trip.lessonTimeZone) ?? .current)
     }
 
     static func dayKey(_ trip: SchoolCaptureTrip) -> String {
@@ -140,12 +138,9 @@ import Observation
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) {
             return "Hier"
         }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_CH")
-        formatter.timeZone = calendar.timeZone
         let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
-        formatter.setLocalizedDateFormatFromTemplate(sameYear ? "EEEEdMMMM" : "EEEEdMMMMyyyy")
-        return formatter.string(from: date).capitalizedFirst
+        return SchoolDateCache.shared.string(from: date, zone: calendar.timeZone,
+            template: sameYear ? "EEEEdMMMM" : "EEEEdMMMMyyyy").capitalizedFirst
     }
 
     static func time(_ trip: SchoolCaptureTrip) -> String {
@@ -164,14 +159,17 @@ import Observation
     static func spokenDuration(_ capture: SchoolCaptureSession) -> String? {
         guard let stopped = capture.stoppedAt ?? capture.cutoffAt, let end = SchoolLesson.date(stopped),
               let start = SchoolLesson.date(capture.authorizedAt), end > start else { return nil }
+        return spokenDurationFormatter.string(from: max(60, (end.timeIntervalSince(start) / 60).rounded() * 60))
+    }
+    private static let spokenDurationFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = [.hour, .minute]
         formatter.unitsStyle = .full
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = Locale(identifier: "fr_CH")
         formatter.calendar = calendar
-        return formatter.string(from: max(60, (end.timeIntervalSince(start) / 60).rounded() * 60))
-    }
+        return formatter
+    }()
 
     /// A badge only for what is unusual: a trip still recording, incomplete, not sent, refused or withdrawn.
     static func badge(_ capture: SchoolCaptureSession) -> SchoolTripBadge? {
@@ -204,6 +202,13 @@ import Observation
         let name = trip.instructorName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard viewerRoles.contains("ADMIN"), trip.capture.instructorMembershipId != scope.membershipID, !name.isEmpty else { return nil }
         return name
+    }
+
+    /// Le trajet tel que son élève le lit : le moniteur qui l’a conduit, « Trajet » quand l’école n’en donne pas le nom.
+    /// Même règle pour la ligne de la liste et pour le titre du replay.
+    static func learnerTitle(_ trip: SchoolCaptureTrip) -> String {
+        let name = trip.instructorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Trajet" : name
     }
 
     // MARK: Failures

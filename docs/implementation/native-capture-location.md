@@ -53,3 +53,21 @@ Le mode de fond n'est activé qu'après départ explicite au premier plan et vé
 Relecture statique ciblée et manifeste plist contrôlé le 24 septembre 2026. Compilation Apple et recette physique de cette source **NOT_EXECUTED** à la rédaction de cette note ; elles seront distinguées du résultat déjà acquis pour l'IPA précédent. Pas de campagne générale lancée.
 
 Le raccord à une composition applicative stable, le traitement visible des interruptions, les revocations/retours Réglages, les interruptions réseau et la qualification iPhone/iPad sous verrouillage restent nécessaires avant de déclarer la collecte scolaire utilisable. La présence du code, la réussite d'un build ou le fonctionnement de G0 ne qualifient pas le profil scolaire.
+
+## Réveil du récepteur avant le départ (10 octobre 2026)
+
+Retour du porteur : après le rideau de départ, la carte attendait encore sa première position. Cause : le récepteur GPS n’était allumé qu’à l’ouverture du segment, après les vérifications réseau, et les positions antérieures à cette ouverture sont refusées (règle inchangée). Quand le diagnostic de l’appareil était encore valable, aucune mesure ne l’avait même réveillé.
+
+Décision : `SchoolCaptureLocationSource.warmUp()` ouvre un flux de localisation dès le geste de départ, si l’autorisation est déjà accordée et l’app au premier plan. Ses positions ne sont ni lues, ni conservées, ni envoyées ; le trajet ne reçoit toujours que des mesures postérieures à l’ouverture de son segment. Le flux s’arrête à la première position admise, à l’arrêt, à un échec du départ, au changement de portée, au retrait de l’autorisation, au passage en arrière-plan sans trajet, et au plus tard après trente secondes.
+
+Le rideau attend cette première position sept secondes au plus après la confirmation de l’école, et porte une barre de progression sans texte. Gain réel non mesuré : aucun essai sur appareil.
+
+### Mise à jour du même jour : réveil durable et diagnostic tiré du réveil
+
+Le réveil était coupé par chaque relecture de la préparation (`load()` fermait la source) et ne commençait qu’après la création de la leçon. Désormais :
+
+- Démarrage immédiat : le réveil commence dès que l’accord de l’élève est « avec GPS » et que l’autorisation d’iOS est accordée, pendant le récapitulatif ; la même source passe à la préparation. Depuis une leçon planifiée : dès que l’accord est confirmé.
+- Chaque appel repousse l’arrêt automatique de trente secondes ; en arrière-plan sans trajet, le réveil se suspend et reprend au retour tant qu’il reste demandé. `load()` conserve un réveil en cours (même portée).
+- La phrase « positions ni lues » ci-dessus est remplacée : aucune coordonnée du réveil n’est conservée ni envoyée, mais l’âge et la précision de sa dernière mesure (prise après le réveil, ni simulée ni d’accessoire) tiennent lieu de mesure de diagnostic, exactement comme une mesure ponctuelle. Une mesure de 5 s au plus et de 35 m au plus évite `requestLocation()` ; sinon la demande ponctuelle part et la prochaine mesure du réveil assez précise y répond. La réponse est toujours asynchrone.
+- Position exacte désactivée ou absence de mesure : échec local, avec sa raison, sans requête à l’école.
+- Le filtre de distance du segment est « aucun » (`distanceFilterMeters = 0`) ; la valeur de 3 mètres citée plus haut est périmée.

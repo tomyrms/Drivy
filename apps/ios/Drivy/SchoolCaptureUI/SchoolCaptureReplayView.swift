@@ -196,12 +196,7 @@ enum SchoolReplayFormatting {
     /// The replay uses the lesson's civil time, never the device's current time zone.
     static func startLabel(_ date: Date?, lessonTimeZone: String?) -> String? {
         guard let date, let lessonTimeZone, let zone = TimeZone(identifier: lessonTimeZone) else { return nil }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_CH")
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = zone
-        formatter.dateFormat = "d MMM 'à' HH:mm"
-        return formatter.string(from: date)
+        return SchoolDateCache.shared.string(from: date, zone: zone, format: "d MMM 'à' HH:mm")
     }
 }
 
@@ -326,11 +321,15 @@ struct SchoolCaptureReplayView: View {
                     DrivyMapDock {
                         // Sur iPhone, l’observation choisie remplace le rail : le dock ne grandit
                         // pas et la carte garde sa place. Fermer le détail rend le rail.
-                        if selectedID != nil, timeline.items.contains(where: { $0.id == selectedID }) {
-                            selectedDetail(timeline)
-                        } else {
-                            rail(timeline)
+                        Group {
+                            if selectedID != nil, timeline.items.contains(where: { $0.id == selectedID }) {
+                                selectedDetail(timeline)
+                            } else {
+                                rail(timeline)
+                            }
                         }
+                        // Le détail et le rail se remplacent en fondu ; la tête de lecture n’en est pas ralentie.
+                        .animation(DrivyMotion.reveal(reduceMotion), value: selectedID)
                         player(timeline, showsList: true)
                         replayLoadingOrError
                     }
@@ -746,7 +745,7 @@ private struct SchoolReplayMap: View {
         .onChange(of: camera.positionedByUser) { _, byUser in if byUser { followsPosition = false } }
         .onChange(of: followsPosition) { _, follows in if follows { follow() } }
         .onChange(of: current?.offset) { _, _ in if followsPosition && !camera.positionedByUser { follow() } }
-        .onChange(of: resetCameraID) { _, _ in followsPosition = false; fitRoute() }
+        .onChange(of: resetCameraID) { _, _ in followsPosition = false; fitRoute(animated: true) }
         .accessibilityLabel("Carte du trajet reconstruit par l’école")
         .accessibilityValue(timeline.mapGaps.isEmpty ? "" : "Portions sans mesure indiquées en pointillé")
     }
@@ -767,7 +766,8 @@ private struct SchoolReplayMap: View {
         }
     }
 
-    private func fitRoute() {
+    /// Tout le trajet à l’écran ; « voir tout » y glisse, l’ouverture s’y pose sans mouvement.
+    private func fitRoute(animated: Bool = false) {
         let mapPoints = timeline.samples.map { MKMapPoint($0.coordinate) }
         guard let minX = mapPoints.map(\.x).min(), let maxX = mapPoints.map(\.x).max(),
               let minY = mapPoints.map(\.y).min(), let maxY = mapPoints.map(\.y).max() else { return }
@@ -775,6 +775,8 @@ private struct SchoolReplayMap: View {
         let minimumSpan = MKMapPointsPerMeterAtLatitude(center.coordinate.latitude) * 160
         let width = max(maxX - minX, minimumSpan) * 1.2
         let height = max(maxY - minY, minimumSpan) * 1.2
-        camera = .rect(MKMapRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height))
+        withAnimation(animated && !reduceMotion ? .smooth(duration: 0.6) : nil) {
+            camera = .rect(MKMapRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height))
+        }
     }
 }

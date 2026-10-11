@@ -176,7 +176,9 @@ final class SchoolCaptureTransferCoordinator {
         }
         let receivedAt = ContinuousClock.now
         if case .authorization(let authorization) = result, authorization.capture.captureState == .authorized {
-            try check(request)
+            // Pas de contrôle d’annulation avant l’enregistrement : une autorisation reçue puis perdue parce que
+            // l’écran a disparu ne pourrait plus être scellée, et l’école la garderait active jusqu’à son expiration.
+            // Enregistrée sous la portée d’origine, elle est scellée par l’appelant si le départ n’a plus lieu.
             guard let keys, let body = try? JSONDecoder().decode(SchoolStartCaptureBody.self, from: command.body) else {
                 throw SchoolCaptureFailure.invalidResponse
             }

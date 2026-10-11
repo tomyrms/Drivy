@@ -99,11 +99,8 @@ enum SchoolReportFlowRules {
     static func observationDetail(_ observation: SchoolObservation, zone: String?) -> String? {
         var parts: [String] = []
         if let date = observation.observedDate {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "fr_CH")
-            formatter.timeZone = zone.flatMap(TimeZone.init(identifier:)) ?? .current
-            formatter.dateFormat = "HH:mm"
-            parts.append(formatter.string(from: date))
+            let zone = zone.flatMap(TimeZone.init(identifier:)) ?? .current
+            parts.append(SchoolDateCache.shared.string(from: date, zone: zone, format: "HH:mm"))
         }
         if observation.hasPosition { parts.append("Sur le trajet") }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")

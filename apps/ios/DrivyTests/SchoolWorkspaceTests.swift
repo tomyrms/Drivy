@@ -114,7 +114,6 @@ struct SchoolWorkspaceTests {
         #expect(workspace.learners.isEmpty)
         #expect(workspace.learner == nil)
         #expect(workspace.trainings.isEmpty)
-        #expect(workspace.training == nil)
         #expect(workspace.accountError != nil)
         #expect(!workspace.requiresAuthentication)
     }

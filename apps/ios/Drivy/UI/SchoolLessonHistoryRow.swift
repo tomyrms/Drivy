@@ -15,6 +15,8 @@ struct SchoolLessonHistoryRow: View {
     /// Named only when the instructor is not the reader.
     var instructor: String? = nil
     var showsState = true
+    /// Remplace le mot de l’état quand le lecteur ne peut rien y faire (l’élève devant une leçon « À terminer »).
+    var note: DrivyRowNote? = nil
 
     var body: some View {
         DrivyLessonRow(start: SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone),
@@ -22,6 +24,7 @@ struct SchoolLessonHistoryRow: View {
             title: Self.titleText(lesson, title: title),
             details: [Self.detail(lesson, title: title, permit: permit, instructor: instructor)],
             state: showsState ? lesson.drivyState : nil,
+            note: showsState ? note : nil,
             contents: lesson.drivyContents)
     }
 

@@ -24,6 +24,23 @@ import Testing
         #expect(model.lessons.count == 2 && model.nextCursor == nil)
     }
 
+    @Test func refreshKeepsTheOlderPagesAlreadyShown() async {
+        let server = HistoryServer(), model = workspace(server)
+        await model.load()
+        await model.loadMore()
+        #expect(model.lessons.count == 2 && model.nextCursor == nil)
+        // Une relecture ne ramène jamais la liste à sa première page sous les yeux.
+        await model.refreshOnAppear()
+        #expect(model.lessons.count == 2 && model.nextCursor == nil)
+    }
+
+    @Test func theLearnerReadsAllLessonsBeforeTheListIsShown() async {
+        let server = HistoryServer(), model = workspace(server)
+        model.requestWholeHistory()
+        await model.load()
+        #expect(model.lessons.count == 2 && model.nextCursor == nil && model.loadedAt != nil)
+    }
+
     @Test func failedHistoryKeepsItsRowsAndCursorUntilRetry() async {
         let server = HistoryServer(), model = workspace(server)
         await model.load()

@@ -210,14 +210,14 @@ struct SchoolRecordingChoiceView: View {
     }
 }
 
-private struct RecordingDocument: Identifiable {
+struct RecordingDocument: Identifiable {
     let id: String
     let title: String
     let text: String
     let contact: String
 }
 
-private struct RecordingDocumentView: View {
+struct RecordingDocumentView: View {
     let document: RecordingDocument
     @Environment(\.dismiss) private var dismiss
     var body: some View {

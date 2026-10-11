@@ -46,6 +46,15 @@ struct SchoolTripsTests {
         }
     }
 
+    /// L’API pourra taire l’appareil du moniteur à l’élève : un trajet sans eux se lit encore.
+    @Test func aTripWithoutTheInstructorDeviceStillDecodes() throws {
+        var item = Self.item(1, start: "2026-09-28T08:00:00Z", stopped: "2026-09-28T08:48:00Z")
+        item["deviceId"] = nil; item["deviceAssessmentId"] = nil
+        let trip = try JSONDecoder().decode(SchoolCaptureTrip.self, from: JSONSerialization.data(withJSONObject: item))
+        #expect(trip.capture.deviceId == nil && trip.capture.deviceAssessmentId == nil)
+        #expect(trip.capture.hasValidTimeline)
+    }
+
     @Test func tripsAreGroupedByDayWithTodayAndYesterday() throws {
         let trips = try [Self.item(1, start: "2026-09-28T14:00:00Z"), Self.item(2, start: "2026-09-28T08:00:00Z"),
                          Self.item(3, start: "2026-09-27T08:00:00Z"), Self.item(4, start: "2026-09-20T08:00:00Z")]

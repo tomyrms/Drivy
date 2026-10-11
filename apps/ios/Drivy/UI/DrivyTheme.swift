@@ -130,6 +130,14 @@ enum DrivyMotion {
     /// System-initiated feedback (state change): short ease-out.
     static func feedback(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : .easeOut(duration: 0.12) }
     static func context(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : .snappy(duration: 0.18) }
+    /// Passage d’une étape à la suivante dans une même feuille : ressort court, à peine rebondi. Sous Réduire
+    /// les animations, un fondu bref seulement (les transitions d’étape deviennent elles aussi des fondus).
+    static func step(_ reduceMotion: Bool) -> Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.38, bounce: 0.12) }
+    /// Contenu qui arrive après une lecture (accord, formation) : il se pose sans pousser brutalement le reste.
+    static func reveal(_ reduceMotion: Bool) -> Animation { reduceMotion ? .easeInOut(duration: 0.2) : .smooth(duration: 0.3) }
+    /// Ouverture et fermeture d’un panneau posé sur l’écran (palette de signalement) : vif, sans rebond. Sous
+    /// Réduire les animations, la transition du panneau devient un fondu, jamais une apparition sèche.
+    static func present(_ reduceMotion: Bool) -> Animation { reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.24, extraBounce: 0) }
 }
 
 /// The single dominant action of a view. Pressed state is immediate; the

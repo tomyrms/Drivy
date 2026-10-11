@@ -55,6 +55,8 @@ final class SchoolCaptureSessionController {
     private(set) var pendingSynchronizationError: String?
     private(set) var finalizedSyncState: SchoolCaptureSession.SyncState?
     private(set) var liveObservations: SchoolLiveObservationRecorder?
+    /// Leçon de ce trajet que l’école a confirmée terminée : le trajet n’a plus rien à proposer que sa fermeture.
+    private(set) var completedLessonID: UUID?
 
     @ObservationIgnored private var permittedScope: SchoolCommandScope?
     @ObservationIgnored private var context: Context?
@@ -234,8 +236,14 @@ final class SchoolCaptureSessionController {
         await finish(active, request: request, boundary: boundary, reason: .deviceError)
     }
 
+    /// Appelé par la fiche quand l’école confirme la fin de la leçon de ce trajet.
+    func noteLessonCompleted(_ id: UUID) {
+        if lessonID == id { completedLessonID = id }
+    }
+
     func closeSaved() {
         guard state == .saved else { return }
+        completedLessonID = nil
         liveObservations?.stop(); liveObservations = nil
         context?.source.onEvent = nil
         context = nil; generation = UUID()
@@ -274,6 +282,7 @@ final class SchoolCaptureSessionController {
         synchronizationClient = nil; pendingSynchronizationCount = 0; pendingSynchronizationError = nil
         liveObservations?.stop(); liveObservations = nil
         permittedScope = scope
+        completedLessonID = nil
         let old = context
         let boundary = old?.stopBoundary()
         old?.terminalRequested = true
@@ -327,6 +336,7 @@ final class SchoolCaptureSessionController {
         let active = Context(scope: transfer.scope, source: source, local: local, transfer: ownedTransfer,
             session: session, authorization: authorization, lease: lease, clock: clock, policy: policy)
         context = active
+        completedLessonID = nil
         captureID = session.id; lessonID = session.serverCapture.lessonId
         segments = []; beginning = nil; endedAt = nil; transition = nil; state = .preparing
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false

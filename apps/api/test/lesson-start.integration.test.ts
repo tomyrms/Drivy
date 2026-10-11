@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {afterAll,beforeAll,describe,expect,it} from 'vitest';
 import type {Pool} from 'pg';
-import {freshDatabase,harness,prepareCommercial,prepareSchool,lessonBody,moveToPast,slot,id,type Call} from './support/harness.js';
+import {freshDatabase,harness,prepareCommercial,prepareSchool,lessonBody,moveToNow,moveToPast,slot,id,type Call} from './support/harness.js';
 
 let pool:Pool,call:Call,app:Awaited<ReturnType<typeof harness>>['app'];
 let school:Awaited<ReturnType<typeof prepareSchool>>,commercial:Awaited<ReturnType<typeof prepareCommercial>>;
@@ -62,10 +62,14 @@ describe('départ explicite et durable, avec ou sans agenda',()=>{
   expect((await pool.query("SELECT count(*)::int AS n FROM drivy.lesson_event_outbox WHERE lesson_id=$1 AND event_type='LessonStarted'",[lesson.id])).rows[0].n).toBe(1);
  });
 
- it('un départ réel anticipé se termine ; une leçon future sans départ reste protégée',async()=>{
+ it('une leçon future ne commence pas avant son jour ; le jour venu, elle commence et se termine',async()=>{
   const lesson=await plan(),route=`/lessons/${lesson.id}`;
   const refused=await call('POST',`${route}/complete`,completeBody(new Date(Date.now()-60_000).toISOString()),lesson.version);
   expect(refused.json().code).toBe('LESSON_NOT_STARTED');
+  const early=await call('POST',`${route}/start`,{operationId:randomUUID()},lesson.version);
+  expect(early.statusCode,early.body).toBe(409);expect(early.json().code).toBe('LESSON_NOT_TODAY');
+  expect(await read(lesson.id)).toMatchObject({actualStart:null,version:1});
+  await moveToNow(pool,lesson.id);
   const start=await call('POST',`${route}/start`,{operationId:randomUUID()},lesson.version);expect(start.statusCode,start.body).toBe(200);
   const done=await call('POST',`${route}/complete`,completeBody(start.json().data.actualStart),start.json().data.version);
   expect(done.statusCode,done.body).toBe(200);expect(done.json().data.lesson.actualStart).toBe(start.json().data.actualStart);
@@ -91,6 +95,7 @@ describe('départ explicite et durable, avec ou sans agenda',()=>{
   try{expect((await call('POST',route,{operationId:randomUUID()},lesson.version)).statusCode).toBe(404);}
   finally{await pool.query('UPDATE drivy.instructor_assignment SET valid_until=NULL WHERE id=$1',[id.assignment]);}
   expect(await read(lesson.id)).toMatchObject({actualStart:null,version:1});
+  await moveToNow(pool,lesson.id);
   const start=await call('POST',route,{operationId:randomUUID()},lesson.version);expect(start.statusCode,start.body).toBe(200);
   const move={operationId:randomUUID(),...slot(nextDay++),timeZone:'Europe/Zurich',meetingPoint:'Recette',instructorMembershipId:id.instructorMember,agreementConfirmed:true};
   expect((await call('POST',`/lessons/${lesson.id}/move`,move,start.json().data.version)).json().code).toBe('LESSON_STARTED');
@@ -105,7 +110,7 @@ describe('départ explicite et durable, avec ou sans agenda',()=>{
  });
 
  it('une annulation concurrente au départ ne valide qu’une commande sur la version affichée',async()=>{
-  const lesson=await plan();
+  const lesson=await plan();await moveToNow(pool,lesson.id);
   const results=await Promise.all([call('POST',`/lessons/${lesson.id}/start`,{operationId:randomUUID()},lesson.version),call('POST',`/lessons/${lesson.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},lesson.version)]);
   expect(results.map(r=>r.statusCode).sort()).toEqual([200,412]);
   const saved=await read(lesson.id);expect(saved.version).toBe(2);

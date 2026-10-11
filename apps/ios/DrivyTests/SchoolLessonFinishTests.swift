@@ -266,6 +266,7 @@ actor LessonFinishServer: SchoolHTTPTransport {
     func setConfirmedOperation(_ id: UUID, resourceID: UUID) { operation = id; receiptResourceID = resourceID }
     func requests() -> [URLRequest] { recorded }
     func enableStartNowConflict() async { await fallback.enableStartNowConflict() }
+    func enableStartNow() async { await fallback.enableStartNow() }
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         recorded.append(request)

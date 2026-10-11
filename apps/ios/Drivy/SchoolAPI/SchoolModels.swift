@@ -151,6 +151,14 @@ protocol SchoolAPI: AnyObject {
     func learner(schoolID: UUID, id: UUID) async throws -> SchoolLearner
     func trainings(schoolID: UUID, learnerID: UUID, cursor: String?) async throws -> SchoolPage<SchoolTraining>
     func training(schoolID: UUID, id: UUID) async throws -> SchoolTraining
+    /// Le dossier de l’élève connecté, archivé compris : une formation terminée garde ses bilans et ses trajets.
+    func ownLearners(schoolID: UUID) async throws -> SchoolPage<SchoolLearner>
+}
+
+extension SchoolAPI {
+    func ownLearners(schoolID: UUID) async throws -> SchoolPage<SchoolLearner> {
+        try await learners(schoolID: schoolID, query: "", cursor: nil)
+    }
 }
 
 enum SchoolAPIError: Error, LocalizedError, Equatable {

@@ -21,7 +21,13 @@ import Observation
     private(set) var errorMessage: String?
     private(set) var progressError: String?
     private(set) var accessRevoked = false
+    /// Dernière lecture complète de la formation et de ses leçons.
+    private(set) var loadedAt: Date?
     @ObservationIgnored private var generation = UUID()
+    /// Lecture en cours ; `nil` sinon. Deux écrans qui montrent la même formation ne la relisent pas chacun.
+    @ObservationIgnored private var loadingRequest: UUID?
+    /// Les relectures qui attendent la fin de la lecture en cours.
+    @ObservationIgnored private var loadingWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var progressRequest = UUID()
     @ObservationIgnored private var seenCursors = Set<String>()
     @ObservationIgnored private var historyRequested = false
@@ -51,6 +57,28 @@ import Observation
     /// Retour sur l’écran : le modèle est partagé et gardé en mémoire, donc relu à chaque affichage
     /// (un bilan enregistré ailleurs change la progression). L’affichage courant reste visible jusqu’à la réponse.
     func refreshOnAppear() async { await load(keepingCurrent: true) }
+    /// Relecture silencieuse, sauf si une lecture est déjà en cours ou date de moins de `interval` secondes :
+    /// les onglets Leçons, Progression et Profil de l’élève partagent ce modèle et ne le relisent pas chacun.
+    func refresh(ifOlderThan interval: TimeInterval) async {
+        // Une lecture en cours est attendue, pas ignorée : annulée avec l’onglet qui l’a lancée, elle ne laisse rien
+        // de lu, et l’écran qui vient d’apparaître doit alors la reprendre.
+        while loadingRequest != nil { await withCheckedContinuation { loadingWaiters.append($0) } }
+        guard !invalidated, !Task.isCancelled else { return }
+        // Un historique complet demandé mais pas encore lu se relit tout de suite, même après une lecture récente ;
+        // une erreur affichée aussi.
+        let complete = !historyRequested || nextCursor == nil
+        if complete, errorMessage == nil, let loadedAt, Date().timeIntervalSince(loadedAt) < interval { return }
+        await load(keepingCurrent: true)
+    }
+    private func finishLoading(_ request: UUID) {
+        guard loadingRequest == request else { return }
+        loadingRequest = nil
+        let waiters = loadingWaiters; loadingWaiters = []
+        waiters.forEach { $0.resume() }
+    }
+    /// L’élève lit toutes ses leçons : la prochaine est toujours la dernière servie (le serveur va de la plus
+    /// ancienne à la plus récente), et son profil compte ses leçons sur l’historique entier.
+    func requestWholeHistory() { historyRequested = true }
     func invalidate() {
         invalidated = true; generation = UUID(); progressRequest = UUID(); cancelHistory()
         clear(); isLoading = false; isLoadingMore = false
@@ -58,15 +86,18 @@ import Observation
     private func cancelHistory() { historyTask?.cancel(); historyTask = nil; isLoadingHistory = false }
     private func clear() {
         training = nil; lessons = []; nextCursor = nil; progress = nil; competencies = []; lastEvaluated = nil
-        seenCursors = []; lessonsLoaded = false
+        seenCursors = []; lessonsLoaded = false; loadedAt = nil
     }
 
     /// `keepingCurrent` : relecture au retour d’une leçon ; ce qui est affiché reste visible jusqu’à la réponse.
     func load(keepingCurrent: Bool = false) async {
         guard !invalidated else { return }
         generation = UUID(); progressRequest = UUID(); let request = generation
+        loadingRequest = request
+        defer { finishLoading(request) }
         cancelHistory()
-        isLoading = !keepingCurrent || training == nil; isLoadingMore = false; errorMessage = nil
+        // Une formation lue sans ses leçons (lecture annulée en route) reste en premier chargement.
+        isLoading = !keepingCurrent || training == nil || !lessonsLoaded; isLoadingMore = false; errorMessage = nil
         if !keepingCurrent { progressError = nil }
         do {
             try await client.checkScope(scope, membership: membership)
@@ -85,13 +116,30 @@ import Observation
             fail(error); return
         }
         do {
-            let page = try await client.lessons(schoolID: scope.schoolID, trainingID: trainingID, cursor: nil)
+            // Une relecture ne tronque jamais sous les yeux ce qui est montré : les pages déjà lues (« Afficher
+            // d’autres leçons », historique complet) sont relues en entier, puis la liste est remplacée d’un coup.
+            let shown = keepingCurrent ? lessons.count : 0
+            var page = try await client.lessons(schoolID: scope.schoolID, trainingID: trainingID, cursor: nil)
             guard page.items.allSatisfy({ $0.learnerId == learnerID }) else { throw SchoolAPIError.invalidResponse }
+            var items = page.items
+            var read = Set<String>()
+            while let cursor = page.nextCursor, historyRequested || items.count < shown, items.count < 10_000, read.count < 200 {
+                guard request == generation, !invalidated else { return }
+                guard read.insert(cursor).inserted else { throw SchoolAPIError.invalidResponse }
+                let next = try await client.lessons(schoolID: scope.schoolID, trainingID: trainingID, cursor: cursor)
+                guard next.nextCursor != cursor, next.nextCursor.map({ !read.contains($0) }) ?? true,
+                      next.items.allSatisfy({ $0.learnerId == learnerID }),
+                      Set(items.map(\.id)).isDisjoint(with: Set(next.items.map(\.id))) else { throw SchoolAPIError.invalidResponse }
+                items += next.items; page = next
+            }
             guard request == generation, !invalidated else { return }
-            lessons = page.items; nextCursor = page.nextCursor; seenCursors = []; lessonsLoaded = true
+            lessons = items; nextCursor = page.nextCursor; seenCursors = read; lessonsLoaded = true
+            loadedAt = Date()
         } catch {
             guard request == generation, !invalidated else { return }
-            if !(error is CancellationError) { fail(error) }
+            // Lecture annulée : rien d’autre n’est lu pour un écran qui n’est plus là.
+            if error is CancellationError { isLoading = false; return }
+            fail(error)
         }
         guard request == generation, !invalidated, !accessRevoked else { return }
         isLoading = false
@@ -119,6 +167,8 @@ import Observation
         historyRequested = true
         guard !isLoading, !invalidated, !accessRevoked else { return }
         if let historyTask { await historyTask.value; return }
+        // Historique déjà complet : rien à lire, aucun « Chargement de l’historique… » qui s’allume pour rien.
+        guard nextCursor != nil else { return }
         let request = generation
         isLoadingHistory = true
         // Le choix d'un autre mois ou la fermeture du sélecteur ne doit pas interrompre l'historique partagé.
@@ -243,6 +293,11 @@ import Observation
     func loadHistory() async { await Self.together(models) { await $0.loadHistory() } }
     /// Relecture silencieuse : ce qui est affiché reste visible jusqu’à chaque réponse.
     func reload() async { await Self.together(models) { await $0.load(keepingCurrent: true) } }
+    /// Relecture silencieuse des seules formations lues il y a plus de `interval` secondes et qu’aucun autre écran
+    /// n’est déjà en train de relire.
+    func reload(ifOlderThan interval: TimeInterval) async {
+        await Self.together(models) { await $0.refresh(ifOlderThan: interval) }
+    }
 
     static func together(_ models: [SchoolTrainingWorkspace],
                          _ work: @escaping @MainActor @Sendable (SchoolTrainingWorkspace) async -> Void) async {
