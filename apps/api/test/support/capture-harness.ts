@@ -7,11 +7,11 @@ import {trackContentHash,type CaptureConfig} from '../../src/capture-crypto.js';
 import {id,issuer} from './harness.js';
 
 /** Trajets de recette sur PostgreSQL réel : école GPS activée, notice adoptée, appareil qualifié par un profil synthétique. */
-export async function captureHarness(pool:Pool){
+export async function captureHarness(pool:Pool,extra:Partial<Pick<Parameters<typeof buildApp>[0],'mapMatching'|'mapMatcher'>>={}){
  const oidc=await generateKeyPair('RS256'),key=await exportJWK(oidc.publicKey),signing=await generateKeyPair('EdDSA',{extractable:true});
  const config:CaptureConfig={encryptionKey:Buffer.alloc(32,42),encryptionKeyId:'synthetic-only',signingKey:{...await exportJWK(signing.privateKey),kid:'synthetic-only'},issuer:'https://capture-api.example.invalid',
   profiles:[{version:'SYNTHETIC-TEST-ONLY',platform:'IOS',deviceClass:'PHONE',modelCode:'TEST',osVersion:'TEST',appBuild:'TEST',expiresAt:new Date(Date.now()+86400000).toISOString(),maxSampleAgeSeconds:5,maxHorizontalAccuracyMeters:50,minimumFreeBytes:1,requireBackground:true,requirePreciseLocation:true}],uploadHours:72};
- const app=buildApp({pool,cursorSecret:'capture-harness-secret-32-characters',capture:config,verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/jwks`},createLocalJWKSet({keys:[{...key,kid:'capture',alg:'RS256'}]}))});
+ const app=buildApp({pool,cursorSecret:'capture-harness-secret-32-characters',capture:config,...extra,verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/jwks`},createLocalJWKSet({keys:[{...key,kid:'capture',alg:'RS256'}]}))});
  const base=`/v1/schools/${id.schoolA}`;
  async function call(method:'GET'|'POST'|'PUT',route:string,body?:any,version?:number,subject='demo-instructor'){
   const token=await new SignJWT({}).setProtectedHeader({alg:'RS256',kid:'capture'}).setIssuer(issuer).setSubject(subject).setAudience('drivy-api').setIssuedAt().setExpirationTime('5m').sign(oidc.privateKey);

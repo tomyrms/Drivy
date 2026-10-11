@@ -17,6 +17,8 @@ import { registerLessonSetup } from './lesson-setup.js';
 import { registerLessonReports } from './lesson-reports.js';
 import type { InvitationMailConfig } from './invitation-mail.js';
 import { registerCaptures } from './captures.js';
+import { registerMatchedRoutes } from './matched-routes.js';
+import type { MapMatcher, MapMatchingConfig } from './map-matching-client.js';
 import type { CaptureConfig } from './capture-crypto.js';
 import { registerHealth } from './health.js';
 import { registerPermits } from './permits.js';
@@ -79,7 +81,7 @@ export function clientError(error: unknown): ApiError | undefined {
   return new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
 }
 
-export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig }) {
+export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher }) {
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384 });
   const cursors = new Cursors(options.cursorSecret);
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options','nosniff'); });
@@ -187,6 +189,7 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerLessons(app,options);
   registerLessonReports(app,options);
   registerCaptures(app,options);
+  registerMatchedRoutes(app,options);
   registerCaptureObservations(app,options);
   registerSharing(app,options);
   registerAdministration(app,options);
