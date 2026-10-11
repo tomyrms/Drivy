@@ -1,13 +1,18 @@
 import SwiftUI
 
-/// La progression d’une formation : la dernière leçon évaluée, un décompte en mots, puis les
-/// compétences rangées par ce qu’il reste à faire. Chaque ligne ouvre la leçon d’où vient son niveau.
+/// La progression d’une formation : la prochaine étape du dernier bilan, ce qu’il reste à travailler, puis, repliés,
+/// ce qui est acquis et ce qui n’a pas encore été vu. Une ligne dit une compétence et son niveau, rien d’autre :
+/// la situation et le détail sont dans la leçon qu’elle ouvre.
 /// Ni score, ni pourcentage, ni barre, ni tendance : le serveur ne garde que le dernier niveau publié.
 struct SchoolTrainingProgressSection: View {
     let model: SchoolTrainingWorkspace
     /// Une évaluation est datée sans sa leçon : elle se lit dans le fuseau de l’école.
     let schoolTimeZone: String
+    /// L’équipe lit de quand date chaque niveau (une compétence pas revue depuis longtemps) ; l’élève non.
+    var showsDates = false
     let open: (UUID) -> Void
+    /// `nil` tant que le lecteur n’a rien choisi : l’acquis ne s’ouvre seul que s’il n’y a rien à travailler.
+    @State private var showsIndependent: Bool?
     @State private var showsUnseen = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -27,10 +32,7 @@ struct SchoolTrainingProgressSection: View {
                 if value.items.isEmpty && value.unobservedCompetencyIds.isEmpty {
                     DrivyEmptyState(title: "Aucune compétence", symbol: "list.bullet")
                 } else {
-                    overview(value)
-                    group("À travailler", SchoolProgressRules.toWorkOn(value.items))
-                    group("En autonomie", SchoolProgressRules.independent(value.items, order: order))
-                    unseen(count: value.unobservedCompetencyIds.count)
+                    content(value)
                 }
             } else if let error = model.progressError {
                 notice(error)
@@ -40,9 +42,10 @@ struct SchoolTrainingProgressSection: View {
             }
         }
         // Le squelette cède la place à la progression (ou à sa panne) par un fondu ; la panne d’une relecture s’ajoute
-        // de même ; le repli « Pas encore vues » s’ouvre et se ferme avec la même douceur.
+        // de même ; les replis s’ouvrent et se ferment avec la même douceur.
         .animation(DrivyMotion.reveal(reduceMotion), value: stage)
         .animation(DrivyMotion.reveal(reduceMotion), value: model.progressError)
+        .animation(DrivyMotion.reveal(reduceMotion), value: showsIndependent)
         .animation(DrivyMotion.reveal(reduceMotion), value: showsUnseen)
     }
 
@@ -57,76 +60,96 @@ struct SchoolTrainingProgressSection: View {
         SchoolErrorNotice(message: message, retry: { Task { await model.loadProgress() } })
     }
 
-    // MARK: - Dernière leçon et décompte
-
-    @ViewBuilder private func overview(_ value: SchoolReportProgress) -> some View {
-        let summary = lastLesson(value)
-        let counts = SchoolProgressRules.countLine(items: value.items, unobserved: value.unobservedCompetencyIds.count)
-        if summary != nil || counts != nil {
-            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                if let summary {
-                    Button { open(summary.lessonID) } label: { summary }
-                        .buttonStyle(DrivyRowButtonStyle())
-                        .accessibilityHint("Ouvre la leçon")
-                }
-                if let counts {
-                    Text(counts)
-                        .font(.subheadline)
-                        .foregroundStyle(DrivyTheme.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+    @ViewBuilder private func content(_ value: SchoolReportProgress) -> some View {
+        let toWorkOn = SchoolProgressRules.toWorkOn(value.items)
+        let independent = SchoolProgressRules.independent(value.items, order: order)
+        lastLesson
+        if !toWorkOn.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                SchoolProgressGroupTitle(title: "À travailler")
+                rows(toWorkOn, showsMeter: true)
             }
         }
+        if !independent.isEmpty {
+            // Replié quand il reste à travailler : la page tient alors sur un écran.
+            fold("En autonomie", count: independent.count,
+                 isExpanded: Binding(get: { showsIndependent ?? toWorkOn.isEmpty }, set: { showsIndependent = $0 })) {
+                rows(independent, showsMeter: false)
+            }
+        }
+        unseen(count: value.unobservedCompetencyIds.count)
     }
 
-    /// Omis tant que le bilan n’est pas lu, si sa lecture est refusée, ou s’il n’a rien à dire.
-    private func lastLesson(_ value: SchoolReportProgress) -> SchoolLastLessonSummary? {
-        guard let last = model.lastEvaluated else { return nil }
-        let nextStep = last.nextStep.trimmingCharacters(in: .whitespacesAndNewlines)
-        let worked = SchoolProgressRules.worked(in: last.lessonID, items: value.items, order: order).map { label($0) }
-        guard !nextStep.isEmpty || !worked.isEmpty else { return nil }
-        return SchoolLastLessonSummary(lessonID: last.lessonID,
-            day: SchoolTrainingFormatting.day(last.date, zone: last.timeZone ?? schoolTimeZone),
-            nextStep: nextStep, worked: worked)
+    // MARK: - Prochaine étape et dernière leçon
+
+    /// Le conseil du dernier bilan en tête, puis la leçon d’où il vient. Rien tant que le bilan n’est pas lu ou si sa
+    /// lecture est refusée ; aucune étape n’est déduite des compétences.
+    @ViewBuilder private var lastLesson: some View {
+        if let last = model.lastEvaluated {
+            let nextStep = last.nextStep.trimmingCharacters(in: .whitespacesAndNewlines)
+            let day = SchoolTrainingFormatting.day(last.date, zone: last.timeZone ?? schoolTimeZone)
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                if !nextStep.isEmpty {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        Text("Prochaine étape")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(DrivyTheme.muted)
+                            .accessibilityAddTraits(.isHeader)
+                        Text(nextStep)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(DrivyTheme.text)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Button { open(last.lessonID) } label: { SchoolLastLessonLine(day: day) }
+                    .buttonStyle(DrivyRowButtonStyle())
+                    .accessibilityHint("Ouvre la leçon")
+                    .accessibilityIdentifier("progress-last-lesson")
+            }
+        }
     }
 
     // MARK: - Compétences
 
-    @ViewBuilder private func group(_ title: String, _ items: [SchoolReportProgressItem]) -> some View {
-        if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                SchoolProgressGroupTitle(title: title)
+    private func rows(_ items: [SchoolReportProgressItem], showsMeter: Bool) -> some View {
+        DrivyRowGroup {
+            ForEach(items) { item in
+                Button { open(item.sourceLessonId) } label: {
+                    SchoolProgressRow(label: label(item), level: item.level, showsMeter: showsMeter,
+                        date: showsDates ? SchoolTrainingFormatting.day(item.observedAt, zone: schoolTimeZone) : nil)
+                }
+                .buttonStyle(DrivyRowButtonStyle())
+                .accessibilityHint("Ouvre la leçon")
+            }
+        }
+    }
+
+    /// Ce qui n’a pas encore été vu n’appelle aucun geste : replié, et ses lignes n’ouvrent rien.
+    @ViewBuilder private func unseen(count: Int) -> some View {
+        let competencies = model.unobservedCompetencies
+        if !competencies.isEmpty {
+            fold("Pas encore vues", count: max(count, competencies.count), isExpanded: $showsUnseen) {
                 DrivyRowGroup {
-                    ForEach(items) { item in
-                        Button { open(item.sourceLessonId) } label: {
-                            SchoolProgressRow(label: label(item), level: item.level, context: item.context,
-                                date: SchoolTrainingFormatting.day(item.observedAt, zone: schoolTimeZone))
-                        }
-                        .buttonStyle(DrivyRowButtonStyle())
-                        .accessibilityHint("Ouvre la leçon")
+                    ForEach(competencies) { competency in
+                        SchoolProgressRow(label: competency.displayLabel, level: "", showsMeter: false, opensLesson: false)
                     }
                 }
             }
         }
     }
 
-    /// Replié : ce qui n’a pas encore été vu n’appelle aucun geste.
-    @ViewBuilder private func unseen(count: Int) -> some View {
-        let competencies = model.unobservedCompetencies
-        if !competencies.isEmpty {
-            DisclosureGroup(isExpanded: $showsUnseen) {
-                DrivyRowGroup {
-                    ForEach(competencies) { competency in
-                        SchoolProgressRow(label: competency.displayLabel, level: "", opensLesson: false)
-                    }
-                }
-            } label: {
-                Text("Pas encore vues (\(max(count, competencies.count)))")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.accent)
-                    .multilineTextAlignment(.leading)
-                    .frame(minHeight: 44, alignment: .leading)
-            }
+    /// Un groupe replié : son nom et son nombre suffisent tant qu’on ne l’ouvre pas.
+    private func fold<Content: View>(_ title: String, count: Int, isExpanded: Binding<Bool>,
+                                     @ViewBuilder content: @escaping () -> Content) -> some View {
+        DisclosureGroup(isExpanded: isExpanded) {
+            content()
+        } label: {
+            Text("\(title) (\(count))")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(DrivyTheme.accent)
+                .multilineTextAlignment(.leading)
+                .frame(minHeight: 44, alignment: .leading)
         }
     }
 }
@@ -144,25 +167,36 @@ private struct SchoolProgressGroupTitle: View {
     }
 }
 
-/// Une compétence : libellé, niveau en mots, situation, date, et le parcours partagé avec le bilan.
+/// Une compétence : son libellé et sa jauge. Le niveau en mots reste dit à VoiceOver, que la jauge soit montrée ou non.
 private struct SchoolProgressRow: View {
     let label: String
     let level: String
-    /// La situation notée par le moniteur (« Slalom sur le plateau »), si elle existe.
-    var context: String? = nil
+    /// Inutile sous un titre qui dit déjà le niveau de tout le groupe.
+    var showsMeter = true
     var date: String? = nil
     var opensLesson = true
     @Environment(\.dynamicTypeSize) private var typeSize
 
+    private var levelWords: String { level.isEmpty ? "Pas encore vue" : SchoolTrainingFormatting.level(level) }
+
     var body: some View {
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.m))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.m))
         layout {
-            DrivyCompetencyNote(label: label, level: level.isEmpty ? "Pas encore vue" : SchoolTrainingFormatting.level(level),
-                context: context, date: date)
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(label)
+                    .font(.body)
+                    .foregroundStyle(DrivyTheme.text)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let date {
+                    Text(date).font(.caption).monospacedDigit().foregroundStyle(DrivyTheme.muted)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: DrivySpacing.s) {
-                DrivyCompetencyMeter(level: level)
+                if showsMeter && !level.isEmpty { DrivyCompetencyMeter(level: level) }
                 if opensLesson {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
@@ -170,65 +204,35 @@ private struct SchoolProgressRow: View {
                         .accessibilityHidden(true)
                 }
             }
-            .padding(.top, DrivySpacing.xs)
         }
         .padding(.vertical, DrivySpacing.s)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue([levelWords, date].compactMap { $0 }.joined(separator: ", "))
     }
 }
 
-/// La dernière leçon et la prochaine étape du même bilan suivent un seul fil.
-/// Une étape absente ne produit ni station vide ni texte déduit des compétences.
-private struct SchoolLastLessonSummary: View {
-    let lessonID: UUID
+/// La leçon du dernier bilan, en une ligne qui l’ouvre.
+private struct SchoolLastLessonLine: View {
     let day: String
-    let nextStep: String
-    let worked: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            DrivyThreadItem(position: nextStep.isEmpty ? .only : .first) {
-                HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Text("Dernière leçon évaluée")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(DrivyTheme.muted)
-                        Text(day)
-                            .font(.headline)
-                            .monospacedDigit()
-                            .foregroundStyle(DrivyTheme.text)
-                        if !worked.isEmpty {
-                            Text("Travaillé : \(worked.joined(separator: ", "))")
-                                .font(.subheadline)
-                                .foregroundStyle(DrivyTheme.muted)
-                        }
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(DrivyTheme.muted)
-                        .accessibilityHidden(true)
-                }
-            }
-            if !nextStep.isEmpty {
-                DrivyThreadItem(position: .last, isCurrent: true, isPast: false) {
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Text("Prochaine étape")
-                            .font(.headline)
-                            .foregroundStyle(DrivyTheme.text)
-                        Text(nextStep)
-                            .font(.body)
-                            .foregroundStyle(DrivyTheme.text)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
+        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+            Text("Leçon du \(day)")
+                .font(.subheadline)
+                .monospacedDigit()
+                .foregroundStyle(DrivyTheme.muted)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(DrivyTheme.muted)
+                .accessibilityHidden(true)
         }
-        .multilineTextAlignment(.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }

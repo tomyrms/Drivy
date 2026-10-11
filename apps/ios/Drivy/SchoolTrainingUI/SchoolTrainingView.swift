@@ -319,6 +319,9 @@ private struct SchoolTrainingContent: View {
         models.count == 1 ? models.first : models.first { $0.trainingID == permit }
     }
     private var shown: [SchoolTrainingWorkspace] { selected.map { [$0] } ?? models }
+    /// La progression se lit un permis à la fois : celui du filtre, sinon le premier (la formation en cours).
+    /// Trois référentiels l’un sous l’autre ne se lisent pas.
+    private var progressModel: SchoolTrainingWorkspace? { selected ?? models.first }
     private var feed: SchoolLessonFeed { SchoolLessonFeed(models: shown) }
     private var hasSeveralPermits: Bool { models.count > 1 }
     /// « Tous » avec plusieurs permis : chaque leçon et chaque section de progression nomme le sien.
@@ -364,7 +367,7 @@ private struct SchoolTrainingContent: View {
         VStack(alignment: .leading, spacing: DrivySpacing.m) {
             if !isEmbedded && (fixedSection == nil || showsHeading) { heading }
             if fixedSection == nil && hasPedagogicalRole { sectionPicker }
-            filterRow(withLessonsMenu: section == .lessons)
+            filterRow(withLessonsMenu: section == .lessons, forProgress: section == .progress)
             if !hasTraining && feed.isLoading {
                 DrivySkeletonRows(count: 4, leading: .time)
                     .drivySkeleton("Chargement de la formation…")
@@ -373,7 +376,7 @@ private struct SchoolTrainingContent: View {
             if hasTraining {
                 switch section {
                 case .lessons: lessons
-                case .progress: progress
+                case .progress: progress()
                 }
             }
         }
@@ -397,7 +400,7 @@ private struct SchoolTrainingContent: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: DrivySpacing.m) {
                         DrivySectionHeader(title: "Progression")
-                        progress
+                        progress(namesPermit: true)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -459,7 +462,7 @@ private struct SchoolTrainingContent: View {
 
     /// Une seule rangée : le permis à gauche, « Filtrer et trier » à droite (Leçons seulement).
     /// Avec un seul permis et rien à trier, la rangée n’existe pas. En très grand texte, les deux menus s’empilent.
-    @ViewBuilder private func filterRow(withLessonsMenu: Bool) -> some View {
+    @ViewBuilder private func filterRow(withLessonsMenu: Bool, forProgress: Bool = false) -> some View {
         let showsMenu = withLessonsMenu && showsLessonsMenu
         if hasSeveralPermits || showsMenu {
             let stacked = dynamicTypeSize.isAccessibilitySize
@@ -467,7 +470,7 @@ private struct SchoolTrainingContent: View {
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
                 : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.m))
             layout {
-                if hasSeveralPermits { permitFilter }
+                if hasSeveralPermits { permitFilter(forProgress: forProgress) }
                 if !stacked { Spacer(minLength: 0) }
                 if showsMenu { lessonsMenu }
             }
@@ -476,12 +479,14 @@ private struct SchoolTrainingContent: View {
 
     /// Toujours un menu qui affiche le choix en cours, quel que soit le nombre de permis :
     /// jamais un second contrôle segmenté sous celui des sections.
-    private var permitFilter: some View {
+    /// Sur la progression, « Tous les permis » n’existe pas : le menu nomme le permis montré.
+    private func permitFilter(forProgress: Bool) -> some View {
         let names = permitNames
-        let current = selected.map { permitName($0, in: names) } ?? "Tous les permis"
+        let chosen = forProgress ? progressModel : selected
+        let current = chosen.map { permitName($0, in: names) } ?? "Tous les permis"
         return Menu {
-            Picker("Permis", selection: Binding(get: { selected?.trainingID }, set: { permit = $0 })) {
-                Text("Tous les permis").tag(UUID?.none)
+            Picker("Permis", selection: Binding(get: { chosen?.trainingID }, set: { permit = $0 })) {
+                if !forProgress { Text("Tous les permis").tag(UUID?.none) }
                 ForEach(models, id: \.trainingID) { model in
                     Text(permitName(model, in: names)).tag(UUID?.some(model.trainingID))
                 }
@@ -817,17 +822,22 @@ private struct SchoolTrainingContent: View {
     private func instructorName(of lesson: SchoolLesson) -> String? {
         lesson.instructorMembershipId == workspace.membership?.membershipId ? nil : lesson.providedInstructorName
     }
-    /// Une compétence relève du référentiel de sa catégorie : « Tous » montre la progression de chaque permis
-    /// sous son nom, l’une après l’autre, sans rien additionner d’un permis à l’autre.
-    private var progress: some View {
+    /// Une compétence relève du référentiel de sa catégorie : la progression se lit un permis à la fois, sans rien
+    /// additionner d’un permis à l’autre. `namesPermit` : le filtre voisin dit « Tous les permis », le permis montré
+    /// est donc nommé ici.
+    private func progress(namesPermit: Bool = false) -> some View {
         let names = permitNames
         let zone = workspace.school?.timeZone ?? "Europe/Zurich"
         return VStack(alignment: .leading, spacing: DrivySpacing.xl) {
             // Une formation illisible est dite par son erreur, pas par une section vide.
-            ForEach(shown.filter { $0.training != nil || $0.isLoading }, id: \.trainingID) { model in
+            ForEach([progressModel].compactMap { $0 }.filter { $0.training != nil || $0.isLoading }, id: \.trainingID) { model in
                 VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                    if mixesPermits { permitTitle(model, name: permitName(model, in: names)) }
-                    SchoolTrainingProgressSection(model: model, schoolTimeZone: zone) { opened = OpenedLesson(id: $0) }
+                    if namesPermit && mixesPermits { permitTitle(model, name: permitName(model, in: names)) }
+                    SchoolTrainingProgressSection(model: model, schoolTimeZone: zone, showsDates: !ownLessons) {
+                        opened = OpenedLesson(id: $0)
+                    }
+                    // Changer de permis : la progression de l’autre remplace celle-ci, replis refermés.
+                    .id(model.trainingID)
                 }
             }
         }
