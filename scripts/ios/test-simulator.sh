@@ -23,7 +23,7 @@ xcodebuild test-without-building \
   -project apps/ios/Drivy.xcodeproj -scheme Drivy \
   -destination "platform=iOS Simulator,id=$device_id" \
   -skip-testing:DrivyUITests/VisualOrientationTests \
-  "${test_options[@]}" \
+  ${test_options[@]+"${test_options[@]}"} \
   -parallel-testing-enabled NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/Tests.xcresult \
