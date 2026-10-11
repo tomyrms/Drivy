@@ -47,10 +47,16 @@ Ce qui fonctionne et reste tel quel :
 
 ## Vérification
 
-- IPA d’essai compilée sur GitHub Actions (voir STATUS.md).
-- Captures simulateur iPhone clair et sombre, avant (run `38166545247`) et après : voir STATUS.md.
-- `python scripts/ios/theme-contrast.py` : aucune valeur claire ne bouge. Le nouveau token `listChevron` est la couleur système `tertiaryLabel`.
-- Reste à qualifier sur appareil : VoiceOver, grand texte, iPad, et la surbrillance native des lignes du Profil.
+- IPA d’essai compilée sur GitHub Actions à chaque lot (runs `38167048200`, `38168268907`, `38168704308`, `38169054910`, tous réussis). La cible de tests n’est pas compilée par ce workflow.
+- Captures simulateur iPhone, clair et sombre : avant (run `38166545247`, 12 écrans) et après (runs `38167461062` et `38168706137`). Relues à l’œil : dans le Profil du moniteur, les lignes ont la même graisse et la même hauteur, et chaque destination a son chevron. Les deux Profils posent l’en-tête sur le fond. Les volets « Informations personnelles » et « Mes informations » ont un chevron vers le bas. Dans l’historique, les chevrons sont ceux du système.
+- `python scripts/ios/theme-contrast.py` : 141/141 couples sombres conformes, clair inchangé. Le nouveau token `listChevron` est la couleur système `tertiaryLabel`.
+- Non exécuté : tests Swift et parcours UI. Restent à qualifier sur appareil : VoiceOver, grand texte, iPad, la surbrillance native des lignes du Profil et l’animation du volet dépliable.
+
+## Ajouts après la première passe
+
+- **Volets dépliables** : `DrivyDisclosureStyle` (`.disclosureGroupStyle(.drivy)`), un chevron vers le bas qui pivote, le même glyphe qu’une compétence de Progression. Le chevron vers l’avant reste réservé à « ouvre ailleurs ». Appliqué au dossier et au Profil de l’élève.
+- **Liens natifs** : un `NavigationLink` de liste groupée ne reçoit plus de hauteur minimale, la cellule assure déjà ses 44 pt.
+- **Ligne de leçon** : son chevron passe par `DrivyRowChevron`. Dans l’historique, il devient celui du système.
 
 ## À valider par le porteur
 

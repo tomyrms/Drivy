@@ -4,7 +4,7 @@
 
 Audit croisé des onglets et de leurs feuilles, puis règles communes : une ligne prend le rythme de sa famille de page (liste groupée ou page de lecture), une seule action en texte, un badge pour ce qui attend une réponse, « Fermer » toujours au même endroit, vides et attentes par les composants partagés. Le Profil du moniteur prend la structure des Paramètres de l’élève, et les deux Profils posent l’en-tête sur le fond. Aujourd’hui n’est pas refait. [Audit, règles et décisions](direction-artistique-20261011.md). Branche `claude/da-harmonisation-20261011`, sur la PR #12.
 
-**Exécuté** : voir le document (compilation et captures). **Reste à qualifier** : VoiceOver, grand texte et iPad sur appareil.
+**Exécuté** : IPA d’essai compilée sur chaque lot ; captures iPhone clair et sombre avant et après, relues ; contraste du thème vérifié (clair inchangé). **Non exécuté** : tests Swift et parcours UI. **Reste à qualifier** : VoiceOver, grand texte et iPad sur appareil.
 
 ## 11 octobre 2026 — Profil de l’élève restructuré
 
