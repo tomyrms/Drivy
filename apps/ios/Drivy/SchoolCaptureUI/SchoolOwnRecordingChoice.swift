@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// L’élève donne ou modifie lui-même son accord GPS (source `SELF`), dans la fiche de sa prochaine leçon, sous
-/// « Mon souhait ». Le choix lu est celui qui vaut pour cette leçon ; l’école enregistre la réponse au même niveau
-/// (choix général, sauf choix propre à la leçon). Une réponse part aussitôt, d’abord dans la file chiffrée, puis à
-/// l’école ; elle se montre avec son attente, et l’ancienne revient si l’école ne la confirme pas.
+/// L’élève donne ou modifie lui-même son accord GPS (source `SELF`) : dans la fiche de sa prochaine leçon, sous
+/// « Mon souhait » (le choix qui vaut pour cette leçon), ou dans son profil (`lessonID` nil : son choix général).
+/// L’école enregistre la réponse au niveau du choix lu. Une réponse part aussitôt, d’abord dans la file chiffrée,
+/// puis à l’école ; elle se montre avec son attente, et l’ancienne revient si l’école ne la confirme pas.
 struct SchoolOwnRecordingChoice: View {
     let scope: SchoolCommandScope
-    let lessonID: UUID
+    let lessonID: UUID?
+    var learnerID: UUID? = nil
     let agenda: SchoolAgendaClient
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
     @Environment(\.scenePhase) private var scenePhase
@@ -15,12 +16,12 @@ struct SchoolOwnRecordingChoice: View {
     @State private var sending: SchoolRecordingChoice.Status?
 
     private var key: String {
-        "\(scope.personID):\(scope.schoolID):\(scope.membershipID):\(scope.accessEpoch):\(scope.apiBaseURL):\(lessonID)"
+        "\(scope.personID):\(scope.schoolID):\(scope.membershipID):\(scope.accessEpoch):\(scope.apiBaseURL):\(lessonID?.uuidString ?? "general"):\(learnerID?.uuidString ?? "")"
     }
 
     var body: some View {
         Group {
-            if let model, model.scope == scope, model.lessonID == lessonID {
+            if let model, matches(model) {
                 SchoolRecordingChoiceInline(model: model, answer: sending ?? model.validAnswer, isEnabled: sending == nil) { status in
                     choose(status, with: model)
                 }
@@ -30,12 +31,12 @@ struct SchoolOwnRecordingChoice: View {
         }
         .task(id: key) {
             // La ligne peut quitter l’écran et revenir : le choix lu reste tant que le compte et la leçon ne changent pas.
-            if let model, model.scope == scope, model.lessonID == lessonID { return }
+            if let model, matches(model) { return }
             model?.invalidate(); sending = nil
             let controller = capture
             var journal: (@MainActor () async throws -> SQLCipherSchoolCaptureStore)?
             if let controller { journal = { try await controller.journal() } }
-            let value = SchoolRecordingChoiceWorkspace(scope: scope, lessonID: lessonID, client: agenda.captureClient,
+            let value = SchoolRecordingChoiceWorkspace(scope: scope, lessonID: lessonID, learnerID: learnerID, client: agenda.captureClient,
                 reader: agenda.reader, agenda: agenda,
                 onRefusalConfirmed: { learner, lesson in controller?.learnerRefused(learnerID: learner, lessonID: lesson) },
                 journalProvider: journal)
@@ -47,6 +48,10 @@ struct SchoolOwnRecordingChoice: View {
             guard phase == .active, sending == nil, let model, !model.isBusy, !model.isLoading else { return }
             Task { await model.load() }
         }
+    }
+
+    private func matches(_ model: SchoolRecordingChoiceWorkspace) -> Bool {
+        model.scope == scope && model.lessonID == lessonID && model.learnerID == learnerID
     }
 
     /// Une réponse explicite, envoyée aussitôt ; la même réponse que le choix enregistré n’envoie rien.

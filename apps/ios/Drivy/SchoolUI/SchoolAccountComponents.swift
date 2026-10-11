@@ -17,7 +17,7 @@ struct SchoolAccountActions {
     func rows(workspace: SchoolWorkspace?, openURL: OpenURLAction, afterChangingSchool: @escaping () -> Void = {}) -> some View {
         // Aucun symbole de tête : chaque ligne se lit par son titre, une icône par ligne ne dit rien de plus.
         if let openProfile {
-            DrivyNavigationRow(title: "Mon profil", action: openProfile)
+            DrivyNavigationRow(title: "Mes informations", action: openProfile)
                 .accessibilityIdentifier("open-my-profile")
         }
         if let resumeOnboarding {
@@ -78,6 +78,8 @@ private struct SchoolSignOutRow: View {
 struct SchoolAccountHeading: View {
     let workspace: SchoolWorkspace?
     let isAuthenticated: Bool
+    /// Remplace la ligne des rôles (l’élève lit ses permis : « Permis B »).
+    var detail: String? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -95,7 +97,7 @@ struct SchoolAccountHeading: View {
                     Text(membership.schoolName)
                         .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(SchoolPresentation.roles(membership.roles))
+                    Text(detail ?? SchoolPresentation.roles(membership.roles))
                         .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }

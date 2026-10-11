@@ -33,9 +33,14 @@ enum SchoolReportObservationRoute: Identifiable {
     private(set) var isOpeningObservation = false
     @ObservationIgnored private var observations: SchoolObservationWorkspace?
 
+    /// Le replay porte le titre de la fiche : le nom de l’élève pour l’équipe, celui du moniteur pour l’élève, qui
+    /// connaît son propre nom. Sans nom de moniteur fourni par l’école, rien n’est deviné : « Trajet ».
     func openReplay(_ capture: SchoolCaptureSession, model: SchoolLessonReportWorkspace, context: SchoolReportContext) {
+        let title = SchoolLessonHubRules.headerIdentity(learnerName: context.learnerName,
+            instructorName: model.lesson?.providedInstructorName, isOwnLearner: model.isOwnLearner,
+            roles: model.membership.roles)?.name ?? "Trajet"
         replay = SchoolTripReplayRoute(model: SchoolCaptureReplayWorkspace(scope: model.scope, client: context.agenda.captureClient,
-            captureID: capture.id), learnerName: context.learnerName, lessonTimeZone: model.lesson?.timeZone)
+            captureID: capture.id), learnerName: title, lessonTimeZone: model.lesson?.timeZone)
     }
 
     func openList() { observation = .list(UUID()) }

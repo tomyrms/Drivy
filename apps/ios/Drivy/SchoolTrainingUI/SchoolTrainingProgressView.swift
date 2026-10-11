@@ -9,6 +9,15 @@ struct SchoolTrainingProgressSection: View {
     let schoolTimeZone: String
     let open: (UUID) -> Void
     @State private var showsUnseen = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Ce que la page montre : clé du fondu entre le squelette, la progression, le vide et la panne.
+    private enum Stage: Equatable { case loading, failed, empty, content }
+
+    private var stage: Stage {
+        guard let value = model.progress else { return model.progressError == nil ? .loading : .failed }
+        return value.items.isEmpty && value.unobservedCompetencyIds.isEmpty ? .empty : .content
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
@@ -30,6 +39,11 @@ struct SchoolTrainingProgressSection: View {
                     .drivySkeleton("Chargement de la progression…")
             }
         }
+        // Le squelette cède la place à la progression (ou à sa panne) par un fondu ; la panne d’une relecture s’ajoute
+        // de même ; le repli « Pas encore vues » s’ouvre et se ferme avec la même douceur.
+        .animation(DrivyMotion.reveal(reduceMotion), value: stage)
+        .animation(DrivyMotion.reveal(reduceMotion), value: model.progressError)
+        .animation(DrivyMotion.reveal(reduceMotion), value: showsUnseen)
     }
 
     private var order: [UUID] { model.competencies.map(\.id) }

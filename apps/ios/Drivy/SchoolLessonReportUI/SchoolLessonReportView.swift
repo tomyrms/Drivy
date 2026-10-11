@@ -19,6 +19,9 @@ struct SchoolLessonReportView: View {
     var completionConfirmed = false
     /// Élève : le souhait se modifie sur la prochaine leçon seulement ; `nil` quand l’appelant ne le sait pas.
     var isNextPlanned: Bool? = nil
+    /// La leçon telle que l’appelant la connaît déjà. Passée (pas « PLANNED »), elle donne au squelette d’attente le
+    /// fond et la marge du récapitulatif qui va le remplacer ; sans elle, rien ne change.
+    var knownLesson: SchoolLesson? = nil
     /// « Commencer la leçon » direct depuis Aujourd’hui qui n’a pas abouti : sa raison, au-dessus de la fiche.
     var startIssue: String? = nil
     var outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()
@@ -46,15 +49,28 @@ struct SchoolLessonReportView: View {
             && value.membership.roles == schoolWorkspace.membership?.roles && value.membership.grants == schoolWorkspace.membership?.grants
             && value.scope.apiBaseURL == client.baseURL.absoluteString
     }
-    var body: some View {
+    /// Une leçon passée connue d’avance s’ouvre sur le fond du récapitulatif, pas sur celui du squelette générique.
+    private var knownLessonIsPast: Bool { knownLesson.map { $0.status != "PLANNED" } ?? false }
+    /// La fiche est lue (et du bon compte) ou pas encore : clé du fondu entre l’attente et le contenu.
+    private var isRead: Bool { model.map { matches($0) } ?? false }
+    /// Fondu à la lecture de la fiche. Pas pour la fin de leçon confirmée : l’attente « Préparation du bilan… » est
+    /// la même avant et après, un fondu entre les deux la ferait scintiller.
+    private var readAnimation: Animation? {
+        opensCompletion && completionConfirmed ? nil : DrivyMotion.reveal(reduceMotion)
+    }
+
+    /// L’attente, la fiche lue, ou le choix d’école : le fond change avec ce que l’on sait de la leçon.
+    private var stage: some View {
         Group {
             if let model, matches(model) {
                 SchoolLessonReportContent(model: model, learnerName: learnerName, schoolWorkspace: schoolWorkspace, agenda: client.agenda,
                     opensCompletion: opensCompletion, opensStart: opensStart, completionConfirmed: completionConfirmed, isNextPlanned: isNextPlanned,
-                    isFinishing: $isCompletingLesson)
+                    knownLesson: knownLesson, isFinishing: $isCompletingLesson)
             } else if schoolWorkspace.membership != nil {
                 if opensCompletion && completionConfirmed {
                     SchoolLessonFinishingView()
+                } else if knownLessonIsPast {
+                    SchoolLessonSummaryPlaceholder()
                 } else {
                     DrivySkeletonRows(count: 4)
                         .drivySkeleton("Chargement de la leçon…")
@@ -66,6 +82,11 @@ struct SchoolLessonReportView: View {
                 ContentUnavailableView("Choisis ton école", systemImage: "building.2")
             }
         }
+        .animation(readAnimation, value: isRead)
+    }
+
+    var body: some View {
+        stage
         .safeAreaInset(edge: .top, spacing: 0) {
             if let startIssue, !startIssueDismissed {
                 SchoolTripIssueBanner(text: startIssue) {
@@ -162,6 +183,8 @@ private struct SchoolLessonReportContent: View {
     let opensStart: Bool
     let completionConfirmed: Bool
     let isNextPlanned: Bool?
+    /// Leçon connue de l’appelant avant la lecture (voir `SchoolLessonReportView.knownLesson`).
+    let knownLesson: SchoolLesson?
     /// Contrôleur de séance de l’app ; absent, rien de ce qui dépend du GPS de l’appareil n’est proposé.
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
     @Environment(\.dismiss) private var dismiss
@@ -310,7 +333,7 @@ private struct SchoolLessonReportContent: View {
             // le modèle, au-dessus de ce changement de composition et des rotations de la fenêtre.
             let wide = SchoolReportFlowRules.isWide(width: geometry.size.width, accessibilitySize: typeSize.isAccessibilitySize)
             let presentation = SchoolReportFlowRules.presentation(entry: reportEntry, canEdit: editsReport, isWide: wide)
-            layout(presentation: presentation, wide: wide, bar: bar)
+            readingLayout(presentation: presentation, wide: wide, bar: bar)
                 .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar(bar, presentation: presentation) }
                 .onChange(of: wide, initial: true) { _, value in isWide = value }
                 .onChange(of: opensReportWhenReady, initial: true) { _, wanted in
@@ -335,6 +358,19 @@ private struct SchoolLessonReportContent: View {
         }
     }
 
+    /// Leçon passée connue de l’appelant, relue en ce moment : le squelette du récapitulatif tient la place de la fiche.
+    /// Une panne ou une lecture terminée sans leçon rend la main au formulaire, qui porte l’erreur et sa reprise.
+    private var showsKnownPlaceholder: Bool {
+        guard let knownLesson, knownLesson.status != "PLANNED" else { return false }
+        return model.lesson == nil && model.isLoading && model.errorMessage == nil
+    }
+
+    /// Le récapitulatif succède au squelette connu d’avance par un fondu, jamais d’un coup.
+    private func readingLayout(presentation: SchoolReportPresentation, wide: Bool, bar: PlannedBar?) -> some View {
+        layout(presentation: presentation, wide: wide, bar: bar)
+            .animation(DrivyMotion.reveal(reduceMotion), value: showsKnownPlaceholder)
+    }
+
     /// Trois compositions : la rédaction sur place (fenêtre large, sur demande), le formulaire d’une leçon à venir,
     /// et le récapitulatif de toute leçon qui a eu lieu ou n’aura pas lieu. Pendant la rédaction en étapes, le
     /// récapitulatif reste sous la pile.
@@ -356,6 +392,8 @@ private struct SchoolLessonReportContent: View {
             }
             .frame(maxWidth: LessonLayout.splitMaxWidth)
             .frame(maxWidth: .infinity)
+        } else if showsKnownPlaceholder {
+            SchoolLessonSummaryPlaceholder()
         } else if isPlanned || model.lesson == nil {
             Form {
                 headerSection

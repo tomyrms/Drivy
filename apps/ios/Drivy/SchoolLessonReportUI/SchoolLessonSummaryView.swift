@@ -166,6 +166,32 @@ struct SchoolLessonSummaryView: View {
     }
 }
 
+/// Ce que l’on voit d’une leçon passée tant que sa fiche n’est pas lue : même fond, même marge et même colonne que
+/// le récapitulatif, pour que la lecture prenne la place du squelette sans saut de fond ni de mise en page.
+/// Un en-tête (l’élève, le moment, le lieu), puis des lignes comme celles du bilan.
+struct SchoolLessonSummaryPlaceholder: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                header
+                DrivySkeletonRows(count: 3)
+            }
+            .drivySkeleton("Chargement de la leçon…")
+            .drivyPageContent()
+        }
+        .scrollDisabled(true)
+        .background(DrivyTheme.surface)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            DrivySkeletonBlock(width: 200, height: 22)
+            DrivySkeletonBlock(width: 260, height: 14)
+            DrivySkeletonBlock(width: 160, height: 14)
+        }
+    }
+}
+
 // MARK: Bilan
 
 /// Les textes du bilan, puis les compétences évaluées ; le même corps pour le moniteur et pour l’élève.
@@ -208,6 +234,7 @@ private struct SchoolLessonSummaryCompetencies: View {
     let competencies: [SchoolCatalogCompetency]
     @State private var showsAll = false
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let fold = SchoolReportFlowRules.fold(levels, limit: SchoolReportFlowRules.competencyFoldLimit)
@@ -215,14 +242,20 @@ private struct SchoolLessonSummaryCompetencies: View {
         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             DrivySectionHeader(title: "Compétences évaluées")
             DrivyRowGroup {
-                ForEach(visible) { level in row(level) }
+                ForEach(visible) { level in row(level).transition(.opacity) }
             }
             if !showsAll && !fold.hidden.isEmpty {
                 SchoolLessonSummaryMoreButton(
                     title: SchoolReportFlowRules.foldTitle(hidden: fold.hidden.count, noun: "compétences"),
-                    identifier: "lesson-summary-more-competencies") { showsAll = true }
+                    identifier: "lesson-summary-more-competencies") { showAll() }
+                    .transition(.opacity)
             }
         }
+    }
+
+    /// Les compétences suivantes s’ajoutent par un fondu, sans pousser la page d’un coup.
+    private func showAll() {
+        withAnimation(DrivyMotion.reveal(reduceMotion)) { showsAll = true }
     }
 
     private func row(_ level: SchoolReportObservation) -> some View {
@@ -276,6 +309,7 @@ private struct SchoolLessonSummaryObservations: View {
     let router: SchoolReportRouter
     let observations: [SchoolObservation]
     @State private var showsAll = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let fold = SchoolReportFlowRules.fold(observations, limit: SchoolReportFlowRules.observationFoldLimit)
@@ -284,20 +318,32 @@ private struct SchoolLessonSummaryObservations: View {
             DrivySectionHeader(title: "Observations")
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(visible.enumerated()), id: \.element.id) { index, observation in
-                    DrivyThreadItem(position: .at(index, count: visible.count),
-                        isCurrent: router.selectedObservation == observation.id,
-                        markerColor: SchoolReportObservationsSection.color(observation),
-                        markerSymbol: SchoolLessonHubRules.status(of: observation)?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble")) {
-                        SchoolLessonSummaryObservationRow(model: model, router: router, observation: observation)
-                    }
+                    threadItem(observation, index: index, count: visible.count)
+                        .transition(.opacity)
                 }
             }
             if !showsAll && !fold.hidden.isEmpty {
                 SchoolLessonSummaryMoreButton(
                     title: SchoolReportFlowRules.foldTitle(hidden: fold.hidden.count, noun: "observations"),
-                    identifier: "lesson-summary-more-observations") { showsAll = true }
+                    identifier: "lesson-summary-more-observations") { showAll() }
+                    .transition(.opacity)
             }
         }
+    }
+
+    /// Une station du fil : la rangée extraite pour garder le corps du `ForEach` court.
+    private func threadItem(_ observation: SchoolObservation, index: Int, count: Int) -> some View {
+        DrivyThreadItem(position: .at(index, count: count),
+            isCurrent: router.selectedObservation == observation.id,
+            markerColor: SchoolReportObservationsSection.color(observation),
+            markerSymbol: SchoolLessonHubRules.status(of: observation)?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble")) {
+            SchoolLessonSummaryObservationRow(model: model, router: router, observation: observation)
+        }
+    }
+
+    /// Les observations suivantes s’ajoutent par un fondu, sans pousser la page d’un coup.
+    private func showAll() {
+        withAnimation(DrivyMotion.reveal(reduceMotion)) { showsAll = true }
     }
 }
 

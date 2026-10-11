@@ -206,6 +206,13 @@ import Observation
         return name
     }
 
+    /// Le trajet tel que son élève le lit : le moniteur qui l’a conduit, « Trajet » quand l’école n’en donne pas le nom.
+    /// Même règle pour la ligne de la liste et pour le titre du replay.
+    static func learnerTitle(_ trip: SchoolCaptureTrip) -> String {
+        let name = trip.instructorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Trajet" : name
+    }
+
     // MARK: Failures
 
     static func revokesAccess(_ error: Error) -> Bool {

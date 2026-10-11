@@ -403,7 +403,10 @@ final class SchoolWorkspace {
     private func fetchLearners(schoolID: UUID, query: String, scope: UUID, request: UUID) async {
         guard scope == schoolScope, request == searchRequest else { return }
         do {
-            let page = try await api.learners(schoolID: schoolID, query: query, cursor: nil)
+            // L’élève cherche son seul dossier, archivé compris ; l’équipe garde la liste des dossiers actifs.
+            let page: SchoolPage<SchoolLearner>
+            if isLearnerOnly && query.isEmpty { page = try await api.ownLearners(schoolID: schoolID) }
+            else { page = try await api.learners(schoolID: schoolID, query: query, cursor: nil) }
             guard scope == schoolScope, request == searchRequest else { return }
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
             learners = []

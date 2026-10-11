@@ -210,12 +210,15 @@ struct DrivyNavigationRow: View {
     }
 }
 
-/// Rows highlight while pressed without drawing a card around every item.
+/// Rows highlight while pressed without drawing a card around every item. A disabled row dims its label only
+/// (layout and highlight untouched), so it reads as not tappable.
 struct DrivyRowButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .opacity(isEnabled ? 1 : 0.5)
             .background {
                 RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
                     .fill(DrivyTheme.surfaceMuted)
@@ -223,6 +226,7 @@ struct DrivyRowButtonStyle: ButtonStyle {
                     .opacity(configuration.isPressed ? 1 : 0)
             }
             .animation(DrivyMotion.feedback(reduceMotion), value: configuration.isPressed)
+            .animation(DrivyMotion.feedback(reduceMotion), value: isEnabled)
     }
 }
 

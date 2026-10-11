@@ -64,6 +64,8 @@ struct SchoolTrainingScreen: View {
     let section: SchoolTrainingSection?
     let showsHeading: Bool
     let openProfile: (() -> Void)?
+    /// Les onglets de l’élève : toutes ses leçons lues, la prochaine en tête, aucun vocabulaire de moniteur.
+    let ownLessons: Bool
     private let isEmbedded: Bool
     /// La section tenue par l’écran hôte ; sinon celle de cet écran.
     private let hostSection: Binding<SchoolTrainingSection>?
@@ -74,11 +76,14 @@ struct SchoolTrainingScreen: View {
     /// La leçon ouverte vit ici, hors du contenu conditionnel et de `.id` : une relecture ou un changement
     /// de portée recrée le contenu, jamais la feuille qui le surplombe.
     @State private var opened: OpenedLesson?
+    /// La carte « Prochaine leçon » s’ouvre en zoom vers sa fiche.
+    @Namespace private var lessonZoom
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(client: SchoolTrainingClient, workspace: SchoolWorkspace, learner: SchoolLearner, trainingIDs: [UUID],
          permit: Binding<UUID?>, section: SchoolTrainingSection? = nil, showsHeading: Bool = false,
-         openProfile: (() -> Void)? = nil) {
+         openProfile: (() -> Void)? = nil, ownLessons: Bool = false) {
         self.client = client
         _workspace = Bindable(wrappedValue: workspace)
         self.learner = learner
@@ -86,9 +91,13 @@ struct SchoolTrainingScreen: View {
         self.section = section
         self.showsHeading = showsHeading
         self.openProfile = openProfile
+        self.ownLessons = ownLessons
         isEmbedded = false
         hostSection = nil
         _permit = permit
+        // Un autre onglet a déjà lu ces formations : elles s’affichent dès la première image, sans squelette.
+        let cached = SchoolTrainingModelCache.current(trainingIDs)
+        if cached.count == trainingIDs.count { _models = State(initialValue: cached) }
     }
 
     /// Dans le dossier : sélecteur Leçons / Progression, filtre et contenu, posés dans le défilement de l’hôte.
@@ -101,6 +110,7 @@ struct SchoolTrainingScreen: View {
         self.section = nil
         showsHeading = false
         openProfile = nil
+        ownLessons = false
         isEmbedded = true
         hostSection = section
         _permit = permit
@@ -124,8 +134,8 @@ struct SchoolTrainingScreen: View {
         Group {
             if isCurrent {
                 SchoolTrainingContent(models: models, workspace: workspace, learner: learner, fixedSection: section, showsHeading: showsHeading,
-                    openProfile: openProfile, isEmbedded: isEmbedded, permit: $permit, chosenSection: hostSection ?? $ownSection,
-                    opened: $opened)
+                    openProfile: openProfile, isEmbedded: isEmbedded, ownLessons: ownLessons, zoom: lessonZoom, permit: $permit,
+                    chosenSection: hostSection ?? $ownSection, opened: $opened)
             } else if isEmbedded {
                 DrivySkeletonRows(count: 4, leading: .time)
                     .drivySkeleton("Chargement de la formation…")
@@ -138,6 +148,8 @@ struct SchoolTrainingScreen: View {
             }
         }
         .id(scopeKey)
+        // Le squelette laisse place aux leçons en fondu, sans remplacement sec.
+        .animation(DrivyMotion.reveal(reduceMotion), value: isCurrent)
         .task(id: scopeKey) { await open() }
         .onChange(of: models.contains { $0.accessRevoked }) { _, revoked in
             // Relecture silencieuse : `loadAccount` vide le compte et fait disparaître tout l’écran (feuille ouverte comprise).
@@ -146,26 +158,41 @@ struct SchoolTrainingScreen: View {
         // Une leçon planifiée ailleurs (feuille de planification du dossier) : la liste se relit sans être recréée.
         .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { notification in
             guard isCurrent else { return }
-            guard let change = notification.object as? SchoolLessonChange else { Task { await refresh() }; return }
+            guard let change = notification.object as? SchoolLessonChange else {
+                Task { await SchoolLessonFeed(models: models).reload(ifOlderThan: 0) }; return
+            }
             guard change.schoolID == workspace.membership?.schoolId,
                   let model = models.first(where: { $0.trainingID == change.trainingID }) else { return }
             Task { await model.refreshOnAppear() }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, isCurrent { Task { await refresh() } }
+            // Les onglets de l’élève partagent leurs formations : un seul relit, et pas plus d’une fois par demi-minute.
+            if phase == .active, isCurrent { Task { await SchoolLessonFeed(models: models).reload(ifOlderThan: 30) } }
         }
-        .sheet(item: $opened, onDismiss: { Task { await refresh() } }) { lesson in
-            NavigationStack {
-                // Le souhait de l’élève suit la prochaine leçon de sa formation, pas celle du dossier entier.
-                SchoolLessonReportView(client: client.reports, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: learner.displayName,
-                    isNextPlanned: models.contains { $0.upcomingLessons.first?.id == lesson.id })
-            }
-            .tint(DrivyTheme.accent)
+        .sheet(item: $opened, onDismiss: { Task { await refresh() } }) { lesson in lessonSheet(lesson) }
+    }
+
+    @ViewBuilder private func lessonSheet(_ lesson: OpenedLesson) -> some View {
+        let sheet = NavigationStack {
+            // Le souhait de l’élève suit la prochaine leçon de sa formation, pas celle du dossier entier.
+            SchoolLessonReportView(client: client.reports, schoolWorkspace: workspace, lessonID: lesson.id, learnerName: learner.displayName,
+                isNextPlanned: models.contains { $0.upcomingLessons.first?.id == lesson.id },
+                knownLesson: models.lazy.flatMap(\.lessons).first { $0.id == lesson.id })
+        }
+        .tint(DrivyTheme.accent)
+        if lesson.zooms {
+            sheet.navigationTransition(.zoom(sourceID: lesson.id, in: lessonZoom))
+        } else {
+            sheet
         }
     }
     private func open() async {
-        // Retour sur l’écran ou changement d’onglet : toujours relire, sans effacer ce qui est affiché.
-        if isCurrent { await refresh(); return }
+        // Retour sur l’écran ou changement d’onglet : relire sans effacer ce qui est affiché, sauf lecture toute
+        // récente ou déjà en cours (les onglets de l’élève partagent leurs formations).
+        if isCurrent {
+            if ownLessons { models.forEach { $0.requestWholeHistory() } }
+            await SchoolLessonFeed(models: models).reload(ifOlderThan: 30); return
+        }
         models = []
         guard let person = workspace.person, let membership = workspace.membership else { return }
         let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
@@ -174,6 +201,7 @@ struct SchoolTrainingScreen: View {
             SchoolTrainingModelCache.model(scope: scope, membership: membership, learnerID: learner.id, trainingID: $0, client: client)
         }
         models = shared.map { $0.model }
+        if ownLessons { models.forEach { $0.requestWholeHistory() } }
         // Un modèle partagé peut dater d’avant un bilan enregistré ailleurs : relecture à chaque affichage.
         let kept = Set(shared.filter { !$0.isNew }.map { $0.model.trainingID })
         await SchoolLessonFeed.together(models) { await $0.load(keepingCurrent: kept.contains($0.trainingID)) }
@@ -187,7 +215,11 @@ struct SchoolTrainingScreen: View {
     }
 }
 
-private struct OpenedLesson: Identifiable { let id: UUID }
+private struct OpenedLesson: Identifiable {
+    let id: UUID
+    /// Ouverte depuis la carte « Prochaine leçon » : la fiche s’ouvre en zoom depuis elle.
+    var zooms = false
+}
 
 extension Notification.Name {
     /// Une leçon vient d’être créée, déplacée ou annulée hors de l’écran qui la montre.
@@ -258,6 +290,8 @@ private struct SchoolTrainingContent: View {
     let openProfile: (() -> Void)?
     /// Posé dans le défilement d’un autre écran (le dossier) : ni défilement, ni fond, ni rappel de l’élève.
     let isEmbedded: Bool
+    let ownLessons: Bool
+    let zoom: Namespace.ID
     @Binding var permit: UUID?
     @Binding var chosenSection: SchoolTrainingSection
     @Binding var opened: OpenedLesson?
@@ -268,6 +302,12 @@ private struct SchoolTrainingContent: View {
     @SceneStorage("training.lessons.year") private var selectedYear = 0
     @State private var showsPeriod = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// L’élève ne termine pas de leçon : « À terminer » n’est pas un filtre pour lui.
+    private var filters: [TrainingLessonFilter] { ownLessons ? [.all, .upcoming, .past] : TrainingLessonFilter.allCases }
+    /// Le filtre retenu, ramené à « Toutes » quand il n’a pas cours ici.
+    private var activeFilter: TrainingLessonFilter { filters.contains(filter) ? filter : .all }
 
     /// Sans lecture pédagogique, il n’y a pas de sélecteur : seules les leçons sont montrées.
     private var section: SchoolTrainingSection { fixedSection ?? (hasPedagogicalRole ? chosenSection : .lessons) }
@@ -286,7 +326,7 @@ private struct SchoolTrainingContent: View {
     private var hasPedagogicalRole: Bool { models.first?.hasPedagogicalRole ?? false }
     private var hasTraining: Bool { shown.contains { $0.training != nil } }
     /// Les filtres de statut et de période portent sur l’historique complet, jamais sur les seules pages lues.
-    private var needsHistory: Bool { period.isActive || filter != .all }
+    private var needsHistory: Bool { period.isActive || activeFilter != .all }
 
     var body: some View {
         Group {
@@ -501,34 +541,110 @@ private struct SchoolTrainingContent: View {
     }
     private var lessons: some View {
         let feed = self.feed
-        let visible = feed.lessons.filter { filter.includes($0) && period.includes($0) }
-        // Le permis d’une leçon n’est nommé que lorsque la liste en mêle plusieurs.
         let names = mixesPermits ? permitNames : [:]
+        let featured = featuredLesson(in: feed.lessons)
+        // La prochaine leçon de l’élève est en tête, dans sa carte : la liste ne la redit pas.
+        let visible = feed.lessons.filter { activeFilter.includes($0) && period.includes($0) && $0.id != featured?.id }
+        // Le permis d’une leçon n’est nommé que lorsque la liste en mêle plusieurs.
         return VStack(alignment: .leading, spacing: DrivySpacing.m) {
             if feed.isLoadingFirstPage {
                 DrivySkeletonRows(count: 4, leading: .time)
                     .drivySkeleton("Chargement des leçons…")
+                    .transition(.opacity)
             } else {
+                if let featured { nextLessonCard(featured, permitNames: names) }
                 if feed.allRead && !feed.hasLessons && !feed.isLoading {
                     DrivyEmptyState(title: "Aucune leçon", symbol: "calendar")
                 }
-                if feed.isLoadingHistory { DrivyLoadingState(title: "Chargement de l’historique…") }
+                if feed.isLoadingHistory { DrivyLoadingState(title: "Chargement de l’historique…").transition(.opacity) }
                 // Tant qu’il reste des pages à lire, « aucune leçon » ne peut pas être affirmé.
-                if visible.isEmpty && feed.hasLessons && !feed.isLoadingHistory && !feed.hasMore {
-                    DrivyEmptyState(title: period.isActive ? "Aucune leçon sur cette période" : filter.emptyTitle, symbol: "calendar",
-                        actionTitle: "Tout afficher", action: { filter = .all; selectedMonth = 0; selectedYear = 0 })
+                if visible.isEmpty && featured == nil && feed.hasLessons && !feed.isLoadingHistory && !feed.hasMore {
+                    DrivyEmptyState(title: period.isActive ? "Aucune leçon sur cette période" : activeFilter.emptyTitle, symbol: "calendar",
+                        actionTitle: "Tout afficher", action: { showAll() })
                 }
-                ForEach(months(of: visible)) { month in monthGroup(month, feed: feed, permitNames: names) }
+                // Des centaines de leçons possibles : seuls les mois visibles sont construits.
+                LazyVStack(alignment: .leading, spacing: DrivySpacing.m) {
+                    ForEach(months(of: visible)) { month in monthGroup(month, feed: feed, permitNames: names) }
+                }
                 moreLessons
             }
         }
+        // Filtre, tri, période ou permis : la liste se recompose en fondu, sans saut.
+        .animation(DrivyMotion.reveal(reduceMotion), value: listKey)
+        .animation(DrivyMotion.reveal(reduceMotion), value: feed.isLoadingFirstPage)
+    }
+
+    /// Ce qui recompose la liste : un changement de l’un de ces choix se fait en fondu.
+    private var listKey: String {
+        "\(activeFilter.rawValue):\(order.rawValue):\(selectedMonth):\(selectedYear):\(selected?.trainingID.uuidString ?? "all")"
+    }
+
+    private func showAll() {
+        withAnimation(DrivyMotion.reveal(reduceMotion)) { filter = .all; selectedMonth = 0; selectedYear = 0 }
+    }
+
+    /// L’élève : la leçon qui compte, en tête de ses leçons — celle qui se déroule, sinon la prochaine. Rien quand
+    /// la liste montre les leçons passées ou une période choisie.
+    private func featuredLesson(in lessons: [SchoolLesson]) -> SchoolLesson? {
+        guard ownLessons, section == .lessons, activeFilter != .past, !period.isActive else { return nil }
+        let now = Date()
+        let coming = lessons.filter { [.planned, .inProgress].contains($0.drivyState(now: now)) }
+        return coming.first { $0.drivyState(now: now) == .inProgress }
+            ?? coming.min { ($0.startsAt ?? .distantFuture) < ($1.startsAt ?? .distantFuture) }
+    }
+
+    /// La même lecture que la leçon qui compte d’Aujourd’hui chez le moniteur : quand, horaire, jour, lieu et moniteur.
+    /// Toute la carte ouvre la fiche, en zoom depuis elle.
+    private func nextLessonCard(_ lesson: SchoolLesson, permitNames: [UUID: String]) -> some View {
+        Button { opened = OpenedLesson(id: lesson.id, zooms: true) } label: {
+            DrivyCard {
+                VStack(alignment: .leading, spacing: 0) {
+                    TimelineView(.everyMinute) { context in
+                        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+                            Text(lesson.hasStarted ? "Leçon en cours" : "Prochaine leçon")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(DrivyTheme.muted)
+                            Spacer(minLength: DrivySpacing.xs)
+                            if let moment = SchoolLearnerLessonMoment.text(for: lesson, now: context.date) {
+                                Text(moment)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(DrivyTheme.accent)
+                                    .monospacedDigit()
+                                    .contentTransition(.numericText())
+                            }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    DrivyLessonRow(start: SchoolTrainingFormatting.time(lesson.plannedStart, zone: lesson.timeZone),
+                        end: SchoolTrainingFormatting.time(lesson.plannedEnd, zone: lesson.timeZone),
+                        title: SchoolTrainingFormatting.rowDay(lesson.plannedStart, zone: lesson.timeZone),
+                        details: [nextLessonDetail(lesson, permitNames: permitNames)])
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.content + DrivySpacing.m, style: .continuous))
+        }
+        .buttonStyle(DrivyTileButtonStyle())
+        .matchedTransitionSource(id: lesson.id, in: zoom)
+        .accessibilityHint("Ouvre la leçon")
+        .accessibilityIdentifier("training-next-lesson")
+        .transition(.opacity)
+    }
+
+    /// Lieu de rendez-vous, permis quand la liste en mêle plusieurs, puis moniteur.
+    private func nextLessonDetail(_ lesson: SchoolLesson, permitNames: [UUID: String]) -> String {
+        [lesson.meetingPoint, permitNames[lesson.trainingId], instructorName(of: lesson)]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
     }
     /// Un seul contrôle natif : le libellé dit le filtre, la flèche dit le sens ; le menu range les deux choix.
     private var lessonsMenu: some View {
         Menu {
             Section("Afficher") {
-                Picker("Afficher", selection: $filter) {
-                    ForEach(TrainingLessonFilter.allCases) { item in Text(item.title).tag(item) }
+                Picker("Afficher", selection: Binding(get: { activeFilter }, set: { value in
+                    withAnimation(DrivyMotion.reveal(reduceMotion)) { filter = value }
+                })) {
+                    ForEach(filters) { item in Text(item.title).tag(item) }
                 }
                 .pickerStyle(.inline)
             }
@@ -545,7 +661,7 @@ private struct SchoolTrainingContent: View {
         } label: {
             HStack(spacing: DrivySpacing.xs) {
                 Image(systemName: order.symbol).font(.caption.weight(.bold))
-                Text(period.isActive ? "\(filter.title) · \(period.title)" : filter.title)
+                Text(period.isActive ? "\(activeFilter.title) · \(period.title)" : activeFilter.title)
                     .multilineTextAlignment(.trailing)
                     .fixedSize(horizontal: false, vertical: true)
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold))
@@ -556,7 +672,7 @@ private struct SchoolTrainingContent: View {
             .contentShape(Rectangle())
         }
         .accessibilityLabel("Filtrer et trier les leçons")
-        .accessibilityValue([filter.title, period.isActive ? period.title : "Toutes les périodes", order.title].joined(separator: ", "))
+        .accessibilityValue([activeFilter.title, period.isActive ? period.title : "Toutes les périodes", order.title].joined(separator: ", "))
         .accessibilityIdentifier("training-lessons-menu")
     }
     private var periodPicker: some View {
@@ -621,6 +737,15 @@ private struct SchoolTrainingContent: View {
         case .newestFirst: return monthGroups(values, newestFirst: true)
         case .oldestFirst: return monthGroups(values, newestFirst: false)
         case .chronological:
+            if ownLessons {
+                // L’élève : ce qui vient, puis le passé par mois. Une leçon restée sans résultat est du passé pour lui,
+                // pas une tâche ; un mois n’a jamais deux titres identiques.
+                let coming = values.filter { [.planned, .inProgress].contains($0.drivyState) }
+                let past = values.filter { ![.planned, .inProgress].contains($0.drivyState) }
+                let upcoming = coming.isEmpty ? [] : [TrainingLessonMonth(id: "upcoming", title: "À venir",
+                    lessons: sortedByDate(coming, newestFirst: false))]
+                return upcoming + monthGroups(past, newestFirst: true, prefix: "past")
+            }
             let toFinish = values.filter { $0.drivyState == .toFinish }
             let waiting = values.filter { $0.drivyState == .waiting }
             let upcoming = values.filter { $0.drivyState == .planned || $0.drivyState == .inProgress }
@@ -674,7 +799,8 @@ private struct SchoolTrainingContent: View {
                     Button { opened = OpenedLesson(id: lesson.id) } label: {
                         // Sous un titre d’état, la ligne ne redit pas la même information.
                         SchoolLessonHistoryRow(lesson: lesson, permit: permitNames[lesson.trainingId],
-                            instructor: instructorName(of: lesson), showsState: month.id != "to-finish" && month.id != "waiting")
+                            instructor: instructorName(of: lesson), showsState: month.id != "to-finish" && month.id != "waiting",
+                            note: learnerNote(lesson))
                     }
                         .buttonStyle(DrivyRowButtonStyle())
                         .disabled(feed.model(for: lesson)?.canOpenPedagogicalContent != true)
@@ -682,6 +808,11 @@ private struct SchoolTrainingContent: View {
                 }
             }
         }
+    }
+    /// L’élève ne termine pas de leçon : une leçon restée sans résultat se lit « En attente », sans encre d’alerte.
+    private func learnerNote(_ lesson: SchoolLesson) -> DrivyRowNote? {
+        guard ownLessons, [.waiting, .toFinish].contains(lesson.drivyState) else { return nil }
+        return DrivyRowNote(text: DrivyLessonState.waiting.title, tone: .neutral)
     }
     /// Le moniteur n’est nommé que s’il n’est pas le lecteur : un collègue pour l’équipe, toujours pour l’élève.
     private func instructorName(of lesson: SchoolLesson) -> String? {
@@ -722,6 +853,26 @@ private struct SchoolTrainingContent: View {
                 DrivyBusyLabel(title: "Afficher d’autres leçons", busyTitle: "Chargement…", isBusy: feed.isLoadingMore)
             }
             .buttonStyle(DrivySecondaryButtonStyle()).disabled(feed.isLoadingMore)
+        }
+    }
+}
+
+/// Quand a lieu la prochaine leçon de l’élève, en un mot : « Dans 25 min », « Aujourd’hui », « Demain »,
+/// « Dans 3 jours ». Au-delà d’une semaine, la date de la ligne suffit. Calendrier du fuseau de la leçon.
+enum SchoolLearnerLessonMoment {
+    static func text(for lesson: SchoolLesson, now: Date) -> String? {
+        if lesson.hasStarted { return nil }
+        guard let start = lesson.startsAt, let zone = TimeZone(identifier: lesson.timeZone) else { return nil }
+        let minutes = Int(ceil(start.timeIntervalSince(now) / 60))
+        guard minutes > 0 else { return nil }
+        if minutes < 60 { return "Dans \(minutes) min" }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: start)).day ?? 0
+        switch days {
+        case 0: return "Aujourd’hui"
+        case 1: return "Demain"
+        case 2...6: return "Dans \(days) jours"
+        default: return nil
         }
     }
 }
