@@ -79,3 +79,7 @@ Tests ajoutés pour le runner Apple :
 - `SchoolPlanningDefaultsTests` : clôture confirmée malgré échec de la lecture suivante, absence de confirmation sans reçu et reprise par vérification du reçu sans second envoi.
 
 À exécuter sur iPhone/iPad : suivi en virage et à l’arrêt, pan/zoom/recentrage pendant lecture, signalement puis réseau coupé, annulation avec sauvegarde et erreur réseau, rotation et fenêtre étroite, VoiceOver et Réduire les animations. Pour la collecte réelle : trajet comprenant intersections, giratoires, tunnel, verrouillage, arrêt prolongé, branchement/débranchement, mesures de précision/intervalle et batterie. Utiliser une trace d’essai autorisée ; ne jamais joindre coordonnées ou données de personnes aux logs/artefacts CI. Le profil matériel reste `NOT_QUALIFIED`.
+
+## Suite du 11 octobre 2026
+
+L’interpolation d’affichage et le recalage routier, écartés ici, ont été introduits à la demande du porteur, en couches distinctes des mesures. Voir [GPS fluide, tracés fidèles et recalage routier](gps-fluide-recalage-20261011.md).
