@@ -229,8 +229,8 @@ def icon(key, title, *directions):
     ICONS[key] = {"title": title, "directions": directions}
 
 
-def P(direction, name, idea, build):
-    return {"direction": direction, "name": name, "idea": idea, "build": build}
+def P(direction, name, idea, build, famille=None):
+    return {"direction": direction, "name": name, "idea": idea, "build": build, "famille": famille}
 
 
 # 1. Maîtrise du véhicule ------------------------------------------------------
@@ -856,6 +856,133 @@ icon("status-positive", "Point positif",
        lambda: U(bite(line((8, 34), (22, 48), (46, 22)), 50, 17.5, 7), marker(50, 17.5, 7, 3.2))))
 
 
+# ---------------------------------------------------------------- reprise du 12 octobre
+# Le porteur a demandé de revoir « Priorité à droite » et « Intersections et giratoires ». Cinq nouvelles
+# études chacune, dans le langage des pictogrammes de manœuvre des applications de navigation : la route
+# en second calque (35 %), le geste en trait plein.
+
+def crossroads(arm=16, r=3):
+    road = U(rrect(32 - arm / 2, 3, arm, 58, r), rrect(3, 32 - arm / 2, 58, arm, r))
+    return road.buffer(4, join_style="round").buffer(-4, join_style="round")
+
+
+def _behind(secondary, primary, gap=2.2):
+    return secondary.difference(primary.buffer(gap))
+
+
+def car_outline(cx, cy, w, h, rot=0):
+    body = rrect(cx - w / 2, cy - h / 2, w, h, min(6, w * 0.36))
+    hollow = body.difference(body.buffer(-3.2, join_style="round"))
+    shield = rrect(cx - w / 2 + 2.5, cy - h / 2 + h * 0.24, w - 5, 3.2, 1.6)
+    g = U(hollow, shield)
+    return affinity.rotate(g, rot, origin=(cx, cy)) if rot else g
+
+
+def rp_F():
+    primary = U(arrow((58, 32), (11, 32)), line((32, 58), (32, 46.5)), line((25, 43), (39, 43), w=4.6))
+    return primary, _behind(crossroads(), primary)
+
+
+def rp_G():
+    # Tour 2 — défaut nommé : voitures qui se touchent. (Rotation −90 vérifiée par calcul : pare-brise
+    # à gauche ; vu du dessus, le sens d'une voiture reste pourtant illisible en petit.)
+    right = car_top(47, 29, 14, 23, rot=-90)
+    ours = car_outline(29, 50, 13, 20)
+    primary = U(right, ours)
+    return primary, _behind(crossroads(16), primary, 2.6)
+
+
+def rp_H():
+    outer = tri_up(32, 3.5, 58.5, 5.5)
+    inner = outer.buffer(-6.4, join_style="round")
+    cx, cy, k = 32, 40, 9.2
+    x = U(line((cx - k, cy - k), (cx + k, cy + k), w=6), line((cx - k, cy + k), (cx + k, cy - k), w=6))
+    return U(outer.difference(inner), x)
+
+
+def rp_I():
+    # Finition de la retenue : réduite à l'export (×0,78), elle perdait sa graisse. Bordures et flèche
+    # épaissies pour retrouver l'épaisseur 6 de la famille une fois en place.
+    kerbs = []
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            a = (32 + sx * 11.5, 32 + sy * 27)
+            b = (32 + sx * 11.5, 32 + sy * 16)
+            c = (32 + sx * 16, 32 + sy * 11.5)
+            d = (32 + sx * 27, 32 + sy * 11.5)
+            kerbs.append(line(a, b, c, d, w=7))
+    arr = arrow((60, 32), (28, 32), w=7.5, hl=12.5, hw=18.5)
+    return U(*kerbs, arr)
+
+
+def rp_J():
+    # Rotation −90 vérifiée par calcul : pare-brise à gauche. Le sens reste illisible en petit.
+    right = car_top(44, 32, 15, 25, rot=-90)
+    bar = line((25, 46), (39, 46), w=4.6)
+    primary = U(right, bar)
+    return primary, _behind(crossroads(), primary)
+
+
+icon("right-priority-v2", "Priorité à droite — reprise",
+     P("F", "Manœuvre", "Le carrefour en second plan ; celui de droite traverse, notre voie s'arrête à la ligne.", rp_F, "Manœuvre"),
+     P("G", "Plein et creux", "Au carrefour, la voiture de droite est pleine, la nôtre creuse : elle cède.", rp_G, "Plan"),
+     P("H", "AB1 redessiné", "Le panneau du code, anneau plus épais et croix agrandie, centrée optiquement.", rp_H, "Panneau"),
+     P("I", "Bordures", "Le carrefour dit par ses quatre bordures ; la flèche entre par la droite.", rp_I, "Plan"),
+     P("J", "Elle arrive, on s'arrête", "La voiture de droite entre dans le carrefour, une ligne d'arrêt de notre côté.", rp_J, "Manœuvre"))
+
+
+def it_F():
+    # Tour 2 — défaut nommé : second plan chargé. Seul l'anneau de chaussée reste derrière le trajet.
+    cx, cy, r = 32, 32, 13
+    path = U(line((cx, 59), (cx, cy + r)), line(*arc_pts(cx, cy, r, 90, -90, 96)),
+             arrow((cx, cy - r), (cx, 5), hl=11, hw=16))
+    return path, _behind(ring(cx, cy, r + 4, r - 4), path)
+
+
+def it_G():
+    # Tour 2 — défaut nommé : se lisait « rafraîchir ». Trois branches de route en second plan.
+    island = disc(32, 32, 8.5)
+    loop = arc_arrow(32, 32, 19.5, 110, -190, w=6, hl=11, hw=16)
+    primary = U(island, loop)
+    stubs = U(*[affinity.rotate(rrect(28, 2, 8, 14, 3), a, origin=(32, 32)) for a in (0, 120, 240)])
+    return primary, _behind(stubs, primary)
+
+
+def it_H():
+    # Tour 2 — défaut nommé : la sortie en biais faisait le symbole ♂. Sortie droite vers le haut,
+    # anneau fin d'une seule couleur pour la moitié qu'on ne parcourt pas.
+    # Finition de la retenue : anneau élargi et trajet plus gras, pour la même présence que la famille.
+    cx, cy, r = 32, 33, 15
+    path = U(line((cx, 61), (cx, cy + r), w=7), line(*arc_pts(cx, cy, r, 90, -90, 96), w=7),
+             arrow((cx, cy - r), (cx, 3), w=7, hl=12, hw=18))
+    thin = ring(cx, cy, r + 2.2, r - 2.2)
+    return U(path, thin.difference(path.buffer(2.6)))
+
+
+def it_I():
+    cx, cy = 32, 32
+    island = disc(cx, cy, 7)
+    loop = arc_arrow(cx, cy, 15.5, 135, -150, w=5.6, hl=10, hw=14)
+    arms = U(*[affinity.rotate(rrect(cx - 5, 2, 10, 16, 3), a, origin=(cx, cy)) for a in (0, 90, 180, 270)])
+    road = U(ring(cx, cy, 20, 11), arms).intersection(box(3, 3, 61, 61))
+    primary = U(island, loop)
+    return primary, _behind(road, primary)
+
+
+def it_J():
+    turn = U(line((28, 59), (28, 41)), line(*arc_pts(42, 41, 14, 180, 270, 48)),
+             arrow((42, 27), (58, 27), hl=10, hw=15))
+    return turn, _behind(crossroads(18), turn)
+
+
+icon("intersections-v2", "Intersections et giratoires — reprise",
+     P("F", "Traverser le giratoire", "Comme une consigne de navigation : on entre en bas, on tourne, on sort en haut.", it_F, "Manœuvre"),
+     P("G", "Îlot et sens giratoire", "L'îlot plein et une seule flèche qui en fait le tour : le giratoire, sans les trois flèches.", it_G, "Silhouette"),
+     P("H", "Sortie du giratoire", "L'anneau fin, le trajet épais qui en sort : une consigne de navigation, d'une couleur.", it_H, "Manœuvre"),
+     P("I", "Giratoire en plan", "Les branches et l'anneau en second plan, l'îlot et le sens de rotation au premier.", it_I, "Plan"),
+     P("J", "Tourner au carrefour", "Le carrefour en second plan, le virage à droite en trait plein.", it_J, "Manœuvre"))
+
+
 # ---------------------------------------------------------------- sortie SVG
 
 def to_path(geom, ndigits=2):
@@ -879,15 +1006,31 @@ def to_path(geom, ndigits=2):
     return "".join(out)
 
 
+SECONDARY_OPACITY = 0.35
+
+
+def layers(g):
+    """Une icône est une géométrie, ou un couple (principale, secondaire) : le second calque garde le
+    même bleu à 35 % d'opacité, comme un SF Symbol hiérarchique ; le gabarit reste d'une couleur."""
+    return g if isinstance(g, tuple) else (g, None)
+
+
 def svg(geom, title, color="#245BD6", size=64):
-    d = to_path(geom).replace(".00", "").replace("L", " L").strip()
+    primary, secondary = layers(geom)
+    def path(g, extra=""):
+        d = to_path(g).replace(".00", "").replace("L", " L").strip()
+        return f'<path fill="{color}"{extra} fill-rule="evenodd" d="{d}"/>'
+    body = (path(secondary, f' fill-opacity="{SECONDARY_OPACITY}"') if secondary is not None else "") + path(primary)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 64 64" role="img">'
-            f'<title>{title}</title><path fill="{color}" fill-rule="evenodd" d="{d}"/></svg>\n')
+            f'<title>{title}</title>{body}</svg>\n')
 
 
 def metrics(geom):
-    minx, miny, maxx, maxy = geom.bounds
-    return {"ink": round(geom.area / 4096, 3), "bbox": [round(v, 1) for v in (minx, miny, maxx, maxy)],
+    primary, secondary = layers(geom)
+    whole = U(primary, secondary)
+    minx, miny, maxx, maxy = whole.bounds
+    return {"ink": round(primary.area / 4096 + (secondary.area * SECONDARY_OPACITY / 4096 if secondary is not None else 0), 3),
+            "bbox": [round(v, 1) for v in (minx, miny, maxx, maxy)],
             "w": round(maxx - minx, 1), "h": round(maxy - miny, 1)}
 
 
@@ -902,7 +1045,8 @@ def build_all():
             g = p["build"]()
             (d / f"{p['direction']}.svg").write_text(svg(g, f"{spec['title']} — {p['name']}"), encoding="utf-8")
             m = metrics(g)
-            report[key]["proposals"].append({"direction": p["direction"], "name": p["name"], "idea": p["idea"], **m})
+            report[key]["proposals"].append({"direction": p["direction"], "name": p["name"], "idea": p["idea"],
+                                             "famille": p.get("famille"), **m})
     (HERE / "propositions.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     return report
 

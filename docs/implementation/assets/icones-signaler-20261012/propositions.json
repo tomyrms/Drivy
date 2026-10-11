@@ -6,6 +6,7 @@
     "direction": "A",
     "name": "Volant braqué",
     "idea": "La voiture vue du dessus, braquée : diriger.",
+    "famille": null,
     "ink": 0.175,
     "bbox": [
      17.5,
@@ -20,6 +21,7 @@
     "direction": "B",
     "name": "Face avant",
     "idea": "La face d'une voiture découpée dans un panneau carré.",
+    "famille": null,
     "ink": 0.371,
     "bbox": [
      8.0,
@@ -34,6 +36,7 @@
     "direction": "C",
     "name": "Volant plein",
     "idea": "Un volant moderne à branche basse, en aplat et non en contour.",
+    "famille": null,
     "ink": 0.301,
     "bbox": [
      7.0,
@@ -48,6 +51,7 @@
     "direction": "D",
     "name": "Profil",
     "idea": "Une voiture de profil, roues détachées par une contre-forme.",
+    "famille": null,
     "ink": 0.229,
     "bbox": [
      6.0,
@@ -62,6 +66,7 @@
     "direction": "E",
     "name": "Trajectoire tenue",
     "idea": "Une trace en S maîtrisée qui finit sur un repère.",
+    "famille": null,
     "ink": 0.116,
     "bbox": [
      11.0,
@@ -81,6 +86,7 @@
     "direction": "A",
     "name": "Angles morts",
     "idea": "La voiture vue du dessus et les deux contrôles d'angle mort.",
+    "famille": null,
     "ink": 0.179,
     "bbox": [
      5.9,
@@ -95,6 +101,7 @@
     "direction": "B",
     "name": "Œil sur disque",
     "idea": "Un œil découpé dans un disque plein, pupille posée au centre.",
+    "famille": null,
     "ink": 0.406,
     "bbox": [
      6.0,
@@ -109,6 +116,7 @@
     "direction": "C",
     "name": "Rétroviseur",
     "idea": "Le rétroviseur intérieur qui reflète la route derrière soi.",
+    "famille": null,
     "ink": 0.206,
     "bbox": [
      7.0,
@@ -123,6 +131,7 @@
     "direction": "D",
     "name": "Regard",
     "idea": "Un œil plein, iris évidé, pupille pleine : regarder.",
+    "famille": null,
     "ink": 0.236,
     "bbox": [
      5.0,
@@ -137,6 +146,7 @@
     "direction": "E",
     "name": "Œil-repère",
     "idea": "Deux paupières en trace, le repère de la marque comme iris.",
+    "famille": null,
     "ink": 0.203,
     "bbox": [
      6.0,
@@ -156,6 +166,7 @@
     "direction": "A",
     "name": "Carrefour d'îlots",
     "idea": "Le carrefour dessiné par ses quatre îlots ; la voiture de droite entre.",
+    "famille": null,
     "ink": 0.298,
     "bbox": [
      7.0,
@@ -170,6 +181,7 @@
     "direction": "B",
     "name": "Panneau croix",
     "idea": "Le triangle à croix de Saint-André du code, en anneau épais.",
+    "famille": null,
     "ink": 0.269,
     "bbox": [
      5.6,
@@ -184,6 +196,7 @@
     "direction": "C",
     "name": "Deux flèches",
     "idea": "Celle de droite passe, la nôtre attend sous elle.",
+    "famille": null,
     "ink": 0.125,
     "bbox": [
      9.8,
@@ -198,6 +211,7 @@
     "direction": "D",
     "name": "Carrefour plein",
     "idea": "Les routes du carrefour sortent du cadre ; la flèche de droite est évidée.",
+    "famille": null,
     "ink": 0.373,
     "bbox": [
      5.0,
@@ -212,6 +226,7 @@
     "direction": "E",
     "name": "Trace qui attend",
     "idea": "Notre trace s'arrête sur un repère, l'autre traverse.",
+    "famille": null,
     "ink": 0.134,
     "bbox": [
      8.8,
@@ -231,6 +246,7 @@
     "direction": "A",
     "name": "Marquage au sol",
     "idea": "La chaussée vue du dessus et sa flèche peinte.",
+    "famille": null,
     "ink": 0.254,
     "bbox": [
      7.0,
@@ -245,6 +261,7 @@
     "direction": "B",
     "name": "Panneau rond",
     "idea": "Un panneau sur son mât, réduit à son anneau.",
+    "famille": null,
     "ink": 0.186,
     "bbox": [
      14.5,
@@ -259,6 +276,7 @@
     "direction": "C",
     "name": "Feux tricolores",
     "idea": "Le feu, un seul œil allumé.",
+    "famille": null,
     "ink": 0.247,
     "bbox": [
      18.0,
@@ -273,6 +291,7 @@
     "direction": "D",
     "name": "Panneau directionnel",
     "idea": "Une flèche-panneau pleine sur son mât, une ligne de texte évidée.",
+    "famille": null,
     "ink": 0.239,
     "bbox": [
      9.0,
@@ -287,6 +306,7 @@
     "direction": "E",
     "name": "Trois formes",
     "idea": "Triangle, rond, carré : la grammaire des panneaux, sans aucun panneau.",
+    "famille": null,
     "ink": 0.29,
     "bbox": [
      7.5,
@@ -306,6 +326,7 @@
     "direction": "A",
     "name": "Ligne et triangle",
     "idea": "La ligne pointillée et le triangle peint au débouché d'une rue.",
+    "famille": null,
     "ink": 0.164,
     "bbox": [
      7.0,
@@ -320,6 +341,7 @@
     "direction": "B",
     "name": "Triangle pointe en bas",
     "idea": "Le panneau du code : un anneau triangulaire épais, rien dedans.",
+    "famille": null,
     "ink": 0.227,
     "bbox": [
      6.2,
@@ -334,6 +356,7 @@
     "direction": "C",
     "name": "Devant le triangle",
     "idea": "Notre voiture s'arrête devant le triangle.",
+    "famille": null,
     "ink": 0.152,
     "bbox": [
      19.2,
@@ -348,6 +371,7 @@
     "direction": "D",
     "name": "Double triangle",
     "idea": "Le triangle plein, cerné par son propre liseré.",
+    "famille": null,
     "ink": 0.28,
     "bbox": [
      5.1,
@@ -362,6 +386,7 @@
     "direction": "E",
     "name": "Repère avant la ligne",
     "idea": "La trace s'arrête sur un repère avant la ligne pointillée.",
+    "famille": null,
     "ink": 0.092,
     "bbox": [
      8.0,
@@ -381,6 +406,7 @@
     "direction": "A",
     "name": "Giratoire en plan",
     "idea": "L'anneau du giratoire et ses quatre branches, vus de la carte.",
+    "famille": null,
     "ink": 0.315,
     "bbox": [
      5.0,
@@ -395,6 +421,7 @@
     "direction": "B",
     "name": "Panneau giratoire",
     "idea": "Le disque du code, trois flèches tournantes évidées.",
+    "famille": null,
     "ink": 0.458,
     "bbox": [
      5.5,
@@ -409,6 +436,7 @@
     "direction": "C",
     "name": "Choix de voie",
     "idea": "Deux flèches au sol : tout droit ou tourner.",
+    "famille": null,
     "ink": 0.155,
     "bbox": [
      14.5,
@@ -423,6 +451,7 @@
     "direction": "D",
     "name": "Trois flèches",
     "idea": "Trois flèches pleines qui tournent : le sens giratoire.",
+    "famille": null,
     "ink": 0.158,
     "bbox": [
      8.8,
@@ -437,6 +466,7 @@
     "direction": "E",
     "name": "Le repère comme îlot",
     "idea": "L'anneau en trace, trois branches, le repère comme îlot central.",
+    "famille": null,
     "ink": 0.219,
     "bbox": [
      5.6,
@@ -456,6 +486,7 @@
     "direction": "A",
     "name": "Distance de sécurité",
     "idea": "Deux voitures dans la voie et l'écart entre elles.",
+    "famille": null,
     "ink": 0.152,
     "bbox": [
      24.5,
@@ -470,6 +501,7 @@
     "direction": "B",
     "name": "Limitation",
     "idea": "Le panneau rond de limitation, chiffres dessinés.",
+    "famille": null,
     "ink": 0.329,
     "bbox": [
      5.5,
@@ -484,6 +516,7 @@
     "direction": "C",
     "name": "Compteur",
     "idea": "Un cadran ouvert, une aiguille, un moyeu : en aplat.",
+    "famille": null,
     "ink": 0.186,
     "bbox": [
      6.0,
@@ -498,6 +531,7 @@
     "direction": "D",
     "name": "Cadran plein",
     "idea": "Un cadran plein dont l'aiguille et les graduations sont évidées.",
+    "famille": null,
     "ink": 0.318,
     "bbox": [
      6.0,
@@ -512,6 +546,7 @@
     "direction": "E",
     "name": "Trace qui ralentit",
     "idea": "Les traits de la trace raccourcissent jusqu'au repère.",
+    "famille": null,
     "ink": 0.086,
     "bbox": [
      6.5,
@@ -531,6 +566,7 @@
     "direction": "A",
     "name": "Dans sa voie",
     "idea": "La voiture vue du dessus, centrée entre ligne pointillée et ligne continue.",
+    "famille": null,
     "ink": 0.257,
     "bbox": [
      8.0,
@@ -545,6 +581,7 @@
     "direction": "B",
     "name": "Panneau de voies",
     "idea": "Deux voies fléchées découpées dans un panneau carré.",
+    "famille": null,
     "ink": 0.44,
     "bbox": [
      8.0,
@@ -559,6 +596,7 @@
     "direction": "C",
     "name": "Cadrage",
     "idea": "La voiture tenue dans quatre équerres : bien placée.",
+    "famille": null,
     "ink": 0.22,
     "bbox": [
      5.5,
@@ -573,6 +611,7 @@
     "direction": "D",
     "name": "Chaussée en perspective",
     "idea": "La route qui file, son axe en tirets évidés.",
+    "famille": null,
     "ink": 0.418,
     "bbox": [
      7.0,
@@ -587,6 +626,7 @@
     "direction": "E",
     "name": "Virage",
     "idea": "Un virage et le repère tenu au milieu de la voie.",
+    "famille": null,
     "ink": 0.195,
     "bbox": [
      7.0,
@@ -606,6 +646,7 @@
     "direction": "A",
     "name": "Créneau en plan",
     "idea": "La place vue du dessus, la voiture y recule.",
+    "famille": null,
     "ink": 0.245,
     "bbox": [
      11.0,
@@ -620,6 +661,7 @@
     "direction": "B",
     "name": "P",
     "idea": "Le P du stationnement, dessiné et découpé dans le panneau.",
+    "famille": null,
     "ink": 0.431,
     "bbox": [
      8.0,
@@ -634,6 +676,7 @@
     "direction": "C",
     "name": "Radar de recul",
     "idea": "La voiture et les ondes de l'aide au recul.",
+    "famille": null,
     "ink": 0.177,
     "bbox": [
      16.3,
@@ -648,6 +691,7 @@
     "direction": "D",
     "name": "Demi-tour",
     "idea": "La flèche du demi-tour, en aplat.",
+    "famille": null,
     "ink": 0.135,
     "bbox": [
      17.0,
@@ -662,6 +706,7 @@
     "direction": "E",
     "name": "Trace qui se gare",
     "idea": "La trace entre dans la place et s'y pose.",
+    "famille": null,
     "ink": 0.231,
     "bbox": [
      4.0,
@@ -681,6 +726,7 @@
     "direction": "A",
     "name": "Insertion",
     "idea": "La bretelle d'insertion rejoint la chaussée, vue du dessus.",
+    "famille": null,
     "ink": 0.247,
     "bbox": [
      9.0,
@@ -695,6 +741,7 @@
     "direction": "B",
     "name": "Panneau autoroute",
     "idea": "Le pictogramme du code — chaussée et pont — découpé dans le carré.",
+    "famille": null,
     "ink": 0.428,
     "bbox": [
      8.0,
@@ -709,6 +756,7 @@
     "direction": "C",
     "name": "Grande route",
     "idea": "Deux bords qui fuient et l'axe en tirets qui grandit.",
+    "famille": null,
     "ink": 0.206,
     "bbox": [
      5.0,
@@ -723,6 +771,7 @@
     "direction": "D",
     "name": "Passage sous le pont",
     "idea": "La chaussée pleine qui passe sous le tablier.",
+    "famille": null,
     "ink": 0.332,
     "bbox": [
      5.0,
@@ -737,6 +786,7 @@
     "direction": "E",
     "name": "Deux traces qui se rejoignent",
     "idea": "La trace de la bretelle rejoint l'autre au repère.",
+    "famille": null,
     "ink": 0.147,
     "bbox": [
      16.5,
@@ -756,6 +806,7 @@
     "direction": "A",
     "name": "Passage piéton",
     "idea": "La voiture approche d'un passage piéton, vu du dessus.",
+    "famille": null,
     "ink": 0.191,
     "bbox": [
      9.0,
@@ -770,6 +821,7 @@
     "direction": "B",
     "name": "Panneau piétons",
     "idea": "Le triangle de danger, un piéton dedans.",
+    "famille": null,
     "ink": 0.243,
     "bbox": [
      5.1,
@@ -784,6 +836,7 @@
     "direction": "C",
     "name": "Piéton",
     "idea": "Un piéton qui avance : la personne qu'on anticipe.",
+    "famille": null,
     "ink": 0.142,
     "bbox": [
      18.4,
@@ -798,6 +851,7 @@
     "direction": "D",
     "name": "Cycliste",
     "idea": "Le vélo, l'usager qu'on ne voit pas venir.",
+    "famille": null,
     "ink": 0.23,
     "bbox": [
      4.0,
@@ -812,6 +866,7 @@
     "direction": "E",
     "name": "Trace qui s'écarte",
     "idea": "La trace s'écarte à temps de ce qu'elle a vu venir.",
+    "famille": null,
     "ink": 0.137,
     "bbox": [
      19.5,
@@ -831,6 +886,7 @@
     "direction": "A",
     "name": "Signet",
     "idea": "Le signet plein : on revient à cette page de la leçon.",
+    "famille": null,
     "ink": 0.317,
     "bbox": [
      17.0,
@@ -845,6 +901,7 @@
     "direction": "B",
     "name": "Fanion",
     "idea": "Un fanion planté : ici, quelque chose à revoir.",
+    "famille": null,
     "ink": 0.223,
     "bbox": [
      15.0,
@@ -859,6 +916,7 @@
     "direction": "C",
     "name": "Chronomètre",
     "idea": "Le chronomètre qui marque un tour : un instant précis.",
+    "famille": null,
     "ink": 0.219,
     "bbox": [
      11.0,
@@ -873,6 +931,7 @@
     "direction": "D",
     "name": "Épingle",
     "idea": "L'épingle de carte, évidée : un lieu à retrouver.",
+    "famille": null,
     "ink": 0.252,
     "bbox": [
      14.0,
@@ -887,6 +946,7 @@
     "direction": "E",
     "name": "Repère sur la trace",
     "idea": "Les deux primitives de Drivy : un repère posé sur la trace.",
+    "famille": null,
     "ink": 0.116,
     "bbox": [
      3.0,
@@ -906,6 +966,7 @@
     "direction": "A",
     "name": "Point d'exclamation",
     "idea": "Un « ! » plein, trait et point de même graisse.",
+    "famille": null,
     "ink": 0.09,
     "bbox": [
      27.0,
@@ -920,6 +981,7 @@
     "direction": "B",
     "name": "Pastille",
     "idea": "Le « ! » évidé dans un disque.",
+    "famille": null,
     "ink": 0.463,
     "bbox": [
      6.0,
@@ -934,6 +996,7 @@
     "direction": "C",
     "name": "Triangle",
     "idea": "Le triangle de danger, « ! » évidé : forme et couleur disent la même chose.",
+    "famille": null,
     "ink": 0.343,
     "bbox": [
      5.1,
@@ -948,6 +1011,7 @@
     "direction": "D",
     "name": "Losange",
     "idea": "Un losange plein, « ! » évidé : distinct du danger.",
+    "famille": null,
     "ink": 0.305,
     "bbox": [
      7.6,
@@ -962,6 +1026,7 @@
     "direction": "E",
     "name": "Trace et repère",
     "idea": "Le trait est une trace, le point est le repère.",
+    "famille": null,
     "ink": 0.078,
     "bbox": [
      24.5,
@@ -981,6 +1046,7 @@
     "direction": "A",
     "name": "Croix",
     "idea": "Une croix pleine : ce qui n'allait pas.",
+    "famille": null,
     "ink": 0.175,
     "bbox": [
      13.0,
@@ -995,6 +1061,7 @@
     "direction": "B",
     "name": "Croix en pastille",
     "idea": "La croix évidée dans un disque.",
+    "famille": null,
     "ink": 0.427,
     "bbox": [
      6.0,
@@ -1009,6 +1076,7 @@
     "direction": "C",
     "name": "À reprendre",
     "idea": "Une flèche qui revient sur elle-même : on le refera.",
+    "famille": null,
     "ink": 0.143,
     "bbox": [
      11.6,
@@ -1023,6 +1091,7 @@
     "direction": "D",
     "name": "Reprendre en pastille",
     "idea": "La flèche de reprise évidée dans un disque.",
+    "famille": null,
     "ink": 0.436,
     "bbox": [
      6.0,
@@ -1037,6 +1106,7 @@
     "direction": "E",
     "name": "Trace qui boucle",
     "idea": "La trace repasse sur elle-même.",
+    "famille": null,
     "ink": 0.171,
     "bbox": [
      3.0,
@@ -1056,6 +1126,7 @@
     "direction": "A",
     "name": "Coche",
     "idea": "Une coche pleine, branche courte et branche longue.",
+    "famille": null,
     "ink": 0.109,
     "bbox": [
      11.0,
@@ -1070,6 +1141,7 @@
     "direction": "B",
     "name": "Coche en pastille",
     "idea": "La coche évidée dans un disque.",
+    "famille": null,
     "ink": 0.453,
     "bbox": [
      6.0,
@@ -1084,6 +1156,7 @@
     "direction": "C",
     "name": "Coche en carré",
     "idea": "La coche évidée dans un carré arrondi.",
+    "famille": null,
     "ink": 0.466,
     "bbox": [
      8.0,
@@ -1098,6 +1171,7 @@
     "direction": "D",
     "name": "Un plus",
     "idea": "Un « + » plein : ce qui s'ajoute.",
+    "famille": null,
     "ink": 0.165,
     "bbox": [
      8.0,
@@ -1112,6 +1186,7 @@
     "direction": "E",
     "name": "Coche-trace",
     "idea": "La coche est une trace qui finit sur un repère.",
+    "famille": null,
     "ink": 0.109,
     "bbox": [
      5.0,
@@ -1121,6 +1196,166 @@
     ],
     "w": 52.0,
     "h": 40.5
+   }
+  ]
+ },
+ "right-priority-v2": {
+  "title": "Priorité à droite — reprise",
+  "proposals": [
+   {
+    "direction": "F",
+    "name": "Manœuvre",
+    "idea": "Le carrefour en second plan ; celui de droite traverse, notre voie s'arrête à la ligne.",
+    "famille": "Manœuvre",
+    "ink": 0.185,
+    "bbox": [
+     3.0,
+     3.0,
+     61.0,
+     61.0
+    ],
+    "w": 58.0,
+    "h": 58.0
+   },
+   {
+    "direction": "G",
+    "name": "Plein et creux",
+    "idea": "Au carrefour, la voiture de droite est pleine, la nôtre creuse : elle cède.",
+    "famille": "Plan",
+    "ink": 0.179,
+    "bbox": [
+     3.0,
+     3.0,
+     61.0,
+     61.0
+    ],
+    "w": 58.0,
+    "h": 58.0
+   },
+   {
+    "direction": "H",
+    "name": "AB1 redessiné",
+    "idea": "Le panneau du code, anneau plus épais et croix agrandie, centrée optiquement.",
+    "famille": "Panneau",
+    "ink": 0.303,
+    "bbox": [
+     4.3,
+     9.0,
+     59.7,
+     58.5
+    ],
+    "w": 55.5,
+    "h": 49.5
+   },
+   {
+    "direction": "I",
+    "name": "Bordures",
+    "idea": "Le carrefour dit par ses quatre bordures ; la flèche entre par la droite.",
+    "famille": "Plan",
+    "ink": 0.3,
+    "bbox": [
+     1.5,
+     1.5,
+     63.8,
+     62.5
+    ],
+    "w": 62.2,
+    "h": 61.0
+   },
+   {
+    "direction": "J",
+    "name": "Elle arrive, on s'arrête",
+    "idea": "La voiture de droite entre dans le carrefour, une ligne d'arrêt de notre côté.",
+    "famille": "Manœuvre",
+    "ink": 0.174,
+    "bbox": [
+     3.0,
+     3.0,
+     61.0,
+     61.0
+    ],
+    "w": 58.0,
+    "h": 58.0
+   }
+  ]
+ },
+ "intersections-v2": {
+  "title": "Intersections et giratoires — reprise",
+  "proposals": [
+   {
+    "direction": "F",
+    "name": "Traverser le giratoire",
+    "idea": "Comme une consigne de navigation : on entre en bas, on tourne, on sort en haut.",
+    "famille": "Manœuvre",
+    "ink": 0.129,
+    "bbox": [
+     15.0,
+     5.8,
+     48.0,
+     62.0
+    ],
+    "w": 33.0,
+    "h": 56.2
+   },
+   {
+    "direction": "G",
+    "name": "Îlot et sens giratoire",
+    "idea": "L'îlot plein et une seule flèche qui en fait le tour : le giratoire, sans les trois flèches.",
+    "famille": "Silhouette",
+    "ink": 0.228,
+    "bbox": [
+     5.1,
+     2.0,
+     58.9,
+     54.5
+    ],
+    "w": 53.8,
+    "h": 52.5
+   },
+   {
+    "direction": "H",
+    "name": "Sortie du giratoire",
+    "idea": "L'anneau fin, le trajet épais qui en sort : une consigne de navigation, d'une couleur.",
+    "famille": "Manœuvre",
+    "ink": 0.175,
+    "bbox": [
+     14.8,
+     3.8,
+     50.5,
+     64.5
+    ],
+    "w": 35.7,
+    "h": 60.7
+   },
+   {
+    "direction": "I",
+    "name": "Giratoire en plan",
+    "idea": "Les branches et l'anneau en second plan, l'îlot et le sens de rotation au premier.",
+    "famille": "Plan",
+    "ink": 0.191,
+    "bbox": [
+     3.0,
+     3.0,
+     61.0,
+     61.0
+    ],
+    "w": 58.0,
+    "h": 58.0
+   },
+   {
+    "direction": "J",
+    "name": "Tourner au carrefour",
+    "idea": "Le carrefour en second plan, le virage à droite en trait plein.",
+    "famille": "Manœuvre",
+    "ink": 0.188,
+    "bbox": [
+     3.0,
+     3.0,
+     61.0,
+     62.0
+    ],
+    "w": 58.0,
+    "h": 59.0
    }
   ]
  }

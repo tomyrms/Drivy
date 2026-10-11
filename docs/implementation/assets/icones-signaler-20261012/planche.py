@@ -30,6 +30,10 @@ def inline(svg_text: str) -> str:
 
 
 def current_svg(key):
+    if key.endswith("-v2"):
+        # Reprise : la référence est l'icône livrée au premier tour, archivée.
+        f = HERE / "avant" / f"{key[:-3]}-tour1.svg"
+        return inline(f.read_text(encoding="utf-8")) if f.exists() else None
     name = CURRENT.get(key)
     if not name:
         return None
@@ -69,9 +73,13 @@ def main():
                     if score else "")
             props.append(cell(svg, "won" if won else "") .replace(
                 '<div class="big">',
-                f'<div class="lab"><span class="dir">{p["direction"]} · {DIRS[p["direction"]]}</span>'
+                f'<div class="lab"><span class="dir">{p["direction"]} · {p.get("famille") or DIRS.get(p["direction"], "")}</span>'
                 f'<span class="name">{p["name"]}</span>{total}<small>{crit}</small></div><div class="big">', 1))
         why = f'<p class="why">{pick["pourquoi"]}</p>' if pick.get("pourquoi") else ""
+        if f"{key}-v2" in choix:
+            why += '<p class="why"><b>Remplacée par la reprise du 12 octobre, demandée par le porteur</b> (planche-reprise.png).</p>'
+        if pick.get("remplace"):
+            why += f'<p class="why">Remplace la sélection du premier tour : {pick["remplace"]}.</p>'
         rows.append(f'<section><h2>{spec["title"]} <code>{key}</code></h2>'
                     f'<div class="grid"><div class="lab"><span class="dir">Actuelle</span></div>{cur_html}{"".join(props)}</div>{why}</section>')
     legend = ("Notes /5 : reconnaissance · qualité graphique · identité Drivy · petite taille · intégration ; "

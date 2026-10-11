@@ -32,15 +32,21 @@ SOLID = {"marker": 0.86}
 
 
 def normalize(geom, key):
-    minx, miny, maxx, maxy = geom.bounds
+    primary, secondary = atelier.layers(geom)
+    whole = atelier.U(primary, secondary)
+    minx, miny, maxx, maxy = whole.bounds
     w, h = maxx - minx, maxy - miny
     if key in STATUS:
         s = 1.0
     else:
         s = min(TARGET * SOLID.get(key, 1.0) / math.sqrt(w * h), MAX / max(w, h))
-    g = affinity.scale(geom, s, s, origin=((minx + maxx) / 2, (miny + maxy) / 2))
-    minx, miny, maxx, maxy = g.bounds
-    return affinity.translate(g, 32 - (minx + maxx) / 2, 32 - LIFT - (miny + maxy) / 2), s
+    origin = ((minx + maxx) / 2, (miny + maxy) / 2)
+    dx, dy = 32 - origin[0], 32 - LIFT - origin[1]
+
+    def place(g):
+        return None if g is None else affinity.translate(affinity.scale(g, s, s, origin=origin), dx, dy)
+    placed = place(primary) if secondary is None else (place(primary), place(secondary))
+    return placed, s
 
 
 def contents(filename):
@@ -56,8 +62,12 @@ def main():
     FINAL.mkdir(exist_ok=True)
     report = {}
     for key, spec in atelier.ICONS.items():
-        pick = selection[key]["retenue"]
-        prop = next(p for p in spec["directions"] if p["direction"] == pick)
+        if key.endswith("-v2"):
+            continue
+        # Une reprise (« <clé>-v2 ») remplace la sélection du premier tour.
+        source = f"{key}-v2" if f"{key}-v2" in selection else key
+        pick = selection[source]["retenue"]
+        prop = next(p for p in atelier.ICONS[source]["directions"] if p["direction"] == pick)
         geom, scale = normalize(prop["build"](), key)
         title = f"{spec['title']} — {prop['name']}"
         (FINAL / f"{key}.svg").write_text(atelier.svg(geom, title), encoding="utf-8")
@@ -69,7 +79,7 @@ def main():
             old.unlink()
         (imageset / f"{key}.svg").write_text(text, encoding="utf-8")
         (imageset / "Contents.json").write_text(contents(f"{key}.svg"), encoding="utf-8")
-        report[key] = {"direction": pick, "scale": round(scale, 3), **atelier.metrics(geom)}
+        report[key] = {"source": source, "direction": pick, "scale": round(scale, 3), **atelier.metrics(geom)}
     (HERE / "retenues.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     for k, v in report.items():
         print(k, v)

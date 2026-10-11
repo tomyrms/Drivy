@@ -688,5 +688,99 @@
    }
   },
   "pourquoi": "A — la coche nue, même graisse que le « ! » et la croix : les trois appréciations forment un jeu. Le « + » (D) se lit « ajouter »."
+ },
+ "right-priority-v2": {
+  "retenue": "I",
+  "notes": {
+   "F": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 3.15
+   },
+   "G": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.95
+   },
+   "H": {
+    "reconnaissance": 5,
+    "qualite": 5,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 3,
+    "total": 4.2
+   },
+   "I": {
+    "reconnaissance": 4,
+    "qualite": 5,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 5,
+    "total": 4.35
+   },
+   "J": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.95
+   }
+  },
+  "pourquoi": "I — le carrefour dit par ses quatre bordures et la flèche qui entre par la droite : le langage des consignes de navigation, net à 16 px et d'une seule couleur. L'AB1 redessiné (H) est mieux construit que la version livrée, mais c'est un second triangle à côté de « Céder le passage » dans la grille : les deux se confondent d'un coup d'œil. Les voitures vues du dessus (G, J) ne disent pas leur sens en petit, et la ligne d'arrêt de F se lit « T ».",
+  "remplace": "right-priority B (4.15)"
+ },
+ "intersections-v2": {
+  "retenue": "H",
+  "notes": {
+   "F": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.8
+   },
+   "G": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.65
+   },
+   "H": {
+    "reconnaissance": 4,
+    "qualite": 5,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 5,
+    "total": 4.35
+   },
+   "I": {
+    "reconnaissance": 4,
+    "qualite": 3,
+    "identite": 3,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 3.1
+   },
+   "J": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 3,
+    "total": 3.85
+   }
+  },
+  "pourquoi": "H — l'anneau fin et le trajet épais qui entre, tourne et sort : le giratoire comme le montre une application de navigation, sans les trois flèches qui se lisaient « synchroniser ». Il reste d'une couleur, comme le reste de la famille ; la même idée en deux tons (F) s'empâte à 16 px. Tourner au carrefour (J) dit bien « intersection » mais pas « giratoire » et demande le second calque.",
+  "remplace": "intersections C (3.70)"
  }
 }
