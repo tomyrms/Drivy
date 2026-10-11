@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 11 octobre 2026 — thème sombre « Soft Charcoal »
+
+Le thème sombre de l’app native est refait en anthracite neutre : un bloc est plus clair que la page qui le porte, le bouton principal est un cobalt plein au libellé blanc, une feuille monte d’un niveau. Le thème clair ne change pas. Détail, références et mesures : [dark-soft-charcoal-20261011.md](dark-soft-charcoal-20261011.md). Branche `claude/dark-soft-charcoal-20261011`, partie de la PR #10.
+
+**Exécuté** : IPA compilée sur `73bd0ec` ; 455 tests métier passent ; 141 couples de contraste sombres au-dessus de leur seuil (calcul sur les valeurs déclarées) ; 28 écrans iPhone capturés en clair et en sombre avant et après. En clair, 23 écrans sont identiques au pixel près ; les 5 autres diffèrent par l’heure, un chronomètre, une animation ou la galerie enrichie.
+
+**Reste à qualifier** : carte sombre réelle, Liquid Glass, ombres et bascule clair/sombre sur appareil ; Contraste accru, Réduire la transparence, grand texte, iPad et paysage, jamais rendus ; parcours UI non rejoués. **Au porteur** : valider à l’œil le bleu du bouton principal (`#3D70E2` au lieu de `#4D80EB`, pour le contraste du libellé) et l’aspect des interrupteurs. Le thème sombre du web n’est pas touché.
+
 ## 11 octobre 2026 — parcours de l’élève : Profil, prochaine leçon, Progression
 
 Trois onglets pour l’élève (Leçons, Progression, Profil), prochaine leçon en tête, historique lu en entier, Progression refaite sur retours du porteur (un permis à la fois, « 4 sur 9 en autonomie », détail déplié sur place), ralentissements corrigés (dates et formateurs mis en cache). [Détail, relecture QA et points ouverts](parcours-eleve-profil-20261011.md).

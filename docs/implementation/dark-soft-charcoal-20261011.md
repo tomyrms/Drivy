@@ -105,3 +105,42 @@ Fichiers touchés hors `UI/` : une ligne ou deux dans `SchoolAgendaView`, `Schoo
 
 Règle pour le code écrit en parallèle : un fond de page garde `surface` ou `canvas` ; un bloc dessiné avec une forme (`in: RoundedRectangle…`, `Circle()`, `listRowBackground`) prend `surfaceCard` ou `surfaceRaised` ; un aplat bleu qui porte du texte prend `accentFill`.
 
+## Vérification
+
+### Exécuté
+
+- **Contrastes** : `python3 scripts/ios/theme-contrast.py` lit `DrivyTheme.swift` et contrôle 47 couples dans quatre états (clair, sombre, sombre dans une feuille, sombre en Contraste accru). Les 141 couples sombres passent leur seuil : 4,5:1 pour un texte, 3:1 pour un élément d’interface. [Mesures](proofs/dark-soft-charcoal-contrast-20261011.json). C’est un calcul sur les valeurs déclarées, pas sur les pixels rendus.
+- **Valeurs claires** : le même script échoue si une valeur claire s’écarte de la référence. Les 27 tokens sont inchangés.
+- **Compilation** : IPA d’essai compilée sur `73bd0ec` (run `38158333100`). L’IPA ne compile pas la cible de tests.
+- **Tests métier** : 455 tests passent sur `73bd0ec` (run `38158334944`). Les parcours UI n’ont pas été rejoués.
+- **Captures du simulateur**, iPhone, clair et sombre, 28 écrans avant (`88914a3`, run `38156084240`) et après (`4810967`, run `38156670509`), puis 5 écrans de contrôle sur `73bd0ec` (run `38158336642`).
+
+### Thème clair, avant et après
+
+Comparaison pixel à pixel des 28 captures claires.
+
+| Résultat | Écrans |
+|---|---|
+| Identiques au pixel près (23) | agenda, capture-preparation, dossier, gps-choice, home-tabs, invitations, join-code, learner-home, learner, learner-progress, learners, lesson-finish, lesson, lesson-observations, observations, onboarding-formation, profile, profile-tab, progression, replay, sign-in, signal, start-now |
+| Différence attendue | design-system : la galerie affiche les nouveaux tokens |
+| Différence sans rapport avec le thème | planning (heure courante affichée), live (chronomètre), skeletons (phase du balayage), lessons-history (champ de recherche système saisi en cours d’animation) |
+
+Sur `73bd0ec`, les écrans learners, learner, dossier et profile-tab restent identiques au pixel près.
+
+### Thème sombre, relu sur captures
+
+Moniteur : Aujourd’hui, Agenda, Élèves, dossier, démarrage, planification, leçon, observations, fin de leçon, historique, leçon en cours sur carte, replay, palette Signaler, choix du GPS, préparation du trajet, invitations, Profil. Élève : Leçons, Progression, accueil dans l’école, mes informations, code d’invitation. Transversal : connexion, galerie du design system, squelettes.
+
+Planches avant et après : [accueil, agenda, dossier, leçon](assets/dark-soft-charcoal-20261011/apres-accueil-agenda-dossier-lecon.jpg) ([avant](assets/dark-soft-charcoal-20261011/avant-accueil-agenda-dossier-lecon.jpg)) ; [carte, replay, Signaler, profil](assets/dark-soft-charcoal-20261011/apres-live-replay-signaler-profil.jpg) ([avant](assets/dark-soft-charcoal-20261011/avant-live-replay-signaler-profil.jpg)).
+
+Corrigé après la première relecture : la liste d’élèves, pleine largeur, formait une dalle plus claire que la page. Ses rangées gardent maintenant la couleur de la page (`drivyPlainRows`).
+
+### Reste à qualifier
+
+- **Sur appareil** : le rendu réel de la carte sombre (le simulateur de la CI n’affiche qu’un aplat sous le replay), le Liquid Glass des commandes sur carte, l’ombre des panneaux, le passage clair/sombre à chaud, VoiceOver.
+- **Jamais rendus** : Contraste accru, Réduire la transparence, grandes tailles de texte, iPad, paysage. Les variantes de Contraste accru sont calculées, pas vues.
+- **Écrans non capturés en sombre** : réglages de planification, création et détail d’invitation, erreurs de connexion, verrouillage de l’app, choix d’école, étapes d’accueil autres que la formation, feuille de tarif, leçon annulée.
+- **Contrôles système teintés** : la teinte système est `accent` (`#86ABF8`), choisie pour le texte des barres et des liens. Un interrupteur activé et le jour courant sélectionné dans un sélecteur de date prennent donc ce bleu clair sous un élément blanc. À voir sur appareil ; le correctif serait une teinte `accentFill` posée sur ces contrôles.
+- **Bouton principal** : `#3D70E2` au lieu du `#4D80EB` demandé, pour que le libellé blanc atteigne 4,5:1. À valider à l’œil par le porteur.
+- **Web** : son thème sombre garde l’ardoise bleutée. Hors périmètre de cette passe.
+- **Écran de lancement** : la couleur `LaunchBackground` n’a pas été vue ; iOS met en cache l’écran de lancement, un redémarrage de l’appareil peut être nécessaire pour la voir.
