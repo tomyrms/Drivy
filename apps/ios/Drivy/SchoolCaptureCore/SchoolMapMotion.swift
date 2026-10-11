@@ -73,9 +73,11 @@ struct SchoolMapGlide {
 /// the frame rate. 359° to 1° is a 2° turn, never a full spin.
 struct SchoolMapHeadingSmoother {
     /// Time to cover about two thirds of a turn.
-    var timeConstant: TimeInterval = 0.28
+    var timeConstant: TimeInterval
     private(set) var value: Double?
     private var updatedAt: TimeInterval?
+
+    init(timeConstant: TimeInterval = 0.28) { self.timeConstant = timeConstant }
 
     mutating func reset() { value = nil; updatedAt = nil }
 
