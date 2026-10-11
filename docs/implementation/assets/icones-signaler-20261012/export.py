@@ -62,10 +62,11 @@ def main():
     FINAL.mkdir(exist_ok=True)
     report = {}
     for key, spec in atelier.ICONS.items():
-        if key.endswith("-v2"):
+        if "-v" in key:
             continue
-        # Une reprise (« <clé>-v2 ») remplace la sélection du premier tour.
-        source = f"{key}-v2" if f"{key}-v2" in selection else key
+        # La dernière reprise retenue (« <clé>-vN », sans « ecartee ») remplace les sélections précédentes.
+        reprises = [k for k in selection if k.startswith(f"{key}-v") and not selection[k].get("ecartee")]
+        source = max(reprises, key=lambda k: int(k.rsplit("-v", 1)[1])) if reprises else key
         pick = selection[source]["retenue"]
         prop = next(p for p in atelier.ICONS[source]["directions"] if p["direction"] == pick)
         geom, scale = normalize(prop["build"](), key)

@@ -30,9 +30,10 @@ def inline(svg_text: str) -> str:
 
 
 def current_svg(key):
-    if key.endswith("-v2"):
-        # Reprise : la référence est l'icône livrée au premier tour, archivée.
-        f = HERE / "avant" / f"{key[:-3]}-tour1.svg"
+    if key.endswith(("-v2", "-v3", "-v4", "-v5")):
+        # Reprise : la référence est l'icône livrée au tour précédent, archivée.
+        tour = "tour1" if key.endswith("-v2") else "tour2"
+        f = HERE / "avant" / f"{key[:-3]}-{tour}.svg"
         return inline(f.read_text(encoding="utf-8")) if f.exists() else None
     name = CURRENT.get(key)
     if not name:

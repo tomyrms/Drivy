@@ -1358,5 +1358,245 @@
     "h": 59.0
    }
   ]
+ },
+ "intersections-v3": {
+  "title": "Intersections et giratoires — reprise 2",
+  "proposals": [
+   {
+    "direction": "K",
+    "name": "Jumeau, flèche autour",
+    "idea": "Les bordures de la priorité à droite s'arrondissent ; une flèche fait le tour de l'îlot.",
+    "famille": "Bordures",
+    "ink": 0.357,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     62.5
+    ],
+    "w": 61.0,
+    "h": 61.0
+   },
+   {
+    "direction": "L",
+    "name": "Jumeau, îlot seul",
+    "idea": "Le giratoire dit seulement par ses bordures courbes et son îlot plein.",
+    "famille": "Bordures",
+    "ink": 0.28,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     62.5
+    ],
+    "w": 61.0,
+    "h": 61.0
+   },
+   {
+    "direction": "M",
+    "name": "Jumeau, traversée",
+    "idea": "On entre en bas, on contourne l'îlot par la droite, on sort en haut.",
+    "famille": "Bordures",
+    "ink": 0.369,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     64.0
+    ],
+    "w": 61.0,
+    "h": 62.5
+   },
+   {
+    "direction": "N",
+    "name": "Jumeau, trois flèches",
+    "idea": "Les trois flèches du panneau giratoire, posées dans l'anneau des bordures.",
+    "famille": "Bordures",
+    "ink": 0.36,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     62.5
+    ],
+    "w": 61.0,
+    "h": 61.0
+   },
+   {
+    "direction": "O",
+    "name": "Jumeau, îlot-repère",
+    "idea": "L'îlot devient le repère annelé de Drivy, la flèche en fait le tour.",
+    "famille": "Bordures",
+    "ink": 0.38,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     62.5
+    ],
+    "w": 61.0,
+    "h": 61.0
+   }
+  ]
+ },
+ "intersections-v4": {
+  "title": "Intersections et giratoires — reprise 3",
+  "proposals": [
+   {
+    "direction": "P",
+    "name": "Carrefour giratoire",
+    "idea": "Les bordures de la priorité à droite, au trait près ; au centre, un îlot et le sens giratoire.",
+    "famille": "Jumeau",
+    "ink": 0.311,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     62.5
+    ],
+    "w": 61.0,
+    "h": 61.0
+   },
+   {
+    "direction": "Q",
+    "name": "Carrefour à îlot",
+    "idea": "Les mêmes bordures, un îlot plein au centre, sans flèche.",
+    "famille": "Jumeau",
+    "ink": 0.28,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     62.5
+    ],
+    "w": 61.0,
+    "h": 61.0
+   },
+   {
+    "direction": "R",
+    "name": "Carrefour tournant",
+    "idea": "Les mêmes bordures, une flèche qui tourne au centre, sans îlot.",
+    "famille": "Jumeau",
+    "ink": 0.298,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     62.5
+    ],
+    "w": 61.0,
+    "h": 61.0
+   },
+   {
+    "direction": "S",
+    "name": "Entrées arrondies",
+    "idea": "Bordures aux angles arrondis, comme les entrées d'un giratoire ; îlot et sens giratoire.",
+    "famille": "Jumeau",
+    "ink": 0.306,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     62.5
+    ],
+    "w": 61.0,
+    "h": 61.0
+   },
+   {
+    "direction": "T",
+    "name": "Celle de droite contourne",
+    "idea": "La flèche vient de droite comme dans la priorité à droite, mais elle contourne l'îlot.",
+    "famille": "Jumeau",
+    "ink": 0.318,
+    "bbox": [
+     1.5,
+     1.5,
+     62.8,
+     62.5
+    ],
+    "w": 61.2,
+    "h": 61.0
+   }
+  ]
+ },
+ "intersections-v5": {
+  "title": "Intersections et giratoires — reprise 4",
+  "proposals": [
+   {
+    "direction": "U",
+    "name": "Anneau et îlot",
+    "idea": "Les bordures de la priorité à droite deviennent l'anneau ; l'îlot plein au centre.",
+    "famille": "Bordures",
+    "ink": 0.302,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     62.5
+    ],
+    "w": 61.0,
+    "h": 61.0
+   },
+   {
+    "direction": "V",
+    "name": "Anneau, îlot, sens",
+    "idea": "L'anneau des bordures, l'îlot et le sens giratoire dans la voie.",
+    "famille": "Bordures",
+    "ink": 0.345,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     62.5
+    ],
+    "w": 61.0,
+    "h": 61.0
+   },
+   {
+    "direction": "W",
+    "name": "Grand îlot",
+    "idea": "Branches plus larges, comme la priorité à droite ; un îlot plus grand pour garder l'anneau.",
+    "famille": "Bordures",
+    "ink": 0.301,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     62.5
+    ],
+    "w": 61.0,
+    "h": 61.0
+   },
+   {
+    "direction": "X",
+    "name": "Îlot-repère",
+    "idea": "L'anneau des bordures autour du repère annelé de Drivy.",
+    "famille": "Bordures",
+    "ink": 0.299,
+    "bbox": [
+     1.5,
+     1.5,
+     62.5,
+     62.5
+    ],
+    "w": 61.0,
+    "h": 61.0
+   },
+   {
+    "direction": "Y",
+    "name": "Celle de droite tourne",
+    "idea": "La flèche vient de droite, comme dans la priorité à droite, et tourne dans l'anneau.",
+    "famille": "Bordures",
+    "ink": 0.338,
+    "bbox": [
+     1.5,
+     1.5,
+     63.5,
+     62.5
+    ],
+    "w": 62.0,
+    "h": 61.0
+   }
+  ]
  }
 }

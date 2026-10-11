@@ -983,6 +983,181 @@ icon("intersections-v2", "Intersections et giratoires — reprise",
      P("J", "Tourner au carrefour", "Le carrefour en second plan, le virage à droite en trait plein.", it_J, "Manœuvre"))
 
 
+# ---------------------------------------------------------------- reprise 2 du 12 octobre
+# Le porteur garde la priorité à droite (bordures) et refuse encore le giratoire. Le giratoire devient
+# son jumeau : mêmes bordures (7), mêmes branches (±11,5), même flèche (7,5), même emprise ; seules
+# les bordures s'arrondissent autour d'un îlot.
+
+KERB, ARM, REACH = 7.0, 11.5, 27.0
+
+
+def roundabout_kerbs(R=22.5):
+    """Quatre bordures : droites le long des branches, courbes autour de l'anneau."""
+    t = math.degrees(math.asin(ARM / R))
+    kerbs = []
+    for q in range(4):
+        base = -90 + 90 * q            # quart entre deux branches
+        a0, a1 = base + t, base + 90 - t
+        start = (32 + R * math.cos(math.radians(a0)), 32 + R * math.sin(math.radians(a0)))
+        end = (32 + R * math.cos(math.radians(a1)), 32 + R * math.sin(math.radians(a1)))
+        ux0, uy0 = math.cos(math.radians(base)), math.sin(math.radians(base))
+        ux1, uy1 = math.cos(math.radians(base + 90)), math.sin(math.radians(base + 90))
+        lead = (start[0] + ux0 * (REACH - math.sqrt(R * R - ARM * ARM)), start[1] + uy0 * (REACH - math.sqrt(R * R - ARM * ARM)))
+        tail = (end[0] + ux1 * (REACH - math.sqrt(R * R - ARM * ARM)), end[1] + uy1 * (REACH - math.sqrt(R * R - ARM * ARM)))
+        kerbs.append(line(lead, *arc_pts(32, 32, R, a0, a1, 48), tail, w=KERB))
+    return U(*kerbs)
+
+
+def it3_K():
+    island = disc(32, 32, 6.5)
+    loop = arc_arrow(32, 32, 13.5, 45, -225, w=6.5, hl=10, hw=15)
+    return U(roundabout_kerbs(), island, loop)
+
+
+def it3_L():
+    island = disc(32, 32, 9)
+    return U(roundabout_kerbs(), island)
+
+
+def it3_M():
+    island = disc(32, 32, 6.5)
+    entry = line((32, 61), (32 + 0, 32 + 13.5))
+    path = U(entry, line(*arc_pts(32, 32, 13.5, 90, -90 + 12, 96), w=6.5))
+    exit_ = arrow((32 + 13.5 * math.cos(math.radians(-90)), 32 + 13.5 * math.sin(math.radians(-90))), (32, 3), w=6.5, hl=10, hw=15)
+    return U(roundabout_kerbs(), island, path.difference(disc(32, 32, 9.5)), exit_)
+
+
+def it3_N():
+    island = disc(32, 32, 6.5)
+    arrows = U(*[arc_arrow(32, 32, 13.5, a, a - 95, w=6, hl=8.5, hw=13) for a in (135, 15, -105)])
+    return U(roundabout_kerbs(), island, arrows)
+
+
+def it3_O():
+    island = ring(32, 32, 9, 4)
+    loop = arc_arrow(32, 32, 15.5, 60, -210, w=6.5, hl=10, hw=15)
+    return U(roundabout_kerbs(24.5), island, loop)
+
+
+icon("intersections-v3", "Intersections et giratoires — reprise 2",
+     P("K", "Jumeau, flèche autour", "Les bordures de la priorité à droite s'arrondissent ; une flèche fait le tour de l'îlot.", it3_K, "Bordures"),
+     P("L", "Jumeau, îlot seul", "Le giratoire dit seulement par ses bordures courbes et son îlot plein.", it3_L, "Bordures"),
+     P("M", "Jumeau, traversée", "On entre en bas, on contourne l'îlot par la droite, on sort en haut.", it3_M, "Bordures"),
+     P("N", "Jumeau, trois flèches", "Les trois flèches du panneau giratoire, posées dans l'anneau des bordures.", it3_N, "Bordures"),
+     P("O", "Jumeau, îlot-repère", "L'îlot devient le repère annelé de Drivy, la flèche en fait le tour.", it3_O, "Bordures"))
+
+
+# ---------------------------------------------------------------- reprise 3 du 12 octobre
+# Bordures courbes (v3) : quatre larges branches ne laissent presque rien de l'anneau, l'ensemble se lit
+# engrenage. On garde au trait près les bordures droites de la priorité à droite ; seul le centre du
+# carrefour change : un îlot et le sens giratoire. La différence se joue là où l'œil tombe.
+
+def straight_kerbs():
+    kerbs = []
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            kerbs.append(line((32 + sx * 11.5, 32 + sy * 27), (32 + sx * 11.5, 32 + sy * 16),
+                              (32 + sx * 16, 32 + sy * 11.5), (32 + sx * 27, 32 + sy * 11.5), w=7))
+    return U(*kerbs)
+
+
+def it4_P():
+    return U(straight_kerbs(), disc(32, 32, 4.5), arc_arrow(32, 32, 10, 80, -180, w=5.5, hl=8, hw=12.5))
+
+
+def it4_Q():
+    return U(straight_kerbs(), disc(32, 32, 8))
+
+
+def it4_R():
+    return U(straight_kerbs(), arc_arrow(32, 32, 9.5, 80, -180, w=6, hl=8.5, hw=13))
+
+
+def it4_S():
+    kerbs = []
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            cx, cy = 32 + sx * 19.5, 32 + sy * 19.5
+            a_mid = math.degrees(math.atan2(-sy, -sx))
+            kerbs.append(line((32 + sx * 11.5, 32 + sy * 27), (32 + sx * 11.5, 32 + sy * 19.5),
+                              *arc_pts(cx, cy, 8, a_mid - 45 if sx * sy > 0 else a_mid + 45,
+                                       a_mid + 45 if sx * sy > 0 else a_mid - 45, 24),
+                              (32 + sx * 19.5, 32 + sy * 11.5), (32 + sx * 27, 32 + sy * 11.5), w=7))
+    return U(*kerbs, disc(32, 32, 4.5), arc_arrow(32, 32, 10, 80, -180, w=5.5, hl=8, hw=12.5))
+
+
+def it4_T():
+    r = 10
+    a0 = 18
+    p0 = (32 + r * math.cos(math.radians(a0)), 32 + r * math.sin(math.radians(a0)))
+    entry = line((60, p0[1]), (p0[0] + 2, p0[1]), w=5.5)
+    around = arc_arrow(32, 32, r, a0, -170, w=5.5, hl=8, hw=12.5)
+    return U(straight_kerbs(), disc(32, 32, 4.5), entry, around)
+
+
+icon("intersections-v4", "Intersections et giratoires — reprise 3",
+     P("P", "Carrefour giratoire", "Les bordures de la priorité à droite, au trait près ; au centre, un îlot et le sens giratoire.", it4_P, "Jumeau"),
+     P("Q", "Carrefour à îlot", "Les mêmes bordures, un îlot plein au centre, sans flèche.", it4_Q, "Jumeau"),
+     P("R", "Carrefour tournant", "Les mêmes bordures, une flèche qui tourne au centre, sans îlot.", it4_R, "Jumeau"),
+     P("S", "Entrées arrondies", "Bordures aux angles arrondis, comme les entrées d'un giratoire ; îlot et sens giratoire.", it4_S, "Jumeau"),
+     P("T", "Celle de droite contourne", "La flèche vient de droite comme dans la priorité à droite, mais elle contourne l'îlot.", it4_T, "Jumeau"))
+
+
+# ---------------------------------------------------------------- reprise 4 du 12 octobre
+# Les bordures droites laissent un centre trop petit (îlot et flèche deviennent une spirale). Ce qui dit
+# « giratoire », c'est l'anneau autour de l'îlot : il doit l'emporter sur les ouvertures. Même grammaire
+# de bordures que la priorité à droite (épaisseur 7, emprise ±27), branches plus étroites pour que les
+# arcs dominent.
+
+def ring_kerbs(arm, R, reach=27.0):
+    t = math.degrees(math.asin(arm / R))
+    lead = reach - math.sqrt(R * R - arm * arm)
+    out = []
+    for q in range(4):
+        base = -90 + 90 * q
+        a0, a1 = base + t, base + 90 - t
+        p0 = (32 + R * math.cos(math.radians(a0)), 32 + R * math.sin(math.radians(a0)))
+        p1 = (32 + R * math.cos(math.radians(a1)), 32 + R * math.sin(math.radians(a1)))
+        u0 = (math.cos(math.radians(base)), math.sin(math.radians(base)))
+        u1 = (math.cos(math.radians(base + 90)), math.sin(math.radians(base + 90)))
+        out.append(line((p0[0] + u0[0] * lead, p0[1] + u0[1] * lead), *arc_pts(32, 32, R, a0, a1, 48),
+                        (p1[0] + u1[0] * lead, p1[1] + u1[1] * lead), w=7))
+    return U(*out)
+
+
+def it5_U():
+    return U(ring_kerbs(8, 21), disc(32, 32, 8))
+
+
+def it5_V():
+    return U(ring_kerbs(8, 22.5), disc(32, 32, 5.5), arc_arrow(32, 32, 12.5, 60, -210, w=5, hl=7.5, hw=11.5))
+
+
+def it5_W():
+    return U(ring_kerbs(9.5, 23), disc(32, 32, 9.5))
+
+
+def it5_X():
+    return U(ring_kerbs(8, 21), ring(32, 32, 9, 4.5))
+
+
+def it5_Y():
+    r = 12.5
+    a0 = 25
+    p0 = (32 + r * math.cos(math.radians(a0)), 32 + r * math.sin(math.radians(a0)))
+    entry = line((61, p0[1]), (p0[0] + 1.5, p0[1]), w=5)
+    around = arc_arrow(32, 32, r, a0, -175, w=5, hl=7.5, hw=11.5)
+    return U(ring_kerbs(8, 22.5), disc(32, 32, 5.5), entry, around)
+
+
+icon("intersections-v5", "Intersections et giratoires — reprise 4",
+     P("U", "Anneau et îlot", "Les bordures de la priorité à droite deviennent l'anneau ; l'îlot plein au centre.", it5_U, "Bordures"),
+     P("V", "Anneau, îlot, sens", "L'anneau des bordures, l'îlot et le sens giratoire dans la voie.", it5_V, "Bordures"),
+     P("W", "Grand îlot", "Branches plus larges, comme la priorité à droite ; un îlot plus grand pour garder l'anneau.", it5_W, "Bordures"),
+     P("X", "Îlot-repère", "L'anneau des bordures autour du repère annelé de Drivy.", it5_X, "Bordures"),
+     P("Y", "Celle de droite tourne", "La flèche vient de droite, comme dans la priorité à droite, et tourne dans l'anneau.", it5_Y, "Bordures"))
+
+
 # ---------------------------------------------------------------- sortie SVG
 
 def to_path(geom, ndigits=2):

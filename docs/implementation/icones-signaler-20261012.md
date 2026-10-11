@@ -45,7 +45,7 @@ Les notes sont un jugement, pas une mesure. Elles ont été posées après avoir
 | Priorité à droite | reprise I · Bordures | 4.35 | H 4.20 (premier tour : B 4.15) |
 | Signalisation | C · Feux tricolores | 4.05 | B 4.00 |
 | Céder le passage | B · Triangle pointe en bas | 4.70 | D 4.15 |
-| Intersections et giratoires | reprise H · Sortie du giratoire | 4.35 | J 3.85 (premier tour : C 3.70) |
+| Intersections et giratoires | reprise 4 U · Anneau et îlot | 4.80 | W 4.15 (avant : H 4.35, C 3.70) |
 | Adaptation de la vitesse | C · Compteur | 4.65 | D 3.85 |
 | Placement sur la chaussée | A · Dans sa voie | 4.30 | C 3.90 |
 | Manœuvres | D · Demi-tour | 4.55 | C 4.00 |
@@ -67,7 +67,11 @@ Les raisons sont détaillées sous chaque ligne de la planche.
 Après avoir vu l'IPA, le porteur a demandé de revoir ces deux icônes. Il y a eu cinq nouvelles études chacune, dans le langage des pictogrammes de manœuvre d'Apple Plans et de Waze ; l'atelier sait désormais poser un second calque du même bleu à 35 %, comme un SF Symbol hiérarchique.
 
 - **Priorité à droite : les bordures (I).** Le carrefour est dit par ses quatre bordures et la flèche entre par la droite. L'AB1 redessiné (H, 4,20) est mieux construit que la version livrée, mais il reste un second triangle à côté de « Céder le passage » : les deux se confondent d'un coup d'œil.
-- **Giratoire : la sortie du giratoire (H).** L'anneau est fin, le trajet épais entre, tourne et sort par le haut. La première version, sortie en biais, faisait le symbole ♂ ; elle a été redressée au second tour.
+- **Giratoire, d'abord : la sortie du giratoire (H).** L'anneau est fin, le trajet épais entre, tourne et sort par le haut. La première version, sortie en biais, faisait le symbole ♂ ; elle a été redressée au second tour.
+- **Giratoire, encore refusé : trois tours de plus.** Le porteur garde la priorité à droite mais refuse la sortie du giratoire et demande deux icônes cohérentes. Le giratoire devient donc le jumeau des bordures de la priorité à droite :
+  - bordures courbes avec les mêmes branches larges : l'anneau disparaît entre quatre ouvertures, l'ensemble se lit engrenage ;
+  - bordures droites au trait près, avec un îlot et une flèche au centre : le centre est trop petit, l'ensemble devient une spirale ;
+  - **retenu, anneau et îlot (U, 4,80)** : mêmes bordures d'épaisseur 7 et même emprise, mais des branches plus étroites, pour que l'anneau autour de l'îlot plein l'emporte. Les deux icônes sortent à la même échelle (0,746 et 0,754), donc avec des bordures identiques : bordures droites et flèche pour le carrefour, bordures en anneau et îlot pour le giratoire.
 - **Pourquoi tout reste d'une couleur :** les deux retenues n'ont qu'un calque, comme le reste de la famille, parce que les versions en deux tons s'empâtent à 16 px.
 - **Les voitures vues du dessus (G, J) :** leur sens ne se lit pas en petit. Je me suis moi-même trompé à l'œil sur leur rotation, que j'ai dû vérifier par calcul.
 - **Finition :** réduites à l'export, les deux retenues perdaient leur graisse. Bordures, flèche et trajet ont été épaissis pour retrouver l'épaisseur 6 en place.
@@ -93,7 +97,7 @@ Les SVG du catalogue mesurent 20 pt, la taille d’une icône de menu ; partout 
 
 ## Reproduire
 
-`python atelier.py` (propositions), `python planche.py --choix`, `python contexte.py`, `python export.py` (écrit le catalogue Xcode ; une clé `-v2` notée dans `selection.json` remplace la sélection du premier tour). Dossier : [assets/icones-signaler-20261012](assets/icones-signaler-20261012). Les icônes d’avant la refonte et celles du premier tour remplacées sont archivées dans `avant/`.
+`python atelier.py` (propositions), `python planche.py --choix`, `python contexte.py`, `python export.py` (écrit le catalogue Xcode ; la dernière reprise `-vN` non écartée de `selection.json` remplace les sélections précédentes). Dossier : [assets/icones-signaler-20261012](assets/icones-signaler-20261012). Les icônes d’avant la refonte et celles du premier tour remplacées sont archivées dans `avant/`.
 
 ## Limites
 

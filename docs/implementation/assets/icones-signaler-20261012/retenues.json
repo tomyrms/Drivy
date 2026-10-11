@@ -70,18 +70,18 @@
   "h": 43.4
  },
  "intersections": {
-  "source": "intersections-v2",
-  "direction": "H",
-  "scale": 0.923,
-  "ink": 0.149,
+  "source": "intersections-v5",
+  "direction": "U",
+  "scale": 0.754,
+  "ink": 0.172,
   "bbox": [
-   15.5,
-   3.0,
-   48.5,
-   59.0
+   9.0,
+   8.0,
+   55.0,
+   54.0
   ],
-  "w": 32.9,
-  "h": 56.0
+  "w": 46.0,
+  "h": 46.0
  },
  "speed": {
   "source": "speed",

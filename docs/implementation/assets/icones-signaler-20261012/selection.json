@@ -782,5 +782,147 @@
   },
   "pourquoi": "H — l'anneau fin et le trajet épais qui entre, tourne et sort : le giratoire comme le montre une application de navigation, sans les trois flèches qui se lisaient « synchroniser ». Il reste d'une couleur, comme le reste de la famille ; la même idée en deux tons (F) s'empâte à 16 px. Tourner au carrefour (J) dit bien « intersection » mais pas « giratoire » et demande le second calque.",
   "remplace": "intersections C (3.70)"
+ },
+ "intersections-v3": {
+  "retenue": "L",
+  "notes": {
+   "K": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.95
+   },
+   "L": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 3.15
+   },
+   "M": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.95
+   },
+   "N": {
+    "reconnaissance": 3,
+    "qualite": 2,
+    "identite": 3,
+    "petite_taille": 2,
+    "integration": 2,
+    "total": 2.45
+   },
+   "O": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.95
+   }
+  },
+  "pourquoi": "Tour écarté — bordures courbes avec les branches larges de la priorité à droite : il ne reste presque rien de l'anneau entre quatre ouvertures, l'ensemble se lit engrenage ou soleil.",
+  "ecartee": true
+ },
+ "intersections-v4": {
+  "retenue": "Q",
+  "notes": {
+   "P": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 5,
+    "petite_taille": 2,
+    "integration": 4,
+    "total": 3.25
+   },
+   "Q": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.85
+   },
+   "R": {
+    "reconnaissance": 2,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.65
+   },
+   "S": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 4,
+    "total": 3.1
+   },
+   "T": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 5,
+    "petite_taille": 2,
+    "integration": 4,
+    "total": 3.25
+   }
+  },
+  "pourquoi": "Tour écarté — les bordures droites de la priorité à droite, au trait près, laissent un centre de 23 unités : l'îlot et la flèche y deviennent une spirale illisible en petit, et l'îlot seul (Q) se lit « carrefour avec un point ».",
+  "ecartee": true
+ },
+ "intersections-v5": {
+  "retenue": "U",
+  "notes": {
+   "U": {
+    "reconnaissance": 5,
+    "qualite": 5,
+    "identite": 5,
+    "petite_taille": 4,
+    "integration": 5,
+    "total": 4.8
+   },
+   "V": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.95
+   },
+   "W": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 4.15
+   },
+   "X": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.7
+   },
+   "Y": {
+    "reconnaissance": 4,
+    "qualite": 3,
+    "identite": 5,
+    "petite_taille": 2,
+    "integration": 4,
+    "total": 3.55
+   }
+  },
+  "pourquoi": "U — le jumeau de la priorité à droite : mêmes bordures d'épaisseur 7, même emprise, mais elles dessinent l'anneau autour d'un îlot plein. Les branches plus étroites laissent l'anneau l'emporter sur les ouvertures, et c'est l'anneau qui dit « giratoire ». Côte à côte : bordures droites et flèche pour le carrefour, bordures en anneau et îlot pour le giratoire. La flèche (V, Y) encombre la voie en petit ; l'îlot-repère (X) se lit « bouton radio ».",
+  "ecartee": false,
+  "remplace": "intersections-v2 H (4.35)"
  }
 }
