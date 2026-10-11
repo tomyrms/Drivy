@@ -9,14 +9,22 @@ struct SchoolOwnRecordingChoice: View {
     let lessonID: UUID?
     var learnerID: UUID? = nil
     let agenda: SchoolAgendaClient
+    /// Choix déjà lu par l’hôte (le Profil s’en sert pour signaler une réponse attendue) ; sinon la ligne lit le sien.
+    var shared: SchoolRecordingChoiceWorkspace? = nil
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
     @Environment(\.scenePhase) private var scenePhase
-    @State private var model: SchoolRecordingChoiceWorkspace?
+    @State private var owned: SchoolRecordingChoiceWorkspace?
     /// Réponse en cours d’envoi ; `nil` : la réponse montrée est celle que l’école a enregistrée.
     @State private var sending: SchoolRecordingChoice.Status?
 
     private var key: String {
         "\(scope.personID):\(scope.schoolID):\(scope.membershipID):\(scope.accessEpoch):\(scope.apiBaseURL):\(lessonID?.uuidString ?? "general"):\(learnerID?.uuidString ?? "")"
+    }
+
+    /// Le choix montré : celui de l’hôte s’il vaut pour ce compte et cette leçon, sinon celui de la ligne.
+    private var model: SchoolRecordingChoiceWorkspace? {
+        if let shared, matches(shared) { return shared }
+        return owned
     }
 
     var body: some View {
@@ -31,16 +39,14 @@ struct SchoolOwnRecordingChoice: View {
         }
         .task(id: key) {
             // La ligne peut quitter l’écran et revenir : le choix lu reste tant que le compte et la leçon ne changent pas.
-            if let model, matches(model) { return }
-            model?.invalidate(); sending = nil
-            let controller = capture
-            var journal: (@MainActor () async throws -> SQLCipherSchoolCaptureStore)?
-            if let controller { journal = { try await controller.journal() } }
-            let value = SchoolRecordingChoiceWorkspace(scope: scope, lessonID: lessonID, learnerID: learnerID, client: agenda.captureClient,
-                reader: agenda.reader, agenda: agenda,
-                onRefusalConfirmed: { learner, lesson in controller?.learnerRefused(learnerID: learner, lessonID: lesson) },
-                journalProvider: journal)
-            model = value
+            // Une lecture interrompue (la ligne a quitté l’écran avant la réponse) reprend ici, sans passer pour une panne.
+            if let model, matches(model) {
+                if model.needsReload, !model.isLoading, !model.isBusy, !model.accessRevoked { await model.load() }
+                return
+            }
+            owned?.invalidate(); sending = nil
+            let value = Self.makeModel(scope: scope, lessonID: lessonID, learnerID: learnerID, agenda: agenda, capture: capture)
+            owned = value
             await value.load()
         }
         .onReceive(NotificationCenter.default.publisher(for: .drivyRecordingChoiceDidChange)) { notification in
@@ -54,6 +60,17 @@ struct SchoolOwnRecordingChoice: View {
             guard phase == .active, sending == nil, let model, !model.isBusy, !model.isLoading else { return }
             Task { await model.load() }
         }
+    }
+
+    /// Le choix de l’élève pour cette portée ; un refus confirmé arrête aussitôt le trajet en cours, s’il y en a un.
+    @MainActor static func makeModel(scope: SchoolCommandScope, lessonID: UUID?, learnerID: UUID?, agenda: SchoolAgendaClient,
+                                     capture controller: SchoolCaptureSessionController?) -> SchoolRecordingChoiceWorkspace {
+        var journal: (@MainActor () async throws -> SQLCipherSchoolCaptureStore)?
+        if let controller { journal = { try await controller.journal() } }
+        return SchoolRecordingChoiceWorkspace(scope: scope, lessonID: lessonID, learnerID: learnerID, client: agenda.captureClient,
+            reader: agenda.reader, agenda: agenda,
+            onRefusalConfirmed: { learner, lesson in controller?.learnerRefused(learnerID: learner, lessonID: lesson) },
+            journalProvider: journal)
     }
 
     private func matches(_ model: SchoolRecordingChoiceWorkspace) -> Bool {

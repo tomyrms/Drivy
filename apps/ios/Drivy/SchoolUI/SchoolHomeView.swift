@@ -3,8 +3,8 @@ import SwiftUI
 enum SchoolHomeTab: Hashable { case session, agenda, learners, profile, lessons, progress }
 
 /// Onglets par rôle : le moniteur et l’administration conduisent (Aujourd’hui, Agenda, Élèves) et trouvent
-/// leur compte et leurs trajets dans Profil ; l’élève suit (Leçons, Progression) et trouve dans Profil où il en
-/// est, ses trajets, son accord GPS et son compte.
+/// leur compte et leurs trajets dans Profil ; l’élève suit (Leçons, Progression) et trouve dans Profil son
+/// identité, son école, ses permis, puis ses informations et ses paramètres.
 /// La gestion de l’école vit sur le web.
 struct SchoolHomeView: View {
     @Bindable var workspace: SchoolWorkspace
@@ -196,7 +196,9 @@ struct SchoolHomeView: View {
                 .tabItem { Label("Progression", systemImage: "checklist") }
                 .tag(SchoolHomeTab.progress)
             SchoolLearnerProfileTab(workspace: workspace, learner: ownLearner, trainings: learnerTrainings, account: account,
-                agendaClient: agendaClient, trainingClient: trainingClient, chooseSchool: chooseSchoolAction)
+                agendaClient: agendaClient, trainingClient: trainingClient, chooseSchool: chooseSchoolAction,
+                openTraining: { training, tab in chosenPermit = training; selectedTab = tab },
+                retryDossier: { retryLearner() })
                 .tabItem { Label("Profil", systemImage: "person.crop.circle") }
                 .tag(SchoolHomeTab.profile)
         }

@@ -6,7 +6,7 @@ import XCTest
     // Unknown legacy names must not silently capture the default dossier.
     private let supportedScreens: Set<String> = [
         "dossier", "progression", "home-tabs", "home-to-finish", "school-choice", "no-school",
-        "profile-tab", "learner-home", "learner-progress", "start-now", "planning-settings",
+        "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "start-now", "planning-settings",
         "agenda", "learners", "learner", "lesson", "lesson-planned",
         "lesson-observations", "lesson-evidence", "lesson-permit", "invitation-code", "lessons-history",
         "replay", "design-system", "skeletons", "gps-choice", "signal", "live-signal",
@@ -80,6 +80,7 @@ import XCTest
                     case "app-lock": "app-unlock"
                     case "app-privacy": "app-privacy-shield"
                     case "profile-tab": "profile-open-lessons"
+                    case "learner-profile", "learner-profile-multi": "learner-profile-list"
                     case "lessons-history": "lessons-history"
                     case "onboarding-staff": "onboarding-start"
                     case "home-tabs": "today-day-list"

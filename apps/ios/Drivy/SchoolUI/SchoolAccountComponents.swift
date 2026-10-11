@@ -15,6 +15,14 @@ struct SchoolAccountActions {
     /// Les lignes du compte, dans l’ordre de la feuille. `afterChangingSchool` ferme la feuille qui les porte, s’il y en a une.
     @MainActor @ViewBuilder
     func rows(workspace: SchoolWorkspace?, openURL: OpenURLAction, afterChangingSchool: @escaping () -> Void = {}) -> some View {
+        accountRows(workspace: workspace, openURL: openURL, afterChangingSchool: afterChangingSchool)
+        lockRow()
+        signOutRow()
+    }
+
+    /// Le compte et l’école, sans le verrou ni la déconnexion : les Paramètres de l’élève les rangent par sujet.
+    @MainActor @ViewBuilder
+    func accountRows(workspace: SchoolWorkspace?, openURL: OpenURLAction, afterChangingSchool: @escaping () -> Void = {}) -> some View {
         // Aucun symbole de tête : chaque ligne se lit par son titre, une icône par ligne ne dit rien de plus.
         if let openProfile {
             DrivyNavigationRow(title: "Mes informations", action: openProfile)
@@ -43,7 +51,12 @@ struct SchoolAccountActions {
             DrivyNavigationRow(title: "Rejoindre une école", action: openJoinSchool)
                 .accessibilityIdentifier("open-join-school")
         }
-        SchoolAppLockRow()
+    }
+
+    /// « Ouvrir avec Face ID » ; rien sans verrou biométrique sur l’appareil.
+    @MainActor func lockRow() -> some View { SchoolAppLockRow() }
+
+    @MainActor func signOutRow() -> some View {
         SchoolSignOutRow(action: signOut, confirms: tripInProgress)
             .accessibilityIdentifier("school-sign-out")
     }
@@ -80,6 +93,8 @@ struct SchoolAccountHeading: View {
     let isAuthenticated: Bool
     /// Remplace la ligne des rôles (l’élève lit ses permis : « Permis B »).
     var detail: String? = nil
+    /// Faux pour l’élève : son rôle ne lui apprend rien, seule l’école est dite (et `detail`, s’il y en a un).
+    var showsRoles = true
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -97,9 +112,11 @@ struct SchoolAccountHeading: View {
                     Text(membership.schoolName)
                         .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(detail ?? SchoolPresentation.roles(membership.roles))
-                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if let line = detail ?? (showsRoles ? SchoolPresentation.roles(membership.roles) : nil) {
+                        Text(line)
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }

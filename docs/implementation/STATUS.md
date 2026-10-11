@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 11 octobre 2026 — Profil de l’élève restructuré
+
+Identité et « Mes informations », permis en liste compacte (une ligne et une synthèse par permis, détail au toucher avec accès à Leçons et Progression sur ce permis), « Paramètres » dans la barre (compte, enregistrement GPS, Face ID, déconnexion). Le message « Le choix n’a pas pu être vérifié » venait d’une lecture de l’accord GPS annulée et prise pour une panne : corrigé à la source. [Détail et arbitrages](profil-eleve-20261011.md).
+
+**Exécuté** : voir le compte rendu de la PR. **Reste à qualifier** : rendu réel (clair, sombre, iPad, grand texte, VoiceOver), jamais vu tourner ; tests Swift non lancés à la demande du porteur.
+
 ## 11 octobre 2026 — thème sombre « Soft Charcoal »
 
 Le thème sombre de l’app native est refait en anthracite neutre : un bloc est plus clair que la page qui le porte, le bouton principal est un cobalt plein au libellé blanc, une feuille monte d’un niveau. Le thème clair ne change pas. Détail, références et mesures : [dark-soft-charcoal-20261011.md](dark-soft-charcoal-20261011.md). Branche `claude/dark-soft-charcoal-20261011`, partie de la PR #10.
