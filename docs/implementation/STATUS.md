@@ -6,7 +6,7 @@ Une seule carte pour la leçon et le replay, animée image par image : le marque
 
 **Exécuté** : IPA d’essai compilée ; tests Swift (482 tests passent après fusion de master) ; 311 tests API sur PostgreSQL ; client vérifié contre l’API Mapbox réelle avec une ligne synthétique. **Non exécuté** : parcours UI. **Reste à qualifier** : tout sur iPhone — fluidité, position du marqueur sous les panneaux, seuils du filtre sur route, VoiceOver. Aucune mesure de performance n’a été faite.
 
-**Au porteur** : le recalage n’est ni déployé ni activé. Les conditions de Mapbox demandent d’afficher ses résultats sur une carte Mapbox et interdisent de les stocker ; les positions partiraient chez un tiers, ce qui touche la notice. Un OSRM sur le homelab évite les deux. Migration 024 à appliquer au prochain déploiement de l’API, après sauvegarde.
+**Déployé le 11 octobre 2026**, à la demande du porteur : release `de2f331` sur le homelab après sauvegarde vérifiée de `drivy_refonte`, 24 migrations aux empreintes conformes, services actifs. Recalage activé avec Mapbox (`MAP_MATCHING_PROVIDER=mapbox` et le jeton du porteur dans `api.env`, copie de l’ancien fichier conservée à côté) ; la route répond 401 sans jeton d’accès et l’API atteint `api.mapbox.com`. Aucun trajet réel n’a encore été recalé en production : à constater à la première ouverture d’un replay. **Reste au porteur** : les conditions de Mapbox demandent d’afficher ses résultats sur une carte Mapbox et interdisent de les stocker, et les positions partent chez un tiers, ce qui touche la notice ; un OSRM sur le homelab évite les deux. Pour couper : retirer les lignes `MAP_MATCHING_*` et redémarrer l’API.
 
 ## 11 octobre 2026 — direction artistique commune (Profil, Élèves, Agenda)
 

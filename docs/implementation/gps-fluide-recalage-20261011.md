@@ -157,9 +157,9 @@ Sans ces variables, rien n’est calculé et rien n’est envoyé à un tiers.
 
 À poser dans `/etc/drivy-refonte/api.env` sur le homelab, après sauvegarde de la base et application de la migration 024. Le jeton collé par le porteur le 11 octobre est rangé dans `.local/acces/map-matching.env`, hors dépôt.
 
-### À trancher par le porteur avant d’activer Mapbox
+### Activé avec Mapbox le 11 octobre 2026, points restant ouverts
 
-Le code est prêt et vérifié contre l’API réelle. L’activation est une décision, pour trois raisons relevées dans les textes de Mapbox et dans le dossier de conception. Elles sont rapportées par l’audit ; les conditions de Mapbox sont à relire à la source avant de s’engager.
+À la demande du porteur, la release `de2f331` est déployée sur le homelab et le recalage y est activé avec Mapbox. Trois points restent à sa charge, pour trois raisons relevées dans les textes de Mapbox et dans le dossier de conception. Elles sont rapportées par l’audit ; les conditions de Mapbox sont à relire à la source avant de s’engager.
 
 1. **Conditions d’utilisation de Mapbox.** La page de l’API indique que les résultats doivent être affichés sur une carte Mapbox ; les conditions produit interdisent de stocker les résultats d’une API de navigation et de l’interroger par traitement automatique. Drivy affiche sur MapKit et conserve le résultat. Sans accord écrit de Mapbox, cet usage n’est pas conforme.
 2. **Nouveau destinataire de données.** Les positions de l’élève partent chez un tiers, hors de Suisse. Le dossier de conception demande de le documenter et de le montrer dans la notice ; une nouvelle version de notice révoque les captures en cours.
