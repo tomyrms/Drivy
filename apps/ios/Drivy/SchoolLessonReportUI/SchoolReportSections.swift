@@ -133,7 +133,7 @@ struct SchoolReportTripSection: View {
             if editable, model.isAuthor, model.sharing != nil {
                 Toggle("Visible par l’élève", isOn: Binding(get: { model.captureShared },
                     set: { shared in Task { await model.updateSharing(captureHidden: !shared) } }))
-                    .disabled(!model.acceptsInput)
+                    .disabled(!model.acceptsInput).drivyControlTint()
             }
         } header: { Text("Trajet").drivyFormSectionHeader() }
             .drivyFormRows()
@@ -360,7 +360,7 @@ struct SchoolReportTextSection: View {
             if model.sharing != nil {
                 Toggle("Visible par l’élève", isOn: Binding(get: { model.reportShared },
                     set: { shared in Task { await model.updateSharing(reportPrivate: !shared) } }))
-                    .disabled(!model.acceptsInput)
+                    .disabled(!model.acceptsInput).drivyControlTint()
             }
             field("Travail réalisé", text: $model.workedOn, focus: .workedOn)
             field("À retenir", text: $model.observationText, focus: .observation)

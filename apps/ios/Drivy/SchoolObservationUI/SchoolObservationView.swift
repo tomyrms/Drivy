@@ -288,6 +288,7 @@ struct SchoolObservationComposer: View {
                 if editor.origin == "LIVE" {
                     Section {
                         Toggle("Repère simple, à préciser ensuite", isOn: $marker)
+                            .drivyControlTint()
                     }
                         .drivyFormRows()
                 }
@@ -411,6 +412,7 @@ struct SchoolObservationRemoval: View {
                 Section {
                     TextField("Pourquoi retirer cette observation ?", text: $reason, axis: .vertical).lineLimit(3...6)
                     Toggle("Je confirme son retrait", isOn: $acknowledged)
+                        .drivyControlTint()
                 } header: { Text("Motif du retrait").drivyFormSectionHeader() }
                 footer: { Text("Ce retrait ne modifie pas un bilan déjà partagé.") }
                     .drivyFormRows()
@@ -475,6 +477,7 @@ private struct SchoolObservationPendingView: View {
                         Button("Vérifier auprès de l’école") { Task { await model.verifyPending(); if model.pending == nil { dismiss() } } }
                             .disabled(!model.canRetry)
                         Toggle("J’ai relu cette demande", isOn: $acknowledged)
+                            .drivyControlTint()
                         Button("Renvoyer exactement cette demande") {
                             Task { if await model.retryPending() { dismiss() } }
                         }.disabled(!acknowledged || !model.canRetry)

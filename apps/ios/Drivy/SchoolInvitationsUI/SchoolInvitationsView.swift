@@ -347,6 +347,7 @@ struct InvitationCreationView: View {
                                     else { model.selectedOfferingIDs.remove(offering.id) }
                                 }))
                                 .disabled(!model.selectedOfferingIDs.contains(offering.id) && model.selectedOfferingIDs.count >= 16)
+                                .drivyControlTint()
                                 .accessibilityIdentifier("invitation-training-\(offering.id.uuidString)")
                         }
                     } header: { Text("Permis").drivyFormSectionHeader() }

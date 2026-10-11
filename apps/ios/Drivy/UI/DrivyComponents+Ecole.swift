@@ -199,6 +199,13 @@ extension View {
             .environment(\.drivyRowContext, .grouped)
     }
 
+    /// Tint of a system control that fills a shape under a white element: a switch track, the selected day of a
+    /// date picker. It takes the fill blue, like the primary button; the ink blue of the system tint would put a
+    /// white thumb or numeral on a pastel in dark. Light is unchanged: both blues share one light value.
+    func drivyControlTint() -> some View {
+        tint(DrivyTheme.accentFill)
+    }
+
     /// A row that is not a cell: a header laid on the canvas (account heading), a notice or an empty state.
     func drivyClearRow() -> some View {
         listRowBackground(Color.clear)
