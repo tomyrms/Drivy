@@ -83,7 +83,11 @@ struct SchoolTrackDisplayTests {
         #expect((selected.last?.point.longitude ?? 1) < 26 * Self.metre)
         #expect(selected.filter(\.startsFragment).count == 1)
 
-        let parking = (0..<30).map { fix($0, second: Double($0) * 2, east: Double(min($0, 15)) * 2.5, north: Double(max(0, $0 - 15)) * 2.5, accuracy: 3) }
+        var parking: [SchoolCapturePoint] = []
+        for index in 0..<30 {
+            let east = Double(min(index, 15)) * 2.5, north = Double(max(0, index - 15)) * 2.5
+            parking.append(fix(index, second: Double(index) * 2, east: east, north: north, accuracy: 3))
+        }
         let parked = SchoolCaptureDisplayRoute.select(parking)
         #expect(parked.count > 20 && parked.filter(\.startsFragment).count == 1)
     }
@@ -95,9 +99,10 @@ struct SchoolTrackDisplayTests {
     }
 
     @Test func aLongBlindStretchCutsTheRouteWhileOneBadFixDoesNot() {
-        let blind = [fix(0, second: 0, east: 0), fix(1, second: 1, east: 10)]
-            + (0..<8).map { fix(2 + $0, second: Double(2 + $0), east: 20 + Double($0) * 10, accuracy: 90) }
-            + [fix(10, second: 10, east: 100), fix(11, second: 11, east: 110)]
+        var blind: [SchoolCapturePoint] = [fix(0, second: 0, east: 0), fix(1, second: 1, east: 10)]
+        for index in 0..<8 { blind.append(fix(2 + index, second: Double(2 + index), east: 20 + Double(index) * 10, accuracy: 90)) }
+        blind.append(fix(10, second: 10, east: 100))
+        blind.append(fix(11, second: 11, east: 110))
         #expect(SchoolCaptureDisplayRoute.select(blind).map(\.startsFragment) == [true, false, true, false])
         let single = [fix(0, second: 0, east: 0), fix(1, second: 1, east: 10), fix(2, second: 2, east: 20, accuracy: 90),
                       fix(3, second: 3, east: 30)]
@@ -210,17 +215,20 @@ struct SchoolTrackDisplayTests {
 
     @Test func headingTurnsAlongTheShortestArcWithoutSpinning() throws {
         var smoother = SchoolMapHeadingSmoother()
-        #expect(smoother.advance(towards: 350, at: 0) == 350)
+        let first = smoother.advance(towards: 350, at: 0)
+        #expect(first == 350)
         var previous = 350.0
         for frame in 1...120 {
-            let value = try #require(smoother.advance(towards: 10, at: Double(frame) / 60))
+            let advanced = smoother.advance(towards: 10, at: Double(frame) / 60)
+            let value = try #require(advanced)
             // Through north: never anywhere near the long way round.
             #expect(value >= 350 || value <= 10.0001)
             #expect(SchoolTrackGeometry.angleDelta(from: previous, to: value) >= -1e-9)
             previous = value
         }
         #expect(smoother.isSettled(on: 10))
-        #expect(smoother.advance(towards: nil, at: 3) == nil)
+        let cleared = smoother.advance(towards: nil, at: 3)
+        #expect(cleared == nil)
         #expect(SchoolTrackGeometry.angleDelta(from: 10, to: 350) == -20)
         #expect(SchoolTrackGeometry.normalizedHeading(-90) == 270)
     }
@@ -251,9 +259,12 @@ struct SchoolTrackDisplayTests {
     }
 
     @Test func aStopKeepsThePlayheadInPlaceInsteadOfHidingIt() throws {
-        let points = (0..<5).map { fix($0, second: Double($0), east: Double($0) * 10) }
-            + (0..<40).map { fix(5 + $0, second: Double(5 + $0), east: 40 + noise($0, 2), north: noise($0 + 5, 2)) }
-            + (0..<5).map { fix(45 + $0, second: Double(45 + $0), east: 50 + Double($0) * 10) }
+        var points: [SchoolCapturePoint] = []
+        for index in 0..<5 { points.append(fix(index, second: Double(index), east: Double(index) * 10)) }
+        for index in 0..<40 {
+            points.append(fix(5 + index, second: Double(5 + index), east: 40 + noise(index, 2), north: noise(index + 5, 2)))
+        }
+        for index in 0..<5 { points.append(fix(45 + index, second: Double(45 + index), east: 50 + Double(index) * 10)) }
         let timeline = replay(points)
         #expect(timeline.fragments.count == 1)
         #expect(timeline.gaps.isEmpty)
