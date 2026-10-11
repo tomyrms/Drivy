@@ -67,6 +67,13 @@ enum SchoolProgressRules {
         }
     }
 
+    /// « 4 sur 9 en autonomie » : l’acquis sur l’ensemble du référentiel, en mots. Rien sans référentiel.
+    static func autonomyLine(items: [SchoolReportProgressItem], unobserved: Int) -> String? {
+        let total = items.count + max(0, unobserved)
+        guard total > 0 else { return nil }
+        return "\(items.filter { $0.level == "INDEPENDENT" }.count) sur \(total) en autonomie"
+    }
+
     /// « 4 en autonomie · 3 avec accompagnement · 2 en découverte · 5 pas encore vues ». Un groupe vide n’est pas nommé.
     static func countLine(items: [SchoolReportProgressItem], unobserved: Int) -> String? {
         func count(_ level: String) -> Int { items.filter { $0.level == level }.count }

@@ -1,16 +1,16 @@
 import SwiftUI
 
-/// La progression d’une formation : la prochaine étape du dernier bilan, ce qu’il reste à travailler, puis, repliés,
-/// ce qui est acquis et ce qui n’a pas encore été vu. Une ligne dit une compétence et son niveau, rien d’autre :
-/// la situation et le détail sont dans la leçon qu’elle ouvre.
+/// La progression d’une formation : où l’élève en est, en une phrase, la prochaine étape du dernier bilan, ce qu’il
+/// reste à travailler, puis, repliés, ce qui est acquis et ce qui n’a pas encore été vu. Une ligne dit une compétence
+/// et son niveau ; la toucher déplie son détail sur place (niveau en mots, date, situation), d’où part la leçon.
 /// Ni score, ni pourcentage, ni barre, ni tendance : le serveur ne garde que le dernier niveau publié.
 struct SchoolTrainingProgressSection: View {
     let model: SchoolTrainingWorkspace
     /// Une évaluation est datée sans sa leçon : elle se lit dans le fuseau de l’école.
     let schoolTimeZone: String
-    /// L’équipe lit de quand date chaque niveau (une compétence pas revue depuis longtemps) ; l’élève non.
-    var showsDates = false
     let open: (UUID) -> Void
+    /// La compétence dont le détail est déplié ; une seule à la fois.
+    @State private var expanded: UUID?
     /// `nil` tant que le lecteur n’a rien choisi : l’acquis ne s’ouvre seul que s’il n’y a rien à travailler.
     @State private var showsIndependent: Bool?
     @State private var showsUnseen = false
@@ -47,6 +47,7 @@ struct SchoolTrainingProgressSection: View {
         .animation(DrivyMotion.reveal(reduceMotion), value: model.progressError)
         .animation(DrivyMotion.reveal(reduceMotion), value: showsIndependent)
         .animation(DrivyMotion.reveal(reduceMotion), value: showsUnseen)
+        .animation(DrivyMotion.reveal(reduceMotion), value: expanded)
     }
 
     private var order: [UUID] { model.competencies.map(\.id) }
@@ -63,6 +64,7 @@ struct SchoolTrainingProgressSection: View {
     @ViewBuilder private func content(_ value: SchoolReportProgress) -> some View {
         let toWorkOn = SchoolProgressRules.toWorkOn(value.items)
         let independent = SchoolProgressRules.independent(value.items, order: order)
+        standing(value)
         lastLesson
         if !toWorkOn.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
@@ -78,6 +80,30 @@ struct SchoolTrainingProgressSection: View {
             }
         }
         unseen(count: value.unobservedCompetencyIds.count)
+    }
+
+    // MARK: - Où j’en suis
+
+    /// La vue d’ensemble : un décompte en mots, jamais un score. L’acquis d’abord, le reste en une ligne.
+    @ViewBuilder private func standing(_ value: SchoolReportProgress) -> some View {
+        if let headline = SchoolProgressRules.autonomyLine(items: value.items, unobserved: value.unobservedCompetencyIds.count) {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(headline)
+                    .font(.title2.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(DrivyTheme.text)
+                if let rest = SchoolProgressRules.countLine(items: value.items.filter { $0.level != "INDEPENDENT" },
+                                                            unobserved: value.unobservedCompetencyIds.count) {
+                    Text(rest)
+                        .font(.subheadline)
+                        .foregroundStyle(DrivyTheme.muted)
+                }
+            }
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("progress-standing")
+        }
     }
 
     // MARK: - Prochaine étape et dernière leçon
@@ -115,14 +141,42 @@ struct SchoolTrainingProgressSection: View {
     private func rows(_ items: [SchoolReportProgressItem], showsMeter: Bool) -> some View {
         DrivyRowGroup {
             ForEach(items) { item in
-                Button { open(item.sourceLessonId) } label: {
-                    SchoolProgressRow(label: label(item), level: item.level, showsMeter: showsMeter,
-                        date: showsDates ? SchoolTrainingFormatting.day(item.observedAt, zone: schoolTimeZone) : nil)
+                let isExpanded = expanded == item.id
+                VStack(alignment: .leading, spacing: 0) {
+                    Button { expanded = isExpanded ? nil : item.id } label: {
+                        SchoolProgressRow(label: label(item), level: item.level, showsMeter: showsMeter, isExpanded: isExpanded)
+                    }
+                    .buttonStyle(DrivyRowButtonStyle())
+                    .accessibilityHint(isExpanded ? "Masque le détail" : "Affiche le détail")
+                    if isExpanded { detail(item).transition(.opacity) }
                 }
-                .buttonStyle(DrivyRowButtonStyle())
-                .accessibilityHint("Ouvre la leçon")
             }
         }
+    }
+
+    /// Le détail d’une compétence, sur place : son niveau en mots et sa date, la situation notée par le moniteur,
+    /// puis la leçon d’où vient ce niveau.
+    private func detail(_ item: SchoolReportProgressItem) -> some View {
+        let context = item.context.trimmingCharacters(in: .whitespacesAndNewlines)
+        let day = SchoolTrainingFormatting.day(item.observedAt, zone: schoolTimeZone)
+        return VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            Text("\(SchoolTrainingFormatting.level(item.level)) · \(day)")
+                .font(.subheadline)
+                .monospacedDigit()
+                .foregroundStyle(DrivyTheme.muted)
+            if !context.isEmpty {
+                Text(context)
+                    .font(.subheadline)
+                    .foregroundStyle(DrivyTheme.text)
+            }
+            Button("Voir la leçon") { open(item.sourceLessonId) }
+                .font(.subheadline.weight(.semibold))
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("progress-open-lesson")
+        }
+        .multilineTextAlignment(.leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Ce qui n’a pas encore été vu n’appelle aucun geste : replié, et ses lignes n’ouvrent rien.
@@ -132,7 +186,7 @@ struct SchoolTrainingProgressSection: View {
             fold("Pas encore vues", count: max(count, competencies.count), isExpanded: $showsUnseen) {
                 DrivyRowGroup {
                     ForEach(competencies) { competency in
-                        SchoolProgressRow(label: competency.displayLabel, level: "", showsMeter: false, opensLesson: false)
+                        SchoolProgressRow(label: competency.displayLabel, level: "", showsMeter: false, isExpanded: nil)
                     }
                 }
             }
@@ -173,8 +227,8 @@ private struct SchoolProgressRow: View {
     let level: String
     /// Inutile sous un titre qui dit déjà le niveau de tout le groupe.
     var showsMeter = true
-    var date: String? = nil
-    var opensLesson = true
+    /// `nil` : la ligne n’a aucun détail à déplier (compétence pas encore vue).
+    let isExpanded: Bool?
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var levelWords: String { level.isEmpty ? "Pas encore vue" : SchoolTrainingFormatting.level(level) }
@@ -184,23 +238,20 @@ private struct SchoolProgressRow: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
             : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.m))
         layout {
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text(label)
-                    .font(.body)
-                    .foregroundStyle(DrivyTheme.text)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let date {
-                    Text(date).font(.caption).monospacedDigit().foregroundStyle(DrivyTheme.muted)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(label)
+                .font(.body)
+                .foregroundStyle(DrivyTheme.text)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: DrivySpacing.s) {
                 if showsMeter && !level.isEmpty { DrivyCompetencyMeter(level: level) }
-                if opensLesson {
-                    Image(systemName: "chevron.right")
+                if let isExpanded {
+                    // Vers le bas : la ligne se déplie ici, elle ne mène pas ailleurs.
+                    Image(systemName: "chevron.down")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(DrivyTheme.muted)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
                         .accessibilityHidden(true)
                 }
             }
@@ -210,7 +261,7 @@ private struct SchoolProgressRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue([levelWords, date].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityValue(levelWords)
     }
 }
 
