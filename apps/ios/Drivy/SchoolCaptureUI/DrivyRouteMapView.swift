@@ -73,7 +73,7 @@ struct DrivyRouteMapView: UIViewRepresentable {
         coordinator.detach()
     }
 
-    @MainActor final class Coordinator: NSObject, @preconcurrency MKMapViewDelegate, UIGestureRecognizerDelegate {
+    @MainActor final class Coordinator: NSObject, MKMapViewDelegate, UIGestureRecognizerDelegate {
         private struct DrawnLine {
             let revision: Int
             let style: DrivyRouteMapLine.Style
@@ -110,6 +110,7 @@ struct DrivyRouteMapView: UIViewRepresentable {
         private var lastGestureAt: TimeInterval = -.infinity
         private var activeGestures = 0
         private var hadPose = false
+        private var showedPose = false
 
         // MARK: Lifecycle
 
@@ -207,6 +208,8 @@ struct DrivyRouteMapView: UIViewRepresentable {
             drawPosition(pose, on: map)
             if let pose {
                 if isFollowing {
+                    // The position appears (first fix, end of a gap): the camera joins it, it does not jump there.
+                    if !showedPose, hasInitialCamera { startBlend() }
                     follow(pose, on: map, at: now)
                 } else if centersOnFirstPose, !hadPose, hasInitialCamera, !userMovedMap {
                     // First recorded fix: the camera glides from the device position to it, once.
@@ -217,6 +220,7 @@ struct DrivyRouteMapView: UIViewRepresentable {
                 }
                 hadPose = true
             }
+            showedPose = pose != nil
             if !motion.isAnimating(at: now), blend == nil { link.isPaused = true }
         }
 
@@ -277,6 +281,8 @@ struct DrivyRouteMapView: UIViewRepresentable {
         private func startBlend() {
             guard let map else { return }
             applied = nil
+            // No finger is on the map when the camera is sent back to the position.
+            activeGestures = 0
             guard !reduceMotion else { blend = nil; blendOrigin = nil; return }
             let camera = map.camera
             blendOrigin = CameraState(latitude: camera.centerCoordinate.latitude, longitude: camera.centerCoordinate.longitude,

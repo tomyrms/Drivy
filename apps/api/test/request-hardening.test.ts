@@ -63,7 +63,10 @@ describe('erreurs de données PostgreSQL', () => {
       const response = await app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: 'Bearer x' } });
       expect(response.statusCode).toBe(400);
       expect(response.json()).toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
-      expect(response.body).not.toMatch(/détail SQL|22\d{3}|stack/);
+      // Hors identifiant de requête : il est aléatoire et peut contenir « 22 » suivi de trois chiffres.
+      const problem = response.json() as Record<string, unknown>;
+      delete problem.requestId;
+      expect(JSON.stringify(problem)).not.toMatch(/détail SQL|22\d{3}|stack/);
     } finally { await app.close(); }
   });
 

@@ -69,7 +69,9 @@ describe('tracé recalé sur la route (extension GET /captures/:id/matched-route
   const ready=await settled(trip.capture.id);expect(ready.statusCode,ready.body).toBe(200);
   const data=ready.json().data;expect(validate(data)).toBe(true);
   expect(Object.keys(data).sort()).toEqual(['algorithmVersion','captureId','generatedAt','provider','reconstructionVersion','spans','status']);
-  expect(data).toMatchObject({status:'READY',provider:'osrm',algorithmVersion:1,reconstructionVersion:1});
+  // L'arrêt et la finalisation ont déjà fait avancer la version des mesures : seule la base la connaît.
+  const version=(await pool.query<{reconstruction_version:number}>('SELECT reconstruction_version FROM drivy.capture_session WHERE id=$1',[trip.capture.id])).rows[0]!.reconstruction_version;
+  expect(data).toMatchObject({status:'READY',provider:'osrm',algorithmVersion:1,reconstructionVersion:version});
   expect(data.spans).toHaveLength(1);
   const span=data.spans[0];expect(span).toMatchObject({segmentId:segment,firstSequence:0,lastSequence:59,confidence:0.92});
   const geometry=decodePolyline(span.geometry);expect(geometry.length).toBeGreaterThanOrEqual(2);
@@ -131,12 +133,13 @@ describe('tracé recalé sur la route (extension GET /captures/:id/matched-route
   expect((await settled(other.capture.id,'demo-other-instructor')).json().data.status).toBe('READY');expect(calls).toBe(before+1);
  });
  it('borne resserrée : les mesures détruites emportent leur dérivé, qui n’est jamais resservi',async()=>{
+  const previous=(await pool.query<{reconstruction_version:number}>('SELECT reconstruction_version FROM drivy.capture_session WHERE id=$1',[trip.capture.id])).rows[0]!.reconstruction_version;
   const cutoff=await pool.query<{reconstruction_version:number}>("UPDATE drivy.capture_session SET cutoff_at=authorized_at+interval '30 seconds' WHERE id=$1 RETURNING reconstruction_version",[trip.capture.id]);
-  expect(cutoff.rows[0]!.reconstruction_version).toBe(2);
+  expect(cutoff.rows[0]!.reconstruction_version).toBe(previous+1);
   expect(await row(trip.capture.id)).toBeUndefined();
   const after=await settled(trip.capture.id);expect(after.statusCode,after.body).toBe(200);
   // Le lot a été détruit : il ne reste aucune mesure à recaler, donc aucun tronçon.
-  expect(after.json().data).toMatchObject({status:'READY',reconstructionVersion:2,spans:[]});expect(validate(after.json().data)).toBe(true);
+  expect(after.json().data).toMatchObject({status:'READY',reconstructionVersion:previous+1,spans:[]});expect(validate(after.json().data)).toBe(true);
   expect(await row(trip.capture.id)).toMatchObject({status:'EMPTY',encrypted_route:null,span_count:0});
  });
  it('trajet retiré : la couche recalée disparaît avec lui',async()=>{
