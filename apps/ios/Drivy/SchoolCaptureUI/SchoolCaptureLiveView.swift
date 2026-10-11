@@ -17,7 +17,8 @@ struct SchoolCaptureLiveView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var resetCameraID = UUID()
-    @State private var followMode: DrivyMapFollowMode = .free
+    /// Un trajet s’ouvre en suivi, nord en haut : la carte accompagne la voiture sans qu’on y touche.
+    @State private var followMode: DrivyMapFollowMode = .position
     @State private var observationMoment: ObservationMoment?
     @State private var observationNotice: ObservationNotice?
     @State private var isFinishing = false
@@ -173,7 +174,7 @@ struct SchoolCaptureLiveView: View {
             observationNotice = nil
             confirmsFinish = false
             resetCameraID = UUID()
-            followMode = .free
+            followMode = .position
         }
         .onDisappear { observationMoment = nil; observationNotice = nil }
     }
@@ -220,7 +221,7 @@ struct SchoolCaptureLiveView: View {
             .frame(width: DrivyMapLayout.sidebarWidth)
             .background(DrivyTheme.canvas)
             routeMap.overlay(alignment: .bottomTrailing) {
-                if controller.displayedPointCount > 0 { mapControls(axis: .vertical).padding(DrivySpacing.l) }
+                if controller.hasDisplayedPosition { mapControls(axis: .vertical).padding(DrivySpacing.l) }
             }
         }
     }
@@ -229,7 +230,7 @@ struct SchoolCaptureLiveView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.l) {
                 heading(floating: false)
-                if controller.displayedPointCount > 0 {
+                if controller.hasDisplayedPosition {
                     routeMap.frame(height: DrivyMapLayout.accessibleMapHeight)
                         .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                     mapControls(axis: .horizontal).frame(maxWidth: .infinity, alignment: .trailing)
@@ -259,15 +260,13 @@ struct SchoolCaptureLiveView: View {
     /// point de l’app Plans, jamais enregistré), comme « Aujourd’hui ». Le tracé commence à la première position
     /// enregistrée. Hors départ, sans aucune position : une attente honnête plutôt qu’une vue du pays.
     private var showsDevicePosition: Bool {
-        controller.displayedPointCount == 0 && (shownState == .recording || shownState == .preparing)
+        !controller.hasDisplayedPosition && (shownState == .recording || shownState == .preparing)
     }
 
     @ViewBuilder private var routeMap: some View {
-        if controller.displayedPointCount > 0 || showsDevicePosition {
-            SchoolCaptureLiveMap(segments: controller.segments,
-                observations: controller.liveObservations?.mapObservations ?? [],
-                resetCameraID: resetCameraID, isRecording: shownState == .recording,
-                showsDevicePosition: showsDevicePosition, followMode: $followMode)
+        if controller.hasDisplayedPosition || showsDevicePosition {
+            SchoolCaptureLiveRoute(controller: controller, resetCameraID: resetCameraID,
+                isRecording: shownState == .recording, showsDevicePosition: showsDevicePosition, followMode: $followMode)
         } else {
             DrivyMapPlaceholder(title: placeholderTitle, message: placeholderMessage, symbol: "location",
                 isSearching: shownState == .preparing || shownState == .recording)
@@ -324,7 +323,7 @@ struct SchoolCaptureLiveView: View {
 
     /// La carte est affichée (positions enregistrées, ou position de l’appareil au départ) : le message du signal
     /// passe dans le panneau, sinon il est déjà dans l’attente qui remplace la carte.
-    private var mapIsShown: Bool { controller.displayedPointCount > 0 || showsDevicePosition }
+    private var mapIsShown: Bool { controller.hasDisplayedPosition || showsDevicePosition }
 
     private var hasSessionInformation: Bool {
         controller.errorMessage != nil || cancellationError != nil
@@ -470,7 +469,7 @@ struct SchoolCaptureLiveView: View {
         return commandPanel(floating: floating, feedbackInPanel: false)
             .overlay(alignment: .top) {
                 VStack(alignment: .trailing, spacing: DrivySpacing.s) {
-                    if controller.displayedPointCount > 0 { mapControls(axis: .horizontal) }
+                    if controller.hasDisplayedPosition { mapControls(axis: .horizontal) }
                     observationNoticeView
                     if let recorder = floatingFeedbackRecorder {
                         VStack(alignment: .leading, spacing: DrivySpacing.s) { observationFeedback(recorder) }
@@ -750,7 +749,7 @@ struct SchoolCaptureLiveView: View {
         case .idle: DrivyMapStatus(title: "Aucun trajet en cours", symbol: "location.slash")
         case .preparing: DrivyMapStatus(title: "Préparation du GPS", symbol: "clock")
         case .recording:
-            controller.displayedPointCount == 0
+            !controller.hasDisplayedPosition
                 ? DrivyMapStatus(title: "En attente de position", symbol: "location")
                 : DrivyMapStatus(title: "GPS actif", symbol: "location.fill", tone: .accent)
         case .paused: DrivyMapStatus(title: "GPS en pause", symbol: "pause.circle")
@@ -785,5 +784,21 @@ struct SchoolCaptureLiveView: View {
             case .retrySaving: await controller.retrySaving()
             }
         }
+    }
+}
+
+/// Seule cette vue lit les segments : une nouvelle position redessine la carte, pas l’écran de leçon.
+private struct SchoolCaptureLiveRoute: View {
+    let controller: SchoolCaptureSessionController
+    let resetCameraID: UUID
+    let isRecording: Bool
+    let showsDevicePosition: Bool
+    @Binding var followMode: DrivyMapFollowMode
+
+    var body: some View {
+        SchoolCaptureLiveMap(segments: controller.segments,
+            observations: controller.liveObservations?.mapObservations ?? [],
+            resetCameraID: resetCameraID, isRecording: isRecording,
+            showsDevicePosition: showsDevicePosition, followMode: $followMode)
     }
 }

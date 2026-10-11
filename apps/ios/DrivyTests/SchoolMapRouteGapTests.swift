@@ -20,7 +20,9 @@ struct SchoolMapRouteGapTests {
         source.append(point(31, second: 31, east: 10))
         let displayed = SchoolCaptureDisplayRoute.select(source)
         #expect(displayed.map(\.point.sequence) == [0, 31])
-        #expect(displayed.last?.startsFragment == true)
+        // A stop is not a break: the vehicle stood on fix 0 until second 30, and the line goes on from there.
+        #expect(displayed.last?.startsFragment == false)
+        #expect(displayed.first?.heldUntilMs == 30_000)
         #expect(SchoolMapRouteGap.withinSegment(source, displayed: displayed, idPrefix: "synthetic").isEmpty)
     }
 
@@ -28,7 +30,8 @@ struct SchoolMapRouteGapTests {
         let source = [point(0, second: 0, east: 0), point(2, second: 2, east: 20),
                       point(3, second: 3, east: 30, accuracy: 100), point(4, second: 4, east: 40)]
         let displayed = SchoolCaptureDisplayRoute.select(source)
-        #expect(displayed.filter(\.startsFragment).count == 3)
+        // The missing sequence still separates two fragments; the single imprecise fix after it does not.
+        #expect(displayed.filter(\.startsFragment).count == 2)
         #expect(SchoolMapRouteGap.withinSegment(source, displayed: displayed, idPrefix: "synthetic").isEmpty)
     }
 

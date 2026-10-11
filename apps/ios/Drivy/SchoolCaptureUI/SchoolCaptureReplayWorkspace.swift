@@ -24,6 +24,8 @@ struct SchoolCaptureReplayFragment: Identifiable {
     private(set) var isComplete = false
     private(set) var errorMessage: String?
     private(set) var quality: String?
+    /// Tracé recalé sur la route, quand l’école en a calculé un. Jamais requis pour lire le trajet.
+    private(set) var matchedRoute: SchoolMatchedRoute?
     private(set) var contentRevision = 0
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
@@ -52,6 +54,11 @@ struct SchoolCaptureReplayFragment: Identifiable {
             guard current(request) else { return }
             guard currentCapture.publicationState == .privateCapture else { throw SchoolCaptureFailure.notFound }
             capture = currentCapture
+            // Demandé avant les pages : la carte se dessine d’emblée sur la route, sans se redessiner ensuite.
+            let matched = await client.matchedRoute(schoolID: scope.schoolID, captureID: captureID, scope: scope)
+            guard current(request) else { return }
+            matchedRoute = matched?.isUsable == true ? matched : nil
+            var awaitsMatching = matched?.isPending == true
             var cursor: String?, seenCursors = Set<String>(), pointKeys = Set<String>()
             var lastContinues = false
             var accumulated: [SchoolCaptureReplayFragment] = []
@@ -125,12 +132,28 @@ struct SchoolCaptureReplayFragment: Identifiable {
                 if let cursor, !seenCursors.insert(cursor).inserted { throw SchoolCaptureFailure.invalidResponse }
             } while cursor != nil
             isComplete = true
+            // Premier affichage d’un trajet : l’école le recale à cet instant. Le trajet mesuré est déjà à l’écran ;
+            // le tracé sur route le remplace s’il arrive dans les secondes qui suivent, sinon à la prochaine ouverture.
+            isLoading = false
+            var attempts = 0
+            while awaitsMatching, attempts < 5 {
+                attempts += 1
+                // Quitter l’écran pendant cette attente n’est pas une erreur de chargement.
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                let next = await client.matchedRoute(schoolID: scope.schoolID, captureID: captureID, scope: scope)
+                guard current(request) else { return }
+                awaitsMatching = next?.isPending == true
+                if let next, next.isUsable, !next.spans.isEmpty {
+                    matchedRoute = next
+                    contentRevision += 1
+                }
+            }
         } catch is CancellationError {
             if current(request) { errorMessage = "Le chargement du trajet a été interrompu." }
         } catch {
             guard current(request) else { return }
             if let failure = error as? SchoolCaptureFailure, failure != .unavailable {
-                fragments = []; observations = []; capture = nil
+                fragments = []; observations = []; capture = nil; matchedRoute = nil
                 contentRevision += 1
             }
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Le replay n’a pas pu être chargé."
@@ -139,7 +162,7 @@ struct SchoolCaptureReplayFragment: Identifiable {
 
     func invalidate() {
         invalidated = true; generation = UUID()
-        fragments = []; observations = []; capture = nil; isLoading = false; isComplete = false
+        fragments = []; observations = []; capture = nil; matchedRoute = nil; isLoading = false; isComplete = false
         contentRevision += 1
         // Sans message, l’écran resterait sur « Ouverture du trajet… » sans fin.
         errorMessage = "Tes accès ont changé. Ferme le replay puis rouvre-le depuis la leçon."

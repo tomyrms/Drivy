@@ -31,7 +31,11 @@ enum SchoolLiveHeading {
 /// A fresh manager per run also rejects callbacks queued before pause/disappearance.
 @MainActor @Observable
 final class SchoolLiveHeadingSource: NSObject, @preconcurrency CLLocationManagerDelegate {
-    private(set) var degrees: Double?
+    /// Read by the camera every frame: observing it would re-evaluate the screen at each degree.
+    @ObservationIgnored private(set) var degrees: Double?
+    /// A usable device heading exists. Changes rarely, unlike its value.
+    private(set) var isAvailable = false
+    @ObservationIgnored var onChange: ((Double?) -> Void)?
     @ObservationIgnored private var manager: CLLocationManager?
     @ObservationIgnored private weak var windowScene: UIWindowScene?
     @ObservationIgnored private var lastTimestamp: Date?
@@ -61,22 +65,22 @@ final class SchoolLiveHeadingSource: NSObject, @preconcurrency CLLocationManager
         manager = nil
         lastTimestamp = nil
         startedAt = nil
-        degrees = nil
+        publish(nil)
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         guard manager === self.manager, let startedAt, newHeading.timestamp >= startedAt else { return }
         if let orientation = interfaceOrientation, manager.headingOrientation != orientation {
             manager.headingOrientation = orientation
-            degrees = nil
+            publish(nil)
             // This callback was measured against the previous screen edge.
             return
         }
         guard lastTimestamp.map({ newHeading.timestamp > $0 }) ?? true else { return }
         lastTimestamp = newHeading.timestamp
-        degrees = SchoolLiveHeading.degrees(trueHeading: newHeading.trueHeading,
+        publish(SchoolLiveHeading.degrees(trueHeading: newHeading.trueHeading,
             magneticHeading: newHeading.magneticHeading, accuracy: newHeading.headingAccuracy,
-            timestamp: newHeading.timestamp, now: Date())
+            timestamp: newHeading.timestamp, now: Date()))
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -88,10 +92,16 @@ final class SchoolLiveHeadingSource: NSObject, @preconcurrency CLLocationManager
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: any Error) {
         guard manager === self.manager else { return }
-        degrees = nil
+        publish(nil)
     }
 
     func locationManagerShouldDisplayHeadingCalibration(_ manager: CLLocationManager) -> Bool { false }
+
+    private func publish(_ value: Double?) {
+        degrees = value
+        if isAvailable != (value != nil) { isAvailable = value != nil }
+        onChange?(value)
+    }
 
     private var interfaceOrientation: CLDeviceOrientation? {
         windowScene.flatMap { SchoolLiveHeading.orientation(for: $0.effectiveGeometry.interfaceOrientation) }

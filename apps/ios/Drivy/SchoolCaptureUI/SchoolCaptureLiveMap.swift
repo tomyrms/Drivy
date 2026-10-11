@@ -1,5 +1,60 @@
 import MapKit
+import QuartzCore
 import SwiftUI
+
+/// Moving part of the live map: the marker glides to each recorded fix and turns
+/// smoothly; the camera heading follows the chosen mode. Display only.
+@MainActor final class SchoolLiveMapMotion: DrivyRouteMapMotion {
+    var wake: (() -> Void)?
+    var followMode: DrivyMapFollowMode = .free
+    var reduceMotion = false
+    /// Ephemeral compass value, never a route point.
+    var deviceHeading: Double? { didSet { if deviceHeading != oldValue { wake?() } } }
+
+    private var glide = SchoolMapGlide()
+    private var arrow = SchoolMapHeadingSmoother()
+    private var cameraTurn = SchoolMapHeadingSmoother(timeConstant: 0.35)
+    private var course: Double?
+    private var target: (segmentID: UUID, sequence: Int)?
+
+    var positionLabel: String {
+        if deviceHeading != nil { return "Dernière position enregistrée et orientation de l’appareil" }
+        return course == nil ? "Dernière position enregistrée" : "Dernière position et direction du déplacement"
+    }
+
+    /// The latest recorded position. The same fix given twice changes nothing.
+    func show(_ position: SchoolLiveTrace.Position?) {
+        guard let position else {
+            if target != nil { target = nil; course = nil; glide.reset(); arrow.reset(); wake?() }
+            return
+        }
+        course = position.course
+        if let target, target.segmentID == position.segmentID, target.sequence == position.point.sequence { return }
+        // A new fragment is not a continuous movement: the marker is placed there, not dragged across the gap.
+        let instant = reduceMotion || position.startsFragment || target?.segmentID != position.segmentID
+        target = (position.segmentID, position.point.sequence)
+        glide.move(toLatitude: position.point.latitude, longitude: position.point.longitude, at: CACurrentMediaTime(), instant: instant)
+        wake?()
+    }
+
+    func pose(at now: TimeInterval) -> SchoolMapPose? {
+        guard let place = glide.position(at: now) else { return nil }
+        return SchoolMapPose(latitude: place.latitude, longitude: place.longitude,
+                             heading: arrow.advance(towards: deviceHeading ?? course, at: now, instant: reduceMotion))
+    }
+
+    func cameraHeading(at now: TimeInterval) -> Double? {
+        guard let wanted = followMode.cameraHeading(deviceHeading: deviceHeading) else { return nil }
+        return cameraTurn.advance(towards: wanted, at: now, instant: reduceMotion)
+    }
+
+    func isAnimating(at now: TimeInterval) -> Bool {
+        if !glide.isSettled(at: now) { return true }
+        if glide.hasTarget, !arrow.isSettled(on: deviceHeading ?? course) { return true }
+        if let wanted = followMode.cameraHeading(deviceHeading: deviceHeading), !cameraTurn.isSettled(on: wanted) { return true }
+        return false
+    }
+}
 
 /// Carte du trajet en cours : tracé mesuré, signalements ancrés et dernière position.
 struct SchoolCaptureLiveMap: View {
@@ -10,193 +65,70 @@ struct SchoolCaptureLiveMap: View {
     /// Départ sans position enregistrée : la position de l’appareil selon Plans, affichée et jamais enregistrée.
     var showsDevicePosition = false
     @Binding var followMode: DrivyMapFollowMode
-    @State private var camera: MapCameraPosition = .automatic
-    @State private var mapHeading = 0.0
-    @State private var followDistance = 650.0
-    @State private var heading: Double?
-    @State private var drawnSegments: [SchoolMapRouteFragment] = []
-    @State private var drawnGaps: [SchoolMapRouteGap] = []
-    @State private var gapsBySegment: [UUID: [SchoolMapRouteGap]] = [:]
-    @State private var sourceBounds: [UUID: (first: SchoolCapturePoint, last: SchoolCapturePoint)] = [:]
-    @State private var selectedSamples: [UUID: [SchoolCaptureDisplayRoute.Sample]] = [:]
-    @State private var cachedCounts: [UUID: Int] = [:]
-    @State private var last: SchoolCapturePoint?
+    @State private var trace = SchoolLiveTrace()
+    @State private var motion = SchoolLiveMapMotion()
     @State private var compass = SchoolLiveHeadingSource()
     @State private var isVisible = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
-    private var count: Int { segments.reduce(0) { $0 + $1.measurements.count } }
-    private var contentKey: String { segments.map { "\($0.id):\($0.measurements.count)" }.joined(separator: ",") }
     private var compassIsActive: Bool { followMode == .heading && isVisible && isRecording && scenePhase == .active }
-    private var displayedHeading: Double? { compass.degrees ?? heading }
 
     var body: some View {
-        Map(position: $camera) {
-            ForEach(drawnGaps) { gap in
-                MapPolyline(gap.line).stroke(DrivyTheme.controlBorder,
-                    style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [5, 5]))
-            }
-            ForEach(drawnSegments) { segment in
-                if segment.line.pointCount > 1 {
-                    // Trait épais : lisible d’un regard, en plein soleil comme de nuit.
-                    MapPolyline(segment.line).stroke(DrivyTheme.routeHalo,
-                        style: StrokeStyle(lineWidth: 11, lineCap: .round, lineJoin: .round))
-                    MapPolyline(segment.line).stroke(DrivyTheme.route,
-                        style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
-                } else if let coordinate = segment.firstCoordinate {
-                    Annotation("Position enregistrée", coordinate: coordinate) {
-                        Circle().fill(DrivyTheme.route).frame(width: 8, height: 8)
-                    }.annotationTitles(.hidden)
-                }
-            }
-            if let coordinate = drawnSegments.first?.firstCoordinate {
-                Annotation("Début du tracé enregistré", coordinate: coordinate) {
-                    SchoolMapEndpointMarker(kind: .start)
-                }.annotationTitles(.hidden)
-            }
-            ForEach(observations) { observation in
-                if let coordinate = coordinate(for: observation) {
-                    Annotation(observation.body.text, coordinate: coordinate) {
-                        observationMarker(observation)
-                    }.annotationTitles(.hidden)
-                }
-            }
-            if showsDevicePosition && last == nil { UserAnnotation() }
-            if let last {
-                Annotation("Dernière position enregistrée", coordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude)) {
-                    SchoolMapPositionMarker(course: displayedHeading, mapHeading: mapHeading)
-                        .accessibilityLabel(compass.degrees == nil
-                            ? (heading == nil ? "Dernière position enregistrée" : "Dernière position et direction du déplacement")
-                            : "Dernière position enregistrée et orientation de l’appareil")
-                }.annotationTitles(.hidden)
-            }
-        }
-        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
-        .mapControls { }
+        // Idempotent: unchanged segments cost a comparison, a new fix only its own vertex.
+        let _ = synchronize()
+        DrivyRouteMapView(lines: trace.lines, pins: pins, motion: motion,
+            isFollowing: followMode.followsPosition, cameraRequest: resetCameraID,
+            showsDevicePosition: showsDevicePosition && trace.position == nil,
+            centersOnFirstPose: true,
+            onUserMovedMap: { followMode = .free })
+        .ignoresSafeArea()
         .background(SchoolLiveHeadingWindowReader(source: compass).accessibilityHidden(true))
         .onAppear {
             isVisible = true
-            updateRoute(); updateCourse()
+            compass.onChange = { [motion] degrees in motion.deviceHeading = degrees }
             compass.setActive(compassIsActive)
-            if last == nil && showsDevicePosition { camera = .userLocation(fallback: .automatic) }
-            else if followMode.followsPosition { followPoint() } else if count > 0 { camera = .automatic }
         }
         .onDisappear { isVisible = false; compass.stop() }
         .onChange(of: compassIsActive) { _, active in compass.setActive(active) }
-        .onChange(of: compass.degrees) { _, degrees in
-            guard degrees != nil, followMode == .heading, !camera.positionedByUser else { return }
-            followPoint()
-        }
-        .onMapCameraChange(frequency: .continuous) { context in
-            mapHeading = context.camera.heading
-            if camera.positionedByUser { followDistance = min(2500, max(180, context.camera.distance)) }
-        }
-        .onChange(of: camera.positionedByUser) { _, byUser in if byUser { followMode = .free } }
-        .onChange(of: followMode) { _, mode in if mode.followsPosition { followPoint(smooth: true) } }
-        .onChange(of: contentKey) { _, _ in
-            let hadPosition = last != nil
-            updateRoute()
-            updateCourse()
-            if followMode.followsPosition && !camera.positionedByUser { followPoint(smooth: !hadPosition) }
-            else if !hadPosition, let last, !camera.positionedByUser {
-                // Premier point : la caméra glisse de la position de l’appareil vers lui, sans saut de zoom.
-                withAnimation(reduceMotion ? nil : .smooth(duration: 0.6)) {
-                    camera = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude),
-                        distance: followDistance, heading: mapHeading, pitch: 0))
-                }
-            }
-        }
-        .onChange(of: resetCameraID) { _, _ in
-            if followMode.followsPosition { followPoint(smooth: true) }
-            else { withAnimation(reduceMotion ? nil : .smooth(duration: 0.6)) { camera = .automatic } }
-        }
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Carte du trajet enregistré")
-        .accessibilityValue((followMode == .heading && compass.degrees == nil
+        .accessibilityValue((followMode == .heading && !compass.isAvailable
             ? "Suivi de position, orientation du téléphone indisponible" : followMode.label)
-            + (drawnGaps.isEmpty ? "" : ", portions sans mesure indiquées en pointillé"))
+            + (trace.hasGaps ? ", portions sans mesure indiquées en pointillé" : ""))
     }
 
-    private func coordinate(for observation: SchoolLiveMapObservation) -> CLLocationCoordinate2D? {
-        guard let segmentID = observation.body.segmentId, let sequence = observation.body.pointSequence,
-              let point = selectedSamples[segmentID]?.first(where: { $0.point.sequence == sequence })?.point else { return nil }
-        return CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
+    private func synchronize() {
+        trace.update(segments)
+        motion.followMode = followMode
+        motion.reduceMotion = reduceMotion
+        motion.show(trace.position)
     }
 
-    private func observationMarker(_ observation: SchoolLiveMapObservation) -> some View {
-        let status = observation.body.eventStatus.flatMap(SchoolObservationStatus.init(rawValue:))
-        let color: Color = switch status {
-        case .attention: DrivyTone.warning.foreground
-        case .toWorkOn: DrivyTone.danger.foreground
-        case .positive: DrivyTone.success.foreground
-        case nil: DrivyTheme.text
+    private var pins: [DrivyRouteMapPin] {
+        var result: [DrivyRouteMapPin] = []
+        if let start = trace.start {
+            result.append(DrivyRouteMapPin(id: "start", coordinate: start, signature: "start",
+                label: SchoolMapEndpointMarker.Kind.start.label, side: 22, priority: 200,
+                content: AnyView(SchoolMapEndpointMarker(kind: .start))))
         }
-        return SchoolMapObservationMarker(symbol: status?.symbol ?? "bookmark.fill", color: color, isPending: observation.isPending)
-            .accessibilityLabel("\(observation.body.text), \(status?.label ?? "Repère")\(observation.isPending ? ", envoi en attente" : "")")
-    }
-
-    private func updateCourse() {
-        heading = nil; last = nil
-        guard let segment = segments.last(where: { selectedSamples[$0.id]?.isEmpty == false }),
-              let samples = selectedSamples[segment.id] else { return }
-        var course = SchoolMapCourse()
-        for sample in samples {
-            if sample.startsFragment { course = SchoolMapCourse() }
-            let point = sample.point
-            heading = course.receive(CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude),
-                at: Double(point.elapsedMs) / 1000, accuracy: point.accuracyMeters)
-            last = point
-        }
-    }
-
-    private func updateRoute() {
-        let currentIDs = Set(segments.map(\.id))
-        selectedSamples = selectedSamples.filter { currentIDs.contains($0.key) }
-        cachedCounts = cachedCounts.filter { currentIDs.contains($0.key) }
-        gapsBySegment = gapsBySegment.filter { currentIDs.contains($0.key) }
-        sourceBounds = sourceBounds.filter { currentIDs.contains($0.key) }
-        drawnSegments = segments.flatMap { segment -> [SchoolMapRouteFragment] in
-            let prefix = segment.id.uuidString + ":"
-            let previous = drawnSegments.filter { $0.id.hasPrefix(prefix) }
-            if cachedCounts[segment.id] == segment.measurements.count { return previous }
-            let samples = segment.displaySamples
-            let source = segment.points
-            selectedSamples[segment.id] = samples
-            gapsBySegment[segment.id] = SchoolMapRouteGap.withinSegment(source, displayed: samples, idPrefix: prefix)
-            if let first = source.first, let last = source.last { sourceBounds[segment.id] = (first, last) }
-            else { sourceBounds.removeValue(forKey: segment.id) }
-            cachedCounts[segment.id] = segment.measurements.count
-            var fragments: [SchoolMapRouteFragment] = []
-            var coordinates: [CLLocationCoordinate2D] = []
-            for sample in samples {
-                let point = sample.point
-                if sample.startsFragment && !coordinates.isEmpty {
-                    fragments.append(.init(id: "\(prefix)\(fragments.count)", coordinates: coordinates))
-                    coordinates = []
-                }
-                coordinates.append(CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude))
+        for observation in observations {
+            guard let segmentID = observation.body.segmentId, let sequence = observation.body.pointSequence,
+                  let coordinate = trace.coordinate(segmentID: segmentID, sequence: sequence) else { continue }
+            let status = observation.body.eventStatus.flatMap(SchoolObservationStatus.init(rawValue:))
+            let color: Color = switch status {
+            case .attention: DrivyTone.warning.foreground
+            case .toWorkOn: DrivyTone.danger.foreground
+            case .positive: DrivyTone.success.foreground
+            case nil: DrivyTheme.text
             }
-            if !coordinates.isEmpty { fragments.append(.init(id: "\(prefix)\(fragments.count)", coordinates: coordinates)) }
-            return fragments
+            let symbol = status?.symbol ?? "bookmark.fill"
+            result.append(DrivyRouteMapPin(id: observation.id.uuidString, coordinate: coordinate,
+                signature: "\(symbol):\(status?.rawValue ?? "-"):\(observation.isPending)",
+                label: "\(observation.body.text), \(status?.label ?? "Repère")\(observation.isPending ? ", envoi en attente" : "")",
+                side: 36, priority: 400,
+                content: AnyView(SchoolMapObservationMarker(symbol: symbol, color: color, isPending: observation.isPending))))
         }
-        drawnGaps = segments.flatMap { gapsBySegment[$0.id] ?? [] }
-        for (previous, next) in zip(segments, segments.dropFirst()) {
-            guard let previousSource = sourceBounds[previous.id]?.last, let nextSource = sourceBounds[next.id]?.first,
-                  let previousDisplayed = selectedSamples[previous.id]?.last?.point,
-                  let nextDisplayed = selectedSamples[next.id]?.first?.point,
-                  let gap = SchoolMapRouteGap.betweenSegments(id: "between:\(previous.id):\(next.id)",
-                    previousSource: previousSource, nextSource: nextSource,
-                    previousDisplayed: previousDisplayed, nextDisplayed: nextDisplayed) else { continue }
-            drawnGaps.append(gap)
-        }
-    }
-
-    /// Suivi fix après fix : glissement linéaire court. Changement de mode ou premier point : mouvement plus ample, adouci.
-    private func followPoint(smooth: Bool = false) {
-        guard followMode.followsPosition, let last else { return }
-        withAnimation(reduceMotion ? nil : (smooth ? .smooth(duration: 0.6) : .linear(duration: 0.35))) {
-            camera = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: last.latitude, longitude: last.longitude),
-                distance: followDistance, heading: followMode.cameraHeading(deviceHeading: compass.degrees) ?? mapHeading, pitch: 0))
-        }
+        return result
     }
 }

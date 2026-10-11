@@ -32,8 +32,8 @@ struct SchoolMapCourse {
             self.origin = coordinate; originAccuracy = accuracy
             return nil
         }
-        let distance = CLLocation(latitude: origin.latitude, longitude: origin.longitude)
-            .distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
+        let distance = SchoolTrackGeometry.meters(latitude1: origin.latitude, longitude1: origin.longitude,
+            latitude2: coordinate.latitude, longitude2: coordinate.longitude)
         let threshold = max(3, min(15, max(originAccuracy, accuracy)))
         guard distance >= threshold else { return heading }
         heading = Self.bearing(from: origin, to: coordinate)
@@ -42,11 +42,8 @@ struct SchoolMapCourse {
     }
 
     static func bearing(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> Double {
-        let latitude1 = from.latitude * .pi / 180, latitude2 = to.latitude * .pi / 180
-        let longitude = (to.longitude - from.longitude) * .pi / 180
-        let y = sin(longitude) * cos(latitude2)
-        let x = cos(latitude1) * sin(latitude2) - sin(latitude1) * cos(latitude2) * cos(longitude)
-        return (atan2(y, x) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
+        SchoolTrackGeometry.bearing(latitude1: from.latitude, longitude1: from.longitude,
+            latitude2: to.latitude, longitude2: to.longitude)
     }
 }
 
