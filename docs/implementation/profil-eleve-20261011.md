@@ -47,6 +47,12 @@ Corrections :
 
 La file chiffrée et les envois ne sont pas modifiés : une demande sauvegardée reste en file, un nouvel envoi reste refusé tant qu’une demande est incertaine.
 
+## Progression de l’élève (même passe, à la demande du porteur)
+
+La Progression de l’élève prend la présentation du Profil : fond de page, blocs en cartes (vue d’ensemble, « Prochaine étape », « À travailler », « En autonomie », « Pas encore vues »). Le dossier vu par le moniteur garde sa lecture à plat (`grouped` faux).
+
+Une toile (radar) s’ajoute à la vue d’ensemble : une branche par compétence, dans l’ordre du référentiel, du centre (pas encore vue) au bord (en autonomie). Elle trace le dernier niveau publié de chaque compétence, sans score ni moyenne ; cela revient sur la règle « ni barre » posée le même jour, à la demande du porteur. Elle n’apparaît pas tant que le référentiel lu ne couvre pas toute la progression, ni en dessous de 3 ou au-dessus de 12 compétences, ni aux tailles de texte d’accessibilité (les listes disent alors tout). Elle est masquée à VoiceOver, qui lit la phrase d’ensemble et les listes.
+
 ## Non vérifié
 
 Écran jamais vu tourner sur cette machine (pas de toolchain Swift). VoiceOver, grandes tailles de texte, iPad, barre d’onglets flottante et transitions sont à valider sur appareil ou par captures (`learner-profile`, `learner-profile-multi`).

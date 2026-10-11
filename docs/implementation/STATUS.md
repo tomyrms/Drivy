@@ -2,9 +2,9 @@
 
 ## 11 octobre 2026 — Profil de l’élève restructuré
 
-Identité et « Mes informations », permis en liste compacte (une ligne et une synthèse par permis, détail au toucher avec accès à Leçons et Progression sur ce permis), « Paramètres » dans la barre (compte, enregistrement GPS, Face ID, déconnexion). Le message « Le choix n’a pas pu être vérifié » venait d’une lecture de l’accord GPS annulée et prise pour une panne : corrigé à la source. [Détail et arbitrages](profil-eleve-20261011.md).
+Identité et « Mes informations », permis en liste compacte (une ligne et une synthèse par permis, détail au toucher avec accès à Leçons et Progression sur ce permis), « Paramètres » dans la barre (compte, enregistrement GPS, Face ID, déconnexion). Le message « Le choix n’a pas pu être vérifié » venait d’une lecture de l’accord GPS annulée et prise pour une panne : corrigé à la source. La Progression de l’élève suit : mêmes cartes que le Profil, et une toile des compétences (niveaux publiés, sans score). [Détail et arbitrages](profil-eleve-20261011.md).
 
-**Exécuté** : voir le compte rendu de la PR. **Reste à qualifier** : rendu réel (clair, sombre, iPad, grand texte, VoiceOver), jamais vu tourner ; tests Swift non lancés à la demande du porteur.
+**Exécuté** : IPA d’essai compilée sur `e78b00c`. **Reste à qualifier** : rendu réel (clair, sombre, iPad, grand texte, VoiceOver), jamais vu tourner ; tests Swift non lancés à la demande du porteur.
 
 ## 11 octobre 2026 — thème sombre « Soft Charcoal »
 
