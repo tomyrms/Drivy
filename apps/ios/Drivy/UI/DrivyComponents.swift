@@ -17,6 +17,16 @@ enum DrivyTone {
         }
     }
 
+    /// The tone drawn as a shape (glyph, ring, badge, pin, marker); `foreground` stays the ink of words.
+    var signal: Color {
+        switch self {
+        case .neutral, .accent: foreground
+        case .success: DrivyTheme.successSignal
+        case .warning: DrivyTheme.warningSignal
+        case .danger: DrivyTheme.dangerSignal
+        }
+    }
+
     var background: Color {
         switch self {
         case .neutral: DrivyTheme.surfaceMuted
@@ -75,7 +85,7 @@ struct DrivyStatusDot: View {
 
     var body: some View {
         HStack(spacing: DrivySpacing.xs) {
-            Circle().fill(tone.foreground).frame(width: dotSize, height: dotSize).accessibilityHidden(true)
+            Circle().fill(tone.signal).frame(width: dotSize, height: dotSize).accessibilityHidden(true)
             Text(title)
                 .font(.caption.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)

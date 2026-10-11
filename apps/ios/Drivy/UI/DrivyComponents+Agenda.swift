@@ -332,8 +332,7 @@ struct DrivyObservationSummary: View {
     var showsStatusSymbol = true
     private var status: SchoolObservationStatus? { SchoolLessonHubRules.status(of: observation) }
     private var color: Color {
-        switch status { case .positive: DrivyTheme.success; case .attention: DrivyTheme.warning;
-        case .toWorkOn: DrivyTheme.danger; case nil: DrivyTheme.muted }
+        status?.tone.signal ?? DrivyTheme.muted
     }
     /// Le thème du signalement, teinté par son appréciation ; repère ou note sinon.
     private var glyph: DrivyObservationGlyph {

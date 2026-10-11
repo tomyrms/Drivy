@@ -265,11 +265,15 @@ struct DrivyMapStatusLabel: View {
     var font: Font = .caption.weight(.semibold)
 
     var body: some View {
-        Label(status.title, systemImage: status.symbol)
-            .font(font)
-            .foregroundStyle(status.tone.foreground)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityElement(children: .combine)
+        // The symbol is drawn in the signal colour, the words keep the ink tuned for text.
+        Label {
+            Text(status.title).foregroundStyle(status.tone.foreground)
+        } icon: {
+            Image(systemName: status.symbol).foregroundStyle(status.tone.signal)
+        }
+        .font(font)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -606,7 +610,7 @@ struct DrivyReplayScrubber: View {
     private func track(usable: CGFloat) -> some View {
         let played = progress(offset)
         let gapRanges = gaps.map { (progress($0.lowerBound), progress($0.upperBound)) }
-        let ticks = marks.map { (progress($0.offset), $0.tone.foreground) }
+        let ticks = marks.map { (progress($0.offset), $0.tone.signal) }
         let leading = inset
         return Canvas { context, size in
             let y = size.height / 2
@@ -676,11 +680,11 @@ struct DrivyReplayScrubber: View {
         let selected = mark.id == selectedMarkID
         return Button { onSelectMark(mark.id) } label: {
             DrivyObservationGlyphImage(glyph: mark.glyph)
-                .foregroundStyle(selected ? DrivyTheme.onAccent : mark.tone.foreground)
+                .foregroundStyle(selected ? DrivyTheme.onAccent : mark.tone.signal)
                 .frame(width: selected ? 13 : 11, height: selected ? 13 : 11)
                 .frame(width: selected ? 28 : 22, height: selected ? 28 : 22)
                 .background(selected ? DrivyTheme.accentFill : mark.tone.background, in: Circle())
-                .overlay(Circle().strokeBorder(selected ? DrivyTheme.accentFill : mark.tone.foreground, lineWidth: 1.5))
+                .overlay(Circle().strokeBorder(selected ? DrivyTheme.accentFill : mark.tone.signal, lineWidth: 1.5))
                 .dynamicTypeSize(...DynamicTypeSize.xLarge)
                 .frame(width: DrivyLayout.tapTarget, height: pinArea)
                 .contentShape(Rectangle())

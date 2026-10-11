@@ -235,12 +235,7 @@ struct SchoolReportObservationsSection: View {
     private var isCompleted: Bool { model.lesson?.status == "COMPLETED" }
 
     static func color(_ observation: SchoolObservation) -> Color {
-        switch SchoolLessonHubRules.status(of: observation) {
-        case .positive: DrivyTheme.success
-        case .attention: DrivyTheme.warning
-        case .toWorkOn: DrivyTheme.danger
-        case nil: DrivyTheme.muted
-        }
+        SchoolLessonHubRules.status(of: observation)?.tone.signal ?? DrivyTheme.muted
     }
 
     var body: some View {

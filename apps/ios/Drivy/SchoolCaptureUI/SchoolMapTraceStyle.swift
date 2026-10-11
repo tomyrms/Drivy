@@ -81,7 +81,7 @@ struct SchoolMapObservationMarker: View {
     var isSelected = false
     var isPending = false
 
-    private var ringColor: Color { tone == .neutral ? DrivyTheme.text : tone.foreground }
+    private var ringColor: Color { tone == .neutral ? DrivyTheme.text : tone.signal }
     private var side: CGFloat { isSelected ? 44 : 32 }
 
     var body: some View {
@@ -104,7 +104,7 @@ struct SchoolMapObservationMarker: View {
                 .foregroundStyle(DrivyTheme.surfaceRaised)
                 .frame(width: badgeSide * 0.58, height: badgeSide * 0.58)
                 .frame(width: badgeSide, height: badgeSide)
-                .background(tone.foreground, in: Circle())
+                .background(tone.signal, in: Circle())
                 .padding(1.5)
                 .background(DrivyTheme.routeHalo, in: Circle())
                 .offset(x: 5, y: 5)

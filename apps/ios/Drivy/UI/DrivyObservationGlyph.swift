@@ -139,10 +139,10 @@ struct SchoolObservationToken: View {
 
     var body: some View {
         DrivyObservationGlyphImage(glyph: glyph)
-            .foregroundStyle(filled ? (tone == .neutral ? DrivyTheme.text : tone.background) : tone.foreground)
+            .foregroundStyle(filled ? (tone == .neutral ? DrivyTheme.text : tone.background) : tone.signal)
             .frame(width: side * 0.6, height: side * 0.6)
             .frame(width: side, height: side)
-            .background(filled && tone != .neutral ? tone.foreground : tone.background, in: Circle())
+            .background(filled && tone != .neutral ? tone.signal : tone.background, in: Circle())
             .accessibilityHidden(true)
     }
 }

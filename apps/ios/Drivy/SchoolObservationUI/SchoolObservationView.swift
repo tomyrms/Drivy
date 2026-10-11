@@ -378,10 +378,10 @@ struct SchoolObservationComposer: View {
                         HStack(spacing: DrivySpacing.s) {
                             // Même pastille que les tuiles du signalement : le symbole et le mot portent l’état.
                             DrivyObservationGlyphImage(glyph: value.glyph)
-                                .foregroundStyle(value.fieldTone.foreground)
+                                .foregroundStyle(value.tone.signal)
                                 .frame(width: 15, height: 15)
                                 .frame(width: 32, height: 32)
-                                .background(value.fieldTone.background, in: Circle())
+                                .background(value.tone.background, in: Circle())
                                 .accessibilityHidden(true)
                             Text(value.label).foregroundStyle(DrivyTheme.text)
                             Spacer(minLength: DrivySpacing.xs)
@@ -509,12 +509,5 @@ private struct SchoolObservationPendingView: View {
             .navigationTitle("Demande conservée").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
         }.tint(DrivyTheme.accent).interactiveDismissDisabled(model.isBusy)
-    }
-}
-
-private extension SchoolObservationStatus {
-    /// Mêmes teintes que les tuiles du signalement et le replay.
-    var fieldTone: DrivyTone {
-        switch self { case .positive: .success; case .attention: .warning; case .toWorkOn: .danger }
     }
 }
