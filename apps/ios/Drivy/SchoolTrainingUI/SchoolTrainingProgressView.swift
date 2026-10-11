@@ -96,10 +96,7 @@ struct SchoolTrainingProgressSection: View {
                     SchoolProgressGroupTitle(title: title).padding(.horizontal, DrivySpacing.m)
                 }
                 VStack(alignment: .leading, spacing: 0) { content() }
-                    .padding(.horizontal, DrivySpacing.m)
-                    .padding(.vertical, DrivySpacing.xs)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                    .drivyGroupedBlock()
             }
         } else {
             VStack(alignment: .leading, spacing: 0) {

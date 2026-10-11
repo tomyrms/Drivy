@@ -366,6 +366,9 @@ private struct SchoolTrainingContent: View {
 
     /// La Progression de l’élève se lit en cartes sur le fond de page, comme son Profil.
     private var groupsProgress: Bool { ownLessons && !isEmbedded && fixedSection == .progress }
+    /// Dans le dossier, posé sur le fond des listes groupées : leçons et progression se lisent en blocs,
+    /// comme Profil et l’historique des leçons.
+    private var groupsBlocks: Bool { isEmbedded || groupsProgress }
 
     /// Le flux unique : sélecteur, rangée de filtres, puis la section choisie. Le dossier le pose tel quel sous l’identité.
     private var page: some View {
@@ -799,7 +802,7 @@ private struct SchoolTrainingContent: View {
     }
     private func monthGroup(_ month: TrainingLessonMonth, feed: SchoolLessonFeed, permitNames: [UUID: String]) -> some View {
         let count = month.lessons.count
-        return VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+        return VStack(alignment: .leading, spacing: isEmbedded ? DrivySpacing.xs : DrivySpacing.xxs) {
             HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
                 Text(month.title)
                     .font(.drivySection).foregroundStyle(DrivyTheme.text)
@@ -807,6 +810,8 @@ private struct SchoolTrainingContent: View {
                 Spacer(minLength: 0)
                 Text("\(count)").font(.subheadline.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
             }
+            // Dans un bloc, le titre s’aligne sur le texte des lignes, comme l’en-tête d’une section groupée.
+            .padding(.horizontal, isEmbedded ? DrivySpacing.m : 0)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(month.title), \(count == 1 ? "1 leçon" : "\(count) leçons")")
             .accessibilityAddTraits(.isHeader)
@@ -824,6 +829,7 @@ private struct SchoolTrainingContent: View {
                         .accessibilityIdentifier("training-lesson-\(lesson.id.uuidString)")
                 }
             }
+            .modifier(TrainingLessonBlock(isGrouped: isEmbedded))
         }
     }
     /// L’élève ne termine pas de leçon : une leçon restée sans résultat se lit « En attente », sans encre d’alerte.
@@ -846,7 +852,7 @@ private struct SchoolTrainingContent: View {
             ForEach([progressModel].compactMap { $0 }.filter { $0.training != nil || $0.isLoading }, id: \.trainingID) { model in
                 VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     if namesPermit && mixesPermits { permitTitle(model, name: permitName(model, in: names)) }
-                    SchoolTrainingProgressSection(model: model, schoolTimeZone: zone, grouped: groupsProgress) { opened = OpenedLesson(id: $0) }
+                    SchoolTrainingProgressSection(model: model, schoolTimeZone: zone, grouped: groupsBlocks) { opened = OpenedLesson(id: $0) }
                     // Changer de permis : la progression de l’autre remplace celle-ci, replis refermés.
                     .id(model.trainingID)
                 }
@@ -946,5 +952,14 @@ enum SchoolTrainingFormatting {
     private static func format(_ value: String, zone: String, template: String) -> String {
         guard let date = SchoolLesson.date(value), let timeZone = TimeZone(identifier: zone) else { return "Date indisponible" }
         return SchoolDateCache.shared.string(from: date, zone: timeZone, template: template)
+    }
+}
+
+/// Les leçons d’un mois : à plat sur une page de lecture, dans un bloc sur le fond des listes groupées.
+private struct TrainingLessonBlock: ViewModifier {
+    let isGrouped: Bool
+
+    func body(content: Content) -> some View {
+        if isGrouped { content.drivyGroupedBlock(verticalPadding: 0) } else { content }
     }
 }

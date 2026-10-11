@@ -63,3 +63,16 @@ Ce qui fonctionne et reste tel quel :
 - Profil du moniteur : le compte est rangé en trois sections (Compte, Sécurité, déconnexion) au lieu d’une.
 - Lignes du Profil et des Paramètres plus compactes : 44 pt et corps de texte au lieu de 64 pt et titre de ligne.
 - « Fermer » à gauche dans les feuilles Compte, Changer d’école et Formation.
+
+## Dossier en blocs (11 octobre 2026, soir)
+
+Retour du porteur : le dossier « est différent des autres ». La première passe l’avait laissé tel quel, à plat sur fond blanc, avec « Informations personnelles » en lien bleu. Il rejoint la famille des listes groupées, sans devenir une `List` : il garde son défilement, son sélecteur et sa barre d’action.
+
+- Fond `canvas`, identité et gestes de contact posés sur le fond, comme l’en-tête des deux Profils.
+- « Informations personnelles » : une ligne blanche qui se déplie sur place, en corps de texte, comme « Mes informations » chez l’élève.
+- Leçons : chaque mois dans un bloc blanc sous son titre, comme l’historique des leçons. Progression : en blocs, comme chez l’élève.
+- Un seul modificateur pour ces blocs hors `List` : `drivyGroupedBlock()`, à l’arrondi des sections groupées (`DrivyRadius.groupedBlock`), dans une colonne aux marges d’une liste groupée (`drivyGroupedPageContent()`).
+- La barre Démarrer / Planifier est posée sur le même fond (`DrivyStickyActionBar(grouped: true)`).
+
+Captures après : [clair](assets/dossier-blocs-20261011/iPhone-dossier-light-synthetic.png), [sombre, plusieurs permis](assets/dossier-blocs-20261011/iPhone-dossier-multi-dark-synthetic.png) (run `38174303280`). IPA d’essai compilée (run `38174299908`). Non exécuté : tests Swift et parcours UI. Non vu : l’onglet Progression du dossier et le volet déplié, que les captures ne montrent pas ; VoiceOver et grand texte.
+

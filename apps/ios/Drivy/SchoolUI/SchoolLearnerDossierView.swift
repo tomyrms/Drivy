@@ -90,9 +90,11 @@ struct SchoolLearnerDossierView: View {
                     pages(learner)
                 }
             }
-            .drivyPageContent()
+            .drivyGroupedPageContent()
         }
-        .background(DrivyTheme.surface)
+        // Sur le fond des listes groupées, comme Profil et l’historique des leçons : l’identité est posée
+        // sur le fond, le reste se lit en blocs.
+        .background(DrivyTheme.canvas)
         .refreshable { await reload(); await reloadLessons() }
         .accessibilityIdentifier("learner-dossier")
         .safeAreaInset(edge: .bottom, spacing: 0) { actions }
@@ -107,9 +109,14 @@ struct SchoolLearnerDossierView: View {
             // Historic UI-test identifier: it now designates the full name that heads the dossier.
             DrivyLearnerIdentity(name: learner.displayName,
                                  detail: SchoolPermitName.summary(trainings), variant: .page)
+                .padding(.horizontal, DrivySpacing.m)
                 .accessibilityIdentifier("learner-profile-first-name")
-            statusBadges(learner)
-            SchoolLearnerActions(learner: learner, contact: contact(of: learner), identifierPrefix: "learner-profile")
+            // Posés sur le fond : alignés sur le texte des blocs, comme l’en-tête des deux Profils.
+            Group {
+                statusBadges(learner)
+                SchoolLearnerActions(learner: learner, contact: contact(of: learner), identifierPrefix: "learner-profile")
+            }
+            .padding(.horizontal, DrivySpacing.m)
             information(learner)
         }
     }
@@ -168,18 +175,20 @@ struct SchoolLearnerDossierView: View {
                 }
             }
             .padding(.top, DrivySpacing.xxs)
+            .padding(.bottom, DrivySpacing.s)
             .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
             informationLabel
         }
         .disclosureGroupStyle(.drivy)
+        .drivyGroupedBlock(verticalPadding: 0)
         .accessibilityIdentifier("learner-profile-details")
     }
 
     private var informationLabel: some View {
+        // Une destination sur place : corps de texte et encre du texte, comme « Mes informations » chez l’élève.
         Text("Informations personnelles")
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(DrivyTheme.accent)
+            .foregroundStyle(DrivyTheme.text)
             .multilineTextAlignment(.leading)
             .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
     }
@@ -216,6 +225,7 @@ struct SchoolLearnerDossierView: View {
                 informationLabel
             }
             .disclosureGroupStyle(.drivy)
+            .drivyGroupedBlock(verticalPadding: 0)
         }
     }
 
@@ -252,7 +262,7 @@ struct SchoolLearnerDossierView: View {
 
     @ViewBuilder private var actions: some View {
         if let learner = workspace.learner, let openPlanning, learner.archivedAt == nil {
-            DrivyStickyActionBar {
+            DrivyStickyActionBar(grouped: true) {
                 let layout = typeSize.isAccessibilitySize
                     ? AnyLayout(VStackLayout(spacing: DrivySpacing.s))
                     : AnyLayout(HStackLayout(spacing: DrivySpacing.s))

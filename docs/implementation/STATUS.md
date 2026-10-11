@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 11 octobre 2026 — dossier de l’élève en blocs
+
+À la demande du porteur, le dossier prend le fond et les blocs blancs de Profil et de l’historique des leçons ; « Informations personnelles » devient une ligne qui se déplie. [Détail](direction-artistique-20261011.md).
+
+**Exécuté** : IPA d’essai compilée ; captures iPhone clair et sombre relues. **Non exécuté** : tests Swift, parcours UI. **Reste à voir** : onglet Progression du dossier, volet déplié, VoiceOver.
+
 ## 11 octobre 2026 — GPS fluide, tracés fidèles et recalage routier
 
 Une seule carte pour la leçon et le replay, animée image par image : le marqueur glisse vers chaque position enregistrée, la caméra suit sans à-coups, le curseur du replay avance en continu et répond aussitôt à la chronologie. Le filtre d’affichage ne dessine plus la dérive à l’arrêt ni les sauts, sans couper le trait à chaque feu rouge. Le serveur sait recaler un trajet sur la route (Mapbox ou OSRM auto-hébergé), à la première lecture, en couche distincte des mesures. [Causes, architecture, décisions et limites](gps-fluide-recalage-20261011.md).
