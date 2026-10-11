@@ -220,6 +220,12 @@ extension View {
         listRowBackground(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surfaceRaised)
     }
 
+    /// Row fill of a plain, full-width list laid on a reading page: the row keeps the page
+    /// color and only the hairlines separate entries; the selection keeps the soft accent.
+    func drivyPlainRows(isSelected: Bool = false) -> some View {
+        listRowBackground(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surface)
+    }
+
     /// Header of a native Form or List section: subheadline semibold, muted, in
     /// the written case (no system capitals). Apply it to the header Text.
     func drivyFormSectionHeader() -> some View {
