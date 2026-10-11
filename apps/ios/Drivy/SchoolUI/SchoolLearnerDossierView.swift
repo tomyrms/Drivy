@@ -105,20 +105,22 @@ struct SchoolLearnerDossierView: View {
     /// Visible at once: who, which permits, what is unusual, and the frequent gestures.
     /// Everything shown here comes with the dossier itself, so nothing moves when the profile arrives.
     private func header(_ learner: SchoolLearner) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            // Historic UI-test identifier: it now designates the full name that heads the dossier.
-            DrivyLearnerIdentity(name: learner.displayName,
-                                 detail: SchoolPermitName.summary(trainings), variant: .page)
-                .padding(.horizontal, DrivySpacing.m)
-                .accessibilityIdentifier("learner-profile-first-name")
-            // Posés sur le fond : alignés sur le texte des blocs, comme l’en-tête des deux Profils.
-            Group {
+        // Une seule carte pour la personne, comme une fiche de contact : qui elle est, comment la joindre,
+        // puis ses informations, repliées. Rien de ce qui la concerne n’est dessiné ailleurs.
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                // Historic UI-test identifier: it now designates the full name that heads the dossier.
+                DrivyLearnerIdentity(name: learner.displayName,
+                                     detail: SchoolPermitName.summary(trainings), variant: .page)
+                    .accessibilityIdentifier("learner-profile-first-name")
                 statusBadges(learner)
-                SchoolLearnerActions(learner: learner, contact: contact(of: learner), identifierPrefix: "learner-profile")
+                SchoolLearnerActions(learner: learner, contact: contact(of: learner), identifierPrefix: "learner-profile",
+                                     labelled: true)
             }
-            .padding(.horizontal, DrivySpacing.m)
+            .padding(.vertical, DrivySpacing.m)
             information(learner)
         }
+        .drivyGroupedBlock(verticalPadding: 0)
     }
 
     @ViewBuilder private func statusBadges(_ learner: SchoolLearner) -> some View {
@@ -154,11 +156,14 @@ struct SchoolLearnerDossierView: View {
             if let model, model.pending != nil { verifyButton(model) }
             if let error = model?.errorMessage {
                 SchoolErrorNotice(message: error, retry: { Task { await loadProfile() } })
+                    .padding(.bottom, DrivySpacing.m)
             } else if model == nil && profileCreationFailed {
                 SchoolErrorNotice(message: "Les informations de l’élève ne peuvent pas être chargées.",
                     retry: { Task { await loadProfile() } })
+                    .padding(.bottom, DrivySpacing.m)
             }
             if model?.profile != nil || model?.isLoading == true || (model == nil && !profileCreationFailed) {
+                Divider().overlay(DrivyTheme.border)
                 informationDisclosure(model, learner: learner)
             }
         }
@@ -181,7 +186,6 @@ struct SchoolLearnerDossierView: View {
             informationLabel
         }
         .disclosureGroupStyle(.drivy)
-        .drivyGroupedBlock(verticalPadding: 0)
         .accessibilityIdentifier("learner-profile-details")
     }
 
@@ -211,6 +215,7 @@ struct SchoolLearnerDossierView: View {
     /// Isolated shells without a profile client still show only recorded contacts.
     @ViewBuilder private func recordedContacts(_ learner: SchoolLearner) -> some View {
         if learner.contactEmail != nil || learner.contactPhone != nil || openProfile != nil {
+            Divider().overlay(DrivyTheme.border)
             DisclosureGroup(isExpanded: $showsInformation) {
                 VStack(alignment: .leading, spacing: 0) {
                     if let email = learner.contactEmail { DrivyContactRow(title: "E-mail", value: email) }
@@ -225,7 +230,6 @@ struct SchoolLearnerDossierView: View {
                 informationLabel
             }
             .disclosureGroupStyle(.drivy)
-            .drivyGroupedBlock(verticalPadding: 0)
         }
     }
 
