@@ -264,10 +264,14 @@ struct SchoolReportObservationsSection: View {
                 .listRowSeparator(.hidden)
             }
             if editable && model.isAuthor {
-                Button(isCompleted ? "Ajouter une observation" : "Noter une observation") {
+                Button {
                     // Envoi bref en cours : l’appui est ignoré plutôt que le bouton grisé. Une relecture n’empêche rien.
                     guard !model.isBusy else { return }
                     if isCompleted { router.add(model: model, context: context) } else { router.openList() }
+                } label: {
+                    // Les observations se relisent avant la feuille : l’attente se lit dans le bouton touché.
+                    let title = isCompleted ? "Ajouter une observation" : "Noter une observation"
+                    DrivyBusyLabel(title: title, busyTitle: title, isBusy: router.isOpeningObservation)
                 }
                 .accessibilityIdentifier("lesson-private-observations")
             }
@@ -319,12 +323,14 @@ private struct SchoolReportObservationRow: View {
     private var actions: some View {
         Menu {
             Button(observation.isMarker ? "Préciser" : "Modifier") { router.edit(observation, model: model, context: context) }
+                .disabled(router.isOpeningObservation)
             if model.sharing != nil {
                 Button(kept ? "Montrer à l’élève" : "Garder pour moi") {
                     Task { await model.updateSharing(observation: observation.id, observationPrivate: !kept) }
                 }
             }
             Button("Retirer", role: .destructive) { router.remove(observation, model: model, context: context) }
+                .disabled(router.isOpeningObservation)
         } label: {
             HStack(spacing: DrivySpacing.xxs) {
                 if kept { Text("Pour moi").font(.caption).foregroundStyle(DrivyTheme.muted) }

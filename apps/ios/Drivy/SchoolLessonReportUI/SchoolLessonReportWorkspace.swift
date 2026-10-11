@@ -580,6 +580,8 @@ import Observation
             id: operation, kind: .completeLesson, version: lesson.version, resourceID: lessonID)
     }
     func markNoShow(reason: String) async -> Bool {
+        // Une relecture en cours (retour au premier plan, trajet synchronisé) ne fait pas tomber la confirmation.
+        await settled()
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let lesson, canMutate, mayMarkNoShow(), !trimmed.isEmpty, reason.unicodeScalars.count <= 1_000 else { return false }
         let operation = UUID()

@@ -234,6 +234,7 @@ private struct SchoolLessonReportContent: View {
     /// Barre du bas d’une leçon planifiée du moniteur, selon l’heure et le trajet.
     private enum PlannedBar: Equatable {
         case begin
+        case absent
         case live
         case start
         case finish
@@ -264,7 +265,7 @@ private struct SchoolLessonReportContent: View {
         .alert("Terminer la leçon ?", isPresented: $confirmsCompletion) {
             Button("Terminer") { beginCompletion() }
                 .accessibilityIdentifier("lesson-confirm-completion")
-            Button("Continuer", role: .cancel) { }
+            Button("Poursuivre la leçon", role: .cancel) { }
         }
         .alert("Recharger et perdre la saisie ?", isPresented: $showReloadConfirmation) {
             Button("Recharger", role: .destructive) { Task { await model.load(discardingEdits: true) } }
@@ -663,7 +664,11 @@ private struct SchoolLessonReportContent: View {
     /// Leçon du moniteur : commencer explicitement, puis gérer le trajet facultatif ou terminer.
     private func plannedBar(now: Date) -> PlannedBar? {
         guard model.isAuthor, isPlanned, let lesson = model.lesson else { return nil }
-        if !lesson.hasStarted { return .begin }
+        if !lesson.hasStarted {
+            if SchoolLessonHubRules.mayBegin(lesson, now: now) { return .begin }
+            // Rendez-vous manqué : le constat d’absence devient l’action de la fiche.
+            return SchoolLessonHubRules.isMissed(lesson, now: now) && model.mayMarkNoShow(now: now) ? .absent : nil
+        }
         if captureStatus == .collecting { return .live }
         if mayStartCapture(now: now) { return .start }
         return .finish
@@ -681,6 +686,13 @@ private struct SchoolLessonReportContent: View {
                 .buttonStyle(DrivyPrimaryButtonStyle())
                 .disabled(!model.acceptsInput)
                 .accessibilityIdentifier("lesson-start")
+            case .absent:
+                Button { confirmsNoShow = true } label: {
+                    DrivyBusyLabel(title: "Élève absent", isBusy: isSending(.markNoShow))
+                }
+                .buttonStyle(DrivySecondaryButtonStyle())
+                .disabled(!model.canMutate || isFinishing)
+                .accessibilityIdentifier("lesson-no-show")
             case .live:
                 Button { showsLive = true } label: { Label("Trajet en cours", systemImage: "location.fill") }
                     .buttonStyle(DrivyPrimaryButtonStyle())
@@ -711,8 +723,9 @@ private struct SchoolLessonReportContent: View {
     }
 
     private func openStartIfAsked() {
-        guard opensStart, !startOpened, !model.isLoading, model.lesson != nil else { return }
+        guard opensStart, !startOpened, !model.isLoading, let lesson = model.lesson else { return }
         startOpened = true
+        guard SchoolLessonHubRules.mayBegin(lesson, now: Date()) else { return }
         Task { await startLesson() }
     }
 

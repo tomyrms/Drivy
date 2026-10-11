@@ -144,6 +144,15 @@ struct SchoolOfficeVisualReview: View {
         responses["\(root)/invitations"] = try envelope(page(invitations))
         // Le bilan de la leçon d’essai est réellement vide pour le test de sauvegarde.
         let planned = "\(root)/lessons/\(SchoolVisualData.plannedLessonID.uuidString)"
+        // Une leçon ne se commence que le jour de son rendez-vous : celle d’essai a lieu maintenant, quelle que soit
+        // l’heure du runner. Seul le transport visuel isolé reçoit cet horaire synthétique.
+        if let bytes = responses[planned], let value = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+           var lesson = value["data"] as? [String: Any] {
+            let iso = ISO8601DateFormatter(), now = Date()
+            lesson["plannedStart"] = iso.string(from: now.addingTimeInterval(-600))
+            lesson["plannedEnd"] = iso.string(from: now.addingTimeInterval(2_400))
+            responses[planned] = try envelope(lesson)
+        }
         if permitWarning {
             guard let bytes = responses[planned],
                   let value = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],

@@ -131,10 +131,8 @@ struct SchoolObservationEditor: Identifiable {
     }
     func timeLabel(_ value: String?) -> String? {
         guard let value, let date = SchoolLesson.date(value) else { return nil }
-        let format = DateFormatter(); format.locale = Locale(identifier: "fr_CH")
-        format.timeZone = TimeZone(identifier: lesson?.timeZone ?? "Europe/Zurich")
-        format.dateStyle = .medium; format.timeStyle = .medium
-        return format.string(from: date)
+        let zone = TimeZone(identifier: lesson?.timeZone ?? "Europe/Zurich") ?? .current
+        return SchoolDateCache.shared.string(from: date, zone: zone, date: .medium, time: .medium)
     }
     func invalidate() {
         generation = UUID(); accessRevoked = true; loaded = false; isLoading = false; isBusy = false

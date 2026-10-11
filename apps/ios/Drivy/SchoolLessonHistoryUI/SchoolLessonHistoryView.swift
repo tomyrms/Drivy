@@ -72,7 +72,7 @@ struct SchoolLessonHistoryView: View {
         .sheet(item: $selectedLesson, onDismiss: { Task { await refresh() } }) { lesson in
             NavigationStack {
                 SchoolLessonReportView(client: agendaClient.reportClient, schoolWorkspace: workspace, lessonID: lesson.id,
-                    learnerName: learnerName(lesson))
+                    learnerName: learnerName(lesson), knownLesson: lesson)
             }
             .tint(DrivyTheme.accent)
             .environment(captureController)

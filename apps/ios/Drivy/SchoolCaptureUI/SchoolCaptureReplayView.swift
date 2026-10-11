@@ -196,12 +196,7 @@ enum SchoolReplayFormatting {
     /// The replay uses the lesson's civil time, never the device's current time zone.
     static func startLabel(_ date: Date?, lessonTimeZone: String?) -> String? {
         guard let date, let lessonTimeZone, let zone = TimeZone(identifier: lessonTimeZone) else { return nil }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_CH")
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = zone
-        formatter.dateFormat = "d MMM 'à' HH:mm"
-        return formatter.string(from: date)
+        return SchoolDateCache.shared.string(from: date, zone: zone, format: "d MMM 'à' HH:mm")
     }
 }
 
