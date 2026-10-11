@@ -89,7 +89,7 @@ struct SchoolLessonHistoryView: View {
                         Task { await workspace.selectSchool(membership) }
                     })
                     .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
+                    .drivyClearRow()
                 } else {
                     DrivySkeletonRows(count: 4, leading: .time)
                         .drivySkeleton("Chargement des leçons…")
@@ -219,7 +219,7 @@ private struct SchoolLessonHistoryList: View {
                     SchoolErrorNotice(message: error, retry: model.accessRevoked ? nil : { Task { await refresh() } })
                 }
                 .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
+                .drivyClearRow()
             }
             if model.isLoading && model.lessons.isEmpty {
                 Section {
@@ -270,27 +270,28 @@ private struct SchoolLessonHistoryList: View {
         if isEmpty && model.isComplete && !model.isLoading && !model.isLoadingMore && model.errorMessage == nil {
             if model.lessons.isEmpty {
                 if !hasUploads && !hasUploadError {
+                    // Le même vide que l’agenda et les listes du dossier : symbole et titre, sans grand écran vide.
                     Section {
-                        ContentUnavailableView("Aucune leçon passée", systemImage: "calendar")
+                        DrivyEmptyState(title: "Aucune leçon passée", symbol: "calendar")
                             .frame(maxWidth: .infinity)
                             .accessibilityIdentifier("lessons-history-empty")
                     }
-                    .listRowBackground(Color.clear)
+                    .drivyClearRow()
                 }
             } else if isSearching {
                 Section {
-                    ContentUnavailableView("Aucun résultat", systemImage: "magnifyingglass")
+                    DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass")
                         .frame(maxWidth: .infinity)
                         .accessibilityIdentifier("lessons-history-no-result")
                 }
-                .listRowBackground(Color.clear)
+                .drivyClearRow()
             } else {
                 Section {
                     DrivyEmptyState(title: filter.emptyTitle, symbol: "calendar",
                         actionTitle: "Tout afficher", action: { filter = .all })
                         .frame(maxWidth: .infinity)
                 }
-                .listRowBackground(Color.clear)
+                .drivyClearRow()
             }
         }
     }
@@ -299,7 +300,7 @@ private struct SchoolLessonHistoryList: View {
         if let error = model.moreErrorMessage {
             SchoolErrorNotice(message: error, retry: { Task { await model.retryMore() } })
                 .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
+                .drivyClearRow()
         } else {
             DrivyLoadingState(title: needsFullHistory ? "Chargement de l’historique…" : "Chargement des autres leçons…")
                 .task(id: model.nextCursor) { await model.loadMore() }

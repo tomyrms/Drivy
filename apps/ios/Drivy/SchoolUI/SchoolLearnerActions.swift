@@ -98,7 +98,7 @@ struct SchoolLearnerActions: View {
                 }
             }
             .font(.subheadline.weight(.semibold))
-            .frame(minHeight: 44)
+            .frame(minHeight: DrivyLayout.tapTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -113,12 +113,12 @@ struct SchoolLearnerActions: View {
                 Label(link.title, systemImage: link.symbol)
                     .font(.body.weight(.semibold))
                     .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
                     .contentShape(Rectangle())
             } else {
                 Image(systemName: link.symbol)
                     .font(.body.weight(.medium))
-                    .frame(width: 44, height: 44)
+                    .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
                     .background(DrivyTheme.surfaceMuted, in: Circle())
                     .overlay {
                         // Même renfort que le bouton secondaire : le remplissage seul se détache mal d’une page blanche.

@@ -151,7 +151,7 @@ struct SchoolTodayView: View {
                 // Avant les insets du panneau : le contrôle suit la carte visible sans déplacer ses mentions.
                 .overlay(alignment: .bottomTrailing) {
                     MapUserLocationButton(scope: mapScope)
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
                         .padding(.trailing, DrivySpacing.m)
                         .padding(.bottom, DrivySpacing.l)
                 }
@@ -298,7 +298,7 @@ struct SchoolTodayView: View {
             } label: {
                 Text(others.count == 1 ? "Autre leçon" : "\(others.count) autres leçons")
                     .font(.subheadline.weight(.semibold)).monospacedDigit()
-                    .frame(minHeight: 44, alignment: .leading)
+                    .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
             }
             .accessibilityIdentifier("today-day-list")
           }

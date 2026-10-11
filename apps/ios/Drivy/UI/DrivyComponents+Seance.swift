@@ -657,7 +657,7 @@ struct DrivyReplayScrubber: View {
                     .frame(width: 28, height: 28)
                     .background(DrivyTheme.surfaceMuted, in: Circle())
                     .overlay(Circle().strokeBorder(DrivyTheme.controlBorder, lineWidth: 1.5))
-                    .frame(width: 44, height: pinArea)
+                    .frame(width: DrivyLayout.tapTarget, height: pinArea)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -676,7 +676,7 @@ struct DrivyReplayScrubber: View {
                 .background(selected ? DrivyTheme.accentFill : mark.tone.background, in: Circle())
                 .overlay(Circle().strokeBorder(selected ? DrivyTheme.accentFill : mark.tone.foreground, lineWidth: 1.5))
                 .dynamicTypeSize(...DynamicTypeSize.xLarge)
-                .frame(width: 44, height: pinArea)
+                .frame(width: DrivyLayout.tapTarget, height: pinArea)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

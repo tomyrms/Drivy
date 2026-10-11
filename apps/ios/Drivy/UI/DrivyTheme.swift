@@ -24,6 +24,9 @@ enum DrivyTheme {
     static let muted = adaptive(0x536174, 0xA1A5AD, darkHighContrast: 0xC2C6CD)
     /// Decorative glyphs only (chevrons): never the sole carrier of an information.
     static let textTertiary = adaptive(0x536174, 0x8E939C, darkHighContrast: 0xA1A5AD)
+    /// Chevron of a row inside a native grouped list: the system's own, so a Drivy row and a NavigationLink
+    /// sitting in the same section show the same glyph in both appearances.
+    static let listChevron = Color(uiColor: .tertiaryLabel)
 
     /// Accent as ink: links, symbols, selection outline, system tint.
     static let accent = adaptive(0x245BD6, 0x86ABF8, darkHighContrast: 0xA8C3FB)
@@ -111,6 +114,8 @@ enum DrivyRadius {
 /// Column widths and thresholds shared by several screens. A width repeated in
 /// two screens is declared here once; map screens keep theirs in DrivyMapLayout.
 enum DrivyLayout {
+    /// Smallest hit target of any control (HIG); primary and critical actions use DrivyButtonSize instead.
+    static let tapTarget: CGFloat = 44
     /// Reading page column (`drivyPageContent` default).
     static let readingColumn: CGFloat = 720
     /// Native Form or List column on iPad, and the bottom action bar under it.
@@ -283,27 +288,27 @@ struct StorageCaption: View {
     }
 }
 
-struct InlineErrorView: View {
-    let message: String
-    var retry: (() -> Void)? = nil
+/// Action written as text next to what it concerns (« Planifier une leçon », « Modifier les informations »,
+/// « Effacer la recherche »): accent ink, subheadline semibold, a 44 pt target across its whole frame. It is the
+/// one look of a secondary action outside the bottom bar; pressed, it dims briefly like a system text button.
+struct DrivyTextActionStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            Label("Enregistrement à vérifier", systemImage: "exclamationmark.triangle.fill")
-                .font(.headline)
-            Text(message)
-                .font(.subheadline)
-                .fixedSize(horizontal: false, vertical: true)
-            if let retry { DrivyRetryButton(action: retry) }
-        }
-        .foregroundStyle(DrivyTheme.danger)
-        .padding(DrivySpacing.m)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DrivyTheme.dangerSurface, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous)
-                .strokeBorder(DrivyTheme.danger.opacity(0.35), lineWidth: 0.5)
-        }
-        .accessibilityElement(children: .contain)
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .multilineTextAlignment(.leading)
+            .foregroundStyle(isEnabled ? DrivyTheme.accent : DrivyTheme.disabledText)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: DrivyLayout.tapTarget)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? DrivyPress.reducedMotionOpacity : 1)
+            .animation(DrivyMotion.feedback(reduceMotion), value: configuration.isPressed)
     }
+}
+
+extension ButtonStyle where Self == DrivyTextActionStyle {
+    /// `.buttonStyle(.drivyText)`: see DrivyTextActionStyle.
+    static var drivyText: DrivyTextActionStyle { DrivyTextActionStyle() }
 }

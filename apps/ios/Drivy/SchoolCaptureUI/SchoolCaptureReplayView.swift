@@ -427,7 +427,7 @@ struct SchoolCaptureReplayView: View {
                 Image(systemName: item.symbol)
                     .font(DrivyMapGlyph.observation)
                     .foregroundStyle(item.tone == .neutral ? DrivyTheme.text : item.tone.background)
-                    .frame(width: 44, height: 44)
+                    .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
                     .background(item.tone == .neutral ? item.tone.background : item.tone.foreground, in: Circle())
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
@@ -452,7 +452,7 @@ struct SchoolCaptureReplayView: View {
                     Image(systemName: "xmark")
                         .font(DrivyMapGlyph.control)
                         .foregroundStyle(DrivyTheme.muted)
-                        .frame(width: 44, height: 44)
+                        .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
                         .background(DrivyTheme.surfaceMuted, in: Circle())
                         .contentShape(Circle())
                 }
@@ -474,7 +474,7 @@ struct SchoolCaptureReplayView: View {
             Label("Aucune observation pour ce trajet", systemImage: "text.bubble")
                 .font(.subheadline)
                 .foregroundStyle(DrivyTheme.muted)
-                .frame(minHeight: 44, alignment: .leading)
+                .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
         } else {
             ScrollViewReader { reader in
                 ScrollView(.horizontal) {
@@ -519,7 +519,7 @@ struct SchoolCaptureReplayView: View {
             }
             .foregroundStyle(DrivyTheme.text)
             .padding(.horizontal, DrivySpacing.s)
-            .frame(minHeight: 44)
+            .frame(minHeight: DrivyLayout.tapTarget)
             .background(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted, in: Capsule())
             .overlay {
                 // Filet léger au repos ; Contraste accru le remplace par la bordure de contrôle.
@@ -634,7 +634,7 @@ struct SchoolCaptureReplayView: View {
                 .background(DrivyTheme.surface)
                 .navigationTitle("Observations")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { showsList = false } } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { showsList = false } } }
         }
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .presentationDragIndicator(.visible)
@@ -754,7 +754,7 @@ private struct SchoolReplayMap: View {
         let selected = selectedID == item.id
         return SchoolMapObservationMarker(symbol: item.symbol, color: item.tone.foreground, isSelected: selected)
             .animation(DrivyMotion.context(reduceMotion), value: selected)
-            .frame(width: 44, height: 44)
+            .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
             .contentShape(Circle())
     }
 

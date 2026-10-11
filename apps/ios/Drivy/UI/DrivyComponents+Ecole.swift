@@ -114,12 +114,7 @@ struct DrivyEntityRow: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-            if showsChevron {
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.textTertiary)
-                    .accessibilityHidden(true)
-            }
+            if showsChevron { DrivyRowChevron() }
         }
         .padding(.vertical, DrivySpacing.xs)
         .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
@@ -135,7 +130,7 @@ struct DrivyEntityRow: View {
             Image(systemName: symbol)
                 .font(.body)
                 .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.muted)
-                .frame(width: 44, height: 44)
+                .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
                 .background(isSelected ? DrivyTheme.surfaceRaised : DrivyTheme.surfaceMuted, in: Circle())
                 .accessibilityHidden(true)
         case .none:
@@ -178,35 +173,6 @@ struct DrivyContactRow: View {
     }
 }
 
-/// Destructive row closing a group of actions (« Se déconnecter »).
-/// Aligned on the DrivyNavigationRow symbol column, danger tone, 52 pt.
-struct DrivyDestructiveRow: View {
-    let title: String
-    let symbol: String
-    let action: () -> Void
-    /// Same scaled column as DrivyNavigationRow.
-    @ScaledMetric(relativeTo: .title3) private var symbolWidth: CGFloat = 28
-
-    var body: some View {
-        Button(role: .destructive, action: action) {
-            HStack(spacing: DrivySpacing.m) {
-                Image(systemName: symbol)
-                    .font(.title3)
-                    .frame(width: symbolWidth)
-                    .accessibilityHidden(true)
-                Text(title).font(.headline)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(DrivyTheme.danger)
-            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(DrivyRowButtonStyle())
-    }
-}
-
 /// Full-width destructive action (revoking a link): the shared danger style.
 typealias DrivyDestructiveButtonStyle = DrivyDangerButtonStyle
 
@@ -218,6 +184,12 @@ extension View {
     /// a special fill (selection, danger, clear header) is set on its own row instead.
     func drivyFormRows(isSelected: Bool = false) -> some View {
         listRowBackground(isSelected ? DrivyTheme.accentSoft : DrivyTheme.surfaceRaised)
+            .environment(\.drivyRowContext, .grouped)
+    }
+
+    /// A row that is not a cell: a header laid on the canvas (account heading), a notice or an empty state.
+    func drivyClearRow() -> some View {
+        listRowBackground(Color.clear)
     }
 
     /// Row fill of a plain, full-width list laid on a reading page: the row keeps the page
@@ -425,7 +397,7 @@ struct DrivyPendingRequest<Details: View>: View {
                 Button(action: retry) {
                     Text(retryTitle)
                         .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
@@ -437,7 +409,7 @@ struct DrivyPendingRequest<Details: View>: View {
                 Button(role: .destructive) { confirmsAbandon = true } label: {
                     Text("Abandonner la demande")
                         .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)

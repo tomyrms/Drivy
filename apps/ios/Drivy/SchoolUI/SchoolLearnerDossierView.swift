@@ -180,29 +180,21 @@ struct SchoolLearnerDossierView: View {
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(DrivyTheme.accent)
             .multilineTextAlignment(.leading)
-            .frame(minHeight: 44, alignment: .leading)
+            .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
     }
 
     /// Never dimmed during a silent reread: the form keeps its own fields locked until the answer.
     private func editButton(_ model: SchoolProfileWorkspace) -> some View {
-        Button { editingProfile = model } label: {
-            Text("Modifier les informations")
-                .font(.subheadline.weight(.semibold))
-                .multilineTextAlignment(.leading)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-        }
-        .accessibilityIdentifier("learner-edit-profile")
+        Button("Modifier les informations") { editingProfile = model }
+            .buttonStyle(.drivyText)
+            .accessibilityIdentifier("learner-edit-profile")
     }
 
     private func verifyButton(_ model: SchoolProfileWorkspace) -> some View {
         Button { editingProfile = model } label: {
             Label("Vérifier la demande", systemImage: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90")
-                .font(.subheadline.weight(.semibold))
-                .multilineTextAlignment(.leading)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
         }
+        .buttonStyle(.drivyText)
         .accessibilityIdentifier("learner-edit-profile")
     }
 
@@ -215,8 +207,7 @@ struct SchoolLearnerDossierView: View {
                     if let phone = learner.contactPhone { DrivyContactRow(title: "Téléphone", value: phone) }
                     if let openProfile {
                         Button("Modifier les informations") { openProfile(learner) }
-                            .font(.subheadline.weight(.semibold))
-                            .frame(minHeight: 44)
+                            .buttonStyle(.drivyText)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

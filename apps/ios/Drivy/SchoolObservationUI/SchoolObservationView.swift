@@ -220,7 +220,7 @@ struct SchoolObservationView: View {
                 Button("Retirer", role: .destructive) { route = .remove(observation) }
             } label: {
                 Image(systemName: "ellipsis").foregroundStyle(DrivyTheme.muted)
-                    .frame(width: 44, height: 44).contentShape(Rectangle())
+                    .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget).contentShape(Rectangle())
             }
             .disabled(!model.acceptsChanges)
             .accessibilityLabel("Actions pour l’observation : \(observation.text)")
@@ -386,7 +386,7 @@ struct SchoolObservationComposer: View {
                             Text(value.label).foregroundStyle(DrivyTheme.text)
                             Spacer(minLength: DrivySpacing.xs)
                             DrivySelectionMark(isSelected: status == value)
-                        }.frame(minHeight: 44).contentShape(Rectangle())
+                        }.frame(minHeight: DrivyLayout.tapTarget).contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityAddTraits(status == value ? [.isSelected] : [])
                 }
             }

@@ -71,7 +71,7 @@ struct SchoolJoinView: View {
                 if let value = values.first, value.utf8.count <= 2_048 { model.link = value }
             }
             .accessibilityLabel("Coller le lien")
-            .frame(minHeight: 44)
+            .frame(minHeight: DrivyLayout.tapTarget)
             .disabled(model.isBusy || !model.isReady)
         }
     }
@@ -268,7 +268,7 @@ struct SchoolJoinTextLink: View {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .multilineTextAlignment(.leading)
-                .frame(minHeight: 44)
+                .frame(minHeight: DrivyLayout.tapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(SchoolJoinTextLinkStyle())

@@ -151,7 +151,7 @@ struct SchoolLessonReplayLinks: View {
         ForEach(Array(replayable.enumerated()), id: \.element.id) { index, capture in
             Button { router.openReplay(capture, model: model, context: context) } label: {
                 Text(replayable.count == 1 ? "Revoir le trajet" : "Revoir le trajet \(index + 1)")
-                    .frame(minHeight: 44)
+                    .frame(minHeight: DrivyLayout.tapTarget)
                     .contentShape(Rectangle())
             }
             .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
@@ -339,7 +339,7 @@ private struct SchoolReportObservationRow: View {
                 if kept { Text("Pour moi").font(.caption).foregroundStyle(DrivyTheme.muted) }
                 Image(systemName: "ellipsis").font(.body).foregroundStyle(DrivyTheme.muted)
             }
-            .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+            .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget).contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .disabled(!model.acceptsInput)
@@ -503,7 +503,7 @@ private struct SchoolReportCompetencyRow: View {
                         .font(.caption2).foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
                 }
             }
-            .frame(minHeight: 44).contentShape(Rectangle())
+            .frame(minHeight: DrivyLayout.tapTarget).contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .disabled(!model.acceptsInput)

@@ -40,7 +40,7 @@ struct SchoolLearnerSettingsView: View {
                     }
                     NavigationLink(value: SchoolLearnerProfileRoute.trips) {
                         Text("Trajets")
-                            .frame(minHeight: 44)
+                            .frame(minHeight: DrivyLayout.tapTarget)
                     }
                     .accessibilityIdentifier("profile-open-trips")
                 } header: {

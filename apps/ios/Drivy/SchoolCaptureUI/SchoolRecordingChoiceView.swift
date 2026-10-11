@@ -149,7 +149,7 @@ struct SchoolRecordingChoiceView: View {
                 Image(systemName: symbol)
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(isEnabled ? DrivyTheme.accent : DrivyTheme.disabledText)
-                    .frame(width: 44, height: 44)
+                    .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
                     .background(isChosen ? DrivyTheme.surfaceRaised : DrivyTheme.accentSoft, in: Circle())
                     .accessibilityHidden(true)
                 HStack(spacing: DrivySpacing.xs) {
@@ -175,12 +175,12 @@ struct SchoolRecordingChoiceView: View {
                 document = .init(id: "notice", title: "Informations de ton école", text: notice.noticeText, contact: notice.contactEmail)
             }
             .accessibilityIdentifier("recording-notice-link")
-            .frame(minHeight: 44)
+            .frame(minHeight: DrivyLayout.tapTarget)
             Button("Conservation des données") {
                 document = .init(id: "retention", title: "Conservation des données", text: notice.retentionText, contact: notice.contactEmail)
             }
             .accessibilityIdentifier("recording-retention-link")
-            .frame(minHeight: 44)
+            .frame(minHeight: DrivyLayout.tapTarget)
         }
         .font(.subheadline).foregroundStyle(DrivyTheme.accent)
     }
@@ -199,7 +199,7 @@ struct SchoolRecordingChoiceView: View {
                         Button("Abandonner la demande", role: .destructive) { abandonCandidate = queued; confirmsAbandon = true }
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(model.mayResume(queued) ? DrivyTheme.danger : DrivyTheme.disabledText)
-                            .frame(minHeight: 44).disabled(!model.mayResume(queued))
+                            .frame(minHeight: DrivyLayout.tapTarget).disabled(!model.mayResume(queued))
                     } else {
                         Button("Vérifier auprès de l’école") { Task { await model.verify(queued) } }
                             .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.mayResume(queued))
@@ -232,7 +232,7 @@ struct RecordingDocumentView: View {
             }
             .background(DrivyTheme.surface)
             .navigationTitle(document.title).navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
         }.tint(DrivyTheme.accent)
     }
 }

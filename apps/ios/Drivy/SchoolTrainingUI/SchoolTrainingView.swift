@@ -44,7 +44,7 @@ struct SchoolTrainingView: View {
             SchoolTrainingScreen(client: client, workspace: workspace, learner: learner, trainingID: trainingID)
                 .navigationTitle("Formation")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fermer") { dismiss() } } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
         }
         .tint(DrivyTheme.accent)
         .presentationSizing(.page)
@@ -505,7 +505,7 @@ private struct SchoolTrainingContent: View {
             }
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(DrivyTheme.accent)
-            .frame(minHeight: 44)
+            .frame(minHeight: DrivyLayout.tapTarget)
             .contentShape(Rectangle())
         }
         .accessibilityLabel("Permis")
@@ -684,7 +684,7 @@ private struct SchoolTrainingContent: View {
             }
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(DrivyTheme.accent)
-            .frame(minHeight: 44)
+            .frame(minHeight: DrivyLayout.tapTarget)
             .contentShape(Rectangle())
         }
         .accessibilityLabel("Filtrer et trier les leçons")
@@ -716,7 +716,7 @@ private struct SchoolTrainingContent: View {
                     }
                     if period.isActive {
                         Button("Toutes les périodes") { selectedMonth = 0; selectedYear = 0 }
-                            .frame(minHeight: 44)
+                            .frame(minHeight: DrivyLayout.tapTarget)
                     }
                 }
                 .drivyPageContent(maxWidth: DrivyLayout.formColumn)
@@ -737,7 +737,7 @@ private struct SchoolTrainingContent: View {
             Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
                 .fixedSize(horizontal: false, vertical: true)
             content().labelsHidden().pickerStyle(.menu)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
                 .contentShape(Rectangle())
                 .fixedSize(horizontal: false, vertical: true)
         }

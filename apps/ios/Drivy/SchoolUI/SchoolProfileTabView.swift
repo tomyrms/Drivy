@@ -10,6 +10,7 @@ struct SchoolProfileTabView: View {
     var chooseSchool: (() -> Void)? = nil
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(AppLock.self) private var appLock: AppLock?
     @State private var planningSettings: PlanningSettingsPresentation?
 
     private var scopeKey: String {
@@ -51,33 +52,35 @@ struct SchoolProfileTabView: View {
             .accessibilityIdentifier("profile-list")
     }
 
-    /// Identité, accès aux leçons, puis actions du compte.
+    /// Les rangées portent déjà leur espacement vertical : sans cela, la liste le double.
+    private var rowInsets: EdgeInsets { EdgeInsets(top: 0, leading: DrivySpacing.m, bottom: 0, trailing: DrivySpacing.m) }
+
+    /// L’en-tête posé sur le fond, comme le Profil de l’élève ; puis les leçons, et le compte rangé par sujet dans
+    /// le même ordre que les Paramètres de l’élève (Compte, Sécurité, déconnexion).
     @ViewBuilder private var accountSections: some View {
         Section {
             SchoolAccountHeading(workspace: workspace, isAuthenticated: true)
         }
         .listRowInsets(EdgeInsets(top: DrivySpacing.s, leading: DrivySpacing.m, bottom: DrivySpacing.s, trailing: DrivySpacing.m))
-        .listRowBackground(Color.clear)
+        .drivyClearRow()
         if let agendaClient {
             Section {
                 NavigationLink {
                     SchoolLessonHistoryView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
                 } label: {
                     Text("Leçons")
-                        .frame(minHeight: 44)
+                        .foregroundStyle(DrivyTheme.text)
+                        .frame(minHeight: DrivyLayout.tapTarget)
                 }
                 .accessibilityIdentifier("profile-open-lessons")
                 if let person = workspace.person, let membership = workspace.membership,
                    membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") {
-                    Button {
+                    // Une feuille s’ouvre : même ligne et même chevron que les autres destinations du Profil.
+                    DrivyNavigationRow(title: "Préférences de leçon") {
                         planningSettings = PlanningSettingsPresentation(scope: agendaClient.scope(person: person, membership: membership),
                             client: agendaClient.planningClient)
-                    } label: {
-                        Text("Préférences de leçon")
-                            .foregroundStyle(DrivyTheme.text)
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .contentShape(Rectangle())
                     }
+                    .listRowInsets(rowInsets)
                     .accessibilityIdentifier("profile-planning-settings")
                 }
             }
@@ -85,9 +88,24 @@ struct SchoolProfileTabView: View {
         }
         if let account {
             Section {
-                account.rows(workspace: workspace, openURL: openURL)
-                    // Les rangées portent déjà leur espacement vertical : sans cela, la liste le double.
-                    .listRowInsets(EdgeInsets(top: 0, leading: DrivySpacing.m, bottom: 0, trailing: DrivySpacing.m))
+                account.accountRows(workspace: workspace, openURL: openURL)
+                    .listRowInsets(rowInsets)
+            } header: {
+                Text("Compte").drivyFormSectionHeader()
+            }
+            .drivyFormRows()
+            if appLock?.biometryName != nil {
+                Section {
+                    account.lockRow()
+                        .listRowInsets(rowInsets)
+                } header: {
+                    Text("Sécurité").drivyFormSectionHeader()
+                }
+                .drivyFormRows()
+            }
+            Section {
+                account.signOutRow()
+                    .listRowInsets(rowInsets)
             }
             .drivyFormRows()
         }

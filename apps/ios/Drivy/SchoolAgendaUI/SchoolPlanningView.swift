@@ -21,7 +21,7 @@ struct SchoolPlanningView: View {
                 if let cancellationPreparationError {
                     Section { DrivyFormMessage(text: cancellationPreparationError, tone: .danger) }.drivyFormRows()
                 } else if isPreparingCancellation {
-                    Section { ProgressView("Arrêt du trajet…") }.drivyFormRows()
+                    Section { DrivyLoadingState(title: "Arrêt du trajet…") }.drivyFormRows()
                 }
                 if model.school != nil {
                     if cancelling { cancellationFields }
@@ -243,7 +243,7 @@ struct SchoolPlanningView: View {
             if model.isCheckingSlot {
                 // Après un créneau libre, l’attente se lit dans le bouton : aucune ligne ne s’insère.
                 if !model.showsSlotDetails {
-                    ProgressView("Vérification du créneau…")
+                    DrivyLoadingState(title: "Vérification du créneau…")
                         .accessibilityIdentifier("planning-slot-checking")
                 }
             } else if let error = model.slotError {
@@ -291,19 +291,19 @@ struct SchoolPlanningView: View {
             .buttonStyle(.plain)
             .foregroundStyle(DrivyTheme.accent)
         }
-        .listRowBackground(Color.clear)
+        .drivyClearRow()
     }
     @ViewBuilder private var documentButtons: some View {
         if let terms = model.selectedTerms {
             Button {
                 document = SchoolPlanningDocument(title: "Conditions tarifaires", text: "\(terms.label)\n\n\(terms.termsText)\n\n\(SchoolPlanningFormat.validity(terms.validFrom, until: terms.validUntil))")
-            } label: { Text("Conditions tarifaires").frame(minHeight: 44).contentShape(Rectangle()) }
+            } label: { Text("Conditions tarifaires").frame(minHeight: DrivyLayout.tapTarget).contentShape(Rectangle()) }
         }
         if let policy = model.selectedPolicy {
             Button { document = SchoolPlanningDocument(title: "Procédure", text: policy.procedureText) }
-                label: { Text("Procédure").frame(minHeight: 44).contentShape(Rectangle()) }
+                label: { Text("Procédure").frame(minHeight: DrivyLayout.tapTarget).contentShape(Rectangle()) }
             Button { document = SchoolPlanningDocument(title: "Annulation", text: policy.cancellationPolicyText) }
-                label: { Text("Annulation").frame(minHeight: 44).contentShape(Rectangle()) }
+                label: { Text("Annulation").frame(minHeight: DrivyLayout.tapTarget).contentShape(Rectangle()) }
         }
     }
     @ViewBuilder private var reviewFields: some View {
@@ -462,7 +462,7 @@ struct SchoolPlanningFeedback: View {
                     .id(Self.errorAnchor)
             }
             .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
+            .drivyClearRow()
         }
         // Une écriture confirmée ferme la feuille : son bandeau ne s’insère pas pendant la descente.
         if let success = model.successMessage, !model.writeConfirmed {

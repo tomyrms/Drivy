@@ -238,8 +238,7 @@ struct SchoolTrainingProgressSection: View {
                     .foregroundStyle(DrivyTheme.text)
             }
             Button("Voir la leçon") { open(item.sourceLessonId) }
-                .font(.subheadline.weight(.semibold))
-                .frame(minHeight: 44)
+                .buttonStyle(.drivyText)
                 .accessibilityIdentifier("progress-open-lesson")
         }
         .multilineTextAlignment(.leading)
@@ -273,7 +272,7 @@ struct SchoolTrainingProgressSection: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(DrivyTheme.accent)
                 .multilineTextAlignment(.leading)
-                .frame(minHeight: 44, alignment: .leading)
+                .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
         }
     }
 }
@@ -329,7 +328,7 @@ private struct SchoolProgressRow: View {
             }
         }
         .padding(.vertical, DrivySpacing.s)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
@@ -351,12 +350,9 @@ private struct SchoolLastLessonLine: View {
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(DrivyTheme.muted)
-                .accessibilityHidden(true)
+            DrivyRowChevron()
         }
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }

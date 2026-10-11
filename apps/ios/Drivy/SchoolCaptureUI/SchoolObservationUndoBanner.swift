@@ -88,7 +88,7 @@ struct SchoolObservationUndoBanner: View {
     @ViewBuilder private var undoButton: some View {
         if recorder.undoState == .none {
             Button { Task { _ = await recorder.undoLastAdded(id: receipt.id) } } label: {
-                Text("Annuler").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                Text("Annuler").frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget).contentShape(Rectangle())
             }
                 .disabled(!recorder.canUndo(receipt.id))
                 .accessibilityIdentifier("live-observation-undo")
@@ -97,7 +97,7 @@ struct SchoolObservationUndoBanner: View {
                 .foregroundStyle(DrivyTheme.accent)
         } else if recorder.undoState == .pending && recorder.canRetry {
             Button { Task { await recorder.retry() } } label: {
-                Text("Réessayer").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                Text("Réessayer").frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget).contentShape(Rectangle())
             }
                 .buttonStyle(.plain)
                 .font(.subheadline.weight(.semibold))
@@ -110,7 +110,7 @@ struct SchoolObservationUndoBanner: View {
             Image(systemName: "xmark")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(DrivyTheme.muted)
-                .frame(width: 44, height: 44)
+                .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -104,15 +104,8 @@ struct DrivySectionHeader: View {
                 .accessibilityAddTraits(.isHeader)
             if !stacked { Spacer(minLength: 0) }
             if let actionTitle, let action {
-                Button(action: action) {
-                    Text(actionTitle)
-                        .font(.subheadline.weight(.semibold))
-                        .multilineTextAlignment(.leading)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(DrivyTheme.accent)
+                Button(actionTitle, action: action)
+                    .buttonStyle(.drivyText)
             }
         }
     }
@@ -123,6 +116,9 @@ struct DrivySectionHeader: View {
 /// Selected, the circle takes the surface so it stays visible on the soft-accent
 /// row that carries the selection.
 struct DrivyAvatar: View {
+    /// A person at the head of a page: the learner's dossier, the account of the Profile tab.
+    static let pageSize: CGFloat = 52
+
     let name: String
     var size: CGFloat = 44
     var isSelected = false
@@ -146,6 +142,15 @@ struct DrivyAvatar: View {
     }
 }
 
+/// Where a shared row sits. On a reading page (`page`) rows breathe: headline, 64 pt, Drivy pressed highlight.
+/// Inside a native grouped List or Form (`grouped`, set by `drivyFormRows()`) they follow the Settings rhythm of
+/// the NavigationLinks next to them: body text, 44 pt, the system cell highlight and the system chevron.
+enum DrivyRowContext { case page, grouped }
+
+extension EnvironmentValues {
+    @Entry var drivyRowContext: DrivyRowContext = .page
+}
+
 /// Navigation row used for settings, school actions and dossier sections:
 /// leading symbol, title, optional detail, chevron. Full-width hit area.
 /// At accessibility text sizes the badge moves under the text and the symbol
@@ -158,6 +163,7 @@ struct DrivyNavigationRow: View {
     var badge: DrivyStatusBadge? = nil
     let action: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.drivyRowContext) private var context
     @ScaledMetric(relativeTo: .title3) private var symbolWidth: CGFloat = 28
 
     init(
@@ -175,38 +181,56 @@ struct DrivyNavigationRow: View {
     }
 
     var body: some View {
+        if context == .grouped {
+            // The automatic style gives the native full-cell highlight; every color below is explicit.
+            Button(action: action) { label }
+        } else {
+            Button(action: action) { label }
+                .buttonStyle(DrivyRowButtonStyle())
+        }
+    }
+
+    private var label: some View {
         let stacked = typeSize.isAccessibilitySize
-        Button(action: action) {
-            HStack(alignment: stacked ? .firstTextBaseline : .center, spacing: DrivySpacing.m) {
-                if let symbol {
-                    Image(systemName: symbol)
-                        .font(.title3.weight(.medium))
-                        .symbolRenderingMode(.monochrome)
-                        .foregroundStyle(DrivyTheme.muted)
-                        .frame(width: symbolWidth)
-                        .accessibilityHidden(true)
-                }
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    Text(title).font(.headline).foregroundStyle(DrivyTheme.text)
-                    if let detail {
-                        Text(detail).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    }
-                    if stacked, let badge { badge.padding(.top, DrivySpacing.xxs) }
-                }
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: DrivySpacing.xs)
-                if !stacked, let badge { badge }
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.textTertiary)
+        let grouped = context == .grouped
+        return HStack(alignment: stacked ? .firstTextBaseline : .center, spacing: grouped ? DrivySpacing.s : DrivySpacing.m) {
+            if let symbol {
+                Image(systemName: symbol)
+                    .font(.title3.weight(.medium))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(DrivyTheme.muted)
+                    .frame(width: symbolWidth)
                     .accessibilityHidden(true)
             }
-            .padding(.vertical, DrivySpacing.m)
-            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-            .contentShape(Rectangle())
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(title).font(grouped ? .body : .headline).foregroundStyle(DrivyTheme.text)
+                if let detail {
+                    Text(detail).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                }
+                if stacked, let badge { badge.padding(.top, DrivySpacing.xxs) }
+            }
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: DrivySpacing.xs)
+            if !stacked, let badge { badge }
+            DrivyRowChevron()
         }
-        .buttonStyle(DrivyRowButtonStyle())
+        .padding(.vertical, grouped ? DrivySpacing.xs : DrivySpacing.m)
+        .frame(maxWidth: .infinity, minHeight: grouped ? DrivyLayout.tapTarget : 64, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
+/// The chevron that says « opens »: Drivy's on a reading page, the system's own inside a grouped list,
+/// so it never differs from a NavigationLink in the same section.
+struct DrivyRowChevron: View {
+    @Environment(\.drivyRowContext) private var context
+
+    var body: some View {
+        Image(systemName: "chevron.forward")
+            .font(context == .grouped ? .footnote.weight(.semibold) : .caption.weight(.semibold))
+            .foregroundStyle(context == .grouped ? DrivyTheme.listChevron : DrivyTheme.textTertiary)
+            .accessibilityHidden(true)
     }
 }
 
@@ -327,15 +351,8 @@ struct DrivyEmptyState: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let actionTitle, let action {
-                    Button(action: action) {
-                        Text(actionTitle)
-                            .font(.subheadline.weight(.semibold))
-                            .multilineTextAlignment(.leading)
-                            .frame(minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(DrivyTheme.accent)
+                    Button(actionTitle, action: action)
+                        .buttonStyle(.drivyText)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -543,7 +560,7 @@ struct DrivyRetryButton: View {
             Label(title, systemImage: "arrow.clockwise")
                 .font(.subheadline.weight(.semibold))
                 .padding(.horizontal, DrivySpacing.s)
-                .frame(minHeight: 44)
+                .frame(minHeight: DrivyLayout.tapTarget)
                 .overlay {
                     RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
                         .strokeBorder(DrivyTheme.danger, lineWidth: 1)
@@ -590,7 +607,7 @@ struct DrivyKeyValueRow: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, DrivySpacing.xs)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(value)
@@ -613,7 +630,7 @@ struct DrivyLoadingState: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, DrivySpacing.s)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
     }

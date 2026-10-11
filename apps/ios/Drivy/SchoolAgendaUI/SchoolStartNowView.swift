@@ -414,8 +414,7 @@ struct SchoolStartNowView: View {
                     Button("Changer") {
                         withAnimation(DrivyMotion.step(reduceMotion)) { launch.changeLearner() }
                     }
-                    .font(.subheadline.weight(.semibold))
-                    .frame(minHeight: 44)
+                    .buttonStyle(.drivyText)
                     .disabled(launch.isBusy)
                     .accessibilityLabel("Changer d’élève")
                     .accessibilityIdentifier("start-now-learner")
@@ -449,7 +448,7 @@ struct SchoolStartNowView: View {
                         ForEach(form.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
                     }
                     .pickerStyle(.menu).labelsHidden()
-                    .frame(minHeight: 44).contentShape(Rectangle())
+                    .frame(minHeight: DrivyLayout.tapTarget).contentShape(Rectangle())
                 }
                 // Les formations de l’élève se relisent : le choix attend leur réponse.
                 .disabled(form.isLoading)
@@ -458,7 +457,7 @@ struct SchoolStartNowView: View {
             // Le lieu se remplit avec celui de la dernière leçon de l’élève : on n’écrit pas dessus pendant la lecture.
             SchoolMeetingPointField(text: meetingPoint)
                 .padding(.vertical, DrivySpacing.s)
-                .frame(minHeight: 44)
+                .frame(minHeight: DrivyLayout.tapTarget)
                 .disabled(form.isLoading)
             if form.meetingPointTooLong {
                 DrivyFormMessage(text: "Raccourcis le lieu à 500 caractères.", tone: .danger)
@@ -481,7 +480,7 @@ struct SchoolStartNowView: View {
                 .multilineTextAlignment(typeSize.isAccessibilitySize ? .leading : .trailing)
         }
         .padding(.vertical, DrivySpacing.s)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
     }
 
     /// Accord de l’élève, puis l’état de cet appareil seulement s’il empêchera l’enregistrement.
@@ -508,8 +507,7 @@ struct SchoolStartNowView: View {
             Button("Ouvrir Réglages", systemImage: "gearshape") {
                 if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
             }
-            .font(.subheadline.weight(.semibold))
-            .frame(minHeight: 44)
+            .buttonStyle(.drivyText)
         }
         .accessibilityIdentifier("start-now-gps-device")
     }

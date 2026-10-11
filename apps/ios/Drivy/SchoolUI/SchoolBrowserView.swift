@@ -18,7 +18,7 @@ struct SchoolBrowserView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             searchableMaster
-            .background(DrivyTheme.canvas)
+            .background(DrivyTheme.surface)
             .navigationTitle("Élèves")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -155,7 +155,7 @@ struct SchoolChooserSheet: View {
                 .navigationTitle("Changer d’école")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .confirmationAction) { Button("Fermer", action: close) }
+                    ToolbarItem(placement: .cancellationAction) { Button("Fermer", action: close) }
                 }
         }
         .tint(DrivyTheme.accent)

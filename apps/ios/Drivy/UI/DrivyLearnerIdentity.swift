@@ -46,7 +46,7 @@ struct DrivyLearnerIdentity<Accessory: View>: View {
             : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.s))
         return layout {
             if !stacked {
-                DrivyAvatar(name: name, size: variant == .page ? 48 : 36)
+                DrivyAvatar(name: name, size: variant == .page ? DrivyAvatar.pageSize : 36)
             }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(name)

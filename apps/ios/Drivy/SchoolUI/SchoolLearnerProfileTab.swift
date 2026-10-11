@@ -106,25 +106,32 @@ struct SchoolLearnerProfileTab: View {
 
     /// Identité, permis, puis seulement ce qui attend une réponse.
     @ViewBuilder private var content: some View {
+        // Le même en-tête que le Profil du moniteur : posé sur le fond, pas dans une cellule.
         Section {
             SchoolAccountHeading(workspace: workspace, isAuthenticated: true, detail: schoolNote, showsRoles: false)
-                .padding(.vertical, DrivySpacing.xs)
-            if let learner, makeLearnerProfile != nil {
-                // Comme dans le dossier vu par le moniteur : les informations attendent repliées, sur place.
-                DisclosureGroup(isExpanded: $showsInformation) {
-                    informationDetails(learner)
-                } label: {
-                    Text("Mes informations")
-                        .foregroundStyle(DrivyTheme.text)
-                        .frame(minHeight: 44, alignment: .leading)
-                }
-                .accessibilityIdentifier("profile-my-information")
-            } else if let openProfile = account?.openProfile {
-                SchoolProfileLinkRow(title: "Mes informations", action: openProfile)
-                    .accessibilityIdentifier("profile-open-my-information")
-            }
         }
-        .drivyFormRows()
+        .listRowInsets(EdgeInsets(top: DrivySpacing.s, leading: DrivySpacing.m, bottom: DrivySpacing.s, trailing: DrivySpacing.m))
+        .drivyClearRow()
+        if (learner != nil && makeLearnerProfile != nil) || account?.openProfile != nil {
+            Section {
+                if let learner, makeLearnerProfile != nil {
+                    // Comme dans le dossier vu par le moniteur : les informations attendent repliées, sur place.
+                    DisclosureGroup(isExpanded: $showsInformation) {
+                        informationDetails(learner)
+                    } label: {
+                        Text("Mes informations")
+                            .foregroundStyle(DrivyTheme.text)
+                            .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("profile-my-information")
+                } else if let openProfile = account?.openProfile {
+                    DrivyNavigationRow(title: "Mes informations", action: openProfile)
+                        .listRowInsets(rowInsets)
+                        .accessibilityIdentifier("profile-open-my-information")
+                }
+            }
+            .drivyFormRows()
+        }
         Section {
             permits
         } header: {
@@ -132,9 +139,13 @@ struct SchoolLearnerProfileTab: View {
         }
         .drivyFormRows()
         if let attention = consentAttention {
+            // Ce qui attend une réponse se lit comme partout : un badge d’alerte sur la ligne qui y mène.
             Section {
-                SchoolProfileLinkRow(title: "Accord GPS", detail: attention) { path.append(.settings) }
-                    .accessibilityIdentifier("profile-gps-consent-attention")
+                DrivyNavigationRow(title: "Accord GPS", badge: DrivyStatusBadge(title: attention, symbol: "exclamationmark.triangle", tone: .warning)) {
+                    path.append(.settings)
+                }
+                .listRowInsets(rowInsets)
+                .accessibilityIdentifier("profile-gps-consent-attention")
             }
             .drivyFormRows()
         }
@@ -152,9 +163,7 @@ struct SchoolLearnerProfileTab: View {
             }
             if let openProfile = account?.openProfile {
                 Button("Modifier mes informations", action: openProfile)
-                    .font(.subheadline.weight(.semibold))
-                    .frame(minHeight: 44)
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.drivyText)
                     .accessibilityIdentifier("profile-open-my-information")
             }
         }
@@ -167,6 +176,9 @@ struct SchoolLearnerProfileTab: View {
         if information == nil { information = makeLearnerProfile?(learner) }
         await information?.load(preserveDraft: false)
     }
+
+    /// Les rangées partagées portent leur espacement vertical : la liste ne le double pas.
+    private var rowInsets: EdgeInsets { EdgeInsets(top: 0, leading: DrivySpacing.m, bottom: 0, trailing: DrivySpacing.m) }
 
     /// Sous le nom de l’école, seulement quand elle n’est pas en activité.
     private var schoolNote: String? {
@@ -203,7 +215,7 @@ struct SchoolLearnerProfileTab: View {
                 .font(.subheadline)
                 .foregroundStyle(DrivyTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
                 .accessibilityIdentifier("profile-no-permit")
         }
     }
@@ -367,7 +379,7 @@ struct SchoolLearnerPermitRow: View {
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
         .padding(.vertical, DrivySpacing.xxs)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(spokenSummary)
@@ -377,40 +389,6 @@ struct SchoolLearnerPermitRow: View {
         switch summary {
         case .loading: "Chargement"
         case .ready(let text): text
-        }
-    }
-}
-
-/// Une ligne qui ouvre quelque chose (feuille ou écran) : titre, détail éventuel à droite, chevron.
-struct SchoolProfileLinkRow: View {
-    let title: String
-    var detail: String? = nil
-    let action: () -> Void
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: DrivySpacing.s) {
-                let layout = typeSize.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xxs))
-                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.s))
-                layout {
-                    Text(title).foregroundStyle(DrivyTheme.text)
-                    if !typeSize.isAccessibilitySize { Spacer(minLength: DrivySpacing.xs) }
-                    if let detail {
-                        Text(detail).foregroundStyle(DrivyTheme.muted)
-                    }
-                }
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.textTertiary)
-                    .accessibilityHidden(true)
-            }
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .contentShape(Rectangle())
         }
     }
 }
