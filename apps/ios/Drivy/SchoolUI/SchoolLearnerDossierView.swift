@@ -19,6 +19,9 @@ struct SchoolLearnerDossierView: View {
     @State private var profileScopeKey = ""
     @State private var profileCreationFailed = false
     @State private var showsInformation = false
+    /// Informations requises qui manquent au profil, telles que l’école les nomme ; vide tant que rien n’est lu.
+    @State private var missingFields: [String] = []
+    @Environment(SchoolRequiredActionStore.self) private var requiredActions: SchoolRequiredActionStore?
     /// The permit filtered in Lessons and Progression; `nil` shows them all. Held here so the choice
     /// is shared by the two sections of the same learner.
     @State private var permit: UUID?
@@ -231,6 +234,7 @@ struct SchoolLearnerDossierView: View {
     @ViewBuilder private func attention(_ learner: SchoolLearner) -> some View {
         if makeLearnerProfile != nil {
             let model = currentProfile
+            if !missingFields.isEmpty, let model, model.pending == nil { missingInformation(model) }
             if let model, model.pending != nil {
                 verifyButton(model).padding(.bottom, DrivySpacing.xs)
             }
@@ -243,6 +247,39 @@ struct SchoolLearnerDossierView: View {
                     .padding(.bottom, DrivySpacing.m)
             }
         }
+    }
+
+    /// Ce qui manque, pourquoi, et le geste pour le renseigner : une seule ligne dans la carte. Qui ne peut
+    /// pas modifier ces champs lit à qui il revient de le faire, sans bouton qui échouerait.
+    private func missingInformation(_ model: SchoolProfileWorkspace) -> some View {
+        let mine = model.hasFullAccess ? missingFields : missingFields.filter(SchoolRequiredActionRules.instructorEditableFields.contains)
+        let names = missingFields.map(SchoolRequiredActionRules.fieldName).joined(separator: ", ")
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xxs))
+                             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.xs))
+        return layout {
+            if !mine.isEmpty && !stacked { DrivyActionDot() }
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text("À renseigner pour planifier : \(names)")
+                    .font(.subheadline)
+                    .foregroundStyle(DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                if mine.isEmpty {
+                    Text("À compléter par l’élève ou l’administration.")
+                        .font(.footnote)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if !mine.isEmpty {
+                Button("Compléter") { editingProfile = model }
+                    .buttonStyle(.drivyText)
+                    .accessibilityIdentifier("learner-complete-profile")
+            }
+        }
+        .padding(.bottom, DrivySpacing.s)
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder private func details(_ learner: SchoolLearner) -> some View {
@@ -363,12 +400,26 @@ struct SchoolLearnerDossierView: View {
         guard editingProfile == nil, let learner = workspace.learner, learner.id == workspace.selectedLearnerID else { return }
         if let model = profileModel, profileScopeKey == scopeKey {
             await model.load(preserveDraft: false)
+            await readMissingFields(model, learner: learner)
             return
         }
         profileModel?.invalidate()
+        missingFields = []
         profileScopeKey = scopeKey
         profileModel = makeLearnerProfile?(learner)
         profileCreationFailed = profileModel == nil
-        if let profileModel { await profileModel.load(preserveDraft: false) }
+        if let profileModel {
+            await profileModel.load(preserveDraft: false)
+            await readMissingFields(profileModel, learner: learner)
+        }
+    }
+
+    /// Relu avec le profil, donc après chaque modification : la ligne et les indicateurs de la liste suivent
+    /// l’état réel. Rien ne manque : l’action de ce dossier est résolue, où qu’elle soit affichée.
+    private func readMissingFields(_ model: SchoolProfileWorkspace, learner: SchoolLearner) async {
+        let requested = scopeKey
+        guard let fields = await model.missingRequiredFields(), requested == scopeKey, !Task.isCancelled else { return }
+        missingFields = fields
+        if fields.isEmpty { requiredActions?.resolve(.completeLearnerProfile, entityID: learner.id) }
     }
 }
