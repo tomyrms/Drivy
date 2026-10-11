@@ -658,7 +658,7 @@ struct DrivyReplayScrubber: View {
                     .background(DrivyTheme.surfaceMuted, in: Circle())
                     .overlay(Circle().strokeBorder(DrivyTheme.controlBorder, lineWidth: 1.5))
                     .frame(width: DrivyLayout.tapTarget, height: pinArea)
-                    .contentShape(Rectangle())
+                    .drivyMenuLabelShape(Circle())
             }
             .buttonStyle(.plain)
             // The adjustable timeline and the full observation list remain the spoken paths.

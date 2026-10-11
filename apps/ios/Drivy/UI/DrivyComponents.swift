@@ -646,6 +646,12 @@ extension View {
             .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.groupedBlock, style: .continuous))
     }
 
+    /// Shape of a menu's label, for the tap and for the system's own animation. When a menu closes, iOS
+    /// settles back onto the label's shape: left rectangular around a round bubble, a square flashes around it.
+    func drivyMenuLabelShape(_ shape: some Shape) -> some View {
+        contentShape([.interaction, .contextMenuPreview, .hoverEffect], shape)
+    }
+
     /// Content column of a page built from grouped blocks: the side margin of a native grouped list, so its
     /// blocks line up with the sections of Profile.
     func drivyGroupedPageContent(maxWidth: CGFloat = DrivyLayout.formColumn) -> some View {

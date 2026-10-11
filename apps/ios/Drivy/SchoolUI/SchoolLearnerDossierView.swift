@@ -198,7 +198,7 @@ struct SchoolLearnerDossierView: View {
                 .frame(width: 32, height: 32)
                 .background(DrivyTheme.surfaceMuted, in: Circle())
                 .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
-                .contentShape(Rectangle())
+                .drivyMenuLabelShape(Circle())
         }
         .accessibilityLabel("Contacter \(learner.displayName)")
         .accessibilityIdentifier("learner-profile-actions")
