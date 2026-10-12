@@ -140,6 +140,16 @@ struct SchoolLearnerProfileTab: View {
             Text(trainings.count == 1 ? "Mon permis" : "Mes permis").drivyFormSectionHeader()
         }
         .drivyFormRows()
+        if let resumeOnboarding = account?.resumeOnboarding {
+            // L’accueil laissé en route : la ligne que le point de l’onglet désigne, avant tout le reste à faire.
+            Section {
+                DrivyNavigationRow(title: "Reprendre l’accueil", badge: DrivyStatusBadge(title: "À terminer", tone: .accent),
+                                   action: resumeOnboarding)
+                    .listRowInsets(rowInsets)
+                    .accessibilityIdentifier("profile-resume-onboarding")
+            }
+            .drivyFormRows()
+        }
         if let attention = consentAttention {
             // Ce qui attend une réponse se lit comme partout : un badge d’alerte sur la ligne qui y mène.
             Section {

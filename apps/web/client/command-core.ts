@@ -15,7 +15,7 @@ export type CommandKind =
   | 'createCommercialTerms' | 'createServiceProduct'
   | 'createTraining' | 'createAssignment' | 'transitionTraining' | 'endAssignment' | 'archiveLearner' | 'restoreLearner' | 'deactivateMember'
   | 'updateModules' | 'recordPermitCheck'
-  | 'saveObservationThemes'
+  | 'saveObservationThemes' | 'updateAdministrativeProfile'
   | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
 
@@ -54,6 +54,7 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   deactivateMember: { operationType: 'DEACTIVATE_MEMBER', resourceType: 'Member', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait de l’accès d’un membre' },
   updateModules: { operationType: 'UPDATE_SCHOOL_MODULES', resourceType: 'School', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Modification des modules de l’école' },
   recordPermitCheck: { operationType: 'RECORD_PERMIT_CHECK', resourceType: 'PermitCheck', target: 'created', method: 'POST', expectedStatus: 200, label: 'Contrôle du permis' },
+  updateAdministrativeProfile: { operationType: 'UPDATE_ADMINISTRATIVE_PROFILE', resourceType: 'AdministrativeProfile', target: 'resource', method: 'PATCH', expectedStatus: 200, label: 'Complétion du profil d’un élève' },
   saveObservationThemes: { operationType: 'SAVE_OBSERVATION_THEMES', resourceType: 'ObservationThemeSettings', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Enregistrement des signalements' },
   createAvailabilityRule: { operationType: 'CREATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ajout d’une disponibilité' },
   updateAvailabilityRule: { operationType: 'UPDATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'PUT', expectedStatus: 200, label: 'Modification d’une disponibilité' },
@@ -190,6 +191,9 @@ export function commandMessage(code: string): string {
     MODULE_NOT_READY: 'Ce changement n’est pas encore disponible.',
     POLICY_REVIEW_REQUIRED: 'Adoptez d’abord les textes d’information et de conservation de l’école.',
     SCHOOL_ALREADY_ACTIVE: 'Cette école est déjà active.',
+    PROFILE_POLICY_CHANGED: 'Les informations demandées par l’école ont changé. Rechargez le dossier puis recommencez.',
+    PROFILE_FIELD_FORBIDDEN: 'Vos accès ne permettent pas de modifier ces informations.',
+    INVALID_BIRTH_DATE: 'La date de naissance ne peut pas être future.',
     SCHOOL_ARCHIVED: 'Cette école est archivée et ne peut plus être modifiée.',
     SETUP_NOT_INITIALIZED: 'Le provisionnement de cette école doit d’abord être complété.',
     INVALID_TIME_ZONE: 'Le fuseau horaire de l’école est invalide.',

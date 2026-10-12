@@ -4,7 +4,7 @@
  * Anything else is refused before an access token is ever used: this is not an open proxy.
  */
 export type SchoolMethod = 'GET' | 'POST' | 'PATCH' | 'PUT';
-type QueryKey = 'limit' | 'cursor' | 'status' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to';
+type QueryKey = 'limit' | 'cursor' | 'status' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to' | 'action';
 export interface SchoolRoute {
   readonly method: SchoolMethod;
   /** Literal segments after the school identifier; ':id' stands for one UUID. */
@@ -65,6 +65,10 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   // Dossier de l'élève, équipe et module GPS (contrats de la branche claude/api-corrections ; noms de champs à confirmer).
   { method: 'POST', segments: ['members', ':id', 'deactivate'], ifMatch: true, bodyLimit: 8_192 },
   { method: 'POST', segments: ['learners', ':id', 'archive'], ifMatch: true, bodyLimit: 8_192 },
+  // Profil à compléter : ce qui manque avant une leçon, et la saisie de ces seuls champs par l'administration.
+  { method: 'GET', segments: ['learners', ':id', 'action-readiness'], query: ['action'] },
+  { method: 'GET', segments: ['learners', ':id', 'administrative-profile'] },
+  { method: 'PATCH', segments: ['learners', ':id', 'administrative-profile'], ifMatch: true, bodyLimit: 4_096 },
   { method: 'POST', segments: ['learners', ':id', 'restore'], ifMatch: true, bodyLimit: 8_192 },
   { method: 'POST', segments: ['trainings', ':id', 'transition'], ifMatch: true, bodyLimit: 8_192 },
   { method: 'POST', segments: ['trainings', ':id', 'assignments', ':id', 'end'], ifMatch: true, bodyLimit: 2_048 },
@@ -88,6 +92,7 @@ const queryRules: Record<QueryKey, RegExp> = {
   cursor: /^[A-Za-z0-9_-]{1,6000}$/,
   noticeVersionId: uuid,
   learnerId: uuid,
+  action: /^(?:ENTER|PLAN_LESSON)$/,
   status: /^(?:ACTIVE|ARCHIVED|ALL)$/,
   trainingId: uuid,
   instructorMembershipId: uuid,

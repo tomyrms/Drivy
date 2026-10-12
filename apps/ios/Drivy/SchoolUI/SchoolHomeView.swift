@@ -278,6 +278,10 @@ struct SchoolHomeView: View {
             Task { await workspace.loadTrainings(); await workspace.loadRemainingTrainings() }
         }
         .task(id: learnerConsentKey) { await prepareLearnerConsent() }
+        // L’accueil de l’élève laissé en route allume Profil, où « Reprendre l’accueil » le rouvre.
+        .onChange(of: account?.resumeOnboarding != nil, initial: true) { _, canResume in
+            requiredActions.replace(.resumeOnboarding, with: SchoolRequiredActionRules.onboarding(canResume: canResume, isLearner: true))
+        }
         // Ce que la ligne « Accord GPS » du Profil dit, le point de l’onglet le dit : réponse donnée, il part aussitôt.
         // Tant que rien n’a été lu, rien n’est affirmé.
         .onChange(of: "\(learnerConsent?.isLoading ?? true):\(learnerConsentAttention ?? "")", initial: true) { _, _ in
