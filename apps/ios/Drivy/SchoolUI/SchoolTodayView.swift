@@ -273,13 +273,15 @@ struct SchoolTodayView: View {
                 if instructs { startNowButton(prominent: true) }
             }
             if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
-            unfinishedList(now: now)
+            unfinishedList(now: now, excluding: featured?.id)
         }
     }
 
     /// Les leçons restées à terminer depuis un autre jour, sous la journée : la ligne dit le jour, son mot
     /// « À terminer » dit quoi faire, et la fiche s’ouvre pour la finir.
-    @ViewBuilder private func unfinishedList(now: Date) -> some View {
+    /// La leçon déjà en tête du panneau n’y est pas répétée.
+    @ViewBuilder private func unfinishedList(now: Date, excluding featuredID: UUID?) -> some View {
+        let unfinished = unfinished.filter { $0.id != featuredID }
         if !unfinished.isEmpty {
             VStack(spacing: 0) {
                 Divider().overlay(DrivyTheme.border)
@@ -324,7 +326,8 @@ struct SchoolTodayView: View {
     private func nextLine(_ lesson: SchoolLesson, extra: Int, now: Date) -> some View {
         let moment = SchoolTodayPresentation.moment(for: lesson, now: now)
         return Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
-            HStack(alignment: .center, spacing: DrivySpacing.m) {
+            // Heure, nom, pastille et chevron sur la première ligne, comme la leçon du dessus.
+            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.m) {
                 Text(startTime(lesson))
                     .font(.headline.monospacedDigit())
                     .foregroundStyle(DrivyTheme.text)
