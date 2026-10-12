@@ -186,6 +186,8 @@ struct SchoolHomeView: View {
                         schoolName: workspace.school?.name ?? workspace.membership?.schoolName, chooseSchool: chooseSchoolAction)
                         .navigationTitle("Aujourd’hui")
                         .navigationBarTitleDisplayMode(.inline)
+                        // La carte va jusqu’en haut : aucun fond ni flou de barre ne la coupe en rectangle.
+                        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
                 }
             }
             .toolbar { staffToolbar }

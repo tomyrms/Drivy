@@ -81,6 +81,7 @@ struct SchoolTodayView: View {
                             // Le panneau commence sous le titre flottant, comme il commençait sous la barre.
                             .safeAreaPadding(.top, DrivyLayout.tapTarget)
                             .frame(width: DrivyMapLayout.sidebarWidth)
+                            .scrollEdgeEffectHidden(true, for: .top)
                             .background(DrivyTheme.canvas)
                         }
                 } else {
@@ -91,6 +92,8 @@ struct SchoolTodayView: View {
                                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
                         }
                         .scrollBounceBehavior(.basedOnSize)
+                        // Le panneau défile seul : son effet de bord ne remonte pas sous la barre du haut.
+                        .scrollEdgeEffectHidden(true, for: .top)
                         .frame(maxWidth: TodayLayout.bottomPanelMaxWidth)
                         .frame(height: min(cardHeight > 0 ? cardHeight : maxHeight, maxHeight))
                     }
