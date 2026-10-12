@@ -147,6 +147,8 @@ final class AppCoverPresenter {
             // Au-dessus des feuilles et du rideau de départ (lui au niveau alerte − 1) ; l’invite Face ID du système reste au-dessus.
             created.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue + 1)
             created.rootViewController = controller
+            // Même thème que l’app (choix de Paramètres), comme le rideau de départ.
+            DrivyAppearance.apply(to: created)
             host = controller
             window = created
         }

@@ -542,7 +542,8 @@ private struct SchoolTrainingContent: View {
     private func retry(_ models: [SchoolTrainingWorkspace]) {
         Task { await SchoolLessonFeed.together(models) { await $0.load() } }
     }
-    /// Segmenté ; en très grand texte, un menu qui affiche la section en cours.
+    /// Segmenté et centré sur la colonne : plafonné à 360 pt, il ne colle plus au bord gauche dès que la page
+    /// est plus large (grands iPhone, iPad). En très grand texte, un menu qui affiche la section en cours.
     @ViewBuilder private var sectionPicker: some View {
         if dynamicTypeSize.isAccessibilitySize {
             sections.pickerStyle(.menu)
@@ -550,7 +551,7 @@ private struct SchoolTrainingContent: View {
         } else {
             sections.pickerStyle(.segmented)
                 .frame(maxWidth: TrainingLayout.pickerMaxWidth)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
     }
     private var sections: some View {

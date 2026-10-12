@@ -106,6 +106,7 @@ struct SchoolProfileTabView: View {
                 Text("Compte").drivyFormSectionHeader()
             }
             .drivyFormRows()
+            DrivyAppearanceSection()
             if appLock?.biometryName != nil {
                 Section {
                     account.lockRow()

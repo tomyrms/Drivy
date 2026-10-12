@@ -46,6 +46,8 @@ import UIKit
         host.view.accessibilityViewIsModal = true
         let window = UIWindow(windowScene: scene)
         window.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue - 1)
+        // Fenêtre à part : elle prend le thème choisi dans Paramètres, comme celle de l’app.
+        DrivyAppearance.apply(to: window)
         window.rootViewController = host
         window.alpha = 0
         window.isHidden = false

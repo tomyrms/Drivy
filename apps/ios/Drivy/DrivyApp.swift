@@ -10,6 +10,8 @@ struct DrivyApp: App {
     /// Fenêtre du verrou et du masque de confidentialité, au-dessus de toute feuille.
     @State private var cover: AppCoverPresenter
     @State private var offersAppLock = false
+    /// Thème choisi dans Paramètres : posé sur les fenêtres dès le lancement, puis à chaque choix.
+    @AppStorage(DrivyAppearance.storageKey) private var appearance: DrivyAppearance = .automatic
     private let configuration: AppConfiguration?
     @Environment(\.scenePhase) private var scenePhase
 
@@ -33,23 +35,28 @@ struct DrivyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            #if DEBUG && targetEnvironment(simulator)
-            if let screen = ProcessInfo.processInfo.environment["DRIVY_VISUAL_SCREEN"] {
-                if screen == "design-system" || screen == "skeletons" {
-                    DrivyDesignSystemGallery(loadingOnly: screen == "skeletons")
-                        .environment(\.locale, Locale(identifier: "fr_CH"))
-                        .dynamicTypeSize(ProcessInfo.processInfo.environment["DRIVY_VISUAL_LARGE_TEXT"] == "1" ? .accessibility3 : .large)
-                        .tint(DrivyTheme.accent)
-                } else {
-                    SchoolVisualReview(screen: screen)
-                }
-            } else {
-                application
-            }
-            #else
-            application
-            #endif
+            Group { content }
+                .onChange(of: appearance, initial: true) { _, value in DrivyAppearance.apply(value) }
         }
+    }
+
+    @ViewBuilder private var content: some View {
+        #if DEBUG && targetEnvironment(simulator)
+        if let screen = ProcessInfo.processInfo.environment["DRIVY_VISUAL_SCREEN"] {
+            if screen == "design-system" || screen == "skeletons" {
+                DrivyDesignSystemGallery(loadingOnly: screen == "skeletons")
+                    .environment(\.locale, Locale(identifier: "fr_CH"))
+                    .dynamicTypeSize(ProcessInfo.processInfo.environment["DRIVY_VISUAL_LARGE_TEXT"] == "1" ? .accessibility3 : .large)
+                    .tint(DrivyTheme.accent)
+            } else {
+                SchoolVisualReview(screen: screen)
+            }
+        } else {
+            application
+        }
+        #else
+        application
+        #endif
     }
 
     /// L’offre du verrou cède le pas aux feuilles ouvertes par la connexion (« J’ai un code », lien d’invitation,
