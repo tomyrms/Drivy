@@ -30,3 +30,26 @@ margins L13.9 R13.9 T3.0 B5.0 · bbox fill 0.494
 · INFO [complexity] 160 anchor points (library median 53.0, p75 95.5). Check every point earns its place.
 · INFO [off-centre-y] Vertical margins differ (top 3.0, bottom 5.0). Remember the optical centre sits slightly above the geometric centre.
 production-readiness score: 98/100 (heuristic)
+
+=== moving-off.svg  (1250 bytes)
+viewBox 0 0 64 64 · aspect 1.0 (square)
+colours 1: #245bd6 · gradients 0 · anchors 86
+margins L6.1 R6.0 T10.6 B12.6 · bbox fill 0.516
+· INFO [off-centre-y] Vertical margins differ (top 10.6, bottom 12.6). Remember the optical centre sits slightly above the geometric centre.
+production-readiness score: 99/100 (heuristic)
+
+=== bends.svg  (1517 bytes)
+viewBox 0 0 64 64 · aspect 1.0 (square)
+colours 1: #245bd6 · gradients 0 · anchors 105
+margins L14.2 R14.2 T3.0 B5.0 · bbox fill 0.486
+· INFO [complexity] 105 anchor points (library median 53.0, p75 95.5). Check every point earns its place.
+· INFO [off-centre-y] Vertical margins differ (top 3.0, bottom 5.0). Remember the optical centre sits slightly above the geometric centre.
+production-readiness score: 98/100 (heuristic)
+
+=== eco-driving.svg  (2376 bytes)
+viewBox 0 0 64 64 · aspect 1.0 (square)
+colours 1: #245bd6 · gradients 0 · anchors 174
+margins L9.0 R9.0 T8.0 B10.0 · bbox fill 0.517
+· INFO [complexity] 174 anchor points (library median 53.0, p75 95.5). Check every point earns its place.
+· INFO [off-centre-y] Vertical margins differ (top 8.0, bottom 10.0). Remember the optical centre sits slightly above the geometric centre.
+production-readiness score: 98/100 (heuristic)

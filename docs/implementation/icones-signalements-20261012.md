@@ -1,8 +1,8 @@
-# Icônes des quatre nouveaux thèmes de « Signaler » — 12 octobre 2026
+# Icônes des sept nouveaux thèmes de « Signaler » — 12 octobre 2026
 
-« Signaler » passe de onze à quinze thèmes : **Clignotants**, **Distance de sécurité**, **Freinage** et **Changement de voie**. Ce document décrit leurs pictogrammes : trois propositions par thème, la sélection, les défauts corrigés et l'intégration. Il prolonge [la refonte du 12 octobre](icones-signaler-20261012.md), dont il reprend l'atelier, la grammaire et la grille de notes. Les onze icônes existantes ne sont pas modifiées.
+« Signaler » passe de onze à dix-huit thèmes. Quatre d'abord : **Clignotants**, **Distance de sécurité**, **Freinage** et **Changement de voie**. Puis trois, demandés par le porteur le même jour : **Démarrage**, **Virages** et **Éco-conduite**, décrits dans [Trois thèmes de plus](#trois-thèmes-de-plus). Ce document décrit leurs pictogrammes : trois propositions par thème, la sélection, les défauts corrigés et l'intégration. Il prolonge [la refonte du 12 octobre](icones-signaler-20261012.md), dont il reprend l'atelier, la grammaire et la grille de notes. Les onze icônes existantes ne sont pas modifiées.
 
-Après avoir vu les quatre retenues, le porteur a demandé trois études de plus par thème. Elles sont décrites dans [Six études par thème](#six-études-par-thème), avec une planche pour choisir par lettre. **L'icône livrée ne change pas tant qu'il n'a pas choisi.**
+Entre les deux, trois études de plus par thème (D, E, F) ont été dessinées pour les quatre premiers, sur une demande mal comprise : le porteur voulait trois thèmes, pas trois études. Elles restent comme planche de choix. Elles sont décrites dans [Six études par thème](#six-études-par-thème), avec une planche pour choisir par lettre. **L'icône livrée ne change pas tant qu'il n'a pas choisi.**
 
 ## Retenues
 
@@ -12,10 +12,13 @@ Après avoir vu les quatre retenues, le porteur a demandé trois études de plus
 | Distance de sécurité | `following-distance` | C · Barres d'écart | 3,85 | B 3,10 |
 | Freinage | `braking` | A · Témoin de frein | 4,25 | C 3,20 |
 | Changement de voie | `lane-change` | A · Par-dessus la ligne | 4,10 | C 4,00 |
+| Démarrage | `moving-off` | B · En côte | 3,85 | C 3,60 |
+| Virages | `bends` | C · Flèche de virage | 4,05 | A 3,60 |
+| Éco-conduite | `eco-driving` | A · Feuille-route | 4,15 | B 3,55 |
 
-![Les quinze thèmes ensemble](assets/icones-signalements-20261012/famille.png)
+![Les dix-huit thèmes ensemble](assets/icones-signalements-20261012/famille.png)
 
-La planche de famille relit les quinze SVG du catalogue Xcode, tels que livrés : grille à 28 pt (@2x), puis 28 px et 16 px au pixel près, en clair et en sombre Soft Charcoal. Les quatre nouveaux sont soulignés.
+La planche de famille relit les dix-huit SVG du catalogue Xcode, tels que livrés : grille à 28 pt (@2x), puis 28 px et 16 px au pixel près, en clair et en sombre Soft Charcoal. Les sept nouveaux sont soulignés.
 
 ## Besoin de chaque thème
 
@@ -179,6 +182,67 @@ python rendu.py famille
 - `--essai` écrit dans `./essai/` sans toucher au catalogue, au web ni à `selection.json`. C'est ainsi que la commande a été vérifiée ; rien n'a été appliqué.
 - La finition n'existe que pour A, C, A, A. Une autre étude sort à son tour 2, dont les traits sont déjà réglés pour valoir environ 6 en place ; elle n'a pas été vue dans la planche de famille. Après un choix, il faut regarder `famille.png` et relancer `svg_audit.py`.
 
+## Trois thèmes de plus
+
+Démarrage, Virages et Éco-conduite. Même méthode et mêmes skills que pour les quatre premiers : clichés nommés, idées en une phrase, trois propositions construites, deux tours avec un défaut nommé par dessin, rendus regardés à 64, 28 et 16 px en clair et en sombre, flou, miroir, voisinage, notes, sélection par la note, finition dans la planche de famille, `svg_audit.py`.
+
+![Propositions et notes](assets/icones-signalements-20261012/propositions-3.png)
+![Tour 1](assets/icones-signalements-20261012/tour-1-3.png)
+![Tour 2](assets/icones-signalements-20261012/tour-2-3.png)
+![Tour 3, pour une lecture involontaire](assets/icones-signalements-20261012/tour-3-3.png)
+![Voisinage](assets/icones-signalements-20261012/voisins-3.png)
+
+### Démarrage
+
+Besoin : calage, démarrage en côte, départ brusque. Le sujet est la mise en mouvement, pas la voiture ni sa vitesse. Clichés : le bouton marche-arrêt, le feu vert, le drapeau à damier. Idées écartées avant construction : le profil de voiture sur une pente (une voiture de plus, à côté de « Maîtrise du véhicule »), le bouton « start » (un interrupteur), un compteur à zéro (c'est « Vitesse »).
+
+| | Idée | Rec. | Qual. | Ident. | Petite | Intég. | Total |
+|---|---|---|---|---|---|---|---|
+| A · Départ | Le point de départ et la trace qui en part. | 3 | 4 | 4 | 4 | 3 | 3,55 |
+| **B · En côte** | Une pente et la flèche qui la monte : démarrer en côte. | 4 | 4 | 3 | 4 | 4 | **3,85** |
+| C · Clé de contact | La clé de contact, en aplat. | 3 | 4 | 2 | 5 | 4 | 3,60 |
+
+- **B retenue.** Le démarrage en côte est la difficulté qui résume le thème, et le dessin tient en deux formes jusqu'à 16 px. Pente à 1 pour 2 exactement, flèche parallèle.
+- **C** est la plus lisible en petit, mais elle dit « mettre le contact », pas « se mettre en mouvement », et beaucoup de voitures n'ont plus de clé.
+- **A** dit « aller ».
+- Défauts corrigés. A : un anneau et une flèche faisaient le symbole « ♂ » couché ; le point de départ est un disque plein. B : la queue de la flèche touchait presque la pointe de la pente à 16 px ; flèche remontée. C : une clé à anneau se lisait « mot de passe » ; tête pleine d'une clé de voiture.
+
+### Virages
+
+Besoin : vitesse d'entrée, trajectoire, regard dans la courbe. Le sujet est la courbe de la route. Clichés : le volant, la route en lacets des cartes postales. Idées écartées avant construction : les balises à chevrons (lues « suivant »), le virage avec le repère sur la trajectoire (déjà essayé pour « Placement », lu « wifi »).
+
+| | Idée | Rec. | Qual. | Ident. | Petite | Intég. | Total |
+|---|---|---|---|---|---|---|---|
+| A · La route tourne | Une route qui tourne, vue du dessus, son axe en tirets. | 4 | 3 | 4 | 3 | 4 | 3,60 |
+| B · Lacets | Une route pleine qui serpente et s'éloigne, son axe en tirets. | 3 | 3 | 3 | 2 | 4 | 2,95 |
+| **C · Flèche de virage** | La flèche courbe du panneau de virage. | 5 | 4 | 3 | 5 | 2 | **4,05** |
+
+- **C retenue.** C'est le signe que le conducteur connaît, net jusqu'à 16 px : une courbe de soixante degrés exactement, rayon 30.
+- **Sa note d'intégration est de 2**, et c'est le point à regarder. C'est une flèche de plus à côté du demi-tour de « Manœuvres » et de la flèche de « Changement de voie ». Sur planche, les trois gestes restent distincts : un crochet qui redescend, une flèche qui passe entre deux tirets, une courbe qui monte. Mais ils sont de la même espèce.
+- **A** a demandé un troisième tour, et reste un tuyau coudé. **B** est une tache en petit.
+- Défauts corrigés. A : deux bordures seules, lues « tuyau » ou « coin arrondi » ; ajout de l'axe. Avec son axe, trois quarts de cercle de même centre : le pictogramme « flux RSS » ; troisième tour, la chaussée devient un seul aplat. B : une flamme en petit ; lacets plus marqués. C : dessin trop petit, grossi par l'export ; courbe plus ample.
+
+### Éco-conduite
+
+Besoin : rapport engagé, régime moteur, lever le pied tôt (Eco-Drive suisse). Le sujet est une manière de conduire, sans objet propre. Clichés : la feuille seule, la voiture verte, la prise électrique. Idées écartées avant construction : le compte-tours à bas régime (c'est le dessin de « Vitesse »), le pied qui se lève de la pédale (la pédale n'a pas tenu pour « Freinage »), la goutte de carburant (lue « eau »).
+
+| | Idée | Rec. | Qual. | Ident. | Petite | Intég. | Total |
+|---|---|---|---|---|---|---|---|
+| **A · Feuille-route** | Une feuille dont la nervure est l'axe en tirets d'une route. | 4 | 4 | 4 | 4 | 5 | **4,15** |
+| B · Grille de vitesses | La grille du levier de vitesses, pommeau sur le rapport le plus haut. | 3 | 4 | 3 | 4 | 4 | 3,55 |
+| C · Pompe | Une pompe à essence : ce que l'on consomme. | 3 | 3 | 2 | 4 | 3 | 3,05 |
+
+- **A retenue.** La feuille dit « éco », comme le témoin des tableaux de bord ; l'axe en tirets dit « conduite » et la rattache aux icônes de route de la famille. Ce n'est donc pas la feuille seule.
+- **B** est juste pour le moniteur, puisque l'Eco-Drive commence par le rapport engagé. Mais sans libellé elle dit « boîte de vitesses ».
+- **C** dit « station-service ».
+- Défauts corrigés. A : trois tirets de 4 se fermaient à 16 px ; deux tirets plus longs, à 4,8. B : pommeau trop petit ; agrandi. C : trop d'encre ; vitre agrandie.
+
+### Finition et audit
+
+- **Virages** : dans la planche de famille, la flèche faisait une colonne de 30 de large, plus maigre que ses voisines. Même rayon et mêmes soixante degrés ; elle file plus loin après la courbe et son trait passe à 6,3, soit 6,1 en place.
+- **Démarrage** et **Éco-conduite** : aucune retouche. Elles sortent presque à l'échelle 1 (×1,03 et ×0,96) et tiennent leur place dans la planche de famille.
+- `svg_audit.py` sur les trois SVG du catalogue : `moving-off` 99, `bends` 98, `eco-driving` 98, aucun FAIL ni avertissement.
+
 ## Finition des retenues
 
 Vues dans la planche de famille, les quatre retenues ont reçu une passe de finition. Elle ne change pas l'idée : seulement la graisse, la taille optique et la propreté de la géométrie. Ce n'est pas un troisième tour d'idées, mais c'est bien une troisième passe sur ces quatre dessins, et celle du changement de voie se voit.
@@ -234,11 +298,11 @@ Deux règles n'ont pas été suivies à la lettre. Le point d'arrêt (« show th
 
 ## Intégration
 
-- **Catalogue Xcode** : `Observation-indicators`, `Observation-following-distance`, `Observation-braking`, `Observation-lane-change`, écrits par `export_signalements.py`. Même `Contents.json` que les onze autres (vectoriel, gabarit), SVG de 20 pt.
-- **Copie web** : les quinze thèmes dans `apps/web/client/assets/observation-themes/<clé>.svg`, `viewBox="0 0 64 64"`, `fill="currentColor"`, sans taille figée. Les onze existants sont relus dans le catalogue, donc identiques à l'app. Le repère et les appréciations n'y sont pas.
+- **Catalogue Xcode** : `Observation-indicators`, `Observation-following-distance`, `Observation-braking`, `Observation-lane-change`, `Observation-moving-off`, `Observation-bends`, `Observation-eco-driving`, écrits par `export_signalements.py`. Même `Contents.json` que les onze autres (vectoriel, gabarit), SVG de 20 pt.
+- **Copie web** : les dix-huit thèmes dans `apps/web/client/assets/observation-themes/<clé>.svg`, `viewBox="0 0 64 64"`, `fill="currentColor"`, sans taille figée. Les onze existants sont relus dans le catalogue, donc identiques à l'app. Le repère et les appréciations n'y sont pas.
 - **Rien d'autre** : aucun fichier Swift, TypeScript ou SQL. Le branchement des clés dans le résolveur de l'app et dans le panneau web est fait par ailleurs.
 
-Audit (`svg_audit.py`, note heuristique) sur les quatre SVG du catalogue : `indicators` 98, `following-distance` 98, `braking` 91, `lane-change` 98, aucun FAIL. Un avertissement : 319 points sur `braking`, à cause des cercles approchés par des polygones, comme pour cinq icônes de la refonte. Sortie complète : [audit.txt](assets/icones-signalements-20261012/audit.txt).
+Audit (`svg_audit.py`, note heuristique) sur les sept SVG du catalogue : `indicators` 98, `following-distance` 98, `braking` 91, `lane-change` 98, `moving-off` 99, `bends` 98, `eco-driving` 98, aucun FAIL. Un avertissement : 319 points sur `braking`, à cause des cercles approchés par des polygones, comme pour cinq icônes de la refonte. Sortie complète : [audit.txt](assets/icones-signalements-20261012/audit.txt).
 
 ## Reproduire
 
@@ -247,14 +311,18 @@ Dans `docs/implementation/assets/icones-signalements-20261012` :
 1. `python atelier_signalements.py` : propositions, tours, `propositions.json` ;
 2. `python rendu.py tour 1`, `tour 2`, `propositions`, `voisins`, `finition` : planches PNG du premier tour ; `etudes 1`, `etudes 2`, `voisins-etudes`, `choix` : planches des études D, E, F et planche de choix ;
 3. `python export_signalements.py` : contrôle des notes, catalogue Xcode, copie web, `retenues.json` (avec `--choix`, voir plus haut) ;
-4. `python rendu.py famille` : planche de famille, relue dans le catalogue.
+4. `python rendu.py famille` : planche de famille, relue dans le catalogue ;
+5. pour Démarrage, Virages et Éco-conduite, les mêmes commandes avec `--lot 3` : `python rendu.py tour 1 --lot 3`, `tour 2`, `tour 3`, `propositions`, `voisins` écrivent `tour-1-3.png`, `tour-2-3.png`, `tour-3-3.png`, `propositions-3.png`, `voisins-3.png`.
 
 Il faut Python, shapely et Pillow. L'atelier du 12 octobre (`../icones-signaler-20261012`) est importé, ni modifié ni relancé.
 
 ## Limites et doutes
 
-- **Rien n'est vu sur appareil.** Les planches sont tramées par `rendu.py` (Pillow) à partir des SVG livrés ; un rendu Chrome de quatre SVG du catalogue et de deux copies web a été comparé à l'œil, à 200 px seulement. Ni simulateur, ni iPhone, ni panneau web.
-- **Distance de sécurité est la plus faible** (3,85). Sans son libellé, elle peut se lire « voiture sur des marches ». Aucune des trois propositions ne dit l'écart sans aide.
+- **Rien n'est vu sur appareil.** Les planches sont tramées par `rendu.py` (Pillow) à partir des SVG livrés ; un rendu Chrome de quatre SVG du catalogue et de deux copies web a été comparé à l'œil, à 200 px seulement, et pas pour les trois derniers thèmes. Ni simulateur, ni iPhone, ni panneau web.
+- **Virages est une flèche de plus.** Avec le demi-tour, le changement de voie et la priorité à droite, la grille porte quatre flèches. Si le porteur les trouve trop proches, « La route tourne » (A) est la solution sans flèche, moins nette.
+- **Démarrage ne dit qu'un cas**, la côte, et peut se lire « courbe qui monte » hors contexte.
+- **Éco-conduite à 16 px** : l'axe n'est plus que deux points, il reste une feuille.
+- **Distance de sécurité est la plus faible des quatre premières** (3,85). Sans son libellé, elle peut se lire « voiture sur des marches ». Aucune des trois propositions ne dit l'écart sans aide.
 - **Changement de voie à 16 px** : deux points et une barre oblique rappellent un « % ». La pointe de flèche le dément à 28 pt.
 - **Freinage** reste parent de l'œil et du giratoire. Jugé distinct sur planche, à confirmer dans la grille réelle.
 - **Clignotants** : deux flèches opposées veulent dire « redimensionner » dans un logiciel. Dans une voiture, c'est le clignotant.

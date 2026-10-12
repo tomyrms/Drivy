@@ -402,5 +402,164 @@
     "h": 58.9
    }
   ]
+ },
+ "moving-off": {
+  "title": "Démarrage",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Trace",
+    "name": "Départ",
+    "idea": "Le repère du point de départ et la trace qui en part.",
+    "tours": 2,
+    "ink": 0.14,
+    "bbox": [
+     4.0,
+     21.5,
+     58.4,
+     42.5
+    ],
+    "w": 54.4,
+    "h": 20.9
+   },
+   {
+    "direction": "B",
+    "famille": "Panneau",
+    "name": "En côte",
+    "idea": "Une pente et la flèche qui la monte : démarrer en côte.",
+    "tours": 2,
+    "ink": 0.239,
+    "bbox": [
+     7.4,
+     17.2,
+     58.0,
+     57.0
+    ],
+    "w": 50.6,
+    "h": 39.8
+   },
+   {
+    "direction": "C",
+    "famille": "Instrument",
+    "name": "Clé de contact",
+    "idea": "La clé de contact, en aplat.",
+    "tours": 2,
+    "ink": 0.213,
+    "bbox": [
+     5.0,
+     17.0,
+     60.0,
+     44.0
+    ],
+    "w": 55.0,
+    "h": 27.0
+   }
+  ]
+ },
+ "bends": {
+  "title": "Virages",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Plan",
+    "name": "La route tourne",
+    "idea": "Les deux bordures d'une route qui tourne, vues du dessus.",
+    "tours": 3,
+    "ink": 0.278,
+    "bbox": [
+     14.0,
+     14.0,
+     59.0,
+     59.0
+    ],
+    "w": 45.0,
+    "h": 45.0
+   },
+   {
+    "direction": "B",
+    "famille": "Silhouette",
+    "name": "Lacets",
+    "idea": "Une route pleine qui serpente et s'éloigne, son axe en tirets.",
+    "tours": 2,
+    "ink": 0.233,
+    "bbox": [
+     9.6,
+     2.4,
+     53.4,
+     60.1
+    ],
+    "w": 43.8,
+    "h": 57.7
+   },
+   {
+    "direction": "C",
+    "famille": "Panneau",
+    "name": "Flèche de virage",
+    "idea": "La flèche courbe du panneau de virage.",
+    "tours": 2,
+    "ink": 0.107,
+    "bbox": [
+     11.0,
+     5.0,
+     41.5,
+     62.0
+    ],
+    "w": 30.5,
+    "h": 57.0
+   }
+  ]
+ },
+ "eco-driving": {
+  "title": "Éco-conduite",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Silhouette",
+    "name": "Feuille-route",
+    "idea": "Une feuille dont la nervure est l'axe en tirets d'une route.",
+    "tours": 2,
+    "ink": 0.245,
+    "bbox": [
+     4.5,
+     10.4,
+     52.6,
+     58.5
+    ],
+    "w": 48.0,
+    "h": 48.0
+   },
+   {
+    "direction": "B",
+    "famille": "Instrument",
+    "name": "Grille de vitesses",
+    "idea": "La grille du levier de vitesses, pommeau sur le rapport le plus haut.",
+    "tours": 2,
+    "ink": 0.267,
+    "bbox": [
+     11.0,
+     5.0,
+     59.5,
+     54.0
+    ],
+    "w": 48.5,
+    "h": 49.0
+   },
+   {
+    "direction": "C",
+    "famille": "Silhouette",
+    "name": "Pompe",
+    "idea": "Une pompe à essence : ce que l'on consomme.",
+    "tours": 2,
+    "ink": 0.301,
+    "bbox": [
+     11.0,
+     8.0,
+     51.2,
+     56.0
+    ],
+    "w": 40.2,
+    "h": 48.0
+   }
+  ]
  }
 }

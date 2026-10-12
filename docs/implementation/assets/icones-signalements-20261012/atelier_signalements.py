@@ -624,6 +624,212 @@ for _key, _extra in ETUDES.items():
     ICONS[_key]["directions"] += _extra
 
 
+# ---------------------------------------------------------------- trois thèmes de plus
+# Démarrage, Virages, Éco-conduite : le catalogue passe à dix-huit thèmes. Même méthode, même grammaire.
+
+def ribbon(pts, w0, w1):
+    """Ruban plein le long d'une ligne, de largeur w0 au départ à w1 à l'arrivée (route qui s'éloigne)."""
+    n = len(pts)
+    left, right = [], []
+    for i, (x, y) in enumerate(pts):
+        x0, y0 = pts[max(i - 1, 0)]
+        x1, y1 = pts[min(i + 1, n - 1)]
+        L = math.hypot(x1 - x0, y1 - y0) or 1.0
+        nx, ny = -(y1 - y0) / L, (x1 - x0) / L
+        h = (w0 + (w1 - w0) * i / (n - 1)) / 2
+        left.append((x + nx * h, y + ny * h))
+        right.append((x - nx * h, y - ny * h))
+    return rpoly(left + right[::-1], 1.5)
+
+
+def moving_off_A_t1():
+    start = base.marker(15, 32, 12, 6)
+    trace = base.bite(arrow((15, 32), (59, 32), hl=13, hw=24), 15, 32, 12)
+    return U(start, trace)
+
+
+def moving_off_B_t1():
+    slope = rpoly([(6, 55), (58, 55), (58, 29)], 3)
+    climb = arrow((8.6, 40.3), (45.6, 21.8), hl=11, hw=17)
+    return U(slope, climb)
+
+
+def moving_off_C_t1():
+    bow = ring(18, 30, 13, 6.5)
+    blade = line((30, 30), (57, 30))
+    bits = U(line((45, 30), (45, 40)), line((55, 30), (55, 40)))
+    return U(bow, blade, bits)
+
+
+def _elbow(x, r, top, right=58.0, bottom=58.0, cx=44.0, cy=44.0, w=W):
+    """Bordure de virage : monte en x, tourne d'un quart de cercle de rayon r autour de (cx, cy), file à droite."""
+    return line(*([(x, bottom)] + arc_pts(cx, cy, r, 180, 270, 32) + [(right, top)]), w=w)
+
+
+def bends_A_t1():
+    outer = _elbow(12, 32, 12)
+    inner = _elbow(38, 6, 38)
+    return U(outer, inner)
+
+
+def _winding():
+    return (bezier((20, 60), (20, 44), (46, 44), (44, 28))
+            + bezier((44, 28), (43, 18), (30, 14), (30, 4))[1:])
+
+
+def bends_B_t1():
+    road = ribbon(_winding(), 19, 9)
+    centre = U(*[line(a, b, w=4) for a, b in ((_winding()[6], _winding()[22]), (_winding()[44], _winding()[60]))])
+    return road.difference(centre)
+
+
+def _bend_arrow(sweep=60.0, R=22.0, x=20.0, y0=58.0, y1=42.0, run=14.0, w=W, hl=12.0, hw=18.0):
+    pts = [(x, y0)] + arc_pts(x + R, y1, R, 180, 180 + sweep, 24)
+    a = math.radians(180 + sweep + 90)
+    ex, ey = pts[-1]
+    tip = (ex + math.cos(a) * run, ey + math.sin(a) * run)
+    return arrow(*pts, tip, w=w, hl=hl, hw=hw)
+
+
+def bends_C_t1():
+    return _bend_arrow()
+
+
+def _leaf(cx=33.0, cy=30.0, a=27.0, b=14.0, rot=-45.0):
+    blade = base._almond(cx, cy, a, b)
+    stem = line((cx - a + 2, cy), (cx - a - 9, cy))
+    return blade, stem, rot, (cx, cy)
+
+
+def eco_A_t1():
+    blade, stem, rot, c = _leaf()
+    rib = U(*[line((x0, 30), (x1, 30), w=4) for x0, x1 in ((18, 24), (31, 37), (44, 48))])
+    return affinity.rotate(U(blade.difference(rib), stem), rot, origin=c)
+
+
+def eco_B_t1():
+    gate = U(line((14, 14), (14, 50)), line((32, 14), (32, 50)), line((50, 14), (50, 50)), line((14, 32), (50, 32)))
+    knob = disc(50, 14, 8.5)
+    return U(gate, knob)
+
+
+def eco_C_t1():
+    body = rrect(11, 8, 27, 48, 5).difference(rrect(17, 14.5, 15, 11, 2.5))
+    hose = line((38, 41), (48, 41), (48, 22), (43, 15), w=5.5)
+    return U(body, hose)
+
+
+def moving_off_A_t2():
+    # Tour 2 — défaut nommé : un anneau et une flèche, c'est le symbole « ♂ » couché. Le point de
+    # départ devient un disque plein, détaché de la trace par une contre-forme.
+    start = disc(14, 32, 10)
+    trace = arrow((14, 32), (59, 32), hl=13, hw=24).difference(disc(14, 32, 10 + G))
+    return U(start, trace)
+
+
+def moving_off_B_t2():
+    # Tour 2 — défaut nommé : la queue de la flèche touchait presque la pointe de la pente à 16 px.
+    # Pente à 1 pour 2 exactement, flèche remontée.
+    slope = rpoly([(4, 57), (58, 57), (58, 30)], 3)
+    climb = arrow((10.4, 37.5), (46.4, 19.5), hl=11.5, hw=17.5)
+    return U(slope, climb)
+
+
+def moving_off_C_t2():
+    # Tour 2 — défaut nommé : une clé à anneau se lit « mot de passe ». Tête pleine d'une clé de voiture.
+    fob = rrect(5, 17, 25, 27, 8.5).difference(disc(14, 30, 3.4))
+    blade = line((30, 30), (57, 30))
+    bits = U(line((46, 30), (46, 40.5)), line((56, 30), (56, 40.5)))
+    return U(fob, blade, bits)
+
+
+def bends_A_t2():
+    # Tour 2 — défaut nommé : deux bordures seules se lisent « tuyau » ou « coin arrondi ». L'axe en
+    # tirets en fait une route ; il suit le même centre que les bordures.
+    outer = _elbow(12, 32, 12)
+    inner = _elbow(38, 6, 38)
+    axis = U(line((25, 50), (25, 58)), arc(44, 44, 19, 207, 243), line((50, 25), (58, 25)))
+    return U(outer, inner, axis)
+
+
+def _winding2():
+    return (bezier((18, 60), (18, 42), (50, 46), (46, 28))
+            + bezier((46, 28), (43, 16), (28, 16), (30, 3))[1:])
+
+
+def bends_B_t2():
+    # Tour 2 — défaut nommé : en petit, une flamme. Lacets plus marqués, ruban moins effilé, tirets plus gros.
+    pts = _winding2()
+    road = ribbon(pts, 17, 11)
+    centre = U(*[line(pts[a], pts[b], w=4.4) for a, b in ((8, 26), (48, 66), (96, 114))])
+    return road.difference(centre)
+
+
+def bends_C_t2():
+    # Tour 2 — défaut nommé : dessin trop petit, grossi par l'export (×1,20, trait à 7,2). Courbe plus
+    # ample : rayon 30, soixante degrés exactement.
+    return _bend_arrow(sweep=60, R=30, x=14, y0=59, y1=40, run=15, hl=12, hw=18)
+
+
+def eco_A_t2():
+    # Tour 2 — défaut nommé : trois tirets de 4 se ferment à 16 px. Deux tirets plus longs, à 4,8.
+    blade, stem, rot, c = _leaf()
+    rib = U(line((17, 30), (26, 30), w=4.8), line((35, 30), (46, 30), w=4.8))
+    return affinity.rotate(U(blade.difference(rib), stem), rot, origin=c)
+
+
+def eco_B_t2():
+    # Tour 2 — défaut nommé : pommeau trop petit, lu comme un simple bout rond. Pommeau à 9,5.
+    gate = U(line((14, 15), (14, 51)), line((32, 15), (32, 51)), line((50, 15), (50, 51)), line((14, 33), (50, 33)))
+    knob = disc(50, 14.5, 9.5)
+    return U(gate, knob)
+
+
+def eco_C_t2():
+    # Tour 2 — défaut nommé : trop d'encre. Vitre agrandie, tuyau détaché du corps.
+    body = rrect(11, 8, 26, 48, 5).difference(rrect(16, 13.5, 16, 14, 2.5))
+    hose = line((37, 42), (48.5, 42), (48.5, 23), (43.5, 16), w=5.5)
+    return U(body, hose)
+
+
+def bends_A_t3():
+    # Tour 3, pour lever une lecture involontaire : deux bordures et un axe, tous en quarts de cercle
+    # de même centre, c'est le pictogramme « flux RSS » ou « wifi ». La chaussée devient un seul aplat,
+    # son axe en tirets évidés : plus trois arcs, une route.
+    centre = [(25, 59)] + arc_pts(44, 44, 19, 180, 270, 32) + [(59, 25)]
+    road = line(*centre, w=22, cap="flat").buffer(-2.5, join_style="round").buffer(2.5, join_style="round")
+    axis = U(line((25, 47.5), (25, 54), w=4.8), arc(44, 44, 19, 208, 242, w=4.8), line((47.5, 25), (54, 25), w=4.8))
+    return road.difference(axis)
+
+
+def bends_final():
+    # Finition, vue dans la planche de famille : colonne de 30 de large, plus maigre que ses voisines.
+    # Même rayon et mêmes soixante degrés ; la flèche file plus loin après la courbe et le trait passe à 6,3.
+    return _bend_arrow(sweep=60, R=30, x=11, y0=59, y1=43, run=22, w=6.3, hl=12.5, hw=19)
+
+
+LOT3 = {
+    "moving-off": {"title": "Démarrage", "directions": [
+        P("A", "Trace", "Départ", "Le repère du point de départ et la trace qui en part.", moving_off_A_t1, moving_off_A_t2),
+        P("B", "Panneau", "En côte", "Une pente et la flèche qui la monte : démarrer en côte.", moving_off_B_t1, moving_off_B_t2),
+        P("C", "Instrument", "Clé de contact", "La clé de contact, en aplat.", moving_off_C_t1, moving_off_C_t2),
+    ]},
+    "bends": {"finition": bends_final, "trait": 6.3, "title": "Virages", "directions": [
+        P("A", "Plan", "La route tourne", "Les deux bordures d'une route qui tourne, vues du dessus.", bends_A_t1, bends_A_t2, bends_A_t3),
+        P("B", "Silhouette", "Lacets", "Une route pleine qui serpente et s'éloigne, son axe en tirets.", bends_B_t1, bends_B_t2),
+        P("C", "Panneau", "Flèche de virage", "La flèche courbe du panneau de virage.", bends_C_t1, bends_C_t2),
+    ]},
+    "eco-driving": {"title": "Éco-conduite", "directions": [
+        P("A", "Silhouette", "Feuille-route", "Une feuille dont la nervure est l'axe en tirets d'une route.", eco_A_t1, eco_A_t2),
+        P("B", "Instrument", "Grille de vitesses", "La grille du levier de vitesses, pommeau sur le rapport le plus haut.", eco_B_t1, eco_B_t2),
+        P("C", "Silhouette", "Pompe", "Une pompe à essence : ce que l'on consomme.", eco_C_t1, eco_C_t2),
+    ]},
+}
+ICONS.update(LOT3)
+LOT1_KEYS = ["indicators", "following-distance", "braking", "lane-change"]
+LOT3_KEYS = list(LOT3)
+
+
 def build_all():
     report = {}
     f = HERE / "selection.json"

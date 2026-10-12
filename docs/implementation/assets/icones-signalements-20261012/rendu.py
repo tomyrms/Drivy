@@ -13,6 +13,8 @@ Usage :
   python rendu.py voisins-etudes    → voisins-etudes.png (les études D, E, F entre leurs voisines)
   python rendu.py choix             → choix.png et choix-<clé>.png (les six études par thème, pour choisir)
   python rendu.py finition          → finition.png (les quatre retenues, tour 2 puis finition)
+  Avec `--lot 3`, les mêmes planches pour Démarrage, Virages et Éco-conduite : tour-1-3.png,
+  tour-2-3.png, propositions-3.png, voisins-3.png, finition-3.png.
   python rendu.py famille           → famille.png (les quinze thèmes du catalogue, 28 et 16 pt, clair et sombre)
 """
 from __future__ import annotations
@@ -127,7 +129,7 @@ def sheet(rows, out, title):
     print(out)
 
 
-def proposals(tour=None, letters="ABC"):
+def proposals(tour=None, letters="ABC", keys=None):
     sys.path.insert(0, str(HERE))
     import atelier_signalements as atelier  # noqa: E402
     notes = {}
@@ -136,6 +138,8 @@ def proposals(tour=None, letters="ABC"):
         notes = json.loads(f.read_text(encoding="utf-8"))
     rows = []
     for key, spec in atelier.ICONS.items():
+        if keys is not None and key not in keys:
+            continue
         cells = []
         for p in spec["directions"]:
             if p["direction"] not in letters:
@@ -147,7 +151,8 @@ def proposals(tour=None, letters="ABC"):
             label = f"{p['direction']} · {p['name']}" + (f"  {total:.2f}" if total and tour is None else "")
             sub = f"{p['famille']} · tour {n} · échelle {scale:.2f}" + ("  ← retenue" if won and tour is None else "")
             cells.append((label, sub, rings))
-        rows.append((f"{spec['title']}  ({key})", cells))
+        if cells:
+            rows.append((f"{spec['title']}  ({key})", cells))
     return rows
 
 
@@ -156,17 +161,21 @@ NEIGHBOURS = {
     "following-distance": ["placement", "vehicle", "motorway"],
     "braking": ["observation", "intersections", "speed"],
     "lane-change": ["manoeuvres", "placement", "motorway"],
+    "moving-off": ["vehicle", "speed", "right-priority"],
+    "bends": ["manoeuvres", "lane-change", "motorway"],
+    "eco-driving": ["signage", "anticipation", "indicators"],
 }
 
 
-def neighbours(out, letters="ABC"):
+def neighbours(out, letters="ABC", keys=None):
     """Chaque proposition à 28 et 16 px entre les icônes existantes avec lesquelles elle pourrait se confondre."""
-    rows = proposals(letters=letters)
+    rows = proposals(letters=letters, keys=keys)
+    order = [re.search(r"\(([^)]+)\)$", name).group(1) for name, _ in rows]
     img = Image.new("RGB", (1180, 70 + len(rows) * 150), rgb("#EEF1F4"))
     d = ImageDraw.Draw(img)
     d.text((24, 16), "Voisinage — chaque proposition entre les icônes existantes les plus proches (28 et 16 px)",
            font=font(16, True), fill=rgb(LIGHT["text"]))
-    for i, ((name, cells), key) in enumerate(zip(rows, NEIGHBOURS)):
+    for i, ((name, cells), key) in enumerate(zip(rows, order)):
         y = 56 + i * 150
         d.text((24, y), name, font=font(13, True), fill=rgb(LIGHT["text"]))
         olds = [(k, load(CATALOG / f"Observation-{k}.imageset" / f"{k}.svg")) for k in NEIGHBOURS[key]]
@@ -196,19 +205,20 @@ THEMES = [("vehicle", "Maîtrise du véhicule"), ("observation", "Observation et
           ("placement", "Placement sur la chaussée"), ("manoeuvres", "Manœuvres"), ("motorway", "Autoroute"),
           ("anticipation", "Anticipation"), ("indicators", "Clignotants"),
           ("following-distance", "Distance de sécurité"), ("braking", "Freinage"),
-          ("lane-change", "Changement de voie")]
-NEW = {"indicators", "following-distance", "braking", "lane-change"}
+          ("lane-change", "Changement de voie"), ("moving-off", "Démarrage"), ("bends", "Virages"),
+          ("eco-driving", "Éco-conduite")]
+NEW = {"indicators", "following-distance", "braking", "lane-change", "moving-off", "bends", "eco-driving"}
 
 
 def family(out):
-    """Les quinze thèmes relus dans le catalogue Xcode. En haut la grille de « Signaler » à 28 pt (@2x,
+    """Les dix-huit thèmes relus dans le catalogue Xcode. En haut la grille de « Signaler » à 28 pt (@2x,
     56 px) ; dessous, deux bandes au pixel près, 28 px puis 16 px, et le 16 px agrandi trois fois.
-    Les quatre nouveaux sont soulignés."""
+    Les sept nouveaux sont soulignés."""
     icons = [(k, t, load(CATALOG / f"Observation-{k}.imageset" / f"{k}.svg")) for k, t in THEMES]
-    pw, ph = 600, 880
+    pw, ph = 600, 990
     img = Image.new("RGB", (24 + 2 * (pw + 16), 64 + ph + 16), rgb("#EEF1F4"))
     d = ImageDraw.Draw(img)
-    d.text((24, 16), "Famille des thèmes de « Signaler » — onze existants et quatre nouveaux (soulignés)",
+    d.text((24, 16), "Famille des thèmes de « Signaler » — onze existants et sept nouveaux (soulignés)",
            font=font(17, True), fill=rgb(LIGHT["text"]))
     for half, (pal, name) in enumerate(((LIGHT, "Clair"), (DARK, "Sombre Soft Charcoal"))):
         x0, y0 = 24 + half * (pw + 16), 56
@@ -223,9 +233,9 @@ def family(out):
             d.text((cx - tw / 2, cy + 62), t, font=font(13, True), fill=rgb(pal["text"]))
             if k in NEW:
                 d.line((cx - tw / 2, cy + 82, cx + tw / 2, cy + 82), fill=rgb(pal["accent"]), width=2)
-        ys = y0 + 44 + 5 * chh + 16
+        ys = y0 + 44 + 6 * chh + 16
         d.line((x0 + 20, ys, x0 + pw - 20, ys), fill=rgb(pal["line"]))
-        step = (pw - 40) / 15
+        step = (pw - 40) / len(icons)
         for row, px in enumerate((28, 16)):
             yy = ys + 16 + row * 68
             d.text((x0 + 20, yy), f"{px} px, au pixel près", font=font(11), fill=rgb(pal["muted"]))
@@ -236,10 +246,10 @@ def family(out):
                     d.line((xx, yy + 54, xx + px, yy + 54), fill=rgb(pal["accent"]), width=2)
         yz = ys + 16 + 2 * 68
         d.text((x0 + 20, yz), "Le 16 px agrandi trois fois (pixels réels)", font=font(11), fill=rgb(pal["muted"]))
-        step = (pw - 40) / 8
+        step = (pw - 40) / 9
         for i, (k, t, rings) in enumerate(icons):
-            xx = int(x0 + 20 + (i % 8) * step + (step - 48) / 2)
-            yy = yz + 22 + (i // 8) * 62
+            xx = int(x0 + 20 + (i % 9) * step + (step - 48) / 2)
+            yy = yz + 22 + (i // 9) * 62
             stamp(img, rings, (xx, yy), 16, pal["accent"], zoom=3)
             if k in NEW:
                 d.line((xx, yy + 53, xx + 48, yy + 53), fill=rgb(pal["accent"]), width=2)
@@ -287,8 +297,8 @@ def choice(out_all):
             stamp(img, rings, (x + 180, yy + 276), 16, DARK["accent"], zoom=3)
 
     rh = ch + 62
-    whole = Image.new("RGB", (width, 70 + 4 * rh), rgb("#EEF1F4"))
-    ImageDraw.Draw(whole).text((24, 16), "Nouveaux thèmes de « Signaler » — six études par thème, à choisir par lettre",
+    whole = Image.new("RGB", (width, 70 + len(atelier.ICONS) * rh), rgb("#EEF1F4"))
+    ImageDraw.Draw(whole).text((24, 16), "Nouveaux thèmes de « Signaler » — les études de chaque thème, à choisir par lettre",
                                font=font(26, True), fill=rgb(LIGHT["text"]))
     for i, (key, spec) in enumerate(atelier.ICONS.items()):
         row(whole, 66 + i * rh, key, spec)
@@ -302,32 +312,40 @@ def choice(out_all):
 
 if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "propositions"
+    sys.path.insert(0, str(HERE))
+    import atelier_signalements as _atelier  # noqa: E402
+    lot3 = "--lot" in sys.argv and sys.argv[sys.argv.index("--lot") + 1] == "3"
+    KEYS = _atelier.LOT3_KEYS if lot3 else _atelier.LOT1_KEYS
+    SUFFIX = "-3" if lot3 else ""
+    LOT = "Démarrage, Virages, Éco-conduite" if lot3 else "Nouveaux thèmes de « Signaler »"
     if what == "tour":
         n = int(sys.argv[2])
-        sheet(proposals(n), HERE / f"tour-{n}.png", f"Nouveaux thèmes de « Signaler » — tour {n} (64 → 28 → 16 px, clair et sombre)")
+        sheet(proposals(n, keys=KEYS), HERE / f"tour-{n}{SUFFIX}.png", f"{LOT} — tour {n} (64 → 28 → 16 px, clair et sombre)")
     elif what == "etudes":
         n = int(sys.argv[2])
-        sheet(proposals(n, "DEF"), HERE / f"etudes-tour-{n}.png",
+        sheet(proposals(n, "DEF", _atelier.LOT1_KEYS), HERE / f"etudes-tour-{n}.png",
               f"Études D, E, F — tour {n} (64 → 28 → 16 px, clair et sombre)")
     elif what == "voisins-etudes":
-        neighbours(HERE / "voisins-etudes.png", "DEF")
+        neighbours(HERE / "voisins-etudes.png", "DEF", _atelier.LOT1_KEYS)
     elif what == "choix":
         choice(HERE / "choix.png")
     elif what == "voisins":
-        neighbours(HERE / "voisins.png")
+        neighbours(HERE / f"voisins{SUFFIX}.png", keys=KEYS)
     elif what == "finition":
         import atelier_signalements as atelier
         sel = json.loads((HERE / "selection.json").read_text(encoding="utf-8"))
         rows = []
         for key, spec in atelier.ICONS.items():
+            if key not in KEYS or not spec.get("finition"):
+                continue
             prop = next(q for q in spec["directions"] if q["direction"] == sel[key]["retenue"])
             before, s0 = normalized(key, prop["tours"][-1]())
             after, s1 = normalized(key, spec["finition"]())
             rows.append((f"{spec['title']}  ({key})", [
                 (f"{prop['direction']} · {prop['name']}", f"tour {len(prop['tours'])} · échelle {s0:.2f}", before),
                 (f"{prop['direction']} · {prop['name']}", f"finition, livrée · échelle {s1:.2f}", after)]))
-        sheet(rows, HERE / "finition.png", "Finition des quatre retenues — graisse et taille optique en place")
+        sheet(rows, HERE / f"finition{SUFFIX}.png", "Finition des retenues — graisse et taille optique en place")
     elif what == "famille":
         family(HERE / "famille.png")
     else:
-        sheet(proposals(), HERE / "propositions.png", "Nouveaux thèmes de « Signaler » — trois propositions par thème")
+        sheet(proposals(keys=KEYS), HERE / f"propositions{SUFFIX}.png", f"{LOT} — trois propositions par thème")
