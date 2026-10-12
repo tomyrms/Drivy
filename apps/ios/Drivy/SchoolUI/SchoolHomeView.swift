@@ -209,7 +209,7 @@ struct SchoolHomeView: View {
               workspace.school?.status == "ACTIVE", membership.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) else { return nil }
         return { learner in
             let model = SchoolPlanningWorkspace(scope: agendaClient.scope(person: person, membership: membership),
-                client: agendaClient.planningClient, date: Date().addingTimeInterval(3600))
+                client: agendaClient.planningClient, date: Date().addingTimeInterval(3600), suggestingNextSlotFrom: Date())
             model.learnerID = learner.id
             dossierPlanningModel = model
         }

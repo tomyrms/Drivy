@@ -61,6 +61,11 @@ struct SchoolPlanningView: View {
             .task(id: model.slotValidationRequest) {
                 if !cancelling, model.slotValidationRequest != nil { await model.validateSlot(debounced: true) }
             }
+            // Prochain créneau libre : relancé quand l’élève, la formation, le moniteur, la durée ou la période changent,
+            // jamais après un choix manuel de la date ou de l’heure.
+            .task(id: model.nextSlotRequest) {
+                if !cancelling, model.nextSlotRequest != nil { await model.findSuggestedSlot() }
+            }
             .sheet(item: $document) { SchoolPlanningDocumentView(document: $0) }
             .alert("Annuler cette leçon ?", isPresented: $confirmsCancellation) {
                 Button("Annuler la leçon", role: .destructive) {
@@ -178,19 +183,26 @@ struct SchoolPlanningView: View {
             if model.assignedInstructors.isEmpty && !model.isLoading {
                 formNote("Aucun moniteur affecté ne couvre ce créneau.")
             }
-            // Rendez-vous resté en attente après son horaire : la borne ne masque pas sa date réelle. Sans cela le
-            // sélecteur affichait aujourd’hui pendant que le formulaire refusait encore l’horaire passé.
-            DatePicker("Date", selection: $model.startsAt, in: min(model.startsAt, Date())..., displayedComponents: .date)
-                .drivyControlTint()
-            DatePicker("Heure", selection: $model.startsAt, displayedComponents: .hourAndMinute)
-                .drivyControlTint()
+            if model.awaitingSuggestedSlot {
+                // La date n’apparaît qu’une fois le prochain créneau libre calculé : aucune date provisoire ne saute.
+                DrivySkeletonRows(count: 2).drivySkeleton("Recherche du prochain créneau libre…")
+                    .accessibilityIdentifier("planning-next-slot-searching")
+            } else {
+                // Rendez-vous resté en attente après son horaire : la borne ne masque pas sa date réelle. Sans cela le
+                // sélecteur affichait aujourd’hui pendant que le formulaire refusait encore l’horaire passé.
+                DatePicker("Date", selection: startSelection, in: min(model.startsAt, Date())..., displayedComponents: .date)
+                    .drivyControlTint()
+                DatePicker("Heure", selection: startSelection, displayedComponents: .hourAndMinute)
+                    .drivyControlTint()
+            }
+            suggestedSlotNotice
             if model.originalLesson == nil || model.changesCommercialTerms {
                 Picker("Durée", selection: Binding(get: { model.duration }, set: { model.selectDuration($0) })) {
                     ForEach(model.durationChoices, id: \.self) { minutes in Text("\(minutes) min").tag(minutes) }
                 }
                 .accessibilityIdentifier("planning-duration")
             }
-            if model.duration > 0 {
+            if model.duration > 0 && !model.awaitingSuggestedSlot {
                 LabeledContent("Fin prévue") { Text(SchoolPlanningFormat.instant(model.endsAt, zone: model.timeZone)).monospacedDigit().foregroundStyle(DrivyTheme.muted) }
             }
             slotStatus
@@ -243,6 +255,29 @@ struct SchoolPlanningView: View {
         } header: { Text("Le rendez-vous").drivyFormSectionHeader() }
             .drivyFormRows()
         .disabled(!model.canMutate)
+    }
+    /// Un choix à la main l’emporte sur la proposition : elle ne revient plus remplacer l’horaire saisi.
+    private var startSelection: Binding<Date> {
+        Binding(get: { model.startsAt }, set: { model.chooseStart($0) })
+    }
+    /// Seulement l’inhabituel : aucune ligne quand un créneau est trouvé.
+    @ViewBuilder private var suggestedSlotNotice: some View {
+        switch model.suggestedSlotNotice {
+        case .some(.exhausted(let through)):
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                DrivyFormMessage(text: "Aucun créneau libre jusqu’au \(SchoolPlanningFormat.civilDay(through, zone: model.timeZone)).", tone: .warning)
+                Button("Chercher plus loin") { model.searchFurther() }
+                    .buttonStyle(.borderless)
+                    .frame(minHeight: DrivyLayout.tapTarget)
+                    .accessibilityIdentifier("planning-next-slot-further")
+            }
+            .accessibilityIdentifier("planning-next-slot-none")
+        case .some(.failed(let message)):
+            SchoolErrorNotice(message: message, retry: { Task { await model.findSuggestedSlot(retrying: true) } })
+                .accessibilityIdentifier("planning-next-slot-error")
+        default:
+            EmptyView()
+        }
     }
     @ViewBuilder private var slotFeedback: some View {
         if let message = model.slotInputMessage {
@@ -518,6 +553,11 @@ enum SchoolPlanningFormat {
     static func tariff(_ product: SchoolServiceProduct, quantity: Int) -> String {
         let price = SchoolCatalogFormatting.price(product.unitPriceCents)
         return quantity > 1 ? "\(product.label) · \(quantity) × \(price)" : "\(product.label) · \(price)"
+    }
+    /// Jour civil « AAAA-MM-JJ » de l’école, en toutes lettres (« jeudi 22 octobre »).
+    static func civilDay(_ value: String, zone: String) -> String {
+        guard let date = SchoolPlanningNextSlot.startOfCivilDay(value, zone: zone) else { return civil(value) }
+        return SchoolDateCache.shared.string(from: date, zone: TimeZone(identifier: zone) ?? .current, format: "EEEE d MMMM")
     }
     static func instant(_ date: Date, zone: String) -> String {
         SchoolDateCache.shared.string(from: date, zone: TimeZone(identifier: zone) ?? .current, format: "EEE d MMM · HH:mm")
