@@ -1,6 +1,6 @@
 # Signalements configurables — contrat et décisions (12 octobre 2026)
 
-Ce document est la référence commune de l'API, de l'app iOS et du panneau web. Il fixe les clés, le contrat HTTP et les règles ; le récit de livraison (tests exécutés, limites) est à la fin.
+Ce document est la référence commune de l'API, de l'app iOS et du panneau web. Il fixe les clés, le contrat HTTP et les règles ; la livraison (scénarios vérifiés, limites) est à la fin.
 
 ## Ce qui existait
 
@@ -122,3 +122,34 @@ Un client n'envoie `themeKey` que si la configuration qu'il utilise vient du ser
 - Les observations existantes gardent `competency_id` et `text` ; la migration renseigne `theme_key` pour celles dont le texte est encore exactement le titre de la tuile. Les autres restent sans clé et continuent d'être reconnues par leur compétence et leur texte, comme avant.
 - Une école sans ligne de configuration voit ses onze tuiles dans le même ordre, plus « Clignotants ».
 - Une clé inconnue dans une configuration enregistrée est ignorée à la lecture ; un thème ajouté plus tard au catalogue prend sa place d'origine.
+
+## Livraison (12 octobre 2026)
+
+- **Base** : migration `026_observation_themes.sql` — droit ajouté à la contrainte de `membership.grants`, fonction `drivy.can_manage_observation_themes`, table `drivy.observation_theme_settings` (RLS forcée), colonne `geo_observation.theme_key` et reprise des observations dont le texte est encore le titre de la tuile.
+- **API** : `apps/api/src/observation-themes.ts` (catalogue, lecture, commande), `themeKey` sur les observations, droit accepté par `PATCH /members/{id}`.
+- **iOS** : catalogue embarqué de repli, store par école avec copie locale, grille de 1 à 18 tuiles, écran Profil → Signalements. Détail : `signalements-ios-20261012.md`.
+- **Web** : section « Signalements » de la console, droit « Gérer les signalements » dans Équipe. La console n'est ouverte qu'aux administrateurs : un moniteur qui porte le droit règle depuis l'app. Détail : `signalements-web-20261012.md`.
+- **Icônes** : sept pictogrammes, trois études chacun (six pour les quatre premiers). Détail : `icones-signalements-20261012.md`.
+
+### Scénarios demandés
+
+| # | Scénario | Vérifié par |
+|---|---|---|
+| 1 | École neuve : tous les thèmes, 12 affichés | test d'intégration API ; tests Swift du catalogue |
+| 2, 3, 4 | L'administrateur affiche tout, masque, réordonne | test d'intégration API ; tests du modèle web ; tests Swift du store |
+| 5 | Ordre conservé après fermeture | tests Swift de la copie locale ; **pas vu sur appareil** |
+| 6, 7 | Moniteur sans droit refusé, avec droit accepté | test d'intégration API (commande, rejeu et RLS) |
+| 8 | Web et iOS se reflètent | même ressource versionnée, testée de chaque côté ; **pas joué de bout en bout contre une vraie API** |
+| 9 | Deux écoles indépendantes | test d'intégration API |
+| 10, 11 | Historique, replays et bilans après masquage | test d'intégration API ; tests Swift du résolveur de pictogramme ; **replay pas vu sur appareil** |
+| 12 | Clair et sombre | planches d'icônes et web dans Chromium ; **iOS pas vu** |
+| 13 | Modification distante pendant une leçon | test Swift de l'instantané de la palette |
+| 14 | Erreurs réseau et conflits | test d'intégration API (412 concurrent) ; tests Swift et web (412, panne, rejeu) |
+
+### Limites connues
+
+- Rien n'est déployé : la migration 026 n'a tourné que sur la base de recette et sur la CI.
+- De 16 à 18 tuiles affichées, la grille fait six rangées sur un iPhone : elle défile sur un petit écran. Hauteurs calculées, pas mesurées sur appareil.
+- Les référentiels moto et remorque gardent leurs tuiles génériques (« Freinage », « Dépassements ») : les thèmes du catalogue rattachés à `vehicule` ou `placement` n'y apparaissent pas.
+- « Priorités » se déplie désormais toujours en trois tuiles, et un ancien référentiel `parking` affiche « Manœuvres ».
+- Les notes des icônes sont un jugement ; le porteur n'a pas encore tranché sur la planche de choix.
