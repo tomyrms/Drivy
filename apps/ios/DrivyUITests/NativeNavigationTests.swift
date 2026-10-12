@@ -64,11 +64,42 @@ import XCTest
         XCTAssertTrue(dossier.exists, app.debugDescription)
     }
 
-    private func launch(_ screen: String) -> XCUIApplication {
+    /// L’école fictive laisse ce compte gérer les signalements : l’entrée existe dans le Profil, l’écran montre
+    /// les quinze thèmes, leur compteur et l’aperçu de la grille. Captures en clair et en sombre.
+    func testProfileOpensObservationThemesWithItsCounterAndPreview() {
+        for appearance in ["Light", "Dark"] {
+            let app = launch("profile-tab", appearance: appearance)
+            let entry = app.descendants(matching: .any)["profile-observation-themes"]
+            XCTAssertTrue(entry.waitForExistence(timeout: 20), app.debugDescription)
+            entry.tap()
+            XCTAssertTrue(app.navigationBars["Signalements"].waitForExistence(timeout: 10), app.debugDescription)
+            for key in ["vehicle", "indicators"] {
+                XCTAssertTrue(app.descendants(matching: .any)["observation-theme-\(key)"].waitForExistence(timeout: 10), app.debugDescription)
+            }
+            let counter = app.descendants(matching: .any)["observation-themes-count"]
+            XCTAssertTrue(counter.waitForExistence(timeout: 10), app.debugDescription)
+            XCTAssertTrue(counter.label.contains("12 affichés sur 15"), counter.label)
+            capture(app, name: "observation-themes-\(appearance.lowercased())")
+            app.buttons["observation-themes-preview"].tap()
+            XCTAssertTrue(app.navigationBars["Aperçu"].waitForExistence(timeout: 10), app.debugDescription)
+            capture(app, name: "observation-themes-preview-\(appearance.lowercased())")
+            app.terminate()
+        }
+    }
+
+    private func launch(_ screen: String, appearance: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = screen
         app.launchArguments = ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH"]
+        if let appearance { app.launchArguments += ["-AppleInterfaceStyle", appearance] }
         app.launch()
         return app
+    }
+
+    private func capture(_ app: XCUIApplication, name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }

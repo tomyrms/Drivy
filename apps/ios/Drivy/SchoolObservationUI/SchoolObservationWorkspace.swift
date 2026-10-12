@@ -119,7 +119,8 @@ struct SchoolObservationEditor: Identifiable {
         // Le signalement précédent part encore : le même enregistreur ouvre la palette et fait attendre la seule
         // écriture suivante, comme pendant le trajet. Un nouvel enregistreur lirait cette demande comme un blocage.
         if let live, live.isSettlingGesture, live.acceptsSignal { return live }
-        let recorder = SchoolLiveObservationRecorder(scope: scope, lessonID: lessonID, client: client, outbox: outbox,
+        let recorder = SchoolLiveObservationRecorder(scope: scope, lessonID: lessonID, client: client,
+            themeStore: SchoolObservationThemeStores.store(for: scope, client: client.themeClient), outbox: outbox,
             onSettlement: { [weak self] in
                 guard let self, !self.accessRevoked else { return }
                 // onDismiss peut avoir fini sa lecture avant la réponse d’envoi. Cette lecture

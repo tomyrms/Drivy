@@ -161,6 +161,8 @@ struct SchoolPrivateGeoObservation: Codable, Sendable, Equatable, Identifiable {
     let eventKind: String?
     let eventStatus: String?
     let authorMembershipId: UUID?
+    /// Clé du thème de « Signaler » ; absente d’une école plus ancienne ou d’une observation sans thème.
+    var themeKey: String? = nil
 }
 
 // Lecture privée dédiée : aucun repli vers cette route depuis une révision publiée.

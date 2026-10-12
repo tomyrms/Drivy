@@ -6,11 +6,25 @@ struct SchoolLiveObservationSheet: View {
     let observedAt: Date
     var anchor: SchoolLiveObservationAnchor? = nil
     var onRecorded: (() -> Void)? = nil
+    /// Hauteur dont le contenu a besoin, pour un conteneur qui fixe lui-même sa taille (popover sur iPad).
+    var onIdealHeight: ((CGFloat) -> Void)? = nil
+    @State private var idealHeight: CGFloat?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    /// Le volet suit le nombre de tuiles : bas pour quelques thèmes, plus haut pour quinze. Estimé d’abord,
+    /// puis mesuré sur le contenu réel.
+    private var paletteHeight: CGFloat {
+        idealHeight ?? SchoolSignalGridLayout.estimatedPaletteHeight(tileCount: recorder.expectedTileCount,
+            width: SchoolSignalGridLayout.assumedWidth, textSize: dynamicTypeSize)
+    }
+
     var body: some View {
-        SchoolLiveObservationPalette(recorder: recorder, observedAt: observedAt, anchor: anchor, onRecorded: onRecorded)
-            .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(DrivyMapLayout.reportPaletteHeight), .large])
+        SchoolLiveObservationPalette(recorder: recorder, observedAt: observedAt, anchor: anchor, onRecorded: onRecorded,
+            onIdealHeight: { height in
+                idealHeight = height
+                onIdealHeight?(height)
+            })
+            .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(paletteHeight), .large])
             .presentationDragIndicator(.visible)
             .presentationSizing(.form)
             .presentationCornerRadius(DrivyRadius.mapPanel + DrivySpacing.xs)
@@ -19,14 +33,21 @@ struct SchoolLiveObservationSheet: View {
 }
 
 /// L’instant et l’ancre appartiennent au geste d’ouverture, jamais au choix ou à l’animation.
-/// Le conteneur choisit la hauteur ; la grille défile entre les commandes et les appréciations.
+/// Le conteneur choisit la hauteur, d’après celle que la palette lui demande ; si elle manque, seule la grille
+/// défile entre les commandes et les appréciations, qui restent visibles.
+/// Les tuiles viennent de l’instantané que l’enregistreur prend à l’ouverture : une configuration modifiée
+/// ailleurs entre-temps ne déplace rien sous le doigt.
 struct SchoolLiveObservationPalette: View {
     @Bindable var recorder: SchoolLiveObservationRecorder
     let observedAt: Date
     var anchor: SchoolLiveObservationAnchor? = nil
     var onRecorded: (() -> Void)? = nil
     var onClose: (() -> Void)? = nil
+    var onIdealHeight: ((CGFloat) -> Void)? = nil
     @State private var selected: SchoolLiveObservationTheme?
+    @State private var headerHeight: CGFloat = 0
+    @State private var contentHeight: CGFloat = 0
+    @State private var barHeight: CGFloat = 0
     /// Son propre enregistrement ferme la palette : elle ne change plus d’apparence pendant sa sortie.
     @State private var isClosingAfterRecord = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -44,43 +65,64 @@ struct SchoolLiveObservationPalette: View {
     private var waitsForPreviousSignal: Bool { selected != nil && recorder.isSettlingGesture && !isClosingAfterRecord }
 
     var body: some View {
-        ScrollViewReader { scroll in
-            paletteContents
-                .onChange(of: recorder.errorMessage) { _, error in
-                    if error != nil { scroll.scrollTo("live-observation-error", anchor: .bottom) }
-                }
+        GeometryReader { proxy in
+            ScrollViewReader { scroll in
+                paletteContents(width: proxy.size.width)
+                    .onChange(of: recorder.errorMessage) { _, error in
+                        if error != nil { scroll.scrollTo("live-observation-error", anchor: .bottom) }
+                    }
+            }
+            .onChange(of: idealHeight(bottomInset: proxy.safeAreaInsets.bottom), initial: true) { _, height in
+                if let height { onIdealHeight?(height) }
+            }
         }
         .foregroundStyle(DrivyTheme.text)
         .background(DrivyTheme.surface)
         .tint(DrivyTheme.accent)
         .sensoryFeedback(.selection, trigger: selected?.id)
+        // Avant la première image : les tuiles de cette ouverture ne changent plus ensuite.
+        .onAppear { recorder.openPalette() }
         .task { await recorder.loadCompetencies() }
     }
 
-    @ViewBuilder private var paletteContents: some View {
+    /// Hauteur de l’en-tête, de la grille entière et des appréciations : ce qu’il faut pour tout voir sans défiler.
+    /// Pendant la lecture du référentiel, la grille n’a pas encore sa taille : le conteneur garde son estimation.
+    /// Un message passager (erreur, envoi précédent) n’entre pas dans le compte : il ne redimensionne pas le
+    /// volet sous le doigt, la grille défile pour lui faire place.
+    private func idealHeight(bottomInset: CGFloat) -> CGFloat? {
+        guard !recorder.isLoadingCompetencies, headerHeight > 0, contentHeight > 0, barHeight > 0 else { return nil }
+        return (headerHeight + contentHeight + SchoolSignalGridLayout.gutter + 1 + barHeight + bottomInset).rounded(.up)
+    }
+
+    @ViewBuilder private func paletteContents(width: CGFloat) -> some View {
         if verticalSizeClass == .compact {
             // Landscape can leave less room than the header and choices need together.
             ScrollView {
                 VStack(spacing: 0) {
-                    header
-                    themeContent
+                    measuredHeader
+                    themeContent(width: width)
                     appraisalBar
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
         } else {
             VStack(spacing: 0) {
-                header
-                ScrollView { themeContent }
+                measuredHeader
+                ScrollView { themeContent(width: width) }
                     .scrollBounceBehavior(.basedOnSize)
                 appraisalBar
             }
         }
     }
 
-    private var themeContent: some View {
+    private var measuredHeader: some View {
+        header.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
+    }
+
+    private func themeContent(width: CGFloat) -> some View {
         VStack(spacing: DrivySpacing.m) {
-            themes
+            themes(width: width)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
             if let error = recorder.errorMessage {
                 VStack(spacing: DrivySpacing.s) {
                     SchoolErrorNotice(message: error)
@@ -92,8 +134,8 @@ struct SchoolLiveObservationPalette: View {
                 .id("live-observation-error")
             }
         }
-        .padding(.horizontal, DrivySpacing.s)
-        .padding(.bottom, DrivySpacing.s)
+        .padding(.horizontal, SchoolSignalGridLayout.gutter)
+        .padding(.bottom, SchoolSignalGridLayout.gutter)
     }
 
     private var appraisalBar: some View {
@@ -106,6 +148,7 @@ struct SchoolLiveObservationPalette: View {
             appraisals
                 .padding(.horizontal, DrivySpacing.s)
                 .padding(.vertical, DrivySpacing.xs)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barHeight = $0 }
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -160,13 +203,15 @@ struct SchoolLiveObservationPalette: View {
         .accessibilityLabel(label)
     }
 
-    private var themes: some View {
-        VStack(spacing: DrivySpacing.m) {
+    private func themes(width: CGFloat) -> some View {
+        let tiles = recorder.themes
+        let layout = SchoolSignalGridLayout(tileCount: tiles.count, width: width, textSize: dynamicTypeSize)
+        return VStack(spacing: DrivySpacing.m) {
             if recorder.isLoadingCompetencies {
                 DrivySkeletonRows(count: 3).drivySkeleton("Chargement des thèmes…")
             }
-            LazyVGrid(columns: themeColumns, spacing: DrivySpacing.xxs) {
-                ForEach(recorder.themes) { theme in themeButton(theme) }
+            LazyVGrid(columns: layout.gridItems, spacing: SchoolSignalGridLayout.spacing) {
+                ForEach(tiles) { theme in themeButton(theme) }
             }
             if let message = recorder.competenciesMessage, !recorder.isLoadingCompetencies {
                 // Le marqueur de l’en-tête reste disponible même sans référentiel. Pendant un nouvel essai,
@@ -178,41 +223,13 @@ struct SchoolLiveObservationPalette: View {
         }
     }
 
-    private var themeColumns: [GridItem] {
-        if dynamicTypeSize.isAccessibilitySize { return [GridItem(.flexible())] }
-        // Three columns still fit a 375 pt iPhone after the panel and content gutters.
-        return [GridItem(.adaptive(minimum: dynamicTypeSize >= .xxLarge ? 148 : 100), spacing: DrivySpacing.xxs)]
-    }
-
     private func themeButton(_ theme: SchoolLiveObservationTheme) -> some View {
         let isSelected = selected?.id == theme.id
         return Button {
             withAnimation(motion) { selected = theme }
             focusedStatus = SchoolObservationStatus.toWorkOn.rawValue
         } label: {
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    HStack(spacing: DrivySpacing.s) {
-                        SchoolObservationEmblem(theme: theme, size: 32)
-                        themeLabel(theme).frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                } else {
-                    VStack(spacing: DrivySpacing.xxs) {
-                        SchoolObservationEmblem(theme: theme, size: 28)
-                        themeLabel(theme).multilineTextAlignment(.center)
-                    }
-                }
-            }
-            .padding(.horizontal, DrivySpacing.xs)
-            .padding(.vertical, DrivySpacing.xs)
-            .frame(maxWidth: .infinity, minHeight: 80)
-            .background(isSelected ? DrivyTheme.accentSoft : .clear,
-                        in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous)
-                    .strokeBorder(isSelected ? DrivyTheme.accent : .clear, lineWidth: 1.5)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+            SchoolSignalTileLabel(glyph: theme.glyph, title: theme.title, isSelected: isSelected)
         }
         .buttonStyle(SchoolObservationChoiceStyle())
         // Choisir un thème n’écrit rien : le choix reste possible pendant l’envoi du signalement précédent.
@@ -220,12 +237,6 @@ struct SchoolLiveObservationPalette: View {
         .accessibilityLabel(theme.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier("live-observation-theme-\(theme.title)")
-    }
-
-    private func themeLabel(_ theme: SchoolLiveObservationTheme) -> some View {
-        Text(theme.title)
-            .font(dynamicTypeSize.isAccessibilitySize ? .body.weight(.semibold) : .footnote.weight(.semibold))
-            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var appraisals: some View {

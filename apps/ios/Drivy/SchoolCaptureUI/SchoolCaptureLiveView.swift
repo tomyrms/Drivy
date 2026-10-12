@@ -20,6 +20,8 @@ struct SchoolCaptureLiveView: View {
     /// Un trajet s’ouvre en suivi, nord en haut : la carte accompagne la voiture sans qu’on y touche.
     @State private var followMode: DrivyMapFollowMode = .position
     @State private var observationMoment: ObservationMoment?
+    /// Hauteur que « Signaler » a mesurée pour ses tuiles ; gardée d’une ouverture à l’autre, elle évite un réglage visible.
+    @State private var observationPaletteHeight: CGFloat?
     @State private var observationNotice: ObservationNotice?
     @State private var isFinishing = false
     @State private var confirmsFinish = false
@@ -103,9 +105,10 @@ struct SchoolCaptureLiveView: View {
                                 .onTapGesture { closeObservation() }
                                 .accessibilityHidden(true)
                             SchoolLiveObservationPalette(recorder: moment.recorder, observedAt: moment.instant,
-                                anchor: moment.anchor, onRecorded: { showObservationNotice(moment.recorder) }, onClose: closeObservation)
+                                anchor: moment.anchor, onRecorded: { showObservationNotice(moment.recorder) }, onClose: closeObservation,
+                                onIdealHeight: { observationPaletteHeight = $0 })
                                 .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
-                                .frame(height: min(DrivyMapLayout.reportPaletteHeight, max(0, geometry.size.height - DrivySpacing.xl)))
+                                .frame(height: paletteHeight(for: moment.recorder, in: geometry.size))
                                 .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                                 .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                                 .drivyShadow(radius: 18, y: 8)
@@ -436,11 +439,27 @@ struct SchoolCaptureLiveView: View {
         .accessibilityIdentifier("capture-signal-observation")
         .popover(item: observationPopover, attachmentAnchor: .rect(.bounds)) { moment in
             SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant, anchor: moment.anchor,
-                onRecorded: { showObservationNotice(moment.recorder) })
+                onRecorded: { showObservationNotice(moment.recorder) }, onIdealHeight: { observationPaletteHeight = $0 })
                 .frame(width: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.width : nil,
-                       height: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.height : nil)
+                       height: horizontalSizeClass == .regular ? popoverHeight(for: moment.recorder) : nil)
                 .presentationCompactAdaptation(.sheet)
         }
+    }
+
+    /// Volet posé sur la carte : la hauteur que ses tuiles demandent, sans dépasser l’écran. Peu de tuiles, volet bas ;
+    /// quinze tuiles, cinq rangées visibles sur un iPhone courant. Au-delà, seule la grille défile.
+    private func paletteHeight(for recorder: SchoolLiveObservationRecorder, in size: CGSize) -> CGFloat {
+        let width = min(DrivyMapLayout.floatingPanelMaxWidth, max(0, size.width - 2 * DrivySpacing.m))
+        let wanted = observationPaletteHeight ?? SchoolSignalGridLayout.estimatedPaletteHeight(
+            tileCount: recorder.expectedTileCount, width: width, textSize: dynamicTypeSize)
+        return min(wanted, max(0, size.height - DrivySpacing.xl))
+    }
+
+    /// Popover de l’iPad : jamais plus haut que sa taille de référence, plus bas quand il y a peu de tuiles.
+    private func popoverHeight(for recorder: SchoolLiveObservationRecorder) -> CGFloat {
+        let wanted = observationPaletteHeight ?? SchoolSignalGridLayout.estimatedPaletteHeight(
+            tileCount: recorder.expectedTileCount, width: DrivyMapLayout.reportPopoverSize.width, textSize: dynamicTypeSize)
+        return min(wanted, DrivyMapLayout.reportPopoverSize.height)
     }
 
     private func closeObservation() {

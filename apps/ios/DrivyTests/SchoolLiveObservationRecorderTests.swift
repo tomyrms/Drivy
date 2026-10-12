@@ -101,7 +101,8 @@ import Testing
     @Test func aThemeNotReadFromTheTrainingCannotBeRecorded() {
         let outbox = ConfigurationOutboxStub()
         let model = recorder(outbox: outbox)
-        #expect(!model.record(theme: SchoolLiveObservationTheme.choices(for: LiveObservationTransport.competency)[0], status: .attention, at: Date()))
+        let unread = SchoolLiveObservationTheme(competency: LiveObservationTransport.competency, title: "Priorité à droite")
+        #expect(!model.record(theme: unread, status: .attention, at: Date()))
         #expect(outbox.value == nil && model.pending == nil)
         model.stop()
     }
@@ -111,10 +112,14 @@ import Testing
         let priorities = SchoolCatalogCompetency(id: c.id, schoolId: c.schoolId, version: c.version,
             curriculumVersionId: c.curriculumVersionId, key: "priorites", label: "Priorités",
             description: "Priorité de droite, signalisation et céder le passage.", sortOrder: 1)
-        let themes = SchoolLiveObservationTheme.choices(for: priorities)
+        let catalog = SchoolObservationThemeCatalog.embedded
+        let themes = SchoolLiveObservationTheme.tiles(for: catalog, competencies: [priorities])
         #expect(themes.map(\.title) == ["Priorité à droite", "Signalisation", "Céder le passage"])
+        #expect(themes.map(\.key) == ["right-priority", "signage", "give-way"])
         #expect(themes.allSatisfy { $0.competency.id == priorities.id })
-        #expect(SchoolLiveObservationTheme.choices(for: c).count == 1)
+        // Une compétence qu’aucun thème ne désigne garde une seule tuile, à son nom, sans clé.
+        let generic = SchoolLiveObservationTheme.tiles(for: catalog, competencies: [c])
+        #expect(generic.count == 1 && generic[0].key == nil && generic[0].title == c.label)
     }
 
     @Test func replayNamesThePreciseObservationAndKeepsItsStatusSeparate() {

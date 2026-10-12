@@ -42,21 +42,30 @@ struct DrivyObservationGlyphImage: View {
     }
 }
 
-/// Thème d’un signalement, retrouvé depuis le titre posé par « Signaler » ou, à défaut, la clé de la
-/// compétence. Les identifiants et la logique métier ne changent pas : seul le dessin en dépend.
+/// Thème d’un signalement : sa clé quand l’observation la porte, sinon la clé de la compétence et le titre
+/// posé par « Signaler ». La valeur brute est la clé du catalogue et le nom du dessin (`Observation-<clé>`).
+/// Les identifiants et la logique métier ne changent pas : seul le dessin en dépend, jamais l’affichage réglé
+/// par l’école — un thème masqué garde son dessin partout où il a servi.
 enum SchoolObservationPictogram: String, CaseIterable {
     case vehicle, observation, rightPriority = "right-priority", signage, giveWay = "give-way", intersections
     case speed, placement, manoeuvres, motorway, anticipation
+    case indicators, followingDistance = "following-distance", braking, laneChange = "lane-change"
 
     var glyph: DrivyObservationGlyph { .asset("Observation-\(rawValue)") }
 
-    /// `nil` quand ni la compétence ni le titre ne désignent un thème : une note libre n’emprunte pas un dessin.
-    /// La compétence prime, car un texte relu peut tout dire ; le titre ne fait que préciser le sous-thème
-    /// de « Priorités » (priorité à droite, signalisation, céder le passage).
-    init?(title: String?, competencyKey: String? = nil) {
+    /// `nil` quand rien ne désigne un thème : une note libre n’emprunte pas un dessin.
+    /// La clé du thème prime : elle ne dépend ni du texte, que le moniteur peut réécrire, ni de l’ordre.
+    /// Sans clé (observation ancienne, école qui n’a pas répondu), la compétence prime sur le texte, qui ne
+    /// fait que préciser un sous-thème de cette compétence (« Signalisation » pour « Priorités »,
+    /// « Clignotants » pour « Observation et contrôles »…).
+    init?(themeKey: String? = nil, title: String?, competencyKey: String? = nil) {
+        if let themeKey, let fromTheme = Self(rawValue: themeKey) {
+            self = fromTheme
+            return
+        }
         let fromTitle = title.flatMap(Self.match)
         if let competencyKey, let fromKey = Self.byKey[competencyKey] {
-            if fromKey == .rightPriority, let sub = fromTitle, sub == .signage || sub == .giveWay {
+            if let sub = fromTitle, Self.refinements[fromKey]?.contains(sub) == true {
                 self = sub
             } else {
                 self = fromKey
@@ -73,10 +82,19 @@ enum SchoolObservationPictogram: String, CaseIterable {
         "autoroute": .motorway, "motorway": .motorway, "anticipation": .anticipation,
     ]
 
-    /// Ordre utile : les sous-thèmes de « Priorités » passent avant le mot « priorité » seul.
+    /// Sous-thèmes qu’un titre peut préciser à l’intérieur d’une compétence.
+    private static let refinements: [Self: Set<Self>] = [
+        .rightPriority: [.signage, .giveWay], .observation: [.indicators], .speed: [.followingDistance],
+        .vehicle: [.braking], .placement: [.laneChange],
+    ]
+
+    /// Ordre utile : les sous-thèmes passent avant le mot plus large de leur compétence (« priorité », « vitesse »,
+    /// « placement »…).
     private static let byWords: [(String, Self)] = [
         ("priorite a droite", .rightPriority), ("priorite de droite", .rightPriority),
         ("ceder le passage", .giveWay), ("signalisation", .signage),
+        ("clignotant", .indicators), ("distance de securite", .followingDistance),
+        ("freinage", .braking), ("changement de voie", .laneChange),
         ("giratoire", .intersections), ("intersection", .intersections), ("carrefour", .intersections),
         ("autoroute", .motorway), ("vitesse", .speed), ("stationnement", .manoeuvres), ("manoeuvre", .manoeuvres),
         ("placement", .placement), ("chaussee", .placement), ("anticipation", .anticipation),
@@ -124,7 +142,7 @@ extension SchoolObservation {
     func glyph(competencies: [SchoolCatalogCompetency] = []) -> DrivyObservationGlyph {
         if isMarker { return .moment }
         let key = competencyId.flatMap { id in competencies.first { $0.id == id }?.key }
-        if let theme = SchoolObservationPictogram(title: text, competencyKey: key) { return theme.glyph }
+        if let theme = SchoolObservationPictogram(themeKey: themeKey, title: text, competencyKey: key) { return theme.glyph }
         return SchoolLessonHubRules.status(of: self)?.glyph ?? .note
     }
 }
