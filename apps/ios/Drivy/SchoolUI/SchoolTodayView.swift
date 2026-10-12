@@ -15,6 +15,7 @@ struct SchoolTodayView: View {
     var schoolName: String? = nil
     var chooseSchool: (() -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(SchoolRequiredActionStore.self) private var requiredActions: SchoolRequiredActionStore?
     @State private var lessons: [SchoolLesson] = []
@@ -29,11 +30,9 @@ struct SchoolTodayView: View {
     @State private var presentsStartNow = false
     /// La feuille « Démarrer une leçon » appartient à l’écran : la carte qui porte son bouton change avec l’heure.
     @State private var startNow = SchoolStartNowPresentation()
-    @State private var showsDay = false
     @State private var cardHeight: CGFloat = 0
     @State private var location = SchoolTodayLocationPermission()
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
-    @Namespace private var mapScope
 
     /// « Commencer la leçon » direct en cours (accord lu, puis rideau) : un second appui ne lance rien.
     @State private var startingPlanned = false
@@ -174,21 +173,40 @@ struct SchoolTodayView: View {
     /// Sans position autorisée, un état honnête plutôt qu’une vue du pays entier.
     @ViewBuilder private var map: some View {
         if location.permitted {
-            Map(position: $camera, scope: mapScope) { UserAnnotation() }
+            // Ni rotation ni boussole : la carte du jour reste nord en haut, sans commande système hors de la DA.
+            Map(position: $camera, interactionModes: [.pan, .zoom]) { UserAnnotation() }
                 .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
                 .mapControls { }
+                // Le point de position garde le bleu du système : teinté du bleu pastel du thème sombre, il se lisait
+                // comme une position périmée.
+                .tint(.blue)
                 // Avant les insets du panneau : le contrôle suit la carte visible sans déplacer ses mentions.
-                .overlay(alignment: .bottomTrailing) {
-                    MapUserLocationButton(scope: mapScope)
-                        .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
-                        .padding(.trailing, DrivySpacing.m)
-                        .padding(.bottom, DrivySpacing.l)
-                }
+                .overlay(alignment: .bottomTrailing) { recenterButton }
         } else {
             locationPlaceholder
                 .frame(maxHeight: .infinity)
                 .background(DrivyTheme.canvas)
         }
+    }
+
+    /// Même bouton rond que sur la carte du trajet : verre lisible, glyphe de la DA, plein quand la carte suit.
+    private var recenterButton: some View {
+        let following = camera.followsUserLocation
+        return Button {
+            withAnimation(DrivyMotion.context(reduceMotion)) { camera = .userLocation(fallback: .automatic) }
+        } label: {
+            Image(systemName: following ? "location.fill" : "location")
+                .font(DrivyMapGlyph.primaryControl)
+                .foregroundStyle(following ? DrivyTheme.accent : DrivyTheme.text)
+                .frame(width: 48, height: 48)
+                .drivyLegibleMapControl(in: Circle())
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, DrivySpacing.m)
+        .padding(.bottom, DrivySpacing.m)
+        .accessibilityLabel("Recentrer sur ma position")
+        .accessibilityAddTraits(following ? [.isSelected] : [])
+        .accessibilityIdentifier("today-recenter")
     }
 
     private var locationPlaceholder: some View {
@@ -228,7 +246,9 @@ struct SchoolTodayView: View {
         let featured = active ?? next
         DrivyMapDock(floating: floating) {
             if let lesson = featured {
-                lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote)
+                // Une leçon commencée se lit « En cours » sur sa ligne, pas seulement dans le libellé du bouton.
+                lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote
+                    ?? (lesson.hasStarted ? DrivyRowNote(text: "En cours", tone: .accent) : nil))
                 if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId
                     && (lesson.hasStarted || SchoolLessonHubRules.mayBegin(lesson, now: now)) {
                     Button { Task { await commence(lesson) } } label: {
@@ -270,7 +290,7 @@ struct SchoolTodayView: View {
                 ForEach(unfinished) { lesson in
                     Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
                         DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                            details: [day(lesson)], state: lesson.drivyState(now: now), showsChevron: false)
+                            details: [day(lesson)], state: lesson.drivyState(now: now))
                     }
                     .buttonStyle(DrivyRowButtonStyle())
                     .accessibilityHint("Ouvre la leçon à terminer")
@@ -298,7 +318,7 @@ struct SchoolTodayView: View {
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(SchoolTodayPresentation.moment(for: lesson, now: now))
                     .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson), details: [])
+                DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson), details: [lesson.meetingPoint])
             }
         }
         .buttonStyle(DrivyRowButtonStyle())
@@ -306,31 +326,16 @@ struct SchoolTodayView: View {
         .accessibilityHint("Ouvre la prochaine leçon")
     }
 
+    /// Le reste de la journée tient en un compte : « +2 ». Les leçons elles-mêmes se lisent dans l’agenda.
     @ViewBuilder private func dayList(now: Date, excluding: Set<UUID>) -> some View {
         let others = SchoolTodayPresentation.upcomingLessons(lessons, now: now, excluding: excluding)
         if !others.isEmpty {
-          VStack(spacing: 0) {
-            // La liste complète reste dans l’agenda ; ce groupe ne montre que la suite de la journée.
-            Divider().overlay(DrivyTheme.border)
-            DisclosureGroup(isExpanded: $showsDay) {
-                VStack(spacing: 0) {
-                    ForEach(Array(others.enumerated()), id: \.element.id) { index, lesson in
-                        Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
-                            DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                                details: [lesson.meetingPoint], state: lesson.drivyState(now: now), showsChevron: false,
-                                railPosition: .at(index, count: others.count))
-                        }
-                        .buttonStyle(DrivyRowButtonStyle())
-                        .accessibilityHint("Ouvre la leçon")
-                    }
-                }
-            } label: {
-                Text(others.count == 1 ? "Autre leçon" : "\(others.count) autres leçons")
-                    .font(.subheadline.weight(.semibold)).monospacedDigit()
-                    .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
-            }
-            .accessibilityIdentifier("today-day-list")
-          }
+            Text("+\(others.count)")
+                .font(.subheadline.weight(.semibold)).monospacedDigit()
+                .foregroundStyle(DrivyTheme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel(others.count == 1 ? "Une autre leçon aujourd’hui" : "\(others.count) autres leçons aujourd’hui")
+                .accessibilityIdentifier("today-day-list")
         }
     }
 
