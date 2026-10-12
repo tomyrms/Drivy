@@ -223,6 +223,8 @@ final class SchoolCaptureSessionController {
         liveObservations?.stop()
         liveObservations = SchoolLiveObservationRecorder(scope: active.scope, lessonID: lessonID, client: client,
             themeStore: SchoolObservationThemeStores.store(for: active.scope, client: client.themeClient),
+            rankingStore: SchoolObservationRankingStores.store(for: active.scope, client: client.rankingClient),
+            signalOrders: SchoolLessonSignalOrderStores.make(active.scope),
             permitsAnchor: { [weak self] anchor in
                 guard let self else { return false }
                 return self.state == .recording && self.captureID == anchor.captureID

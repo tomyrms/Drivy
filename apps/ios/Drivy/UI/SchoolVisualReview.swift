@@ -64,7 +64,9 @@ struct SchoolVisualReview: View {
                     NavigationStack {
                         if let themes = context.agenda.observationThemeStore(person: context.workspace.person,
                                                                            membership: context.workspace.membership) {
-                            SchoolObservationThemeSettingsView(store: themes)
+                            SchoolObservationThemeSettingsView(store: themes,
+                                ranking: context.agenda.observationRankingStore(person: context.workspace.person,
+                                                                                 membership: context.workspace.membership))
                         }
                     }
                 case "profile-tab":
@@ -197,6 +199,9 @@ struct SchoolVisualShell: View {
         let baseURL = URL(string: "https://visual.drivy.invalid")!
         // Aucun fichier sur le simulateur : la configuration des signalements reste en mémoire.
         SchoolObservationThemeStores.makeCache = { SchoolVisualThemeCache() }
+        // De même pour le classement du moniteur et l’ordre figé d’une leçon.
+        SchoolObservationRankingStores.makeCache = { SchoolVisualRankingCache() }
+        SchoolLessonSignalOrderStores.make = { _ in SchoolLessonSignalOrderMemoryStore() }
         let fixtures = try responses(learnerRole: learnerRole, populatedObservations: populatedObservations,
             permitCount: permitCount)
         let transport = SchoolVisualTransport(responses: fixtures)
@@ -543,6 +548,12 @@ struct SchoolVisualShell: View {
             let themes = SchoolObservationThemeSettings(id: schoolID, schoolId: schoolID, version: 1, canManage: true,
                 themes: catalog)
             objects["\(root)/observation-themes"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(themes))
+            // Classement du moniteur fictif : jamais réglé (ordre de l’école, version 1). L’écran des signalements
+            // montre donc l’interrupteur ; l’activer échoue ici (transport en lecture seule) et revient à cet état.
+            let ranking: [String: Any] = ["id": membershipID.uuidString, "schoolId": schoolID.uuidString,
+                "membershipId": membershipID.uuidString, "version": 1, "mode": SchoolObservationRankingMode.manual.rawValue,
+                "order": [String](), "rankedOn": null]
+            objects["\(root)/observation-ranking"] = ranking
         }
         // Fiche d’une leçon annulée (clés nouvelles : aucun écran existant n’en dépend).
         objects.merge(cancelledLessonObjects()) { _, new in new }
@@ -628,6 +639,13 @@ struct SchoolVisualTransport: SchoolHTTPTransport {
 @MainActor final class SchoolVisualThemeCache: SchoolObservationThemeCache {
     func read(scope: SchoolCommandScope) -> SchoolObservationThemeConfiguration? { nil }
     func write(_ configuration: SchoolObservationThemeConfiguration, scope: SchoolCommandScope) { }
+}
+
+/// Copie locale du classement pour les rendus de contrôle : rien n’est lu ni écrit sur le simulateur.
+@MainActor final class SchoolVisualRankingCache: SchoolObservationRankingCache {
+    func read(scope: SchoolCommandScope) -> SchoolObservationRanking? { nil }
+    func write(_ ranking: SchoolObservationRanking, scope: SchoolCommandScope) { }
+    func remove(scope: SchoolCommandScope) { }
 }
 
 @MainActor final class SchoolVisualOutbox: SchoolCommandOutbox {

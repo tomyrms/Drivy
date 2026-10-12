@@ -164,6 +164,10 @@ struct SchoolHomeView: View {
         .task(id: observationThemeScope) {
             guard let themes = agendaClient?.observationThemeStore(person: workspace.person, membership: workspace.membership) else { return }
             await themes.refresh()
+            // Classement du moniteur : relu au même moment, pour que la prochaine leçon parte du dernier ordre.
+            if let ranking = agendaClient?.observationRankingStore(person: workspace.person, membership: workspace.membership) {
+                await ranking.refresh()
+            }
         }
     }
 

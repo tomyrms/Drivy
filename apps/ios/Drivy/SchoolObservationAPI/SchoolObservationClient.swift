@@ -8,6 +8,7 @@ import Foundation
     private let transport: any SchoolHTTPTransport
     var reportClient: SchoolLessonReportClient { agenda.reportClient }
     var themeClient: SchoolObservationThemeClient { SchoolObservationThemeClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
+    var rankingClient: SchoolObservationRankingClient { SchoolObservationRankingClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
 
     init(baseURL: URL, tokenSource: any AccessTokenSource, transport: any SchoolHTTPTransport = SchoolURLSessionTransport()) {
         self.baseURL = baseURL; self.tokenSource = tokenSource; self.transport = transport

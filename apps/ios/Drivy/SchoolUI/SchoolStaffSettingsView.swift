@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Profil → Paramètres (moniteur, administration) : préférences de leçon, signalements de l’école, apparence,
+/// Profil → Paramètres (moniteur, administration) : préférences de leçon, signalements et leur classement, apparence,
 /// verrou de l’app et déconnexion. Mêmes lignes et même rangement que les Paramètres de l’élève
 /// (`SchoolLearnerSettingsView`) : rien n’est copié, chaque ligne vient de son écran ou de `SchoolAccountActions`.
 /// Le compte (informations, invitations, école) reste sur le Profil.
@@ -22,12 +22,14 @@ struct SchoolStaffSettingsView: View {
         return (agendaClient.scope(person: person, membership: membership), agendaClient.planningClient)
     }
 
-    /// Seulement quand l’école a dit que ce compte peut les gérer (administration, ou moniteur portant le droit) ;
-    /// un moniteur sans ce droit utilise simplement « Signaler ».
+    /// Pour tout moniteur ou compte de l’administration : chacun y règle son propre classement. L’ordre et
+    /// l’affichage de l’école ne s’y modifient que si elle a dit que ce compte peut les gérer.
     private var observationThemes: SchoolObservationThemeStore? {
-        guard let themes = agendaClient?.observationThemeStore(person: workspace.person, membership: workspace.membership),
-              themes.canManage else { return nil }
-        return themes
+        agendaClient?.observationThemeStore(person: workspace.person, membership: workspace.membership)
+    }
+
+    private var observationRanking: SchoolObservationRankingStore? {
+        agendaClient?.observationRankingStore(person: workspace.person, membership: workspace.membership)
     }
 
     var body: some View {
@@ -47,7 +49,7 @@ struct SchoolStaffSettingsView: View {
                     }
                     if let themes {
                         NavigationLink {
-                            SchoolObservationThemeSettingsView(store: themes)
+                            SchoolObservationThemeSettingsView(store: themes, ranking: observationRanking)
                         } label: {
                             Text("Signalements")
                                 .foregroundStyle(DrivyTheme.text)
