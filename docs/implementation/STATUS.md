@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 12 octobre 2026 — leçon terminée en onglets, « Mon souhait », Formation d’un permis, icône Progression
+
+La leçon terminée se lit en trois onglets sous la carte de l’élève (Bilan, Compétences, Trajet & notes), même vue pour le moniteur et l’élève. Côté élève, « Mon souhait » ferme enfin son clavier, et l’accord GPS sous le souhait ne reste plus en squelette (une lecture annulée par un `Group` n’était jamais relancée). Dans le profil, la Formation d’un permis passe au-dessus de Leçons et Progression, dense, avec des décomptes réels du référentiel. L’onglet Progression de l’élève a son icône dessinée (« route parcourue », retenue sur trois). [Décisions, causes et limites](lecon-onglets-20261012.md).
+
+**Exécuté** : IPA d’essai compilée ; 497 tests Swift réussis dont 7 nouveaux ; captures iPhone clair/sombre des nouveaux écrans relues. **Reste à qualifier** : clavier et transitions sur appareil, VoiceOver, grand texte, iPad, icône dans la barre d’onglets réelle. Pas de note sur 10 (l’école évalue en trois niveaux) ni d’exigences de formation (aucune donnée dans l’API).
+
 ## 12 octobre 2026 — icônes des catégories de permis
 
 Les 16 catégories de l’OAC (A, A1, M, B, B1, BE, C, C1, CE, C1E, D, D1, DE, D1E, F, G) ont leur icône. L’atelier a produit trois directions par catégorie ; la direction « Signature » (aplats, roues = repère de la marque) est retenue partout sur notes pondérées. Composant central `DrivingLicenseIcon`, assets vectoriels `License-*`, intégration dans les filtres Leçons/Progression, le Profil, l’accueil élève, la planification, « Commencer maintenant », les réglages d’agenda et l’invitation. [Démarche, notes et limites](icones-permis-20261012.md).
