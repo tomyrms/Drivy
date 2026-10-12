@@ -8,6 +8,7 @@ import {schoolCommand,schoolColumns,checkIdempotency,checkVersion,requireVersion
 import {ApiError,forbidden,notFound} from './errors.js';
 import {Cursors} from './cursor.js';
 import {ensureOpen,instructorPermission} from './lesson-setup.js';
+import {missingRules,PLANNING_STAGES,type ProfileValues} from './profile-completeness.js';
 const id=z.uuid(),date=z.iso.datetime({offset:true}),amount=z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),empty=z.object({}).strict();
 const selection=z.object({mode:z.enum(['UNIT_PRICE','ENTITLEMENT']),serviceProductVersionId:id,quantity:z.number().int().min(1).max(100),entitlementLotId:id.nullable(),acceptedTermsVersionId:id}).strict()
  .refine(v=>v.mode==='UNIT_PRICE'?v.entitlementLotId===null:v.entitlementLotId!==null);
@@ -84,8 +85,7 @@ async function trainingContext(db:PoolClient,school:SchoolRow,trainingId:string,
  const policy=(await db.query<{fields:{field:string;requirement:string;stage:string}[]}>(`SELECT fields FROM drivy.profile_field_policy WHERE school_id=$1 AND status='PUBLISHED' AND effective_from<=now() ORDER BY effective_from DESC LIMIT 1`,[school.id])).rows[0];
  if(!policy)throw new ApiError(409,'PROFILE_POLICY_NOT_READY','Publiez la politique des informations nécessaires avant de planifier.');
  const profile=(await db.query<Record<string,unknown>>('SELECT first_name,last_name,birth_date,postal_address,contact_email,contact_phone FROM drivy.learner_profile WHERE school_id=$1 AND id=$2',[school.id,row.learner_id])).rows[0]!;
- const names:Record<string,string>={firstName:'first_name',lastName:'last_name',birthDate:'birth_date',postalAddress:'postal_address',contactEmail:'contact_email',contactPhone:'contact_phone'};
- if(policy.fields.some(rule=>rule.requirement==='REQUIRED'&&['JOIN','BEFORE_LESSON'].includes(rule.stage)&&(!names[rule.field]||profile[names[rule.field]!]==null||profile[names[rule.field]!] ==='')))throw new ApiError(409,'PROFILE_ACTION_REQUIRED','Complétez les informations requises du dossier avant de planifier.');
+ if(missingRules(profile as unknown as ProfileValues,policy.fields,PLANNING_STAGES).length)throw new ApiError(409,'PROFILE_ACTION_REQUIRED','Complétez les informations requises du dossier avant de planifier.');
  return row;
 }
 async function validateCommercial(db:PoolClient,schoolId:string,commercial:Selection,price:number,category:string,minutes:number,start:string,timeZone:string,allowOverride:boolean){
