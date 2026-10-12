@@ -9,6 +9,7 @@ import {checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandA
 import {getLesson,type LessonRow} from './lessons.js';
 import {geoObservationCommand,geoObservationProjection,uuid,type GeoObservationInput,type GeoObservationRow,type CaptureRow,type ChunkRow} from './capture-contracts.js';
 import {chunkAAD,decryptPoints,type CaptureConfig} from './capture-crypto.js';
+import {observationThemeCompetencies,type ObservationThemeKey} from './observation-themes.js';
 
 const empty=z.object({}).strict();
 const reasonCommand=z.object({operationId:uuid,reason:z.string().refine(v=>v.trim().length>0&&[...v].length<=1000)}).strict();
@@ -39,11 +40,14 @@ async function resolveDraft(db:PoolClient,lesson:LessonRow,memberId:string,body:
  if(lesson.status!=='COMPLETED'||!row)throw conflict('OBSERVATION_REVIEW_REQUIRED','Le brouillon doit être relu avant de recevoir cette observation.');
  return row.id;
 }
-async function validateTheme(db:PoolClient,lesson:LessonRow,id:string|null){
+async function validateTheme(db:PoolClient,lesson:LessonRow,id:string|null,themeKey:ObservationThemeKey|null=null){
  if(id===null)return;
- const found=await db.query(`SELECT c.id FROM drivy.competency_definition c JOIN drivy.offering_version o ON o.school_id=c.school_id AND o.curriculum_version_id=c.curriculum_version_id
+ const found=await db.query<{stable_key:string}>(`SELECT c.stable_key FROM drivy.competency_definition c JOIN drivy.offering_version o ON o.school_id=c.school_id AND o.curriculum_version_id=c.curriculum_version_id
   JOIN drivy.training t ON t.school_id=o.school_id AND t.offering_id=o.id WHERE t.school_id=$1 AND t.id=$2 AND c.id=$3`,[lesson.school_id,lesson.training_id,id]);
  if(!found.rowCount)throw conflict('CURRICULUM_VERSION_MISMATCH','Choisissez un thème du référentiel de cette formation.');
+ // Le thème précise la compétence choisie, il ne la remplace pas. Son affichage dans « Signaler » n'est pas relu ici : masquer un
+ // thème ne refuse ni une leçon en cours ni une demande restée dans la file d'un appareil.
+ if(themeKey&&!observationThemeCompetencies(themeKey).includes(found.rows[0]!.stable_key))throw new ApiError(422,'OBSERVATION_THEME_MISMATCH','Ce thème ne correspond pas à la compétence choisie.');
 }
 async function validateAnchor(db:PoolClient,lesson:LessonRow,body:GeoObservationInput,config:CaptureConfig|undefined){
  if(body.captureId===null)return;
@@ -141,9 +145,9 @@ export function registerCaptureObservations(app:FastifyInstance,options:{pool:Po
    const count=(await db.query<{n:number}>('SELECT count(*)::int AS n FROM drivy.geo_observation WHERE school_id=$1 AND lesson_id=$2 AND author_membership_id=$3 AND removed_at IS NULL',[school.id,lessonId,actor.membershipId])).rows[0]!.n;
    if(count>=100)throw conflict('OBSERVATION_LIMIT_REACHED','Cette leçon contient déjà 100 observations privées. Relisez-les avant un nouvel ajout.');
    if(body.observedAt&&Date.parse(body.observedAt)>Date.now()+300_000)throw new ApiError(422,'OBSERVATION_TIME_INVALID','L’instant indiqué est futur. Conservez l’intention et relisez son heure.');
-   await validateTheme(db,lesson,body.competencyId);await validateAnchor(db,lesson,body,options.capture);
-   const row=(await db.query<GeoObservationRow>(`INSERT INTO drivy.geo_observation(school_id,lesson_id,training_id,author_membership_id,draft_id,capture_id,segment_id,point_sequence,competency_id,text,origin,observed_at,event_kind,event_status)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,[school.id,lessonId,lesson.training_id,actor.membershipId,draftId,body.captureId,body.segmentId,body.pointSequence,body.competencyId,body.text,body.origin??'REVIEW',body.observedAt??null,body.eventKind??null,body.eventStatus??null])).rows[0]!;
+   await validateTheme(db,lesson,body.competencyId,body.themeKey??null);await validateAnchor(db,lesson,body,options.capture);
+   const row=(await db.query<GeoObservationRow>(`INSERT INTO drivy.geo_observation(school_id,lesson_id,training_id,author_membership_id,draft_id,capture_id,segment_id,point_sequence,competency_id,text,origin,observed_at,event_kind,event_status,theme_key)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,[school.id,lessonId,lesson.training_id,actor.membershipId,draftId,body.captureId,body.segmentId,body.pointSequence,body.competencyId,body.text,body.origin??'REVIEW',body.observedAt??null,body.eventKind??null,body.eventStatus??null,body.themeKey??null])).rows[0]!;
    await touchDraft(db,school.id,[draftId]);
    // F3 : une observation sans ancre qui arrive après la finalisation du trajet est placée tout de suite (avant, la finalisation s'en charge).
    let created=row;
@@ -163,9 +167,10 @@ export function registerCaptureObservations(app:FastifyInstance,options:{pool:Po
    const draftId=await resolveDraft(db,lesson,actor.membershipId,body);
    if(body.observedAt&&Date.parse(body.observedAt)>Date.now()+300_000)throw new ApiError(422,'OBSERVATION_TIME_INVALID','L’instant indiqué est futur.');
    if(body.origin==='LIVE'&&old.observed_at&&Date.parse(body.observedAt!)!==old.observed_at.getTime())throw new ApiError(422,'OBSERVATION_TIME_CHANGED','La qualification conserve l’instant du signalement. Une correction explicite exige une revue dans le brouillon.');
-   await validateTheme(db,lesson,body.competencyId);await validateAnchor(db,lesson,body,options.capture);
-   const row=(await db.query<GeoObservationRow>(`UPDATE drivy.geo_observation SET version=version+1,draft_id=$3,capture_id=$4,segment_id=$5,point_sequence=$6,competency_id=$7,text=$8,origin=$9,observed_at=$10,event_kind=$11,event_status=$12
-    WHERE school_id=$1 AND id=$2 RETURNING *`,[school.id,observationId,draftId,body.captureId,body.segmentId,body.pointSequence,body.competencyId,body.text,body.origin??'REVIEW',body.observedAt??null,body.eventKind??null,body.eventStatus??null])).rows[0]!;
+   await validateTheme(db,lesson,body.competencyId,body.themeKey??null);await validateAnchor(db,lesson,body,options.capture);
+   const row=(await db.query<GeoObservationRow>(`UPDATE drivy.geo_observation SET version=version+1,draft_id=$3,capture_id=$4,segment_id=$5,point_sequence=$6,competency_id=$7,text=$8,origin=$9,observed_at=$10,event_kind=$11,event_status=$12,theme_key=$13
+    WHERE school_id=$1 AND id=$2 RETURNING *`,[school.id,observationId,draftId,body.captureId,body.segmentId,body.pointSequence,body.competencyId,body.text,body.origin??'REVIEW',body.observedAt??null,body.eventKind??null,body.eventStatus??null,
+     body.themeKey!==undefined?body.themeKey:(body.competencyId===old.competency_id?old.theme_key:null)])).rows[0]!;
    await touchDraft(db,school.id,[old.draft_id,draftId]);return {data:geoObservationProjection(row),action:'GeoObservationUpdated',resourceType:'GeoObservation',resourceId:row.id,changedFields:['observation']};
   });reply.header('ETag',`"${data.version}"`);return envelope(data,r);
  });
