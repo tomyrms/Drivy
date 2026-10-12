@@ -84,8 +84,9 @@ struct DrivyDesignSystemGallery: View {
                     }
                 }
                 // La grille de « Signaler » selon le nombre de thèmes que l’école affiche : une tuile large,
-                // les douze d’origine, puis les quinze du catalogue.
-                ForEach([1, 12, 15], id: \.self) { count in
+                // les thèmes affichés à l’origine, quinze, puis tout le catalogue (trois colonnes sur six rangées
+                // sur un iPhone).
+                ForEach(Self.signalGridCounts, id: \.self) { count in
                     VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                         Text(count > 1 ? "\(count) tuiles" : "1 tuile")
                             .font(.caption).foregroundStyle(DrivyTheme.muted)
@@ -121,6 +122,11 @@ struct DrivyDesignSystemGallery: View {
     }
 
     /// Trois configurations d’école : un seul thème affiché, celle d’origine, tout le catalogue.
+    private static var signalGridCounts: [Int] {
+        let catalog = SchoolObservationThemeCatalog.embedded
+        return Array(Set([1, catalog.filter(\.defaultVisible).count, 15, catalog.count])).sorted()
+    }
+
     private static func signalThemes(_ count: Int) -> [SchoolObservationTheme] {
         var themes = SchoolObservationThemeCatalog.embedded
         for index in themes.indices { themes[index].visible = index < count }

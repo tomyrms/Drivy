@@ -8,7 +8,7 @@ Contrat et décisions communes : [signalements-configurables-20261012.md](signal
 
 Créés :
 
-- `Drivy/SchoolObservationAPI/SchoolObservationThemes.swift` : thème, catalogue embarqué des 15 thèmes, règle de fusion, corps du `PUT`, erreurs typées, client `GET`/`PUT`.
+- `Drivy/SchoolObservationAPI/SchoolObservationThemes.swift` : thème, catalogue embarqué des 18 thèmes, règle de fusion, corps du `PUT`, erreurs typées, client `GET`/`PUT`.
 - `Drivy/SchoolObservationAPI/SchoolObservationThemeStore.swift` : copie locale, store par école et par accès, registre des stores.
 - `Drivy/SchoolCaptureUI/SchoolSignalGrid.swift` : règle de disposition (`SchoolSignalGridLayout`), contenu d’une tuile, aperçu de la grille.
 - `Drivy/SchoolObservationUI/SchoolObservationThemeSettingsView.swift` : écran « Signalements » et feuille « Aperçu ».
@@ -20,7 +20,7 @@ Modifiés : `SchoolCaptureLiveObservations.swift` (tuiles, instantané, `themeKe
 
 ### Stockage local
 
-Un fichier JSON par école dans Application Support (`SchoolObservationThemes/<école>.json`), en clair : ordre et affichage de quinze thèmes, aucune donnée de personne. Il n’a rien de commun avec la file chiffrée et n’écrit jamais le repli embarqué, qui passerait ensuite pour une réponse de l’école. `canManage` n’est pas copié : il ne vient que d’une réponse de l’école pendant la session.
+Un fichier JSON par école dans Application Support (`SchoolObservationThemes/<école>.json`), en clair : ordre et affichage des thèmes du catalogue, aucune donnée de personne. Il n’a rien de commun avec la file chiffrée et n’écrit jamais le repli embarqué, qui passerait ensuite pour une réponse de l’école. `canManage` n’est pas copié : il ne vient que d’une réponse de l’école pendant la session.
 
 ### Pas de file pour l’écriture
 
@@ -45,9 +45,9 @@ L’enregistreur garde `themeConfiguration`. `openPalette()`, appelé à l’app
 | 5 à 12 | 3 (inchangé pour 11 et 12) |
 | 13 et plus | 4 |
 
-Le nombre voulu est ensuite limité à ce que la largeur permet sans passer sous 100 pt par tuile (148 pt dès la taille XXL). Sur un iPhone, 13 à 15 tuiles donnent donc 5 rangées de 3 ; sur le popover de l’iPad, 4 rangées de 4. Tailles d’accessibilité : une colonne. Hauteur minimale de tuile inchangée (80 pt).
+Le nombre voulu est ensuite limité à ce que la largeur permet sans passer sous 100 pt par tuile (148 pt dès la taille XXL). Sur un iPhone, 13 à 15 tuiles donnent donc 5 rangées de 3 et 16 à 18 tuiles 6 rangées de 3 ; sur le popover de l’iPad (480 pt), 4 colonnes, soit 4 ou 5 rangées. La règle ne suppose aucun nombre de thèmes. Tailles d’accessibilité : une colonne. Hauteur minimale de tuile inchangée (80 pt).
 
-Le volet prend la hauteur de son contenu : estimée d’abord (`estimatedPaletteHeight`), puis mesurée (en-tête + grille + appréciations), plafonnée par l’écran. Estimation : 513 pt pour 12 tuiles (ancien budget : 520), 601 pt pour 15. Si la place manque, seule la grille défile. Un message passager (erreur, « Envoi précédent en cours… ») n’entre pas dans la mesure, pour ne pas redimensionner le volet sous le doigt.
+Le volet prend la hauteur de son contenu : estimée d’abord (`estimatedPaletteHeight`), puis mesurée (en-tête + grille + appréciations), plafonnée par l’écran. Estimation : 513 pt pour 12 tuiles (ancien budget : 520), 601 pt pour 15, 689 pt pour 16 à 18. Si la place manque, seule la grille défile. Un message passager (erreur, « Envoi précédent en cours… ») n’entre pas dans la mesure, pour ne pas redimensionner le volet sous le doigt.
 
 ### Réordonnancement
 
@@ -79,7 +79,7 @@ L’interrupteur n’est pas grisé : le refus s’explique par une phrase (« A
 
 - **« Priorités » se déplie toujours en trois tuiles.** Avant, seulement si la description de la compétence nommait les trois sous-thèmes. Le contrat ne garde pas cette condition.
 - **Référentiel ancien (`parking`, libellé « Stationnement »)** : la tuile s’appelle maintenant « Manœuvres ». Les données de démonstration de l’app sont dans ce cas.
-- **Catalogue plus récent côté serveur** : une clé inconnue est ignorée à la lecture, mais le `PUT` n’enverrait que les 15 clés connues et serait refusé (400).
+- **Catalogue plus récent côté serveur** : corrigé dans le second lot (voir plus bas).
 - **Campagne de captures** : l’écran `observation-themes` existe dans le harnais, mais n’est pas dans `supportedScreens` : il faudrait aussi l’ajouter à `scripts/ios/capture-screens.sh`, hors de mon périmètre (un test Python compare les deux listes). Les captures clair et sombre de l’écran viennent du test UI `testProfileOpensObservationThemesWithItsCounterAndPreview`.
 - **`STATUS.md` non mis à jour** (hors périmètre).
 - **Transport de démonstration en lecture seule** : dans le harnais, toute modification échoue et montre le retour à l’état confirmé.
@@ -100,3 +100,45 @@ L’interrupteur n’est pas grisé : le refus s’explique par une phrase (« A
 - La liste en mode d’édition : interrupteur et poignée côte à côte, en clair et en sombre, en grand texte.
 - VoiceOver : « Monter », « Descendre », annonce de position, annonce « Enregistré ».
 - Le popover de l’iPad, qui raccourcit quand il y a peu de tuiles.
+
+## Mise à jour : 18 thèmes (12 octobre, second lot)
+
+Toujours sans compilation ni rendu.
+
+- **Catalogue** : `moving-off` « Démarrage » (`vehicule`), `bends` « Virages » (`placement`), `eco-driving` « Éco-conduite » (`vehicule`), en fin de liste, masqués à l’origine. Douze thèmes restent affichés à l’origine.
+- **Plus de 15 en dur** : compteur, validation du corps, tests, données de démonstration et galerie lisent le catalogue. La galerie montre 1, 12, 15 et 18 tuiles.
+
+### Grille à 16, 17 et 18 tuiles
+
+Calculé, pas vu. Le volet fait la largeur de l’écran moins 32 pt.
+
+| Écran | Volet | Colonnes | Tuile | Rangées | Volet estimé |
+|---|---|---|---|---|---|
+| 375 pt | 343 pt | 3 | 104 pt | 6 | 689 pt |
+| 430 pt | 398 pt | 3 | 122 pt | 6 | 689 pt |
+
+Quatre colonnes demanderaient un volet d’au moins 436 pt : aucun iPhone en portrait. Je n’ai pas réduit la tuile sous 100 pt pour y arriver.
+
+- **430 × 932** : environ 807 pt utiles, tout est visible sans défilement.
+- **375 × 812** : environ 696 à 702 pt utiles pour 689 : à la limite. Selon les marges réelles, la dernière rangée peut dépasser de quelques points ; la grille défile alors.
+- **375 × 667** (iPhone SE) : environ 615 pt utiles ; la grille défile d’environ 74 pt, soit presque toute la sixième rangée.
+
+Dans tous les cas, seule la grille défile ; l’en-tête et les appréciations restent en place. De 13 à 15 tuiles, rien ne change.
+
+### Pictogrammes
+
+- Trois cas : `movingOff`, `bends`, `ecoDriving`. Mots : « démarrage », « calage » (mot entier : « décalage » n’est pas reconnu), « virage », « éco-conduite », « écoconduite », « eco-drive ».
+- **La compétence prime, plus strictement qu’avant** : avec une compétence, le texte n’est plus cherché que parmi les sous-thèmes de cette compétence. Effet de bord : « Clignotant et freinage » rattaché à « Maîtrise du véhicule » donne désormais Freinage (avant : Maîtrise du véhicule).
+- Sans compétence, les nouveaux mots sont en fin de liste : ils ne reprennent aucun texte qu’un mot plus ancien reconnaissait (« Démarrage du véhicule » reste Maîtrise du véhicule).
+
+### Catalogue de l’école différent de celui de l’app
+
+- **École plus récente** : les thèmes inconnus de l’app ne sont pas montrés, mais gardés (`foreign`) et renvoyés à chaque `PUT`, replacés après le thème connu qui les précédait, avec leur affichage. Plus de 400 en réordonnant.
+- **École plus ancienne** (cas symétrique, non demandé, mais il aurait produit le même 400) : les thèmes que l’école ne liste pas (`unlisted`) restent dans la liste à leur place d’origine, masqués et non réglables ; ils ne sont pas envoyés au `PUT`, et une observation ne porte jamais leur `themeKey`.
+- La copie locale garde ces deux listes ; une copie écrite par une version plus ancienne de l’app ne tient pas les nouveaux thèmes pour connus de l’école.
+
+### À regarder à la compilation
+
+- `everyPictogramAndAppraisalHasAnAsset` échoue tant que `Observation-moving-off`, `-bends` et `-eco-driving` ne sont pas au catalogue d’assets.
+- `SchoolObservationThemeConfiguration` : deux propriétés à valeur par défaut ajoutées en fin de structure ; les appels à trois arguments doivent rester valides.
+- `SchoolObservationPictogram.init` : `self = title.flatMap { … } ?? fromKey` dans un initialiseur faillible.

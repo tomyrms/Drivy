@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Disposition de la grille « Signaler » pour 1 à 15 tuiles (et au-delà, pour un référentiel propre à l’école).
+/// Disposition de la grille « Signaler » pour un nombre quelconque de tuiles : tout le catalogue affiché, plus
+/// les tuiles génériques d’un référentiel propre à l’école. Aucun nombre de thèmes n’est supposé.
 /// Règle : le nombre de colonnes suit le nombre de tuiles, puis se limite à ce que la largeur permet sans passer
 /// sous la largeur de tuile actuelle ; la hauteur du volet suit le nombre de rangées. Rien ici ne lit l’écran :
 /// la règle se teste sans vue. Détail : docs/implementation/signalements-ios-20261012.md.
@@ -26,7 +27,8 @@ struct SchoolSignalGridLayout: Equatable {
         // Tailles d’accessibilité : une colonne, pictogramme à gauche du libellé.
         guard !textSize.isAccessibilitySize else { columns = 1; rows = count; return }
         // Peu de tuiles : une seule rangée de tuiles larges, ou un carré de quatre. Jusqu’à douze : trois colonnes,
-        // comme avant. Au-delà : quatre colonnes là où la largeur le permet (iPad, paysage), sinon cinq rangées de trois.
+        // comme avant. Au-delà : quatre colonnes là où la largeur le permet (iPad, paysage), sinon des rangées de trois
+        // (cinq pour treize à quinze tuiles, six pour seize à dix-huit) ; quand elles dépassent l’écran, la grille défile.
         let wanted: Int
         switch count {
         case 1...3: wanted = count
@@ -121,7 +123,7 @@ struct SchoolSignalGridPreview: View {
         .padding(.vertical, SchoolSignalGridLayout.gutter)
         .frame(maxWidth: .infinity)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-        // Une image de la grille : VoiceOver lit la liste réglable, pas quinze tuiles inertes.
+        // Une image de la grille : VoiceOver lit la liste réglable, pas des tuiles inertes.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Aperçu de la grille")
         .accessibilityValue(visible.map(\.title).joined(separator: ", "))

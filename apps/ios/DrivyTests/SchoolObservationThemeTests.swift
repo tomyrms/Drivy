@@ -6,16 +6,23 @@ import Testing
 /// Signalements configurables : catalogue, tuiles d’une leçon, corps envoyé, disposition de la grille.
 /// Contrat : docs/implementation/signalements-configurables-20261012.md.
 struct SchoolObservationThemeCatalogTests {
-    @Test func embeddedCatalogIsTheFifteenThemesOfTheContract() {
+    @Test func embeddedCatalogIsTheOneOfTheContract() {
         let catalog = SchoolObservationThemeCatalog.embedded
         #expect(catalog.map(\.key) == ["vehicle", "observation", "right-priority", "signage", "give-way", "intersections",
-            "speed", "placement", "manoeuvres", "motorway", "anticipation", "indicators", "following-distance", "braking", "lane-change"])
+            "speed", "placement", "manoeuvres", "motorway", "anticipation", "indicators", "following-distance", "braking", "lane-change",
+            "moving-off", "bends", "eco-driving"])
         #expect(catalog.map(\.title) == ["Maîtrise du véhicule", "Observation et contrôles", "Priorité à droite", "Signalisation",
             "Céder le passage", "Intersections et giratoires", "Vitesse", "Placement sur la chaussée", "Manœuvres", "Autoroute",
-            "Anticipation", "Clignotants", "Distance de sécurité", "Freinage", "Changement de voie"])
-        #expect(catalog.map(\.defaultPosition) == Array(0..<15))
-        #expect(catalog.filter(\.visible).count == 12 && catalog.allSatisfy { $0.visible == $0.defaultVisible })
-        #expect(catalog.filter { !$0.visible }.map(\.key) == ["following-distance", "braking", "lane-change"])
+            "Anticipation", "Clignotants", "Distance de sécurité", "Freinage", "Changement de voie",
+            "Démarrage", "Virages", "Éco-conduite"])
+        #expect(catalog.map(\.defaultPosition) == Array(catalog.indices))
+        #expect(SchoolObservationThemeCatalog.keys.count == catalog.count)
+        // Les douze premiers s’affichent à l’origine ; tout thème ajouté ensuite arrive masqué.
+        #expect(catalog.allSatisfy { $0.visible == $0.defaultVisible })
+        #expect(catalog.filter(\.visible).map(\.key) == Array(catalog.map(\.key).prefix(12)))
+        #expect(catalog.first { $0.key == "moving-off" }?.competencyKeys == ["vehicule"])
+        #expect(catalog.first { $0.key == "bends" }?.competencyKeys == ["placement"])
+        #expect(catalog.first { $0.key == "eco-driving" }?.competencyKeys == ["vehicule"])
         #expect(catalog.first { $0.key == "manoeuvres" }?.competencyKeys == ["manoeuvres", "parking"])
         #expect(catalog.first { $0.key == "motorway" }?.competencyKeys == ["autoroute", "motorway"])
         #expect(catalog.first { $0.key == "indicators" }?.competencyKeys == ["observation"])
@@ -30,9 +37,12 @@ struct SchoolObservationThemeCatalogTests {
         // « speed » manque (position d’origine 6) ; une clé d’un catalogue plus récent arrive en tête.
         received.removeAll { $0.key == "speed" }
         received.insert(SchoolObservationTheme(key: "tunnel", title: "Tunnels", competencyKeys: ["tunnel"], visible: true,
-                                               defaultVisible: true, defaultPosition: 15), at: 0)
+                                               defaultVisible: true, defaultPosition: received.count + 1), at: 0)
         let arranged = SchoolObservationThemeCatalog.arranged(received)
-        #expect(arranged.count == 15 && !arranged.contains { $0.key == "tunnel" })
+        #expect(arranged.count == SchoolObservationThemeCatalog.embedded.count && !arranged.contains { $0.key == "tunnel" })
+        // La clé inconnue n’est pas perdue pour autant : elle sera renvoyée à l’école, en tête comme reçue.
+        #expect(SchoolObservationThemeCatalog.foreign(in: received) == [SchoolObservationForeignTheme(key: "tunnel", visible: true, after: nil)])
+        #expect(SchoolObservationThemeCatalog.unlisted(in: received) == ["speed"])
         #expect(Array(arranged.map(\.key).prefix(2)) == ["observation", "vehicle"])
         #expect(arranged.firstIndex { $0.key == "speed" } == 6)
         #expect(arranged.first { $0.key == "speed" }?.visible == true)
@@ -96,7 +106,7 @@ struct SchoolLiveObservationTileTests {
         #expect(!tiles.contains { $0.key == nil })
         // Le contrôle d’un signalement accepte aussi les thèmes masqués.
         let all = SchoolLiveObservationTheme.tiles(for: themes, competencies: Self.standard, includingHidden: true)
-        #expect(all.contains { $0.key == "speed" } && all.count == 15)
+        #expect(all.contains { $0.key == "speed" } && all.count == themes.count)
     }
 
     @Test func aThemeWhoseCompetencyIsAbsentIsLeftOutAndUnclaimedCompetenciesKeepAGenericTile() {
@@ -182,7 +192,7 @@ struct SchoolObservationThemeBodyTests {
         themes[1].visible = false
         let operation = UUID()
         let body = SchoolObservationThemesBody(operationId: operation, themes: themes)
-        #expect(body.isValid && body.themes.count == 15)
+        #expect(body.isValid && body.themes.count == themes.count)
         let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(body)) as? [String: Any])
         #expect(Set(object.keys) == ["operationId", "themes"] && UUID(uuidString: object["operationId"] as? String ?? "") == operation)
         let entries = try #require(object["themes"] as? [[String: Any]])
@@ -190,7 +200,27 @@ struct SchoolObservationThemeBodyTests {
         #expect(entries.allSatisfy { Set($0.keys) == ["key", "visible"] })
         for index in themes.indices { themes[index].visible = false }
         #expect(!SchoolObservationThemesBody(operationId: operation, themes: themes).isValid)
-        #expect(!SchoolObservationThemesBody(operationId: operation, themes: Array(SchoolObservationThemeCatalog.embedded.dropLast())).isValid)
+        let catalog = SchoolObservationThemeCatalog.embedded
+        #expect(!SchoolObservationThemesBody(operationId: operation, themes: catalog + [catalog[0]]).isValid)
+    }
+
+    /// École au catalogue plus récent : ses thèmes inconnus repartent à leur place, sans jamais avoir été montrés.
+    /// École plus ancienne : les thèmes qu’elle ne liste pas ne lui sont pas envoyés.
+    @Test func theSavedListIsExactlyTheKeysTheSchoolListed() {
+        var themes = SchoolObservationThemeCatalog.embedded
+        let foreign = [SchoolObservationForeignTheme(key: "tunnel", visible: true, after: nil),
+                       SchoolObservationForeignTheme(key: "night", visible: false, after: "signage"),
+                       SchoolObservationForeignTheme(key: "rain", visible: true, after: "signage"),
+                       SchoolObservationForeignTheme(key: "lost", visible: true, after: "retiré")]
+        // « Signalisation » passe en tête : ses deux suivants inconnus la suivent, dans leur ordre.
+        let signage = themes.remove(at: 3)
+        themes.insert(signage, at: 0)
+        let body = SchoolObservationThemesBody(operationId: UUID(), themes: themes, foreign: foreign,
+                                               unlisted: ["moving-off", "bends", "eco-driving"])
+        #expect(Array(body.themes.map(\.key).prefix(5)) == ["tunnel", "signage", "night", "rain", "vehicle"])
+        #expect(body.themes.last?.key == "lost" && body.themes.first { $0.key == "night" }?.visible == false)
+        #expect(body.isValid && body.themes.count == themes.count - 3 + foreign.count)
+        #expect(!body.themes.contains { ["moving-off", "bends", "eco-driving"].contains($0.key) })
     }
 }
 
@@ -213,6 +243,28 @@ struct SchoolSignalGridLayoutTests {
         #expect(layout(0).rows == 0)
     }
 
+    /// Tout le catalogue affiché, sur les deux largeurs d’iPhone courantes (volet = écran − 32 pt) : trois colonnes,
+    /// donc six rangées de seize à dix-huit tuiles. Quatre colonnes seulement là où une tuile garde 100 pt.
+    @Test func theWholeCatalogueKeepsThreeColumnsOnAnIPhone() {
+        let all = SchoolObservationThemeCatalog.embedded.count
+        for width: CGFloat in [375 - 32, 430 - 32] {
+            for count in 16...max(18, all) {
+                #expect(layout(count, width: width).columns == 3 && layout(count, width: width).rows == (count + 2) / 3, "\(count) à \(width)")
+            }
+        }
+        #expect(layout(16, width: 480).columns == 4 && layout(16, width: 480).rows == 4)
+        #expect(layout(18, width: 480).rows == 5)
+        // Aucune disposition ne perd de tuile ni ne descend sous la largeur minimale, de 1 à bien au-delà du catalogue.
+        for count in 1...(all + 12) {
+            for width: CGFloat in [320, 343, 398, 480, 640] {
+                let value = layout(count, width: width)
+                #expect(value.columns * value.rows >= count && value.columns * (value.rows - 1) < count)
+                let tile = (width - 2 * SchoolSignalGridLayout.gutter - CGFloat(value.columns - 1) * SchoolSignalGridLayout.spacing) / CGFloat(value.columns)
+                #expect(value.columns == 1 || tile >= SchoolSignalGridLayout.minimumTileWidth)
+            }
+        }
+    }
+
     @Test func largeTextWidensTilesAndAccessibilitySizesUseOneColumn() {
         #expect(layout(12, text: .xxLarge).columns == 2)
         #expect(layout(12, text: .accessibility1).columns == 1 && layout(12, text: .accessibility1).rows == 12)
@@ -227,6 +279,8 @@ struct SchoolSignalGridLayoutTests {
         // Douze tuiles tiennent dans l’ancien budget du volet ; quinze dans la hauteur utile d’un iPhone de 667 pt.
         #expect(height(12) <= 520 && height(15) <= 615)
         #expect(height(11) == height(12) && height(13) == height(15))
+        // Seize à dix-huit tuiles : une sixième rangée. Le volet dépasse alors un iPhone de 667 pt, où la grille défile.
+        #expect(height(16) == height(18) && height(16) > height(15) && height(18) > 615)
     }
 }
 
@@ -254,9 +308,10 @@ private actor ThemeServer: SchoolHTTPTransport {
     private(set) var writes: [Write] = []
     private(set) var reads = 0
 
-    init(canManage: Bool = true) {
+    /// `themes` : le catalogue de l’école, qui peut être plus récent ou plus ancien que celui de l’app.
+    init(canManage: Bool = true, themes: [SchoolObservationTheme] = SchoolObservationThemeCatalog.embedded) {
         settings = SchoolObservationThemeSettings(id: ConfigurationFixture.schoolID, schoolId: ConfigurationFixture.schoolID,
-            version: 1, canManage: canManage, themes: SchoolObservationThemeCatalog.embedded)
+            version: 1, canManage: canManage, themes: themes)
     }
 
     func current() -> SchoolObservationThemeSettings { settings }
@@ -302,6 +357,9 @@ private actor ThemeServer: SchoolHTTPTransport {
             guard let match = request.value(forHTTPHeaderField: "If-Match") else { return try problem(428, "PRECONDITION_REQUIRED") }
             // Un rejeu de la même opération rend la configuration actuelle, sans second effet.
             if !applied.contains(body.operationId) {
+                // Comme l’école : toutes ses clés, chacune une fois, et aucune autre.
+                guard body.themes.count == settings.themes.count,
+                      Set(body.themes.map(\.key)) == Set(settings.themes.map(\.key)) else { return try problem(400, "INVALID_REQUEST") }
                 guard match == "\"\(settings.version)\"" else { return try problem(412, "VERSION_CONFLICT") }
                 let known = Dictionary(uniqueKeysWithValues: settings.themes.map { ($0.key, $0) })
                 let themes = body.themes.compactMap { entry -> SchoolObservationTheme? in
@@ -497,6 +555,73 @@ private actor ThemeServer: SchoolHTTPTransport {
         #expect(await server.writes.count == before + 2)
     }
 
+    /// École au catalogue plus récent que l’app : le thème inconnu n’est jamais montré, mais chaque écriture le
+    /// renvoie à sa place, sans quoi l’école refuserait la liste (400).
+    @Test func aThemeUnknownToThisVersionIsNeverShownAndAlwaysSentBack() async throws {
+        var themes = SchoolObservationThemeCatalog.embedded
+        themes.insert(SchoolObservationTheme(key: "tunnel", title: "Tunnels", competencyKeys: ["tunnel"], visible: true,
+                                             defaultVisible: true, defaultPosition: themes.count), at: 3)
+        let server = ThemeServer(themes: themes), cache = ThemeCacheStub()
+        let model = store(server, cache: cache)
+        await model.refresh()
+        #expect(model.displayed.map(\.key) == SchoolObservationThemeCatalog.embedded.map(\.key))
+        #expect(model.configuration.foreign == [SchoolObservationForeignTheme(key: "tunnel", visible: true, after: "right-priority")])
+        #expect(model.configuration.unlisted.isEmpty && cache.stored?.foreign == model.configuration.foreign)
+        // « Priorité à droite » descend d’un rang : « Tunnels » la suit.
+        #expect(model.move(key: "right-priority", by: 1) == 3)
+        try await settled(model)
+        #expect(model.saveState == .saved && model.configuration.version == 2)
+        let sent = try #require(await server.writes.last).keys
+        #expect(sent.count == themes.count && Array(sent[2...4]) == ["signage", "right-priority", "tunnel"])
+        let kept = await server.current()
+        #expect(kept.themes.first { $0.key == "tunnel" }?.visible == true)
+        #expect(model.displayed.count == SchoolObservationThemeCatalog.embedded.count && !model.displayed.contains { $0.key == "tunnel" })
+        // Tout rétablir ne perd pas davantage la clé inconnue.
+        model.resetAll()
+        try await settled(model)
+        let restored = try #require(await server.writes.last).keys
+        #expect(model.saveState == .saved && restored.contains("tunnel") && restored.count == themes.count)
+    }
+
+    /// École plus ancienne que l’app : elle ne reçoit que les clés qu’elle liste ; les thèmes qu’elle ignore
+    /// restent masqués, ne se règlent pas et ne sont jamais nommés par une observation.
+    @Test func aSchoolWithAnOlderCatalogueOnlyReceivesTheKeysItListed() async throws {
+        let listed = Array(SchoolObservationThemeCatalog.embedded.prefix(15))
+        let server = ThemeServer(themes: listed)
+        let model = store(server)
+        await model.refresh()
+        #expect(model.displayed.count == SchoolObservationThemeCatalog.embedded.count)
+        #expect(model.configuration.unlisted == ["moving-off", "bends", "eco-driving"])
+        #expect(!model.configuration.sendsThemeKey("moving-off") && model.configuration.sendsThemeKey("vehicle"))
+        #expect(!model.configuration.sendsThemeKey(nil) && !SchoolObservationThemeConfiguration.embedded.sendsThemeKey("vehicle"))
+        model.setVisible(true, key: "moving-off")
+        #expect(model.proposal == nil && model.saveState == .idle)
+        model.setVisible(false, key: "vehicle")
+        try await settled(model)
+        #expect(model.saveState == .saved && model.configuration.themes.first?.visible == false)
+        let writes = await server.writes
+        #expect(writes.count == 1 && writes[0].keys == listed.map(\.key))
+        #expect(model.displayed.first { $0.key == "moving-off" }?.visible == false)
+    }
+
+    @Test func aCopyWrittenBeforeNewThemesDoesNotAssumeTheSchoolKnowsThem() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("themes-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = SchoolObservationThemeFileCache(directory: directory), scope = ConfigurationFixture.scope()
+        let older = SchoolObservationThemeConfiguration(themes: Array(SchoolObservationThemeCatalog.embedded.prefix(15)),
+                                                        version: 3, source: .server)
+        cache.write(older, scope: scope)
+        let read = try #require(cache.read(scope: scope))
+        #expect(read.themes.count == SchoolObservationThemeCatalog.embedded.count && read.version == 3 && read.isFromServer)
+        #expect(read.unlisted == ["moving-off", "bends", "eco-driving"] && !read.sendsThemeKey("bends"))
+        // Les thèmes étrangers et non listés survivent à la copie.
+        let foreign = [SchoolObservationForeignTheme(key: "tunnel", visible: false, after: "vehicle")]
+        let full = SchoolObservationThemeConfiguration(themes: SchoolObservationThemeCatalog.embedded, version: 4, source: .server,
+                                                       foreign: foreign, unlisted: ["eco-driving"])
+        cache.write(full, scope: scope)
+        #expect(cache.read(scope: scope) == full)
+    }
+
     @Test func theFileCopyBelongsToItsSchoolAndNeverStoresTheEmbeddedFallback() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("themes-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -614,6 +739,22 @@ private actor ThemeLessonTransport: SchoolHTTPTransport {
         // Le texte reste le titre de la tuile ; la clé dit le thème, la compétence reste celle du référentiel.
         #expect(body.themeKey == "indicators" && body.text == "Clignotants" && body.isValid)
         #expect(body.competencyId == ThemeLessonTransport.competencies[1].id && body.eventKind == "QUALIFIED")
+        model.stop()
+    }
+
+    /// École plus ancienne que l’app : un thème qu’elle ne liste pas s’enregistre sans clé, pour ne pas être refusé.
+    @Test func aThemeTheSchoolDoesNotListIsRecordedWithoutItsKey() async throws {
+        let store = themeStore(ThemeServer(themes: Array(SchoolObservationThemeCatalog.embedded.prefix(15))))
+        await store.refresh()
+        let outbox = ConfigurationOutboxStub()
+        let model = recorder(outbox, themes: store)
+        await model.loadCompetencies()
+        model.openPalette()
+        #expect(model.themeConfiguration.isFromServer && model.themeConfiguration.unlisted.contains("moving-off"))
+        let movingOff = SchoolLiveObservationTheme(competency: ThemeLessonTransport.competencies[0], title: "Démarrage", key: "moving-off")
+        #expect(model.record(theme: movingOff, status: .attention, at: Date()))
+        let object = try #require(JSONSerialization.jsonObject(with: try #require(outbox.value).body) as? [String: Any])
+        #expect(object["themeKey"] == nil && object["text"] as? String == "Démarrage")
         model.stop()
     }
 

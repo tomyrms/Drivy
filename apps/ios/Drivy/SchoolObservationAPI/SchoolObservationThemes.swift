@@ -33,6 +33,9 @@ enum SchoolObservationThemeCatalog {
         ("following-distance", "Distance de sécurité", ["vitesse"], false),
         ("braking", "Freinage", ["vehicule"], false),
         ("lane-change", "Changement de voie", ["placement"], false),
+        ("moving-off", "Démarrage", ["vehicule"], false),
+        ("bends", "Virages", ["placement"], false),
+        ("eco-driving", "Éco-conduite", ["vehicule"], false),
     ] as [(String, String, [String], Bool)]).enumerated().map { index, value in
         SchoolObservationTheme(key: value.0, title: value.1, competencyKeys: value.2, visible: value.3,
                                defaultVisible: value.3, defaultPosition: index)
@@ -50,6 +53,24 @@ enum SchoolObservationThemeCatalog {
             result.insert(theme, at: min(theme.defaultPosition, result.count))
         }
         return result.contains(where: \.visible) ? result : embedded
+    }
+
+    /// Thèmes reçus de l’école que cette version ne connaît pas (catalogue de l’école plus récent). Ils ne se
+    /// montrent pas, mais chaque écriture les renvoie : l’école refuse une liste incomplète. Chacun garde sa
+    /// place par rapport au thème connu qui le précède.
+    static func foreign(in received: [SchoolObservationTheme]) -> [SchoolObservationForeignTheme] {
+        var seen = Set<String>(), result: [SchoolObservationForeignTheme] = []
+        var anchor: String?
+        for theme in received where seen.insert(theme.key).inserted {
+            if keys.contains(theme.key) { anchor = theme.key }
+            else { result.append(SchoolObservationForeignTheme(key: theme.key, visible: theme.visible, after: anchor)) }
+        }
+        return result
+    }
+
+    /// Clés de cette version que l’école n’a pas listées (école plus ancienne) : elle les refuserait.
+    static func unlisted(in received: [SchoolObservationTheme]) -> Set<String> {
+        keys.subtracting(received.map(\.key))
     }
 
     /// L’ordre d’origine, sans toucher à l’affichage choisi.
@@ -76,11 +97,35 @@ struct SchoolObservationThemeConfiguration: Sendable, Equatable {
     /// Version de l’école ; 0 pour le repli embarqué, qui n’a jamais été confirmé.
     var version: Int
     var source: Source
+    /// Thèmes de l’école inconnus de cette version : jamais montrés, toujours renvoyés.
+    var foreign: [SchoolObservationForeignTheme] = []
+    /// Thèmes de cette version que l’école ne liste pas : ni renvoyés, ni réglables, ni nommés par `themeKey`.
+    var unlisted: Set<String> = []
 
     static let embedded = SchoolObservationThemeConfiguration(themes: SchoolObservationThemeCatalog.embedded,
                                                               version: 0, source: .embedded)
+
+    /// Configuration reçue de l’école, ramenée au catalogue de cette version sans rien perdre de ce qu’elle a listé.
+    static func server(_ received: [SchoolObservationTheme], version: Int) -> SchoolObservationThemeConfiguration {
+        SchoolObservationThemeConfiguration(themes: SchoolObservationThemeCatalog.arranged(received), version: version,
+            source: .server, foreign: SchoolObservationThemeCatalog.foreign(in: received),
+            unlisted: SchoolObservationThemeCatalog.unlisted(in: received))
+    }
+
     var isFromServer: Bool { source == .server }
+    /// Une observation ne nomme son thème que si l’école a répondu et connaît cette clé.
+    func sendsThemeKey(_ key: String?) -> Bool {
+        guard let key else { return false }
+        return isFromServer && !unlisted.contains(key)
+    }
     var visibleCount: Int { themes.filter(\.visible).count }
+}
+
+struct SchoolObservationForeignTheme: Codable, Sendable, Equatable {
+    let key: String
+    let visible: Bool
+    /// Clé du thème connu qui le précède dans la liste de l’école ; `nil` s’il est en tête.
+    let after: String?
 }
 
 /// Projection de l’école : la même à la lecture et après une modification.
@@ -113,15 +158,31 @@ struct SchoolObservationThemesBody: Codable, Sendable, Equatable {
     let operationId: UUID
     let themes: [Entry]
 
-    init(operationId: UUID, themes: [SchoolObservationTheme]) {
+    /// La liste que l’école attend : exactement les clés qu’elle a listées. Les thèmes connus dans leur nouvel
+    /// ordre, sans ceux qu’elle ne liste pas (`unlisted`) ; les thèmes inconnus de cette version (`foreign`)
+    /// replacés après le thème connu qui les précédait, avec leur affichage intact.
+    init(operationId: UUID, themes: [SchoolObservationTheme], foreign: [SchoolObservationForeignTheme] = [],
+         unlisted: Set<String> = []) {
         self.operationId = operationId
-        self.themes = themes.map { Entry(key: $0.key, visible: $0.visible) }
+        var entries = foreign.filter { $0.after == nil }.map { Entry(key: $0.key, visible: $0.visible) }
+        var placed = Set(entries.map(\.key))
+        for theme in themes {
+            if !unlisted.contains(theme.key) { entries.append(Entry(key: theme.key, visible: theme.visible)) }
+            for follower in foreign where follower.after == theme.key {
+                entries.append(Entry(key: follower.key, visible: follower.visible))
+                placed.insert(follower.key)
+            }
+        }
+        // Un repère disparu ne fait perdre aucune clé : elle part en fin de liste.
+        for orphan in foreign where !placed.contains(orphan.key) {
+            entries.append(Entry(key: orphan.key, visible: orphan.visible))
+        }
+        self.themes = entries
     }
 
-    /// Toutes les clés du catalogue, chacune une fois, et au moins un thème affiché.
+    /// Chaque clé une fois, et au moins un thème affiché. Le nombre de clés est celui de l’école, pas celui de l’app.
     var isValid: Bool {
-        Set(themes.map(\.key)) == SchoolObservationThemeCatalog.keys && themes.count == SchoolObservationThemeCatalog.keys.count
-            && themes.contains(where: \.visible)
+        !themes.isEmpty && Set(themes.map(\.key)).count == themes.count && themes.contains(where: \.visible)
     }
 }
 

@@ -7,7 +7,7 @@ import Observation
     func write(_ configuration: SchoolObservationThemeConfiguration, scope: SchoolCommandScope)
 }
 
-/// Un fichier JSON par école dans Application Support. Ordre et affichage de quinze thèmes : aucune donnée de
+/// Un fichier JSON par école dans Application Support. Ordre et affichage des thèmes du catalogue : aucune donnée de
 /// personne, donc aucun chiffrement, et rien de commun avec la file chiffrée des demandes. Perdre ce fichier
 /// ramène seulement au repli embarqué jusqu’à la prochaine lecture.
 @MainActor final class SchoolObservationThemeFileCache: SchoolObservationThemeCache {
@@ -17,6 +17,9 @@ import Observation
         let schoolId: UUID
         let version: Int
         let themes: [SchoolObservationTheme]
+        /// Absents d’une copie écrite avant leur ajout.
+        var foreign: [SchoolObservationForeignTheme]? = nil
+        var unlisted: [String]? = nil
     }
     private let directory: URL
     private let maximumBytes = 64_000
@@ -31,15 +34,20 @@ import Observation
               let stored = try? JSONDecoder().decode(Stored.self, from: data),
               stored.format == 1, stored.apiBaseURL == scope.apiBaseURL, stored.schoolId == scope.schoolID,
               stored.version > 0, !stored.themes.isEmpty else { return nil }
+        // Une copie écrite par une version qui connaissait moins de thèmes : les nouveaux ne sont pas réputés
+        // connus de l’école avant sa prochaine réponse.
+        let unlisted = Set(stored.unlisted ?? []).union(SchoolObservationThemeCatalog.unlisted(in: stored.themes))
         return SchoolObservationThemeConfiguration(themes: SchoolObservationThemeCatalog.arranged(stored.themes),
-                                                   version: stored.version, source: .server)
+            version: stored.version, source: .server, foreign: stored.foreign ?? [],
+            unlisted: unlisted.intersection(SchoolObservationThemeCatalog.keys))
     }
 
     func write(_ configuration: SchoolObservationThemeConfiguration, scope: SchoolCommandScope) {
         // Le repli embarqué ne s’écrit jamais : il passerait ensuite pour une réponse de l’école.
         guard configuration.isFromServer, configuration.version > 0 else { return }
         let stored = Stored(format: 1, apiBaseURL: scope.apiBaseURL, schoolId: scope.schoolID,
-                            version: configuration.version, themes: configuration.themes)
+                            version: configuration.version, themes: configuration.themes,
+                            foreign: configuration.foreign, unlisted: configuration.unlisted.sorted())
         guard let data = try? JSONEncoder().encode(stored), data.count <= maximumBytes else { return }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try? data.write(to: file(for: scope), options: [.atomic])
@@ -127,8 +135,7 @@ import Observation
 
     private func confirm(_ value: SchoolObservationThemeSettings) {
         canManage = value.canManage
-        let next = SchoolObservationThemeConfiguration(themes: SchoolObservationThemeCatalog.arranged(value.themes),
-                                                       version: value.version, source: .server)
+        let next = SchoolObservationThemeConfiguration.server(value.themes, version: value.version)
         guard next != configuration else { return }
         configuration = next
         cache.write(next, scope: scope)
@@ -138,7 +145,9 @@ import Observation
 
     func setVisible(_ visible: Bool, key: String) {
         var themes = displayed
-        guard let index = themes.firstIndex(where: { $0.key == key }), themes[index].visible != visible else { return }
+        // Un thème que l’école ne liste pas encore ne se règle pas : elle refuserait sa clé.
+        guard !configuration.unlisted.contains(key),
+              let index = themes.firstIndex(where: { $0.key == key }), themes[index].visible != visible else { return }
         themes[index].visible = visible
         propose(themes)
     }
@@ -188,7 +197,8 @@ import Observation
             uncertain = nil
             do {
                 let value = try await client.save(scope: scope, version: attempt.version,
-                    body: SchoolObservationThemesBody(operationId: attempt.operation, themes: target))
+                    body: SchoolObservationThemesBody(operationId: attempt.operation, themes: target,
+                                                      foreign: configuration.foreign, unlisted: configuration.unlisted))
                 writeGeneration += 1
                 confirm(value)
                 // Rien d’autre n’a été demandé entre-temps : l’envoi est terminé, quelle que soit la forme confirmée.

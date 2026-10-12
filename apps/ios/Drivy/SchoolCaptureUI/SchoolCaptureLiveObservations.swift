@@ -179,8 +179,9 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
             segmentId: anchor?.segmentID, pointSequence: anchor?.pointSequence, competencyId: theme?.competency.id,
             text: theme?.title ?? "Moment à revoir", origin: "LIVE", observedAt: formatter.string(from: instant),
             eventKind: theme == nil ? "MARKER" : "QUALIFIED", eventStatus: status?.rawValue,
-            // Une école qui n’a jamais répondu ne connaît peut-être pas ce champ : il ne part qu’avec sa configuration.
-            themeKey: themeConfiguration.isFromServer ? theme?.key : nil)
+            // Une école qui n’a jamais répondu ne connaît peut-être pas ce champ, et une école plus ancienne ne
+            // connaît pas tous les thèmes : la clé ne part qu’avec sa configuration, pour un thème qu’elle liste.
+            themeKey: themeConfiguration.sendsThemeKey(theme?.key) ? theme?.key : nil)
         do {
             let command = PendingSchoolCommand(id: operation, scope: scope, kind: .createObservation, resourceVersion: 0,
                 createdAt: instant, body: try JSONEncoder().encode(value), routeResourceID: lessonID)

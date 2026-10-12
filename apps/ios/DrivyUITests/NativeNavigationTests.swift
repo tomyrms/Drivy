@@ -65,7 +65,7 @@ import XCTest
     }
 
     /// L’école fictive laisse ce compte gérer les signalements : l’entrée existe dans le Profil, l’écran montre
-    /// les quinze thèmes, leur compteur et l’aperçu de la grille. Captures en clair et en sombre.
+    /// les thèmes du catalogue, leur compteur et l’aperçu de la grille. Captures en clair et en sombre.
     func testProfileOpensObservationThemesWithItsCounterAndPreview() {
         for appearance in ["Light", "Dark"] {
             let app = launch("profile-tab", appearance: appearance)
@@ -78,7 +78,8 @@ import XCTest
             }
             let counter = app.descendants(matching: .any)["observation-themes-count"]
             XCTAssertTrue(counter.waitForExistence(timeout: 10), app.debugDescription)
-            XCTAssertTrue(counter.label.contains("12 affichés sur 15"), counter.label)
+            // Le total vient du catalogue de l’école fictive : seul le nombre affiché à l’origine est fixé ici.
+            XCTAssertTrue(counter.label.contains("12 affichés sur "), counter.label)
             capture(app, name: "observation-themes-\(appearance.lowercased())")
             app.buttons["observation-themes-preview"].tap()
             XCTAssertTrue(app.navigationBars["Aperçu"].waitForExistence(timeout: 10), app.debugDescription)

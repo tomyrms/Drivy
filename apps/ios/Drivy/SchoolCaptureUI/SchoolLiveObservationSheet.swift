@@ -11,7 +11,7 @@ struct SchoolLiveObservationSheet: View {
     @State private var idealHeight: CGFloat?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// Le volet suit le nombre de tuiles : bas pour quelques thèmes, plus haut pour quinze. Estimé d’abord,
+    /// Le volet suit le nombre de tuiles : bas pour quelques thèmes, plus haut pour tout le catalogue. Estimé d’abord,
     /// puis mesuré sur le contenu réel.
     private var paletteHeight: CGFloat {
         idealHeight ?? SchoolSignalGridLayout.estimatedPaletteHeight(tileCount: recorder.expectedTileCount,

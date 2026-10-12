@@ -532,7 +532,7 @@ struct SchoolVisualShell: View {
         }
         objects["\(root)/lessons/\(lessonID.uuidString)/captures"] = ["items": [syntheticCapture(captureID)]]
         objects["\(root)/lessons/\(plannedLessonID.uuidString)/reports"] = page([])
-        // Signalements de l’école fictive : la configuration d’origine (douze affichés sur quinze), réglable par ce compte.
+        // Signalements de l’école fictive : la configuration d’origine du catalogue embarqué, réglable par ce compte.
         // Un élève ne la lit pas : l’école la lui refuserait.
         if !learnerRole {
             let themes = SchoolObservationThemeSettings(id: schoolID, schoolId: schoolID, version: 1, canManage: true,

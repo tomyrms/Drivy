@@ -134,7 +134,8 @@ struct SchoolObservationThemeSettingsView: View {
         }
         .drivyControlTint()
         .frame(minHeight: DrivyLayout.tapTarget)
-        .disabled(!store.canEdit)
+        // Un thème que l’école ne liste pas encore (école plus ancienne que l’app) reste masqué et ne se règle pas.
+        .disabled(!store.canEdit || store.configuration.unlisted.contains(theme.key))
         .accessibilityHint("Position \(position) sur \(count)")
         .accessibilityAction(named: "Monter") { move(theme, by: -1) }
         .accessibilityAction(named: "Descendre") { move(theme, by: 1) }
