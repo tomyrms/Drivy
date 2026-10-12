@@ -78,14 +78,22 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     @ObservationIgnored private var stopped = false
     @ObservationIgnored private var lastAddedCommand: PendingSchoolCommand?
     @ObservationIgnored private var lastAddedWasConfirmed = false
+    /// Renvoi automatique d’une demande restée en file faute de réseau : essais espacés, puis le dernier délai.
+    @ObservationIgnored private let retryDelays: [Duration]
+    @ObservationIgnored private var automaticRetry: Task<Void, Never>?
+    @ObservationIgnored private var automaticRetryCount = 0
+    /// Le dernier envoi a échoué faute d’école joignable : le retour du réseau le relance.
+    @ObservationIgnored private var waitsForNetwork = false
 
     init(scope: SchoolCommandScope, lessonID: UUID, client: SchoolObservationClient,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(),
          permitsAnchor: (@MainActor (SchoolLiveObservationAnchor) -> Bool)? = nil,
          prepareAnchor: (@MainActor (SchoolLiveObservationAnchor) async throws -> Void)? = nil,
-         onSettlement: (@MainActor () async -> Void)? = nil) {
+         onSettlement: (@MainActor () async -> Void)? = nil,
+         retryDelays: [Duration] = [.seconds(5), .seconds(15), .seconds(60)]) {
         self.scope = scope; self.lessonID = lessonID; self.client = client; self.outbox = outbox
         self.onSettlement = onSettlement
+        self.retryDelays = retryDelays
         self.permitsAnchor = permitsAnchor; self.prepareAnchor = prepareAnchor
         do { pending = try outbox.pending(for: scope) }
         catch { stopped = true; errorMessage = "Le stockage protégé est indisponible. Aucune observation n’a été ajoutée." }
@@ -164,6 +172,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     /// dans la file chiffrée et se vérifie depuis les observations de la leçon.
     func stop() {
         stopped = true
+        automaticRetry?.cancel(); automaticRetry = nil; waitsForNetwork = false
         lastAdded = nil; lastAddedCommand = nil; undoState = .none; undoErrorMessage = nil
     }
 
@@ -204,6 +213,14 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         !stopped && !isSending && pending?.scope == scope
             && pending?.kind == .createObservation && pending?.routeResourceID == lessonID
     }
+    /// Retour du réseau : une demande de cette leçon restée en file faute d’école joignable repart aussitôt.
+    func retryAfterReconnection() async {
+        guard waitsForNetwork else { return }
+        automaticRetry?.cancel(); automaticRetry = nil
+        automaticRetryCount = 0
+        await retry()
+    }
+
     func retry() async {
         guard canRetry, let initial = pending else { return }
         // Une demande retirée ou remplacée depuis un autre écran (abandon, vérification réussie) n’est pas
@@ -212,6 +229,22 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
               stored.withoutObservationUndo == initial.withoutObservationUndo else { refreshPending(); return }
         isSending = true
         await transmit(stored)
+    }
+
+    /// Nouvel essai espacé (5 s, 15 s, puis toutes les 60 s) tant que la demande en file est celle de cette leçon
+    /// et que l’école reste injoignable. Même opération, même corps : l’invariant d’une demande par école tient.
+    private func scheduleAutomaticRetry() {
+        guard !stopped, !retryDelays.isEmpty, let pending, pending.scope == scope,
+              pending.kind == .createObservation, pending.routeResourceID == lessonID else { return }
+        let delay = retryDelays[min(automaticRetryCount, retryDelays.count - 1)]
+        automaticRetryCount += 1
+        automaticRetry?.cancel()
+        automaticRetry = Task { [weak self] in
+            do { try await Task.sleep(for: delay) } catch { return }
+            guard let self, !self.stopped else { return }
+            self.automaticRetry = nil
+            await self.retry()
+        }
     }
 
     /// L’envoi est réclamé dans le tour même de l’écriture durable : aucune image ne montre « attend son
@@ -227,6 +260,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         guard !stopped else { isSending = false; isSettlingGesture = false; return }
         // Premier envoi, dans le tour du geste : aucune réponse antérieure de l’école ne peut exister.
         let followsGesture = isSettlingGesture
+        var unreachable = false
         var command = initial
         while true {
             do {
@@ -302,12 +336,16 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
                     }
                     if error as? SchoolObservationFailure == .unauthorized || error as? SchoolObservationFailure == .forbidden {
                         stop(); errorMessage = "Ton accès a changé. La demande reste conservée dans le compte d’origine."
+                    } else if error as? SchoolObservationFailure == .unavailable {
+                        unreachable = true
                     }
                 }
                 break
             }
         }
         isSending = false; isSettlingGesture = false
+        waitsForNetwork = unreachable && !stopped
+        if waitsForNetwork { scheduleAutomaticRetry() } else { automaticRetryCount = 0 }
         // La feuille peut déjà être fermée : avertir son propriétaire après le résultat réseau,
         // sans confondre la sauvegarde du geste et la confirmation de l’école.
         await onSettlement?()

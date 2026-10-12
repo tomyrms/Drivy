@@ -121,10 +121,26 @@ struct SchoolTrackDisplayTests {
             segment.appendDurable([measurement])
             revisions.append(segment.displayRevision)
         }
-        #expect(segment.points.map(\.sequence) == Array(0..<120))
-        #expect(segment.displaySamples.map(\.point) == SchoolCaptureDisplayRoute.select(segment.points).map(\.point))
+        // The segment keeps no copy of its measurements: only their count and the filter's samples.
+        #expect(segment.measurementCount == 120 && segment.lastElapsedMs == all.last?.elapsedMs)
+        let points = all.enumerated().map { index, value in
+            SchoolCapturePoint(sequence: index, elapsedMs: value.elapsedMs, capturedAt: value.capturedAt,
+                latitude: value.latitude, longitude: value.longitude, accuracyMeters: value.accuracyMeters)
+        }
+        #expect(segment.displaySamples.map(\.point) == SchoolCaptureDisplayRoute.select(points).map(\.point))
         #expect(SchoolCaptureMapSegment(id: UUID(), measurements: all).displaySamples.count == segment.displaySamples.count)
         #expect(zip(revisions, revisions.dropFirst()).allSatisfy { $0 <= $1 })
+    }
+
+    @Test func theReplayTimelineIsRebuiltAtMostOncePerIntervalWhileItLoads() {
+        var pacer = SchoolReplayRebuildPacer(interval: .seconds(1))
+        let start = ContinuousClock.now
+        #expect(pacer.admits(at: start))
+        #expect(!pacer.admits(at: start.advanced(by: .milliseconds(10))))
+        #expect(!pacer.admits(at: start.advanced(by: .milliseconds(999))))
+        #expect(pacer.admits(at: start.advanced(by: .seconds(1))))
+        #expect(!pacer.admits(at: start.advanced(by: .milliseconds(1_500))))
+        #expect(pacer.admits(at: start.advanced(by: .seconds(3))))
     }
 
     // MARK: Live trace

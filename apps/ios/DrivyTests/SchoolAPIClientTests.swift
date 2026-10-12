@@ -35,6 +35,38 @@ private actor ResponseTransport: SchoolHTTPTransport {
     func recordedRequests() -> [URLRequest] { requests }
 }
 
+/// Source qui renouvelle son jeton quand l’API l’a refusé, comme la session d’identité.
+@MainActor
+private final class RenewingAccessToken: AccessTokenSource {
+    var calls = 0
+    var invalidated: [String] = []
+    private var current = "stale-unit-test-token"
+    func accessToken() async throws -> String { calls += 1; return current }
+    func invalidateAccessToken(_ token: String) async -> Bool {
+        invalidated.append(token)
+        current = "renewed-unit-test-token"
+        return true
+    }
+}
+
+/// 401 pour tout autre jeton que celui accepté.
+private actor TokenGateTransport: SchoolHTTPTransport {
+    let data: Data
+    let acceptedToken: String?
+    private var seen: [String] = []
+    init(data: Data, acceptedToken: String?) { self.data = data; self.acceptedToken = acceptedToken }
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        let authorization = request.value(forHTTPHeaderField: "Authorization") ?? ""
+        seen.append(authorization)
+        guard let acceptedToken, authorization == "Bearer \(acceptedToken)" else {
+            return SchoolHTTPResponse(data: Data("{\"code\":\"UNAUTHORIZED\"}".utf8), status: 401, url: request.url!,
+                contentType: "application/problem+json")
+        }
+        return SchoolHTTPResponse(data: data, status: 200, url: request.url!, contentType: "application/json")
+    }
+    func authorizations() -> [String] { seen }
+}
+
 @MainActor
 struct SchoolAPIClientTests {
     private let base = URL(string: "https://api.example.invalid")!
@@ -99,6 +131,25 @@ struct SchoolAPIClientTests {
             #expect(token.calls == 1)
             #expect(await transport.recordedRequests().count == 1)
         }
+    }
+
+    @Test func aFirstUnauthorizedRenewsTheTokenOnceBeforeConcludingTheSessionExpired() async throws {
+        let me = try apiFixture("me")
+        // Le jeton que l’appareil croyait valable est refusé ; le renouvellement forcé est accepté.
+        let renewing = RenewingAccessToken()
+        let accepted = TokenGateTransport(data: me, acceptedToken: "renewed-unit-test-token")
+        let person = try await DrivyAPIClient(baseURL: base, tokenSource: renewing, transport: accepted).me()
+        #expect(person.displayName == "Alex Moniteur")
+        #expect(renewing.invalidated == ["stale-unit-test-token"] && renewing.calls == 2)
+        #expect(await accepted.authorizations() == ["Bearer stale-unit-test-token", "Bearer renewed-unit-test-token"])
+
+        // Le jeton renouvelé est refusé aussi : un seul nouvel essai, puis la session expirée.
+        let again = RenewingAccessToken()
+        let refused = TokenGateTransport(data: me, acceptedToken: nil)
+        let expired = DrivyAPIClient(baseURL: base, tokenSource: again, transport: refused)
+        await #expect(throws: SchoolAPIError.unauthorized) { try await expired.me() }
+        #expect(again.invalidated == ["stale-unit-test-token"])
+        #expect(await refused.authorizations().count == 2)
     }
 
     @Test func rejectsUnsafeEndpointBeforeReadingToken() async throws {

@@ -12,6 +12,20 @@ struct SchoolCommandScope: Codable, Sendable, Equatable {
     func belongsToWorkspace(_ other: SchoolCommandScope) -> Bool {
         personID == other.personID && schoolID == other.schoolID && apiBaseURL == other.apiBaseURL
     }
+
+    /// Même compte, même école, même adhésion et même API : seule l’époque d’accès peut différer.
+    func sharesMembership(with other: SchoolCommandScope) -> Bool {
+        belongsToWorkspace(other) && membershipID == other.membershipID
+    }
+
+    /// Une adhésion relue dans `/me` (qui ne rend que les adhésions actives) confirme cette portée à la même
+    /// époque, ou à une époque plus récente qui garde le rôle moniteur : une affectation de plus avance l’époque
+    /// sans retirer de droit. Un rôle retiré, une adhésion close, une autre école restent des refus.
+    func isConfirmed(by membership: SchoolMembership) -> Bool {
+        guard membership.schoolId == schoolID, membership.membershipId == membershipID else { return false }
+        return membership.accessEpoch == accessEpoch
+            || (membership.accessEpoch > accessEpoch && membership.roles.contains("INSTRUCTOR"))
+    }
 }
 
 enum SchoolCommandKind: String, Codable, Sendable {

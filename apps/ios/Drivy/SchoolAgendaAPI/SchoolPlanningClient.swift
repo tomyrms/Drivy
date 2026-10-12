@@ -289,7 +289,7 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             "SCHOOL_POLICY_CHANGED": "La procédure de la formation a changé. Recharge-la avant de confirmer.",
             "COMMERCIAL_TERMS_NOT_APPROVED": "Choisis des conditions commerciales approuvées.",
             "LESSON_CLOSED": "Cette leçon est déjà terminée ou annulée.",
-            "LESSON_STARTED": "Cette leçon a déjà commencé : elle ne peut plus être déplacée.",
+            "LESSON_STARTED": "Cette leçon a déjà commencé : elle ne peut plus être déplacée ni annulée.",
             "INVALID_INTERVAL": "Vérifie les dates, les horaires et la durée de cette réservation.",
             "INVALID_REQUEST": "Vérifie les informations saisies avant de confirmer."
         ]

@@ -620,12 +620,13 @@ struct SchoolRootView: View {
             if workspace.accessRevoked { captureController.setScope(nil) }
             return
         }
-        // La recharge conserve la même portée. Changer d'école, de compte ou
-        // d'epoch ferme immédiatement la source de l'ancienne séance.
+        // La recharge conserve la même portée. Changer d'école ou de compte, ou perdre le rôle moniteur,
+        // ferme immédiatement la source de l'ancienne séance. Une époque plus récente de la même adhésion
+        // active, rôle moniteur conservé, laisse le trajet en cours finir sous sa portée (A5-01).
         let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
             membershipID: membership.membershipId, accessEpoch: membership.accessEpoch,
             apiBaseURL: configuration.apiBaseURL.absoluteString)
-        captureController.setScope(scope)
+        captureController.setScope(scope, retainsInstructorRole: membership.roles.contains("INSTRUCTOR"))
         if let client = homeAgendaClient?.captureClient {
             Task { await captureController.resumePendingSynchronizations(client: client, scope: scope) }
         }
