@@ -181,6 +181,23 @@ path.write_text(json.dumps(proof, ensure_ascii=False, indent=2) + '\n', encoding
 PY
   xcrun simctl status_bar "$device_id" override --time '9:41' --batteryState charged --batteryLevel 100
   xcrun simctl install "$device_id" "$app"
+  if [[ "${DRIVY_VISUAL_HOT_SWITCH:-0}" == 1 ]]; then
+    # Theme change while the app runs: launched in light without forcing the style, then the
+    # system appearance flips. `hot-dark` must match the cold `dark` capture, `hot-light` the cold
+    # `light` one; any surface that keeps the previous appearance shows up in the comparison.
+    for screen in "${screens[@]}"; do
+      xcrun simctl terminate "$device_id" ch.drivy.qualification 2>/dev/null || true
+      xcrun simctl ui "$device_id" appearance light
+      SIMCTL_CHILD_DRIVY_VISUAL_SCREEN="$screen" SIMCTL_CHILD_DRIVY_VISUAL_LARGE_TEXT="${DRIVY_VISUAL_LARGE_TEXT:-0}" xcrun simctl launch "$device_id" ch.drivy.qualification -AppleLanguages '(fr)' -AppleLocale fr_CH
+      sleep 10
+      xcrun simctl ui "$device_id" appearance dark
+      sleep 3
+      xcrun simctl io "$device_id" screenshot "artifacts/ios/${kind}-${screen}-hot-dark-synthetic.png"
+      xcrun simctl ui "$device_id" appearance light
+      sleep 3
+      xcrun simctl io "$device_id" screenshot "artifacts/ios/${kind}-${screen}-hot-light-synthetic.png"
+    done
+  fi
   for appearance in "${appearances[@]}"; do
     xcrun simctl ui "$device_id" appearance "$appearance"
     if (( use_xctest )); then

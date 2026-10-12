@@ -40,6 +40,10 @@ on:
         description: Vérifier les grandes tailles de texte d’accessibilité
         type: boolean
         default: false
+      visual_hot_switch:
+        description: Basculer l’apparence du simulateur sans relancer l’app (clair → sombre → clair)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -129,6 +133,7 @@ jobs:
           DRIVY_VISUAL_APPEARANCES: ${{ inputs.visual_appearances }}
           DRIVY_VISUAL_ORIENTATIONS: ${{ inputs.visual_orientations }}
           DRIVY_VISUAL_LARGE_TEXT: ${{ inputs.visual_large_text && '1' || '0' }}
+          DRIVY_VISUAL_HOT_SWITCH: ${{ inputs.visual_hot_switch && '1' || '0' }}
         run: bash scripts/ios/capture-screens.sh
       - name: Construire l'IPA pour iLoader
         if: inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == ''
