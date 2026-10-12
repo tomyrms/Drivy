@@ -535,7 +535,7 @@ struct SchoolVisualShell: View {
         objects["\(root)/lessons/\(lessonID.uuidString)/captures"] = ["items": [syntheticCapture(captureID)]]
         objects["\(root)/lessons/\(plannedLessonID.uuidString)/reports"] = page([])
         // Signalements de l’école fictive : la configuration d’origine du catalogue embarqué, réglable par ce compte,
-        // ou tout le catalogue affiché (écran `signal-all` : la grille dépasse douze tuiles et défile).
+        // ou tout le catalogue affiché (écran `signal-all` : la grille dépasse neuf tuiles et défile).
         // Un élève ne la lit pas : l’école la lui refuserait.
         if !learnerRole {
             var catalog = SchoolObservationThemeCatalog.embedded

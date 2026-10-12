@@ -84,7 +84,7 @@ struct DrivyDesignSystemGallery: View {
                     }
                 }
                 // La grille de « Signaler » selon le nombre de thèmes que l’école affiche : une tuile large, huit,
-                // les douze affichés à l’origine, quinze, tout le catalogue, vingt-quatre. En leçon, les douze
+                // les douze affichés à l’origine, quinze, tout le catalogue, vingt-quatre. En leçon, les neuf
                 // premières sont visibles à l’ouverture et la suite défile ; ici, chaque grille est montrée entière.
                 ForEach(Self.signalGridCounts, id: \.self) { count in
                     VStack(alignment: .leading, spacing: DrivySpacing.xs) {

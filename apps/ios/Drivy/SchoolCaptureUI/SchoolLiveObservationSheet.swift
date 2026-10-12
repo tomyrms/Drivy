@@ -11,7 +11,7 @@ struct SchoolLiveObservationSheet: View {
     @State private var idealHeight: CGFloat?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// Le volet suit le nombre de tuiles jusqu’à douze ; au-delà, il garde la hauteur des douze premières et la
+    /// Le volet suit le nombre de tuiles jusqu’à neuf ; au-delà, il garde la hauteur des neuf premières et la
     /// grille défile. Estimé d’abord, puis mesuré sur le contenu réel.
     private var paletteHeight: CGFloat {
         idealHeight ?? SchoolSignalGridLayout.estimatedPaletteHeight(tileCount: recorder.expectedTileCount,
@@ -34,7 +34,7 @@ struct SchoolLiveObservationSheet: View {
 }
 
 /// L’instant et l’ancre appartiennent au geste d’ouverture, jamais au choix ou à l’animation.
-/// Le conteneur choisit la hauteur, d’après celle que la palette lui demande : les douze premières tuiles, plus
+/// Le conteneur choisit la hauteur, d’après celle que la palette lui demande : les neuf premières tuiles, plus
 /// l’amorce estompée de la rangée suivante s’il y en a une. Seule la grille défile, entre les commandes et les
 /// appréciations, qui restent visibles.
 /// Les tuiles viennent de l’instantané que l’enregistreur prend à l’ouverture : une configuration modifiée
@@ -52,7 +52,7 @@ struct SchoolLiveObservationPalette: View {
     @State private var headerHeight: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
     @State private var barHeight: CGFloat = 0
-    /// Hauteur d’une tuile, la même pour toutes : elle donne celle de la fenêtre des douze premières.
+    /// Hauteur d’une tuile, la même pour toutes : elle donne celle de la fenêtre des neuf premières.
     @State private var tileHeight: CGFloat = 0
     /// Des tuiles restent sous le bas de la grille : son bord s’estompe.
     @State private var hidesTilesBelow = false
@@ -93,7 +93,7 @@ struct SchoolLiveObservationPalette: View {
         .task { await recorder.loadCompetencies() }
     }
 
-    /// Hauteur de l’en-tête, de la grille et des appréciations. Jusqu’à douze tuiles, toute la grille ; au-delà,
+    /// Hauteur de l’en-tête, de la grille et des appréciations. Jusqu’à neuf tuiles, toute la grille ; au-delà,
     /// sa fenêtre (`SchoolSignalGridLayout.windowHeight`), le reste s’atteignant en défilant.
     /// Pendant la lecture du référentiel, la grille n’a pas encore sa taille : le conteneur garde son estimation.
     /// Un message passager (erreur, envoi précédent) n’entre pas dans le compte : il ne redimensionne pas le

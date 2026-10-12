@@ -3,7 +3,7 @@ import SwiftUI
 /// Disposition de la grille « Signaler » pour un nombre quelconque de tuiles : tout le catalogue affiché, plus
 /// les tuiles génériques d’un référentiel propre à l’école. Aucun nombre de thèmes n’est supposé.
 /// Règle : le nombre de colonnes suit le nombre de tuiles, puis se limite à ce que la largeur permet sans passer
-/// sous la largeur de tuile actuelle. Le volet montre d’emblée les douze premières tuiles ; les suivantes
+/// sous la largeur de tuile actuelle. Le volet montre d’emblée les neuf premières tuiles (3 × 3) ; les suivantes
 /// continuent la même grille en dessous et s’atteignent en la faisant défiler. Rien ici ne lit l’écran :
 /// la règle se teste sans vue. Détail : docs/implementation/signalements-ios-20261012.md.
 struct SchoolSignalGridLayout: Equatable {
@@ -21,9 +21,8 @@ struct SchoolSignalGridLayout: Equatable {
     static let gutter = DrivySpacing.s
     /// Largeur supposée du volet avant sa première mesure : un iPhone de 393 pt.
     static let assumedWidth: CGFloat = 361
-    /// Tuiles visibles à l’ouverture, sans défiler. Douze se divise par 1, 2, 3 et 4 : la fenêtre finit toujours
-    /// sur une rangée pleine.
-    static let immediateTileCount = 12
+    /// Tuiles visibles à l’ouverture, sans défiler : trois rangées de trois.
+    static let immediateTileCount = 9
     /// Haut de la rangée suivante laissé visible sous la fenêtre (en plus de la marge), estompé : il dit que la
     /// grille continue sans masquer la dernière rangée de la fenêtre.
     static let peek: CGFloat = 16
@@ -35,15 +34,13 @@ struct SchoolSignalGridLayout: Equatable {
         guard count > 0 else { columns = 1; rows = 0; return }
         // Tailles d’accessibilité : une colonne, pictogramme à gauche du libellé.
         guard !textSize.isAccessibilitySize else { columns = 1; rows = count; return }
-        // Peu de tuiles : une seule rangée de tuiles larges, ou un carré de quatre. Jusqu’à douze : trois colonnes,
-        // comme avant. Au-delà : quatre colonnes là où la largeur le permet (iPad, paysage), sinon des rangées de trois
-        // (cinq pour treize à quinze tuiles, six pour seize à dix-huit) ; au-delà des douze premières, la grille défile.
+        // Peu de tuiles : une seule rangée de tuiles larges, ou un carré de quatre. Dès cinq : trois colonnes partout,
+        // iPad compris, pour que la fenêtre soit un carré de neuf ; au-delà des neuf premières, la grille défile.
         let wanted: Int
         switch count {
         case 1...3: wanted = count
         case 4: wanted = 2
-        case 5...12: wanted = 3
-        default: wanted = 4
+        default: wanted = 3
         }
         let tile = textSize >= .xxLarge ? Self.largeTextTileWidth : Self.minimumTileWidth
         let usable = max(0, width - 2 * Self.gutter)
@@ -52,7 +49,7 @@ struct SchoolSignalGridLayout: Equatable {
         rows = (count + columns - 1) / columns
     }
 
-    /// Rangées montrées à l’ouverture : celles des douze premières tuiles.
+    /// Rangées montrées à l’ouverture : celles des neuf premières tuiles (trois sur trois colonnes).
     var visibleRows: Int { min(rows, (Self.immediateTileCount + columns - 1) / columns) }
     /// Des tuiles suivent la fenêtre : la grille défile.
     var overflows: Bool { rows > visibleRows }

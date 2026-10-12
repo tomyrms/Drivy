@@ -166,3 +166,5 @@ Demande du porteur : les douze premiers signalements affichés visibles d’embl
 ### À voir à l’œil
 
 Le fondu en clair et en sombre, l’amorce sur iPhone SE et Pro Max, le défilement à 120 Hz, le geste de défilement qui commence sur une tuile (le système le tranche : pas de sélection si le doigt glisse).
+
+**13 octobre 2026** : la fenêtre passe de douze à **neuf tuiles (3 × 3)**, demande du porteur. Trois colonnes dès cinq tuiles, iPad compris ; au-delà de neuf, la même grille défile dans sa zone, avec l’amorce estompée de la rangée suivante. Six ou huit tuiles s’affichent seules, sans case vide. Ordre et réglages inchangés.
