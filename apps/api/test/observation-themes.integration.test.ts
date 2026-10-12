@@ -20,8 +20,8 @@ async function grant(grants:string[]){
 }
 
 describe('catalogue des signalements',()=>{
- it('porte quinze thèmes à clés uniques, douze affichés à l’origine, les onze premiers inchangés',()=>{
-  expect(observationThemes).toHaveLength(15);expect(new Set(observationThemes.map(theme=>theme.key)).size).toBe(15);
+ it('porte dix-huit thèmes à clés uniques, douze affichés à l’origine, les onze premiers inchangés',()=>{
+  expect(observationThemes).toHaveLength(18);expect(new Set(observationThemes.map(theme=>theme.key)).size).toBe(18);
   expect(observationThemes.filter(theme=>theme.defaultVisible)).toHaveLength(12);
   expect(observationThemes.slice(0,11).map(theme=>theme.key)).toEqual(['vehicle','observation','right-priority','signage','give-way','intersections','speed','placement','manoeuvres','motorway','anticipation']);
   for(const theme of observationThemes)expect(theme.key).toMatch(/^[a-z][a-z0-9-]{0,39}$/);
@@ -30,7 +30,7 @@ describe('catalogue des signalements',()=>{
   expect(arrangeObservationThemes(undefined).map(theme=>theme.key)).toEqual(observationThemes.map(theme=>theme.key));
   // Clé inconnue ignorée ; thème absent de la ligne remis à sa place d'origine avec son affichage d'origine.
   const arranged=arrangeObservationThemes({theme_order:['speed','retired-theme','vehicle'],hidden_themes:['vehicle','retired-theme']});
-  expect(arranged).toHaveLength(15);expect(arranged.map(theme=>theme.key)).not.toContain('retired-theme');
+  expect(arranged).toHaveLength(18);expect(arranged.map(theme=>theme.key)).not.toContain('retired-theme');
   expect(arranged.find(theme=>theme.key==='vehicle')!.visible).toBe(false);
   expect(arranged.find(theme=>theme.key==='braking')!.visible).toBe(false);
   expect(arranged.find(theme=>theme.key==='indicators')!.visible).toBe(true);
@@ -41,13 +41,13 @@ describe('catalogue des signalements',()=>{
 });
 
 describe('configuration des signalements par école',()=>{
- it('une école qui n’a rien réglé a quinze thèmes dont douze affichés, sans ligne en base',async()=>{
+ it('une école qui n’a rien réglé a dix-huit thèmes dont douze affichés, sans ligne en base',async()=>{
   const read=await call('GET',path);expect(read.statusCode,read.body).toBe(200);
   const data=read.json().data;
   expect(data).toMatchObject({id:id.schoolA,schoolId:id.schoolA,version:1,canManage:false});expect(read.headers.etag).toBe('"1"');
-  expect(data.themes).toHaveLength(15);expect(visibleOf(data)).toHaveLength(12);
+  expect(data.themes).toHaveLength(18);expect(visibleOf(data)).toHaveLength(12);
   expect(data.themes[0]).toEqual({key:'vehicle',title:'Maîtrise du véhicule',competencyKeys:['vehicule'],visible:true,defaultVisible:true,defaultPosition:0});
-  expect(data.themes.map((theme:{defaultPosition:number})=>theme.defaultPosition)).toEqual([...Array(15).keys()]);
+  expect(data.themes.map((theme:{defaultPosition:number})=>theme.defaultPosition)).toEqual([...Array(18).keys()]);
   expect((await call('GET',path,undefined,null,'demo-admin')).json().data.canManage).toBe(true);
   expect((await pool.query('SELECT count(*)::int AS n FROM drivy.observation_theme_settings')).rows[0].n).toBe(0);
  });
@@ -69,10 +69,10 @@ describe('configuration des signalements par école',()=>{
    await db.query('ROLLBACK');
   }finally{db.release();}
  });
- it('l’administrateur affiche les quinze, masque, réordonne ; version, idempotence, audit et conflit',async()=>{
+ it('l’administrateur affiche les dix-huit, masque, réordonne ; version, idempotence, audit et conflit',async()=>{
   const all=save(defaults.map(theme=>({...theme,visible:true}))),saved=await call('PUT',path,all,1,'demo-admin');
   expect(saved.statusCode,saved.body).toBe(200);expect(saved.json().data.version).toBe(2);expect(saved.headers.etag).toBe('"2"');
-  expect(visibleOf(saved.json().data)).toHaveLength(15);expect(saved.json().data.canManage).toBe(true);
+  expect(visibleOf(saved.json().data)).toHaveLength(18);expect(saved.json().data.canManage).toBe(true);
   // Rejeu : même réponse, aucune seconde écriture.
   expect((await call('PUT',path,all,1,'demo-admin')).json().data.version).toBe(2);
   expect((await call('PUT',path,{...all,themes:defaults},1,'demo-admin')).json().code).toBe('IDEMPOTENCY_MISMATCH');
@@ -84,12 +84,12 @@ describe('configuration des signalements par école',()=>{
   const custom=first('right-priority').map(theme=>({...theme,visible:!['motorway','manoeuvres','braking'].includes(theme.key)}));
   const changed=await call('PUT',path,save(custom),2,'demo-admin');expect(changed.statusCode,changed.body).toBe(200);
   expect(changed.json().data.version).toBe(3);expect(keysOf(changed.json().data)[0]).toBe('right-priority');
-  expect(visibleOf(changed.json().data)).toHaveLength(12);expect(visibleOf(changed.json().data)).not.toContain('motorway');
+  expect(visibleOf(changed.json().data)).toHaveLength(15);expect(visibleOf(changed.json().data)).not.toContain('motorway');
   // Le moniteur de la même école reçoit l'ordre et l'affichage de son école.
   const seen=(await call('GET',path)).json().data;expect(seen.version).toBe(3);expect(keysOf(seen)).toEqual(custom.map(theme=>theme.key));expect(seen.canManage).toBe(false);
  });
  it('refuse une liste incomplète, en double, inconnue, ou qui masque tout',async()=>{
-  const bodies=[save(defaults.slice(1)),save([defaults[0]!,...defaults.slice(0,14)]),save([{key:'unknown',visible:true},...defaults.slice(1)]),
+  const bodies=[save(defaults.slice(1)),save([defaults[0]!,...defaults.slice(0,17)]),save([{key:'unknown',visible:true},...defaults.slice(1)]),
    save(defaults.map(theme=>({...theme,visible:false}))),{...save(defaults),reset:true},save(defaults.map(theme=>({...theme,title:'Autre'})) as never)];
   for(const body of bodies){const response=await call('PUT',path,body,3,'demo-admin');expect(response.statusCode,response.body).toBe(400);}
   expect((await call('GET',path)).json().data.version).toBe(3);

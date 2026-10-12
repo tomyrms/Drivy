@@ -1,4 +1,4 @@
--- Signalements configurables (12 octobre 2026). Le catalogue des quinze thèmes vit dans le code du service (observation-themes.ts) ;
+-- Signalements configurables (12 octobre 2026). Le catalogue des thèmes vit dans le code du service (observation-themes.ts) ;
 -- la base ne garde que ce qui appartient à l'école : l'ordre, l'affichage et qui peut les régler.
 -- Contrat et décisions : docs/implementation/signalements-configurables-20261012.md.
 

@@ -7,7 +7,7 @@ import {checkIdempotency,checkVersion,requireVersion,schoolCommand} from './comm
 import {ApiError,forbidden} from './errors.js';
 
 /**
- * Catalogue des signalements : quinze thèmes à clés stables, chacun rattaché à une compétence du référentiel par la clé stable de
+ * Catalogue des signalements : dix-huit thèmes à clés stables, chacun rattaché à une compétence du référentiel par la clé stable de
  * celle-ci (la première de `competencyKeys` fait foi, les suivantes sont d'anciennes clés). L'ordre du tableau est l'ordre d'origine.
  * La clé est aussi le nom du pictogramme dans l'app et sur le web. Contrat : docs/implementation/signalements-configurables-20261012.md.
  */
@@ -26,7 +26,10 @@ export const observationThemes=[
  {key:'indicators',title:'Clignotants',competencyKeys:['observation'],defaultVisible:true},
  {key:'following-distance',title:'Distance de sécurité',competencyKeys:['vitesse'],defaultVisible:false},
  {key:'braking',title:'Freinage',competencyKeys:['vehicule'],defaultVisible:false},
- {key:'lane-change',title:'Changement de voie',competencyKeys:['placement'],defaultVisible:false}
+ {key:'lane-change',title:'Changement de voie',competencyKeys:['placement'],defaultVisible:false},
+ {key:'moving-off',title:'Démarrage',competencyKeys:['vehicule'],defaultVisible:false},
+ {key:'bends',title:'Virages',competencyKeys:['placement'],defaultVisible:false},
+ {key:'eco-driving',title:'Éco-conduite',competencyKeys:['vehicule'],defaultVisible:false}
 ] as const;
 export type ObservationThemeKey=typeof observationThemes[number]['key'];
 const keys=observationThemes.map(theme=>theme.key) as [ObservationThemeKey,...ObservationThemeKey[]];
