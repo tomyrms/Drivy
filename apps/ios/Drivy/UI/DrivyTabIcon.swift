@@ -20,7 +20,9 @@ import UIKit
         let accent = UIColor(DrivyTheme.accent).resolvedColor(with: traits)
         let ink = (selected ? accent : UIColor.label.resolvedColor(with: traits))
         let configuration = UIImage.SymbolConfiguration(pointSize: 21, weight: .medium)
-        guard let symbol = UIImage(systemName: systemName, withConfiguration: configuration)?
+        // The tab bar draws the filled variant of a symbol: the marked icon must not switch to outlines.
+        let filled = UIImage(systemName: systemName + ".fill", withConfiguration: configuration)
+        guard let symbol = (filled ?? UIImage(systemName: systemName, withConfiguration: configuration))?
                 .withTintColor(ink, renderingMode: .alwaysOriginal) else { return Image(systemName: systemName) }
         let size = symbol.size, side = max(size.width, size.height)
         let format = UIGraphicsImageRendererFormat.preferred()
