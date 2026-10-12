@@ -150,7 +150,7 @@ private struct InvitationCodeRecovery: View {
             Label("Le code n’a pas été reçu. Crée-en un nouveau : l’ancien ne fonctionnera plus.",
                   systemImage: "exclamationmark.triangle.fill")
                 .font(.subheadline)
-                .foregroundStyle(DrivyTheme.warning)
+                .foregroundStyle(DrivyTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
             Button { Task { await model.renewRecoveredCode() } } label: {
                 DrivyBusyLabel(title: "Nouveau code", busyTitle: "Création…", isBusy: model.isBusy)
@@ -169,7 +169,7 @@ enum InvitationPresentation {
         return ["Code élève", training].compactMap { $0 }.joined(separator: " · ")
     }
     static func tone(_ status: SchoolInvitationStatus) -> DrivyTone {
-        switch status { case .pending: .accent; case .accepted: .success; case .revoked, .expired: .neutral }
+        switch status { case .pending: .accent; case .accepted, .revoked, .expired: .neutral }
     }
     static func symbol(_ status: SchoolInvitationStatus) -> String {
         switch status { case .pending: "clock"; case .accepted: "checkmark"; case .revoked: "xmark"; case .expired: "hourglass" }
@@ -347,6 +347,7 @@ struct InvitationCreationView: View {
                                     else { model.selectedOfferingIDs.remove(offering.id) }
                                 }))
                                 .disabled(!model.selectedOfferingIDs.contains(offering.id) && model.selectedOfferingIDs.count >= 16)
+                                .drivyControlTint()
                                 .accessibilityIdentifier("invitation-training-\(offering.id.uuidString)")
                         }
                     } header: { Text("Permis").drivyFormSectionHeader() }

@@ -13,6 +13,7 @@ struct SchoolTodayView: View {
     let captureController: SchoolCaptureSessionController?
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(SchoolRequiredActionStore.self) private var requiredActions: SchoolRequiredActionStore?
     @State private var lessons: [SchoolLesson] = []
     /// Leçons du moniteur commencées un jour précédent et jamais terminées : aucune fin n’est automatique, et
     /// sans ce rappel elles ne se retrouvaient que dans l’historique du profil.
@@ -91,6 +92,12 @@ struct SchoolTodayView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { location.refresh(); Task { await load() } }
+        }
+        // Les leçons à terminer que cet écran lit déjà (le jour et le rappel des jours passés) sont l’action
+        // de l’onglet : aucune lecture de plus, et le point part dès que la liste se vide.
+        .onChange(of: (lessons + unfinished).map { "\($0.id):\($0.version)" }, initial: true) { _, _ in
+            requiredActions?.replace(.finishLesson, with: SchoolRequiredActionRules.lessonsToFinish(lessons + unfinished,
+                instructorMembershipID: instructorFilter, now: Date()))
         }
         .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { notification in
             if let change = notification.object as? SchoolLessonChange, change.schoolID != workspace.membership?.schoolId { return }

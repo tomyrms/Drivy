@@ -25,6 +25,8 @@ struct SchoolHomeView: View {
     /// Le permis que l’élève filtre dans ses onglets Leçons et Progression ; `nil` les montre tous.
     @State private var chosenPermit: UUID?
     @State private var captureLesson: CaptureLessonRoute?
+    /// Ce que le compte doit faire dans cette école : les points des onglets et les lignes s’y lisent.
+    @State private var requiredActions = SchoolRequiredActionStore()
     /// Élève du trajet en cours, lu à part quand il n’est pas dans la page d’élèves affichée.
     @State private var captureLearner: (id: UUID, name: String)?
     @Environment(\.scenePhase) private var scenePhase
@@ -42,6 +44,7 @@ struct SchoolHomeView: View {
             }
         }
         .tint(DrivyTheme.accent)
+        .environment(requiredActions)
         .sheet(isPresented: $choosesSchool) {
             SchoolChooserSheet(workspace: workspace, close: { choosesSchool = false })
         }
@@ -89,8 +92,41 @@ struct SchoolHomeView: View {
         }
     }
 
+    /// Le point d’un onglet : la pastille du système, vide, à la couleur d’accent. Rien quand tout est résolu.
+    private func actionDot(_ tab: SchoolHomeTab) -> Text? {
+        requiredActions.needsAttention(tab) ? Text(" ") : nil
+    }
+
+    /// Ce que cette vue sait déjà sans rien lire de plus : les profils incomplets de la page d’élèves affichée
+    /// (administration seulement) et l’accueil laissé en route.
+    private func refreshStaffActions() {
+        let roles = workspace.membership?.roles ?? []
+        requiredActions.replace(.completeLearnerProfile, with: SchoolRequiredActionRules.incompleteProfiles(workspace.learners, roles: roles))
+        requiredActions.replace(.resumeOnboarding, with: SchoolRequiredActionRules.onboarding(canResume: account?.resumeOnboarding != nil, isLearner: false))
+    }
+
+    /// L’accord GPS de l’élève se lit dès l’ouverture, pas seulement quand il visite son Profil : sinon le
+    /// point n’apparaîtrait qu’après coup. Une lecture en panne ne signale rien.
+    private func readLearnerConsent(_ learner: SchoolLearner) async {
+        guard let agendaClient, let trainingClient, let person = workspace.person, let membership = workspace.membership,
+              workspace.school?.status == "ACTIVE", workspace.school?.modules.gpsEnabled == true else {
+            requiredActions.replace(.giveRecordingConsent, with: []); return
+        }
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId, membershipID: membership.membershipId,
+            accessEpoch: membership.accessEpoch, apiBaseURL: trainingClient.baseURL.absoluteString)
+        let model = SchoolOwnRecordingChoice.makeModel(scope: scope, lessonID: nil, learnerID: learner.id,
+            agenda: agendaClient, capture: captureController)
+        await model.load()
+        guard !Task.isCancelled, workspace.membership?.membershipId == membership.membershipId else { return }
+        let attention = SchoolRecordingChoiceAttention.label(notice: model.notice != nil, revoked: model.accessRevoked,
+            pending: !model.relatedPending.isEmpty || model.hasOldScope, answered: model.validAnswer != nil)
+        requiredActions.replace(.giveRecordingConsent, with: SchoolRequiredActionRules.recordingConsent(attention: attention))
+        model.invalidate()
+    }
+
     private func resetScope() {
         dossierPlanningModel?.invalidate(); dossierPlanningModel = nil; chosenPermit = nil; captureLesson = nil
+        requiredActions.reset()
     }
 
     // MARK: Moniteur
@@ -107,6 +143,7 @@ struct SchoolHomeView: View {
                         .accessibilityValue(captureController?.captureID != nil ? "Leçon en cours" : "")
                 }
                 .tag(SchoolHomeTab.session)
+                .badge(actionDot(.session))
             if let agendaClient {
                 NavigationStack {
                     SchoolAgendaView(client: agendaClient, workspace: workspace, captureController: captureController)
@@ -121,11 +158,17 @@ struct SchoolHomeView: View {
                 agendaClient: agendaClient, captureController: captureController)
                 .tabItem { Label("Élèves", systemImage: "person.2") }
                 .tag(SchoolHomeTab.learners)
+                .badge(actionDot(.learners))
             SchoolProfileTabView(workspace: workspace, account: account, agendaClient: agendaClient,
                 captureController: captureController, chooseSchool: chooseSchoolAction)
                 .tabItem { Label("Profil", systemImage: "person.crop.circle") }
                 .tag(SchoolHomeTab.profile)
+                .badge(actionDot(.profile))
         }
+        // Ce que les onglets savent déjà : relu quand la page d’élèves, les droits ou l’accueil changent.
+        .onChange(of: workspace.learners.map { "\($0.id):\($0.profileReadiness ?? "")\($0.archivedAt == nil)" }, initial: true) { _, _ in refreshStaffActions() }
+        .onChange(of: workspace.membership?.roles) { _, _ in refreshStaffActions() }
+        .onChange(of: account?.resumeOnboarding != nil) { _, _ in refreshStaffActions() }
     }
 
     private var sessionTab: some View {
@@ -201,12 +244,16 @@ struct SchoolHomeView: View {
                 retryDossier: { retryLearner() }, makeLearnerProfile: makeLearnerProfile)
                 .tabItem { Label("Profil", systemImage: "person.crop.circle") }
                 .tag(SchoolHomeTab.profile)
+                .badge(actionDot(.profile))
         }
         .task(id: ownLearner?.id) {
             guard let id = ownLearner?.id else { return }
             if workspace.selectedLearnerID != id { workspace.selectLearner(id) }
             if workspace.learner?.id != id { await workspace.loadSelectedLearner() }
             await workspace.loadRemainingTrainings()
+        }
+        .task(id: "\(ownLearner?.id.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.school?.modules.gpsEnabled == true)") {
+            if let learner = ownLearner { await readLearnerConsent(learner) }
         }
         .onChange(of: scenePhase) { _, phase in
             // Une formation ouverte, mise en pause ou terminée par l’école apparaît au retour dans l’app ; les

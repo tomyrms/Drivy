@@ -1,0 +1,928 @@
+{
+ "vehicle": {
+  "retenue": "D",
+  "notes": {
+   "A": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.7
+   },
+   "B": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 2,
+    "petite_taille": 3,
+    "integration": 2,
+    "total": 3.2
+   },
+   "C": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 5,
+    "integration": 4,
+    "total": 4.05
+   },
+   "D": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 4.3
+   },
+   "E": {
+    "reconnaissance": 2,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 3.2
+   }
+  },
+  "pourquoi": "D — le profil dit « véhicule » au premier regard, même à 16 px ; le volant plein (C) le suit de près mais se lit « conduite » plus que « véhicule ». La face avant (B) porte son propre carré, un contenant dans le contenant du bouton et du repère de carte."
+ },
+ "observation": {
+  "retenue": "E",
+  "notes": {
+   "A": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.3
+   },
+   "B": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 2,
+    "petite_taille": 4,
+    "integration": 2,
+    "total": 3.4
+   },
+   "C": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.5
+   },
+   "D": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 5,
+    "integration": 5,
+    "total": 4.5
+   },
+   "E": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 4,
+    "integration": 5,
+    "total": 4.6
+   }
+  },
+  "pourquoi": "E — l'œil reste immédiat et son iris est le repère de Drivy, sans afficher le logo. D, plus massif, tient un peu mieux à 16 px ; écart minime, l'identité tranche."
+ },
+ "right-priority": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "reconnaissance": 2,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.25
+   },
+   "B": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 4.15
+   },
+   "C": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.7
+   },
+   "D": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 3,
+    "total": 3.2
+   },
+   "E": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.65
+   }
+  },
+  "pourquoi": "B — c'est le panneau AB1 que l'élève apprend au code ; l'anneau épais et la croix tiennent à 16 px. Les îlots (A) se lisent « grille d'apps », le carrefour plein (D) garde un air de croix de pharmacie malgré le second tour."
+ },
+ "signage": {
+  "retenue": "C",
+  "notes": {
+   "A": {
+    "reconnaissance": 2,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.65
+   },
+   "B": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 4.0
+   },
+   "C": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 5,
+    "integration": 4,
+    "total": 4.05
+   },
+   "D": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 4.0
+   },
+   "E": {
+    "reconnaissance": 3,
+    "qualite": 5,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.9
+   }
+  },
+  "pourquoi": "C — le feu est le signe le plus lisible de la signalisation, et sa silhouette verticale le distingue des triangles de priorité et de céder le passage, qui sont déjà des panneaux. Les trois formes (E) sont le dessin le plus abouti mais se lisent « formes » sans libellé."
+ },
+ "give-way": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 3.15
+   },
+   "B": {
+    "reconnaissance": 5,
+    "qualite": 5,
+    "identite": 3,
+    "petite_taille": 5,
+    "integration": 5,
+    "total": 4.7
+   },
+   "C": {
+    "reconnaissance": 4,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 3.45
+   },
+   "D": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 4.15
+   },
+   "E": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.65
+   }
+  },
+  "pourquoi": "B — le triangle pointe en bas est le signe le plus reconnu du code ; en anneau seul, il reste léger à côté du triangle à croix et ne ressemble à aucun autre pictogramme de la grille."
+ },
+ "intersections": {
+  "retenue": "C",
+  "notes": {
+   "A": {
+    "reconnaissance": 2,
+    "qualite": 2,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 2.65
+   },
+   "B": {
+    "reconnaissance": 4,
+    "qualite": 3,
+    "identite": 2,
+    "petite_taille": 2,
+    "integration": 2,
+    "total": 2.8
+   },
+   "C": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.7
+   },
+   "D": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.55
+   },
+   "E": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 5,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.45
+   }
+  },
+  "pourquoi": "C — deux flèches au sol : propre à toutes les tailles et sans fausse lecture. Les trois flèches (D) disent mieux « giratoire » mais se lisent « synchroniser » hors de la grille, sur la carte ; le plan (A) s'est lu viseur, visage puis engrenage en trois tours ; le panneau (B) s'empâte à 16 px."
+ },
+ "speed": {
+  "retenue": "C",
+  "notes": {
+   "A": {
+    "reconnaissance": 2,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 2.85
+   },
+   "B": {
+    "reconnaissance": 4,
+    "qualite": 3,
+    "identite": 3,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 3.3
+   },
+   "C": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 5,
+    "integration": 5,
+    "total": 4.65
+   },
+   "D": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.85
+   },
+   "E": {
+    "reconnaissance": 2,
+    "qualite": 3,
+    "identite": 5,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.8
+   }
+  },
+  "pourquoi": "C — le compteur ouvert : immédiat, aéré, et l'aiguille reste visible à 16 px. La limitation (B) dépend de chiffres et d'une seule valeur ; le cadran plein (D) perd ses graduations en petit."
+ },
+ "placement": {
+  "retenue": "A",
+  "notes": {
+   "A": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 4.3
+   },
+   "B": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 2,
+    "petite_taille": 2,
+    "integration": 2,
+    "total": 2.5
+   },
+   "C": {
+    "reconnaissance": 3,
+    "qualite": 5,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.9
+   },
+   "D": {
+    "reconnaissance": 2,
+    "qualite": 3,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 3,
+    "total": 2.9
+   },
+   "E": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.65
+   }
+  },
+  "pourquoi": "A — la voiture entre la ligne pointillée et la ligne continue dit exactement « placement dans la voie ». Le cadrage (C) est plus élégant mais se lit « mise au point » ; la perspective (D) se lit « A »."
+ },
+ "manoeuvres": {
+  "retenue": "D",
+  "notes": {
+   "A": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.8
+   },
+   "B": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 2,
+    "petite_taille": 4,
+    "integration": 2,
+    "total": 3.4
+   },
+   "C": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 4.0
+   },
+   "D": {
+    "reconnaissance": 4,
+    "qualite": 5,
+    "identite": 4,
+    "petite_taille": 5,
+    "integration": 5,
+    "total": 4.55
+   },
+   "E": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 5,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.45
+   }
+  },
+  "pourquoi": "D — le référentiel nomme ce thème « Manœuvres » (stationnements, marche arrière, demi-tour) : le demi-tour en aplat est la manœuvre la plus reconnaissable et le dessin le plus net à 16 px. Le radar de recul (C) le suit ; le P (B) ne dit que « stationnement » et apporte son propre carré."
+ },
+ "motorway": {
+  "retenue": "C",
+  "notes": {
+   "A": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.8
+   },
+   "B": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 2,
+    "petite_taille": 3,
+    "integration": 2,
+    "total": 3.5
+   },
+   "C": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 4.0
+   },
+   "D": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 3,
+    "total": 3.2
+   },
+   "E": {
+    "reconnaissance": 2,
+    "qualite": 3,
+    "identite": 5,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 3.0
+   }
+  },
+  "pourquoi": "C — les deux bords qui fuient et l'axe qui grandit lisent « grande route » à toutes les tailles. Le pictogramme officiel (B) est plus exact mais n'existe que dans son carré, qui s'empâte et double le contenant."
+ },
+ "anticipation": {
+  "retenue": "C",
+  "notes": {
+   "A": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.8
+   },
+   "B": {
+    "reconnaissance": 4,
+    "qualite": 3,
+    "identite": 3,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.45
+   },
+   "C": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 5,
+    "integration": 5,
+    "total": 4.5
+   },
+   "D": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.35
+   },
+   "E": {
+    "reconnaissance": 2,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 2.85
+   }
+  },
+  "pourquoi": "C — anticiper, c'est d'abord voir le piéton : une silhouette pleine, en marche, qui ne se confond avec rien. Dans le panneau (B), la figure devient trop petite ; la trace qui s'écarte (E) se lit « ? »."
+ },
+ "marker": {
+  "retenue": "A",
+  "notes": {
+   "A": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 5,
+    "integration": 5,
+    "total": 4.5
+   },
+   "B": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.85
+   },
+   "C": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 3,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 3.0
+   },
+   "D": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 2,
+    "total": 3.25
+   },
+   "E": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 4.15
+   }
+  },
+  "pourquoi": "A — le signet plein dit « à revoir plus tard » à toutes les tailles. Le repère sur la trace (E) est le plus Drivy mais se confond avec le tracé sur la carte ; l'épingle (D) s'y lit « lieu »."
+ },
+ "status-attention": {
+  "retenue": "A",
+  "notes": {
+   "A": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 5,
+    "integration": 5,
+    "total": 4.5
+   },
+   "B": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 2,
+    "total": 3.55
+   },
+   "C": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 3,
+    "total": 4.0
+   },
+   "D": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 3,
+    "total": 3.7
+   },
+   "E": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 5,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 3.3
+   }
+  },
+  "pourquoi": "A — le glyphe nu : c'est lui qui va dans la pastille de couleur sur la carte et à côté du libellé dans la grille. Les versions déjà contenues (B, C, D) doubleraient la pastille."
+ },
+ "status-rework": {
+  "retenue": "A",
+  "notes": {
+   "A": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 5,
+    "integration": 5,
+    "total": 4.2
+   },
+   "B": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 2,
+    "total": 3.55
+   },
+   "C": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 4,
+    "integration": 2,
+    "total": 3.85
+   },
+   "D": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 2,
+    "total": 3.5
+   },
+   "E": {
+    "reconnaissance": 2,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.65
+   }
+  },
+  "pourquoi": "A — la croix reste la plus lisible en pastille. La flèche de reprise (C) dit mieux « à retravailler », sans ton punitif, mais elle a le même dessin que « Effacer le choix » dans l'en-tête de la même feuille : écartée pour cette raison."
+ },
+ "status-positive": {
+  "retenue": "A",
+  "notes": {
+   "A": {
+    "reconnaissance": 5,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 5,
+    "integration": 5,
+    "total": 4.5
+   },
+   "B": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 2,
+    "total": 3.55
+   },
+   "C": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 2,
+    "total": 3.55
+   },
+   "D": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 5,
+    "integration": 4,
+    "total": 3.75
+   },
+   "E": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 3.5
+   }
+  },
+  "pourquoi": "A — la coche nue, même graisse que le « ! » et la croix : les trois appréciations forment un jeu. Le « + » (D) se lit « ajouter »."
+ },
+ "right-priority-v2": {
+  "retenue": "I",
+  "notes": {
+   "F": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 3.15
+   },
+   "G": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.95
+   },
+   "H": {
+    "reconnaissance": 5,
+    "qualite": 5,
+    "identite": 3,
+    "petite_taille": 4,
+    "integration": 3,
+    "total": 4.2
+   },
+   "I": {
+    "reconnaissance": 4,
+    "qualite": 5,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 5,
+    "total": 4.35
+   },
+   "J": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.95
+   }
+  },
+  "pourquoi": "I — le carrefour dit par ses quatre bordures et la flèche qui entre par la droite : le langage des consignes de navigation, net à 16 px et d'une seule couleur. L'AB1 redessiné (H) est mieux construit que la version livrée, mais c'est un second triangle à côté de « Céder le passage » dans la grille : les deux se confondent d'un coup d'œil. Les voitures vues du dessus (G, J) ne disent pas leur sens en petit, et la ligne d'arrêt de F se lit « T ».",
+  "remplace": "right-priority B (4.15)"
+ },
+ "intersections-v2": {
+  "retenue": "H",
+  "notes": {
+   "F": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.8
+   },
+   "G": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 3,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.65
+   },
+   "H": {
+    "reconnaissance": 4,
+    "qualite": 5,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 5,
+    "total": 4.35
+   },
+   "I": {
+    "reconnaissance": 4,
+    "qualite": 3,
+    "identite": 3,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 3.1
+   },
+   "J": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 3,
+    "total": 3.85
+   }
+  },
+  "pourquoi": "H — l'anneau fin et le trajet épais qui entre, tourne et sort : le giratoire comme le montre une application de navigation, sans les trois flèches qui se lisaient « synchroniser ». Il reste d'une couleur, comme le reste de la famille ; la même idée en deux tons (F) s'empâte à 16 px. Tourner au carrefour (J) dit bien « intersection » mais pas « giratoire » et demande le second calque.",
+  "remplace": "intersections C (3.70)"
+ },
+ "intersections-v3": {
+  "retenue": "L",
+  "notes": {
+   "K": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.95
+   },
+   "L": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 3,
+    "integration": 3,
+    "total": 3.15
+   },
+   "M": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.95
+   },
+   "N": {
+    "reconnaissance": 3,
+    "qualite": 2,
+    "identite": 3,
+    "petite_taille": 2,
+    "integration": 2,
+    "total": 2.45
+   },
+   "O": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.95
+   }
+  },
+  "pourquoi": "Tour écarté — bordures courbes avec les branches larges de la priorité à droite : il ne reste presque rien de l'anneau entre quatre ouvertures, l'ensemble se lit engrenage ou soleil.",
+  "ecartee": true
+ },
+ "intersections-v4": {
+  "retenue": "Q",
+  "notes": {
+   "P": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 5,
+    "petite_taille": 2,
+    "integration": 4,
+    "total": 3.25
+   },
+   "Q": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.85
+   },
+   "R": {
+    "reconnaissance": 2,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 3,
+    "total": 2.65
+   },
+   "S": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 4,
+    "petite_taille": 2,
+    "integration": 4,
+    "total": 3.1
+   },
+   "T": {
+    "reconnaissance": 3,
+    "qualite": 3,
+    "identite": 5,
+    "petite_taille": 2,
+    "integration": 4,
+    "total": 3.25
+   }
+  },
+  "pourquoi": "Tour écarté — les bordures droites de la priorité à droite, au trait près, laissent un centre de 23 unités : l'îlot et la flèche y deviennent une spirale illisible en petit, et l'îlot seul (Q) se lit « carrefour avec un point ».",
+  "ecartee": true
+ },
+ "intersections-v5": {
+  "retenue": "U",
+  "notes": {
+   "U": {
+    "reconnaissance": 5,
+    "qualite": 5,
+    "identite": 5,
+    "petite_taille": 4,
+    "integration": 5,
+    "total": 4.8
+   },
+   "V": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 3,
+    "integration": 4,
+    "total": 3.95
+   },
+   "W": {
+    "reconnaissance": 4,
+    "qualite": 4,
+    "identite": 5,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 4.15
+   },
+   "X": {
+    "reconnaissance": 3,
+    "qualite": 4,
+    "identite": 4,
+    "petite_taille": 4,
+    "integration": 4,
+    "total": 3.7
+   },
+   "Y": {
+    "reconnaissance": 4,
+    "qualite": 3,
+    "identite": 5,
+    "petite_taille": 2,
+    "integration": 4,
+    "total": 3.55
+   }
+  },
+  "pourquoi": "U — le jumeau de la priorité à droite : mêmes bordures d'épaisseur 7, même emprise, mais elles dessinent l'anneau autour d'un îlot plein. Les branches plus étroites laissent l'anneau l'emporter sur les ouvertures, et c'est l'anneau qui dit « giratoire ». Côte à côte : bordures droites et flèche pour le carrefour, bordures en anneau et îlot pour le giratoire. La flèche (V, Y) encombre la voie en petit ; l'îlot-repère (X) se lit « bouton radio ».",
+  "ecartee": false,
+  "remplace": "intersections-v2 H (4.35)"
+ }
+}

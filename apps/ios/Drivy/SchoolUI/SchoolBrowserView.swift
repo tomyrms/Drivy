@@ -210,15 +210,21 @@ struct SchoolChooserView: View {
 private struct SchoolLearnerRow: View {
     let learner: SchoolLearner
     let isSelected: Bool
+    @Environment(SchoolRequiredActionStore.self) private var requiredActions: SchoolRequiredActionStore?
 
     var body: some View {
         DrivyEntityRow(title: learner.displayName, leading: .avatar(learner.displayName), badge: badge, isSelected: isSelected)
     }
 
-    /// Seul ce qui demande une action reste en badge.
+    /// Ce que la ligne dit en plus du nom. Un profil auquel il manque une information requise est nommé
+    /// pour ce qu’il est ; en bleu pour qui peut le compléter en entier (administration), en gris sinon :
+    /// le dossier dit alors ce qui manque et qui peut le renseigner.
     private var badge: DrivyStatusBadge? {
         if learner.archivedAt != nil { return DrivyStatusBadge(title: "Archivé") }
-        if learner.profileReadiness == "ACTION_REQUIRED" { return DrivyStatusBadge(title: "À vérifier", symbol: "exclamationmark.triangle", tone: .warning) }
+        if SchoolRequiredActionRules.profileIsIncomplete(learner) {
+            let isMine = requiredActions?.action(.completeLearnerProfile, entityID: learner.id) != nil
+            return DrivyStatusBadge(title: "Profil à compléter", tone: isMine ? .accent : .neutral)
+        }
         return nil
     }
 }

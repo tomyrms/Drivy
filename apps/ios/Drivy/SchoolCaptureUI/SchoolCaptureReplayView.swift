@@ -18,12 +18,17 @@ struct SchoolCaptureReplayView: View {
     @State private var resetCameraID = UUID()
     @State private var followsPosition = true
     @State private var showsList = false
+    /// Des pastilles sont cachées au-delà de ce bord du rail : lui seul s’estompe.
+    @State private var railHidesLeading = false
+    @State private var railHidesTrailing = false
 
     private var contentKey: String {
         "\(model.contentRevision):\(model.isComplete)"
     }
     /// Largeur maximale du libellé d’une pastille du rail : au-delà, il est tronqué.
     private static let chipTitleMaxWidth: CGFloat = 240
+    /// Largeur du fondu aux bords du rail des observations.
+    private static let railFadeWidth: CGFloat = 44
 
     var body: some View {
         Group {
@@ -224,13 +229,8 @@ struct SchoolCaptureReplayView: View {
     private func selectedDetail(_ timeline: SchoolReplayTimeline) -> some View {
         if let item = timeline.items.first(where: { $0.id == selectedID }) {
             HStack(alignment: .top, spacing: DrivySpacing.s) {
-                // Focus du dock : pastille pleine, comme les tuiles du signalement.
-                Image(systemName: item.symbol)
-                    .font(DrivyMapGlyph.observation)
-                    .foregroundStyle(item.tone == .neutral ? DrivyTheme.text : item.tone.background)
-                    .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
-                    .background(item.tone == .neutral ? item.tone.background : item.tone.foreground, in: Circle())
-                    .accessibilityHidden(true)
+                // Focus du dock : pastille pleine, le thème du signalement.
+                SchoolObservationToken(glyph: item.glyph, tone: item.tone, side: DrivyLayout.tapTarget, filled: true)
                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                     Text(item.title)
                         .font(.headline)
@@ -291,6 +291,25 @@ struct SchoolCaptureReplayView: View {
                 // Le rail va jusqu’aux bords du dock : les pastilles défilent sans être coupées net
                 // au retrait, et la première reste alignée sur le contenu.
                 .contentMargins(.horizontal, DrivySpacing.m, for: .scrollContent)
+                // Un bord ne s’estompe que s’il cache des pastilles : au repos la première est nette, en fin de course
+                // la dernière aussi. Le fondu est large et progressif, il ne se lit pas comme une coupe.
+                .mask {
+                    HStack(spacing: 0) {
+                        railFade(from: .leading, isActive: railHidesLeading)
+                        Color.black
+                        railFade(from: .trailing, isActive: railHidesTrailing)
+                    }
+                }
+                .onScrollGeometryChange(for: [Bool].self) { geometry in
+                    let start = geometry.contentOffset.x + geometry.contentInsets.leading
+                    let end = geometry.contentSize.width + geometry.contentInsets.trailing
+                        - geometry.contentOffset.x - geometry.containerSize.width
+                    return [start > 2, end > 2]
+                } action: { _, hidden in
+                    withAnimation(DrivyMotion.feedback(reduceMotion)) {
+                        railHidesLeading = hidden[0]; railHidesTrailing = hidden[1]
+                    }
+                }
                 .padding(.horizontal, -DrivySpacing.m)
                 .onChange(of: selectedID) { _, id in
                     guard let id else { return }
@@ -300,15 +319,20 @@ struct SchoolCaptureReplayView: View {
         }
     }
 
+    /// Bord du rail : transparent au bord, plein vers l’intérieur, en courbe douce. Inactif, il est plein.
+    private func railFade(from edge: HorizontalEdge, isActive: Bool) -> some View {
+        let stops: [Gradient.Stop] = [.init(color: .clear, location: 0), .init(color: .black.opacity(0.18), location: 0.25),
+                                      .init(color: .black.opacity(0.6), location: 0.6), .init(color: .black, location: 1)]
+        return LinearGradient(stops: stops, startPoint: edge == .leading ? .leading : .trailing,
+                              endPoint: edge == .leading ? .trailing : .leading)
+            .overlay(Color.black.opacity(isActive ? 0 : 1))
+            .frame(width: Self.railFadeWidth)
+    }
+
     private func chip(_ item: SchoolReplayTimeline.Item, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: DrivySpacing.xs) {
-                Image(systemName: item.symbol)
-                    .font(DrivyMapGlyph.compactObservation)
-                    .foregroundStyle(item.tone.foreground)
-                    .frame(width: 24, height: 24)
-                    .background(item.tone.background, in: Circle())
-                    .accessibilityHidden(true)
+                SchoolObservationToken(glyph: item.glyph, tone: item.tone, side: 26)
                 Text(item.offset.map { DrivyReplayScrubber.clock($0) } ?? "—")
                     .font(.subheadline.weight(.semibold).monospacedDigit())
                 // Une note de relecture peut compter des centaines de caractères : la pastille garde une
@@ -358,12 +382,7 @@ struct SchoolCaptureReplayView: View {
                             if closesSheet { showsList = false }
                         } label: {
                             HStack(alignment: .top, spacing: DrivySpacing.s) {
-                                Image(systemName: item.symbol)
-                                    .font(DrivyMapGlyph.observation)
-                                    .foregroundStyle(item.tone.foreground)
-                                    .frame(width: 36, height: 36)
-                                    .background(item.tone.background, in: Circle())
-                                    .accessibilityHidden(true)
+                                SchoolObservationToken(glyph: item.glyph, tone: item.tone)
                                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                                     Text(item.title).font(.headline).foregroundStyle(DrivyTheme.text)
                                     Text(item.statusLabel).font(.subheadline).foregroundStyle(item.tone.foreground)
@@ -429,7 +448,8 @@ private struct SchoolReplayPlayerPanel: View {
                 offset: Binding(get: { player.offset }, set: { player.seek(to: $0) }),
                 duration: timeline.duration,
                 marks: timed.compactMap { item in
-                    item.offset.map { DrivyTimelineMark(id: item.id, offset: $0, symbol: item.symbol, tone: item.tone, label: item.title) }
+                    item.offset.map { DrivyTimelineMark(id: item.id, offset: $0, glyph: item.status?.glyph ?? item.glyph, theme: item.glyph,
+                                                            tone: item.tone, label: item.title) }
                 },
                 gaps: timeline.gaps,
                 selectedMarkID: selectedID,
@@ -514,10 +534,11 @@ private struct SchoolReplayMap: View {
             guard let coordinate = item.coordinate else { continue }
             let selected = selectedID == item.id
             result.append(DrivyRouteMapPin(id: item.id.uuidString, coordinate: coordinate,
-                signature: "\(item.symbol):\(item.statusLabel):\(selected)",
+                signature: "\(item.glyph.key):\(item.statusLabel):\(selected)",
                 label: "\(item.title), \(item.statusLabel)", isSelected: selected, isSelectable: true,
                 side: DrivyLayout.tapTarget, priority: selected ? 450 : 400,
-                content: AnyView(SchoolMapObservationMarker(symbol: item.symbol, color: item.tone.foreground, isSelected: selected))))
+                content: AnyView(SchoolMapObservationMarker(glyph: item.glyph, tone: item.tone, badge: item.status?.glyph,
+                    isSelected: selected))))
         }
         return result
     }

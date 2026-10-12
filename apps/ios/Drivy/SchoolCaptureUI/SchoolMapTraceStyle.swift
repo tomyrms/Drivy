@@ -71,23 +71,43 @@ struct SchoolMapEndpointMarker: View {
     }
 }
 
-/// One marker grammar in live capture, replay and the lesson preview.
+/// One marker grammar in live capture, replay and the lesson preview: a ringed disc carrying the
+/// theme in ink. The appraisal is the ring colour and a badge with its own glyph, so it never rests
+/// on colour alone. Without an appraisal (moment, note), the ring is ink and there is no badge.
 struct SchoolMapObservationMarker: View {
-    let symbol: String
-    let color: Color
+    let glyph: DrivyObservationGlyph
+    var tone: DrivyTone = .neutral
+    var badge: DrivyObservationGlyph? = nil
     var isSelected = false
     var isPending = false
 
+    private var ringColor: Color { tone == .neutral ? DrivyTheme.text : tone.signal }
+    private var side: CGFloat { isSelected ? 44 : 32 }
+
     var body: some View {
-        Image(systemName: symbol)
-            .font(isSelected ? .body.weight(.bold) : DrivyMapGlyph.compactObservation)
-            .foregroundStyle(color)
-            .frame(width: isSelected ? 40 : 28, height: isSelected ? 40 : 28)
+        DrivyObservationGlyphImage(glyph: glyph)
+            .foregroundStyle(DrivyTheme.text)
+            .frame(width: side * 0.54, height: side * 0.54)
+            .frame(width: side, height: side)
             .background(DrivyTheme.surfaceRaised, in: Circle())
-            .overlay(Circle().strokeBorder(isSelected ? DrivyTheme.accent : color,
+            .overlay(Circle().strokeBorder(isSelected ? DrivyTheme.accent : ringColor,
                 style: StrokeStyle(lineWidth: 3, dash: isPending ? [3, 2] : [])))
+            .overlay(alignment: .bottomTrailing) { badgeView }
             .padding(2)
             .background(DrivyTheme.routeHalo, in: Circle())
-            .dynamicTypeSize(...DynamicTypeSize.xLarge)
+    }
+
+    @ViewBuilder private var badgeView: some View {
+        if let badge, tone != .neutral {
+            let badgeSide: CGFloat = isSelected ? 18 : 16
+            DrivyObservationGlyphImage(glyph: badge)
+                .foregroundStyle(DrivyTheme.surfaceRaised)
+                .frame(width: badgeSide * 0.58, height: badgeSide * 0.58)
+                .frame(width: badgeSide, height: badgeSide)
+                .background(tone.signal, in: Circle())
+                .padding(1.5)
+                .background(DrivyTheme.routeHalo, in: Circle())
+                .offset(x: 5, y: 5)
+        }
     }
 }

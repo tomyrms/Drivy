@@ -17,6 +17,16 @@ enum DrivyTone {
         }
     }
 
+    /// The tone drawn as a shape (glyph, ring, badge, pin, marker); `foreground` stays the ink of words.
+    var signal: Color {
+        switch self {
+        case .neutral, .accent: foreground
+        case .success: DrivyTheme.successSignal
+        case .warning: DrivyTheme.warningSignal
+        case .danger: DrivyTheme.dangerSignal
+        }
+    }
+
     var background: Color {
         switch self {
         case .neutral: DrivyTheme.surfaceMuted
@@ -26,12 +36,24 @@ enum DrivyTone {
         case .danger: DrivyTheme.dangerSurface
         }
     }
+
+    /// The tone a status, a note or a message is drawn in. Drivy reads in blue, grey and white: an ordinary
+    /// state (done, accepted) and a point to check are said by their words, in neutral ink. Only what is
+    /// critical keeps a colour of its own. Orange and green stay available for the few places where the
+    /// colour itself is the information: the observation scale, a GPS alert while driving.
+    var quiet: DrivyTone {
+        switch self {
+        case .success, .warning: .neutral
+        case .neutral, .accent, .danger: self
+        }
+    }
 }
 
-/// Compact status pill: « En cours », « Partagé », « Profil à compléter ».
-/// On one line it keeps its natural width so neighbours compress first; at
-/// accessibility text sizes it wraps instead of overflowing, and its capsule
-/// becomes a field-radius rectangle so a two-line pill keeps a readable shape.
+/// A status said in words: « En pause », « Archivé », « À vérifier ». Secondary typography, no pill, no
+/// fill and no symbol: it sits on the line of what it qualifies and never competes with it. `symbol` is
+/// kept for callers and no longer drawn; `tone` only matters when it is critical (danger) or an action
+/// in the accent. On one line it keeps its natural width so neighbours compress first; at accessibility
+/// text sizes it wraps.
 struct DrivyStatusBadge: View {
     let title: String
     var symbol: String? = nil
@@ -40,21 +62,12 @@ struct DrivyStatusBadge: View {
 
     var body: some View {
         let wraps = typeSize.isAccessibilitySize
-        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xxs) {
-            if let symbol { Image(systemName: symbol).imageScale(.small).accessibilityHidden(true) }
-            Text(title)
-                .lineLimit(wraps ? nil : 1)
-                .multilineTextAlignment(.leading)
-        }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(tone.foreground)
-        .padding(.horizontal, DrivySpacing.xs)
-        .padding(.vertical, DrivySpacing.xxs)
-        .background(tone.background, in: wraps
-            ? AnyShape(RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
-            : AnyShape(Capsule()))
-        .fixedSize(horizontal: !wraps, vertical: true)
-        .accessibilityElement(children: .combine)
+        Text(title)
+            .font(.subheadline)
+            .foregroundStyle(tone.quiet.foreground)
+            .lineLimit(wraps ? nil : 1)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: !wraps, vertical: true)
     }
 }
 
@@ -72,7 +85,7 @@ struct DrivyStatusDot: View {
 
     var body: some View {
         HStack(spacing: DrivySpacing.xs) {
-            Circle().fill(tone.foreground).frame(width: dotSize, height: dotSize).accessibilityHidden(true)
+            Circle().fill(tone.signal).frame(width: dotSize, height: dotSize).accessibilityHidden(true)
             Text(title)
                 .font(.caption.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)
@@ -501,13 +514,18 @@ struct DrivyInlineMessage: View {
     }
 
     var body: some View {
-        Label(text, systemImage: symbol)
+        // The symbol keeps saying what kind of message this is; the colour is kept for what is critical.
+        let ink = tone.quiet
+        return Label {
+            Text(text).foregroundStyle(ink == .neutral ? DrivyTheme.text : ink.foreground)
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(ink.foreground)
+        }
             .font(.subheadline)
-            .foregroundStyle(tone.foreground)
             .fixedSize(horizontal: false, vertical: true)
             .padding(DrivySpacing.s)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(tone.background, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+            .background(ink.background, in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
             .accessibilityElement(children: .combine)
     }
 }
@@ -644,6 +662,12 @@ extension View {
             .padding(.vertical, verticalPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.groupedBlock, style: .continuous))
+    }
+
+    /// Shape of a menu's label, for the tap and for the system's own animation. When a menu closes, iOS
+    /// settles back onto the label's shape: left rectangular around a round bubble, a square flashes around it.
+    func drivyMenuLabelShape(_ shape: some Shape) -> some View {
+        contentShape([.interaction, .contextMenuPreview, .hoverEffect], shape)
     }
 
     /// Content column of a page built from grouped blocks: the side margin of a native grouped list, so its

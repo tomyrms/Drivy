@@ -144,6 +144,7 @@ struct SchoolAgendaView: View {
     @ViewBuilder private var schoolFilter: some View {
         if isAdmin && isInstructor {
             Toggle("Toute l’école", isOn: $wholeSchool)
+                .drivyControlTint()
                 .font(.subheadline.weight(.semibold))
                 .frame(minHeight: DrivyLayout.tapTarget)
                 .accessibilityIdentifier("agenda-whole-school")
@@ -259,6 +260,7 @@ struct SchoolAgendaView: View {
                 DatePicker("Choisir un jour", selection: $selectedDate, displayedComponents: .date)
             }
         }
+            .drivyControlTint()
             .environment(\.timeZone, calendar.timeZone)
             .environment(\.calendar, calendar)
             .environment(\.locale, Locale(identifier: "fr_CH"))

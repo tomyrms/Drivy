@@ -44,7 +44,12 @@ import XCTest
         let firstName = app.descendants(matching: .any)["learner-profile-first-name"]
         XCTAssertTrue(firstName.waitForExistence(timeout: 30), app.debugDescription)
         XCTAssertTrue(firstName.label.contains("Camille"), app.debugDescription)
-        XCTAssertTrue(app.descendants(matching: .any)["learner-profile-email"].exists)
+        // Les gestes de contact sont rangés dans le menu de la carte de l’élève.
+        let contact = app.descendants(matching: .any)["learner-profile-actions"].firstMatch
+        XCTAssertTrue(contact.waitForExistence(timeout: 10), app.debugDescription)
+        contact.tap()
+        XCTAssertTrue(app.buttons["learner-profile-email"].waitForExistence(timeout: 10), app.debugDescription)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.97)).tap()
         XCTAssertTrue(app.descendants(matching: .any)["dossier-section"].waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(app.buttons["learner-start-now"].exists)
         XCTAssertTrue(app.buttons["learner-plan-lesson"].exists)

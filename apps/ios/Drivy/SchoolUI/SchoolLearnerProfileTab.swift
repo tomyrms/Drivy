@@ -40,6 +40,7 @@ struct SchoolLearnerProfileTab: View {
     @State private var consent: SchoolRecordingChoiceWorkspace?
     @State private var showsInformation = false
     @State private var information: SchoolProfileWorkspace?
+    @Environment(SchoolRequiredActionStore.self) private var requiredActions: SchoolRequiredActionStore?
 
     private var accountKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)"
@@ -76,6 +77,10 @@ struct SchoolLearnerProfileTab: View {
         }
         .id(accountKey)
         .task(id: scopeKey) { await prepare() }
+        // L’accord donné (ou relu) ici éteint aussitôt le point de l’onglet.
+        .onChange(of: consentAttention) { _, attention in
+            if consent != nil { requiredActions?.replace(.giveRecordingConsent, with: SchoolRequiredActionRules.recordingConsent(attention: attention)) }
+        }
         .onChange(of: accountKey) { _, _ in
             path = []; showsInformation = false; information?.invalidate(); information = nil
         }
@@ -143,7 +148,8 @@ struct SchoolLearnerProfileTab: View {
         if let attention = consentAttention {
             // Ce qui attend une réponse se lit comme partout : un badge d’alerte sur la ligne qui y mène.
             Section {
-                DrivyNavigationRow(title: "Accord GPS", badge: DrivyStatusBadge(title: attention, symbol: "exclamationmark.triangle", tone: .warning)) {
+                // Ce qui attend l’élève se lit en bleu : c’est une action, pas une alerte.
+                DrivyNavigationRow(title: "Accord GPS", badge: DrivyStatusBadge(title: attention, tone: .accent)) {
                     path.append(.settings)
                 }
                 .listRowInsets(rowInsets)

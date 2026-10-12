@@ -133,7 +133,7 @@ struct SchoolReportTripSection: View {
             if editable, model.isAuthor, model.sharing != nil {
                 Toggle("Visible par l’élève", isOn: Binding(get: { model.captureShared },
                     set: { shared in Task { await model.updateSharing(captureHidden: !shared) } }))
-                    .disabled(!model.acceptsInput)
+                    .disabled(!model.acceptsInput).drivyControlTint()
             }
         } header: { Text("Trajet").drivyFormSectionHeader() }
             .drivyFormRows()
@@ -186,8 +186,8 @@ struct SchoolLessonTripMap: View {
         model.lessonObservations.compactMap { observation in
             guard let point = model.anchor(of: observation) else { return nil }
             return LessonTrackMap.Pin(id: observation.id, latitude: point.latitude, longitude: point.longitude,
-                color: SchoolReportObservationsSection.color(observation), isSelected: router.selectedObservation == observation.id,
-                symbol: SchoolLessonHubRules.status(of: observation)?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble"),
+                status: SchoolLessonHubRules.status(of: observation), isSelected: router.selectedObservation == observation.id,
+                glyph: observation.glyph(competencies: model.competencies),
                 label: observation.text)
         }
     }
@@ -235,12 +235,7 @@ struct SchoolReportObservationsSection: View {
     private var isCompleted: Bool { model.lesson?.status == "COMPLETED" }
 
     static func color(_ observation: SchoolObservation) -> Color {
-        switch SchoolLessonHubRules.status(of: observation) {
-        case .positive: DrivyTheme.success
-        case .attention: DrivyTheme.warning
-        case .toWorkOn: DrivyTheme.danger
-        case nil: DrivyTheme.muted
-        }
+        SchoolLessonHubRules.status(of: observation)?.tone.signal ?? DrivyTheme.muted
     }
 
     var body: some View {
@@ -256,7 +251,7 @@ struct SchoolReportObservationsSection: View {
                 DrivyThreadItem(position: .at(index, count: model.lessonObservations.count),
                     isCurrent: router.selectedObservation == observation.id,
                     markerColor: Self.color(observation),
-                    markerSymbol: SchoolLessonHubRules.status(of: observation)?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble")) {
+                    markerGlyph: observation.glyph(competencies: model.competencies)) {
                     SchoolReportObservationRow(model: model, router: router, context: context, observation: observation,
                         editable: editable && model.isAuthor && isCompleted)
                 }
@@ -365,7 +360,7 @@ struct SchoolReportTextSection: View {
             if model.sharing != nil {
                 Toggle("Visible par l’élève", isOn: Binding(get: { model.reportShared },
                     set: { shared in Task { await model.updateSharing(reportPrivate: !shared) } }))
-                    .disabled(!model.acceptsInput)
+                    .disabled(!model.acceptsInput).drivyControlTint()
             }
             field("Travail réalisé", text: $model.workedOn, focus: .workedOn)
             field("À retenir", text: $model.observationText, focus: .observation)

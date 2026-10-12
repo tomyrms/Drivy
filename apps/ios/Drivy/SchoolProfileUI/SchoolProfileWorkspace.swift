@@ -81,6 +81,15 @@ final class SchoolProfileWorkspace: Identifiable {
     /// Même décision que `drivy.profile_access` : accès complet pour l’administration et pour l’élève sur son
     /// propre dossier ; tout autre lecteur d’un dossier chargé est un moniteur affecté, limité aux coordonnées.
     var hasFullAccess: Bool { isOwnProfile || roles.contains("ADMIN") }
+
+    /// Les informations requises par l’école qui manquent encore pour planifier une leçon, champ par champ.
+    /// `nil` quand la lecture n’a pas abouti : une panne ne se lit jamais comme « rien ne manque ».
+    func missingRequiredFields() async -> [String]? {
+        guard let learnerID,
+              let value = try? await api.readiness(schoolID: scope.schoolID, learnerID: learnerID, action: "PLAN_LESSON"),
+              value.learnerId == learnerID else { return nil }
+        return value.blockers.filter { $0.code == "PROFILE_ACTION_REQUIRED" }.compactMap(\.field)
+    }
     /// Les champs modifiables suivent les droits relus par le serveur, pas la liste de la politique : celle-ci dit
     /// ce qui est requis et pourquoi. Sans politique applicable, le serveur n’accepte aucune écriture de profil.
     /// La photo suit son propre parcours de dépôt.

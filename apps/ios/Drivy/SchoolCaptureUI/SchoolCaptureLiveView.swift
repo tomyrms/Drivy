@@ -708,7 +708,7 @@ struct SchoolCaptureLiveView: View {
     @ViewBuilder private func finalizationResult(_ state: SchoolCaptureSession.SyncState) -> some View {
         switch state {
         case .synced:
-            resultLabel("Trajet synchronisé", symbol: "checkmark.circle.fill", tone: .success,
+            resultLabel("Trajet synchronisé", symbol: "checkmark.circle.fill", tone: .accent,
                 message: nil)
         case .partial:
             resultLabel("Trajet partiel", symbol: "exclamationmark.circle.fill", tone: .warning,
@@ -725,9 +725,12 @@ struct SchoolCaptureLiveView: View {
 
     private func resultLabel(_ title: String, symbol: String, tone: DrivyTone, message: String?) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-            Label(title, systemImage: symbol)
-                .font(.headline)
-                .foregroundStyle(tone == .neutral ? DrivyTheme.text : tone.foreground)
+            Label {
+                Text(title).foregroundStyle(tone == .neutral ? DrivyTheme.text : tone.foreground)
+            } icon: {
+                Image(systemName: symbol).foregroundStyle(tone == .neutral ? DrivyTheme.text : tone.signal)
+            }
+            .font(.headline)
             if let message {
                 Text(message).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)

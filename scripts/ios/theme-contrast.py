@@ -16,7 +16,9 @@ LIGHT = dict(canvas='F7F8FA', surface='FFFFFF', surfaceCard='F7F8FA', surfaceRai
              accentPressed='1947AD', onAccent='FFFFFF', accentSoft='EAF0FE', success='17633D', successSurface='E9F5EE',
              warning='7A4D00', warningSurface='FFF3D6', danger='B02B37', dangerSurface='FDECEF', border='D9E0E9',
              controlBorder='78869A', rail='C3CDD9', disabledText='5D6A7C', disabledSurface='E8EDF3',
-             route='245BD6', routeHalo='FFFFFF', shadow='18212B')
+             route='245BD6', routeHalo='FFFFFF', shadow='18212B',
+             # Couleurs de signal (2026-10-12) : l'échelle d'appréciation dessinée, plus claire que les encres.
+             successSignal='26A058', warningSignal='D1760E', dangerSignal='E5484D')
 
 TEXT, UI = 4.5, 3.0
 # (premier plan, fond, seuil). Texte courant 4,5:1 ; élément d'interface non textuel 3:1 (WCAG 1.4.11).
@@ -29,6 +31,11 @@ PAIRS += [('text', 'accentSoft', TEXT), ('muted', 'accentSoft', TEXT), ('accent'
           ('controlBorder', 'canvas', UI), ('controlBorder', 'surfaceCard', UI), ('controlBorder', 'surfaceMuted', UI),
           ('textTertiary', 'canvas', UI), ('textTertiary', 'surfaceCard', UI),
           ('route', 'routeHalo', UI), ('accent', 'surfaceRaised', UI)]
+# Signal : pictogramme, anneau, pastille et repère sur la page, le bloc, le halo et le fond teinté de son état ;
+# pastille pleine portant un glyphe clair (badge de carte, élément en cours du rail).
+for tone in ('success', 'warning', 'danger'):
+    PAIRS += [(tone + 'Signal', bg, UI) for bg in ('surface', 'surfaceCard', 'surfaceRaised', 'routeHalo', tone + 'Surface')]
+    PAIRS += [('surfaceRaised', tone + 'Signal', UI), (tone + 'Surface', tone + 'Signal', UI)]
 # Le thème clair historique laisse passer ces couples sous le seuil ; ils sont relevés, pas modifiés.
 LIGHT_KNOWN = {('muted', 'surfaceMuted'), ('accent', 'surfaceMuted'), ('success', 'surfaceMuted'), ('warning', 'surfaceMuted'),
                ('danger', 'surfaceMuted'), ('controlBorder', 'surfaceMuted'), ('controlBorder', 'surfaceCard'), ('controlBorder', 'canvas')}

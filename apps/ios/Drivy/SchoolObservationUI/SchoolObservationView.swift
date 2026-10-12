@@ -233,7 +233,7 @@ struct SchoolObservationView: View {
         DrivyPanel {
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
                 Label("Demande à vérifier", systemImage: "clock.arrow.circlepath").font(.headline)
-                    .foregroundStyle(DrivyTheme.warning)
+                    .foregroundStyle(DrivyTheme.muted)
                 Text(model.pendingBelongsHere ? "La demande est conservée sur cet appareil. Vérifie son résultat avant une autre modification." : model.pendingText)
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -288,6 +288,7 @@ struct SchoolObservationComposer: View {
                 if editor.origin == "LIVE" {
                     Section {
                         Toggle("Repère simple, à préciser ensuite", isOn: $marker)
+                            .drivyControlTint()
                     }
                         .drivyFormRows()
                 }
@@ -307,7 +308,7 @@ struct SchoolObservationComposer: View {
                 if model.pendingAwaitsReview {
                     Section {
                         Label("La demande est conservée. Ferme cette saisie pour vérifier son résultat dans les observations.", systemImage: "clock.arrow.circlepath")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                         .drivyFormRows()
@@ -377,11 +378,11 @@ struct SchoolObservationComposer: View {
                     Button { status = value } label: {
                         HStack(spacing: DrivySpacing.s) {
                             // Même pastille que les tuiles du signalement : le symbole et le mot portent l’état.
-                            Image(systemName: value.symbol)
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(value.fieldTone.foreground)
+                            DrivyObservationGlyphImage(glyph: value.glyph)
+                                .foregroundStyle(value.tone.signal)
+                                .frame(width: 15, height: 15)
                                 .frame(width: 32, height: 32)
-                                .background(value.fieldTone.background, in: Circle())
+                                .background(value.tone.background, in: Circle())
                                 .accessibilityHidden(true)
                             Text(value.label).foregroundStyle(DrivyTheme.text)
                             Spacer(minLength: DrivySpacing.xs)
@@ -411,13 +412,14 @@ struct SchoolObservationRemoval: View {
                 Section {
                     TextField("Pourquoi retirer cette observation ?", text: $reason, axis: .vertical).lineLimit(3...6)
                     Toggle("Je confirme son retrait", isOn: $acknowledged)
+                        .drivyControlTint()
                 } header: { Text("Motif du retrait").drivyFormSectionHeader() }
                 footer: { Text("Ce retrait ne modifie pas un bilan déjà partagé.") }
                     .drivyFormRows()
                 if model.pendingAwaitsReview {
                     Section {
                         Label("La demande est conservée. Retrouve-la dans les observations pour vérifier le résultat.", systemImage: "clock.arrow.circlepath")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                         .drivyFormRows()
@@ -470,18 +472,19 @@ private struct SchoolObservationPendingView: View {
                     Text("Référence : \(command.id.uuidString)").font(.caption.monospaced()).textSelection(.enabled)
                     if command.scope != model.scope {
                         Label("Tes droits ont changé depuis cette demande. Elle reste conservée et ne peut pas être renvoyée avec ces nouveaux accès.", systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     } else {
                         Button("Vérifier auprès de l’école") { Task { await model.verifyPending(); if model.pending == nil { dismiss() } } }
                             .disabled(!model.canRetry)
                         Toggle("J’ai relu cette demande", isOn: $acknowledged)
+                            .drivyControlTint()
                         Button("Renvoyer exactement cette demande") {
                             Task { if await model.retryPending() { dismiss() } }
                         }.disabled(!acknowledged || !model.canRetry)
                         if model.pendingAbsent {
                             // Offert seulement après la réponse de l’école : elle n’a jamais reçu cette demande.
                             Label("L’école n’a pas reçu cette demande : rien n’a été enregistré.", systemImage: "exclamationmark.circle")
-                                .font(.subheadline).foregroundStyle(DrivyTheme.warning)
+                                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                                 .fixedSize(horizontal: false, vertical: true)
                             Button("Abandonner la demande", role: .destructive) { confirmsAbandon = true }
                                 .disabled(!model.canRetry)
@@ -509,12 +512,5 @@ private struct SchoolObservationPendingView: View {
             .navigationTitle("Demande conservée").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
         }.tint(DrivyTheme.accent).interactiveDismissDisabled(model.isBusy)
-    }
-}
-
-private extension SchoolObservationStatus {
-    /// Mêmes teintes que les tuiles du signalement et le replay.
-    var fieldTone: DrivyTone {
-        switch self { case .positive: .success; case .attention: .warning; case .toWorkOn: .danger }
     }
 }

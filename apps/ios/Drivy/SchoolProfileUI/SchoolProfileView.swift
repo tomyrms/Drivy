@@ -160,6 +160,7 @@ struct SchoolProfileView: View {
     private var addressSection: some View {
         Section {
             Toggle("Renseigner une adresse", isOn: $model.draft.hasAddress)
+                .drivyControlTint()
             if model.draft.hasAddress {
                 profileField("Rue et numéro", text: $model.draft.address.line1).textContentType(.streetAddressLine1)
                 profileField("Complément · facultatif", text: Binding(get: { model.draft.address.line2 ?? "" }, set: { model.draft.address.line2 = $0.isEmpty ? nil : $0 }))
@@ -235,7 +236,7 @@ struct SchoolProfileView: View {
             Label(completed ? "Accueil terminé" : "Accueil à terminer",
                 systemImage: completed ? "checkmark.circle.fill" : "figure.wave")
                 .font(.headline)
-                .foregroundStyle(completed ? DrivyTheme.success : DrivyTheme.text)
+                .foregroundStyle(completed ? DrivyTheme.accent : DrivyTheme.text)
                 .fixedSize(horizontal: false, vertical: true)
             if !completed {
                 Button("Reprendre l’accueil") { showsGuidedWelcome = true }

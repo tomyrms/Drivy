@@ -341,7 +341,7 @@ struct SchoolCapturePreparationView: View {
                 if let snapshot = model.snapshot {
                     DrivyMapStatusLabel(status: DrivyMapStatus(title: permissionLabel(snapshot.permission),
                         symbol: snapshot.permission.permitsLocation ? "location.fill" : "location.slash",
-                        tone: snapshot.permission.permitsLocation ? .success : (snapshot.permission == .notDetermined ? .neutral : .warning)),
+                        tone: snapshot.permission.permitsLocation ? .accent : (snapshot.permission == .notDetermined ? .neutral : .warning)),
                         font: .subheadline.weight(.semibold))
                     if let age = snapshot.sampleAgeSeconds, let accuracy = snapshot.horizontalAccuracyMeters {
                         Text("À la dernière vérification : mesure âgée de \(age) s · précision annoncée ±\(Int(ceil(accuracy))) m")
@@ -390,7 +390,7 @@ struct SchoolCapturePreparationView: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     Label(expired ? "Diagnostic à renouveler" : assessmentLabel(value.status),
                           systemImage: !expired && value.status == .qualified ? "checkmark.shield.fill" : "exclamationmark.shield")
-                        .font(.headline).foregroundStyle(!expired && value.status == .qualified ? DrivyTheme.success : DrivyTheme.warning)
+                        .font(.headline).foregroundStyle(!expired && value.status == .qualified ? DrivyTheme.accent : DrivyTheme.text)
                     if !expired { Text("Vérifié à \(time(value.assessedAt)). Valable jusqu’à \(time(value.expiresAt)).").font(.caption).foregroundStyle(DrivyTheme.muted) }
                     ForEach(Array(value.blockers.enumerated()), id: \.offset) { _, blocker in
                         Text(blocker.message).font(.subheadline).fixedSize(horizontal: false, vertical: true)
@@ -491,7 +491,7 @@ struct SchoolCapturePreparationView: View {
                     Text("Cette reprise conserve le diagnostic déjà sauvegardé. Elle ne prend aucune nouvelle mesure.")
                         .fixedSize(horizontal: false, vertical: true)
                     Toggle("Je confirme la reprise de cette demande", isOn: $confirmsResend)
-                        .disabled(model.isBusy)
+                        .disabled(model.isBusy).drivyControlTint()
                     Button("Renvoyer la même demande") {
                         Task { await model.resume(queued, verifyFirst: false); resendRoute = nil }
                     }
@@ -520,7 +520,7 @@ struct SchoolCapturePreparationView: View {
                 : DrivyMapStatus(title: "Choix à vérifier", symbol: "exclamationmark.triangle", tone: .warning)
         }
         switch choice.status {
-        case .allowed: return DrivyMapStatus(title: "GPS accepté", symbol: "location.fill", tone: .success)
+        case .allowed: return DrivyMapStatus(title: "GPS accepté", symbol: "location.fill", tone: .accent)
         case .refused: return DrivyMapStatus(title: "Sans GPS", symbol: "location.slash")
         case .unknown: return DrivyMapStatus(title: "Choix non renseigné", symbol: "questionmark.circle")
         }
@@ -573,9 +573,9 @@ private struct SchoolCaptureStartReviewView: View {
                     DrivyPanel {
                         VStack(alignment: .leading, spacing: DrivySpacing.s) {
                             Label("Accord GPS de l’élève confirmé", systemImage: "person.crop.circle.badge.checkmark")
-                                .foregroundStyle(DrivyTheme.success)
+                                .foregroundStyle(DrivyTheme.accent)
                             Label("Diagnostic de l’appareil qualifié", systemImage: "checkmark.shield")
-                                .foregroundStyle(DrivyTheme.success)
+                                .foregroundStyle(DrivyTheme.accent)
                         }
                         .font(.subheadline.weight(.semibold))
                     }
@@ -592,7 +592,7 @@ private struct SchoolCaptureStartReviewView: View {
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     }
                     Toggle("Je confirme le départ GPS maintenant pour cette leçon", isOn: $acknowledged)
-                        .disabled(model.isBusy).accessibilityIdentifier("capture-confirm-start")
+                        .disabled(model.isBusy).drivyControlTint().accessibilityIdentifier("capture-confirm-start")
                     if let error = model.errorMessage { SchoolErrorNotice(message: error) }
                     if let message = model.startMessage { DrivyInlineMessage(text: message, tone: .neutral) }
                     if model.isBusy { DrivyLoadingState(title: "Vérification et ouverture du trajet…") }

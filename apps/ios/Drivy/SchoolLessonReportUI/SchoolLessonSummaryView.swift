@@ -336,7 +336,7 @@ private struct SchoolLessonSummaryObservations: View {
         DrivyThreadItem(position: .at(index, count: count),
             isCurrent: router.selectedObservation == observation.id,
             markerColor: SchoolReportObservationsSection.color(observation),
-            markerSymbol: SchoolLessonHubRules.status(of: observation)?.symbol ?? (observation.isMarker ? "bookmark.fill" : "text.bubble")) {
+            markerGlyph: observation.glyph(competencies: model.competencies)) {
             SchoolLessonSummaryObservationRow(model: model, router: router, observation: observation)
         }
     }

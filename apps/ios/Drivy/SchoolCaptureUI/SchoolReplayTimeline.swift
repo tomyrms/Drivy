@@ -43,7 +43,11 @@ struct SchoolReplayTimeline {
 
         var title: String { isMarker ? "Moment à revoir" : text }
         var statusLabel: String { status?.label ?? "Repère" }
-        var symbol: String { status?.symbol ?? "bookmark.fill" }
+        /// Thème si le titre en désigne un, sinon l’appréciation, sinon repère ou note.
+        var glyph: DrivyObservationGlyph {
+            if isMarker { return .moment }
+            return SchoolObservationPictogram(title: text)?.glyph ?? status?.glyph ?? .note
+        }
         var tone: DrivyTone { status?.tone ?? .neutral }
     }
 

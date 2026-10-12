@@ -103,6 +103,7 @@ struct SchoolJoinView: View {
                     .font(.subheadline).fixedSize(horizontal: false, vertical: true)
             }
             .disabled(model.isBusy)
+            .drivyControlTint()
             .accessibilityIdentifier("join-acknowledge")
             .fixedSize(horizontal: false, vertical: true)
             secondaryLink("Utiliser un autre lien") { model.anotherInvitation() }
@@ -226,9 +227,9 @@ struct SchoolJoinSchoolHeader: View {
                 if !typeSize.isAccessibilitySize {
                     Image(systemName: isConfirmed ? "checkmark" : "building.2")
                         .font(isConfirmed ? Font.title2.weight(.semibold) : Font.title2)
-                        .foregroundStyle(isConfirmed ? DrivyTheme.success : DrivyTheme.accent)
+                        .foregroundStyle(DrivyTheme.accent)
                         .frame(width: plate, height: plate)
-                        .background(isConfirmed ? DrivyTheme.successSurface : DrivyTheme.accentSoft, in: Circle())
+                        .background(DrivyTheme.accentSoft, in: Circle())
                         .accessibilityHidden(true)
                 }
                 Text(name)

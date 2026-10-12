@@ -94,7 +94,7 @@ struct SchoolLearnerActions: View {
                 Label("Profil", systemImage: "person.text.rectangle")
                 if learner.profileReadiness == "ACTION_REQUIRED" {
                     Image(systemName: "exclamationmark.triangle")
-                        .foregroundStyle(DrivyTheme.warning).accessibilityHidden(true)
+                        .foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
                 }
             }
             .font(.subheadline.weight(.semibold))
