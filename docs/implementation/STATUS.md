@@ -4,7 +4,7 @@
 
 Les 16 catégories de l’OAC (A, A1, M, B, B1, BE, C, C1, CE, C1E, D, D1, DE, D1E, F, G) ont leur icône. L’atelier a produit trois directions par catégorie ; la direction « Signature » (aplats, roues = repère de la marque) est retenue partout sur notes pondérées. Composant central `DrivingLicenseIcon`, assets vectoriels `License-*`, intégration dans les filtres Leçons/Progression, le Profil, l’accueil élève, la planification, « Commencer maintenant », les réglages d’agenda et l’invitation. [Démarche, notes et limites](icones-permis-20261012.md).
 
-**Exécuté** : rendus et `svg_audit.py`, planches clair/sombre. **Ajouté** : tests de correspondance code → catégorie et présence des assets. **Reste à qualifier** : appareil réel, VoiceOver, iPad ; lisibilité des ensembles avec remorque à 16 pt.
+**Exécuté** sur `b56bde5` : IPA d’essai 0.7.0/212 compilée ([run38233544399](https://github.com/tomyrms/Drivy/actions/runs/38233544399)) ; **490 tests Swift réussis**, dont les 4 nouveaux ([run38233574292](https://github.com/tomyrms/Drivy/actions/runs/38233574292)) ; vérifications API/web vertes ; captures iPhone clair/sombre de 7 écrans ([run38233578314](https://github.com/tomyrms/Drivy/actions/runs/38233578314), `assets/icones-permis-20261012/captures-simulateur.png`) où les icônes apparaissent dans Progression, Profil, invitation et planification. **Non vu en capture** : le menu de filtre ouvert, l’accueil « Ta formation » (la scène capturée est l’étape récapitulative), le sélecteur de « Commencer maintenant » (scène à une formation). **Reste à qualifier** : appareil réel, VoiceOver, iPad ; lisibilité des ensembles avec remorque à 16 pt.
 
 ## 12 octobre 2026 — audit du thème sombre « Soft Charcoal »
 
