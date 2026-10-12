@@ -420,11 +420,22 @@ import Observation
             var capturesRead = try await capturesTask.value
             if discreetCaptures { capturesRead.message = nil }
             var trackRead: (value: (segments: [[SchoolCapturePoint]], observations: [SchoolPrivateGeoObservation], pointsByAnchor: [String: SchoolCapturePoint])?, message: String?) = (nil, nil)
-            if let capture = capturesRead.value?.last(where: { SchoolTripsWorkspace.isReplayable($0) }) {
+            // Une leçon interrompue (fermeture, crash, redémarrage) puis reprise a plusieurs trajets : l’aperçu les
+            // montre tous, dans l’ordre, chacun avec ses propres lacunes.
+            let replayable = (capturesRead.value ?? []).filter(SchoolTripsWorkspace.isReplayable)
+                .sorted { (SchoolLesson.date($0.authorizedAt) ?? .distantPast) < (SchoolLesson.date($1.authorizedAt) ?? .distantPast) }
+            if !replayable.isEmpty {
                 trackRead = try await readSupplement(request: request,
                     unavailable: "L’aperçu du trajet n’a pas pu être chargé. Tu peux ouvrir le replay pour réessayer.",
-                    absentWhenRefused: discreetCaptures) {
-                    try await self.client.agenda.captureClient.replayTrack(schoolID: schoolID, captureID: capture.id)
+                    absentWhenRefused: discreetCaptures) { () async throws -> SchoolCapturePriorTrack.Track in
+                    var segments: [[SchoolCapturePoint]] = [], observations: [SchoolPrivateGeoObservation] = []
+                    var anchors: [String: SchoolCapturePoint] = [:]
+                    for capture in replayable {
+                        let part = try await self.client.agenda.captureClient.replayTrack(schoolID: schoolID, captureID: capture.id)
+                        segments += part.segments; observations += part.observations
+                        anchors.merge(part.pointsByAnchor) { first, _ in first }
+                    }
+                    return (segments: segments, observations: observations, pointsByAnchor: anchors)
                 }
                 if discreetCaptures { trackRead.message = nil }
             }

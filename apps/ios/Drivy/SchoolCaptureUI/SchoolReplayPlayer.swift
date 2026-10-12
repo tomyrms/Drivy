@@ -7,7 +7,8 @@ import QuartzCore
 /// a few times per second only, which is all the timeline thumb and the clock need.
 @MainActor @Observable
 final class SchoolReplayPlayer: DrivyRouteMapMotion {
-    static let speeds = [1, 2, 4]
+    /// Vitesses du replay, dans l’ordre du bouton : vitesse réelle, puis ×2, ×5 et ×10.
+    static let speeds = [1, 2, 5, 10]
 
     private(set) var offset: TimeInterval = 0
     private(set) var isPlaying = false

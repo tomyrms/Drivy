@@ -61,11 +61,14 @@ Chaque champ qui manquait garde le point d’action devant son libellé (ou l’
 - **Reprendre l’accueil** : une lecture en panne ne retire plus la ligne ni le point (`SchoolOnboardingPrompt.pendingState`).
 - Le bouton « Profil » de la vue formation suit le même signe et le même mot (point d’action, « Profil à compléter »).
 
+### Décisions du porteur (13 octobre)
+
+- **L’élève reprend son accueil** : « Reprendre l’accueil · À terminer » dans son Profil, avec le point de l’onglet, dès qu’il a laissé l’accueil en route ; il part quand l’école dit l’accueil terminé. Avant, l’accueil n’était reproposé qu’après sept jours.
+- **Le web mène aux champs** : dans le dossier d’un élève incomplet, un bloc « Profil à compléter · N informations manquantes » donne un champ par information manquante (l’adresse en rue, code postal, localité, pays) et les enregistre par la route du profil administratif (commande `updateAdministrativeProfile`, trois routes de plus dans le relais : readiness `ENTER`/`PLAN_LESSON`, lecture et saisie du profil). Seuls les champs manquants sont envoyés ; l’administration seule saisit. Après confirmation, le dossier est relu, le bloc et le badge partent.
+
 ## Ce qui n’a pas été fait, volontairement
 
 - Pas de nouvelle obligation ni de nouvelle notification. Le moniteur n’a toujours pas de point pour un profil incomplet (décision de `b95a633` : il ne peut compléter que les coordonnées).
-- Pas d’accueil à reprendre pour l’élève dans l’app : rien ne l’y oblige aujourd’hui, l’accueil est reproposé après sept jours. À décider.
-- Le web montre le badge « Profil à compléter » désormais juste, sans mener champ par champ (le bureau a son propre formulaire).
 - Pendant un trajet, l’onglet Aujourd’hui montre la conduite, pas les leçons à terminer d’avant.
 
 ## Déploiement

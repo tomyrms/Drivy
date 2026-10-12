@@ -9,3 +9,5 @@ La confirmation d’AP158, conservée dans le coffre, prouve la finalisation. `P
 `SchoolCaptureReplayWorkspace` lit AP155 puis AP160 sous la même portée. Les pages sont assemblées progressivement ; une erreur réseau laisse clairement le chargement incomplet. Une révocation, une reconstruction modifiée ou un contenu invalide retire les données affichées. Seuls deux fragments contigus, explicitement signalés comme continuation et vérifiés par leurs séquences, sont joints. Plusieurs fragments d’un même segment après un lot manquant restent séparés. Aucun point personnel ou exemple n’est converti en point scolaire.
 
 Relecture indépendante ciblée : trois défauts de reprise corrigés (PARTIAL confondu avec finalisation, accès local insuffisant après changement d’affectation, refus AP158 bloquant une correction). Compilation Apple groupée à effectuer ; récupération après fermeture forcée, réseau interrompu et usage physique restent à qualifier.
+
+Reprise d’une leçon après relance (continuer le trajet, chronomètre de leçon, tracé antérieur) : voir [reprise-lecon-20261012.md](reprise-lecon-20261012.md).

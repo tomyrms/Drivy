@@ -63,6 +63,18 @@ struct SchoolPlanningInstructor: Identifiable {
     private(set) var writeConfirmed = false
     private(set) var checkedSlotRequest: SchoolPlanningSlotRequest?
     private(set) var selectedDurationMinutes: Int?
+    /// « Planifier une leçon » propose le prochain créneau libre au lieu d’une heure arbitraire. Un déplacement garde
+    /// l’horaire de la leçon et ne cherche jamais.
+    let suggestsNextSlot: Bool
+    private(set) var suggestedSlot: SchoolSuggestedSlotState = .idle
+    /// Recherche à laquelle répond `suggestedSlot` : un autre moniteur, une autre durée ou une recherche élargie en relancent une.
+    private(set) var suggestedSlotRequest: SchoolPlanningNextSlotRequest?
+    /// Le moniteur a choisi lui-même la date ou l’heure : plus aucune proposition ne remplace son choix.
+    private(set) var startChosenByUser = false
+    /// Recherche élargie : reprise au jour civil qui suit la dernière période examinée.
+    private(set) var suggestionResumesAt: Date?
+    @ObservationIgnored private let searchStart: Date
+    @ObservationIgnored private var suggestionGeneration = UUID()
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var selectionGeneration = UUID()
@@ -113,8 +125,10 @@ struct SchoolPlanningInstructor: Identifiable {
     var cancellationReason = ""
 
     init(scope: SchoolCommandScope, client: SchoolPlanningClient, date: Date = Date(), lesson: SchoolLesson? = nil,
-         outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
+         suggestingNextSlotFrom: Date? = nil, outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
         self.scope = scope; self.client = client; originalLesson = lesson; self.outbox = outbox
+        // `date` reste l’horaire initial si l’école ne connaît pas la recherche ; celle-ci part de `suggestingNextSlotFrom`.
+        suggestsNextSlot = suggestingNextSlotFrom != nil && lesson == nil; searchStart = suggestingNextSlotFrom ?? date
         startsAt = lesson?.startsAt ?? Date(timeIntervalSince1970: ceil(date.timeIntervalSince1970 / 60) * 60)
         if let lesson {
             learnerID = lesson.learnerId; trainingID = lesson.trainingId; instructorID = lesson.instructorMembershipId
@@ -202,7 +216,7 @@ struct SchoolPlanningInstructor: Identifiable {
     }
     var endsAt: Date { startsAt.addingTimeInterval(TimeInterval(duration * 60)) }
     var slotInputMessage: String? {
-        guard trainingID != nil, !isLoading else { return nil }
+        guard trainingID != nil, !isLoading, !awaitingSuggestedSlot else { return nil }
         if startsAt <= Date() { return "Choisis un horaire à venir." }
         if !(1...480).contains(duration) { return "Choisis une durée de 1 à 480 minutes." }
         if !(0...240).contains(bufferMinutes) { return "Choisis un intervalle entre les leçons de 0 à 240 minutes." }
@@ -212,7 +226,7 @@ struct SchoolPlanningInstructor: Identifiable {
         return nil
     }
     var slotRequest: SchoolPlanningSlotRequest? {
-        guard !invalidated, !accessRevoked, !isLoading, !needsReload, school?.status == "ACTIVE",
+        guard !invalidated, !accessRevoked, !isLoading, !needsReload, school?.status == "ACTIVE", !awaitingSuggestedSlot,
               let learnerID, learners.contains(where: { $0.id == learnerID }), let training = selectedTraining,
               training.learnerId == learnerID, let instructorID,
               assignedInstructors.contains(where: { $0.id == instructorID }), slotInputMessage == nil else { return nil }
@@ -252,7 +266,7 @@ struct SchoolPlanningInstructor: Identifiable {
     }
     private func clear() {
         school = nil; defaults = nil; learners = []; trainings = []; offerings = []; policies = []; products = []; terms = []
-        instructors = []; assignments = []; clearAvailability(); clearSlot(); pending = nil
+        instructors = []; assignments = []; clearAvailability(); clearSlot(); clearSuggestion(); pending = nil
         storageAvailable = false; needsReload = true; isBusy = false; isLoading = false
     }
     func load() async {
@@ -366,7 +380,7 @@ struct SchoolPlanningInstructor: Identifiable {
         let previousTrainingID = keepsSelection ? trainingID : nil
         let previousProductID = keepsSelection ? productID : nil
         learnerID = id; assignments = []; productID = nil
-        if !keepsSelection { trainings = []; instructorID = nil; selectedDurationMinutes = nil }
+        if !keepsSelection { trainings = []; instructorID = nil; selectedDurationMinutes = nil; suggestionResumesAt = nil }
         if originalLesson == nil { trainingID = nil }
         isLoading = true
         do {
@@ -451,6 +465,81 @@ struct SchoolPlanningInstructor: Identifiable {
         slotGeneration = UUID(); checkedSlotRequest = nil; slotAvailability = nil; slotError = nil; isCheckingSlot = false
         lastSlotWasAvailable = false
     }
+    // MARK: Prochain créneau libre
+
+    /// Ce que la recherche demande au serveur ; nil tant qu’il manque l’élève, la formation, le moniteur ou la durée,
+    /// ou dès que le moniteur a choisi son horaire.
+    var nextSlotRequest: SchoolPlanningNextSlotRequest? {
+        guard suggestsNextSlot, !startChosenByUser, canMutate, let learnerID, learners.contains(where: { $0.id == learnerID }),
+              let training = selectedTraining, training.learnerId == learnerID,
+              let instructorID, instructors.contains(where: { $0.id == instructorID }),
+              (1...480).contains(duration), (0...240).contains(bufferMinutes) else { return nil }
+        return SchoolPlanningNextSlotRequest(learnerID: learnerID, trainingID: training.id, instructorID: instructorID,
+            durationMinutes: duration, bufferMinutes: bufferMinutes, timeZone: timeZone, from: suggestionResumesAt ?? searchStart)
+    }
+    /// La date et l’heure ne s’affichent qu’une fois la proposition calculée : jamais une date provisoire qui saute ensuite.
+    var awaitingSuggestedSlot: Bool {
+        guard suggestsNextSlot, !startChosenByUser, trainingID != nil else { return false }
+        if let request = nextSlotRequest { return suggestedSlotRequest != request || suggestedSlot == .searching }
+        // Affectations en lecture : le moniteur n’est pas encore connu. Seule la toute première recherche attend ainsi.
+        return isLoading && suggestedSlotRequest == nil
+    }
+    /// Message de la recherche courante : rien quand un créneau est trouvé, que la recherche tourne ou que le moniteur a choisi.
+    var suggestedSlotNotice: SchoolSuggestedSlotState? {
+        guard let request = nextSlotRequest, request == suggestedSlotRequest else { return nil }
+        switch suggestedSlot {
+        case .exhausted, .failed: return suggestedSlot
+        default: return nil
+        }
+    }
+    /// Choix manuel de la date ou de l’heure : il l’emporte sur toute proposition, même en cours.
+    func chooseStart(_ date: Date) {
+        if suggestsNextSlot && !startChosenByUser {
+            startChosenByUser = true; suggestionGeneration = UUID()
+            if suggestedSlot == .searching { suggestedSlot = .idle; suggestedSlotRequest = nil }
+        }
+        startsAt = date
+    }
+    /// Aucun créneau dans la période : la recherche reprend au jour qui suit la dernière date examinée.
+    func searchFurther() {
+        guard case .exhausted(let through) = suggestedSlot, suggestedSlotNotice != nil,
+              let next = SchoolPlanningNextSlot.startOfNextCivilDay(after: through, zone: timeZone) else { return }
+        suggestionResumesAt = next
+    }
+    /// Lecture indicative : « Planifier » revérifie le créneau, puis l’école le contrôle de nouveau à l’écriture.
+    func findSuggestedSlot(retrying: Bool = false) async {
+        guard let request = nextSlotRequest else { return }
+        if !retrying, suggestedSlotRequest == request, suggestedSlot != .idle { return }
+        suggestionGeneration = UUID(); let generation = suggestionGeneration
+        suggestedSlotRequest = request; suggestedSlot = .searching
+        do {
+            let result = try await client.nextSlot(schoolID: scope.schoolID, request: request)
+            guard generation == suggestionGeneration, request == nextSlotRequest, !Task.isCancelled else {
+                if generation == suggestionGeneration { suggestedSlot = .idle; suggestedSlotRequest = nil }
+                return
+            }
+            if let start = result.startsAt {
+                startsAt = start; suggestedSlot = .found
+            } else {
+                suggestedSlot = .exhausted(searchedThrough: result.searchedThrough)
+            }
+        } catch {
+            guard generation == suggestionGeneration else { return }
+            if error is CancellationError || Task.isCancelled { suggestedSlot = .idle; suggestedSlotRequest = nil; return }
+            if error as? SchoolPlanningFailure == .forbidden || error as? SchoolPlanningFailure == .unauthorized {
+                suggestedSlot = .idle; fail(error)
+            } else if error as? SchoolPlanningFailure == .notFound {
+                // Service antérieur à la recherche : le formulaire reste celui d’avant, l’horaire se choisit à la main.
+                suggestedSlot = .unavailable
+            } else {
+                suggestedSlot = .failed((error as? LocalizedError)?.errorDescription ?? "Le prochain créneau n’a pas pu être cherché.")
+            }
+        }
+    }
+    private func clearSuggestion() {
+        suggestionGeneration = UUID(); suggestedSlot = .idle; suggestedSlotRequest = nil
+    }
+
     func loadAvailability() async {
         guard let instructorID, !invalidated, !accessRevoked else { clearAvailability(); return }
         let request = generation; availabilityGeneration = UUID(); let availabilityRequest = availabilityGeneration
@@ -592,4 +681,14 @@ struct SchoolPlanningInstructor: Identifiable {
             clear(); accessRevoked = true
         }
     }
+}
+
+/// État de la proposition du prochain créneau libre.
+enum SchoolSuggestedSlotState: Equatable {
+    case idle, searching, found
+    /// Aucun créneau libre jusqu’à ce jour civil inclus.
+    case exhausted(searchedThrough: String)
+    case failed(String)
+    /// L’école ne propose pas encore cette recherche : saisie manuelle.
+    case unavailable
 }

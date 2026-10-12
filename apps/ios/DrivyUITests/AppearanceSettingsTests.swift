@@ -6,6 +6,7 @@ import XCTest
     private func restoreAutomaticAtTheEnd() {
         addTeardownBlock { @MainActor in
             let app = self.launch("profile-tab")
+            self.openInstructorSettings(app)
             let automatic = self.appearanceButton(app, "Automatique")
             if automatic.waitForExistence(timeout: 20) { automatic.tap() }
             app.terminate()
@@ -15,6 +16,7 @@ import XCTest
     func testInstructorChoosesATheme_itPersistsAfterRelaunch() {
         restoreAutomaticAtTheEnd()
         var app = launch("profile-tab")
+        openInstructorSettings(app)
         let dark = appearanceButton(app, "Sombre")
         XCTAssertTrue(dark.waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(appearanceButton(app, "Automatique").isSelected, "Automatique par défaut : \(app.debugDescription)")
@@ -28,6 +30,7 @@ import XCTest
         dark.tap()
         app.terminate()
         app = launch("profile-tab")
+        openInstructorSettings(app)
         let kept = appearanceButton(app, "Sombre")
         XCTAssertTrue(kept.waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(kept.isSelected, "Choix perdu au relancement : \(app.debugDescription)")
@@ -44,6 +47,14 @@ import XCTest
         XCTAssertTrue(light.waitForExistence(timeout: 10), app.debugDescription)
         light.tap()
         XCTAssertTrue(light.isSelected, app.debugDescription)
+    }
+
+    /// Le Profil du moniteur ouvre ses Paramètres par l’engrenage de la barre de navigation.
+    private func openInstructorSettings(_ app: XCUIApplication) {
+        let settings = app.buttons["profile-settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 20), app.debugDescription)
+        settings.tap()
+        XCTAssertTrue(app.navigationBars["Paramètres"].waitForExistence(timeout: 10), app.debugDescription)
     }
 
     private func appearanceButton(_ app: XCUIApplication, _ title: String) -> XCUIElement {

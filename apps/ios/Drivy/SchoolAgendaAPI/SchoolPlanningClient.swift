@@ -81,6 +81,58 @@ struct SchoolPlanningSlotAvailability: Decodable, Equatable {
     }
 }
 
+/// Recherche du prochain créneau libre (extension `GET …/lessons/next-slot`). Le serveur seul voit les occupations
+/// privées de l’élève et du moniteur ; il ne renvoie qu’un début et une fin, ou l’absence de créneau.
+struct SchoolPlanningNextSlotRequest: Equatable {
+    let learnerID: UUID, trainingID: UUID, instructorID: UUID
+    let durationMinutes: Int, bufferMinutes: Int
+    let timeZone: String
+    /// Début de la recherche ; le serveur ne propose jamais moins de cinq minutes après maintenant.
+    let from: Date
+}
+
+struct SchoolPlanningNextSlot: Decodable, Equatable {
+    let startsAt: Date?, endsAt: Date?
+    /// Dernier jour civil examiné (« AAAA-MM-JJ », fuseau de l’école).
+    let searchedThrough: String
+    let timeZone: String
+
+    private struct Slot: Decodable { let plannedStart: String; let plannedEnd: String }
+    private enum CodingKeys: String, CodingKey { case slot, searchedThrough, timeZone }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        guard values.contains(.slot) else { throw SchoolPlanningFailure.invalidResponse }
+        searchedThrough = try values.decode(String.self, forKey: .searchedThrough)
+        timeZone = try values.decode(String.self, forKey: .timeZone)
+        guard Self.startOfCivilDay(searchedThrough, zone: timeZone) != nil else { throw SchoolPlanningFailure.invalidResponse }
+        if let slot = try values.decodeIfPresent(Slot.self, forKey: .slot) {
+            guard let start = SchoolLesson.date(slot.plannedStart), let end = SchoolLesson.date(slot.plannedEnd),
+                  end > start, end.timeIntervalSince(start) <= 480 * 60 else { throw SchoolPlanningFailure.invalidResponse }
+            startsAt = start; endsAt = end
+        } else {
+            startsAt = nil; endsAt = nil
+        }
+    }
+
+    /// Minuit d’un jour civil « AAAA-MM-JJ » dans le fuseau donné ; nil si la valeur n’est pas un jour réel.
+    static func startOfCivilDay(_ value: String, zone: String) -> Date? {
+        let parts = value.split(separator: "-", omittingEmptySubsequences: false)
+        guard value.count == 10, parts.count == 3, let year = Int(parts[0]), let month = Int(parts[1]), let day = Int(parts[2]),
+              let timeZone = TimeZone(identifier: zone) else { return nil }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = timeZone
+        guard let date = calendar.date(from: DateComponents(year: year, month: month, day: day)) else { return nil }
+        let read = calendar.dateComponents([.year, .month, .day], from: date)
+        guard read.year == year, read.month == month, read.day == day else { return nil }
+        return calendar.startOfDay(for: date)
+    }
+    /// Minuit du jour civil suivant, pour reprendre une recherche restée sans créneau.
+    static func startOfNextCivilDay(after value: String, zone: String) -> Date? {
+        guard let start = startOfCivilDay(value, zone: zone), let timeZone = TimeZone(identifier: zone) else { return nil }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = timeZone
+        return calendar.date(byAdding: .day, value: 1, to: start).map { calendar.startOfDay(for: $0) }
+    }
+}
+
 enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
     case unauthorized, forbidden, unavailable, invalidResponse, notFound, conflict, rejected(String)
     var errorDescription: String? {
@@ -150,6 +202,22 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             URLQueryItem(name: "bufferMinutes", value: String(slot.bufferMinutes))]
         if let id = slot.excludedLessonID { query.append(URLQueryItem(name: "excludeLessonId", value: id.uuidString)) }
         return try await request(schoolID, ["lessons", "availability"], query: query)
+    }
+    func nextSlot(schoolID: UUID, request search: SchoolPlanningNextSlotRequest) async throws -> SchoolPlanningNextSlot {
+        let query = [URLQueryItem(name: "trainingId", value: search.trainingID.uuidString),
+            URLQueryItem(name: "instructorMembershipId", value: search.instructorID.uuidString),
+            URLQueryItem(name: "durationMinutes", value: String(search.durationMinutes)),
+            URLQueryItem(name: "bufferMinutes", value: String(search.bufferMinutes)),
+            URLQueryItem(name: "timeZone", value: search.timeZone),
+            URLQueryItem(name: "from", value: ISO8601DateFormatter().string(from: search.from))]
+        let result: SchoolPlanningNextSlot = try await request(schoolID, ["lessons", "next-slot"], query: query)
+        guard result.timeZone == search.timeZone else { throw SchoolPlanningFailure.invalidResponse }
+        if let start = result.startsAt, let end = result.endsAt {
+            // L’instant envoyé perd ses fractions de seconde : une seconde de tolérance, jamais un début antérieur.
+            guard start > search.from.addingTimeInterval(-1),
+                  Int(end.timeIntervalSince(start).rounded()) == search.durationMinutes * 60 else { throw SchoolPlanningFailure.invalidResponse }
+        }
+        return result
     }
     func send(_ command: PendingSchoolCommand) async throws {
         guard command.kind.isPlanning, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,

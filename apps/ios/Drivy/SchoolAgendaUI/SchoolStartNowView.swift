@@ -587,7 +587,7 @@ struct SchoolStartNowView: View {
         lastLaunch = nil
         if model.form.planInstead, let agendaClient, let person = workspace.person, let membership = workspace.membership {
             let planned = SchoolPlanningWorkspace(scope: agendaClient.scope(person: person, membership: membership),
-                client: agendaClient.planningClient, date: Date().addingTimeInterval(120))
+                client: agendaClient.planningClient, date: Date().addingTimeInterval(120), suggestingNextSlotFrom: Date())
             planned.learnerID = model.form.learnerID
             planning = planned
         } else if !model.finishesItself {

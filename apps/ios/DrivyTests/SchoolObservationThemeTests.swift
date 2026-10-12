@@ -234,31 +234,30 @@ struct SchoolSignalGridLayoutTests {
         #expect(layout(2).columns == 2 && layout(3).columns == 3 && layout(3).rows == 1)
         #expect(layout(4).columns == 2 && layout(4).rows == 2)
         #expect(layout(5).columns == 3 && layout(5).rows == 2)
-        // Onze et douze tuiles : trois colonnes et quatre rangées, comme avant.
-        #expect(layout(11).columns == 3 && layout(11).rows == 4 && layout(12).rows == 4)
-        // Quinze tuiles : cinq rangées de trois sur un iPhone, quatre colonnes là où une tuile garde 100 pt.
+        // Six et huit tuiles : seulement elles, en trois colonnes, sans tuile ajoutée.
+        #expect(layout(6).columns == 3 && layout(6).rows == 2 && layout(8).rows == 3)
+        // Quinze tuiles : cinq rangées de trois, sur un iPhone comme dans le popover de l’iPad.
         #expect(layout(15).columns == 3 && layout(15).rows == 5)
-        #expect(layout(15, width: 480).columns == 4 && layout(15, width: 480).rows == 4)
+        #expect(layout(15, width: 480).columns == 3 && layout(15, width: 480).rows == 5)
         #expect(layout(15, width: 320).columns == 2)
         #expect(layout(0).rows == 0)
     }
 
-    /// Tout le catalogue affiché, sur les deux largeurs d’iPhone courantes (volet = écran − 32 pt) : trois colonnes,
-    /// donc six rangées de seize à dix-huit tuiles. Quatre colonnes seulement là où une tuile garde 100 pt.
-    @Test func theWholeCatalogueKeepsThreeColumnsOnAnIPhone() {
+    /// Tout le catalogue affiché, sur les largeurs d’iPhone courantes (volet = écran − 32 pt) et du popover de l’iPad :
+    /// trois colonnes, donc six rangées de seize à dix-huit tuiles.
+    @Test func theWholeCatalogueKeepsThreeColumns() {
         let all = SchoolObservationThemeCatalog.embedded.count
-        for width: CGFloat in [375 - 32, 430 - 32] {
+        for width: CGFloat in [375 - 32, 430 - 32, 480] {
             for count in 16...max(18, all) {
                 #expect(layout(count, width: width).columns == 3 && layout(count, width: width).rows == (count + 2) / 3, "\(count) à \(width)")
             }
         }
-        #expect(layout(16, width: 480).columns == 4 && layout(16, width: 480).rows == 4)
-        #expect(layout(18, width: 480).rows == 5)
         // Aucune disposition ne perd de tuile ni ne descend sous la largeur minimale, de 1 à bien au-delà du catalogue.
         for count in 1...(all + 12) {
             for width: CGFloat in [320, 343, 398, 480, 640] {
                 let value = layout(count, width: width)
                 #expect(value.columns * value.rows >= count && value.columns * (value.rows - 1) < count)
+                #expect(value.columns <= 3)
                 let tile = (width - 2 * SchoolSignalGridLayout.gutter - CGFloat(value.columns - 1) * SchoolSignalGridLayout.spacing) / CGFloat(value.columns)
                 #expect(value.columns == 1 || tile >= SchoolSignalGridLayout.minimumTileWidth)
             }
@@ -271,16 +270,42 @@ struct SchoolSignalGridLayoutTests {
         #expect(layout(3, text: .accessibility3).columns == 1)
     }
 
-    @Test func thePanelGrowsWithItsRowsAndFifteenTilesFitASmallPhone() {
+    @Test func thePanelGrowsUpToNineTilesThenKeepsTheirHeight() {
         func height(_ count: Int) -> CGFloat {
             SchoolSignalGridLayout.estimatedPaletteHeight(tileCount: count, width: 361, textSize: .large)
         }
-        #expect(height(1) < height(4) && height(4) < height(9) && height(9) < height(12) && height(12) < height(15))
-        // Douze tuiles tiennent dans l’ancien budget du volet ; quinze dans la hauteur utile d’un iPhone de 667 pt.
-        #expect(height(12) <= 520 && height(15) <= 615)
-        #expect(height(11) == height(12) && height(13) == height(15))
-        // Seize à dix-huit tuiles : une sixième rangée. Le volet dépasse alors un iPhone de 667 pt, où la grille défile.
-        #expect(height(16) == height(18) && height(16) > height(15) && height(18) > 615)
+        // Quatre tuiles (2 × 2) et six (2 × 3) tiennent sur deux rangées : même hauteur.
+        #expect(height(1) < height(4) && height(4) == height(6) && height(6) < height(9))
+        #expect(height(7) == height(9))
+        // Au-delà, la fenêtre des neuf premières plus l’amorce de la rangée suivante, quel que soit le nombre.
+        let overflow = height(9) + SchoolSignalGridLayout.spacing + SchoolSignalGridLayout.peek
+        for count in [10, 12, 15, 18, 24, 40] { #expect(height(count) == overflow, "\(count) tuiles") }
+        #expect(overflow <= 520)
+    }
+
+    /// Les neuf premières tuiles à l’ouverture (3 × 3), les suivantes en défilant, sur les largeurs d’iPhone
+    /// (volet = écran − 32 pt) et du popover de l’iPad. La fenêtre finit toujours sur une rangée pleine.
+    @Test func theFirstNineTilesAreTheWindowAndTheRestScrolls() {
+        for width: CGFloat in [375 - 32, 393 - 32, 430 - 32, 480] {
+            for count in [6, 8, 9, 10, 12, 15, 18, 24] {
+                let value = layout(count, width: width)
+                #expect(value.columns == 3, "\(count) à \(width)")
+                #expect(value.overflows == (count > 9), "\(count) à \(width)")
+                #expect(value.visibleRows == min(3, value.rows), "\(count) à \(width)")
+            }
+        }
+        // Trop étroit pour trois colonnes : la fenêtre garde au moins les neuf premières, en rangées pleines.
+        let narrow = layout(12, width: 320 - 32)
+        #expect(narrow.columns == 2 && narrow.visibleRows == 5 && narrow.overflows)
+        #expect(layout(8).visibleRows == layout(8).rows && !layout(8).overflows)
+        #expect(layout(12).visibleRows == 3 && layout(12).rows == 4 && layout(12).overflows)
+        // Fenêtre : trois rangées pleines, plus l’amorce seulement quand des tuiles suivent.
+        let spacing = SchoolSignalGridLayout.spacing
+        #expect(layout(9).windowHeight(tileHeight: 80) == 3 * 80 + 2 * spacing)
+        #expect(layout(12).windowHeight(tileHeight: 80) == 3 * 80 + 3 * spacing + SchoolSignalGridLayout.peek)
+        #expect(layout(6).windowHeight(tileHeight: 80) == 2 * 80 + spacing)
+        // Le fondu ne couvre que l’amorce et la marge, jamais la dernière rangée de la fenêtre.
+        #expect(SchoolSignalGridLayout.fadeHeight == spacing + SchoolSignalGridLayout.peek + SchoolSignalGridLayout.gutter)
     }
 }
 

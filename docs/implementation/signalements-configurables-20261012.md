@@ -153,3 +153,5 @@ Un client n'envoie `themeKey` que si la configuration qu'il utilise vient du ser
 - Les référentiels moto et remorque gardent leurs tuiles génériques (« Freinage », « Dépassements ») : les thèmes du catalogue rattachés à `vehicule` ou `placement` n'y apparaissent pas.
 - « Priorités » se déplie désormais toujours en trois tuiles, et un ancien référentiel `parking` affiche « Manœuvres ».
 - Les notes des icônes sont un jugement ; le porteur n'a pas encore tranché sur la planche de choix.
+
+**13 octobre 2026** : un moniteur peut faire ranger ses signalements d’après ses habitudes, sans toucher à l’ordre de l’école décrit ici. Voir [classement-intelligent-20261013.md](classement-intelligent-20261013.md).
