@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Profil → Paramètres (élève) : le compte, l’enregistrement GPS, le verrou de l’app et la déconnexion. Les lignes
-/// sont celles de `SchoolAccountActions`, partagées avec la feuille « Compte » et le Profil du moniteur : un seul
+/// sont celles de `SchoolAccountActions`, partagées avec la feuille « Compte », le Profil et les Paramètres du moniteur : un seul
 /// jeu de réglages, rangé ici par sujet.
 struct SchoolLearnerSettingsView: View {
     /// L’accord GPS général de l’élève et ses trajets, dans une école qui en enregistre.

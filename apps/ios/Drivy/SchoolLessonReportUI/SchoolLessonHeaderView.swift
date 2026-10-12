@@ -7,8 +7,6 @@ struct SchoolLessonHeaderView: View {
     let model: SchoolLessonReportWorkspace
     let learnerName: String
     var finishError: String? = nil
-    /// Le prix suit le lieu sur une leçon planifiée ; le récapitulatif le range à la fin de la page.
-    var showsPrices = true
 
     private var identity: SchoolLessonHeaderIdentity? {
         SchoolLessonHubRules.headerIdentity(learnerName: learnerName, instructorName: model.lesson?.providedInstructorName,
@@ -20,7 +18,7 @@ struct SchoolLessonHeaderView: View {
             if identity != nil || model.lesson != nil {
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     if let identity { DrivyLearnerIdentity(name: identity.name, detail: identity.role, variant: .compact) }
-                    if let lesson = model.lesson { SchoolLessonFacts(model: model, lesson: lesson, showsPrices: showsPrices) }
+                    if let lesson = model.lesson { SchoolLessonFacts(model: model, lesson: lesson) }
                 }
             }
             if model.isLoading && model.lesson == nil {
@@ -38,12 +36,11 @@ struct SchoolLessonHeaderView: View {
     }
 }
 
-/// Faits de la leçon sous l’élève : son état s’il est inhabituel, quand, où, avec qui, à quel prix.
+/// Faits de la leçon sous l’élève : son état s’il est inhabituel, quand, à quel prix, où, avec qui.
 /// Du texte seul, sans symbole, pastille ni colonne de montants.
 struct SchoolLessonFacts: View {
     let model: SchoolLessonReportWorkspace
     let lesson: SchoolLesson
-    var showsPrices = true
 
     /// L’élève ne termine pas de leçon : dans sa fiche comme dans sa liste, une leçon restée sans résultat se lit
     /// « En attente », sans encre d’alerte.
@@ -68,33 +65,34 @@ struct SchoolLessonFacts: View {
             if let actual = SchoolLessonHubRules.actualSchedule(lesson) {
                 SchoolLessonFactLine(text: actual, color: DrivyTheme.muted)
             }
+            // Le prix suit l’horaire, réel s’il est affiché, prévu sinon : sa place ne dépend pas de l’état de la leçon.
+            SchoolLessonPriceLines(model: model, lesson: lesson)
+            if !lesson.meetingPoint.isEmpty {
+                SchoolLessonFactLine(text: lesson.meetingPoint, color: DrivyTheme.muted)
+            }
             if let instructor = SchoolLessonHubRules.instructorLine(instructorName: lesson.providedInstructorName,
                 isAuthor: model.isAuthor, isOwnLearner: model.isOwnLearner, roles: model.membership.roles) {
                 SchoolLessonFactLine(text: instructor, color: DrivyTheme.muted)
             }
-            if showsPrices { SchoolLessonPriceLines(model: model, lesson: lesson) }
         }
     }
 }
 
-/// Date, horaire et lieu. La date et l’horaire tiennent sur une ligne quand la colonne le permet, sinon l’un
-/// sous l’autre : l’intervalle horaire ne se coupe jamais entre ses deux heures. Le lieu passe à la ligne seul.
+/// Date et horaire. Ils tiennent sur une ligne quand la colonne le permet, sinon l’un sous l’autre :
+/// l’intervalle horaire ne se coupe jamais entre ses deux heures.
 private struct SchoolLessonScheduleLines: View {
     let lesson: SchoolLesson
 
     var body: some View {
         let schedule = SchoolLessonHubRules.schedule(lesson)?.replacingOccurrences(of: " – ", with: "\u{00A0}–\u{00A0}")
         let parts = schedule?.components(separatedBy: " · ") ?? []
-        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-            if let schedule {
-                ViewThatFits(in: .horizontal) {
-                    SchoolLessonFactLine(text: schedule, color: DrivyTheme.text).fixedSize(horizontal: true, vertical: false)
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        ForEach(parts, id: \.self) { part in SchoolLessonFactLine(text: part, color: DrivyTheme.text) }
-                    }
+        if let schedule {
+            ViewThatFits(in: .horizontal) {
+                SchoolLessonFactLine(text: schedule, color: DrivyTheme.text).fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                    ForEach(parts, id: \.self) { part in SchoolLessonFactLine(text: part, color: DrivyTheme.text) }
                 }
             }
-            if !lesson.meetingPoint.isEmpty { SchoolLessonFactLine(text: lesson.meetingPoint, color: DrivyTheme.muted) }
         }
     }
 }

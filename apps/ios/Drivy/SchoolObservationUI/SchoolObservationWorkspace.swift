@@ -120,7 +120,9 @@ struct SchoolObservationEditor: Identifiable {
         // écriture suivante, comme pendant le trajet. Un nouvel enregistreur lirait cette demande comme un blocage.
         if let live, live.isSettlingGesture, live.acceptsSignal { return live }
         let recorder = SchoolLiveObservationRecorder(scope: scope, lessonID: lessonID, client: client,
-            themeStore: SchoolObservationThemeStores.store(for: scope, client: client.themeClient), outbox: outbox,
+            themeStore: SchoolObservationThemeStores.store(for: scope, client: client.themeClient),
+            rankingStore: SchoolObservationRankingStores.store(for: scope, client: client.rankingClient),
+            signalOrders: SchoolLessonSignalOrderStores.make(scope), outbox: outbox,
             onSettlement: { [weak self] in
                 guard let self, !self.accessRevoked else { return }
                 // onDismiss peut avoir fini sa lecture avant la réponse d’envoi. Cette lecture

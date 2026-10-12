@@ -43,9 +43,12 @@ import Foundation
     private(set) var hasGaps = false
     private(set) var start: CLLocationCoordinate2D?
     private(set) var position: Position?
+    private var liveFrom = 0
 
     /// Idempotent: called again with unchanged segments, it does nothing.
-    func update(_ segments: [SchoolCaptureMapSegment]) {
+    /// `liveFrom`: index of the first segment of the trip being recorded. Earlier segments (previous trips of the
+    /// same lesson) are drawn and give the start, never the current position.
+    func update(_ segments: [SchoolCaptureMapSegment], liveFrom: Int = 0) {
         let ids = segments.map(\.id)
         var changed = ids != order
         if changed {
@@ -60,7 +63,8 @@ import Foundation
             states[segment.id] = state
             changed = true
         }
-        guard changed else { return }
+        guard changed || liveFrom != self.liveFrom else { return }
+        self.liveFrom = liveFrom
         var all: [DrivyRouteMapLine] = []
         var gapCount = 0
         for (index, segment) in segments.enumerated() {
@@ -77,7 +81,7 @@ import Foundation
         lines = all
         hasGaps = gapCount > 0
         start = segments.lazy.compactMap { self.states[$0.id]?.first }.first
-        position = segments.reversed().lazy.compactMap { self.states[$0.id]?.last }.first
+        position = segments.dropFirst(min(liveFrom, segments.count)).reversed().lazy.compactMap { self.states[$0.id]?.last }.first
     }
 
     /// Exact anchor only: an observation whose fix is not displayed keeps its time, without a place.

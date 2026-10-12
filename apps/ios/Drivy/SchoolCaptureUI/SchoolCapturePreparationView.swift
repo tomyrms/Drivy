@@ -81,7 +81,7 @@ struct SchoolCapturePreparationView: View {
             .scrollBounceBehavior(.basedOnSize)
             .scrollDismissesKeyboard(.interactively)
             .background(DrivyTheme.surface)
-            .navigationTitle("Démarrer le trajet").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(model.startTitle).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Fermer") { model.invalidate(); dismiss() }
@@ -267,9 +267,9 @@ struct SchoolCapturePreparationView: View {
                 Task { await start() }
             } label: {
                 if isWaiting {
-                    DrivyBusyLabel(title: "Démarrer le trajet", busyTitle: "Vérification de la leçon…", isBusy: true)
+                    DrivyBusyLabel(title: model.startTitle, busyTitle: "Vérification de la leçon…", isBusy: true)
                 } else {
-                    Label("Démarrer le trajet", systemImage: "location.fill")
+                    Label(model.startTitle, systemImage: "location.fill")
                 }
             }
             .buttonStyle(DrivyPrimaryButtonStyle(size: .field))

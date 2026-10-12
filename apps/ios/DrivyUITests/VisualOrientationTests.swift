@@ -9,7 +9,7 @@ import XCTest
         "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "start-now", "planning-settings",
         "agenda", "agenda-month", "learners", "learner", "lesson", "lesson-planned",
         "lesson-observations", "lesson-evidence", "lesson-permit", "invitation-code", "lessons-history",
-        "replay", "design-system", "skeletons", "gps-choice", "signal", "live-signal",
+        "replay", "design-system", "skeletons", "gps-choice", "signal", "signal-all", "live-signal",
         "signal-status", "observations", "capture-preparation", "live", "live-waiting",
         "planning", "planning-details", "planning-confirmation", "invitations", "invitation-create",
         "invitation-detail", "lesson-finish", "lesson-modal", "lesson-tariff", "sign-in",
@@ -83,11 +83,11 @@ import XCTest
                     case "learner-profile", "learner-profile-multi": "learner-profile-list"
                     case "lessons-history": "lessons-history"
                     case "onboarding-staff": "onboarding-start"
-                    case "home-tabs": "today-day-list"
+                    case "home-tabs": "today-focus-lesson"
                     case "home-to-finish": "today-continue-lesson"
                     case "live", "live-waiting": "capture-signal-observation"
                     case "replay": "replay-play"
-                    case "signal": "live-observation-theme-Priorité à droite"
+                    case "signal", "signal-all": "live-observation-theme-Priorité à droite"
                     case "sign-in": "school-sign-in"
                     default: nil
                     }
@@ -134,6 +134,7 @@ import XCTest
                     if screen == "lesson-tariff" {
                         // « Prix de la leçon » : une seule ligne (lesson-tariff). La ligne lesson-balance n’existe que si
                         // l’école a corrigé le montant retenu ; ici le compte de la fixture égale le prix convenu.
+                        // Le prix se lit dans l’en-tête, sous l’horaire ; le défilement ne sert qu’en paysage serré.
                         let tariff = app.descendants(matching: .any)["lesson-tariff"]
                         let balance = app.descendants(matching: .any)["lesson-balance"]
                         let form = app.collectionViews.firstMatch

@@ -454,6 +454,10 @@ struct SchoolTrackDisplayTests {
         #expect(abs(player.time(at: faster + 2) - player.time(at: faster) - 4) < 0.001)
         player.pause()
         #expect(!player.isPlaying && player.offset >= 10 && player.offset < 11)
+        // ×2, ×5, ×10, puis retour à la vitesse réelle.
+        var cycle: [Int] = []
+        for _ in 0..<3 { player.cycleSpeed(); cycle.append(player.speed) }
+        #expect(cycle == [5, 10, 1])
         #expect(player.time(at: CACurrentMediaTime() + 60) == player.offset)
     }
 }

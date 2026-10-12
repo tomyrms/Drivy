@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:lesson-next-slot:1",
+  "$comment": "Extension du 12 octobre 2026 : GET /v1/schools/{schoolId}/lessons/next-slot. Recherche du prochain créneau libre à l’ouverture de « Planifier une leçon ». OpenAPI canonique 3.11.0 conservé. Lecture indicative sans réservation temporaire, ni opération, ni audit ; CREATE recontrôle droits, créneau et conditions commerciales au commit. Mêmes droits et mêmes refus que GET …/lessons/availability (ADMIN ou moniteur affecté ; sinon 403/404).",
+  "$defs": {
+    "Query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trainingId", "instructorMembershipId", "durationMinutes", "bufferMinutes", "timeZone"],
+      "properties": {
+        "trainingId": {"type": "string", "format": "uuid"},
+        "instructorMembershipId": {"type": "string", "format": "uuid"},
+        "durationMinutes": {"type": "integer", "minimum": 1, "maximum": 480},
+        "bufferMinutes": {"type": "integer", "minimum": 0, "maximum": 240},
+        "timeZone": {"type": "string", "minLength": 1, "maxLength": 100, "description": "Fuseau IANA de l’école ; tout autre fuseau est refusé (INVALID_TIME_ZONE)."},
+        "from": {"type": "string", "format": "date-time", "description": "Début de la recherche. Par défaut et au plus tôt : maintenant + 5 minutes."},
+        "days": {"type": "integer", "minimum": 1, "maximum": 31, "default": 14, "description": "Nombre de jours civils de l’école examinés, à partir du jour de `from`."},
+        "stepMinutes": {"type": "integer", "minimum": 5, "maximum": 60, "default": 15, "description": "Pas de la grille, alignée sur le début de chaque ouverture."}
+      },
+      "$comment": "Paramètres query encodés dans l’URL. Un créneau proposé tient entier dans une ouverture du moniteur le même jour local, ne croise aucune de ses fermetures, est couvert par l’affectation, et n’entre en conflit ni avec une occupation du moniteur (tampon compris) ni avec une occupation de l’élève dans toute l’école. Les occupations restent privées : seule leur absence est déduite."
+    },
+    "NextSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slot", "searchedThrough", "timeZone"],
+      "properties": {
+        "slot": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "object", "additionalProperties": false, "required": ["plannedStart", "plannedEnd"],
+             "properties": {"plannedStart": {"type": "string", "format": "date-time"}, "plannedEnd": {"type": "string", "format": "date-time"}}}
+          ]
+        },
+        "searchedThrough": {"type": "string", "format": "date", "description": "Dernier jour civil examiné. Sans créneau, une nouvelle recherche peut reprendre au jour suivant."},
+        "timeZone": {"type": "string", "minLength": 1, "maxLength": 100}
+      }
+    },
+    "NextSlotEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "data": {"$ref": "#/$defs/NextSlot"},
+        "requestId": {"type": "string", "format": "uuid"},
+        "serverTime": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

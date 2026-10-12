@@ -164,6 +164,10 @@ struct SchoolHomeView: View {
         .task(id: observationThemeScope) {
             guard let themes = agendaClient?.observationThemeStore(person: workspace.person, membership: workspace.membership) else { return }
             await themes.refresh()
+            // Classement du moniteur : relu au même moment, pour que la prochaine leçon parte du dernier ordre.
+            if let ranking = agendaClient?.observationRankingStore(person: workspace.person, membership: workspace.membership) {
+                await ranking.refresh()
+            }
         }
     }
 
@@ -186,6 +190,8 @@ struct SchoolHomeView: View {
                         schoolName: workspace.school?.name ?? workspace.membership?.schoolName, chooseSchool: chooseSchoolAction)
                         .navigationTitle("Aujourd’hui")
                         .navigationBarTitleDisplayMode(.inline)
+                        // La carte va jusqu’en haut : aucun fond ni flou de barre ne la coupe en rectangle.
+                        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
                 }
             }
             .toolbar { staffToolbar }
@@ -209,7 +215,7 @@ struct SchoolHomeView: View {
               workspace.school?.status == "ACTIVE", membership.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) else { return nil }
         return { learner in
             let model = SchoolPlanningWorkspace(scope: agendaClient.scope(person: person, membership: membership),
-                client: agendaClient.planningClient, date: Date().addingTimeInterval(3600))
+                client: agendaClient.planningClient, date: Date().addingTimeInterval(3600), suggestingNextSlotFrom: Date())
             model.learnerID = learner.id
             dossierPlanningModel = model
         }

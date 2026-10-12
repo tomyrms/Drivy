@@ -137,6 +137,16 @@ enum SchoolLessonHubRules {
         return capture == .none && controllerCanPrepare && withinCaptureWindow(lesson, now: now)
     }
 
+    /// La leçon a déjà un trajet chez l’école (fermeture, crash ou redémarrage pendant la leçon) : un nouveau départ
+    /// le complète, il ne recommence ni la leçon ni son chronomètre.
+    static func continuesTrip(captures: [SchoolCaptureSession], lessonID: UUID) -> Bool {
+        captures.contains { $0.lessonId == lessonID }
+    }
+
+    static func startTripTitle(captures: [SchoolCaptureSession], lessonID: UUID) -> String {
+        continuesTrip(captures: captures, lessonID: lessonID) ? "Continuer le trajet" : "Démarrer le trajet"
+    }
+
     /// Le démarrage confirmé ouvre la fin, indépendamment de l’horaire prévu.
     static func mayFinish(_ lesson: SchoolLesson, now: Date) -> Bool {
         lesson.status == "PLANNED" && lesson.hasStarted

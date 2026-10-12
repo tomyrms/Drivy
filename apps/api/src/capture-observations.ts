@@ -10,6 +10,7 @@ import {getLesson,type LessonRow} from './lessons.js';
 import {geoObservationCommand,geoObservationProjection,uuid,type GeoObservationInput,type GeoObservationRow,type CaptureRow,type ChunkRow} from './capture-contracts.js';
 import {chunkAAD,decryptPoints,type CaptureConfig} from './capture-crypto.js';
 import {observationThemeCompetencies,type ObservationThemeKey} from './observation-themes.js';
+import {palettePosition} from './observation-ranking.js';
 
 const empty=z.object({}).strict();
 const reasonCommand=z.object({operationId:uuid,reason:z.string().refine(v=>v.trim().length>0&&[...v].length<=1000)}).strict();
@@ -146,8 +147,10 @@ export function registerCaptureObservations(app:FastifyInstance,options:{pool:Po
    if(count>=100)throw conflict('OBSERVATION_LIMIT_REACHED','Cette leçon contient déjà 100 observations privées. Relisez-les avant un nouvel ajout.');
    if(body.observedAt&&Date.parse(body.observedAt)>Date.now()+300_000)throw new ApiError(422,'OBSERVATION_TIME_INVALID','L’instant indiqué est futur. Conservez l’intention et relisez son heure.');
    await validateTheme(db,lesson,body.competencyId,body.themeKey??null);await validateAnchor(db,lesson,body,options.capture);
-   const row=(await db.query<GeoObservationRow>(`INSERT INTO drivy.geo_observation(school_id,lesson_id,training_id,author_membership_id,draft_id,capture_id,segment_id,point_sequence,competency_id,text,origin,observed_at,event_kind,event_status,theme_key)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,[school.id,lessonId,lesson.training_id,actor.membershipId,draftId,body.captureId,body.segmentId,body.pointSequence,body.competencyId,body.text,body.origin??'REVIEW',body.observedAt??null,body.eventKind??null,body.eventStatus??null,body.themeKey??null])).rows[0]!;
+   // Rang de la tuile au moment du geste, pour le classement intelligent : noté ici, l'app n'a rien à envoyer.
+   const position=body.themeKey&&body.origin==='LIVE'?await palettePosition(db,school.id,actor.membershipId,body.themeKey):null;
+   const row=(await db.query<GeoObservationRow>(`INSERT INTO drivy.geo_observation(school_id,lesson_id,training_id,author_membership_id,draft_id,capture_id,segment_id,point_sequence,competency_id,text,origin,observed_at,event_kind,event_status,theme_key,palette_position)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,[school.id,lessonId,lesson.training_id,actor.membershipId,draftId,body.captureId,body.segmentId,body.pointSequence,body.competencyId,body.text,body.origin??'REVIEW',body.observedAt??null,body.eventKind??null,body.eventStatus??null,body.themeKey??null,position])).rows[0]!;
    await touchDraft(db,school.id,[draftId]);
    // F3 : une observation sans ancre qui arrive après la finalisation du trajet est placée tout de suite (avant, la finalisation s'en charge).
    let created=row;

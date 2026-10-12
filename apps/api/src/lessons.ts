@@ -8,6 +8,7 @@ import {schoolCommand,schoolColumns,checkIdempotency,checkVersion,requireVersion
 import {ApiError,forbidden,notFound} from './errors.js';
 import {Cursors} from './cursor.js';
 import {ensureOpen,instructorPermission} from './lesson-setup.js';
+import {findNextSlot,type Candidate} from './next-slot.js';
 const id=z.uuid(),date=z.iso.datetime({offset:true}),amount=z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),empty=z.object({}).strict();
 const selection=z.object({mode:z.enum(['UNIT_PRICE','ENTITLEMENT']),serviceProductVersionId:id,quantity:z.number().int().min(1).max(100),entitlementLotId:id.nullable(),acceptedTermsVersionId:id}).strict()
  .refine(v=>v.mode==='UNIT_PRICE'?v.entitlementLotId===null:v.entitlementLotId!==null);
@@ -21,6 +22,12 @@ const moveCommand=z.object({operationId:id,...interval,agreementConfirmed:z.lite
 const cancelCommand=z.object({operationId:id,reasonCode:z.enum(['LEARNER_REQUEST','INSTRUCTOR_UNAVAILABLE','SCHOOL_CLOSURE','OTHER']),comment:z.string().max(1000).nullable().optional()}).strict();
 const availabilityQuery=z.object({trainingId:id,instructorMembershipId:id,plannedStart:date,plannedEnd:date,
  timeZone:z.string().min(1).max(100),bufferMinutes:z.coerce.number().int().min(0).max(240),excludeLessonId:id.optional()}).strict();
+/** Extension hors contrat canonique (12 octobre 2026) : recherche du prochain créneau libre, voir contracts/lesson-next-slot.json. */
+const nextSlotQuery=z.object({trainingId:id,instructorMembershipId:id,durationMinutes:z.coerce.number().int().min(1).max(480),
+ bufferMinutes:z.coerce.number().int().min(0).max(240),timeZone:z.string().min(1).max(100),from:date.optional(),
+ days:z.coerce.number().int().min(1).max(31).default(14),stepMinutes:z.coerce.number().int().min(5).max(60).default(15)}).strict();
+/** Marge avant le premier début proposé : le créneau doit rester futur quand « Planifier » arrive au serveur. */
+const nextSlotLeadMs=5*60_000;
 type Selection=z.infer<typeof selection>;
 export interface LessonRow {id:string;school_id:string;version:number;training_id:string;learner_id:string;learner_person_id:string;instructor_membership_id:string;
  planned_start:Date;planned_end:Date;time_zone:string;meeting_point:string;status:'PLANNED'|'COMPLETED'|'CANCELLED'|'NO_SHOW';price_cents_snapshot:string;buffer_minutes_snapshot:number;
@@ -237,6 +244,43 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
      [schoolId,query.trainingId,query.instructorMembershipId,query.plannedStart,query.plannedEnd,query.bufferMinutes,query.excludeLessonId??null])).rows[0];
     if(typeof result?.conflict!=='boolean')throw new ApiError(503,'SERVICE_UNAVAILABLE','Le créneau n’a pas pu être vérifié.');
     return {available:!result.conflict,reasonCode:result.conflict?'SLOT_CONFLICT':null};
+   });return envelope(data,r);
+  });
+  // Prochain créneau libre : ouvertures, fermetures et affectation lues ici, occupations testées par la même fonction
+  // anonyme que la prévalidation. Rien n'est retenu ni journalisé ; CREATE rejoue toutes les validations sous verrou.
+  app.get(`${base}/lessons/next-slot`,async r=>{
+   const query=nextSlotQuery.parse(r.query),schoolId=schoolID(r),identity=await options.verifyToken(r.headers.authorization);
+   const data=await withActor(options.pool,identity,schoolId,async(db,_actor,member)=>{
+    if(!member?.roles.some(role=>role==='ADMIN'||role==='INSTRUCTOR'))throw forbidden();
+    const school=(await db.query<SchoolRow>(`SELECT ${schoolColumns} FROM drivy.school WHERE id=$1`,[schoolId])).rows[0];
+    if(!school)throw notFound();
+    let zone=false;try{new Intl.DateTimeFormat('fr',{timeZone:query.timeZone});zone=query.timeZone===school.timeZone;}catch{ /* Invalid zone is never coerced. */ }
+    if(!zone)throw new ApiError(422,'INVALID_TIME_ZONE','Utilisez le fuseau de l’école affiché.');
+    const now=new Date(),nowText=now.toISOString();
+    await learnerPerson(db,schoolId,query.trainingId);
+    // Mêmes refus que la prévalidation ; l'affectation est relue ici pour l'instant présent, puis par créneau.
+    await trainingContext(db,school,query.trainingId,query.instructorMembershipId,nowText,nowText);
+    const notBefore=new Date(Math.max(now.getTime()+nextSlotLeadMs,query.from?Date.parse(query.from):0));
+    const horizon=new Date(notBefore.getTime()+(query.days+2)*86_400_000);
+    const rules=(await db.query<{weekdays:number[];localStart:string;localEnd:string;validFrom:string;validUntil:string|null}>(`SELECT weekdays,
+     to_char(local_start,'HH24:MI') AS "localStart",to_char(local_end,'HH24:MI') AS "localEnd",to_char(valid_from,'YYYY-MM-DD') AS "validFrom",
+     to_char(valid_until,'YYYY-MM-DD') AS "validUntil" FROM drivy.availability_rule WHERE school_id=$1 AND instructor_membership_id=$2 AND removed_at IS NULL`,
+     [schoolId,query.instructorMembershipId])).rows;
+    const closures=(await db.query<{startsAt:Date;endsAt:Date}>(`SELECT starts_at AS "startsAt",ends_at AS "endsAt" FROM drivy.closure
+     WHERE school_id=$1 AND instructor_membership_id=$2 AND removed_at IS NULL AND ends_at>$3 AND starts_at<$4`,[schoolId,query.instructorMembershipId,notBefore,horizon])).rows;
+    const assignments=(await db.query<{validFrom:Date;validUntil:Date|null}>(`SELECT valid_from AS "validFrom",valid_until AS "validUntil" FROM drivy.instructor_assignment
+     WHERE school_id=$1 AND training_id=$2 AND instructor_membership_id=$3`,[schoolId,query.trainingId,query.instructorMembershipId])).rows;
+    const conflicts=async(candidates:Candidate[])=>{
+     const rows=(await db.query<{conflict:boolean}>(`SELECT drivy.lesson_slot_conflict($1,$2,$3,c.s,c.e,$4,NULL) AS conflict
+      FROM unnest($5::timestamptz[],$6::timestamptz[]) WITH ORDINALITY AS c(s,e,n) ORDER BY c.n`,
+      [schoolId,query.trainingId,query.instructorMembershipId,query.bufferMinutes,candidates.map(c=>c.start),candidates.map(c=>c.end)])).rows;
+     if(rows.some(row=>typeof row.conflict!=='boolean'))throw new ApiError(503,'SERVICE_UNAVAILABLE','Le créneau n’a pas pu être vérifié.');
+     return rows.map(row=>row.conflict);
+    };
+    const result=await findNextSlot({rules,closures,assignments,timeZone:school.timeZone,durationMinutes:query.durationMinutes,
+     stepMinutes:query.stepMinutes,now,notBefore},query.days,conflicts);
+    return {slot:result.slot?{plannedStart:result.slot.start.toISOString(),plannedEnd:result.slot.end.toISOString()}:null,
+     searchedThrough:result.searchedThrough,timeZone:school.timeZone};
    });return envelope(data,r);
   });
   app.get(`${base}/lessons`,async r=>{

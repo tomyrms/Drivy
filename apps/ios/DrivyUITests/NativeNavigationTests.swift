@@ -13,12 +13,36 @@ import XCTest
         XCTAssertTrue(back.exists)
         back.tap()
         XCTAssertTrue(trips.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["profile-planning-settings"].exists)
+        // Les réglages ont quitté le Profil : ils sont dans Paramètres, ouverts par l’engrenage.
+        XCTAssertFalse(app.buttons["profile-planning-settings"].exists)
+        XCTAssertFalse(app.buttons["school-sign-out"].exists)
+        XCTAssertTrue(app.buttons["open-school-invitations"].exists, "Invitations reste sur le Profil : \(app.debugDescription)")
         let resume = app.buttons["resume-school-onboarding"]
         XCTAssertTrue(resume.exists)
         resume.tap()
         XCTAssertTrue(app.buttons["onboarding-start"].waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertTrue(app.buttons["onboarding-later"].exists)
+    }
+
+    /// L’engrenage du Profil pousse Paramètres dans la même pile ; le retour ramène au Profil.
+    func testProfileGearOpensSettingsAndReturns() {
+        let app = launch("profile-tab")
+        let gear = app.buttons["profile-settings"]
+        XCTAssertTrue(gear.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertEqual(gear.label, "Paramètres")
+        gear.tap()
+        XCTAssertTrue(app.navigationBars["Paramètres"].waitForExistence(timeout: 10), app.debugDescription)
+        let planning = app.buttons["profile-planning-settings"]
+        XCTAssertTrue(planning.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.descendants(matching: .any)["profile-observation-themes"].exists, app.debugDescription)
+        XCTAssertTrue(app.segmentedControls["settings-appearance"].exists, app.debugDescription)
+        XCTAssertTrue(app.buttons["school-sign-out"].exists, app.debugDescription)
+        planning.tap()
+        XCTAssertTrue(app.navigationBars["Préférences de leçon"].waitForExistence(timeout: 10), app.debugDescription)
+        app.navigationBars["Préférences de leçon"].buttons["Fermer"].tap()
+        XCTAssertTrue(planning.waitForExistence(timeout: 10), app.debugDescription)
+        app.navigationBars["Paramètres"].buttons.firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile-open-lessons"].waitForExistence(timeout: 10), app.debugDescription)
     }
 
     func testObservationListShowsEachStatusWithoutGPS() {
@@ -64,11 +88,14 @@ import XCTest
         XCTAssertTrue(dossier.exists, app.debugDescription)
     }
 
-    /// L’école fictive laisse ce compte gérer les signalements : l’entrée existe dans le Profil, l’écran montre
+    /// L’école fictive laisse ce compte gérer les signalements : l’entrée existe dans Paramètres, l’écran montre
     /// les thèmes du catalogue, leur compteur et l’aperçu de la grille. Captures en clair et en sombre.
     func testProfileOpensObservationThemesWithItsCounterAndPreview() {
         for appearance in ["Light", "Dark"] {
             let app = launch("profile-tab", appearance: appearance)
+            let gear = app.buttons["profile-settings"]
+            XCTAssertTrue(gear.waitForExistence(timeout: 20), app.debugDescription)
+            gear.tap()
             let entry = app.descendants(matching: .any)["profile-observation-themes"]
             XCTAssertTrue(entry.waitForExistence(timeout: 20), app.debugDescription)
             entry.tap()
