@@ -128,6 +128,8 @@ struct SchoolBrowserView: View {
             guard workspace.school?.status == "ACTIVE" else { return }
             await workspace.searchLearners(workspace.searchText)
         }
+        // Retour sur l’onglet : un élève qui vient de rejoindre l’école apparaît, sans effacer la liste.
+        .task { await workspace.refreshLearners() }
     }
 
     @ViewBuilder private var emptyLearners: some View {

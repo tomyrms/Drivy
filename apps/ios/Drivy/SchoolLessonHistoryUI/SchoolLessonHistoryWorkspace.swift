@@ -229,8 +229,18 @@ struct SchoolLessonHistoryMonth: Identifiable, Equatable {
         Self.visible(lessons, filter: filter, search: search, now: now)
     }
 
+    /// La route des leçons n’a pas de filtre par nom : chercher lit tout l’historique. Une lettre ne suffit pas à
+    /// le demander, et la frappe se termine avant (`searchPause`).
+    static let minimumSearchLength = 2
+    static let searchPause: Duration = .milliseconds(300)
+
+    /// Le texte cherché tel qu’il s’applique à la liste : vide tant qu’il compte moins de deux caractères.
+    static func appliedSearch(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).count >= minimumSearchLength ? text : ""
+    }
+
     static func needsFullHistory(filter: SchoolLessonHistoryFilter, search: String) -> Bool {
-        filter != .all || !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        filter != .all || !appliedSearch(search).isEmpty
     }
 
     static func visible(_ lessons: [SchoolLesson], filter: SchoolLessonHistoryFilter, search: String, now: Date = Date()) -> [SchoolLesson] {

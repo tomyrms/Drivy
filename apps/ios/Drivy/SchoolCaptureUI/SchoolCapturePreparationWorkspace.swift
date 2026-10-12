@@ -113,7 +113,9 @@ struct SchoolCaptureStartReview: Identifiable {
     /// Un départ en un geste est en cours (ou attend l’adoption du trajet par l’app).
     var isStarting: Bool { beginRun != nil }
     var diagnosticIsAvailable: Bool { canUseDiagnostic() }
-    var hasOldScope: Bool { pending.contains { $0.mutation.scope != scope } }
+    /// Une saisie (diagnostic, accord, départ) conservée sous d’anciens accès. Les faits de collecte d’un trajet
+    /// (lots, arrêt, finalisation) suivent leur trajet et ne bloquent jamais un nouveau départ.
+    var hasOldScope: Bool { pending.contains { $0.mutation.scope != scope && !$0.mutation.kind.isCollectionFact } }
     var mayDiagnose: Bool {
         !invalidated && !sourceTransferred && diagnosticIsAvailable && !accessRevoked && contextIsCurrent && isInstructor && lesson?.status == "PLANNED"
             && !isLoading && !isBusy

@@ -42,6 +42,24 @@ import Testing
         #expect(outbox.saves.contains { $0.kind == .completeLesson && $0.resourceVersion == 3 })
     }
 
+    @Test func theStartCarriesTheInstantOfTheGestureFrozenInTheQueuedCommand() async throws {
+        let server = LifecycleServer(), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox)
+        await model.load()
+        let before = Date()
+        #expect(await model.start())
+        let after = Date()
+        let command = try #require(outbox.saves.first { $0.kind == .startLesson })
+        let body = try #require(JSONSerialization.jsonObject(with: command.body) as? [String: Any])
+        #expect(Set(body.keys) == ["operationId", "startedAt"])
+        let text = try #require(body["startedAt"] as? String)
+        let instant = try #require(SchoolLesson.date(text))
+        // Encodé comme les autres instants de ce client (millisecondes), jamais après la mise en file.
+        #expect(text.contains(".") && text.hasSuffix("Z"))
+        #expect(instant >= before.addingTimeInterval(-0.001) && instant <= after.addingTimeInterval(0.001))
+        #expect(instant <= command.createdAt.addingTimeInterval(0.001))
+    }
+
     @Test func aLostStartAcknowledgementCannotClaimSuccessAndCanBeRecovered() async {
         let server = LifecycleServer(), outbox = ConfigurationOutboxStub()
         let model = workspace(server, outbox)

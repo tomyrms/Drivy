@@ -205,6 +205,9 @@ final class SchoolProfileWorkspace: Identifiable {
                 : storageError ?? (receiptRefused ? "Le résultat ne peut pas être consulté avec tes droits actuels. Sa référence reste conservée." : nil)
         } catch {
             guard request == generation else { return }
+            // Lecture interrompue parce que l’écran a été quitté : ce n’est pas une panne, rien n’est annoncé.
+            // L’écran qui réapparaît relit.
+            if error is CancellationError { isLoading = false; isReplacingDraft = false; return }
             // Relecture échouée : l’état de l’école n’est plus connu, toute écriture attend une relecture réussie.
             isLoading = false; isReplacingDraft = false; needsReload = true; fail(error)
         }

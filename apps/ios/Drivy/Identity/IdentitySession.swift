@@ -144,6 +144,17 @@ final class IdentitySession: AccessTokenSource {
         return token
     }
 
+    /// Un 401 reçu avec le jeton courant (horloge de l’appareil en retard, session révoquée chez le fournisseur) :
+    /// AppAuth le renouvelle au prochain `accessToken()`. Un jeton déjà remplacé ou un renouvellement en cours
+    /// ne force rien ; seul l’échec de ce renouvellement conclut à une session expirée.
+    func invalidateAccessToken(_ token: String) async -> Bool {
+        guard let state, state.isAuthorized else { return false }
+        if refreshTask != nil { return true }
+        guard let current = state.lastTokenResponse?.accessToken, current == token else { return true }
+        state.setNeedsTokenRefresh()
+        return true
+    }
+
     /// A fresh provider login is checked against the current server Person before
     /// replacing the durable session. The API still validates signed auth_time.
     func reauthenticate(presenting: UIViewController, expectedPersonID: UUID) async -> Bool {

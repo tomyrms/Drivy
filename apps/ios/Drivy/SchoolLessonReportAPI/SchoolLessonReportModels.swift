@@ -131,6 +131,19 @@ struct SchoolReportProgress: Codable, Sendable, Equatable {
     let unobservedCompetencyIds: [UUID]
     let computedAt: String
 }
+/// Début de leçon : `startedAt` est l’instant du geste, figé quand la demande entre dans la file chiffrée.
+/// Un renvoi garde les mêmes octets ; l’école ignore cet instant s’il sort de ses bornes.
+struct SchoolStartLesson: Encodable, Sendable {
+    let operationId: UUID
+    let startedAt: String
+
+    init(operationId: UUID, startedAt: Date) {
+        self.operationId = operationId
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        self.startedAt = iso.string(from: startedAt)
+    }
+}
 struct SchoolCompleteLesson: Encodable {
     let operationId: UUID
     let actualStart: String, actualEnd: String

@@ -157,6 +157,9 @@ describe('AP57 retrait d’un bilan publié',()=>{
   expect((await lessonNow(lesson.id)).currentPublishedRevisionId).toBeNull();
   expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-alice')).statusCode).toBe(404);
   expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items).toEqual([]);
+  // Un bilan retiré reste illisible par l'administration (A2-02).
+  expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-admin')).statusCode).toBe(404);
+  expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-admin')).json().data.items).toEqual([]);
   expect((await call('GET',`/report-revisions/${revision.id}`)).statusCode).toBe(200);
   expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-alice')).json().data.items.some((i:{sourceRevisionId:string})=>i.sourceRevisionId===revision.id)).toBe(false);
   expect((await call('POST',route,{...body,operationId:randomUUID()},after.version)).json().code).toBe('NO_PUBLISHED_REPORT');
@@ -168,6 +171,7 @@ describe('AP57 retrait d’un bilan publié',()=>{
   const republished=await publish(draft.id,3,{correctionReason:'Bilan relu et republié'});expect(republished.sequence).toBe(3);
   expect((await call('GET',`/lessons/${lesson.id}/sharing`)).json().data).toMatchObject({reportPrivate:false});
   const learnerList=(await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items;expect(learnerList.map((r:{id:string})=>r.id)).toEqual([republished.id]);
+  expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-admin')).json().data.items.map((r:{id:string})=>r.id)).toEqual([republished.id]);
   expect((await call('GET',`/lessons/${lesson.id}/reports`)).json().data.items).toHaveLength(3);
   expect((await lessonNow(lesson.id)).publicationVersion).toBe(4);
  });
@@ -207,6 +211,11 @@ describe('AP88/AP50 correction encadrée d’un résultat',()=>{
   expect((await call('POST',route,body,current.version,'demo-admin')).json().data).toEqual(lessonAfter);expect(await audits(body.operationId)).toBe(1);
   const accountResponse=await call('GET',`/lessons/${lesson.id}/account`,undefined,null,'demo-admin');await expectContract('AccountEnvelope',accountResponse.json());const accountAfter=accountResponse.json().data;
   expect(accountAfter).toMatchObject({version:2,chargeCents:0,balanceCents:0});expect(accountAfter.charges.map((c:{kind:string;amountSignedCents:number})=>[c.kind,c.amountSignedCents])).toEqual([['INITIAL',9000],['REVERSAL',-9000]]);
+  // A2-13 : le motif saisi par l'administration reste au bureau et au moniteur de la leçon ; l'élève reçoit un libellé neutre.
+  const reasons=async(subject:string)=>(await call('GET',`/lessons/${lesson.id}/account`,undefined,null,subject)).json().data.charges.map((c:{kind:string;reason:string|null})=>[c.kind,c.reason]);
+  for(const subject of ['demo-admin','demo-instructor'])expect((await reasons(subject))[1],subject).toEqual(['REVERSAL',proposal.reason]);
+  const learnerAccount=await call('GET',`/lessons/${lesson.id}/account`,undefined,null,'demo-alice');await expectContract('AccountEnvelope',learnerAccount.json());
+  expect(await reasons('demo-alice')).toEqual([['INITIAL',accountAfter.charges[0].reason],['REVERSAL','Correction de la leçon par l’école.']]);
   expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-alice')).statusCode).toBe(404);
   expect((await call('GET',`/report-revisions/${revision.id}`)).statusCode).toBe(200);
   const stored=(await pool.query('SELECT consumed_at,version FROM drivy.outcome_approval WHERE id=$1',[approval.id])).rows[0];expect(stored.version).toBe(2);expect(stored.consumed_at).not.toBeNull();
@@ -242,6 +251,9 @@ describe('AP88/AP50 correction encadrée d’un résultat',()=>{
    // Jeton émis 60 s après l'authentification : la réauthentification est exigée.
    const stale=await own.app.inject({method:'POST',url:`${own.base}/lessons/${lesson.id}/correct-outcome`,headers:{authorization:`Bearer ${await staleToken()}`,'idempotency-key':'00000000-0000-4000-8000-00000000abcd','if-match':`"${lesson.version}"`},payload:{operationId:'00000000-0000-4000-8000-00000000abcd',...proposal,pedagogicalApprovalId:approval.json().data.id}});
    expect(stale.json().code).toBe('REAUTH_REQUIRED');
+   // A4-02 : un auth_time dans le futur (au-delà de la dérive tolérée) est refusé, comme pour les autres changements d'accès.
+   const future=await own.app.inject({method:'POST',url:`${own.base}/lessons/${lesson.id}/correct-outcome`,headers:{authorization:`Bearer ${await own.token('demo-admin',Math.floor(Date.now()/1000)+120)}`,'idempotency-key':'00000000-0000-4000-8000-00000000abce','if-match':`"${lesson.version}"`},payload:{operationId:'00000000-0000-4000-8000-00000000abce',...proposal,pedagogicalApprovalId:approval.json().data.id}});
+   expect(future.statusCode,future.body).toBe(401);expect(future.json().code).toBe('REAUTH_REQUIRED');
    const ok=await own.call('POST',`/lessons/${lesson.id}/correct-outcome`,{operationId:randomUUID(),...proposal,pedagogicalApprovalId:approval.json().data.id},lesson.version,'demo-admin');
    expect(ok.statusCode,ok.body).toBe(200);expect(ok.json().data.status).toBe('CANCELLED');
    async function staleToken(){return own.token('demo-admin',Math.floor(Date.now()/1000)-60);}

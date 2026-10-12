@@ -49,8 +49,9 @@ struct SchoolHomeView: View {
         .sheet(isPresented: $choosesSchool) {
             SchoolChooserSheet(workspace: workspace, close: { choosesSchool = false })
         }
-        // La leçon planifiée depuis le dossier apparaît dans sa liste : le dossier se relit à la fermeture.
-        .sheet(item: $dossierPlanningModel, onDismiss: { NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil) }) { model in
+        // La leçon planifiée depuis le dossier apparaît dans sa liste : la planification annonce elle-même son
+        // écriture confirmée (`drivyLessonsDidChange`), une fois. Une feuille refermée sans écriture ne relit rien.
+        .sheet(item: $dossierPlanningModel) { model in
             SchoolPlanningView(model: model)
         }
         // Une demande abandonnée ou vérifiée depuis la fiche ne reste pas affichée par l'enregistreur du trajet.
@@ -280,12 +281,25 @@ struct SchoolHomeView: View {
 
     /// Un seul fond pour chaque état : erreur, attente et vide se remplacent sans saut de couleur.
     private var learnerStatus: some View {
-        learnerStatusContent
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(DrivyTheme.surface)
+        // Défilement pour pouvoir tirer : un dossier que l’école vient d’ouvrir se lit sans relancer l’app.
+        GeometryReader { proxy in
+            ScrollView {
+                learnerStatusContent(height: proxy.size.height)
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .top)
+            }
+            .refreshable {
+                await workspace.refreshLearners(minimumInterval: 0)
+                if workspace.learner != nil {
+                    await workspace.loadTrainings()
+                    await workspace.loadRemainingTrainings()
+                }
+            }
+        }
+        .background(DrivyTheme.surface)
     }
 
-    @ViewBuilder private var learnerStatusContent: some View {
+    /// `height` : la hauteur visible. Dans le défilement, un état vide se centre sur elle comme hors défilement.
+    @ViewBuilder private func learnerStatusContent(height: CGFloat) -> some View {
         if let error = workspace.schoolError ?? workspace.learnersError ?? workspace.learnerError ?? workspace.trainingsError {
             SchoolErrorNotice(message: error, retry: { retryLearner() }).drivyPageContent()
         } else if workspace.isLoadingSchool || workspace.isSearching || workspace.isLoadingLearner || workspace.isLoadingTrainings
@@ -297,14 +311,14 @@ struct SchoolHomeView: View {
             // Même lecture que chez le moniteur : une école archivée ne « se prépare » pas.
             let archived = workspace.school?.status == "ARCHIVED"
             ContentUnavailableView(archived ? "École archivée" : "L’école se prépare", systemImage: archived ? "archivebox" : "building.2")
-                .frame(maxHeight: .infinity)
+                .frame(minHeight: height)
         } else if ownLearner == nil {
             ContentUnavailableView("Dossier pas encore ouvert", systemImage: "person.crop.circle.badge.questionmark",
                 description: Text("Ton école l’ouvrira bientôt."))
-                .frame(maxHeight: .infinity)
+                .frame(minHeight: height)
         } else {
             ContentUnavailableView("Aucune formation", systemImage: "steeringwheel")
-                .frame(maxHeight: .infinity)
+                .frame(minHeight: height)
         }
     }
 

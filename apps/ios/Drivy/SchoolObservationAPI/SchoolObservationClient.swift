@@ -217,8 +217,10 @@ import Foundation
         catch SchoolAPIError.forbidden { throw SchoolObservationFailure.forbidden }
         catch SchoolAPIError.identityNotLinked { throw SchoolObservationFailure.forbidden }
         catch { throw SchoolObservationFailure.unavailable }
+        // Même adhésion active, rôle moniteur : une époque plus récente (une affectation de plus) n’arrête pas un
+        // signalement en route. L’école reste juge de l’écriture.
         guard person.personId == scope.personID, person.memberships.contains(where: {
-            $0.schoolId == scope.schoolID && $0.membershipId == scope.membershipID && $0.accessEpoch == scope.accessEpoch && $0.roles.contains("INSTRUCTOR")
+            scope.isConfirmed(by: $0) && $0.roles.contains("INSTRUCTOR")
         }) else { throw SchoolObservationFailure.forbidden }
     }
     private func request<Value: Decodable>(_ scope: SchoolCommandScope, _ path: [String], query: [URLQueryItem] = [],

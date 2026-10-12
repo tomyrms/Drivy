@@ -86,6 +86,13 @@ struct SchoolCaptureStoredChunk: Codable, Sendable, Identifiable {
     var receipt: SchoolCaptureChunkReceipt?
 }
 
+/// Ce que le coffre garde encore d’un trajet : positions, lots et commandes de lot.
+struct SchoolCaptureRetainedRows: Sendable, Equatable {
+    let samples: Int
+    let chunks: Int
+    let uploadCommands: Int
+}
+
 enum SchoolCaptureLocalStopReason: String, Sendable {
     case lessonEnded = "LESSON_ENDED", userStop = "USER_STOP", learnerRefusal = "LEARNER_REFUSAL"
     case permissionLost = "PERMISSION_LOST", expired = "EXPIRED", deviceError = "DEVICE_ERROR"

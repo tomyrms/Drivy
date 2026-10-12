@@ -196,6 +196,17 @@ describe('Entrée anonyme, limites et cache',()=>{
     expect((await spoof('203.0.113.1')).statusCode).toBe(200);expect((await spoof('203.0.113.2')).statusCode).toBe(429);
   });
 
+  test('derrière le proxy, chaque visiteur a son compteur ; une liste d’adresses compte pour sa première valeur, d’où la valeur unique écrite par Caddy',async()=>{
+    const limiter=new RateLimiter(2,60_000);const h=await harness(undefined,{entryLimiter:limiter,config:{trustProxy:true}});
+    const value=await anonymousValue(h);const call=(forwarded:string)=>h.app.inject({method:'POST',url:'/app/bff/login',payload:{},
+      headers:{origin:config.origin,'x-csrf-token':value,'x-forwarded-for':forwarded},remoteAddress:'192.168.1.10'});
+    // Deux visiteurs derrière la même adresse de proxy : deux compteurs indépendants.
+    expect([(await call('203.0.113.1')).statusCode,(await call('203.0.113.1')).statusCode,(await call('203.0.113.1')).statusCode]).toEqual([200,200,429]);
+    expect([(await call('203.0.113.2')).statusCode,(await call('203.0.113.2')).statusCode,(await call('203.0.113.2')).statusCode]).toEqual([200,200,429]);
+    // Si le proxy laissait passer une liste, sa première valeur (choisie par le client) ferait foi : le visiteur bloqué en changerait à volonté.
+    expect((await call('198.51.100.7, 203.0.113.1')).statusCode).toBe(200);
+  });
+
   test('l’invite de mot de passe n’est demandée que pour se réauthentifier ou après une déconnexion',async()=>{
     const h=await harness();
     await h.start();expect(vi.mocked(h.identity.begin)).toHaveBeenLastCalledWith(undefined);

@@ -56,8 +56,27 @@ function validatePoints(body:ChunkInput,row:CaptureRow){
   if(previous&&(point.sequence<=previous.sequence||point.elapsedMs<=previous.elapsedMs||measured<=Date.parse(previous.capturedAt)))throw error('POINT_ORDER_INVALID','Les séquences et les temps doivent être strictement croissants.',422);previous=point;
  }
 }
-async function chunks(db:PoolClient,row:CaptureRow){return (await db.query<ChunkRow>('SELECT * FROM drivy.capture_chunk WHERE school_id=$1 AND capture_id=$2 ORDER BY segment_index,chunk_index',[row.school_id,row.id])).rows;}
-function validateChunkMetadata(existing:ChunkRow[],body:ChunkInput,segmentId:string,chunkIndex:number){
+/** Un lot sans son contenu chiffré : identité, ordre, bornes et présence. Le dépôt, la finalisation et le replay s'en servent pour décider. */
+export type ChunkMeta=Omit<ChunkRow,'encrypted_points'>&{present:boolean};
+async function chunks(db:PoolClient,row:CaptureRow){return (await db.query<ChunkMeta>(`SELECT school_id,capture_id,segment_id,chunk_index,segment_index,segment_started_at,segment_start_reason,content_hash,point_count,
+ first_sequence,last_sequence,first_elapsed_ms,last_elapsed_ms,first_captured_at,last_captured_at,key_id,acknowledged_at,encrypted_points IS NOT NULL AS present
+ FROM drivy.capture_chunk WHERE school_id=$1 AND capture_id=$2 ORDER BY segment_index,chunk_index`,[row.school_id,row.id])).rows;}
+/** Mesures des seuls lots demandés : le contenu chiffré est lu puis déchiffré lot par lot, jamais pour tout le trajet. */
+async function chunkPoints(db:PoolClient,config:CaptureConfig,wanted:ChunkMeta[]):Promise<Map<ChunkMeta,TrackPoint[]>>{
+ const result=new Map<ChunkMeta,TrackPoint[]>();if(!wanted.length)return result;
+ const first=wanted[0]!,rows=(await db.query<{segment_id:string;chunk_index:number;encrypted_points:Buffer|null}>(`SELECT segment_id,chunk_index,encrypted_points FROM drivy.capture_chunk
+  WHERE school_id=$1 AND capture_id=$2 AND (segment_id,chunk_index) IN(SELECT * FROM unnest($3::uuid[],$4::int[]))`,[first.school_id,first.capture_id,wanted.map(c=>c.segment_id),wanted.map(c=>c.chunk_index)])).rows;
+ for(const c of wanted){
+  const stored=rows.find(r=>r.segment_id===c.segment_id&&r.chunk_index===c.chunk_index)?.encrypted_points;
+  if(!stored)throw new ApiError(503,'CAPTURE_DATA_UNAVAILABLE','La capture chiffrée ne peut pas être relue.');
+  const points=decryptPoints(config,stored,c.key_id,chunkAAD(c.school_id,c.capture_id,c.segment_id,c.chunk_index,c.content_hash));
+  // Le nombre de mesures d'un lot est écrit avec lui : un écart signifie que le contenu ne correspond plus à ses métadonnées.
+  if(points.length!==c.point_count)throw new ApiError(503,'CAPTURE_DATA_UNAVAILABLE','La capture chiffrée ne peut pas être relue.');
+  result.set(c,points);
+ }
+ return result;
+}
+function validateChunkMetadata(existing:ChunkMeta[],body:ChunkInput,segmentId:string,chunkIndex:number){
  const first=body.points[0]!,last=body.points.at(-1)!,started=Date.parse(body.segmentStartedAt);
  for(const row of existing){
   if(row.segment_id===segmentId){
@@ -71,16 +90,16 @@ function validateChunkMetadata(existing:ChunkRow[],body:ChunkInput,segmentId:str
   }
  }
 }
-function manifestQuality(rows:ChunkRow[],manifest:Manifest[]):'SYNCED'|'PARTIAL'{
+function manifestQuality(rows:ChunkMeta[],manifest:Manifest[]):'SYNCED'|'PARTIAL'{
  let missing=false;
  for(const row of rows){const m=manifest.find(m=>m.segmentId===row.segment_id);if(!m||m.segmentIndex!==row.segment_index||!m.expectedChunkIndices.includes(row.chunk_index))throw error('CAPTURE_MANIFEST_MISMATCH','Le manifeste ne décrit pas les lots déjà reçus.');}
- for(const m of manifest){const all=rows.filter(r=>r.segment_id===m.segmentId),present=all.filter(r=>r.encrypted_points!==null);
+ for(const m of manifest){const all=rows.filter(r=>r.segment_id===m.segmentId),present=all.filter(r=>r.present);
   if(all.length===m.expectedChunkIndices.length){if(all.reduce((n,r)=>n+r.point_count,0)!==m.expectedPointCount||(all.length?Math.max(...all.map(r=>r.last_sequence)):null)!==m.lastSequence)throw error('CAPTURE_MANIFEST_MISMATCH','Le nombre de points ou la dernière séquence diffère du manifeste.');}
   if(present.length!==m.expectedChunkIndices.length)missing=true;
  }
  return missing?'PARTIAL':'SYNCED';
 }
-function receipt(row:ChunkRow,duplicate:boolean){return {captureId:row.capture_id,segmentId:row.segment_id,chunkIndex:row.chunk_index,contentHash:row.content_hash,acknowledgedAt:row.acknowledged_at.toISOString(),duplicate};}
+function receipt(row:Pick<ChunkRow,'capture_id'|'segment_id'|'chunk_index'|'content_hash'|'acknowledged_at'>,duplicate:boolean){return {captureId:row.capture_id,segmentId:row.segment_id,chunkIndex:row.chunk_index,contentHash:row.content_hash,acknowledgedAt:row.acknowledged_at.toISOString(),duplicate};}
 
 export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string;capture?:CaptureConfig}){
  const base='/v1/schools/:schoolId',cursors=new Cursors(options.cursorSecret);
@@ -194,7 +213,7 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
   const value=await command(r,'UPLOAD_TRACK_CHUNK',bound,null,{captureId},async(db,actor,school)=>{
    const row=await getCapture(db,school.id,captureId,true);await authority.verifyUpload(body.signedUploadAuthorization,row,actor.personId);validatePoints(body,row);
    const rows=await chunks(db,row),old=rows.find(x=>x.segment_id===segmentId&&x.chunk_index===chunkIndex);
-   if(old){if(old.content_hash!==body.contentHash)throw error('CHUNK_IDENTITY_MISMATCH','Ce lot a déjà été reçu avec un autre contenu.');if(!old.encrypted_points)throw error('CHUNK_CUTOFF_REJECTED','Ce lot a été écarté par la borne de collecte.');return {data:receipt(old,true),action:'TrackChunkAccepted',resourceType:'CaptureSession',resourceId:row.id,resourceVersion:row.version,changedFields:[]};}
+   if(old){if(old.content_hash!==body.contentHash)throw error('CHUNK_IDENTITY_MISMATCH','Ce lot a déjà été reçu avec un autre contenu.');if(!old.present)throw error('CHUNK_CUTOFF_REJECTED','Ce lot a été écarté par la borne de collecte.');return {data:receipt(old,true),action:'TrackChunkAccepted',resourceType:'CaptureSession',resourceId:row.id,resourceVersion:row.version,changedFields:[]};}
    if(row.finalized_at)throw error('CAPTURE_FINALIZED','La reconstruction est finalisée ; aucun nouveau lot n’est accepté.');
    if(rows.reduce((n,v)=>n+v.point_count,0)+body.points.length>100_000||rows.length>=2000)throw error('CAPTURE_CAPACITY_REACHED','La limite technique de cette capture est atteinte.',413);
    validateChunkMetadata(rows,body,segmentId,chunkIndex);
@@ -237,11 +256,26 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
   if(query.reportRevisionId)throw notFound();
   const result=await withActor(options.pool,await options.verifyToken(r.headers.authorization),schoolID(r),async(db,actor,member)=>{
    const row=await getCapture(db,schoolID(r),captureId);if(row.publication_state!=='PRIVATE')throw notFound();
-   const scope=canonicalCaptureJSON(['captureReplay',row.id,row.reconstruction_version,actor.personId,member!.accessEpoch,query.limit]),position=cursors.decode(query.cursor,scope),rows=(await chunks(db,row)).filter(c=>c.encrypted_points!==null);
+   const scope=canonicalCaptureJSON(['captureReplay',row.id,row.reconstruction_version,actor.personId,member!.accessEpoch,query.limit]),position=cursors.decode(query.cursor,scope),rows=(await chunks(db,row)).filter(c=>c.present);
    const after=position?{segmentId:position.id,sequence:Date.parse(position.createdAt)}:undefined;
-   const ordered=rows.flatMap(c=>decryptPoints(config,c.encrypted_points!,c.key_id,chunkAAD(c.school_id,c.capture_id,c.segment_id,c.chunk_index,c.content_hash)).map(point=>({segmentId:c.segment_id,segmentIndex:c.segment_index,point})));
-   const begin=after?ordered.findIndex(p=>p.segmentId===after.segmentId&&p.point.sequence===after.sequence)+1:0;if(after&&begin===0)throw error('INVALID_CURSOR','La reconstruction a changé ; rechargez le trajet.',400);
-   let page=ordered.slice(begin,begin+query.limit);const segments:{segmentId:string;segmentIndex:number;points:TrackPoint[];hasGapBefore:boolean;qualityLabel:'AVAILABLE'|'LOW_ACCURACY'|'PARTIAL';continuesFromPreviousPage:boolean;continuesOnNextPage:boolean}[]=[];
+   // Seuls les lots qui portent la page, la mesure qui la précède et celle qui la suit sont déchiffrés. `offsets[i]` est le rang, dans
+   // tout le trajet, de la première mesure du lot i ; `ordered[rang]` rend la même mesure que l'ancienne liste complète.
+   const offsets:number[]=[];let total=0;for(const c of rows){offsets.push(total);total+=c.point_count;}
+   const loaded=new Map<ChunkMeta,TrackPoint[]>();
+   const load=async(wanted:ChunkMeta[])=>{for(const [c,points] of await chunkPoints(db,config,wanted.filter(c=>!loaded.has(c))))loaded.set(c,points);};
+   let begin=0;
+   if(after){
+    const at=rows.findIndex(c=>c.segment_id===after.segmentId&&c.first_sequence<=after.sequence&&c.last_sequence>=after.sequence);
+    if(at>=0){await load([rows[at]!]);begin=offsets[at]!+loaded.get(rows[at]!)!.findIndex(p=>p.sequence===after.sequence)+1;if(begin===offsets[at])begin=0;}
+    if(begin===0)throw error('INVALID_CURSOR','La reconstruction a changé ; rechargez le trajet.',400);
+   }
+   const from=Math.max(0,begin-1),to=Math.min(total-1,begin+query.limit);
+   await load(rows.filter((c,i)=>offsets[i]!<=to&&offsets[i]!+c.point_count-1>=from));
+   const ordered:Record<number,{segmentId:string;segmentIndex:number;point:TrackPoint}|undefined>={};
+   rows.forEach((c,i)=>loaded.get(c)?.forEach((point,n)=>{ordered[offsets[i]!+n]={segmentId:c.segment_id,segmentIndex:c.segment_index,point};}));
+   const window:{segmentId:string;segmentIndex:number;point:TrackPoint}[]=[];
+   for(let rank=begin;rank<Math.min(total,begin+query.limit);rank++)window.push(ordered[rank]!);
+   let page=window;const segments:{segmentId:string;segmentIndex:number;points:TrackPoint[];hasGapBefore:boolean;qualityLabel:'AVAILABLE'|'LOW_ACCURACY'|'PARTIAL';continuesFromPreviousPage:boolean;continuesOnNextPage:boolean}[]=[];
    const assessment=(await db.query<{qualification_profile_version:string}>('SELECT qualification_profile_version FROM drivy.capture_device_assessment WHERE id=$1',[row.device_assessment_id])).rows[0];
    const qualityProfile=config.profiles.find(p=>p.version===assessment?.qualification_profile_version);
    for(let i=0;i<page.length;i++){const item=page[i]!,previous=ordered[begin+i-1],same=previous?.segmentId===item.segmentId,continuous=same&&previous.point.sequence+1===item.point.sequence,last=segments.at(-1);

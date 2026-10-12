@@ -61,7 +61,9 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             return body?.lessonId == lessonID
         }
     }
-    var hasOldScope: Bool { pending.contains { $0.mutation.scope != scope } }
+    /// Une saisie (diagnostic, accord, départ) conservée sous d’anciens accès. Les faits de collecte d’un trajet
+    /// (lots, arrêt, finalisation) suivent leur trajet et ne bloquent jamais un nouveau départ.
+    var hasOldScope: Bool { pending.contains { $0.mutation.scope != scope && !$0.mutation.kind.isCollectionFact } }
     /// Demandes que l’école a déclaré ne pas connaître : elles peuvent être abandonnées.
     private(set) var unknownRequestIDs: Set<UUID> = []
     var mayChoose: Bool {

@@ -4,9 +4,13 @@ import Observation
 
 struct SchoolCaptureMapSegment: Identifiable {
     let id: UUID
-    private(set) var measurements: [SchoolCaptureMeasurement] = []
-    /// The presentation queue preserves the storage order, before any display filter.
-    private(set) var points: [SchoolCapturePoint] = []
+    /// Durable measurements of this segment, in storage order: the next one takes this sequence.
+    /// Only their count and the last elapsed time are kept; the map copies nothing else per fix.
+    private(set) var measurementCount = 0
+    private(set) var lastElapsedMs: Int?
+    /// Raw ends of the segment, before any display filter: the dashed bridge between two segments starts from them.
+    private(set) var firstPoint: SchoolCapturePoint?
+    private(set) var lastPoint: SchoolCapturePoint?
     /// Changes each time the displayed samples do: the map redraws only then.
     private(set) var displayRevision = 0
     private var selector = SchoolCaptureDisplayRoute.Selector()
@@ -21,10 +25,12 @@ struct SchoolCaptureMapSegment: Identifiable {
     /// Constant work per measurement: the filter keeps its state, nothing is replayed from the start.
     mutating func appendDurable(_ added: [SchoolCaptureMeasurement]) {
         for measurement in added {
-            let point = SchoolCapturePoint(sequence: points.count, elapsedMs: measurement.elapsedMs, capturedAt: measurement.capturedAt,
+            let point = SchoolCapturePoint(sequence: measurementCount, elapsedMs: measurement.elapsedMs, capturedAt: measurement.capturedAt,
                 latitude: measurement.latitude, longitude: measurement.longitude, accuracyMeters: measurement.accuracyMeters)
-            measurements.append(measurement)
-            points.append(point)
+            measurementCount += 1
+            lastElapsedMs = measurement.elapsedMs
+            if firstPoint == nil { firstPoint = point }
+            lastPoint = point
             if selector.append(point) != .none { displayRevision += 1 }
         }
     }
@@ -64,6 +70,8 @@ final class SchoolCaptureSessionController {
     private(set) var completedLessonID: UUID?
 
     @ObservationIgnored private var permittedScope: SchoolCommandScope?
+    /// Époque plus récente de la même adhésion, adoptée à la fermeture du trajet qui garde la sienne.
+    @ObservationIgnored private var deferredScope: SchoolCommandScope?
     @ObservationIgnored private var context: Context?
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var scopeGeneration = UUID()
@@ -121,7 +129,7 @@ final class SchoolCaptureSessionController {
 
     init(store: SQLCipherSchoolCaptureStore? = nil) { sharedJournal = store }
 
-    var pointCount: Int { segments.reduce(0) { $0 + $1.measurements.count } }
+    var pointCount: Int { segments.reduce(0) { $0 + $1.measurementCount } }
     var displayedPointCount: Int { segments.reduce(0) { $0 + $1.displaySamples.count } }
     /// État que l’écran présente. Pendant un passage bref, c’est l’état stable que l’on quitte, jusqu’au
     /// résultat durable : ni « sauvegarde » ni « préparation » ne remplacent les commandes ou la carte.
@@ -173,13 +181,22 @@ final class SchoolCaptureSessionController {
 
     /// Freeze the last durable point available at the opening gesture. Pause, stale
     /// fixes and absent fixes produce a temporal observation, never an old position.
+    /// Stopped at a light, the displayed point is held: each later fix inside its uncertainty
+    /// confirms it. It stays an anchor while the very last fix confirmed it, and its freshness
+    /// is that of this confirmation. The anchor remains the real measurement, at its sequence.
     func observationAnchor(at instant: Date) -> SchoolLiveObservationAnchor? {
         guard state == .recording, let active = context, active.scope == permittedScope,
               active.lease.permitsCollection(), let handle = active.handle,
               let segment = segments.first(where: { $0.id == handle.segmentID }),
-              let point = segment.displaySamples.last?.point,
-              point.sequence == segment.measurements.count - 1,
-              let measured = SchoolLesson.date(point.capturedAt), (0...15).contains(instant.timeIntervalSince(measured)) else { return nil }
+              let sample = segment.displaySamples.last, let lastMeasured = segment.lastElapsedMs,
+              let measured = SchoolLesson.date(sample.point.capturedAt) else { return nil }
+        let point = sample.point
+        let confirmedUntilMs: Int
+        if point.sequence == segment.measurementCount - 1 { confirmedUntilMs = point.elapsedMs }
+        else if sample.heldUntilMs == lastMeasured, sample.heldUntilMs >= point.elapsedMs { confirmedUntilMs = sample.heldUntilMs }
+        else { return nil }
+        let confirmedAt = measured.addingTimeInterval(Double(confirmedUntilMs - point.elapsedMs) / 1000)
+        guard (0...15).contains(instant.timeIntervalSince(confirmedAt)) else { return nil }
         return .init(captureID: active.session.id, segmentID: segment.id, pointSequence: point.sequence)
     }
 
@@ -210,6 +227,9 @@ final class SchoolCaptureSessionController {
             let store = try await SQLCipherSchoolCaptureStore.openDefault()
             let deviceID = await store.installationID()
             try await store.recoverInterrupted(deviceID: deviceID)
+            // Les positions déjà confirmées par l’école quittent l’appareil. Un échec n’empêche pas d’ouvrir le
+            // coffre : rien n’est perdu, la purge reprend à la prochaine finalisation ou ouverture.
+            _ = try? await store.purgeSettledCaptures()
             return store
         }
         openingJournal = task
@@ -257,6 +277,7 @@ final class SchoolCaptureSessionController {
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false
         finalizedSyncState = nil
         beginning = nil; endedAt = nil
+        adoptDeferredScope()
     }
 
     func closeLessonFlow(lessonID: UUID) {
@@ -272,7 +293,16 @@ final class SchoolCaptureSessionController {
 
     /// Appelé par la racine sur toute modification réelle des accès, même si une
     /// feuille est présentée. Les mesures de l'ancien contexte disparaissent aussitôt.
-    func setScope(_ scope: SchoolCommandScope?) {
+    /// Exception : une époque plus récente de la même adhésion active, rôle moniteur conservé
+    /// (`retainsInstructorRole`, relu dans `/me`), n’est pas une perte de droit. Le trajet ouvert
+    /// garde sa portée jusqu’à sa fermeture, puis la nouvelle est adoptée ; l’école reste juge à chaque envoi.
+    func setScope(_ scope: SchoolCommandScope?, retainsInstructorRole: Bool = false) {
+        if let scope, retainsInstructorRole, let current = permittedScope, context != nil,
+           scope.sharesMembership(with: current), scope.accessEpoch > current.accessEpoch {
+            deferredScope = scope
+            return
+        }
+        deferredScope = nil
         guard permittedScope != scope else { return }
         scopeGeneration = UUID()
         if scope == nil { networkMonitor?.cancel(); networkMonitor = nil; networkAvailable = nil }
@@ -315,6 +345,10 @@ final class SchoolCaptureSessionController {
     func adoptAndStart(transfer: SchoolCaptureTransferCoordinator, source: any SchoolCaptureLocationProviding,
                        session: SchoolCaptureStoredSession, lease: SchoolCaptureLease,
                        authorization: SchoolCaptureAuthorization, receivedAt: ContinuousClock.Instant) async throws {
+        // Un départ sous la nouvelle époque ferme d’abord le trajet terminé qui gardait l’ancienne.
+        if let deferredScope, deferredScope == transfer.scope {
+            if state == .saved { closeSaved() } else if context == nil { adoptDeferredScope() }
+        }
         guard canPrepareCapture, sharedJournal === transfer.store, permittedScope == transfer.scope, session.scope == transfer.scope,
               session.id == authorization.capture.id, session.state == .ready,
               session.manifest == nil, lease.captureID == session.id, lease.permitsCollection(),
@@ -385,6 +419,17 @@ final class SchoolCaptureSessionController {
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false
         synchronizationNeedsRetry = false; finalizedSyncState = nil
         beginning = nil; endedAt = nil
+        adoptDeferredScope()
+    }
+
+    /// Le trajet qui gardait l’ancienne époque est fermé : la nouvelle portée s’applique, puis les trajets
+    /// scellés de l’adhésion repartent sous elle après une relecture de `/me`.
+    private func adoptDeferredScope() {
+        guard let next = deferredScope, context == nil else { return }
+        let client = synchronizationClient
+        setScope(next)
+        guard let client, permittedScope == next else { return }
+        Task { await resumePendingSynchronizations(client: client, scope: next) }
     }
 
     func pause() async {
@@ -408,9 +453,14 @@ final class SchoolCaptureSessionController {
         state = .preparing; transition = .resuming; errorMessage = nil
         defer { endTransition(.resuming, request: request) }
         do {
-            let current = try await active.transfer.refresh(captureID: active.session.id)
+            // Hors réseau ou école injoignable : le bail local encore valable suffit à rouvrir un segment, comme
+            // après une perte de signal. Un trajet clos par l’école pendant la pause se découvre alors au premier
+            // envoi (elle refuse les lots au-delà de sa borne). Un refus (401, 403, 404) reste un refus.
+            let current: SchoolCaptureStoredSession?
+            do { current = try await active.transfer.refresh(captureID: active.session.id) }
+            catch SchoolCaptureFailure.unavailable where active.lease.permitsCollection() { current = nil }
             guard generation == request, state == .preparing, !active.terminalRequested else { return }
-            guard current.serverCapture.captureState == .authorized else {
+            if let current, current.serverCapture.captureState != .authorized {
                 // L’école a clos le trajet pendant la pause : sans cette branche l’état restait
                 // « Préparation du GPS » sans aucune commande. On scelle localement, GPS arrêté.
                 let boundary = active.stopBoundary()
@@ -478,6 +528,14 @@ final class SchoolCaptureSessionController {
         defer { checkingPendingSynchronizations = false }
         do {
             let store = try await journal()
+            // Trajets scellés sous une époque antérieure de la même adhésion : adoptés après une relecture de
+            // `/me` (adhésion active, cette époque, rôle moniteur), sinon laissés tels quels jusqu’au prochain essai.
+            if try await store.capturesAwaitingEpochAdoption(scope: scope) > 0,
+               (try? await client.confirmInstructorScope(scope)) != nil,
+               permittedScope == scope, scopeGeneration == access {
+                _ = try? await store.adoptEpoch(scope)
+            }
+            guard permittedScope == scope, scopeGeneration == access else { return }
             let sessions = try await store.sessions(scope: scope)
             let finalizations = try await store.acknowledgedFinalizations(scope: scope)
             guard permittedScope == scope, scopeGeneration == access else { return }
@@ -530,7 +588,10 @@ final class SchoolCaptureSessionController {
                 guard let self else { return }
                 let becameAvailable = available && self.networkAvailable != true
                 self.networkAvailable = available
-                if becameAvailable { await self.retryPendingSynchronizations() }
+                guard becameAvailable else { return }
+                // Un signalement resté en file faute de réseau repart de lui-même, sans attendre le trajet.
+                if let recorder = self.liveObservations { Task { await recorder.retryAfterReconnection() } }
+                await self.retryPendingSynchronizations()
             }
         }
         networkMonitor = monitor
@@ -673,8 +734,10 @@ final class SchoolCaptureSessionController {
             } catch { failCollector(active, request: request, error: error) }
         case .interrupted(let reason, let stop):
             guard state == .recording || state == .paused || state == .preparing else { return }
-            if reason == .signalLost {
-                recoverSignal(active, request: request, stop: stop)
+            // Un saut réel de l’horloge (contrôle `coherentClock` de la source) se récupère comme une perte de
+            // signal : le nouveau segment reprend sa référence sur l’horloge monotone, les positions gardent leur heure.
+            if reason == .signalLost || reason == .clockChanged {
+                recoverSignal(active, request: request, stop: stop, reason: reason)
                 return
             }
             active.terminalRequested = true; active.local.halt()
@@ -687,14 +750,15 @@ final class SchoolCaptureSessionController {
 
     /// Une vraie lacune sépare les segments. La même autorisation encore valide
     /// permet la reprise locale, y compris hors réseau ; ce n'est pas un nouveau départ.
-    private func recoverSignal(_ active: Context, request: UUID, stop: SchoolCaptureLocationStop) {
+    private func recoverSignal(_ active: Context, request: UUID, stop: SchoolCaptureLocationStop,
+                               reason: SchoolCaptureLocationInterruption) {
         guard let handle = active.handle, !active.terminalRequested else { return }
         state = .stopping; transition = .recoveringSignal
-        locationMessage = SchoolCaptureLocationInterruption.signalLost.message
+        locationMessage = reason.message
         Task {
             defer { endTransition(.recoveringSignal, request: request) }
             do {
-                try await active.local.pause(handle: handle, endedAt: stop.stoppedAt, reason: .signalLost)
+                try await active.local.pause(handle: handle, endedAt: stop.stoppedAt, reason: reason.segmentEndReason)
                 guard generation == request, permittedScope == active.scope, !active.terminalRequested else { return }
                 active.handle = nil; state = .preparing
                 try await openSegment(active, request: request, reason: .resume)

@@ -98,6 +98,8 @@ struct SchoolLessonHubTests {
         #expect(SchoolLessonHubRules.mayCancel(lesson, roles: ["ADMIN"], membershipID: colleague))
         #expect(!SchoolLessonHubRules.mayCancel(lesson, roles: ["LEARNER"], membershipID: own))
         #expect(!SchoolLessonHubRules.mayCancel(HubFixture.lesson(status: "CANCELLED"), roles: ["ADMIN"], membershipID: own))
+        // Une leçon commencée se termine ; l’école refuse son annulation (409 LESSON_STARTED).
+        #expect(!SchoolLessonHubRules.mayCancel(HubFixture.lesson(actualStart: "2026-09-28T12:00:00Z"), roles: ["ADMIN"], membershipID: own))
         // L’école refuse à un moniteur la leçon d’un collègue : l’app ne la lui propose pas.
         #expect(!SchoolLessonHubRules.mayMove(lesson, roles: ["INSTRUCTOR"], membershipID: colleague, now: before))
         #expect(!SchoolLessonHubRules.mayCancel(lesson, roles: ["INSTRUCTOR"], membershipID: colleague))

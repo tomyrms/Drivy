@@ -15,7 +15,8 @@ const interval={plannedStart:date,plannedEnd:date,timeZone:z.string().min(1).max
 const createCommand=z.object({operationId:id,trainingId:id,...interval,agreedPriceCents:amount,bufferMinutes:z.number().int().min(0).max(240),policyVersionId:id,commercialSelection:selection}).strict();
 const commercialChange=z.object({commercialSelection:selection,agreedPriceCents:amount,expectedAccountVersion:z.number().int().positive().nullable(),reason:z.string().trim().min(1).max(1000)}).strict();
 const startNowCommand=z.object({operationId:id,trainingId:id,meetingPoint:z.string().trim().max(500).nullable().optional()}).strict();
-const startLessonCommand=z.object({operationId:id}).strict();
+/** startedAt (extension facultative, A2-03) : instant du geste « Commencer » sur l'appareil, pour une commande arrivée en retard. */
+const startLessonCommand=z.object({operationId:id,startedAt:date.optional()}).strict();
 const moveCommand=z.object({operationId:id,...interval,agreementConfirmed:z.literal(true),reason:z.string().max(1000).nullable().optional(),commercialChange:commercialChange.optional()}).strict();
 const cancelCommand=z.object({operationId:id,reasonCode:z.enum(['LEARNER_REQUEST','INSTRUCTOR_UNAVAILABLE','SCHOOL_CLOSURE','OTHER']),comment:z.string().max(1000).nullable().optional()}).strict();
 const availabilityQuery=z.object({trainingId:id,instructorMembershipId:id,plannedStart:date,plannedEnd:date,
@@ -104,6 +105,18 @@ interface NewLesson {trainingId:string;instructorId:string;start:string;end:stri
 async function insertLesson(db:PoolClient,school:SchoolRow,context:TrainingContext,value:NewLesson){
  return (await db.query<LessonRow>(`INSERT INTO drivy.lesson(id,school_id,training_id,learner_id,learner_person_id,instructor_membership_id,planned_start,planned_end,time_zone,meeting_point,price_cents_snapshot,buffer_minutes_snapshot,policy_version_id,commercial_selection,actual_start)
   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING ${lessonColumns}`,[randomUUID(),school.id,value.trainingId,context.learner_id,context.person_id,value.instructorId,value.start,value.end,school.timeZone,value.meetingPoint,value.priceCents,value.bufferMinutes,value.policyVersionId,JSON.stringify(value.selection),value.actualStart??null])).rows[0]!;
+}
+/** Ancienneté maximale d'un départ déclaré par l'appareil. */
+const startMaxAgeMs=12*3_600_000;
+/** Heure réelle du départ (A2-03). L'instant déclaré par l'appareil est retenu s'il n'est pas postérieur à la réception, s'il date
+ * de 12 heures au plus et s'il tombe le jour civil du rendez-vous dans le fuseau de la leçon. Sinon le serveur garde son instant de
+ * réception, sans refus : une commande mise en file hors ligne n'est jamais bloquée pour son horodatage. Un instant légèrement futur
+ * (horloge de l'appareil en avance) revient de fait à l'heure du serveur, qui est alors la meilleure estimation du geste. */
+function effectiveStart(declared:string|undefined,now:Date,lesson:{planned_start:Date;time_zone:string}):Date{
+ if(!declared)return now;
+ const at=new Date(declared),age=now.getTime()-at.getTime();
+ if(!Number.isFinite(age)||age<0||age>startMaxAgeMs)return now;
+ return localDay(at,lesson.time_zone)===localDay(lesson.planned_start,lesson.time_zone)?at:now;
 }
 /** Seule une action explicite établit le départ, jamais le passage de l'heure prévue. */
 export async function startLesson(db:PoolClient,lesson:LessonRow,operationId:string,startedAt:Date){
@@ -315,7 +328,7 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
    // mise en file hors ligne peut arriver après le créneau.
    const now=new Date();
    if(localDay(now,old.time_zone)<localDay(old.planned_start,old.time_zone))throw new ApiError(409,'LESSON_NOT_TODAY','Cette leçon ne peut commencer que le jour de son rendez-vous.');
-   const row=await startLesson(db,old,body.operationId,now);
+   const row=await startLesson(db,old,body.operationId,effectiveStart(body.startedAt,now,old));
    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonStarted',changedFields:['actualStart']};
   },['INSTRUCTOR'],{...lessonCommandGuards(schoolId,{lessonId}),authorize,replay:async(db,_actor,previous)=>{await authorize(db);return previous;}});
   reply.header('ETag',`"${data.version}"`);return envelope(data,r);
@@ -347,6 +360,8 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
   const boundCommand={...body,lessonId};
   const data=await command(r,'CANCEL_LESSON',boundCommand,expected,{lessonId},async(db,_actor,school)=>{
    const old=await getLesson(db,school.id,lessonId,true);checkVersion(old.version,expected);if(old.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Cette leçon possède déjà un résultat.');
+   // A2-11 : comme l'absence, une leçon commencée ne s'annule pas ; elle se termine (constat), puis se corrige au besoin.
+   if(old.actual_start)throw new ApiError(409,'LESSON_STARTED','Une leçon commencée ne peut pas être annulée. Terminez-la.');
    const row=(await db.query<LessonRow>(`UPDATE drivy.lesson SET status='CANCELLED',version=version+1,cancel_reason_code=$3,cancel_comment=$4 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lessonId,body.reasonCode,body.comment??null])).rows[0]!;
    await releaseFutureOccupations(db,school.id,lessonId);await openClosedAccount(db,row);await event(db,row,body.operationId,'LessonCancelled');
    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonCancelled',changedFields:['status']};

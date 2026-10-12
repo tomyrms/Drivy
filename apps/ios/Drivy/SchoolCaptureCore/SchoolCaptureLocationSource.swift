@@ -520,9 +520,11 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         manager?.desiredAccuracy = Self.navigationAccuracy(power: UIDevice.current.batteryState)
     }
 
+    /// Minuit, l’heure d’été ou une mise à l’heure par l’opérateur : la notification ne dit pas que l’horloge
+    /// a réellement sauté. Le contrôle `coherentClock`, fait à chaque position, reste seul juge ; un vrai saut
+    /// y est récupéré comme une perte de signal, dans un nouveau segment.
     @objc private func clockChanged() {
         lastDiagnostic = nil
-        if isRunning { interrupt(.clockChanged) }
     }
     @objc private func enteredBackground() {
         // Jamais de GPS en arrière-plan sans trajet en cours ; un réveil demandé reprend au retour.

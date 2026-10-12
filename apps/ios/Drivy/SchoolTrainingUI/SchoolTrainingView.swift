@@ -253,7 +253,10 @@ enum TrainingLessonFilter: String, CaseIterable, Identifiable {
     }
     func includes(_ lesson: SchoolLesson, now: Date = Date()) -> Bool {
         let state = lesson.drivyState(now: now)
+        // Même règle qu’Aujourd’hui : un rendez-vous dont l’heure vient de passer reste à venir tant qu’il peut
+        // encore commencer ; manqué (30 minutes après sa fin), il est passé.
         let isUpcoming = state == .planned || state == .inProgress
+            || (state == .waiting && !SchoolLessonHubRules.isMissed(lesson, now: now))
         switch self {
         case .all: return true
         case .upcoming: return isUpcoming

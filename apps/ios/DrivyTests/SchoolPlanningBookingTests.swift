@@ -182,6 +182,18 @@ import Testing
         #expect(model.tariffMessage == "Aucun tarif ne correspond à cette durée et à cette date.")
     }
 
+    @Test func cancellingALessonReadsOnlyTheAccountTheSchoolAndTheLesson() async throws {
+        let server = PlanningBookingServer()
+        let model = workspace(server, lesson: HubFixture.lesson())
+        model.readsForCancellation = true
+        await model.load()
+        // Ni catalogue, ni préférences, ni élèves : le motif est saisissable dès ces trois lectures.
+        let read = Set(await server.reads())
+        #expect(read == ["me", ConfigurationFixture.schoolID.uuidString, HubFixture.lessonID.uuidString])
+        #expect(model.canMutate && model.originalLesson?.id == HubFixture.lessonID)
+        #expect(model.learners.isEmpty && model.products.isEmpty && model.errorMessage == nil)
+    }
+
     private func workspace(_ server: PlanningBookingServer, outbox: ConfigurationOutboxStub? = nil,
                            date: Date = Date().addingTimeInterval(86_400), lesson: SchoolLesson? = nil) -> SchoolPlanningWorkspace {
         let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
@@ -207,6 +219,8 @@ private actor PlanningBookingServer: SchoolHTTPTransport {
         self.receiptAvailable = receiptAvailable; self.restriction = restriction; self.deadline = deadline; self.rejection = rejection
     }
     func writes() -> [URLRequest] { recorded.filter { $0.httpMethod != "GET" } }
+    /// Dernier segment de chaque lecture reçue.
+    func reads() -> [String] { recorded.filter { $0.httpMethod == "GET" }.compactMap { $0.url?.lastPathComponent } }
     func enableReceipt() { receiptAvailable = true }
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {

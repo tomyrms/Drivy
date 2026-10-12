@@ -13,6 +13,9 @@ struct SchoolLessonHistoryView: View {
     @State private var preparedKey: String?
     @State private var filter: SchoolLessonHistoryFilter = .all
     @State private var search = ""
+    /// Recherche appliquée à la liste : après une pause de frappe, et à partir de deux caractères. Une seule lettre
+    /// ne filtre rien et ne lance pas la lecture de tout l’historique.
+    @State private var appliedSearch = ""
     @State private var selectedLesson: SchoolLesson?
 
     private var roles: [String] { workspace.membership?.roles ?? [] }
@@ -21,13 +24,13 @@ struct SchoolLessonHistoryView: View {
          workspace.membership.map { String($0.accessEpoch) }, workspace.membership?.roles.joined(separator: ","),
          workspace.school?.status].map { $0 ?? "" }.joined(separator: ":")
     }
-    private var needsFullHistory: Bool { SchoolLessonHistoryWorkspace.needsFullHistory(filter: filter, search: search) }
+    private var needsFullHistory: Bool { SchoolLessonHistoryWorkspace.needsFullHistory(filter: filter, search: appliedSearch) }
     private var fullHistoryKey: String { "\(model?.id.uuidString ?? ""):\(needsFullHistory)" }
 
     var body: some View {
         Group {
             if let model {
-                SchoolLessonHistoryList(model: model, uploads: uploads, filter: $filter, search: search,
+                SchoolLessonHistoryList(model: model, uploads: uploads, filter: $filter, search: appliedSearch,
                     learnerName: learnerName, open: { selectedLesson = $0 }, refresh: refresh)
             } else {
                 placeholder
@@ -50,6 +53,14 @@ struct SchoolLessonHistoryView: View {
                 return
             }
             await prepare()
+        }
+        .task(id: search) {
+            let wanted = SchoolLessonHistoryWorkspace.appliedSearch(search)
+            // Effacer s’applique tout de suite ; une saisie attend la fin de la frappe.
+            if !wanted.isEmpty, wanted != appliedSearch {
+                do { try await Task.sleep(for: SchoolLessonHistoryWorkspace.searchPause) } catch { return }
+            }
+            appliedSearch = wanted
         }
         // Une recherche ou un filtre porte sur tout l’historique ; l’abandonner arrête la lecture en cours.
         .task(id: fullHistoryKey) { await model?.setFullHistory(needsFullHistory) }
@@ -108,7 +119,7 @@ struct SchoolLessonHistoryView: View {
         let key = scopeKey
         preparedKey = nil
         model?.invalidate(); uploads?.invalidate(); selectedLesson = nil
-        model = nil; uploads = nil; filter = .all; search = ""
+        model = nil; uploads = nil; filter = .all; search = ""; appliedSearch = ""
         guard let person = workspace.person, let membership = workspace.membership, workspace.school != nil else { return }
         let scope = agendaClient.scope(person: person, membership: membership)
         // Un moniteur ouvre sur ses leçons, même s’il administre aussi ; l’administration seule lit l’école.

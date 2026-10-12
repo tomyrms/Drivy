@@ -44,6 +44,8 @@ final class SchoolInvitationWorkspace: Identifiable {
     private(set) var creationOptionsError: String?
     private(set) var issuedCode: SchoolIssuedInvitationCode?
     private(set) var codeRecovery: SchoolCodeRecovery?
+    /// L’école a confirmé une écriture depuis cet écran (code créé, renouvelé ou révoqué).
+    private(set) var didConfirmWrite = false
     var email = ""
     var selectedRoles: Set<SchoolInvitationRole> = [.learner]
     var selectedOfferingIDs: Set<UUID> = []
@@ -162,6 +164,7 @@ final class SchoolInvitationWorkspace: Identifiable {
                     } else { selectedInstructorID = scope.membershipID }
                 } catch {
                     guard request == generation else { return }
+                    if error is CancellationError { throw error }
                     if error as? SchoolInvitationFailure == .unauthorized || error as? SchoolInvitationFailure == .forbidden { throw error }
                     creationOptionsError = "Les permis et moniteurs n’ont pas pu être chargés. Réessaie."
                 }
@@ -172,6 +175,8 @@ final class SchoolInvitationWorkspace: Identifiable {
         } catch {
             guard request == generation else { return }
             isLoading = false
+            // Lecture interrompue parce que la feuille se ferme : ce n’est pas une panne, rien n’est annoncé.
+            if error is CancellationError { return }
             fail(error)
         }
     }
@@ -283,7 +288,7 @@ final class SchoolInvitationWorkspace: Identifiable {
             guard command.matches(receipt) else { throw SchoolInvitationFailure.invalidResponse }
             try outbox.remove(command)
             guard request == generation else { return }
-            pending = nil; pendingRequiresReview = false; isBusy = false
+            pending = nil; pendingRequiresReview = false; isBusy = false; didConfirmWrite = true
             if issuesCode(command) {
                 // A receipt never carries the code: only a new one can be handed over.
                 successMessage = nil
@@ -339,7 +344,7 @@ final class SchoolInvitationWorkspace: Identifiable {
             }
             try outbox.remove(command)
             guard request == generation else { return true }
-            pending = nil; pendingRequiresReview = false; isBusy = false
+            pending = nil; pendingRequiresReview = false; isBusy = false; didConfirmWrite = true
             if command.kind == .createInvitation { email = ""; selectedRoles = [.learner] }
             let listed = result.withoutCode
             if let index = invitations.firstIndex(where: { $0.id == result.id }) { invitations[index] = listed }

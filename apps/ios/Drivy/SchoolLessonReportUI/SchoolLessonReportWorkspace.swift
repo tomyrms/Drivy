@@ -555,11 +555,12 @@ import Observation
     }
     /// Même file durable et même preuve d’opération que la fin de leçon.
     func start() async -> Bool {
+        // L’heure réelle du départ est celle du geste, avant l’enregistrement des objectifs.
+        let gesture = Date()
         guard await savePreparationBeforeDeparture() else { return false }
         guard let lesson, canMutate, isAuthor, lesson.status == "PLANNED", !lesson.hasStarted else { return false }
-        struct Start: Encodable { let operationId: UUID }
         let operation = UUID()
-        let confirmed = await prepare(Start(operationId: operation), id: operation, kind: .startLesson,
+        let confirmed = await prepare(SchoolStartLesson(operationId: operation, startedAt: gesture), id: operation, kind: .startLesson,
             version: lesson.version, resourceID: lessonID)
         return confirmed && self.lesson?.hasStarted == true
     }

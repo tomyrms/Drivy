@@ -156,7 +156,7 @@ enum SchoolLessonHubRules {
         mayReschedule(lesson, roles: roles, membershipID: membershipID) && lesson.status == "PLANNED" && !lesson.hasStarted
     }
     static func mayCancel(_ lesson: SchoolLesson, roles: [String], membershipID: UUID?) -> Bool {
-        mayReschedule(lesson, roles: roles, membershipID: membershipID) && lesson.status == "PLANNED"
+        mayReschedule(lesson, roles: roles, membershipID: membershipID) && lesson.status == "PLANNED" && !lesson.hasStarted
     }
 
     /// Départ durable de la leçon et instant du geste de fin. Le GPS facultatif ne réduit pas la séance.

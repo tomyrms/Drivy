@@ -294,19 +294,19 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    /// Identité et état GPS ; les actions secondaires de leçon sont dans le menu.
-    private func heading(floating: Bool = true) -> some View {
-        TimelineView(.periodic(from: clockOrigin, by: 1)) { _ in
-            DrivyLiveTopBar(
-                context: learnerName,
-                elapsed: showsElapsed ? elapsedLabel : nil,
-                elapsedLabel: "Temps écoulé depuis le départ GPS",
-                status: status,
-                leading: isTabRoot ? nil : .back(label: "Revenir à la leçon",
-                    hint: controller.presentsStopEnabled ? "Le GPS conserve son état actuel" : "Fermer le trajet",
-                    isDisabled: isFinishing) { close() },
-                floating: floating
-            ) { lessonMenu }
+    /// Identité et état GPS ; les actions secondaires de leçon sont dans le menu. Seule la durée est relue
+    /// chaque seconde : le retour, l’état et le menu ne sont pas reconstruits à la seconde.
+    @ViewBuilder private func heading(floating: Bool = true) -> some View {
+        let back: DrivyMapHeaderAction? = isTabRoot ? nil : .back(label: "Revenir à la leçon",
+            hint: controller.presentsStopEnabled ? "Le GPS conserve son état actuel" : "Fermer le trajet",
+            isDisabled: isFinishing) { close() }
+        if showsElapsed {
+            DrivyLiveTopBar(context: learnerName, tickingFrom: clockOrigin, elapsed: { elapsedLabel },
+                elapsedLabel: "Temps écoulé depuis le départ GPS", status: status, leading: back,
+                floating: floating) { lessonMenu }
+        } else {
+            DrivyLiveTopBar(context: learnerName, elapsed: nil, elapsedLabel: "Temps écoulé depuis le départ GPS",
+                status: status, leading: back, floating: floating) { lessonMenu }
         }
     }
 
@@ -650,11 +650,7 @@ struct SchoolCaptureLiveView: View {
     private var lessonMenu: some View {
         Menu {
             Button("Voir la leçon", systemImage: "doc.text") { close() }
-            if observationClient != nil {
-                Button("Annuler la leçon", systemImage: "xmark.circle", role: .destructive) { openCancellation() }
-                    .disabled(!controller.presentsStopEnabled && controller.state != .saved)
-                    .accessibilityIdentifier("capture-cancel-lesson")
-            }
+            // Une leçon commencée ne s’annule plus (API : 409 LESSON_STARTED) : on la termine.
         } label: {
             // La lecture de la leçon à annuler se signale là où le geste a eu lieu : le panneau reste en place.
             Group {
