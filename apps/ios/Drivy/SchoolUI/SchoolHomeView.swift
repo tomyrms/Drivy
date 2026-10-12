@@ -30,6 +30,7 @@ struct SchoolHomeView: View {
     /// Élève du trajet en cours, lu à part quand il n’est pas dans la page d’élèves affichée.
     @State private var captureLearner: (id: UUID, name: String)?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Group {
@@ -92,10 +93,19 @@ struct SchoolHomeView: View {
         }
     }
 
-    /// Le point d’un onglet : la pastille du système, vide, à la couleur d’accent. Rien quand tout est résolu.
-    private func actionDot(_ tab: SchoolHomeTab) -> Text? {
-        // An empty badge is the system's small dot; any text would make it a pill.
-        requiredActions.needsAttention(tab) ? Text("") : nil
+    /// Icône d’un onglet : le symbole du système, ou, quand une action y attend, le même symbole mordu par le
+    /// point bleu de Drivy, dessiné pour l’état choisi et l’état au repos.
+    @ViewBuilder private func tabLabel(_ title: String, systemImage: String, tab: SchoolHomeTab) -> some View {
+        if requiredActions.needsAttention(tab) {
+            Label {
+                Text(title)
+            } icon: {
+                DrivyTabIcon.image(systemName: systemImage, selected: selectedTab == tab, scheme: colorScheme)
+            }
+            .accessibilityValue("Action requise")
+        } else {
+            Label(title, systemImage: systemImage)
+        }
     }
 
     /// Ce que cette vue sait déjà sans rien lire de plus : les profils incomplets de la page d’élèves affichée
@@ -121,11 +131,10 @@ struct SchoolHomeView: View {
         TabView(selection: staffSelection) {
             sessionTab
                 .tabItem {
-                    Label("Aujourd’hui", systemImage: captureController?.captureID != nil ? "location.fill" : "map")
-                        .accessibilityValue(captureController?.captureID != nil ? "Leçon en cours" : "")
+                    tabLabel("Aujourd’hui", systemImage: captureController?.captureID != nil ? "location.fill" : "map", tab: .session)
+                        .accessibilityValue(captureController?.captureID != nil ? "Leçon en cours" : (requiredActions.needsAttention(.session) ? "Action requise" : ""))
                 }
                 .tag(SchoolHomeTab.session)
-                .badge(actionDot(.session)).badgeProminence(.decreased)
             if let agendaClient {
                 NavigationStack {
                     SchoolAgendaView(client: agendaClient, workspace: workspace, captureController: captureController)
@@ -138,14 +147,12 @@ struct SchoolHomeView: View {
                 inviteLearner: inviteLearner, openProfile: openProfile, makeLearnerProfile: makeLearnerProfile,
                 openPlanning: planningAction, trainingClient: trainingClient,
                 agendaClient: agendaClient, captureController: captureController)
-                .tabItem { Label("Élèves", systemImage: "person.2") }
+                .tabItem { tabLabel("Élèves", systemImage: "person.2", tab: .learners) }
                 .tag(SchoolHomeTab.learners)
-                .badge(actionDot(.learners)).badgeProminence(.decreased)
             SchoolProfileTabView(workspace: workspace, account: account, agendaClient: agendaClient,
                 captureController: captureController, chooseSchool: chooseSchoolAction)
-                .tabItem { Label("Profil", systemImage: "person.crop.circle") }
+                .tabItem { tabLabel("Profil", systemImage: "person.crop.circle", tab: .profile) }
                 .tag(SchoolHomeTab.profile)
-                .badge(actionDot(.profile)).badgeProminence(.decreased)
         }
         // Ce que les onglets savent déjà : relu quand la page d’élèves, les droits ou l’accueil changent.
         .onChange(of: workspace.learners.map { "\($0.id):\($0.profileReadiness ?? "")\($0.archivedAt == nil)" }, initial: true) { _, _ in refreshStaffActions() }
@@ -224,9 +231,8 @@ struct SchoolHomeView: View {
                 agendaClient: agendaClient, trainingClient: trainingClient, chooseSchool: chooseSchoolAction,
                 openTraining: { training, tab in chosenPermit = training; selectedTab = tab },
                 retryDossier: { retryLearner() }, makeLearnerProfile: makeLearnerProfile)
-                .tabItem { Label("Profil", systemImage: "person.crop.circle") }
+                .tabItem { tabLabel("Profil", systemImage: "person.crop.circle", tab: .profile) }
                 .tag(SchoolHomeTab.profile)
-                .badge(actionDot(.profile)).badgeProminence(.decreased)
         }
         .task(id: ownLearner?.id) {
             guard let id = ownLearner?.id else { return }
