@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Le compte et ses réglages. L’historique des leçons a sa propre destination ;
-/// le serveur décide de ce que ce compte y lit.
+/// Le compte du moniteur ou de l’administration : qui il est, ses leçons et son compte (informations, invitations,
+/// école). Les réglages (préférences, signalements, apparence, verrou, déconnexion) sont dans Paramètres, poussés
+/// dans la même pile par l’engrenage. Le serveur décide de ce que ce compte lit dans l’historique des leçons.
 struct SchoolProfileTabView: View {
     @Bindable var workspace: SchoolWorkspace
     let account: SchoolAccountActions?
@@ -10,8 +11,8 @@ struct SchoolProfileTabView: View {
     var chooseSchool: (() -> Void)? = nil
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(AppLock.self) private var appLock: AppLock?
     @State private var planningSettings: PlanningSettingsPresentation?
+    @State private var showsSettings = false
 
     private var scopeKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.schoolId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.joined(separator: ",") ?? ""):\(workspace.membership?.grants.joined(separator: ",") ?? "")"
@@ -27,6 +28,16 @@ struct SchoolProfileTabView: View {
                         DrivySchoolToolbarItem(schoolName: workspace.school?.name ?? workspace.membership?.schoolName,
                             chooseSchool: chooseSchool)
                     }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { showsSettings = true } label: { Image(systemName: "gearshape") }
+                            .accessibilityLabel("Paramètres")
+                            .accessibilityIdentifier("profile-settings")
+                    }
+                }
+                .navigationDestination(isPresented: $showsSettings) {
+                    SchoolStaffSettingsView(workspace: workspace, account: account, agendaClient: agendaClient) { scope, client in
+                        planningSettings = PlanningSettingsPresentation(scope: scope, client: client)
+                    }
                 }
         }
         .id(scopeKey)
@@ -39,7 +50,7 @@ struct SchoolProfileTabView: View {
             .presentationDragIndicator(.visible)
             .presentationSizing(.form)
         }
-        .onChange(of: scopeKey) { _, _ in planningSettings = nil }
+        .onChange(of: scopeKey) { _, _ in planningSettings = nil; showsSettings = false }
     }
 
     private var content: some View {
@@ -55,8 +66,8 @@ struct SchoolProfileTabView: View {
     /// Les rangées portent déjà leur espacement vertical : sans cela, la liste le double.
     private var rowInsets: EdgeInsets { EdgeInsets(top: 0, leading: DrivySpacing.m, bottom: 0, trailing: DrivySpacing.m) }
 
-    /// L’en-tête posé sur le fond, comme le Profil de l’élève ; puis les leçons, et le compte rangé par sujet dans
-    /// le même ordre que les Paramètres de l’élève (Compte, Sécurité, déconnexion).
+    /// L’en-tête posé sur le fond, comme le Profil de l’élève ; puis les leçons et le compte. Les réglages sont
+    /// dans Paramètres, rangés dans le même ordre que ceux de l’élève.
     @ViewBuilder private var accountSections: some View {
         Section {
             SchoolAccountHeading(workspace: workspace, isAuthenticated: true)
@@ -73,28 +84,6 @@ struct SchoolProfileTabView: View {
                         .foregroundStyle(DrivyTheme.text)
                 }
                 .accessibilityIdentifier("profile-open-lessons")
-                if let person = workspace.person, let membership = workspace.membership,
-                   membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") {
-                    // Une feuille s’ouvre : même ligne et même chevron que les autres destinations du Profil.
-                    DrivyNavigationRow(title: "Préférences de leçon") {
-                        planningSettings = PlanningSettingsPresentation(scope: agendaClient.scope(person: person, membership: membership),
-                            client: agendaClient.planningClient)
-                    }
-                    .listRowInsets(rowInsets)
-                    .accessibilityIdentifier("profile-planning-settings")
-                }
-                // Seulement quand l’école a dit que ce compte peut les gérer (administration, ou moniteur
-                // portant le droit) ; un moniteur sans ce droit utilise simplement « Signaler ».
-                if let themes = agendaClient.observationThemeStore(person: workspace.person, membership: workspace.membership),
-                   themes.canManage {
-                    NavigationLink {
-                        SchoolObservationThemeSettingsView(store: themes)
-                    } label: {
-                        Text("Signalements")
-                            .foregroundStyle(DrivyTheme.text)
-                    }
-                    .accessibilityIdentifier("profile-observation-themes")
-                }
             }
             .drivyFormRows()
         }
@@ -104,21 +93,6 @@ struct SchoolProfileTabView: View {
                     .listRowInsets(rowInsets)
             } header: {
                 Text("Compte").drivyFormSectionHeader()
-            }
-            .drivyFormRows()
-            DrivyAppearanceSection()
-            if appLock?.biometryName != nil {
-                Section {
-                    account.lockRow()
-                        .listRowInsets(rowInsets)
-                } header: {
-                    Text("Sécurité").drivyFormSectionHeader()
-                }
-                .drivyFormRows()
-            }
-            Section {
-                account.signOutRow()
-                    .listRowInsets(rowInsets)
             }
             .drivyFormRows()
         }

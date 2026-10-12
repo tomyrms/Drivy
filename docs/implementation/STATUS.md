@@ -5,6 +5,11 @@
 Après une fermeture, un crash ou un redémarrage, la fiche propose « Continuer le trajet » au lieu de « Démarrer le trajet ». Le chronomètre reprend la durée réelle de la leçon depuis son départ enregistré par l’école ; la carte redessine le tracé et les signalements des trajets précédents ; l’arrêt du trajet interrompu part avant le nouveau départ, sans doublon. Rien n’était perdu avant, rien n’était repris. [Cause, décisions et limites](reprise-lecon-20261012.md).
 
 **Exécuté** : rien ici (pas de toolchain Swift sous Windows) ; tests Swift ajoutés (crash simulé sur le coffre SQLCipher, durée de leçon, tracé antérieur), à exécuter sur la CI. **Reste à qualifier** sur iPhone : fermeture forcée, crash, redémarrage, reprise après plusieurs minutes, perte de réseau au moment de continuer.
+## 12 octobre 2026 — Paramètres du moniteur, ouverts depuis le Profil
+
+L’engrenage du Profil du moniteur (barre de navigation, « Paramètres », `profile-settings`) pousse une page « Paramètres » dans la pile du Profil : Préférences de leçon (la feuille existante), Signalements (mêmes conditions qu’avant : droit de gérer les thèmes), Apparence, Sécurité (verrou biométrique, si l’appareil en a un), Se déconnecter (même ligne et même confirmation pendant un trajet). Ces lignes ont quitté le Profil, qui garde l’en-tête, Leçons et le compte (Mes informations, Reprendre l’accueil, Invitations, Gérer l’école, Changer d’école). Aucun réglage nouveau ; Profil et Paramètres de l’élève inchangés. Vue `SchoolStaffSettingsView`.
+
+**Exécuté** : rien (pas de compilation possible sur la machine Windows). **Reste à qualifier** : compilation, tests UI mis à jour (`NativeNavigationTests`, `AppearanceSettingsTests`), push et retour natifs, feuille des préférences ouverte depuis la page poussée, clair et sombre à l’œil, VoiceOver, grand texte, iPad.
 
 ## 12 octobre 2026 — audit global et corrections
 
