@@ -274,7 +274,8 @@ struct SchoolSignalGridLayoutTests {
         func height(_ count: Int) -> CGFloat {
             SchoolSignalGridLayout.estimatedPaletteHeight(tileCount: count, width: 361, textSize: .large)
         }
-        #expect(height(1) < height(4) && height(4) < height(6) && height(6) < height(9))
+        // Quatre tuiles (2 × 2) et six (2 × 3) tiennent sur deux rangées : même hauteur.
+        #expect(height(1) < height(4) && height(4) == height(6) && height(6) < height(9))
         #expect(height(7) == height(9))
         // Au-delà, la fenêtre des neuf premières plus l’amorce de la rangée suivante, quel que soit le nombre.
         let overflow = height(9) + SchoolSignalGridLayout.spacing + SchoolSignalGridLayout.peek

@@ -109,3 +109,9 @@ Tout. En particulier :
   ce document).
 - Rien n’a été commité, poussé ni déployé. L’API doit connaître `observation-ranking` avant que l’interrupteur
   n’apparaisse ; une API plus ancienne répond 404 et l’app se comporte comme avant.
+
+## Mise à jour : compilation et tests (13 octobre)
+
+L’IPA compile et la cible de tests aussi. Sur la CI (`Refonte · iOS`, `unit_only`), les cinq suites de ce lot passent : `SchoolObservationRankingOrderTests`, `SchoolObservationRankingProjectionTests`, `SchoolObservationRankingStoreTests`, `SchoolLessonSignalOrderStoreTests`, `SchoolLiveObservationRankingFreezeTests`. Les points « à regarder à la première compilation » sont donc levés ; ceux « à regarder à l’œil » restent entiers : aucun écran n’a été vu.
+
+Limite connue : la leçon fige l’ordre que l’app a en mémoire à la première ouverture de « Signaler ». Si l’app n’est pas repassée par l’accueil depuis le dernier reclassement, c’est l’ordre de la veille.
