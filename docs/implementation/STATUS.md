@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 12 octobre 2026 — Paramètres du moniteur, ouverts depuis le Profil
+
+L’engrenage du Profil du moniteur (barre de navigation, « Paramètres », `profile-settings`) pousse une page « Paramètres » dans la pile du Profil : Préférences de leçon (la feuille existante), Signalements (mêmes conditions qu’avant : droit de gérer les thèmes), Apparence, Sécurité (verrou biométrique, si l’appareil en a un), Se déconnecter (même ligne et même confirmation pendant un trajet). Ces lignes ont quitté le Profil, qui garde l’en-tête, Leçons et le compte (Mes informations, Reprendre l’accueil, Invitations, Gérer l’école, Changer d’école). Aucun réglage nouveau ; Profil et Paramètres de l’élève inchangés. Vue `SchoolStaffSettingsView`.
+
+**Exécuté** : rien (pas de compilation possible sur la machine Windows). **Reste à qualifier** : compilation, tests UI mis à jour (`NativeNavigationTests`, `AppearanceSettingsTests`), push et retour natifs, feuille des préférences ouverte depuis la page poussée, clair et sombre à l’œil, VoiceOver, grand texte, iPad.
+
 ## 12 octobre 2026 — audit global et corrections
 
 Cinq audits en lecture seule (écrans iOS, API et base, UI/UX, architecture, fiabilité terrain), puis corrections par lots. 65 constats distincts : 1 P0, 8 P1, 30 P2, 26 P3 ; 41 corrigés. Le P0 : une affectation faite au bureau arrêtait le trajet du moniteur et bloquait l’iPhone (positions jamais envoyées, plus aucun départ). Corrigé côté serveur (migration 025) et côté app. Aussi : verrou Face ID au-dessus des feuilles, bilans lisibles au bureau, l’élève ne reçoit plus que la version courante d’un bilan, heure réelle d’un départ hors ligne, signalements renvoyés seuls, reprise du GPS sans réseau, positions purgées une fois confirmées, replay paginé sans tout déchiffrer. [Constats, décisions du porteur, changements d’API et limites](audit-global-20261012.md).
