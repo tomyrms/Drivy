@@ -161,6 +161,8 @@ Demande du porteur : les douze premiers signalements affichés visibles d’embl
 - La campagne de captures ne connaît qu’un modèle d’iPhone et un d’iPad : les autres tailles d’iPhone ne sont couvertes que par les tests de règle.
 - `test_swift_and_shell_supported_screens_match` échouait déjà sur master (cinq écrans du script absents de la liste Swift) ; `signal-all` est ajouté aux deux.
 
+- **Feuille trop haute de la marge du bas (corrigé)** : les captures iPhone montraient environ 34 pt vides sous la grille. Le détent `.height` d’une feuille ne compte pas la marge de sécurité du bas, que la palette ajoutait. La feuille la retire désormais (`countsBottomInset: false`) ; le volet posé sur la carte la garde. Le popover de l’iPad était juste.
+
 ### À voir à l’œil
 
 Le fondu en clair et en sombre, l’amorce sur iPhone SE et Pro Max, le défilement à 120 Hz, le geste de défilement qui commence sur une tuile (le système le tranche : pas de sélection si le doigt glisse).

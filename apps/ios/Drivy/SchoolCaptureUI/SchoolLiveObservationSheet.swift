@@ -19,8 +19,9 @@ struct SchoolLiveObservationSheet: View {
     }
 
     var body: some View {
+        // Le détent d’une feuille ne compte pas la marge du bas : le système l’ajoute.
         SchoolLiveObservationPalette(recorder: recorder, observedAt: observedAt, anchor: anchor, onRecorded: onRecorded,
-            onIdealHeight: { height in
+            countsBottomInset: false, onIdealHeight: { height in
                 idealHeight = height
                 onIdealHeight?(height)
             })
@@ -44,6 +45,8 @@ struct SchoolLiveObservationPalette: View {
     var anchor: SchoolLiveObservationAnchor? = nil
     var onRecorded: (() -> Void)? = nil
     var onClose: (() -> Void)? = nil
+    /// Un cadre posé sur la carte inclut la marge du bas ; le détent d’une feuille, non.
+    var countsBottomInset = true
     var onIdealHeight: ((CGFloat) -> Void)? = nil
     @State private var selected: SchoolLiveObservationTheme?
     @State private var headerHeight: CGFloat = 0
@@ -77,7 +80,7 @@ struct SchoolLiveObservationPalette: View {
                         if error != nil { scroll.scrollTo("live-observation-error", anchor: .bottom) }
                     }
             }
-            .onChange(of: idealHeight(width: proxy.size.width, bottomInset: proxy.safeAreaInsets.bottom), initial: true) { _, height in
+            .onChange(of: idealHeight(width: proxy.size.width, bottomInset: countsBottomInset ? proxy.safeAreaInsets.bottom : 0), initial: true) { _, height in
                 if let height { onIdealHeight?(height) }
             }
         }
