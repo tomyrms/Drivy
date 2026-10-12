@@ -10,6 +10,8 @@ struct SchoolFieldVisualReview: View {
     @State private var error: String?
     @State private var selectedTab: SchoolHomeTab = .session
     private enum FieldRoute: String, Identifiable { case choice, signal; var id: String { rawValue } }
+    /// `signal-all` : la même palette, tout le catalogue affiché.
+    private var isSignal: Bool { screen == "signal" || screen == "signal-all" }
 
     var body: some View {
         Group {
@@ -28,7 +30,7 @@ struct SchoolFieldVisualReview: View {
                     NavigationStack {
                         VStack(spacing: DrivySpacing.l) {
                             Text("Leçon d’essai").font(.drivyScreenTitle)
-                            if screen == "signal" {
+                            if isSignal {
                                 Button("Signaler") { route = .signal }.buttonStyle(DrivyPrimaryButtonStyle())
                                 if models.recorder.confirmed > 0 {
                                     Text("Observation enregistrée").accessibilityIdentifier("field-observation-saved")
@@ -54,13 +56,14 @@ struct SchoolFieldVisualReview: View {
         .task {
             guard models == nil else { return }
             do {
-                let loaded = try SchoolFieldVisualModels(context: context, populatedObservations: screen == "observations")
+                let loaded = try SchoolFieldVisualModels(context: context, populatedObservations: screen == "observations",
+                    allSignalThemes: screen == "signal-all")
                 models = loaded
                 // Lue avant l’ouverture : la palette de contrôle montre la configuration de l’école fictive.
                 await loaded.themes.refresh()
                 await loaded.recorder.loadCompetencies()
                 if screen == "gps-choice" { route = .choice }
-                if screen == "signal" { route = .signal }
+                if isSignal { route = .signal }
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -76,10 +79,11 @@ struct SchoolFieldVisualReview: View {
     let waiting: SchoolCaptureSessionController
     let instant = Date()
 
-    init(context: SchoolVisualContext, populatedObservations: Bool) throws {
+    init(context: SchoolVisualContext, populatedObservations: Bool, allSignalThemes: Bool = false) throws {
         guard let person = context.workspace.person, let membership = context.workspace.membership else { throw SchoolAPIError.invalidResponse }
         let scope = context.agenda.scope(person: person, membership: membership)
-        let transport = SchoolFieldVisualTransport(responses: try SchoolVisualData.responses(populatedObservations: populatedObservations))
+        let transport = SchoolFieldVisualTransport(responses: try SchoolVisualData.responses(populatedObservations: populatedObservations,
+            allSignalThemes: allSignalThemes))
         let baseURL = URL(string: "https://visual.drivy.invalid")!
         let token = SchoolVisualToken()
         let agenda = SchoolAgendaClient(baseURL: baseURL, tokenSource: token, transport: transport)

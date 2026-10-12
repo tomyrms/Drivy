@@ -83,9 +83,9 @@ struct DrivyDesignSystemGallery: View {
                         }
                     }
                 }
-                // La grille de « Signaler » selon le nombre de thèmes que l’école affiche : une tuile large,
-                // les thèmes affichés à l’origine, quinze, puis tout le catalogue (trois colonnes sur six rangées
-                // sur un iPhone).
+                // La grille de « Signaler » selon le nombre de thèmes que l’école affiche : une tuile large, huit,
+                // les douze affichés à l’origine, quinze, tout le catalogue, vingt-quatre. En leçon, les douze
+                // premières sont visibles à l’ouverture et la suite défile ; ici, chaque grille est montrée entière.
                 ForEach(Self.signalGridCounts, id: \.self) { count in
                     VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                         Text(count > 1 ? "\(count) tuiles" : "1 tuile")
@@ -121,15 +121,22 @@ struct DrivyDesignSystemGallery: View {
         }
     }
 
-    /// Trois configurations d’école : un seul thème affiché, celle d’origine, tout le catalogue.
+    /// Configurations d’école : un seul thème affiché, huit, celle d’origine, quinze, tout le catalogue, vingt-quatre.
+    /// Au-delà du catalogue, des tuiles génériques, comme celles d’un référentiel propre à l’école.
     private static var signalGridCounts: [Int] {
         let catalog = SchoolObservationThemeCatalog.embedded
-        return Array(Set([1, catalog.filter(\.defaultVisible).count, 15, catalog.count])).sorted()
+        return Array(Set([1, 8, catalog.filter(\.defaultVisible).count, 15, catalog.count, 24])).sorted()
     }
 
     private static func signalThemes(_ count: Int) -> [SchoolObservationTheme] {
         var themes = SchoolObservationThemeCatalog.embedded
         for index in themes.indices { themes[index].visible = index < count }
+        let catalogCount = themes.count
+        let generic = (0..<max(0, count - catalogCount)).map { index in
+            SchoolObservationTheme(key: "gallery-\(index)", title: "Compétence \(index + 1)", competencyKeys: [],
+                visible: true, defaultVisible: true, defaultPosition: catalogCount + index)
+        }
+        themes += generic
         return themes
     }
 

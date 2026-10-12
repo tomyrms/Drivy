@@ -11,8 +11,8 @@ struct SchoolLiveObservationSheet: View {
     @State private var idealHeight: CGFloat?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// Le volet suit le nombre de tuiles : bas pour quelques thèmes, plus haut pour tout le catalogue. Estimé d’abord,
-    /// puis mesuré sur le contenu réel.
+    /// Le volet suit le nombre de tuiles jusqu’à douze ; au-delà, il garde la hauteur des douze premières et la
+    /// grille défile. Estimé d’abord, puis mesuré sur le contenu réel.
     private var paletteHeight: CGFloat {
         idealHeight ?? SchoolSignalGridLayout.estimatedPaletteHeight(tileCount: recorder.expectedTileCount,
             width: SchoolSignalGridLayout.assumedWidth, textSize: dynamicTypeSize)
@@ -33,8 +33,9 @@ struct SchoolLiveObservationSheet: View {
 }
 
 /// L’instant et l’ancre appartiennent au geste d’ouverture, jamais au choix ou à l’animation.
-/// Le conteneur choisit la hauteur, d’après celle que la palette lui demande ; si elle manque, seule la grille
-/// défile entre les commandes et les appréciations, qui restent visibles.
+/// Le conteneur choisit la hauteur, d’après celle que la palette lui demande : les douze premières tuiles, plus
+/// l’amorce estompée de la rangée suivante s’il y en a une. Seule la grille défile, entre les commandes et les
+/// appréciations, qui restent visibles.
 /// Les tuiles viennent de l’instantané que l’enregistreur prend à l’ouverture : une configuration modifiée
 /// ailleurs entre-temps ne déplace rien sous le doigt.
 struct SchoolLiveObservationPalette: View {
@@ -48,6 +49,10 @@ struct SchoolLiveObservationPalette: View {
     @State private var headerHeight: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
     @State private var barHeight: CGFloat = 0
+    /// Hauteur d’une tuile, la même pour toutes : elle donne celle de la fenêtre des douze premières.
+    @State private var tileHeight: CGFloat = 0
+    /// Des tuiles restent sous le bas de la grille : son bord s’estompe.
+    @State private var hidesTilesBelow = false
     /// Son propre enregistrement ferme la palette : elle ne change plus d’apparence pendant sa sortie.
     @State private var isClosingAfterRecord = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -72,7 +77,7 @@ struct SchoolLiveObservationPalette: View {
                         if error != nil { scroll.scrollTo("live-observation-error", anchor: .bottom) }
                     }
             }
-            .onChange(of: idealHeight(bottomInset: proxy.safeAreaInsets.bottom), initial: true) { _, height in
+            .onChange(of: idealHeight(width: proxy.size.width, bottomInset: proxy.safeAreaInsets.bottom), initial: true) { _, height in
                 if let height { onIdealHeight?(height) }
             }
         }
@@ -85,13 +90,22 @@ struct SchoolLiveObservationPalette: View {
         .task { await recorder.loadCompetencies() }
     }
 
-    /// Hauteur de l’en-tête, de la grille entière et des appréciations : ce qu’il faut pour tout voir sans défiler.
+    /// Hauteur de l’en-tête, de la grille et des appréciations. Jusqu’à douze tuiles, toute la grille ; au-delà,
+    /// sa fenêtre (`SchoolSignalGridLayout.windowHeight`), le reste s’atteignant en défilant.
     /// Pendant la lecture du référentiel, la grille n’a pas encore sa taille : le conteneur garde son estimation.
     /// Un message passager (erreur, envoi précédent) n’entre pas dans le compte : il ne redimensionne pas le
     /// volet sous le doigt, la grille défile pour lui faire place.
-    private func idealHeight(bottomInset: CGFloat) -> CGFloat? {
+    private func idealHeight(width: CGFloat, bottomInset: CGFloat) -> CGFloat? {
         guard !recorder.isLoadingCompetencies, headerHeight > 0, contentHeight > 0, barHeight > 0 else { return nil }
-        return (headerHeight + contentHeight + SchoolSignalGridLayout.gutter + 1 + barHeight + bottomInset).rounded(.up)
+        let layout = SchoolSignalGridLayout(tileCount: recorder.themes.count, width: width, textSize: dynamicTypeSize)
+        let grid: CGFloat
+        if layout.overflows {
+            guard tileHeight > 0 else { return nil }
+            grid = min(contentHeight, layout.windowHeight(tileHeight: tileHeight))
+        } else {
+            grid = contentHeight
+        }
+        return (headerHeight + grid + SchoolSignalGridLayout.gutter + 1 + barHeight + bottomInset).rounded(.up)
     }
 
     @ViewBuilder private func paletteContents(width: CGFloat) -> some View {
@@ -110,8 +124,29 @@ struct SchoolLiveObservationPalette: View {
                 measuredHeader
                 ScrollView { themeContent(width: width) }
                     .scrollBounceBehavior(.basedOnSize)
+                    // Indicateur montré un instant à l’ouverture, fondu sur l’amorce de la rangée suivante : la suite
+                    // de la grille se devine sans bouton ni pagination. Le fondu disparaît en fin de course.
+                    .scrollIndicatorsFlash(onAppear: true)
+                    .mask { bottomFade }
+                    .onScrollGeometryChange(for: Bool.self) { geometry in
+                        geometry.contentSize.height + geometry.contentInsets.bottom
+                            - geometry.contentOffset.y - geometry.containerSize.height > 2
+                    } action: { _, hidden in
+                        withAnimation(DrivyMotion.feedback(reduceMotion)) { hidesTilesBelow = hidden }
+                    }
                 appraisalBar
             }
+        }
+    }
+
+    private var bottomFade: some View {
+        VStack(spacing: 0) {
+            Color.black
+            ZStack {
+                LinearGradient(colors: [.black, .black.opacity(0.08)], startPoint: .top, endPoint: .bottom)
+                Color.black.opacity(hidesTilesBelow ? 0 : 1)
+            }
+            .frame(height: SchoolSignalGridLayout.fadeHeight)
         }
     }
 
@@ -211,7 +246,12 @@ struct SchoolLiveObservationPalette: View {
                 DrivySkeletonRows(count: 3).drivySkeleton("Chargement des thèmes…")
             }
             LazyVGrid(columns: layout.gridItems, spacing: SchoolSignalGridLayout.spacing) {
-                ForEach(tiles) { theme in themeButton(theme) }
+                ForEach(tiles) { theme in
+                    themeButton(theme)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                            if theme.id == tiles.first?.id { tileHeight = height }
+                        }
+                }
             }
             if let message = recorder.competenciesMessage, !recorder.isLoadingCompetencies {
                 // Le marqueur de l’en-tête reste disponible même sans référentiel. Pendant un nouvel essai,

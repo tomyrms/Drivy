@@ -142,3 +142,25 @@ Dans tous les cas, seule la grille défile ; l’en-tête et les appréciations 
 - `everyPictogramAndAppraisalHasAnAsset` échoue tant que `Observation-moving-off`, `-bends` et `-eco-driving` ne sont pas au catalogue d’assets.
 - `SchoolObservationThemeConfiguration` : deux propriétés à valeur par défaut ajoutées en fin de structure ; les appels à trois arguments doivent rester valides.
 - `SchoolObservationPictogram.init` : `self = title.flatMap { … } ?? fromKey` dans un initialiseur faillible.
+
+## Mise à jour : douze tuiles visibles, la suite défile (12 octobre, troisième lot)
+
+Demande du porteur : les douze premiers signalements affichés visibles d’emblée, les suivants dans la même grille en dessous, atteints en la faisant défiler. Ni pagination, ni « Voir plus », ni second écran, ni carrousel. Le volet ne grandit plus avec le nombre de tuiles au-delà de douze.
+
+- **Règle** (`SchoolSignalGridLayout`) : `immediateTileCount = 12`, `visibleRows` = rangées des douze premières, `overflows` quand des tuiles suivent, `windowHeight(tileHeight:)` = rangées visibles + amorce. Le choix des colonnes ne change pas (3 sur iPhone, 4 sur le popover iPad au-delà de 12). Douze se divise par 1, 2, 3 et 4 : la fenêtre finit toujours sur une rangée pleine.
+- **Tuiles de hauteur égale** : hors tailles d’accessibilité, chaque libellé réserve deux lignes (`lineLimit(2, reservesSpace: true)`, resserré jusqu’à 85 % avant troncature). À la taille par défaut, la tuile garde ses 80 pt. La palette mesure la première tuile ; la fenêtre s’en déduit, sans lire les tuiles lointaines d’une grille paresseuse.
+- **Amorce et fondu** : au-delà de douze, le volet montre 16 pt de la rangée suivante (plus la marge), sous un fondu qui commence exactement sous la dernière rangée de la fenêtre et disparaît en fin de course (`onScrollGeometryChange`). L’indicateur de défilement apparaît un instant à l’ouverture (`scrollIndicatorsFlash(onAppear:)`).
+- **Volet** : 513 pt estimés jusqu’à douze tuiles (inchangé), 533 pt au-delà, quel que soit le nombre ; il tient dans un iPhone de 667 pt. Le popover iPad montre trois rangées de quatre.
+- **Ordre et masquage** : inchangés. Les tuiles viennent de la configuration de l’école, dans son ordre, sans les masquées ; un thème passé de la 16e à la 2e place est dans la fenêtre à l’ouverture suivante (l’instantané reste pris à l’ouverture, rien ne bouge sous le doigt).
+- **Inchangés** : boutons, sélection (fond seul, hauteur constante), écriture, paysage compact (tout le volet défile), tailles d’accessibilité (une colonne, feuille en grand détent).
+
+### Contrôle
+
+- `SchoolSignalGridLayoutTests` : 8, 12, 15, 18 et 24 tuiles sur 288, 343, 361, 398 et 480 pt ; hauteur constante au-delà de douze ; fondu limité à l’amorce.
+- Écran de capture `signal-all` : la palette de leçon avec les dix-huit thèmes affichés. La galerie montre 1, 8, 12, 15, 18 et 24 tuiles (au-delà du catalogue, des tuiles génériques).
+- La campagne de captures ne connaît qu’un modèle d’iPhone et un d’iPad : les autres tailles d’iPhone ne sont couvertes que par les tests de règle.
+- `test_swift_and_shell_supported_screens_match` échouait déjà sur master (cinq écrans du script absents de la liste Swift) ; `signal-all` est ajouté aux deux.
+
+### À voir à l’œil
+
+Le fondu en clair et en sombre, l’amorce sur iPhone SE et Pro Max, le défilement à 120 Hz, le geste de défilement qui commence sur une tuile (le système le tranche : pas de sélection si le doigt glisse).

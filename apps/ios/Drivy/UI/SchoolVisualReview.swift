@@ -19,7 +19,7 @@ struct SchoolVisualReview: View {
                 SchoolAccountVisualReview(screen: screen)
             } else if let context {
                 switch screen {
-                case "gps-choice", "signal", "observations", "capture-preparation", "live", "live-waiting":
+                case "gps-choice", "signal", "signal-all", "observations", "capture-preparation", "live", "live-waiting":
                     SchoolFieldVisualReview(screen: screen, context: context)
                 case "planning", "start-now", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit":
                     SchoolOfficeVisualReview(screen: screen, context: context)
@@ -378,7 +378,7 @@ struct SchoolVisualShell: View {
     }
 
     static func responses(learnerRole: Bool = false, populatedObservations: Bool = false,
-        permitCount: Int = 1) throws -> [String: Data] {
+        permitCount: Int = 1, allSignalThemes: Bool = false) throws -> [String: Data] {
         let null = NSNull()
         let root = "/v1/schools/\(schoolID.uuidString)"
         let roles = ["ADMIN", "INSTRUCTOR"]
@@ -532,11 +532,14 @@ struct SchoolVisualShell: View {
         }
         objects["\(root)/lessons/\(lessonID.uuidString)/captures"] = ["items": [syntheticCapture(captureID)]]
         objects["\(root)/lessons/\(plannedLessonID.uuidString)/reports"] = page([])
-        // Signalements de l’école fictive : la configuration d’origine du catalogue embarqué, réglable par ce compte.
+        // Signalements de l’école fictive : la configuration d’origine du catalogue embarqué, réglable par ce compte,
+        // ou tout le catalogue affiché (écran `signal-all` : la grille dépasse douze tuiles et défile).
         // Un élève ne la lit pas : l’école la lui refuserait.
         if !learnerRole {
+            var catalog = SchoolObservationThemeCatalog.embedded
+            if allSignalThemes { for index in catalog.indices { catalog[index].visible = true } }
             let themes = SchoolObservationThemeSettings(id: schoolID, schoolId: schoolID, version: 1, canManage: true,
-                themes: SchoolObservationThemeCatalog.embedded)
+                themes: catalog)
             objects["\(root)/observation-themes"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(themes))
         }
         // Fiche d’une leçon annulée (clés nouvelles : aucun écran existant n’en dépend).
