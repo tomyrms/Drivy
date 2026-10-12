@@ -140,7 +140,7 @@ Le contrat de `POST /lessons/{lessonId}/geo-observations` ne change pas. Le serv
 1. Sauvegarde de la base, migration 028, puis API.
 2. L'app ensuite. Une app plus récente que l'API reçoit 404 et masque l'option ; une app plus ancienne ignore la route.
 
-Rien n'est déployé.
+Déployé sur le homelab le 13 octobre 2026 : release `be5d5d8`, sauvegarde de la base avant, 28 migrations aux empreintes vérifiées, `/health/ready` 200. L'app qui porte l'option reste à installer.
 
 ## Simulations
 
@@ -282,7 +282,7 @@ Coût mesuré : 0,7 ms pour classer 30 thèmes sur 31 798 signalements (12 650 l
 
 ## Limites connues
 
-- Rien n'est déployé ; la migration 028 n'a tourné que sur la CI.
+- L'API est déployée sur le homelab, sans aucun usage réel de l'option à ce jour.
 - Les tuiles génériques d'un référentiel propre à l'école ne sont pas classées.
 - Le web n'a pas de réglage : la préférence appartient au moniteur, sur le terrain. La console de l'école continue de régler l'ordre manuel.
 - La position notée est celle que le service connaît, pas celle que l'app a réellement montrée (formation dont le référentiel ne porte pas tous les thèmes, ordre figé de la veille).
