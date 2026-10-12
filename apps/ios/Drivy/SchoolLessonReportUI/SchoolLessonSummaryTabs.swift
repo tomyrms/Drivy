@@ -127,7 +127,7 @@ struct SchoolLessonSummaryTabs: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: DrivySpacing.l, pinnedViews: .sectionHeaders) {
                     VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                        SchoolLessonHeaderView(model: model, learnerName: learnerName, finishError: finishError, showsPrices: false)
+                        SchoolLessonHeaderView(model: model, learnerName: learnerName, finishError: finishError)
                         SchoolReportNotices(model: model)
                     }
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
@@ -247,14 +247,6 @@ struct SchoolLessonSummaryTabs: View {
         missingReportLine
         if content.hasGoals {
             SchoolLessonSummaryGoalList(goals: content.goals, privateNote: content.privateNote)
-        }
-        if content.hasPrices, let lesson = model.lesson {
-            VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                Divider().overlay(DrivyTheme.border)
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    SchoolLessonPriceLines(model: model, lesson: lesson)
-                }
-            }
         }
     }
 

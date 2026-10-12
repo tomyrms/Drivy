@@ -34,7 +34,6 @@ enum SchoolLessonSummaryLayout {
     let privateNote: String
     let showsTrip: Bool
     let observations: [SchoolObservation]
-    let hasPrices: Bool
 
     init(model: SchoolLessonReportWorkspace) {
         let lesson = model.lesson
@@ -73,7 +72,6 @@ enum SchoolLessonSummaryLayout {
             replayableCount: model.replayableCaptures.count, noteCount: SchoolReportFlowRules.tripNotes(model.captures).count,
             isPlanned: isPlanned)
         observations = model.lessonObservations
-        hasPrices = lesson.map { !SchoolLessonHubRules.priceLines(lesson: $0, account: model.account).isEmpty } ?? false
     }
 
     var hasGoals: Bool { !goals.isEmpty || !privateNote.isEmpty }
@@ -84,8 +82,8 @@ enum SchoolLessonSummaryLayout {
 }
 
 /// Récapitulatif d’une leçon terminée, annulée ou manquée : une lecture, jamais un formulaire. Terminée, elle se lit
-/// en trois onglets (`SchoolLessonSummaryTabs`) ; annulée ou manquée, en une page : en-tête compact, objectifs
-/// prévus, prix ; chaque partie n’existe que si elle a un contenu. Aucune commande d’édition ici : la rédaction
+/// en trois onglets (`SchoolLessonSummaryTabs`) ; annulée ou manquée, en une page : en-tête compact (prix sous
+/// l’horaire), objectifs prévus ; chaque partie n’existe que si elle a un contenu. Aucune commande d’édition ici : la rédaction
 /// s’ouvre depuis la barre ou le menu de la fiche.
 struct SchoolLessonSummaryView: View {
     let model: SchoolLessonReportWorkspace
@@ -111,7 +109,7 @@ struct SchoolLessonSummaryView: View {
         let twoColumns = isWide && content.hasEvidence && content.hasMainColumn
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                SchoolLessonHeaderView(model: model, learnerName: learnerName, finishError: finishError, showsPrices: false)
+                SchoolLessonHeaderView(model: model, learnerName: learnerName, finishError: finishError)
                 SchoolReportNotices(model: model)
                 if twoColumns {
                     HStack(alignment: .top, spacing: DrivySpacing.xl) {
@@ -161,18 +159,10 @@ struct SchoolLessonSummaryView: View {
         }
     }
 
-    /// Ce qui se consulte après coup : les objectifs prévus, puis le prix.
+    /// Ce qui se consulte après coup : les objectifs prévus.
     @ViewBuilder private func closing(_ content: SchoolLessonSummaryContent) -> some View {
         if content.hasGoals {
             SchoolLessonSummaryGoals(goals: content.goals, privateNote: content.privateNote, startsExpanded: content.goalsStandAlone)
-        }
-        if content.hasPrices, let lesson = model.lesson {
-            VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                Divider().overlay(DrivyTheme.border)
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    SchoolLessonPriceLines(model: model, lesson: lesson)
-                }
-            }
         }
     }
 }

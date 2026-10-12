@@ -134,6 +134,7 @@ import XCTest
                     if screen == "lesson-tariff" {
                         // « Prix de la leçon » : une seule ligne (lesson-tariff). La ligne lesson-balance n’existe que si
                         // l’école a corrigé le montant retenu ; ici le compte de la fixture égale le prix convenu.
+                        // Le prix se lit dans l’en-tête, sous l’horaire ; le défilement ne sert qu’en paysage serré.
                         let tariff = app.descendants(matching: .any)["lesson-tariff"]
                         let balance = app.descendants(matching: .any)["lesson-balance"]
                         let form = app.collectionViews.firstMatch
