@@ -28,7 +28,9 @@ struct SchoolOwnRecordingChoice: View {
     }
 
     var body: some View {
-        Group {
+        // Un conteneur stable, pas un `Group` : sous un `Group`, la tâche suivait chaque branche, et le passage de
+        // l’attente au choix lu annulait la lecture en cours sans la relancer (squelette sans fin, octobre 2026).
+        VStack(alignment: .leading, spacing: 0) {
             if let model, matches(model) {
                 SchoolRecordingChoiceInline(model: model, answer: sending ?? model.validAnswer, isEnabled: sending == nil) { status in
                     choose(status, with: model)
@@ -48,6 +50,12 @@ struct SchoolOwnRecordingChoice: View {
             let value = Self.makeModel(scope: scope, lessonID: lessonID, learnerID: learnerID, agenda: agenda, capture: capture)
             owned = value
             await value.load()
+        }
+        .onChange(of: model.map(Self.readWasInterrupted) ?? false) { _, interrupted in
+            // Une lecture interrompue (ligne sortie de l’écran, compte relu) ne laisse jamais l’attente affichée : elle
+            // reprend aussitôt, et une vraie panne s’affiche avec « Réessayer ».
+            guard interrupted, let model else { return }
+            Task { await model.load() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .drivyRecordingChoiceDidChange)) { notification in
             // Réponse confirmée ailleurs (fiche de la prochaine leçon ↔ Profil) : ce choix-ci se relit.
@@ -71,6 +79,16 @@ struct SchoolOwnRecordingChoice: View {
             reader: agenda.reader, agenda: agenda,
             onRefusalConfirmed: { learner, lesson in controller?.learnerRefused(learnerID: learner, lessonID: lesson) },
             journalProvider: journal)
+    }
+
+    /// Rien de lu, rien en cours, aucune panne : la dernière lecture a été interrompue avant sa réponse.
+    static func readWasInterrupted(_ model: SchoolRecordingChoiceWorkspace) -> Bool {
+        interruptedRead(hasNotice: model.notice != nil, isLoading: model.isLoading, hasError: model.errorMessage != nil,
+            accessRevoked: model.accessRevoked, needsReload: model.needsReload)
+    }
+
+    static func interruptedRead(hasNotice: Bool, isLoading: Bool, hasError: Bool, accessRevoked: Bool, needsReload: Bool) -> Bool {
+        !hasNotice && !isLoading && !hasError && !accessRevoked && needsReload
     }
 
     private func matches(_ model: SchoolRecordingChoiceWorkspace) -> Bool {

@@ -23,12 +23,17 @@ struct SchoolVisualReview: View {
                     SchoolFieldVisualReview(screen: screen, context: context)
                 case "planning", "start-now", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit":
                     SchoolOfficeVisualReview(screen: screen, context: context)
-                case "lesson", "lesson-planned", "lesson-observations", "lesson-cancelled":
+                case "lesson", "lesson-planned", "lesson-observations", "lesson-cancelled", "lesson-competencies", "lesson-route",
+                     "learner-lesson", "learner-lesson-planned":
                     NavigationStack {
                         SchoolLessonReportView(client: context.agenda.reportClient, schoolWorkspace: context.workspace,
                             lessonID: SchoolVisualData.reportLessonID(for: screen),
-                            learnerName: context.learner.displayName, outbox: SchoolVisualOutbox())
+                            learnerName: context.learner.displayName,
+                            isNextPlanned: screen == "learner-lesson-planned" ? true : nil, outbox: SchoolVisualOutbox())
                     }
+                    .environment(\.lessonSummaryInitialTab, SchoolVisualData.summaryTab(for: screen))
+                case "learner-permit":
+                    NavigationStack { SchoolVisualPermitDetail(context: context) }
                 case "invitation-code":
                     NavigationStack {
                         InvitationCodeResultView(issued: SchoolIssuedInvitationCode(invitationID: SchoolVisualData.lessonID,
@@ -100,8 +105,9 @@ struct SchoolVisualReview: View {
             guard !SchoolAccountVisualReview.screenNames.contains(screen) else { return }
             guard context == nil else { return }
             do {
-                context = try await SchoolVisualData.prepare(learnerRole: ["learner-home", "learner-progress", "learner-profile", "learner-profile-multi"].contains(screen),
-                    populatedObservations: screen == "lesson-observations",
+                context = try await SchoolVisualData.prepare(learnerRole: ["learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "learner-lesson",
+                    "learner-lesson-planned", "learner-permit"].contains(screen),
+                    populatedObservations: ["lesson-observations", "lesson-route", "learner-lesson"].contains(screen),
                     permitCount: SchoolVisualData.permitCount(for: screen))
             }
             catch { self.error = error.localizedDescription }

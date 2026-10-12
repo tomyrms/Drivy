@@ -83,9 +83,10 @@ enum SchoolLessonSummaryLayout {
     var goalsStandAlone: Bool { report == nil && !hasEvidence }
 }
 
-/// Récapitulatif d’une leçon terminée, annulée ou manquée : une lecture, jamais un formulaire. En-tête compact,
-/// bilan, compétences évaluées, trajet, observations, objectifs prévus, prix ; chaque partie n’existe que si elle a
-/// un contenu. Aucune commande d’édition ici : la rédaction s’ouvre depuis la barre ou le menu de la fiche.
+/// Récapitulatif d’une leçon terminée, annulée ou manquée : une lecture, jamais un formulaire. Terminée, elle se lit
+/// en trois onglets (`SchoolLessonSummaryTabs`) ; annulée ou manquée, en une page : en-tête compact, objectifs
+/// prévus, prix ; chaque partie n’existe que si elle a un contenu. Aucune commande d’édition ici : la rédaction
+/// s’ouvre depuis la barre ou le menu de la fiche.
 struct SchoolLessonSummaryView: View {
     let model: SchoolLessonReportWorkspace
     let router: SchoolReportRouter
@@ -97,6 +98,16 @@ struct SchoolLessonSummaryView: View {
 
     var body: some View {
         let content = SchoolLessonSummaryContent(model: model)
+        // Terminée : trois onglets sous l’en-tête. Annulée ou manquée : il ne reste que les objectifs, une page suffit.
+        if model.lesson?.status == "COMPLETED" {
+            SchoolLessonSummaryTabs(model: model, router: router, context: context, learnerName: learnerName,
+                finishError: finishError, content: content, isWide: isWide)
+        } else {
+            page(content)
+        }
+    }
+
+    @ViewBuilder private func page(_ content: SchoolLessonSummaryContent) -> some View {
         let twoColumns = isWide && content.hasEvidence && content.hasMainColumn
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.l) {
@@ -211,20 +222,8 @@ private struct SchoolLessonSummaryReport: View {
             if !report.levels.isEmpty {
                 SchoolLessonSummaryCompetencies(levels: report.levels, competencies: competencies)
             }
-            // L’inhabituel seulement : une saisie pas encore envoyée, un bilan gardé pour soi.
-            switch report.mark {
-            case .unsaved:
-                markText("Non enregistré").accessibilityIdentifier("lesson-report-unsaved")
-            case .forMe:
-                markText("Pour moi").accessibilityIdentifier("lesson-report-private")
-            case nil:
-                EmptyView()
-            }
+            SchoolLessonSummaryMarkText(mark: report.mark)
         }
-    }
-
-    private func markText(_ text: String) -> some View {
-        Text(text).font(.subheadline).foregroundStyle(DrivyTheme.muted)
     }
 }
 
@@ -233,7 +232,6 @@ private struct SchoolLessonSummaryCompetencies: View {
     let levels: [SchoolReportObservation]
     let competencies: [SchoolCatalogCompetency]
     @State private var showsAll = false
-    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -242,7 +240,9 @@ private struct SchoolLessonSummaryCompetencies: View {
         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             DrivySectionHeader(title: "Compétences évaluées")
             DrivyRowGroup {
-                ForEach(visible) { level in row(level).transition(.opacity) }
+                ForEach(visible) { level in
+                    SchoolLessonCompetencyRow(level: level, competencies: competencies).transition(.opacity)
+                }
             }
             if !showsAll && !fold.hidden.isEmpty {
                 SchoolLessonSummaryMoreButton(
@@ -257,35 +257,22 @@ private struct SchoolLessonSummaryCompetencies: View {
     private func showAll() {
         withAnimation(DrivyMotion.reveal(reduceMotion)) { showsAll = true }
     }
-
-    private func row(_ level: SchoolReportObservation) -> some View {
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.m))
-        return layout {
-            DrivyCompetencyNote(label: competencies.first(where: { $0.id == level.id })?.displayLabel ?? "Compétence",
-                level: level.levelLabel, context: level.context)
-            DrivyCompetencyMeter(level: level.level)
-                .padding(.top, DrivySpacing.xs)
-        }
-        .padding(.vertical, DrivySpacing.s)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
 }
 
 // MARK: Trajet et observations
 
 /// Aperçu du trajet avec sa lecture. Sans tracé lisible, une ligne de texte ouvre le replay.
-private struct SchoolLessonSummaryTrip: View {
+struct SchoolLessonSummaryTrip: View {
     let model: SchoolLessonReportWorkspace
     let router: SchoolReportRouter
     let context: SchoolReportContext
     let mapHeight: CGFloat
+    /// Sous l’onglet « Trajet & notes », le titre serait redit.
+    var showsTitle = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            DrivySectionHeader(title: "Trajet")
+            if showsTitle { DrivySectionHeader(title: "Trajet") }
             if !model.track.isEmpty {
                 SchoolLessonTripMap(model: model, router: router, context: context, height: mapHeight)
                     .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
@@ -347,7 +334,7 @@ private struct SchoolLessonSummaryObservations: View {
     }
 }
 
-private struct SchoolLessonSummaryObservationRow: View {
+struct SchoolLessonSummaryObservationRow: View {
     let model: SchoolLessonReportWorkspace
     let router: SchoolReportRouter
     let observation: SchoolObservation

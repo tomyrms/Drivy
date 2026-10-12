@@ -223,9 +223,10 @@ struct SchoolHomeView: View {
             learnerTab(.lessons, title: "Leçons")
                 .tabItem { Label("Leçons", systemImage: "calendar") }
                 .tag(SchoolHomeTab.lessons)
-            // Ni score ni tendance : des compétences et leur niveau.
+            // Ni score ni tendance : des compétences et leur niveau. L’icône dessinée pour Drivy : une courbe
+            // montante, segments à 45°, bouts ronds, pointe ouverte.
             learnerTab(.progress, title: "Progression")
-                .tabItem { Label("Progression", systemImage: "checklist") }
+                .tabItem { Label("Progression", image: "Tab-progress") }
                 .tag(SchoolHomeTab.progress)
             SchoolLearnerProfileTab(workspace: workspace, learner: ownLearner, trainings: learnerTrainings, account: account,
                 agendaClient: agendaClient, trainingClient: trainingClient, chooseSchool: chooseSchoolAction,
