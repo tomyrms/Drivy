@@ -65,15 +65,20 @@ import Testing
         await model.load()
         await model.selectLearner(HubFixture.learnerID)
         let initial = model.startsAt
-        await server.respond(.none("2026-10-26"))
+        // Dernier jour examiné : aujourd’hui (Zurich). La reprise part de demain, avant le créneau proposé à deux jours.
+        var zurich = Calendar(identifier: .gregorian)
+        zurich.timeZone = TimeZone(identifier: "Europe/Zurich")!
+        let today = zurich.dateComponents([.year, .month, .day], from: Date())
+        let through = String(format: "%04d-%02d-%02d", today.year!, today.month!, today.day!)
+        await server.respond(.none(through))
         await model.findSuggestedSlot()
-        #expect(model.suggestedSlot == .exhausted(searchedThrough: "2026-10-26"))
-        #expect(model.suggestedSlotNotice == .exhausted(searchedThrough: "2026-10-26"))
+        #expect(model.suggestedSlot == .exhausted(searchedThrough: through))
+        #expect(model.suggestedSlotNotice == .exhausted(searchedThrough: through))
         // La date reste modifiable à la main ; elle n’a pas bougé.
         #expect(!model.awaitingSuggestedSlot && model.startsAt == initial)
 
         model.searchFurther()
-        let resumed = try #require(SchoolPlanningNextSlot.startOfNextCivilDay(after: "2026-10-26", zone: "Europe/Zurich"))
+        let resumed = try #require(SchoolPlanningNextSlot.startOfNextCivilDay(after: through, zone: "Europe/Zurich"))
         #expect(model.suggestionResumesAt == resumed && model.nextSlotRequest?.from == resumed)
         #expect(model.awaitingSuggestedSlot && model.suggestedSlotNotice == nil)
         await server.respond(.found)

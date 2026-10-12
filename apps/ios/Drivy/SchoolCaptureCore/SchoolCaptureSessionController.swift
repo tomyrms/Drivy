@@ -512,7 +512,11 @@ final class SchoolCaptureSessionController {
             guard generation == request, permittedScope == active.scope, state == .preparing,
                   !active.terminalRequested else { throw SchoolCaptureStorageFailure.closed }
             try await openSegment(active, request: request, reason: .start)
-            Task { await loadPriorTrack(active, request: request) }
+            // Seule une leçon commencée avant ce trajet peut en avoir d’autres : rien n’est lu sinon.
+            if let lessonStart = lessonStartedAt, let authorized = SchoolLesson.date(authorization.capture.authorizedAt),
+               lessonStart < authorized.addingTimeInterval(-1) {
+                Task { await loadPriorTrack(active, request: request) }
+            }
         } catch {
             // Un arrêt décidé pendant l'attente reste l'état courant. La réponse
             // tardive du départ ne le remplace pas par une erreur de démarrage.
