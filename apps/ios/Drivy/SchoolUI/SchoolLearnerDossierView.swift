@@ -76,7 +76,8 @@ struct SchoolLearnerDossierView: View {
         // system bounce, without which the pull gesture has nothing to pull.
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                if workspace.isLoadingLearner && workspace.learner == nil {
+                // Rien de lu pour cet élève : l’attente, aussi après une lecture interrompue que la prochaine reprend.
+                if workspace.learner?.id != workspace.selectedLearnerID && workspace.learnerError == nil {
                     DrivySkeletonRows(count: 3, leading: .avatar).drivySkeleton("Chargement du dossier…")
                 }
                 if let error = workspace.learnerError {
@@ -92,7 +93,7 @@ struct SchoolLearnerDossierView: View {
         // Sur le fond des listes groupées, comme Profil et l’historique des leçons : l’identité est posée
         // sur le fond, le reste se lit en blocs.
         .background(DrivyTheme.canvas)
-        .refreshable { await reload(); await reloadLessons() }
+        .refreshable { await refresh() }
         .accessibilityIdentifier("learner-dossier")
         .safeAreaInset(edge: .bottom, spacing: 0) { actions }
     }
@@ -389,10 +390,21 @@ struct SchoolLearnerDossierView: View {
         await loadProfile()
     }
 
-    /// Pull to refresh also rereads what the embedded section shows. The models are the shared ones,
-    /// so the lists stay on screen until each answer arrives.
+    /// Tirer pour actualiser relit le dossier puis ce que montre la section embarquée (modèles partagés : les listes
+    /// restent à l’écran jusqu’à chaque réponse). Le geste attend la relecture sans la porter : SwiftUI annule la
+    /// tâche de `.refreshable` dès que la page se redessine sous le doigt (dossier relu, formations remplacées),
+    /// et cette annulation, transmise aux requêtes, revenait en « Le chargement a été interrompu ». La relecture
+    /// court donc dans sa propre tâche ; un changement d’élève ou de droits l’arrête toujours (`reload` compare
+    /// la portée, le dossier ignore les réponses d’un autre élève).
+    private func refresh() async {
+        let reading = Task { @MainActor in
+            await reload()
+            await reloadLessons()
+        }
+        await reading.value
+    }
+
     private func reloadLessons() async {
-        guard !Task.isCancelled else { return }
         await SchoolLessonFeed(models: SchoolTrainingModelCache.current(trainings.map(\.id))).reload()
     }
 

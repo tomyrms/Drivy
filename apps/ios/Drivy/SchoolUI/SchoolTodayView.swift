@@ -90,6 +90,11 @@ struct SchoolTodayView: View {
             .onAppear { restoreRememberedDay() }
             .task(id: dayKey(context.date)) { restoreRememberedDay(); await load() }
         }
+        // Sous iOS 26, la barre de navigation floute ce qui passe sous elle (effet de bord de défilement) : sur la
+        // carte, un bandeau translucide restait sous « Aujourd’hui ». Le haut de l’écran reste net, carte ou fond
+        // de page jusqu’à la barre d’état ; titre et boutons de la barre gardent leur propre fond.
+        .scrollEdgeEffectHidden(true, for: .top)
+        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { location.refresh(); Task { await load() } }
         }

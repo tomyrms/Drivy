@@ -275,6 +275,30 @@ struct SchoolWorkspaceTests {
         #expect(!workspace.accessRevoked)
     }
 
+    /// Tirer pour actualiser le dossier annulait la relecture en route : l’annulation s’affichait en
+    /// « Le chargement a été interrompu ». Une lecture annulée n’est pas une panne : le dossier reste, sans erreur.
+    @Test func aCancelledReloadOfTheDossierIsNotAnError() async throws {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        let learner = workspace.learner
+        let trainings = workspace.trainings
+        #expect(learner != nil && !trainings.isEmpty)
+        api.learnerHandler = { _, _ in throw CancellationError() }
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learner == learner && workspace.learnerError == nil && !workspace.isLoadingLearner)
+        api.learnerHandler = nil
+        api.trainingsHandler = { _, _, _ in throw URLError(.cancelled) }
+        await workspace.loadSelectedLearner()
+        #expect(workspace.trainings == trainings && workspace.trainingsError == nil && !workspace.isLoadingTrainings)
+        // Une vraie panne reste dite, avec de quoi réessayer.
+        api.trainingsHandler = { _, _, _ in throw SchoolAPIError.unavailable }
+        await workspace.loadTrainings()
+        #expect(workspace.trainingsError != nil)
+    }
+
     @Test func refreshingAPartialTrainingListNeverMakesItLookComplete() async throws {
         let api = WorkspaceAPIStub()
         let workspace = SchoolWorkspace(api: api)
