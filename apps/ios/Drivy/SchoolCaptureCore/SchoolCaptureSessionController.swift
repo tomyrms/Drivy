@@ -8,6 +8,9 @@ struct SchoolCaptureMapSegment: Identifiable {
     /// Only their count and the last elapsed time are kept; the map copies nothing else per fix.
     private(set) var measurementCount = 0
     private(set) var lastElapsedMs: Int?
+    /// Raw ends of the segment, before any display filter: the dashed bridge between two segments starts from them.
+    private(set) var firstPoint: SchoolCapturePoint?
+    private(set) var lastPoint: SchoolCapturePoint?
     /// Changes each time the displayed samples do: the map redraws only then.
     private(set) var displayRevision = 0
     private var selector = SchoolCaptureDisplayRoute.Selector()
@@ -26,6 +29,8 @@ struct SchoolCaptureMapSegment: Identifiable {
                 latitude: measurement.latitude, longitude: measurement.longitude, accuracyMeters: measurement.accuracyMeters)
             measurementCount += 1
             lastElapsedMs = measurement.elapsedMs
+            if firstPoint == nil { firstPoint = point }
+            lastPoint = point
             if selector.append(point) != .none { displayRevision += 1 }
         }
     }
