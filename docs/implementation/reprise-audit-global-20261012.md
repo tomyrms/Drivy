@@ -16,12 +16,12 @@ Demande du porteur : audit technique et fonctionnel de toute l’application (iO
 | Phase | Contenu | État |
 | --- | --- | --- |
 | 1 | Compréhension du dépôt, des audits précédents, des skills | fait |
-| 2 | Audit en lecture seule, cinq agents en deux vagues | en cours |
-| 3 | Consolidation, priorités | à faire |
-| 4 | Corrections P0 → P3, par lots à fichiers disjoints | à faire |
-| 5 | Améliorations UI/UX | à faire |
-| 6 | Validation (typage, tests API et web, IPA, tests Swift sur la CI) | à faire |
-| 7 | Bilan : `audit-global-20261012.md`, `STATUS.md`, PR | à faire |
+| 2 | Audit en lecture seule, cinq agents en deux vagues | fait (UI/UX interrompu) |
+| 3 | Consolidation, priorités | fait |
+| 4 | Corrections P0 → P3, par lots à fichiers disjoints | fait |
+| 5 | Améliorations UI/UX | non fait (limite d’usage) |
+| 6 | Validation (typage, tests API et web, IPA, tests Swift sur la CI) | fait |
+| 7 | Bilan : `audit-global-20261012.md`, `STATUS.md`, PR | fait |
 
 ## Agents d’audit
 
@@ -38,6 +38,8 @@ Les rapports sont écrits hors du dépôt, dans le dossier temporaire de la sess
 ## Journal
 
 - 12 octobre : branche créée, phase 1 faite, première vague lancée.
+- 12 octobre : lots API (963a561, af21220), écrans iOS (25233d1), terrain iOS (cdb0f82, b3bdbf4) intégrés ; synthèse dans `audit-global-20261012.md`.
+- Suite possible : audit UI/UX sur `artifacts/audit-20261012/` (112 captures, non suivies), puis les constats laissés listés dans la synthèse.
 
 ## Pour reprendre (Codex ou autre session)
 

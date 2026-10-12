@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 12 octobre 2026 — audit global et corrections
+
+Cinq audits en lecture seule (écrans iOS, API et base, UI/UX, architecture, fiabilité terrain), puis corrections par lots. 65 constats distincts : 1 P0, 8 P1, 30 P2, 26 P3 ; 41 corrigés. Le P0 : une affectation faite au bureau arrêtait le trajet du moniteur et bloquait l’iPhone (positions jamais envoyées, plus aucun départ). Corrigé côté serveur (migration 025) et côté app. Aussi : verrou Face ID au-dessus des feuilles, bilans lisibles au bureau, l’élève ne reçoit plus que la version courante d’un bilan, heure réelle d’un départ hors ligne, signalements renvoyés seuls, reprise du GPS sans réseau, positions purgées une fois confirmées, replay paginé sans tout déchiffrer. [Constats, décisions du porteur, changements d’API et limites](audit-global-20261012.md).
+
+**Exécuté** : API 322/322 tests sur PostgreSQL locale (base 311) ; web 149/149 ; IPA d’essai compilée ; tests Swift sur la CI (résultat dans la PR). **Non fait** : audit UI/UX sur captures (agent arrêté par la limite d’usage), aucune retouche visuelle. **Non déployé** : migrations 025 et 026, `WEB_TRUST_PROXY`. **Reste à qualifier** : tout sur iPhone (verrou au-dessus d’une feuille, adoption d’époque, purge, reprise hors réseau). **Au porteur** : un départ immédiat lancé par erreur ne s’annule plus, il se termine puis l’école corrige l’issue.
+
 ## 12 octobre 2026 — audit du thème sombre « Soft Charcoal »
 
 54 écrans iPhone capturés en clair et en sombre avant et après, couleurs mesurées sur les pixels, bascule clair → sombre → clair à chaud sur chaque écran (nouvelle option `visual_hot_switch`). Le thème est appliqué partout. Un défaut corrigé : les interrupteurs et les sélecteurs de date prenaient le bleu d’encre pastel sous un élément blanc ; ils prennent l’aplat `accentFill`, inchangé en clair. [Constats, méthode et limites](sombre-audit-20261012.md).
