@@ -1,6 +1,5 @@
 import Observation
 import SwiftUI
-import UIKit
 
 /// Something the person signed in has to do, and can do from here. Never a status to look at: an action
 /// exists only when the data shows it is pending and when this person holds the means to resolve it.
@@ -44,8 +43,6 @@ struct SchoolRequiredAction: Identifiable, Equatable {
 final class SchoolRequiredActionStore {
     private(set) var actions: [SchoolRequiredAction] = []
 
-    init() { Self.styleTabIndicators() }
-
     /// The current state of one kind of action, as its source reads it.
     func replace(_ kind: SchoolRequiredAction.Kind, with pending: [SchoolRequiredAction]) {
         let next = actions.filter { $0.kind != kind } + pending.filter { $0.kind == kind }
@@ -65,11 +62,6 @@ final class SchoolRequiredActionStore {
 
     func action(_ kind: SchoolRequiredAction.Kind, entityID: UUID?) -> SchoolRequiredAction? {
         actions.first { $0.kind == kind && $0.entityID == entityID }
-    }
-
-    /// The tab indicator is the system badge, empty and in the Drivy accent: a dot, never a red count.
-    private static func styleTabIndicators() {
-        UITabBarItem.appearance().badgeColor = UIColor(DrivyTheme.accent)
     }
 }
 
