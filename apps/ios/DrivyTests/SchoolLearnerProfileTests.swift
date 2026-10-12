@@ -113,6 +113,31 @@ import Testing
 
     // MARK: Données de test
 
+    @Test func permitLevelsSplitTheCurriculumWithoutCountingAnUnknownLevelAsAcquired() throws {
+        #expect(SchoolPermitLevels(progress: nil) == nil)
+        let progress = try Self.progress(levels: ["INDEPENDENT", "GUIDED", "DISCOVERING", "LATER"], unobserved: 2)
+        let levels = try #require(SchoolPermitLevels(progress: progress))
+        #expect(levels == SchoolPermitLevels(independent: 1, inProgress: 2, unseen: 3))
+        #expect(levels.total == 6)
+    }
+
+    @Test func permitFiguresNameOnlyWhatExistsAndTheNextLessonStillToCome() {
+        let now = HubFixture.date("2026-10-12T10:00:00Z")
+        let done = Self.lesson(1, status: "COMPLETED", start: "2026-10-01T08:00:00Z", actual: nil)
+        // Commencée mais pas terminée : ce n’est plus une prochaine leçon.
+        let started = Self.lesson(2, status: "PLANNED", start: "2026-10-12T09:30:00Z", actual: ("2026-10-12T09:31:00Z", nil))
+        let later = Self.lesson(3, status: "PLANNED", start: "2026-10-20T08:00:00Z")
+        let sooner = Self.lesson(4, status: "PLANNED", start: "2026-10-14T08:00:00Z")
+        let lessons = [done, started, later, sooner]
+        #expect(SchoolLearnerPermitDetail.nextLesson(lessons, now: now)?.id == sooner.id)
+        let overview = SchoolTrainingOverview.make(lessons: lessons, progress: nil)
+        let ids = SchoolLearnerPermitDetail.figures(overview, lessons: lessons, now: now).map(\.id)
+        // Aucun horaire réel : le temps de conduite n’est pas affirmé.
+        #expect(ids == ["lessons", "last", "next"])
+        #expect(SchoolLearnerPermitDetail.figures(SchoolTrainingOverview.make(lessons: [], progress: nil), lessons: [], now: now)
+            .map(\.id) == ["lessons"])
+    }
+
     private static func lesson(_ index: Int, status: String, start: String, actual: (String, String?)? = nil,
                                instructor: UUID = instructor, name: String? = "Alex Martin") -> SchoolLesson {
         let begin = HubFixture.date(start)

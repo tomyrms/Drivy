@@ -220,6 +220,13 @@ private struct SchoolLessonReportContent: View {
     @State private var planningRoute: PlanningRoute?
     /// Planning présenté, gardé pour lire une annulation confirmée à la fermeture de sa feuille.
     @State private var presentedPlanning: SchoolPlanningWorkspace?
+    /// Champ de la fiche planifiée qui tient le clavier : « Terminé », un défilement ou un toucher ailleurs le rend.
+    @FocusState private var focusedField: PlannedField?
+
+    private enum PlannedField: Hashable {
+        case wish, note
+        case goal(UUID)
+    }
 
     private enum LessonSheet: String, Identifiable {
         case permit
@@ -407,6 +414,20 @@ private struct SchoolLessonReportContent: View {
                 plannedSections(bar: bar)
             }
             .scrollContentBackground(.hidden)
+            // « Mon souhait » et les objectifs sont multilignes : « Retour » va à la ligne. Le clavier se ferme par
+            // « Terminé », en faisant défiler, ou d’un toucher hors du champ ; la saisie reste, rien n’est envoyé.
+            .scrollDismissesKeyboard(.interactively)
+            .drivyDismissesKeyboardOnOutsideTap()
+            .toolbar {
+                if focusedField != nil {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Terminé") { focusedField = nil }
+                            .fontWeight(.semibold)
+                            .accessibilityIdentifier("keyboard-done")
+                    }
+                }
+            }
             .frame(maxWidth: LessonLayout.formMaxWidth)
             .frame(maxWidth: .infinity)
         } else {
@@ -815,6 +836,7 @@ private struct SchoolLessonReportContent: View {
                 let number = (model.goals.firstIndex { $0.id == goal.id } ?? 0) + 1
                 HStack {
                     TextField("Objectif \(number)", text: $goal.label, axis: .vertical)
+                        .focused($focusedField, equals: .goal(goal.id))
                     Button(role: .destructive) { model.goals.removeAll { $0.id == goal.id } } label: {
                         Image(systemName: "minus.circle").frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
                     }
@@ -835,6 +857,7 @@ private struct SchoolLessonReportContent: View {
                 DrivyPrivacyMark(isPrivate: true).accessibilityHidden(true)
                     .frame(width: DrivySpacing.l)
                 TextField("Note pour moi", text: $model.administrativeNote, axis: .vertical).lineLimit(1...4).disabled(!model.acceptsInput)
+                    .focused($focusedField, equals: .note)
             }
             // Le bouton n’apparaît qu’avec une modification : désactivé, il n’était qu’un texte fantôme.
             if model.preparationChanged {
@@ -868,9 +891,11 @@ private struct SchoolLessonReportContent: View {
         Section {
             if model.isOwnLearner {
                 TextField("Ce que j’aimerais travailler", text: $model.wishText, axis: .vertical).lineLimit(2...6).disabled(!model.acceptsInput)
+                    .focused($focusedField, equals: .wish)
+                    .accessibilityIdentifier("lesson-wish")
                 // Comme pour les objectifs : le bouton n’apparaît qu’après une modification, il reste pendant l’envoi.
                 if model.wishChanged || isSending(.saveWish) {
-                    Button { Task { await model.saveWish() } } label: {
+                    Button { focusedField = nil; Task { await model.saveWish() } } label: {
                         DrivyBusyLabel(title: "Enregistrer le souhait", isBusy: isSending(.saveWish))
                     }
                     .disabled(!model.acceptsInput || model.wishText.unicodeScalars.count > 500)
