@@ -302,12 +302,16 @@ struct SchoolCaptureLiveView: View {
             isDisabled: isFinishing) { close() }
         if showsElapsed {
             DrivyLiveTopBar(context: learnerName, tickingFrom: clockOrigin, elapsed: { elapsedLabel },
-                elapsedLabel: "Temps écoulé depuis le départ GPS", status: status, leading: back,
+                elapsedLabel: elapsedAccessibilityLabel, status: status, leading: back,
                 floating: floating) { lessonMenu }
         } else {
-            DrivyLiveTopBar(context: learnerName, elapsed: nil, elapsedLabel: "Temps écoulé depuis le départ GPS",
+            DrivyLiveTopBar(context: learnerName, elapsed: nil, elapsedLabel: elapsedAccessibilityLabel,
                 status: status, leading: back, floating: floating) { lessonMenu }
         }
+    }
+
+    private var elapsedAccessibilityLabel: String {
+        controller.lessonStartedAt == nil ? "Temps écoulé depuis le départ GPS" : "Temps écoulé depuis le début de la leçon"
     }
 
     private var showsElapsed: Bool {
@@ -777,11 +781,10 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
+    /// Durée de la leçon depuis son départ durable : après une relance, elle reprend là où elle en est.
+    /// Sans départ connu, durée d’enregistrement GPS de ce trajet.
     private var elapsedLabel: String {
-        let seconds = max(0, Int(controller.elapsedSeconds))
-        return seconds >= 3_600
-            ? String(format: "%d:%02d:%02d", seconds / 3_600, (seconds % 3_600) / 60, seconds % 60)
-            : String(format: "%02d:%02d", seconds / 60, seconds % 60)
+        SchoolLessonElapsed.label(controller.lessonElapsedSeconds ?? controller.elapsedSeconds)
     }
 
     private func close() {
@@ -816,6 +819,7 @@ private struct SchoolCaptureLiveRoute: View {
     var body: some View {
         SchoolCaptureLiveMap(segments: controller.segments,
             observations: controller.liveObservations?.mapObservations ?? [],
+            priorSegments: controller.priorSegments, priorObservations: controller.priorObservations,
             resetCameraID: resetCameraID, isRecording: isRecording,
             showsDevicePosition: showsDevicePosition, followMode: $followMode)
     }

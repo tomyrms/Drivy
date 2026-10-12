@@ -60,6 +60,9 @@ import SwiftUI
 struct SchoolCaptureLiveMap: View {
     let segments: [SchoolCaptureMapSegment]
     let observations: [SchoolLiveMapObservation]
+    /// Trajets précédents de la même leçon (relance après interruption), dessinés avant `segments`.
+    var priorSegments: [SchoolCaptureMapSegment] = []
+    var priorObservations: [SchoolLivePriorObservation] = []
     let resetCameraID: UUID
     let isRecording: Bool
     /// Départ sans position enregistrée : la position de l’appareil selon Plans, affichée et jamais enregistrée.
@@ -99,7 +102,7 @@ struct SchoolCaptureLiveMap: View {
     }
 
     private func synchronize() {
-        trace.update(segments)
+        trace.update(priorSegments + segments, liveFrom: priorSegments.count)
         motion.followMode = followMode
         motion.reduceMotion = reduceMotion
         motion.show(trace.position)
@@ -111,6 +114,18 @@ struct SchoolCaptureLiveMap: View {
             result.append(DrivyRouteMapPin(id: "start", coordinate: start, signature: "start",
                 label: SchoolMapEndpointMarker.Kind.start.label, side: 22, priority: 200,
                 content: AnyView(SchoolMapEndpointMarker(kind: .start))))
+        }
+        for observation in priorObservations {
+            let status = observation.eventStatus.flatMap(SchoolObservationStatus.init(rawValue:))
+            let glyph: DrivyObservationGlyph = observation.eventKind == "MARKER" ? .moment
+                : SchoolObservationPictogram(themeKey: observation.themeKey, title: observation.text)?.glyph ?? status?.glyph ?? .note
+            result.append(DrivyRouteMapPin(id: observation.id.uuidString,
+                coordinate: CLLocationCoordinate2D(latitude: observation.latitude, longitude: observation.longitude),
+                signature: "\(glyph.key):\(status?.rawValue ?? "-"):false",
+                label: "\(observation.text), \(status?.label ?? "Repère")",
+                side: 40, priority: 400,
+                content: AnyView(SchoolMapObservationMarker(glyph: glyph, tone: status?.tone ?? .neutral, badge: status?.glyph,
+                    isPending: false))))
         }
         for observation in observations {
             guard let segmentID = observation.body.segmentId, let sequence = observation.body.pointSequence,

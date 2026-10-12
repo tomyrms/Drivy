@@ -393,6 +393,64 @@ import Testing
         await fixture.waitUntilSettled()
         #expect(controller.state == .saved && controller.transition == nil && !fixture.source.isRunning)
     }
+
+    // MARK: Reprise après une fermeture, un crash ou un redémarrage
+
+    @Test func aRelaunchKeepsEveryDurablePointAndSealsAtTheLastDurableFact() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        try await Task.sleep(for: .milliseconds(5))
+        _ = try #require(fixture.source.emitPoint())
+        try await Task.sleep(for: .milliseconds(5))
+        let last = try #require(fixture.source.emitPoint())
+        for _ in 0..<300 {
+            if fixture.controller.pointCount == 2 { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(fixture.controller.pointCount == 2)
+        try await Task.sleep(for: .milliseconds(50))
+        // Crash : aucun arrêt n’est écrit. Le coffre est rouvert comme au lancement suivant.
+        let reopened = try SQLCipherSchoolCaptureStore(url: fixture.storeURL, key: Data(repeating: 0x3D, count: 32),
+            protectFiles: false, installationID: UUID())
+        let device = await reopened.installationID()
+        #expect(device == fixture.capture.deviceId)
+        try await reopened.recoverInterrupted(deviceID: device)
+        let session = try await reopened.storedSession(captureID: fixture.capture.id, scope: fixture.scope)
+        #expect(session.state == .interrupted)
+        #expect((session.manifest ?? []).reduce(0) { $0 + $1.expectedPointCount } == 2)
+        let retained = try await reopened.retainedRows(captureID: fixture.capture.id)
+        #expect(retained.samples == 2)
+        // La fin suit le dernier point durable d’une milliseconde : ni l’heure de relance, ni une position inventée.
+        let stopped = try #require(session.stoppedAt.flatMap(SchoolLesson.date))
+        #expect(stopped > last && stopped.timeIntervalSince(last) < 0.01)
+        let stops = try await reopened.pending(scope: fixture.scope, deviceID: device).filter { $0.mutation.kind == .stopCapture }
+        #expect(stops.count == 1)
+        // Une seconde récupération ne crée ni doublon d’arrêt ni nouveau scellement.
+        try await reopened.recoverInterrupted(deviceID: device)
+        let stopsAgain = try await reopened.pending(scope: fixture.scope, deviceID: device).filter { $0.mutation.kind == .stopCapture }
+        #expect(stopsAgain.count == 1)
+    }
+
+    @Test func theLessonClockFollowsTheDurableLessonStartNotTheGPSStart() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        let controller = fixture.controller
+        let authorized = try #require(SchoolLesson.date(fixture.capture.authorizedAt))
+        // Sans départ lu ailleurs, la leçon commence avec ce trajet (règle de l’école).
+        #expect(controller.lessonStartedAt == authorized)
+        // Trajet repris après une relance : la leçon avait commencé quinze minutes plus tôt.
+        controller.noteLessonStart(lessonID: fixture.capture.lessonId, startedAt: authorized.addingTimeInterval(-900))
+        let lessonElapsed = try #require(controller.lessonElapsedSeconds)
+        #expect(lessonElapsed >= 900 && lessonElapsed < 960)
+        #expect(controller.elapsedSeconds < 60)
+        // Le départ d’une autre leçon ne touche pas ce trajet.
+        controller.noteLessonStart(lessonID: UUID(), startedAt: authorized.addingTimeInterval(-7_200))
+        let unchanged = try #require(controller.lessonElapsedSeconds)
+        #expect(unchanged < 960)
+        let saved = await controller.stopAndSynchronize()
+        #expect(saved)
+        await fixture.waitUntilSettled()
+        controller.closeSaved()
+        #expect(controller.lessonStartedAt == nil && controller.priorSegments.isEmpty)
+    }
 }
 
 @MainActor private struct CaptureLifecycleFixture {
@@ -402,6 +460,7 @@ import Testing
     let server: CaptureLifecycleServer
     let source: CaptureLifecycleSource
     let controller: SchoolCaptureSessionController
+    let storeURL: URL
 
     static func make(startImmediately: Bool = true) async throws -> Self {
         let scope = ConfigurationFixture.scope(), device = UUID(), operation = UUID()
@@ -451,7 +510,7 @@ import Testing
             try await controller.adoptAndStart(transfer: transfer, source: source, session: session, lease: lease,
                 authorization: authorization, receivedAt: received)
         }
-        return Self(scope: scope, capture: capture, store: store, server: server, source: source, controller: controller)
+        return Self(scope: scope, capture: capture, store: store, server: server, source: source, controller: controller, storeURL: url)
     }
 
     func preparation(holdAdoption: Bool = false) -> SchoolCapturePreparationWorkspace {

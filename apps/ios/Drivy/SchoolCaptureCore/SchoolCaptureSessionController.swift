@@ -41,6 +41,59 @@ struct SchoolCaptureLessonTimes {
     let stoppedAt: String
 }
 
+/// Signalement d’un trajet précédent de la même leçon, placé sur la position mesurée qu’il désigne.
+struct SchoolLivePriorObservation: Identifiable, Equatable {
+    let id: UUID
+    let latitude: Double
+    let longitude: Double
+    let text: String
+    let eventKind: String?
+    let eventStatus: String?
+    let themeKey: String?
+}
+
+/// Trajets déjà enregistrés pour la leçon, avant celui qui tourne (relance après une fermeture, un crash ou
+/// un redémarrage). Lus chez l’école : seules des mesures confirmées par elle sont dessinées, et un signalement
+/// dont la position n’est pas affichée garde son heure sans lieu inventé.
+enum SchoolCapturePriorTrack {
+    typealias Track = (segments: [[SchoolCapturePoint]], observations: [SchoolPrivateGeoObservation],
+                       pointsByAnchor: [String: SchoolCapturePoint])
+
+    static func make(_ tracks: [Track]) -> (segments: [SchoolCaptureMapSegment], observations: [SchoolLivePriorObservation]) {
+        var segments: [SchoolCaptureMapSegment] = []
+        var observations: [SchoolLivePriorObservation] = []
+        for track in tracks {
+            for points in track.segments where !points.isEmpty {
+                segments.append(SchoolCaptureMapSegment(id: UUID(), measurements: points.map {
+                    SchoolCaptureMeasurement(capturedAt: $0.capturedAt, elapsedMs: $0.elapsedMs, latitude: $0.latitude,
+                        longitude: $0.longitude, accuracyMeters: $0.accuracyMeters)
+                }))
+            }
+            for observation in track.observations {
+                guard let segmentID = observation.segmentId, let sequence = observation.pointSequence,
+                      let point = track.pointsByAnchor["\(segmentID.uuidString.lowercased()):\(sequence)"] else { continue }
+                observations.append(.init(id: observation.id, latitude: point.latitude, longitude: point.longitude,
+                    text: observation.text, eventKind: observation.eventKind, eventStatus: observation.eventStatus,
+                    themeKey: observation.themeKey))
+            }
+        }
+        return (segments, observations)
+    }
+}
+
+/// Durée de la leçon, distincte de celle du GPS : elle part du départ durable enregistré par l’école et se lit
+/// sur l’heure de l’école quand elle est connue. Une relance de l’app ne la remet jamais à zéro.
+enum SchoolLessonElapsed {
+    static func seconds(lessonStartedAt: Date, now: Date) -> TimeInterval { max(0, now.timeIntervalSince(lessonStartedAt)) }
+
+    static func label(_ elapsed: TimeInterval) -> String {
+        let seconds = max(0, Int(elapsed))
+        return seconds >= 3_600
+            ? String(format: "%d:%02d:%02d", seconds / 3_600, (seconds % 3_600) / 60, seconds % 60)
+            : String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
 /// Propriétaire de la séance au niveau de l'application, hors des feuilles SwiftUI.
 /// La géométrie visible ne contient que des mesures dont l'écriture est confirmée.
 @MainActor @Observable
@@ -68,6 +121,11 @@ final class SchoolCaptureSessionController {
     private(set) var liveObservations: SchoolLiveObservationRecorder?
     /// Leçon de ce trajet que l’école a confirmée terminée : le trajet n’a plus rien à proposer que sa fermeture.
     private(set) var completedLessonID: UUID?
+    /// Tracé des trajets précédents de cette leçon, dessiné avant celui-ci. Jamais utilisé pour ancrer un signalement.
+    private(set) var priorSegments: [SchoolCaptureMapSegment] = []
+    private(set) var priorObservations: [SchoolLivePriorObservation] = []
+    /// Départ durable de la leçon de ce trajet (`actualStart`), pas celui du GPS.
+    private(set) var lessonStartedAt: Date?
 
     @ObservationIgnored private var permittedScope: SchoolCommandScope?
     /// Époque plus récente de la même adhésion, adoptée à la fermeture du trajet qui garde la sienne.
@@ -86,6 +144,9 @@ final class SchoolCaptureSessionController {
     @ObservationIgnored private var networkMonitor: NWPathMonitor?
     @ObservationIgnored private var networkAvailable: Bool?
     @ObservationIgnored private var checkingPendingSynchronizations = false
+    /// Départs de leçon lus par les écrans (fiche, Aujourd’hui) : un trajet repris après relance retrouve ainsi
+    /// l’heure réelle de début de sa leçon.
+    @ObservationIgnored private var knownLessonStarts: [UUID: Date] = [:]
 
     private struct RecoveryTransfer {
         let id: UUID
@@ -209,9 +270,67 @@ final class SchoolCaptureSessionController {
         }
         return SchoolPlanningWorkspace(scope: active.scope, client: client, lesson: lesson)
     }
+    /// Durée d’enregistrement GPS de ce trajet seulement.
     var elapsedSeconds: TimeInterval {
         guard let beginning else { return 0 }
         return max(0, SchoolCaptureLocationTime.seconds(beginning.duration(to: endedAt ?? .now)))
+    }
+
+    /// Durée réelle de la leçon depuis son départ durable, lue sur l’heure de l’école reçue avec l’autorisation
+    /// (horloge monotone ensuite) : une heure fausse de l’appareil ne la fausse pas. `nil` sans départ connu.
+    var lessonElapsedSeconds: TimeInterval? {
+        guard let lessonStartedAt else { return nil }
+        let now: Date
+        if let clock = context?.clock {
+            now = clock.serverTime.addingTimeInterval(max(0, SchoolCaptureLocationTime.seconds(clock.receivedAt.duration(to: .now))))
+        } else { now = Date() }
+        return SchoolLessonElapsed.seconds(lessonStartedAt: lessonStartedAt, now: now)
+    }
+
+    /// Appelé par les écrans qui lisent une leçon commencée. Corrige l’heure provisoire du trajet en cours.
+    func noteLessonStart(lessonID: UUID, startedAt: Date?) {
+        guard let startedAt else { return }
+        knownLessonStarts[lessonID] = startedAt
+        if self.lessonID == lessonID { lessonStartedAt = startedAt }
+    }
+
+    /// Avant un nouveau trajet pour la même leçon. L’école n’autorise qu’un trajet ouvert par leçon : l’arrêt
+    /// scellé d’un trajet interrompu (fermeture, crash, redémarrage) et ses positions partent d’abord. Rien n’est
+    /// supprimé ni réécrit ; au-delà de l’attente, c’est la réponse de l’école au départ qui fait foi.
+    func settleInterruptedCaptures(lessonID: UUID, timeout: Duration = .seconds(20)) async {
+        guard let client = synchronizationClient, let scope = permittedScope,
+              let store = try? await journal(), let sessions = try? await store.sessions(scope: scope) else { return }
+        let ids = sessions.filter {
+            $0.serverCapture.lessonId == lessonID && $0.stopOperationID != nil && $0.id != context?.session.id
+        }.map(\.id)
+        guard !ids.isEmpty else { return }
+        await resumePendingSynchronizations(client: client, scope: scope)
+        let waits = ids.compactMap { recoveryTransfers[$0]?.task ?? backgroundTransfers[$0]?.synchronizationTask }
+        guard !waits.isEmpty else { return }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { for task in waits { await task.value } }
+            group.addTask { _ = try? await Task.sleep(for: timeout) }
+            _ = await group.next()
+            group.cancelAll()
+        }
+    }
+
+    /// Tracé et signalements des trajets précédents de la leçon, lus après le départ sans le retarder.
+    private func loadPriorTrack(_ active: Context, request: UUID) async {
+        let client = active.transfer.client, schoolID = active.scope.schoolID
+        guard let captures = try? await client.lessonCaptures(schoolID: schoolID, lessonID: active.session.serverCapture.lessonId) else { return }
+        let earlier = captures
+            .filter { $0.id != active.session.id && SchoolTripsWorkspace.isReplayable($0) }
+            .sorted { (SchoolLesson.date($0.authorizedAt) ?? .distantPast) < (SchoolLesson.date($1.authorizedAt) ?? .distantPast) }
+        guard !earlier.isEmpty else { return }
+        var tracks: [SchoolCapturePriorTrack.Track] = []
+        for capture in earlier {
+            guard generation == request else { return }
+            if let track = try? await client.replayTrack(schoolID: schoolID, captureID: capture.id) { tracks.append(track) }
+        }
+        guard generation == request, context === active else { return }
+        let prior = SchoolCapturePriorTrack.make(tracks)
+        priorSegments = prior.segments; priorObservations = prior.observations
     }
 
     /// Une seule récupération par lancement, avant de fournir le coffre aux écrans.
@@ -277,6 +396,7 @@ final class SchoolCaptureSessionController {
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false
         finalizedSyncState = nil
         beginning = nil; endedAt = nil
+        priorSegments = []; priorObservations = []; lessonStartedAt = nil
         adoptDeferredScope()
     }
 
@@ -331,6 +451,7 @@ final class SchoolCaptureSessionController {
         transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []; hasDisplayedPosition = false
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false; beginning = nil; endedAt = nil
         finalizedSyncState = nil
+        priorSegments = []; priorObservations = []; lessonStartedAt = nil; knownLessonStarts = [:]
         if let old, let boundary {
             Task {
                 // Scellement sous la portée d'origine seulement, jamais émission sous
@@ -381,6 +502,9 @@ final class SchoolCaptureSessionController {
         segments = []; hasDisplayedPosition = false; beginning = nil; endedAt = nil; transition = nil; state = .preparing
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false
         finalizedSyncState = nil
+        priorSegments = []; priorObservations = []
+        // Une leçon pas encore commencée l’est par ce départ, à l’heure de l’autorisation (règle de l’école).
+        lessonStartedAt = knownLessonStarts[session.serverCapture.lessonId] ?? SchoolLesson.date(authorization.capture.authorizedAt)
         source.updateScope(transfer.scope)
         source.onEvent = { [weak self] event in self?.receive(event, request: request) }
         do {
@@ -388,6 +512,7 @@ final class SchoolCaptureSessionController {
             guard generation == request, permittedScope == active.scope, state == .preparing,
                   !active.terminalRequested else { throw SchoolCaptureStorageFailure.closed }
             try await openSegment(active, request: request, reason: .start)
+            Task { await loadPriorTrack(active, request: request) }
         } catch {
             // Un arrêt décidé pendant l'attente reste l'état courant. La réponse
             // tardive du départ ne le remplace pas par une erreur de démarrage.
@@ -419,6 +544,7 @@ final class SchoolCaptureSessionController {
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false
         synchronizationNeedsRetry = false; finalizedSyncState = nil
         beginning = nil; endedAt = nil
+        priorSegments = []; priorObservations = []; lessonStartedAt = nil
         adoptDeferredScope()
     }
 

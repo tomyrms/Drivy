@@ -51,10 +51,14 @@ struct SchoolCaptureStartReview: Identifiable {
     private(set) var quickStep: String?
     /// Suit les étapes du départ hors de tout écran : le rideau les annonce quand la préparation tourne sans vue.
     @ObservationIgnored var onQuickStep: (@MainActor (String?) -> Void)?
+    /// La leçon a déjà un trajet (relance après une fermeture, un crash ou un redémarrage) : le départ le complète.
+    var continuesTrip = false
+    var startTitle: String { continuesTrip ? "Continuer le trajet" : "Démarrer le trajet" }
     private(set) var quickBlock: SchoolCaptureQuickStartBlock?
     @ObservationIgnored private let journalProvider: @MainActor () async throws -> SQLCipherSchoolCaptureStore
     @ObservationIgnored private let onCaptureAuthorized: SchoolCaptureStartHandler?
     @ObservationIgnored private let onRefusalConfirmed: (@MainActor (UUID, UUID?) -> Void)?
+    @ObservationIgnored private let settleInterruptedCaptures: (@MainActor (UUID) async -> Void)?
     @ObservationIgnored private let canUseDiagnostic: @MainActor () -> Bool
     @ObservationIgnored private let makeLocationSource: @MainActor () -> any SchoolCaptureLocationProviding
     @ObservationIgnored private var startTransfer: SchoolCaptureTransferCoordinator?
@@ -73,6 +77,7 @@ struct SchoolCaptureStartReview: Identifiable {
          onCaptureAuthorized: SchoolCaptureStartHandler? = nil,
          onRefusalConfirmed: (@MainActor (UUID, UUID?) -> Void)? = nil,
          canUseDiagnostic: @escaping @MainActor () -> Bool = { true },
+         settleInterruptedCaptures: (@MainActor (UUID) async -> Void)? = nil,
          makeLocationSource: @escaping @MainActor () -> any SchoolCaptureLocationProviding = { SchoolCaptureLocationSource() }) {
         self.scope = scope
         self.lessonID = lessonID
@@ -84,6 +89,7 @@ struct SchoolCaptureStartReview: Identifiable {
         self.onCaptureAuthorized = onCaptureAuthorized
         self.onRefusalConfirmed = onRefusalConfirmed
         self.canUseDiagnostic = canUseDiagnostic
+        self.settleInterruptedCaptures = settleInterruptedCaptures
         self.makeLocationSource = makeLocationSource
     }
 
@@ -339,8 +345,11 @@ struct SchoolCaptureStartReview: Identifiable {
     func confirmStart(_ review: SchoolCaptureStartReview, acknowledged: Bool, revalidate: Bool = true) async -> Bool {
         guard acknowledged, mayConfirmStart, let store,
               let onCaptureAuthorized else { return false }
-        let request = generation
         isBusy = true; errorMessage = nil; startMessage = nil
+        // Un trajet interrompu de cette leçon doit être arrêté chez l’école avant qu’elle en ouvre un autre.
+        await settleInterruptedCaptures?(lessonID)
+        let request = generation
+        guard !invalidated else { isBusy = false; return false }
         var authorizationMayExist = false
         do {
             let fresh = revalidate ? try await freshStartReview(resuming: review.pendingMutation) : review

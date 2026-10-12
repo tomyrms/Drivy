@@ -604,6 +604,8 @@ extension SchoolAgendaClient {
             client: captureClient, reader: reader, agenda: self,
             journalProvider: { try await controller.journal() }, onCaptureAuthorized: handler,
             onRefusalConfirmed: { learnerID, lessonID in controller.learnerRefused(learnerID: learnerID, lessonID: lessonID) },
-            canUseDiagnostic: { controller.canPrepareCapture }, makeLocationSource: makeSource)
+            canUseDiagnostic: { controller.canPrepareCapture },
+            settleInterruptedCaptures: { lessonID in await controller.settleInterruptedCaptures(lessonID: lessonID) },
+            makeLocationSource: makeSource)
     }
 }

@@ -325,6 +325,10 @@ private struct SchoolLessonReportContent: View {
             if !visible { Task { await model.refreshObservations() } }
         }
         .onChange(of: model.lesson?.status) { _, _ in openCompletionIfAsked() }
+        // Le trajet repris après une relance retrouve l’heure réelle de début de la leçon.
+        .onChange(of: model.lesson?.actualStart, initial: true) { _, _ in
+            capture?.noteLessonStart(lessonID: model.lessonID, startedAt: model.lesson?.startedAt)
+        }
         .onChange(of: model.isLoading) { _, loading in if !loading { openCompletionIfAsked(); openStartIfAsked() } }
         .onChange(of: capture?.finalizedSyncState) { _, state in
             if isCompleted && !isFinishing && (state == .synced || state == .partial) { Task { await model.load() } }
@@ -723,9 +727,9 @@ private struct SchoolLessonReportContent: View {
             case .start:
                 Button { Task { await openCapturePreparation() } } label: {
                     if isOpeningTrip {
-                        DrivyBusyLabel(title: "Démarrer le trajet", busyTitle: "Vérification de l’accord GPS…", isBusy: true)
+                        DrivyBusyLabel(title: startTripTitle, busyTitle: "Vérification de l’accord GPS…", isBusy: true)
                     } else {
-                        Label("Démarrer le trajet", systemImage: "location.fill")
+                        Label(startTripTitle, systemImage: "location.fill")
                     }
                 }
                     .buttonStyle(DrivyPrimaryButtonStyle())
@@ -781,6 +785,11 @@ private struct SchoolLessonReportContent: View {
         }
     }
 
+    /// Un trajet existe déjà pour la leçon (relance après une interruption) : le geste le complète.
+    private var startTripTitle: String {
+        SchoolLessonHubRules.startTripTitle(captures: model.captures, lessonID: model.lessonID)
+    }
+
     private func mayStartCapture(now: Date) -> Bool {
         guard let lesson = model.lesson, let capture else { return false }
         return SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: model.isAuthor, school: schoolWorkspace.school,
@@ -795,6 +804,7 @@ private struct SchoolLessonReportContent: View {
         guard await model.savePreparationBeforeDeparture(), capturePreparation == nil,
               mayStartCapture(now: Date()) else { return }
         let preparation = agenda.capturePreparation(scope: model.scope, lessonID: model.lessonID, controller: capture)
+        preparation.continuesTrip = SchoolLessonHubRules.continuesTrip(captures: model.captures, lessonID: model.lessonID)
         await preparation.load()
         guard capturePreparation == nil else { preparation.invalidate(); return }
         if preparation.readyForOneStepStart { DrivyLaunchCurtain.shared.show() }
