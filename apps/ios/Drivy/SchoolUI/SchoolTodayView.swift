@@ -66,7 +66,7 @@ struct SchoolTodayView: View {
                     accessibleDay(now: context.date, availableHeight: geometry.size.height)
                 } else if geometry.size.width >= TodayLayout.sidebarBreakpoint {
                     // Hors de la carte, le panneau latéral est posé sur le fond : filet, pas d’ombre.
-                    map
+                    fullScreenMap
                         .safeAreaInset(edge: .leading, spacing: 0) {
                             ScrollView {
                                 card(now: context.date, floating: false).padding(DrivySpacing.m)
@@ -76,7 +76,7 @@ struct SchoolTodayView: View {
                         }
                 } else {
                     let maxHeight = geometry.size.height * TodayLayout.bottomPanelMaxRatio
-                    map.safeAreaInset(edge: .bottom, spacing: 0) {
+                    fullScreenMap.safeAreaInset(edge: .bottom, spacing: 0) {
                         ScrollView {
                             card(now: context.date, floating: true).padding(DrivySpacing.m)
                                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
@@ -90,9 +90,8 @@ struct SchoolTodayView: View {
             .onAppear { restoreRememberedDay() }
             .task(id: dayKey(context.date)) { restoreRememberedDay(); await load() }
         }
-        // Sous iOS 26, la barre de navigation floute ce qui passe sous elle (effet de bord de défilement) : sur la
-        // carte, un bandeau translucide restait sous « Aujourd’hui ». Le haut de l’écran reste net, carte ou fond
-        // de page jusqu’à la barre d’état ; titre et boutons de la barre gardent leur propre fond.
+        // La barre de navigation ne pose ni fond ni effet de bord (le flou d’iOS 26 sous le titre) : rien ne
+        // s’intercale entre la carte et la barre d’état ; titre et boutons gardent leur propre rendu.
         .scrollEdgeEffectHidden(true, for: .top)
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .onChange(of: scenePhase) { _, phase in
@@ -152,6 +151,14 @@ struct SchoolTodayView: View {
         .scrollBounceBehavior(.basedOnSize)
         .safeAreaPadding(.bottom, DrivySpacing.l)
         .background(DrivyTheme.canvas)
+    }
+
+    /// La carte plein écran remonte derrière la barre d’état et le titre. Laissée dans la zone sûre, elle
+    /// s’arrêtait sous « Aujourd’hui » : un bandeau restait au-dessus, fermé par le bord net de la carte. Comme la
+    /// carte du trajet en direct, elle ignore donc le haut de la zone sûre ; ses commandes et ses mentions, posées
+    /// en bas, ne bougent pas. Sans position, le fond de page remonte déjà jusqu’en haut.
+    @ViewBuilder private var fullScreenMap: some View {
+        if location.permitted { map.ignoresSafeArea(.container, edges: .top) } else { map }
     }
 
     /// Sans position autorisée, un état honnête plutôt qu’une vue du pays entier.

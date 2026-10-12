@@ -181,6 +181,9 @@ path.write_text(json.dumps(proof, ensure_ascii=False, indent=2) + '\n', encoding
 PY
   xcrun simctl status_bar "$device_id" override --time '9:41' --batteryState charged --batteryLevel 100
   xcrun simctl install "$device_id" "$app"
+  # Aujourd’hui montre sa carte, comme sur un appareil : position accordée, fixée à Lausanne (coordonnées publiques).
+  xcrun simctl privacy "$device_id" grant location ch.drivy.qualification || true
+  xcrun simctl location "$device_id" set 46.5197,6.6323 || true
   if [[ "${DRIVY_VISUAL_HOT_SWITCH:-0}" == 1 ]]; then
     # Theme change while the app runs: launched in light without forcing the style, then the
     # system appearance flips. `hot-dark` must match the cold `dark` capture, `hot-light` the cold
