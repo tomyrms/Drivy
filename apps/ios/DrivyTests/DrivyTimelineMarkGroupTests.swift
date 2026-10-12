@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct DrivyTimelineMarkGroupTests {
     private func mark(_ offset: TimeInterval) -> DrivyTimelineMark {
-        DrivyTimelineMark(id: UUID(), offset: offset, symbol: "bookmark", tone: .neutral, label: "Repère")
+        DrivyTimelineMark(id: UUID(), offset: offset, glyph: .moment, tone: .neutral, label: "Repère")
     }
 
     @Test func closeObservationsKeepTheirInstantsAndIndependentMenuChoices() {

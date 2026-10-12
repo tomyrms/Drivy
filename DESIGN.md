@@ -185,6 +185,7 @@ Toujours consommer une couleur par son rôle (`DrivyTheme.*` en Swift, `var(--*)
 | `accent-fill` / `accent-pressed` / `on-accent` | Aplat de l’action primaire ; état pressé ; texte sur l’aplat. |
 | `accent-soft` | Fond de sélection et de pastille d’accent, bouton secondaire pressé. |
 | `success`, `warning`, `danger` + `*-surface` | Texte et fond d’un état ; toujours avec symbole et libellé. |
+| `*-signal` | L’appréciation d’un signalement **dessinée** (pictogramme, anneau, pastille, repère de frise) : plus claire que l’encre, jamais pour du texte. |
 | `border` / `control-border` | Séparateur décoratif doux / contour d’un contrôle interactif (champ, marque de sélection vide). |
 | `disabled-text` / `disabled-surface` | Contrôle indisponible. |
 | `route` / `route-halo` | Trace mesurée sur la carte et son halo (5 pt + halo 9 pt de référence). |
@@ -213,6 +214,7 @@ Le sombre est **Soft Charcoal** : un anthracite neutre où un bloc est plus clai
 | success / success-surface | #17633D / #E9F5EE | #7CCFA0 / #2B423B | |
 | warning / warning-surface | #7A4D00 / #FFF3D6 | #E5BE7A / #453E30 | |
 | danger / danger-surface | #B02B37 / #FDECEF | #FF9DA3 / #473338 | |
+| success-signal / warning-signal / danger-signal | #26A058 / #D1760E / #E5484D | #7CCFA0 / #E5BE7A / #FF9DA3 | Appréciation dessinée : 3:1 minimum, jamais pour du texte. |
 | border / control-border | #D9E0E9 / #78869A | #3A3E44 / #82878F | |
 | rail | #C3CDD9 | #454A51 | |
 | disabled-text / disabled-surface | #5D6A7C / #E8EDF3 | #7A7F87 / #303338 | |

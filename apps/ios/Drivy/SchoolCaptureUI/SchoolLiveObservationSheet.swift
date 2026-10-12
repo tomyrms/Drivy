@@ -248,9 +248,9 @@ struct SchoolLiveObservationPalette: View {
                   recorder.record(theme: selected, status: status, at: observedAt, anchor: anchor) else { return }
             recorded()
         } label: {
-            SchoolAppraisalLabel(status: status, tone: tone(status), isVertical: !dynamicTypeSize.isAccessibilitySize)
+            SchoolAppraisalLabel(status: status, isVertical: !dynamicTypeSize.isAccessibilitySize)
         }
-        .buttonStyle(SchoolObservationChoiceStyle())
+        .buttonStyle(SchoolObservationChoiceStyle(pressedFill: status.tone.background))
         .disabled(selected == nil || !recorder.canRecord)
         .opacity(selected == nil || writesWait ? 0.45 : 1)
         .animation(DrivyMotion.feedback(reduceMotion), value: writesWait)
@@ -271,16 +271,11 @@ struct SchoolLiveObservationPalette: View {
     private func close() {
         if let onClose { onClose() } else { dismiss() }
     }
-
-    private func tone(_ status: SchoolObservationStatus) -> DrivyTone {
-        switch status { case .toWorkOn: .danger; case .attention: .warning; case .positive: .success }
-    }
 }
 
 /// Même contenu avant et après la sélection : aucune appréciation n’est présélectionnée.
 private struct SchoolAppraisalLabel: View {
     let status: SchoolObservationStatus
-    let tone: DrivyTone
     let isVertical: Bool
 
     var body: some View {
@@ -308,20 +303,22 @@ private struct SchoolAppraisalLabel: View {
     }
 
     private var symbol: some View {
-        Image(systemName: status.symbol)
-            .font(DrivyMapGlyph.observation)
-            .foregroundStyle(tone.foreground)
+        DrivyObservationGlyphImage(glyph: status.glyph)
+            .foregroundStyle(status.tone.signal)
+            .frame(width: 22, height: 22)
             .frame(width: 24, height: 24)
             .accessibilityHidden(true)
     }
 }
 
-/// Retour tactile discret ; seul le thème sélectionné conserve un fond.
+/// Retour tactile discret ; seul le thème sélectionné conserve un fond. Une appréciation pressée prend la teinte
+/// de son état plutôt que le bleu de sélection.
 private struct SchoolObservationChoiceStyle: ButtonStyle {
+    var pressedFill: Color = DrivyTheme.accentSoft
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(configuration.isPressed ? DrivyTheme.accentSoft : .clear,
+            .background(configuration.isPressed ? pressedFill : .clear,
                         in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
             .scaleEffect(configuration.isPressed && !reduceMotion ? DrivyPress.scale : 1)
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)

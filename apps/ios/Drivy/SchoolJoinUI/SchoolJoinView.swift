@@ -103,6 +103,7 @@ struct SchoolJoinView: View {
                     .font(.subheadline).fixedSize(horizontal: false, vertical: true)
             }
             .disabled(model.isBusy)
+            .drivyControlTint()
             .accessibilityIdentifier("join-acknowledge")
             .fixedSize(horizontal: false, vertical: true)
             secondaryLink("Utiliser un autre lien") { model.anotherInvitation() }

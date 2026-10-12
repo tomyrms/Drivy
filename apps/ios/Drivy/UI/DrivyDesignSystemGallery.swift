@@ -21,6 +21,7 @@ struct DrivyDesignSystemGallery: View {
                         loadingSection
                     } else {
                     traceSection
+                    signalSection
                     colorsSection
                     typographySection
                     spacingSection
@@ -64,6 +65,44 @@ struct DrivyDesignSystemGallery: View {
                         details: ["Cernier"], state: .planned, railPosition: .last)
                 }
             }
+        }
+    }
+
+    /// Famille « Signaler » : les thèmes tels que la grille les montre, puis le repère de carte avec
+    /// chaque appréciation. Sert aussi de capture de contrôle des gabarits vectoriels.
+    private var signalSection: some View {
+        GallerySection(title: "Signaler") {
+            VStack(alignment: .leading, spacing: DrivySpacing.m) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: DrivySpacing.xs)], spacing: DrivySpacing.s) {
+                    ForEach(SchoolObservationPictogram.allCases, id: \.self) { theme in
+                        VStack(spacing: DrivySpacing.xxs) {
+                            DrivyObservationGlyphImage(glyph: theme.glyph)
+                                .foregroundStyle(DrivyTheme.accent)
+                                .frame(width: 28, height: 28)
+                            Text(theme.rawValue).font(.caption2).foregroundStyle(DrivyTheme.muted)
+                        }
+                    }
+                }
+                HStack(spacing: DrivySpacing.m) {
+                    SchoolMapObservationMarker(glyph: SchoolObservationPictogram.speed.glyph, tone: .danger,
+                                               badge: SchoolObservationStatus.toWorkOn.glyph)
+                    SchoolMapObservationMarker(glyph: SchoolObservationPictogram.giveWay.glyph, tone: .warning,
+                                               badge: SchoolObservationStatus.attention.glyph)
+                    SchoolMapObservationMarker(glyph: SchoolObservationPictogram.observation.glyph, tone: .success,
+                                               badge: SchoolObservationStatus.positive.glyph, isSelected: true)
+                    SchoolMapObservationMarker(glyph: .moment)
+                    SchoolMapObservationMarker(glyph: SchoolObservationPictogram.manoeuvres.glyph, tone: .danger,
+                                               badge: SchoolObservationStatus.toWorkOn.glyph, isPending: true)
+                }
+                HStack(spacing: DrivySpacing.s) {
+                    ForEach(SchoolObservationStatus.allCases) { status in
+                        SchoolObservationToken(glyph: SchoolObservationPictogram.anticipation.glyph, tone: status.tone)
+                    }
+                    SchoolObservationToken(glyph: SchoolObservationPictogram.vehicle.glyph, tone: .danger,
+                                           side: DrivyLayout.tapTarget, filled: true)
+                }
+            }
+            .accessibilityHidden(true)
         }
     }
 
@@ -416,6 +455,9 @@ struct DrivyDesignSystemGallery: View {
         GallerySwatch(name: "warningSurface", role: "Fond alerte", color: DrivyTheme.warningSurface),
         GallerySwatch(name: "danger", role: "Erreur", color: DrivyTheme.danger),
         GallerySwatch(name: "dangerSurface", role: "Fond erreur", color: DrivyTheme.dangerSurface),
+        GallerySwatch(name: "successSignal", role: "Point positif dessiné", color: DrivyTheme.successSignal),
+        GallerySwatch(name: "warningSignal", role: "Attention dessinée", color: DrivyTheme.warningSignal),
+        GallerySwatch(name: "dangerSignal", role: "À retravailler dessiné", color: DrivyTheme.dangerSignal),
         GallerySwatch(name: "border", role: "Filet", color: DrivyTheme.border),
         GallerySwatch(name: "controlBorder", role: "Bord de contrôle", color: DrivyTheme.controlBorder),
         GallerySwatch(name: "disabledText", role: "Texte désactivé", color: DrivyTheme.disabledText),

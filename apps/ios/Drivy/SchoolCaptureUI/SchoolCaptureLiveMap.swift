@@ -116,18 +116,14 @@ struct SchoolCaptureLiveMap: View {
             guard let segmentID = observation.body.segmentId, let sequence = observation.body.pointSequence,
                   let coordinate = trace.coordinate(segmentID: segmentID, sequence: sequence) else { continue }
             let status = observation.body.eventStatus.flatMap(SchoolObservationStatus.init(rawValue:))
-            let color: Color = switch status {
-            case .attention: DrivyTone.warning.foreground
-            case .toWorkOn: DrivyTone.danger.foreground
-            case .positive: DrivyTone.success.foreground
-            case nil: DrivyTheme.text
-            }
-            let symbol = status?.symbol ?? "bookmark.fill"
+            let glyph: DrivyObservationGlyph = observation.body.eventKind == "MARKER" ? .moment
+                : SchoolObservationPictogram(title: observation.body.text)?.glyph ?? status?.glyph ?? .note
             result.append(DrivyRouteMapPin(id: observation.id.uuidString, coordinate: coordinate,
-                signature: "\(symbol):\(status?.rawValue ?? "-"):\(observation.isPending)",
+                signature: "\(glyph.key):\(status?.rawValue ?? "-"):\(observation.isPending)",
                 label: "\(observation.body.text), \(status?.label ?? "Repère")\(observation.isPending ? ", envoi en attente" : "")",
-                side: 36, priority: 400,
-                content: AnyView(SchoolMapObservationMarker(symbol: symbol, color: color, isPending: observation.isPending))))
+                side: 40, priority: 400,
+                content: AnyView(SchoolMapObservationMarker(glyph: glyph, tone: status?.tone ?? .neutral, badge: status?.glyph,
+                    isPending: observation.isPending))))
         }
         return result
     }

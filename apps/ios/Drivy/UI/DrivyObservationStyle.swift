@@ -10,7 +10,7 @@ extension ObservationStatus {
         }
     }
 
-    var color: Color { tone.foreground }
+    var color: Color { tone.signal }
     var surface: Color { tone.background }
 
     /// Status tone: always paired with the status symbol and label.

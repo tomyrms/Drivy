@@ -153,6 +153,7 @@ private struct SchoolAppLockRow: View {
                     .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .drivyControlTint()
             .padding(.vertical, context == .grouped ? DrivySpacing.xs : DrivySpacing.s)
             .frame(minHeight: context == .grouped ? DrivyLayout.tapTarget : 52)
             .accessibilityIdentifier("app-lock-toggle")

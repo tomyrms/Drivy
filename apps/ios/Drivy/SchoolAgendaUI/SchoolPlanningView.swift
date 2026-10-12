@@ -148,6 +148,7 @@ struct SchoolPlanningView: View {
     private var keptTermsFields: some View {
         Section {
             Toggle("Changer la durée ou le tarif", isOn: $model.changesCommercialTerms)
+                .drivyControlTint()
                 .disabled(!model.canMutate)
             if !model.changesCommercialTerms, let lesson = model.originalLesson {
                 LabeledContent("Durée et prix conservés") {
@@ -175,7 +176,9 @@ struct SchoolPlanningView: View {
             // Rendez-vous resté en attente après son horaire : la borne ne masque pas sa date réelle. Sans cela le
             // sélecteur affichait aujourd’hui pendant que le formulaire refusait encore l’horaire passé.
             DatePicker("Date", selection: $model.startsAt, in: min(model.startsAt, Date())..., displayedComponents: .date)
+                .drivyControlTint()
             DatePicker("Heure", selection: $model.startsAt, displayedComponents: .hourAndMinute)
+                .drivyControlTint()
             if model.originalLesson == nil || model.changesCommercialTerms {
                 Picker("Durée", selection: Binding(get: { model.duration }, set: { model.selectDuration($0) })) {
                     ForEach(model.durationChoices, id: \.self) { minutes in Text("\(minutes) min").tag(minutes) }
@@ -311,6 +314,7 @@ struct SchoolPlanningView: View {
             Section {
                 TextField(model.changesCommercialTerms ? "Motif du changement" : "Motif facultatif", text: $model.reason, axis: .vertical).lineLimit(2...4)
                 Toggle("Le nouvel horaire est convenu", isOn: $model.agreementConfirmed)
+                    .drivyControlTint()
             } header: { Text("Motif et accord").drivyFormSectionHeader() }
             .drivyFormRows()
             .disabled(!model.canMutate)

@@ -28,19 +28,6 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     let competency: SchoolCatalogCompetency
     let title: String
     var id: String { "\(competency.id.uuidString):\(title)" }
-    var symbol: String {
-        switch title {
-        case "Priorité à droite": "arrow.turn.up.right"
-        case "Signalisation": "signpost.right"
-        case "Céder le passage": "triangle"
-        case "Vitesse", "Adaptation de la vitesse": "speedometer"
-        case "Stationnement": "parkingsign"
-        case "Observation", "Observation et contrôles": "eye"
-        case "Anticipation": "arrow.up.forward"
-        case "Giratoire", "Giratoires": "arrow.triangle.2.circlepath"
-        default: "steeringwheel"
-        }
-    }
 
     static func choices(for competency: SchoolCatalogCompetency) -> [Self] {
         let description = competency.description.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "fr"))

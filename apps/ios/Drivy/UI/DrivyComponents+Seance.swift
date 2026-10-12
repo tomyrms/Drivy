@@ -265,11 +265,15 @@ struct DrivyMapStatusLabel: View {
     var font: Font = .caption.weight(.semibold)
 
     var body: some View {
-        Label(status.title, systemImage: status.symbol)
-            .font(font)
-            .foregroundStyle(status.tone.foreground)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityElement(children: .combine)
+        // The symbol is drawn in the signal colour, the words keep the ink tuned for text.
+        Label {
+            Text(status.title).foregroundStyle(status.tone.foreground)
+        } icon: {
+            Image(systemName: status.symbol).foregroundStyle(status.tone.signal)
+        }
+        .font(font)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -492,11 +496,13 @@ struct DrivyDangerButtonStyle: ButtonStyle {
 
 // MARK: - Replay timeline
 
-/// One observation on a replay timeline: status symbol and tone, spoken label.
+/// One observation on a replay timeline: appraisal glyph and tone on the 22 pt pin, theme in the
+/// menu of a group, spoken label.
 struct DrivyTimelineMark: Identifiable, Equatable {
     let id: UUID
     let offset: TimeInterval
-    let symbol: String
+    let glyph: DrivyObservationGlyph
+    var theme: DrivyObservationGlyph? = nil
     let tone: DrivyTone
     let label: String
 }
@@ -604,7 +610,7 @@ struct DrivyReplayScrubber: View {
     private func track(usable: CGFloat) -> some View {
         let played = progress(offset)
         let gapRanges = gaps.map { (progress($0.lowerBound), progress($0.upperBound)) }
-        let ticks = marks.map { (progress($0.offset), $0.tone.foreground) }
+        let ticks = marks.map { (progress($0.offset), $0.tone.signal) }
         let leading = inset
         return Canvas { context, size in
             let y = size.height / 2
@@ -647,7 +653,11 @@ struct DrivyReplayScrubber: View {
             Menu {
                 ForEach(group.marks) { mark in
                     Button { onSelectMark(mark.id) } label: {
-                        Label("\(Self.clock(mark.offset)) · \(mark.label)", systemImage: mark.symbol)
+                        Label {
+                            Text("\(Self.clock(mark.offset)) · \(mark.label)")
+                        } icon: {
+                            (mark.theme ?? mark.glyph).menuImage
+                        }
                     }
                 }
             } label: {
@@ -669,12 +679,12 @@ struct DrivyReplayScrubber: View {
     private func pin(_ mark: DrivyTimelineMark) -> some View {
         let selected = mark.id == selectedMarkID
         return Button { onSelectMark(mark.id) } label: {
-            Image(systemName: mark.symbol)
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(selected ? DrivyTheme.onAccent : mark.tone.foreground)
+            DrivyObservationGlyphImage(glyph: mark.glyph)
+                .foregroundStyle(selected ? DrivyTheme.onAccent : mark.tone.signal)
+                .frame(width: selected ? 13 : 11, height: selected ? 13 : 11)
                 .frame(width: selected ? 28 : 22, height: selected ? 28 : 22)
                 .background(selected ? DrivyTheme.accentFill : mark.tone.background, in: Circle())
-                .overlay(Circle().strokeBorder(selected ? DrivyTheme.accentFill : mark.tone.foreground, lineWidth: 1.5))
+                .overlay(Circle().strokeBorder(selected ? DrivyTheme.accentFill : mark.tone.signal, lineWidth: 1.5))
                 .dynamicTypeSize(...DynamicTypeSize.xLarge)
                 .frame(width: DrivyLayout.tapTarget, height: pinArea)
                 .contentShape(Rectangle())

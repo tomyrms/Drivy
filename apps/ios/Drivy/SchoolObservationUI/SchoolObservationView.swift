@@ -288,6 +288,7 @@ struct SchoolObservationComposer: View {
                 if editor.origin == "LIVE" {
                     Section {
                         Toggle("Repère simple, à préciser ensuite", isOn: $marker)
+                            .drivyControlTint()
                     }
                         .drivyFormRows()
                 }
@@ -377,11 +378,11 @@ struct SchoolObservationComposer: View {
                     Button { status = value } label: {
                         HStack(spacing: DrivySpacing.s) {
                             // Même pastille que les tuiles du signalement : le symbole et le mot portent l’état.
-                            Image(systemName: value.symbol)
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(value.fieldTone.foreground)
+                            DrivyObservationGlyphImage(glyph: value.glyph)
+                                .foregroundStyle(value.tone.signal)
+                                .frame(width: 15, height: 15)
                                 .frame(width: 32, height: 32)
-                                .background(value.fieldTone.background, in: Circle())
+                                .background(value.tone.background, in: Circle())
                                 .accessibilityHidden(true)
                             Text(value.label).foregroundStyle(DrivyTheme.text)
                             Spacer(minLength: DrivySpacing.xs)
@@ -411,6 +412,7 @@ struct SchoolObservationRemoval: View {
                 Section {
                     TextField("Pourquoi retirer cette observation ?", text: $reason, axis: .vertical).lineLimit(3...6)
                     Toggle("Je confirme son retrait", isOn: $acknowledged)
+                        .drivyControlTint()
                 } header: { Text("Motif du retrait").drivyFormSectionHeader() }
                 footer: { Text("Ce retrait ne modifie pas un bilan déjà partagé.") }
                     .drivyFormRows()
@@ -475,6 +477,7 @@ private struct SchoolObservationPendingView: View {
                         Button("Vérifier auprès de l’école") { Task { await model.verifyPending(); if model.pending == nil { dismiss() } } }
                             .disabled(!model.canRetry)
                         Toggle("J’ai relu cette demande", isOn: $acknowledged)
+                            .drivyControlTint()
                         Button("Renvoyer exactement cette demande") {
                             Task { if await model.retryPending() { dismiss() } }
                         }.disabled(!acknowledged || !model.canRetry)
@@ -509,12 +512,5 @@ private struct SchoolObservationPendingView: View {
             .navigationTitle("Demande conservée").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
         }.tint(DrivyTheme.accent).interactiveDismissDisabled(model.isBusy)
-    }
-}
-
-private extension SchoolObservationStatus {
-    /// Mêmes teintes que les tuiles du signalement et le replay.
-    var fieldTone: DrivyTone {
-        switch self { case .positive: .success; case .attention: .warning; case .toWorkOn: .danger }
     }
 }

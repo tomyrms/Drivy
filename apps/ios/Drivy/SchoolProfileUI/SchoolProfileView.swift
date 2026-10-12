@@ -160,6 +160,7 @@ struct SchoolProfileView: View {
     private var addressSection: some View {
         Section {
             Toggle("Renseigner une adresse", isOn: $model.draft.hasAddress)
+                .drivyControlTint()
             if model.draft.hasAddress {
                 profileField("Rue et numéro", text: $model.draft.address.line1).textContentType(.streetAddressLine1)
                 profileField("Complément · facultatif", text: Binding(get: { model.draft.address.line2 ?? "" }, set: { model.draft.address.line2 = $0.isEmpty ? nil : $0 }))

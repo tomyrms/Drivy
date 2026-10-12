@@ -238,6 +238,7 @@ Le sombre est **Soft Charcoal** (anthracite neutre, blocs plus clairs que la pag
 | success / successSurface | #17633D / #E9F5EE | #7CCFA0 / #2B423B |
 | warning / warningSurface | #7A4D00 / #FFF3D6 | #E5BE7A / #453E30 |
 | danger / dangerSurface | #B02B37 / #FDECEF | #FF9DA3 / #473338 |
+| successSignal / warningSignal / dangerSignal | #26A058 / #D1760E / #E5484D | #7CCFA0 / #E5BE7A / #FF9DA3 |
 | border / controlBorder / rail | #D9E0E9 / #78869A / #C3CDD9 | #3A3E44 / #82878F / #454A51 |
 | disabledText / disabledSurface | #5D6A7C / #E8EDF3 | #7A7F87 / #303338 |
 | route / routeHalo | #245BD6 / #FFFFFF | #4D80EB / #17191C |

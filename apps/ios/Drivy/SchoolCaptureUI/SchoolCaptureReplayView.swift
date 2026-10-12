@@ -229,13 +229,8 @@ struct SchoolCaptureReplayView: View {
     private func selectedDetail(_ timeline: SchoolReplayTimeline) -> some View {
         if let item = timeline.items.first(where: { $0.id == selectedID }) {
             HStack(alignment: .top, spacing: DrivySpacing.s) {
-                // Focus du dock : pastille pleine, comme les tuiles du signalement.
-                Image(systemName: item.symbol)
-                    .font(DrivyMapGlyph.observation)
-                    .foregroundStyle(item.tone == .neutral ? DrivyTheme.text : item.tone.background)
-                    .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
-                    .background(item.tone == .neutral ? item.tone.background : item.tone.foreground, in: Circle())
-                    .accessibilityHidden(true)
+                // Focus du dock : pastille pleine, le thème du signalement.
+                SchoolObservationToken(glyph: item.glyph, tone: item.tone, side: DrivyLayout.tapTarget, filled: true)
                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                     Text(item.title)
                         .font(.headline)
@@ -337,12 +332,7 @@ struct SchoolCaptureReplayView: View {
     private func chip(_ item: SchoolReplayTimeline.Item, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: DrivySpacing.xs) {
-                Image(systemName: item.symbol)
-                    .font(DrivyMapGlyph.compactObservation)
-                    .foregroundStyle(item.tone.foreground)
-                    .frame(width: 24, height: 24)
-                    .background(item.tone.background, in: Circle())
-                    .accessibilityHidden(true)
+                SchoolObservationToken(glyph: item.glyph, tone: item.tone, side: 26)
                 Text(item.offset.map { DrivyReplayScrubber.clock($0) } ?? "—")
                     .font(.subheadline.weight(.semibold).monospacedDigit())
                 // Une note de relecture peut compter des centaines de caractères : la pastille garde une
@@ -392,12 +382,7 @@ struct SchoolCaptureReplayView: View {
                             if closesSheet { showsList = false }
                         } label: {
                             HStack(alignment: .top, spacing: DrivySpacing.s) {
-                                Image(systemName: item.symbol)
-                                    .font(DrivyMapGlyph.observation)
-                                    .foregroundStyle(item.tone.foreground)
-                                    .frame(width: 36, height: 36)
-                                    .background(item.tone.background, in: Circle())
-                                    .accessibilityHidden(true)
+                                SchoolObservationToken(glyph: item.glyph, tone: item.tone)
                                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                                     Text(item.title).font(.headline).foregroundStyle(DrivyTheme.text)
                                     Text(item.statusLabel).font(.subheadline).foregroundStyle(item.tone.foreground)
@@ -463,7 +448,8 @@ private struct SchoolReplayPlayerPanel: View {
                 offset: Binding(get: { player.offset }, set: { player.seek(to: $0) }),
                 duration: timeline.duration,
                 marks: timed.compactMap { item in
-                    item.offset.map { DrivyTimelineMark(id: item.id, offset: $0, symbol: item.symbol, tone: item.tone, label: item.title) }
+                    item.offset.map { DrivyTimelineMark(id: item.id, offset: $0, glyph: item.status?.glyph ?? item.glyph, theme: item.glyph,
+                                                            tone: item.tone, label: item.title) }
                 },
                 gaps: timeline.gaps,
                 selectedMarkID: selectedID,
@@ -548,10 +534,11 @@ private struct SchoolReplayMap: View {
             guard let coordinate = item.coordinate else { continue }
             let selected = selectedID == item.id
             result.append(DrivyRouteMapPin(id: item.id.uuidString, coordinate: coordinate,
-                signature: "\(item.symbol):\(item.statusLabel):\(selected)",
+                signature: "\(item.glyph.key):\(item.statusLabel):\(selected)",
                 label: "\(item.title), \(item.statusLabel)", isSelected: selected, isSelectable: true,
                 side: DrivyLayout.tapTarget, priority: selected ? 450 : 400,
-                content: AnyView(SchoolMapObservationMarker(symbol: item.symbol, color: item.tone.foreground, isSelected: selected))))
+                content: AnyView(SchoolMapObservationMarker(glyph: item.glyph, tone: item.tone, badge: item.status?.glyph,
+                    isSelected: selected))))
         }
         return result
     }

@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 12 octobre 2026 — audit du thème sombre « Soft Charcoal »
+
+54 écrans iPhone capturés en clair et en sombre avant et après, couleurs mesurées sur les pixels, bascule clair → sombre → clair à chaud sur chaque écran (nouvelle option `visual_hot_switch`). Le thème est appliqué partout. Un défaut corrigé : les interrupteurs et les sélecteurs de date prenaient le bleu d’encre pastel sous un élément blanc ; ils prennent l’aplat `accentFill`, inchangé en clair. [Constats, méthode et limites](sombre-audit-20261012.md).
+
+**Exécuté** : IPA d’essai compilée ; 54 captures claires identiques au pixel près, hors heure, chronomètre et animations ; contraste du thème 204/204. **Non exécuté** : tests Swift, parcours UI. **Reste à qualifier** : appareil réel, états pressés et menus ouverts, Contraste accru, iPad. **Au porteur** : bleu système des alertes (pas de couleur d’accent globale).
+
+## 12 octobre 2026 — couleurs de l’échelle d’appréciation en clair
+
+« Signaler » peignait ses trois appréciations avec les encres de texte (`success`/`warning`/`danger`, réglées pour 4,5:1), d’où un bordeaux, un brun et un vert bouteille en clair. Trois tokens de signal (#26A058, #D1760E, #E5484D en clair, sombre inchangé) servent désormais à tout ce qui *dessine* un état : feuille Signaler, marqueurs de carte, rail et frise du replay, fil du bilan, alerte GPS, point d’état. Le texte garde ses encres. `theme-contrast.py` couvre les nouveaux couples ; clair existant inchangé. Rendu sur appareil non qualifié. [Cause, décision et audit](couleurs-signal-20261012.md).
+
 ## 11 octobre 2026 — dossier de l’élève en blocs
 
 À la demande du porteur, le dossier prend le fond et les blocs blancs de Profil et de l’historique des leçons ; « Informations personnelles » devient une ligne qui se déplie. [Détail](direction-artistique-20261011.md).

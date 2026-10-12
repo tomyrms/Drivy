@@ -491,7 +491,7 @@ struct SchoolCapturePreparationView: View {
                     Text("Cette reprise conserve le diagnostic déjà sauvegardé. Elle ne prend aucune nouvelle mesure.")
                         .fixedSize(horizontal: false, vertical: true)
                     Toggle("Je confirme la reprise de cette demande", isOn: $confirmsResend)
-                        .disabled(model.isBusy)
+                        .disabled(model.isBusy).drivyControlTint()
                     Button("Renvoyer la même demande") {
                         Task { await model.resume(queued, verifyFirst: false); resendRoute = nil }
                     }
@@ -592,7 +592,7 @@ private struct SchoolCaptureStartReviewView: View {
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     }
                     Toggle("Je confirme le départ GPS maintenant pour cette leçon", isOn: $acknowledged)
-                        .disabled(model.isBusy).accessibilityIdentifier("capture-confirm-start")
+                        .disabled(model.isBusy).drivyControlTint().accessibilityIdentifier("capture-confirm-start")
                     if let error = model.errorMessage { SchoolErrorNotice(message: error) }
                     if let message = model.startMessage { DrivyInlineMessage(text: message, tone: .neutral) }
                     if model.isBusy { DrivyLoadingState(title: "Vérification et ouverture du trajet…") }

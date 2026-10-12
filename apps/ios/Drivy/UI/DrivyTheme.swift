@@ -43,6 +43,14 @@ enum DrivyTheme {
     static let danger = adaptive(0xB02B37, 0xFF9DA3)
     static let dangerSurface = adaptive(0xFDECEF, 0x473338)
 
+    // Signal colours: the same three states drawn rather than written — the observation scale's glyph, map ring,
+    // badge, timeline pin and list marker. `success` / `warning` / `danger` are text inks tuned for 4.5:1 and read
+    // brown, bottle green and burgundy once they fill a shape. A graphic needs 3:1 (WCAG 1.4.11), so the light
+    // values are brighter, at one OKLCH lightness (≈ 0.62–0.65) so no state outweighs another. Dark keeps its inks.
+    static let successSignal = adaptive(0x26A058, 0x7CCFA0)
+    static let warningSignal = adaptive(0xD1760E, 0xE5BE7A)
+    static let dangerSignal = adaptive(0xE5484D, 0xFF9DA3)
+
     static let border = adaptive(0xD9E0E9, 0x3A3E44, darkHighContrast: 0x5C616A)
     static let controlBorder = adaptive(0x78869A, 0x82878F, darkHighContrast: 0xA1A5AD)
     /// Decorative continuation only; stations and labels carry the information.
